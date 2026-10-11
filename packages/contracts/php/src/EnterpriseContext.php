@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts;
 
-/** Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it. */
+/** Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it. deviceId is the device Control placed the call on: the one online device of the execution binding device group (the user's own first), or the device a human chose. */
 final readonly class EnterpriseContext implements \JsonSerializable {
     public function __construct(
         public string $requestId,

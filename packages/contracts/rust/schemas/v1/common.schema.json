@@ -23,9 +23,18 @@
         "version"
       ]
     },
+    "CredentialKind": {
+      "type": "string",
+      "enum": [
+        "STATIC_TOKEN",
+        "JWT",
+        "INTROSPECTION"
+      ],
+      "description": "Which validator accepted the credential (plan.md §9.2)."
+    },
     "RequestContext": {
       "type": "object",
-      "description": "Authenticated Gateway runtime context. All mode, chain, session, workload, binding and target fields are explicit. Legacy contexts are rejected.",
+      "description": "Authenticated Gateway runtime context. Carries no device: Control places a client tool call on a device from the execution binding device group (ADR 015 amendment), and server-side agents have none.",
       "additionalProperties": false,
       "properties": {
         "requestId": {
@@ -36,6 +45,14 @@
         },
         "mode": {
           "$ref": "enterprise.schema.json#/$defs/EnterpriseRequestMode"
+        },
+        "credentialKind": {
+          "$ref": "common.schema.json#/$defs/CredentialKind"
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
         },
         "userId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
@@ -64,10 +81,17 @@
           "minimum": 1,
           "maximum": 9007199254740991
         },
-        "bindingId": {
-          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        "delegatedSessionEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
-        "deviceId": {
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bindingId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
         },
         "credentialSha256": {
@@ -78,9 +102,8 @@
         "requestId",
         "tenantId",
         "mode",
-        "chain",
-        "bindingId",
-        "deviceId"
+        "credentialKind",
+        "chain"
       ]
     }
   }

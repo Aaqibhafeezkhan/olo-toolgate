@@ -12,12 +12,12 @@ public final class DiscoveryIndex {
     private final Codec codec;
     public DiscoveryIndex(Codec codec) {this.codec=codec;}
     public record Eligibility(String toolId,String action,ResourceDescriptor resource,Decision decision) {}
-    public List<Eligibility> rules(Ids.TenantId tenant,Directory directory,RequestContext c,long now) {
-        return rules(tenant,directory,c,now,budget->0L);
+    public List<Eligibility> rules(Ids.TenantId tenant,Directory directory,RequestContext c,String device,long now) {
+        return rules(tenant,directory,c,device,now,budget->0L);
     }
-    public List<Eligibility> rules(Ids.TenantId tenant,Directory directory,RequestContext c,long now,java.util.function.Function<String,Long> quotas) {
+    public List<Eligibility> rules(Ids.TenantId tenant,Directory directory,RequestContext c,String device,long now,java.util.function.Function<String,Long> quotas) {
         var result=new TreeMap<String,Eligibility>();var evaluator=new EnterpriseEvaluator(codec);
-        var context=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),c.bindingId(),c.deviceId());
+        var context=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),c.bindingId(),device);
         var resources=new TreeMap<String,ResourceDescriptor>();
         for(var entry:directory.entries().values())if(entry.id().kind()==Kind.GRANT&&entry.enabled())for(var r:codec.model(entry.document(),ControlAccessGrant.class).scope().resources()) {
             var resource=new ResourceDescriptor(r.kind(),r.match()==EnterpriseResourceMatch.ANY?(r.kind()==ResourceKind.URL?"https://discovery.invalid/":"discovery-probe"):r.locator());resources.put(codec.json(resource),resource);

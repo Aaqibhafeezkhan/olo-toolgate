@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Workload authentication facts are administrator mounted; group grants live only in Control.
 use crate::{digest, validation::Contracts};
-use olo_toolgate_contracts::{EnterpriseRequestMode, RequestContext};
+use olo_toolgate_contracts::{CredentialKind, EnterpriseRequestMode, RequestContext};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use subtle::ConstantTimeEq;
 
 /// Deliberately no Debug implementation. Static tokens cannot impersonate a HUMAN session.
+/// The context names no device: Control places each call on a device of the binding's group.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Credential {
@@ -38,6 +39,10 @@ impl Authenticator {
                 || !hashes.insert(&c.token_sha256)
                 || c.expires_at_unix_ms <= now
                 || context.mode == EnterpriseRequestMode::Human
+                || context.credential_kind != CredentialKind::StaticToken
+                || context
+                    .expires_at_unix_ms
+                    .is_some_and(|expires| expires != c.expires_at_unix_ms)
                 || context.workload_binding_id.is_none()
                 || context.agent_id.is_none()
                 || context.credential_epoch.is_none()
@@ -83,6 +88,7 @@ impl Authenticator {
         found.map(|c| {
             let mut context = c.context.clone();
             context.request_id = request_id;
+            context.expires_at_unix_ms = Some(c.expires_at_unix_ms);
             (context, c.expires_at_unix_ms)
         })
     }

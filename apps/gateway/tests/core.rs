@@ -30,7 +30,7 @@ fn fixtures() -> Value {
     .unwrap()
 }
 fn context() -> RequestContext {
-    serde_json::from_value(json!({"requestId":"operation","tenantId":"tenant-demo","mode":"DELEGATED","userId":"user-demo","agentId":"agent-demo","workloadBindingId":"workload","chain":[],"sessionEpoch":1,"credentialEpoch":1,"bindingId":"binding","deviceId":"device","credentialSha256":digest(TOKEN.as_bytes())})).unwrap()
+    serde_json::from_value(json!({"requestId":"operation","tenantId":"tenant-demo","mode":"DELEGATED","userId":"user-demo","agentId":"agent-demo","workloadBindingId":"workload","chain":[],"sessionEpoch":1,"credentialEpoch":1,"credentialKind":"STATIC_TOKEN","bindingId":"binding","credentialSha256":digest(TOKEN.as_bytes())})).unwrap()
 }
 fn credential() -> Credential {
     Credential {
@@ -62,7 +62,7 @@ impl Authority {
         RemoteToolResponse {
             record: RemoteToolRecord {
                 request_id: s.context.request_id.clone(),
-                device_id: s.context.device_id.clone(),
+                device_id: "placed-device".into(),
                 agent_id: s.context.agent_id.clone(),
                 tool_id: s.request.tool_id.clone(),
                 state: state.clone(),
@@ -125,7 +125,18 @@ impl RelayPort for Authority {
             let mut i: EnterpriseInvocation =
                 serde_json::from_value(fixtures()["EnterpriseInvocation"].clone()).unwrap();
             let mut c = serde_json::to_value(&r.context).unwrap();
-            c.as_object_mut().unwrap().remove("credentialSha256");
+            // Control resolves the device; the request context never names one.
+            let fields = c.as_object_mut().unwrap();
+            for key in [
+                "credentialSha256",
+                "credentialKind",
+                "issuer",
+                "expiresAtUnixMs",
+                "delegatedSessionEpoch",
+            ] {
+                fields.remove(key);
+            }
+            fields.insert("deviceId".into(), json!("placed-device"));
             i.id = r.context.request_id.clone();
             i.evaluation.context = serde_json::from_value(c).unwrap();
             i.evaluation.tool_id = r.request.tool_id.clone();
@@ -142,7 +153,7 @@ impl RelayPort for Authority {
             };
             i.revision = 1;
             if self.substitute {
-                i.evaluation.context.device_id = "attacker-device".into();
+                i.evaluation.context.binding_id = "attacker-binding".into();
             }
             *self.invocation.lock().unwrap() = Some(i.clone());
             Ok(i)
@@ -237,8 +248,24 @@ fn credentials_bind_all_facts_and_cannot_be_human_or_rebound() {
     let c = credential();
     let auth = Authenticator::new(vec![c.clone()], &contracts, 1).unwrap();
     let (ctx, _) = auth.authenticate(TOKEN, "fresh-request".into(), 2).unwrap();
-    assert_eq!(ctx.binding_id, "binding");
+    assert_eq!(ctx.binding_id.as_deref(), Some("binding"));
     assert_eq!(ctx.session_epoch, Some(1));
+    assert_eq!(ctx.expires_at_unix_ms, Some(c.expires_at_unix_ms));
+    // Only static-token contexts can be mounted, and their expiry must match the credential.
+    for change in [
+        json!({"credentialKind": "JWT"}),
+        json!({"expiresAtUnixMs": c.expires_at_unix_ms + 1}),
+        json!({"deviceId": "device"}),
+    ] {
+        let mut value = serde_json::to_value(&c).unwrap();
+        for (key, field) in change.as_object().unwrap() {
+            value["context"][key] = field.clone();
+        }
+        let rejected = serde_json::from_value::<Credential>(value)
+            .ok()
+            .and_then(|credential| Authenticator::new(vec![credential], &contracts, 1).ok());
+        assert!(rejected.is_none(), "{change}");
+    }
     assert!(auth
         .authenticate(
             "unknown-credential-0000000000000000000000000000000000",

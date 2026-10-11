@@ -633,6 +633,7 @@ export interface ControlWorkloadBindingPage {
   readonly items: ReadonlyArray<ControlWorkloadBinding>;
   readonly nextCursor?: string;
 }
+export type CredentialKind = "STATIC_TOKEN" | "JWT" | "INTROSPECTION";
 export type Decision = "ALLOW" | "ASK" | "BLOCK";
 /** Organization assignment with independent Marketplace evidence; grants no runtime permission. */
 export interface DeploymentAssignment {
@@ -926,7 +927,7 @@ export interface EnterpriseConfigurationTransition {
   readonly expectedRevision: number;
   readonly action: EnterpriseConfigurationAction;
 }
-/** Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it. */
+/** Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it. deviceId is the device Control placed the call on: the one online device of the execution binding device group (the user's own first), or the device a human chose. */
 export interface EnterpriseContext {
   readonly requestId: string;
   readonly tenantId: string;
@@ -1594,19 +1595,22 @@ export interface ReportedPackage {
   readonly version: string;
   readonly state: PackageState;
 }
-/** Authenticated Gateway runtime context. All mode, chain, session, workload, binding and target fields are explicit. Legacy contexts are rejected. */
+/** Authenticated Gateway runtime context. Carries no device: Control places a client tool call on a device from the execution binding device group (ADR 015 amendment), and server-side agents have none. */
 export interface RequestContext {
   readonly requestId: string;
   readonly tenantId: string;
   readonly mode: EnterpriseRequestMode;
+  readonly credentialKind: CredentialKind;
+  readonly issuer?: string;
   readonly userId?: string;
   readonly agentId?: string;
   readonly workloadBindingId?: string;
   readonly chain: ReadonlyArray<EnterpriseActorHop>;
   readonly sessionEpoch?: number;
   readonly credentialEpoch?: number;
-  readonly bindingId: string;
-  readonly deviceId: string;
+  readonly delegatedSessionEpoch?: number;
+  readonly expiresAtUnixMs?: number;
+  readonly bindingId?: string;
   readonly credentialSha256?: string;
 }
 /** Declared resource identity; does not grant access or validate a path. */

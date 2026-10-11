@@ -17,6 +17,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class EnterpriseConformanceTest {
     static final Ids.TenantId TENANT=new Ids.TenantId("enterprise");
     static final long NOW=1791450000000L;
+    /** Enrolls an online endpoint for a directory device, so Control can place calls on it. */
+    static void online(PostgresStore store,Codec codec,String id){endpoint(store,codec,id,NOW);}
+    static void endpoint(PostgresStore store,Codec codec,String id,long lastSeen){
+        store.transaction(TENANT,true,tx->{tx.saveEndpoint(new Store.EndpointRecord(id,DirectoryService.digest(id),codec.json(new EndpointDeviceRecord(id,TENANT.value(),"bob",DirectoryService.digest(id),EndpointState.ACTIVE,1L,lastSeen,1L,null,null,null,null,null,null)),"public","0".repeat(64),"{}"));return null;});
+    }
     static final String DIGEST="a".repeat(64),PROOF="b".repeat(64);
     final ContractCodec codec=new ContractCodec();
     Map<Ids.RecordId,Directory.Entry> entries;

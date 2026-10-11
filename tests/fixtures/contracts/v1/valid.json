@@ -1900,6 +1900,7 @@
   "ControlWorkloadBindingPage": {
     "items": []
   },
+  "CredentialKind": "STATIC_TOKEN",
   "Decision": "BLOCK",
   "DeploymentAssignment": {
     "assignmentId": "assignment-1",
@@ -2402,9 +2403,9 @@
       "requestId": "example",
       "tenantId": "example",
       "mode": "HUMAN",
+      "credentialKind": "STATIC_TOKEN",
       "chain": [],
-      "bindingId": "example",
-      "deviceId": "example"
+      "bindingId": "example"
     },
     "request": {
       "toolId": "example",
@@ -3339,9 +3340,9 @@
       "requestId": "example",
       "tenantId": "example",
       "mode": "HUMAN",
+      "credentialKind": "STATIC_TOKEN",
       "chain": [],
-      "bindingId": "example",
-      "deviceId": "example"
+      "bindingId": "example"
     },
     "invocationId": "example"
   },
@@ -3397,12 +3398,14 @@
   "RequestContext": {
     "requestId": "request-1",
     "tenantId": "tenant-1",
-    "mode": "HUMAN",
-    "userId": "user-1",
+    "mode": "SERVICE",
+    "credentialKind": "STATIC_TOKEN",
     "agentId": "agent-1",
     "chain": [],
     "bindingId": "example",
-    "deviceId": "example"
+    "workloadBindingId": "workload-1",
+    "credentialEpoch": 1,
+    "expiresAtUnixMs": 1700000000000
   },
   "ResourceDescriptor": {
     "kind": "CUSTOM",

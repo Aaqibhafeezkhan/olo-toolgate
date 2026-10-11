@@ -315,9 +315,10 @@ def provision(args):
     config.upsert('workload-bindings', dict(id=workload, name='LangChain example credential', enabled=True,
         revision=1, agentId=agent, mode='SERVICE', issuer='gateway', subject=name, audience='gateway',
         credentialSha256=digest, credentialEpoch=epoch, expiresAtUnixMs=expires))
+    # The context names no device; Control places calls on a device of the binding's group.
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires, context=dict(requestId=name,
-        tenantId='quickstart', mode='SERVICE', agentId=agent, workloadBindingId=workload, chain=[],
-        credentialEpoch=epoch, credentialSha256=digest, bindingId=binding_id, deviceId=device))
+        tenantId='quickstart', mode='SERVICE', credentialKind='STATIC_TOKEN', agentId=agent, workloadBindingId=workload,
+        chain=[], credentialEpoch=epoch, expiresAtUnixMs=expires, credentialSha256=digest, bindingId=binding_id))
     # Install opaque bearer facts only. No private signing key or server-side verifier is read.
     docker('quickstart', ['/opt/quickstart-python/bin/python', '-c',
         "import sys,json,time,os;os.umask(0o077);sys.path.insert(0,'/opt/quickstart');import supervisor as s;"

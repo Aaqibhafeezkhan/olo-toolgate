@@ -28,9 +28,9 @@ public final class EndpointService {
     private ClientCheckInPolicy checkInPolicy=ClientCheckInPolicy.QUICKSTART;
     private EnterpriseOperations operations;
     /** Env-owned check-in policy; the fixed 500 ms Quickstart behaviour until configured. */
-    public EndpointService checkInPolicy(ClientCheckInPolicy value){checkInPolicy=java.util.Objects.requireNonNull(value);return this;}
+    public EndpointService checkInPolicy(ClientCheckInPolicy value){checkInPolicy=java.util.Objects.requireNonNull(value);if(operations!=null)operations.checkInPolicy(value);return this;}
     public ClientCheckInPolicy checkInPolicy(){return checkInPolicy;}
-    public EndpointService operations(EnterpriseOperations value){operations=java.util.Objects.requireNonNull(value);return this;}
+    public EndpointService operations(EnterpriseOperations value){operations=java.util.Objects.requireNonNull(value).checkInPolicy(checkInPolicy);return this;}
     public McpService relay(){available();if(operations==null)throw Failure.unavailable();return new McpService(store,codec,this,operations,clock,tenant,server);}
     public EndpointService(Store store,Codec codec,DeviceIssuer issuer,Clock clock,boolean enabled,
                            String tenant,String server,String organization,String control,String gateway) {

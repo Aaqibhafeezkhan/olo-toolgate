@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # ADR 015: Credential classification, catalog scope and MCP routes
 
-**Status:** Accepted (design gate D1), on merge of the PR that adds this file
+**Status:** Accepted (design gate D1). Amended in M1: device placement, see [Amendment](#amendment-m1-device-placement).
 
 ## Context
 
@@ -26,11 +26,23 @@ The Gateway accepts only opaque bearer tokens today: up to 256 mounted SHA-256 h
 
 Contract surface: issuer and route changes are specified in `packages/contracts/openapi/proposed/gateway-v1.proposed.yaml` and `control-v1.proposed.yaml`. The served `packages/contracts/openapi/gateway-v1.yaml` and `control-v1.yaml` change only when M1 implements each endpoint, so the served spec never advertises an unimplemented endpoint.
 
+## Amendment (M1): device placement
+
+Decision 8 removes the device from `RequestContext` but did not say where a call runs. The project owner decided:
+
+1. **Every call runs on a device.** Client tools run on enrolled endpoint devices. Server executors are devices too: Quickstart's built-in executors already are, and each Tool Host or Gateway executor container is its own always-connected device entry. Disabling a device, group membership and the kill switch therefore govern server calls exactly like client calls. Identity still carries no device; the device belongs to the call, not to the caller.
+2. **Control places the call** from the execution binding's device group (`RequestContext.bindingId`). Candidates are group members that are enabled, enrolled, approved and online under the client check-in policy. For a tool call, members that report that exact tool installed are preferred. If the caller (`userId`) owns any candidates, only those remain. One candidate is used as is; from several, Control picks the one with the fewest queued calls, with ties broken by a hash of the request id. No candidate means no tools are listed and calls are denied.
+3. **The placement is stored** in the invocation's `EnterpriseContext.deviceId`, which the permit, the relay and the result all use. A replay of the same request keeps its device; the Gateway no longer compares devices.
+4. **A person in the console still chooses a device**, which must belong to the binding's device group.
+
+A pool of executor containers is one device group, so scaling out adds devices and calls spread across them. `RequestContext` also gains `credentialKind` (mounted credentials are `STATIC_TOKEN`), `issuer`, `delegatedSessionEpoch` and `expiresAtUnixMs`, and `bindingId` becomes optional, matching the v2 definition.
+
 ## Alternatives Considered
 
 - **Take the tenant from `iss`.** Rejected: two tenants trusting one IdP would be confused.
 - **Combined "JWT or introspect" per issuer, or trying validators in turn.** Rejected: ambiguous and lets one validator's failure fall through to another.
-- **Synthetic device ids for server agents.** Rejected (row 7).
+- **Synthetic device ids for server agents.** Rejected (row 7). The M1 amendment does not reverse this: executor devices are real registered devices that run calls, not identities given to agents.
+- **Device named by the workload binding.** Considered in M1 and not chosen: it ties an agent to one device and cannot spread work across a pool.
 - **Ids in URLs.** Rejected (row 6) in favour of readable, stable slugs.
 - **URL scope that grants access**, or a fallback to `ALL` on mismatch. Rejected: a URL must never widen authorization or leak group existence.
 - **One name field for MCP and policy.** Rejected (row 9): clients' naming limits would leak into policy ids.

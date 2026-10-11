@@ -108,6 +108,7 @@ fn shared_fixture_round_trips() {
         ControlUserPage,
         ControlWorkloadBinding,
         ControlWorkloadBindingPage,
+        CredentialKind,
         Decision,
         DeploymentAssignment,
         DesiredState,

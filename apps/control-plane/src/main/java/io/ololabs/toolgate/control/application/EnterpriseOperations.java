@@ -15,6 +15,9 @@ import java.util.*;
 public final class EnterpriseOperations {
     private final Store store;private final Codec codec;private final EffectSigner signer;private final Clock clock;
     private final String issuer,audience;private final long lifetime;private final int capacity;
+    private volatile ClientCheckInPolicy checkIn=ClientCheckInPolicy.configure(null,null,null);
+    /** The running check-in policy decides which devices are online for placement. */
+    public EnterpriseOperations checkInPolicy(ClientCheckInPolicy value){checkIn=java.util.Objects.requireNonNull(value);return this;}
     public EnterpriseOperations(Store store,Codec codec,EffectSigner signer,Clock clock,String issuer,String audience,long lifetime,int capacity){
         if(lifetime<1000||lifetime>300000||capacity<1||capacity>10000)throw new IllegalArgumentException("Invalid operation limits");
         this.store=store;this.codec=codec;this.signer=signer;this.clock=clock;this.issuer=Ids.valid(issuer);this.audience=Ids.valid(audience);this.lifetime=lifetime;this.capacity=capacity;
@@ -58,10 +61,14 @@ public final class EnterpriseOperations {
             for(var review:approval.reviews())if(review.decision()==EnterpriseReviewDecision.APPROVE)reviewer(tx,review.reviewerUserId(),i,review.obligationId(),now);
         }
     }
-    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==EnterpriseRequestMode.HUMAN)throw ManagementAccess.denied();return submitVerified(actor,request);}
-    public Store.Reply submitHuman(DirectoryService.Actor actor,EnterpriseInvocationRequest request){if(actor.userId()==null||request.context().mode()!=EnterpriseRequestMode.HUMAN||!actor.userId().equals(request.context().userId()))throw ManagementAccess.denied();return submitVerified(actor,request);}
-    private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request){String document=codec.json(request);
-        return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);var e=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),request.context(),request.request(),request.toolDigest(),request.packageDigest(),now);
+    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==EnterpriseRequestMode.HUMAN)throw ManagementAccess.denied();return submitVerified(actor,request,null);}
+    /** A person names the device; it must belong to the execution binding's device group. */
+    public Store.Reply submitHuman(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String device){if(actor.userId()==null||device==null||request.context().mode()!=EnterpriseRequestMode.HUMAN||!actor.userId().equals(request.context().userId()))throw ManagementAccess.denied();return submitVerified(actor,request,device);}
+    private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){String document=codec.json(request)+(chosen==null?"":"\n"+chosen);
+        return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
+            // A replay keeps the device the first submission was placed on, whatever the pool's load is now.
+            var placed=tx.enterprise().invocation(request.context().requestId());
+            var e=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),request.context(),chosen!=null?chosen:placed!=null?placed.evaluation().context().deviceId():placement.place(tx,request.context(),now,request.request(),request.toolDigest(),request.packageDigest()),request.request(),request.toolDigest(),request.packageDigest(),now);
             String digest=requestDigest(e,request.downstreamIdempotencyKey());var previous=tx.enterprise().invocation(e.context().requestId());
             if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
             if(tx.enterprise().invocationsSince(Math.max(0,now-lifetime))>=capacity)throw Failure.conflict();var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,now,false,budgets);long epoch=tx.enterprise().authorizationEpoch();

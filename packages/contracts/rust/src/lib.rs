@@ -976,6 +976,16 @@ pub struct ControlWorkloadBindingPage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
 }
+/// Canonical CredentialKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CredentialKind {
+    #[serde(rename = "STATIC_TOKEN")]
+    StaticToken,
+    #[serde(rename = "JWT")]
+    Jwt,
+    #[serde(rename = "INTROSPECTION")]
+    Introspection,
+}
 /// Canonical Decision wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Decision {
@@ -1495,7 +1505,7 @@ pub struct EnterpriseConfigurationTransition {
     pub expected_revision: u64,
     pub action: EnterpriseConfigurationAction,
 }
-/// Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it.
+/// Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it. deviceId is the device Control placed the call on: the one online device of the execution binding device group (the user's own first), or the device a human chose.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseContext {
@@ -2645,13 +2655,16 @@ pub struct ReportedPackage {
     pub version: String,
     pub state: PackageState,
 }
-/// Authenticated Gateway runtime context. All mode, chain, session, workload, binding and target fields are explicit. Legacy contexts are rejected.
+/// Authenticated Gateway runtime context. Carries no device: Control places a client tool call on a device from the execution binding device group (ADR 015 amendment), and server-side agents have none.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RequestContext {
     pub request_id: String,
     pub tenant_id: String,
     pub mode: EnterpriseRequestMode,
+    pub credential_kind: CredentialKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issuer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2663,8 +2676,12 @@ pub struct RequestContext {
     pub session_epoch: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_epoch: Option<u64>,
-    pub binding_id: String,
-    pub device_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_session_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_sha256: Option<String>,
 }
