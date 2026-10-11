@@ -2,9 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 name: foundation
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
@@ -16,6 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   admission:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/admission.yml
     with:
       main_only: true

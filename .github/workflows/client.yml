@@ -3,9 +3,6 @@
 name: endpoint-client
 on:
   workflow_call:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
@@ -14,6 +11,7 @@ permissions:
   pull-requests: read
 jobs:
   admission:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/admission.yml
     with:
       main_only: true

@@ -47,11 +47,10 @@ def merged_pr_title(repository, sha):
 
 
 def trigger_message(event, event_name):
-    if event_name == 'pull_request':
-        pr = event.get('pull_request') or {}
-        if (pr.get('base') or {}).get('ref') != 'main':
+    if event_name in ('push', 'workflow_dispatch'):
+        ref = os.environ.get('GITHUB_REF', '')
+        if ref != 'refs/heads/main' and not ref.startswith('refs/tags/'):
             return ''
-        return pr.get('title', '')
     repository = os.environ.get('GITHUB_REPOSITORY', '')
     if event_name == 'push':
         sha = event.get('after', '')
