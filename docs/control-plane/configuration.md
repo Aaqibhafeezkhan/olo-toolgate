@@ -131,7 +131,8 @@ the derived default); the chart refuses to render values that break the rule abo
 Quickstart sets the Quickstart column in its compose files and supervisor. With none
 of the variables set, Control uses the enterprise defaults. These are
 environment-owned values: they cannot be changed through the settings API or
-configuration import, and the console will show the effective values read-only under
+configuration import. `GET /api/control/v1/settings` returns them as `clientCheckIn`
+with `source` (`DEFAULT` or `ENVIRONMENT`), and the console shows them read-only under
 Configuration > Device (see [Configuration menu](configuration-menu.md)).
 
 ### Phase B variables (future, needs a client release)

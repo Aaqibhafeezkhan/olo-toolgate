@@ -4,7 +4,8 @@ package io.ololabs.toolgate.control.adapter;
 
 import io.ololabs.toolgate.control.application.ServerSettingsService;
 import io.ololabs.toolgate.control.domain.Ids;
-import io.ololabs.toolgate.contracts.ControlServerSettings;
+import io.ololabs.toolgate.contracts.v2.ControlServerSettings;
+import io.ololabs.toolgate.contracts.v2.DeviceApproval;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -14,8 +15,9 @@ import java.nio.file.*;
 import java.util.Locale;
 
 /** Optional bring-up import of server settings from a mounted folder and environment variables.
- * Folder: server-settings.json in toolgate.config.import-directory, in the exported settings format.
- * Environment values override the file. Settings are seeded once unless overwrite is enabled.
+ * Folder: server-settings.json in toolgate.config.import-directory, in the exported settings format (formatVersion 2).
+ * Environment values override the file. Settings are seeded once unless overwrite is enabled. clientCheckIn in the
+ * file is ignored: check-in is env-owned and always comes from TOOLGATE_CONTROL_CLIENT_*.
  */
 @ApplicationScoped
 public class ConfigurationImportBootstrap {
@@ -24,6 +26,7 @@ public class ConfigurationImportBootstrap {
     @Inject Config config;
     @Inject ContractCodec codec;
     @Inject ServerSettingsService settings;
+    @Inject io.ololabs.toolgate.control.application.EndpointService endpoint;
 
     void start(@Observes StartupEvent event) {
         var requested = requested();
@@ -33,7 +36,7 @@ public class ConfigurationImportBootstrap {
         boolean overwrite = config.getOptionalValue("toolgate.config.import-overwrite", Boolean.class).orElse(false);
         try {
             boolean applied = settings.importAtStartup(new Ids.TenantId(Ids.valid(tenant)), requested, overwrite, "startup-" + java.util.UUID.randomUUID());
-            LOG.info(codec.json(java.util.Map.of("service", "control", "event", "configuration_import", "applied", applied, "autoApproveDevices", requested.autoApproveDevices())));
+            LOG.info(codec.json(java.util.Map.of("service", "control", "event", "configuration_import", "applied", applied, "autoApproveDevices", requested.deviceApproval().autoApprove())));
         } catch (RuntimeException failure) {
             throw new IllegalStateException("Startup configuration import was rejected; check server-settings.json and TOOLGATE_SETTINGS_* values", failure);
         }
@@ -41,7 +44,7 @@ public class ConfigurationImportBootstrap {
 
     /** Merged file and environment settings, or null when neither source is configured. */
     ControlServerSettings requested() {
-        var base = ServerSettingsService.defaults();boolean present = false;
+        var base = ServerSettingsService.defaults(endpoint.checkInPolicy());boolean present = false;
         var directory = config.getOptionalValue("toolgate.config.import-directory", String.class);
         if (directory.isPresent()) {
             var file = Path.of(directory.get()).resolve(SETTINGS_FILE);
@@ -58,7 +61,10 @@ public class ConfigurationImportBootstrap {
         var duration = config.getOptionalValue("toolgate.settings.auto-approve-duration-days", String.class).map(ConfigurationImportBootstrap::days);
         var owner = config.getOptionalValue("toolgate.settings.auto-approve-owner", String.class);
         if (enabled.isEmpty() && duration.isEmpty() && owner.isEmpty() && !present) return null;
-        return new ControlServerSettings(1L, 0L, enabled.orElse(base.autoApproveDevices()), duration.orElse(base.autoApproveDurationDays()), owner.orElse(base.autoApproveOwnerUserId()), base.gatewayName());
+        var approval = base.deviceApproval();
+        return new ControlServerSettings(2L, base.revision(), base.gateway(),
+            new DeviceApproval(enabled.orElse(approval.autoApprove()), duration.map(days -> days * ServerSettingsService.DAY_MS).orElse(approval.durationMs()), owner.orElse(approval.ownerUserId())),
+            base.clientCheckIn());
     }
 
     /** Accepts 30, 30d, 30day or 30days. */

@@ -14,7 +14,7 @@ test('real group administration, inherited provenance and review impact are acce
   await page.getByLabel('Password',{exact:true}).fill(process.env.TOOLGATE_ENTERPRISE_PASSWORD!);
   await page.getByRole('button',{name:'Connect to workspace',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
-  for(const [route,title] of [['users','Users'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['bindings','Execution bindings'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['configuration','Configuration reviews']] as const){
+  for(const [route,title] of [['users','Users'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['bindings','Execution bindings'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
     await page.goto(origin+'/console/#'+route);
     await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
     await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);

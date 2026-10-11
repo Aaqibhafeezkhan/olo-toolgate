@@ -1763,13 +1763,6 @@
       }
     ]
   },
-  "ControlServerSettings": {
-    "formatVersion": 1,
-    "revision": 0,
-    "autoApproveDevices": false,
-    "autoApproveDurationDays": 1,
-    "gatewayName": "Example Gateway"
-  },
   "ControlSnapshot": {
     "formatVersion": 2,
     "tenantId": "example",

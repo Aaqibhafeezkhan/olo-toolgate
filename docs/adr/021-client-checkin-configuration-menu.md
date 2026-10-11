@@ -39,6 +39,10 @@ In the console, Gateway name, device approval and configuration import/export al
 7. **`ControlServerSettings` `formatVersion` 2**, defined in `packages/contracts/schemas/v2/settings.schema.json` together with the read-only client check-in settings. Env-owned values are excluded from the startup configuration import and from exports.
 8. **The existing full-record `PUT /api/control/v1/settings` stays** for import, with strict compare-and-swap on the revision.
 
+## Amendment (M1): group-level patch and the review route
+
+Implementing decision 6 in M1 changed two details. A PATCH body replaces each group it names (`gateway`, `deviceApproval`) rather than merging fields inside a group, because the patch schema has no `null` for optional fields and a page must be able to clear the device approval owner. A stale revision returns the standard `409` error, and the console then reads the current record itself. The review queue moved to `#config-reviews`, so `#configuration?id=<id>` redirects there and a bare `#configuration` redirects to `#config-server`. The settings PATCH is now in the served `control-v1.yaml`. Records saved in formatVersion 1 reset to the defaults, since nothing is in production.
+
 Contract surface: the PATCH and the check-in settings are specified in `packages/contracts/openapi/proposed/control-v1.proposed.yaml` and `quickstart-v1.proposed.yaml`. The served `packages/contracts/openapi/control-v1.yaml` and `quickstart-v1.yaml` change only when M1 implements each endpoint, so the served spec never advertises an unimplemented endpoint.
 
 ## Alternatives Considered

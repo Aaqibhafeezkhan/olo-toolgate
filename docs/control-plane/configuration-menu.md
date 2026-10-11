@@ -6,26 +6,22 @@ This document specifies the **Configuration** menu of the administration console
 new sidebar group with Server, Device and Backup/Restore pages, and the field-level
 settings save behind them.
 
-> **Status: frozen specification, not yet available.** This is a design gate D1
-> artifact. It is implemented in milestone M1; the current console does not have this
-> menu yet. Changes after D1 passes need an ADR amendment. Source:
+> **Status: implemented in milestone M1.** Changes need an ADR amendment to
+> [ADR 021](../adr/021-client-checkin-configuration-menu.md). Source:
 > [Tool SDK plan §18](../sdk-plan/plan.md).
 
-## Current state
+## Before M1
 
-- Sidebar groups are defined in `navigationGroups` at `apps/admin-ui/src/App.tsx:30`.
-  The `configuration` route ("Configuration reviews") sits in the **Audit** group.
-- That page (`apps/admin-ui/src/ConfigurationRequests.tsx`) renders, above the review
-  queue, the `ServerSettings` component (`apps/admin-ui/src/ServerSettings.tsx`) and the
-  `ConfigurationTransfer` component (`apps/admin-ui/src/ConfigurationTransfer.tsx`).
-- `ServerSettings` has a **Gateway** fieldset, a **Device approval** fieldset and an
-  "Import and export settings" area. It saves the whole record with
+- The `configuration` route ("Configuration reviews") sat in the **Audit** group and
+  rendered, above the review queue, the server settings form and the configuration
+  import/export.
+- The settings form saved the whole formatVersion 1 record with
   `PUT /api/control/v1/settings`.
 
 ## Layout
 
-The console must add a sidebar group **Configuration** with three pages. Their contents
-move unchanged from Audit > Configuration reviews.
+The console has a sidebar group **Configuration** with three pages. Their contents
+moved from Audit > Configuration reviews.
 
 | Page | Route | Contents | Moved from |
 |---|---|---|---|
@@ -66,19 +62,19 @@ Overview                     [Gateway]
 
 ## Rules
 
-- Audit > Configuration reviews must keep only the review queue.
-- Old `#configuration` links must redirect to `#config-server`. Links that name a
-  review (`#configuration?id=<id>`, built in `apps/admin-ui/src/Failure.tsx:7`) must
-  still open that review in the queue.
+- Audit > Configuration reviews (`#config-reviews`) keeps only the review queue.
+- Old `#configuration` links redirect to `#config-server`. Links that name a review
+  (`#configuration?id=<id>`) redirect to `#config-reviews?id=<id>` and open that review.
+  New draft links (`apps/admin-ui/src/Failure.tsx`) use `#config-reviews?id=<id>`.
 - The Check-in fieldset is read-only. Its values are environment-owned and come from
-  the variables in [Client check-in](configuration.md#client-check-in-specification-design-gate-d1).
+  the variables in [Client check-in](configuration.md#client-check-in).
   The page shows the effective values and says they are set by the deployment.
 - Server and Device each edit part of one `ControlServerSettings` record. Each page
-  must send only its own fields.
+  sends only its own group.
 
 ## Saving
 
-Saving uses field-level PATCH:
+Saving uses a merge patch of the page's own group:
 
 ```text
 PATCH /api/control/v1/settings
@@ -86,24 +82,27 @@ Content-Type: application/merge-patch+json
 If-Match: "<revision>"
 Idempotency-Key: <key>
 
-{"gatewayName": "Production gateway"}
+{"gateway": {"gatewayName": "Production gateway"}}
 ```
 
 - `If-Match` carries the quoted revision the page loaded.
-- A stale revision returns `409` with the current record, as the existing PUT does.
-  The UI must show "changed elsewhere, review and retry" and load the current values
+- A group in the body replaces that whole group, so clearing the optional owner means
+  leaving it out. Groups not in the body are unchanged.
+- A stale revision returns `409`, as the PUT does. The UI says the settings changed
+  elsewhere, loads the current values and asks the administrator to review and retry,
   instead of overwriting them.
-- The new fields raise `ControlServerSettings.formatVersion` to 2.
-- Environment-owned values (such as the check-in values) are excluded from the startup
-  configuration import.
-- The existing full-record `PUT /api/control/v1/settings` stays for import, with
-  strict compare-and-swap on the revision.
+- `ControlServerSettings.formatVersion` is 2. Records saved before M1 reset to the
+  defaults, and formatVersion 1 files are rejected.
+- Environment-owned values (the check-in values) are rejected in a PATCH body and
+  ignored in a restore and in the startup configuration import.
+- The full-record `PUT /api/control/v1/settings` is used by Backup/Restore, with strict
+  compare-and-swap on the revision.
 
 ## Failure Behavior
 
 | Case | Result |
 |---|---|
-| Revision changed since the page loaded | `409` with the current record; UI shows "changed elsewhere, review and retry" |
+| Revision changed since the page loaded | `409`; the UI loads the current values and asks the administrator to review and retry |
 | Retried save with the same `Idempotency-Key` | Same result as the first attempt; no second change |
 
 ## Later items

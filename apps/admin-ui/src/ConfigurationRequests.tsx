@@ -4,8 +4,6 @@ import {useEffect,useRef,useState} from 'react';
 import type {EnterpriseConfigurationChange,EnterpriseConfigurationAction} from '@olo-labs/toolgate-contracts';
 import {ControlClient,ApiError} from './api';
 import {Failure} from './Failure';
-import {ConfigurationTransfer} from './ConfigurationTransfer';
-import {ServerSettings} from './ServerSettings';
 
 export function ConfigurationRequests({client}:{client:ControlClient}){
   const [requestedId,setRequestedId]=useState(()=>new URLSearchParams(window.location.hash.split('?')[1]).get('id'));
@@ -23,8 +21,6 @@ export function ConfigurationRequests({client}:{client:ControlClient}){
   const expired=selected&&selected.expiresAtUnixMs<=Date.now();
   return <><div className="page-heading"><h1>Configuration reviews</h1><button disabled={busy} onClick={()=>setAttempt(v=>v+1)}>Refresh changes</button></div>
     <p className="intro">Review the impact of each draft before submitting it. Independent reviewers need authority over the same source and destination groups and permission to grant the proposed scopes. Application checks the requester, every reviewer and the current revision again.</p>
-    <ServerSettings client={client}/>
-    <ConfigurationTransfer client={client}/>
     {Boolean(error)&&<Failure error={error}/>}{!items&&!error&&<p role="status">Loading configuration changes…</p>}
     {items&&<><div className="table-wrap"><table><caption className="sr-only">Reviewed configuration changes</caption><thead><tr><th>Change</th><th>Requester</th><th>Operation</th><th>State</th><th>Reviews</th></tr></thead><tbody>{items.map(c=><tr key={c.id}><th scope="row"><button className="record-link" onClick={()=>void open(c)}>{c.id}</button></th><td>{c.requesterUserId}</td><td>{c.command.operation} {c.command.kind} {c.command.entityId}</td><td>{c.state}</td><td>{c.reviews.filter(r=>r.decision==='APPROVE').length} / {c.requiredReviews}</td></tr>)}</tbody></table></div>{items.length===0&&<p>No configuration changes in your current scope.</p>}<div className="pagination"><button disabled={busy||!history.length} onClick={()=>{setAfter(history.at(-1));setHistory(history.slice(0,-1));}}>Previous changes</button><button disabled={busy||items.length<100} onClick={()=>{setHistory([...history,after]);setAfter(items.at(-1)?.id);}}>Next changes</button></div></>}
     {selected&&<section className="detail" aria-label="Configuration impact"><div className="page-heading"><h2>Review configuration impact</h2><button disabled={busy} onClick={()=>{setSelected(undefined);setConfirmed(false);}}>Close change</button></div><p><strong>{selected.state}</strong> · Change revision {selected.revision} · Directory revision {selected.directoryRevision} · Authorization epoch {selected.authorizationEpoch}</p>

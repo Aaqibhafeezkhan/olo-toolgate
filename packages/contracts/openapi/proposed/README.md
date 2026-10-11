@@ -6,7 +6,7 @@ The HTTP operations decided at D1 that are not implemented yet. The served docum
 
 | File | Adds |
 |---|---|
-| `control-v1.proposed.yaml` | Settings `PATCH` (merge patch, `If-Match`, 409); package upload, versions, review and enable; deployment bindings and effective values; Tool Host registration; v2 bodies for `permits/consume` and `effects/report`; lease heartbeat; kill events, recoveries and break-glass |
+| `control-v1.proposed.yaml` | Package upload, versions, review and enable; deployment bindings and effective values; Tool Host registration; v2 bodies for `permits/consume` and `effects/report`; lease heartbeat; kill events, recoveries and break-glass |
 | `gateway-v1.proposed.yaml` | Scoped MCP routes `/mcp/agent/{agent}`, `/mcp/agent-group/{group}`, `/mcp/agent-group/{group}/{agent}`; RFC 9728 metadata |
 | `quickstart-v1.proposed.yaml` | Package upload with auto-enable |
 

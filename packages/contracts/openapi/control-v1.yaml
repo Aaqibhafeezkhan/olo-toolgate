@@ -2485,8 +2485,10 @@ paths:
   /api/control/v1/settings:
     get:
       operationId: getServerSettings
-      description: Requires toolgate-admin. Returns the tenant's control-plane settings,
-        including device auto-approval. The document is also the export format.
+      description: Requires toolgate-admin. Returns the tenant's control-plane settings
+        (formatVersion 2), grouped by Configuration page. clientCheckIn is read-only and
+        always shows the running deployment's values. The document is also the export
+        format.
       responses:
         '200':
           description: Success; no-store
@@ -2502,7 +2504,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/control.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2514,9 +2516,10 @@ paths:
         '503': *id010
     put:
       operationId: updateServerSettings
-      description: Requires toolgate-admin. Replaces the tenant's control-plane settings;
-        also used to import an exported settings document. The revision in the body
-        is ignored; If-Match carries the current revision.
+      description: Requires toolgate-admin. Replaces the editable settings with a full
+        formatVersion 2 record; used to restore an exported settings document. The
+        revision and clientCheckIn in the body are ignored; If-Match carries the current
+        revision.
       parameters:
       - *id011
       - *id012
@@ -2525,7 +2528,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/control.schema.json#/$defs/ControlServerSettings
+              $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
       responses:
         '200':
           description: Success; no-store
@@ -2541,7 +2544,46 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/control.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+        '400': *id002
+        '401': *id003
+        '403': *id004
+        '404': *id005
+        '409': *id006
+        '413': *id007
+        '415': *id008
+        '500': *id009
+        '503': *id010
+    patch:
+      operationId: patchServerSettings
+      description: Requires toolgate-admin. Merge patch (RFC 7396) of the editable settings
+        groups; each Configuration page sends only its own fields. clientCheckIn is
+        env-owned and cannot be patched. A stale If-Match returns 409.
+      parameters:
+      - *id011
+      - *id012
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettingsPatch
+      responses:
+        '200':
+          description: Success; no-store
+          headers:
+            ETag:
+              description: Quoted settings revision
+              schema:
+                type: string
+            X-Request-ID:
+              description: Server correlation ID
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
         '400': *id002
         '401': *id003
         '403': *id004

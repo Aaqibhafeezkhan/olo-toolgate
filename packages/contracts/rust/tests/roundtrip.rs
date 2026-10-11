@@ -97,7 +97,6 @@ fn shared_fixture_round_trips() {
         ControlResourceExtractorPage,
         ControlRole,
         ControlRolePage,
-        ControlServerSettings,
         ControlSnapshot,
         ControlTeam,
         ControlTeamPage,

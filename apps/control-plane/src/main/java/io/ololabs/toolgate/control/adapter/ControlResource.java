@@ -48,6 +48,11 @@ public class ControlResource {
         if (document == null || document.length() > 16384) throw Failure.validation();
         return Response.fromResponse(response(settings.update(actor(), document, expected(revision), key, correlation.id()), "UPDATE", "settings")).header("Cache-Control", "no-store").build();
     }
+    @PATCH @Path("settings") @Consumes("application/merge-patch+json")
+    public Response patchSettings(@HeaderParam("Idempotency-Key") String key, @HeaderParam("If-Match") String revision, String document) {
+        if (document == null || document.length() > 16384) throw Failure.validation();
+        return Response.fromResponse(response(settings.patch(actor(), document, expected(revision), key, correlation.id()), "UPDATE", "settings")).header("Cache-Control", "no-store").build();
+    }
     @GET @Path("admin-session") @io.quarkus.security.Authenticated
     public String adminSession() {
         var identity=actor();

@@ -8,6 +8,8 @@ import type { DirectoryKind, DirectoryRecords, DirectoryPages } from './operatio
 import { Failure } from './Failure';
 import { Approvals } from './Approvals';
 import {ConfigurationRequests} from './ConfigurationRequests';
+import {ConfigurationTransfer} from './ConfigurationTransfer';
+import {ServerConfiguration,DeviceConfiguration,SettingsTransfer} from './ServerSettings';
 import { Fleet } from './Fleet';
 import { Builder } from './Builder';
 import { Enrollment } from './Enrollment';
@@ -26,11 +28,18 @@ import oloLogo from './assets/olo.png';
 declare const __APP_VERSION__: string;
 declare const __APP_BUILD__: string;
 const directorySections = [['users','Users'],['teams','Teams'],['roles','Typed roles'],['tools','Tools'],['policies','Policies'],['devices','Devices'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['delegations','Human delegations'],['agentDelegations','Agent delegations'],['bindings','Execution bindings'],['extractors','Resource extractors'],['workloadBindings','Workload identities'],['identityBindings','Human identities'],['deviceEvidence','Device evidence']] as const;
-const sections = [['overview','Overview'],...directorySections,['audit','Audit log'],['approvals','Approvals'],['configuration','Configuration reviews'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['fleet','Packages'],['builder','Tool builder'],['enroll','Enroll device'],['local','Built-in tools and vault'],['requests','Client tool requests'],['mapping','Agent Group tool mapping'],['about','About']] as const;
-const navigationGroups=[{label:'Audit',routes:['audit','approvals','configuration','outcomes','simulation']},{label:'Tools',routes:['tools','toolGroups','grants','bindings','policies','extractors','builder','local','requests']},{label:'Devices',routes:['devices','deviceGroups','deviceEvidence','enroll','fleet']},{label:'Users',routes:['users','teams','roles','identityBindings','delegations']},{label:'Agents',routes:['agents','agentGroups','mapping','workloadBindings','agentDelegations']}] as const;
+const sections = [['overview','Overview'],...directorySections,['audit','Audit log'],['approvals','Approvals'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['fleet','Packages'],['builder','Tool builder'],['enroll','Enroll device'],['local','Built-in tools and vault'],['requests','Client tool requests'],['mapping','Agent Group tool mapping'],['about','About']] as const;
+const navigationGroups=[{label:'Audit',routes:['audit','approvals','config-reviews','outcomes','simulation']},{label:'Configuration',routes:['config-server','config-device','config-backup']},{label:'Tools',routes:['tools','toolGroups','grants','bindings','policies','extractors','builder','local','requests']},{label:'Devices',routes:['devices','deviceGroups','deviceEvidence','enroll','fleet']},{label:'Users',routes:['users','teams','roles','identityBindings','delegations']},{label:'Agents',routes:['agents','agentGroups','mapping','workloadBindings','agentDelegations']}] as const;
 type Route = typeof sections[number][0];
 type RecordValue = DirectoryRecords[DirectoryKind];
-const routeFromHash = (): Route => sections.find(([route]) => window.location.hash.split('?')[0] === `#${route}`)?.[0] ?? 'overview';
+/** Old #configuration links open Configuration > Server; links that name a review still open it in the queue. */
+function redirectLegacyHash() {
+  const [path, query] = window.location.hash.split('?');
+  if (path !== '#configuration') return;
+  const id = new URLSearchParams(query).get('id');
+  window.history.replaceState(null, '', id ? `#config-reviews?id=${encodeURIComponent(id)}` : '#config-server');
+}
+const routeFromHash = (): Route => { redirectLegacyHash(); return sections.find(([route]) => window.location.hash.split('?')[0] === `#${route}`)?.[0] ?? 'overview'; };
 const safeOrigin = () => window.location.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
 
 /** Authenticated shell; identities/roles are verified only by Control. */
@@ -152,7 +161,7 @@ export function App() {
         onKeyDown={event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); resizeSidebar(event.key==='Home'?190:event.key==='End'?420:sidebarWidth+(event.key==='ArrowLeft'?-20:20)); } }} />}</div>
 
       <div className="workspace">
-        <main id="main" tabIndex={-1} className={administrator&&route==='requests'?'request-canvas':undefined}>{route==='about'?<About/>:!administrator?<Approvals client={client}/>:route==='outcomes'?<EffectOutcomes client={client}/>:route==='simulation'?<AccessSimulation client={client}/>:route==='configuration'?<ConfigurationRequests client={client}/>:route==='mapping'?<AgentToolMapping client={client}/>:route==='devices'?<Devices client={client}/>:route==='requests'?<RemoteRequests client={client}/>:route === 'local' ? quickstart ? <QuickstartTools client={client} /> : <p>Local tools are available in Quickstart.</p> : route === 'overview' ? <Dashboard client={client} /> : route === 'audit' ? <Audit client={client}/> : route === 'approvals' ? <Approvals client={client} /> : route === 'fleet' ? <Fleet client={client} /> : route === 'builder' ? <Builder client={client} /> : route === 'enroll' ? <><Enrollment client={client} /><ClientDownloads /></> : <Directory key={route} client={client} kind={route} />}</main>
+        <main id="main" tabIndex={-1} className={administrator&&route==='requests'?'request-canvas':undefined}>{route==='about'?<About/>:!administrator?<Approvals client={client}/>:route==='outcomes'?<EffectOutcomes client={client}/>:route==='simulation'?<AccessSimulation client={client}/>:route==='config-reviews'?<ConfigurationRequests client={client}/>:route==='config-server'?<ServerConfiguration client={client}/>:route==='config-device'?<DeviceConfiguration client={client}/>:route==='config-backup'?<><div className="page-heading"><h1>Backup/Restore</h1></div><ConfigurationTransfer client={client}/><SettingsTransfer client={client}/></>:route==='mapping'?<AgentToolMapping client={client}/>:route==='devices'?<Devices client={client}/>:route==='requests'?<RemoteRequests client={client}/>:route === 'local' ? quickstart ? <QuickstartTools client={client} /> : <p>Local tools are available in Quickstart.</p> : route === 'overview' ? <Dashboard client={client} /> : route === 'audit' ? <Audit client={client}/> : route === 'approvals' ? <Approvals client={client} /> : route === 'fleet' ? <Fleet client={client} /> : route === 'builder' ? <Builder client={client} /> : route === 'enroll' ? <><Enrollment client={client} /><ClientDownloads /></> : <Directory key={route} client={client} kind={route} />}</main>
         <footer>Control verifies permissions. Gateway checks current policy for every runtime authorization.</footer></div></div></div>}
   </>;
 }
@@ -182,6 +191,11 @@ const iconPaths: Record<string,string> = {
   mapping:'M4 4h6v6H4z M14 14h6v6h-6z M10 7h7v7',
   deviceGroups:'M3 4h7v6H3z M14 4h7v6h-7z M8 15h8v6H8z M6 10v2h12v-2 M12 12v3',
   disconnect:'M10 3H3v18h7 M9 12h13 M17 7l5 5-5 5',
+  Configuration:'M4 6h10 M18 6h2 M4 12h4 M12 12h8 M4 18h12 M20 18h0 M16 4v4 M10 10v4 M18 16v4',
+  'config-reviews':'M4 4h12v16H4z M7 8h6 M7 12h6 M15 15l5 5 M17 17a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
+  'config-server':'M4 4h16v6H4z M4 14h16v6H4z M8 7h1 M8 17h1',
+  'config-device':'M7 2h10v20H7z M10 18h4 M10 6h4',
+  'config-backup':'M12 3v12 M7 10l5 5 5-5 M4 17v4h16v-4',
 };
 function MenuIcon({name}:{name:string}) { return <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={iconPaths[name]}/></svg>; }
 

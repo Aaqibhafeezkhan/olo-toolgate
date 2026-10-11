@@ -155,28 +155,54 @@ final class EndpointTest {
         assertThrows(Failure.class,()->service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(second.userCode(),secondReview.keyFingerprint(),EnrollmentChoice.APPROVE,null,null)),"audit-fail","request"));
         assertEquals(EnrollmentState.PENDING,review(s,second).state());assertThrows(Failure.class,()->s.service.device(s.admin,"audit"));
     }
+    private static io.ololabs.toolgate.contracts.v2.ControlServerSettings settings(boolean auto,long days,String owner,String name){
+        return new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,1L,new io.ololabs.toolgate.contracts.v2.GatewaySettings(name),
+            new io.ololabs.toolgate.contracts.v2.DeviceApproval(auto,days*ServerSettingsService.DAY_MS,owner),ClientCheckInPolicy.QUICKSTART.effective());
+    }
     @Test void autoApprovalUsesSettingsAndSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        var s=configured(new PostgresStore(SqliteState.open(directory.resolve("auto.sqlite")),codec));var settings=new ServerSettingsService(s.store,codec);
-        var defaults=codec.model(settings.get(s.admin).body(),ControlServerSettings.class);
-        assertEquals(0L,defaults.revision());assertFalse(defaults.autoApproveDevices());assertEquals(30L,defaults.autoApproveDurationDays());assertEquals(ServerSettingsService.DEFAULT_GATEWAY_NAME,defaults.gatewayName());
+        var s=configured(new PostgresStore(SqliteState.open(directory.resolve("auto.sqlite")),codec));
+        var policy=ClientCheckInPolicy.configure(2000L,20,null);s.service.checkInPolicy(policy);
+        var settings=new ServerSettingsService(s.store,codec,policy);
+        var defaults=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+        assertEquals(2L,defaults.formatVersion());assertEquals(1L,defaults.revision());assertFalse(defaults.deviceApproval().autoApprove());
+        assertEquals(30L*ServerSettingsService.DAY_MS,defaults.deviceApproval().durationMs());assertEquals(ServerSettingsService.DEFAULT_GATEWAY_NAME,defaults.gateway().gatewayName());
+        // Check-in is the running env policy, read-only.
+        assertEquals(policy.effective(),defaults.clientCheckIn());
         assertEquals(403,assertThrows(Failure.class,()->settings.get(new DirectoryService.Actor(s.admin.tenant(),"a".repeat(64),false))).status());
-        assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,codec.json(new ControlServerSettings(1L,0L,true,30L,null,null)),0,"no-owner","request")).status());
-        assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,codec.json(new ControlServerSettings(1L,0L,true,30L,"missing",null)),0,"missing-owner","request")).status());
+        assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,codec.json(settings(true,30,null,"Lab Gateway")),1,"no-owner","request")).status());
+        assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,codec.json(settings(true,30,"missing","Lab Gateway")),1,"missing-owner","request")).status());
         var manual=start(s,"manual");assertEquals(EnrollmentState.PENDING,review(s,manual).state());assertEquals(ServerSettingsService.DEFAULT_GATEWAY_NAME,poll(s,manual).serverName());
-        var body=codec.json(new ControlServerSettings(1L,0L,true,30L,"owner","Lab Gateway"));
-        var saved=settings.update(s.admin,body,0,"enable","request");assertEquals(1L,codec.model(saved.body(),ControlServerSettings.class).revision());
-        assertEquals(saved,settings.update(s.admin,body,0,"enable","retry"));
-        assertEquals(409,assertThrows(Failure.class,()->settings.update(s.admin,body,0,"stale","request")).status());
+        // Each Configuration page patches only its own group.
+        var gateway="{\"gateway\":{\"gatewayName\":\"Lab Gateway\"}}";
+        var renamed=settings.patch(s.admin,gateway,1,"rename","request");
+        var afterRename=codec.model(renamed.body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+        assertEquals(2L,afterRename.revision());assertEquals("Lab Gateway",afterRename.gateway().gatewayName());assertFalse(afterRename.deviceApproval().autoApprove());
+        assertEquals(renamed,settings.patch(s.admin,gateway,1,"rename","retry"));
+        assertEquals(409,assertThrows(Failure.class,()->settings.patch(s.admin,gateway,1,"stale","request")).status());
+        assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"clientCheckIn\":{\"checkInMs\":500,\"jitterPct\":0,\"offlineAfterMs\":120000,\"source\":\"DATABASE\"}}",2,"env-owned","request")).status());
+        assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"deviceApproval\":{\"autoApprove\":true}}",2,"patch-no-owner","request")).status());
+        var saved=settings.patch(s.admin,"{\"deviceApproval\":{\"autoApprove\":true,\"ownerUserId\":\"owner\"}}",2,"enable","request");
+        var enabled=codec.model(saved.body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+        assertEquals(3L,enabled.revision());assertTrue(enabled.deviceApproval().autoApprove());assertEquals("Lab Gateway",enabled.gateway().gatewayName());
+        assertEquals(30L*ServerSettingsService.DAY_MS,enabled.deviceApproval().durationMs());
         var automatic=start(s,"automatic");var result=poll(s,automatic);
         assertEquals(EnrollmentState.CONSUMED,result.state());assertNotNull(result.identity());assertEquals("Lab Gateway",result.serverName());
         var device=codec.model(s.service.device(s.admin,"automatic").body(),EndpointDeviceRecord.class);
         assertEquals("owner",device.userId());assertEquals(START+30L*86400000,device.connectionExpiresAtUnixMs());assertTrue(device.connectionApproved());
         assertEquals(List.of(manual.userCode()),codec.model(s.service.pending(s.admin,"owner").body(),EndpointEnrollmentPage.class).items().stream().map(EndpointEnrollmentReview::userCode).toList());
+        // Restoring an export replaces the record; its check-in values are ignored.
+        var exported=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+        var foreign=new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,3L,exported.gateway(),new io.ololabs.toolgate.contracts.v2.DeviceApproval(false,7L*ServerSettingsService.DAY_MS,null),ClientCheckInPolicy.QUICKSTART.effective());
+        var restored=codec.model(settings.update(s.admin,codec.json(foreign),3,"restore","request").body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+        assertEquals(4L,restored.revision());assertFalse(restored.deviceApproval().autoApprove());assertEquals(policy.effective(),restored.clientCheckIn());
+        assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,"{\"formatVersion\":1,\"revision\":4,\"autoApproveDevices\":false,\"autoApproveDurationDays\":7}",4,"v1","request")).status());
+        assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"gateway\":{\"gatewayName\":\" spaced\"}}",4,"bad-name","request")).status());
+        assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"deviceApproval\":{\"autoApprove\":false,\"durationMs\":1000}}",4,"too-short","request")).status());
         // Startup import seeds only once unless overwrite is requested.
-        assertFalse(settings.importAtStartup(s.admin.tenant(),new ControlServerSettings(1L,0L,false,7L,null,null),false,"startup"));
-        assertTrue(settings.importAtStartup(s.admin.tenant(),new ControlServerSettings(1L,0L,false,7L,null,null),true,"startup"));
-        var imported=codec.model(settings.get(s.admin).body(),ControlServerSettings.class);assertEquals(2L,imported.revision());assertEquals(7L,imported.autoApproveDurationDays());assertEquals("Lab Gateway",imported.gatewayName());
-        assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,"{\"formatVersion\":1,\"revision\":2,\"autoApproveDevices\":false,\"autoApproveDurationDays\":7,\"gatewayName\":\" spaced\"}",2,"bad-name","request")).status());
+        assertFalse(settings.importAtStartup(s.admin.tenant(),settings(false,7,null,"Lab Gateway"),false,"startup"));
+        assertTrue(settings.importAtStartup(s.admin.tenant(),settings(false,7,null,"Imported"),true,"startup"));
+        var imported=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+        assertEquals(5L,imported.revision());assertEquals(7L*ServerSettingsService.DAY_MS,imported.deviceApproval().durationMs());assertEquals("Imported",imported.gateway().gatewayName());
         assertEquals(EnrollmentState.PENDING,review(s,start(s,"after-off")).state());
         assertEquals(30L,ConfigurationImportBootstrap.days("30Day"));assertEquals(7L,ConfigurationImportBootstrap.days("7"));
         assertThrows(IllegalStateException.class,()->ConfigurationImportBootstrap.days("month"));

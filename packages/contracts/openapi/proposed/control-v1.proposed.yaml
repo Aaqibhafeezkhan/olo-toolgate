@@ -5,25 +5,18 @@ openapi: 3.1.0
 info:
   title: OLO ToolGate Control Plane API (proposed v2 additions)
   version: 0.10.0-dev
-  description: Proposed at design gate D1 (ADRs 014, 015, 018, 020, 021), with the invocation, reserve and task endpoints added at D2 (ADR 016). Not served. Milestone M1 moves each operation into
-    the served file when it is implemented, so the served contract never advertises an unimplemented endpoint.
+  description: Proposed at design gate D1 (ADRs 014, 015, 018, 020, 021), with the invocation, reserve and task endpoints
+    added at D2 (ADR 016). Not served. Milestone M1 moves each operation into the served file when it is implemented, so the
+    served contract never advertises an unimplemented endpoint.
 security:
 - adminAccessToken: []
 paths:
-  /api/control/v1/settings:
-    patch:
-      operationId: patchServerSettings
-      description: Requires toolgate-admin. Field-level merge patch (RFC 7396) of the settings record. Each Configuration
-        page sends only its own fields. Env-owned fields (clientCheckIn) are rejected. A stale If-Match returns 409 with the
-        current record. The full-record PUT stays for import.
+  /api/control/v1/packages/uploads:
+    post:
+      operationId: uploadPackage
+      description: Requires toolgate-admin. Uploads a .tgpkg. Control verifies zip rules, CHECKSUMS, size ceilings, secret
+        scan and signatures, stores the sealed version and drafts a review (plan.md §7.6, §8.1).
       parameters:
-      - &id004
-        name: If-Match
-        in: header
-        required: true
-        description: Quoted current revision; a stale value returns 409 with the current record
-        schema:
-          type: string
       - &id002
         name: Idempotency-Key
         in: header
@@ -33,41 +26,6 @@ paths:
           type: string
           minLength: 8
           maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/merge-patch+json:
-            schema:
-              $ref: ../../schemas/v2/settings.schema.json#/$defs/ControlServerSettingsPatch
-      responses:
-        '200':
-          description: Updated settings; no-store
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
-          headers: &id003
-            ETag:
-              description: Quoted revision
-              schema:
-                type: string
-        '400': &id001
-          $ref: '#/components/responses/Error'
-        '401': *id001
-        '403': *id001
-        '404': *id001
-        '409': *id001
-        '413': *id001
-        '415': *id001
-        '500': *id001
-        '503': *id001
-  /api/control/v1/packages/uploads:
-    post:
-      operationId: uploadPackage
-      description: Requires toolgate-admin. Uploads a .tgpkg. Control verifies zip rules, CHECKSUMS, size ceilings, secret
-        scan and signatures, stores the sealed version and drafts a review (plan.md §7.6, §8.1).
-      parameters:
-      - *id002
       requestBody:
         required: true
         content:
@@ -82,7 +40,8 @@ paths:
             application/json:
               schema:
                 $ref: ../../schemas/v2/package.schema.json#/$defs/PackageVersion
-        '400': *id001
+        '400': &id001
+          $ref: '#/components/responses/Error'
         '401': *id001
         '403': *id001
         '404': *id001
@@ -138,7 +97,11 @@ paths:
             application/json:
               schema:
                 $ref: ../../schemas/v2/package.schema.json#/$defs/PackageReview
-          headers: *id003
+          headers: &id003
+            ETag:
+              description: Quoted revision
+              schema:
+                type: string
         '401': *id001
         '403': *id001
         '404': *id001
@@ -162,7 +125,13 @@ paths:
         description: SemVer
         schema:
           type: string
-      - *id004
+      - &id004
+        name: If-Match
+        in: header
+        required: true
+        description: Quoted current revision; a stale value returns 409 with the current record
+        schema:
+          type: string
       - *id002
       requestBody:
         required: true
@@ -324,8 +293,8 @@ paths:
   /api/control/v1/access/invocations/reserve:
     post:
       operationId: reserveInvocationPermitV2
-      description: Extends the existing endpoint with a v2 body. Mints one Control-signed permit for one attempt, addressed to
-        one Tool Host or device, and reserves its single-use nonce (invocation-state-v2.md T4, ADR 013).
+      description: Extends the existing endpoint with a v2 body. Mints one Control-signed permit for one attempt, addressed
+        to one Tool Host or device, and reserves its single-use nonce (invocation-state-v2.md T4, ADR 013).
       requestBody:
         required: true
         content:
@@ -436,7 +405,7 @@ paths:
       operationId: getInvocationTask
       description: Task state for MCP tasks/get (invocation-state-v2.md §7). Control compares the owner digest the Gateway
         derived from the authenticated caller; a task owned by anyone else is 404, never 403.
-      parameters: &id010
+      parameters: &id005
       - name: taskId
         in: path
         required: true
@@ -468,7 +437,7 @@ paths:
     post:
       operationId: submitInvocationTaskInput
       description: MCP tasks/update input for a task in INPUT_REQUIRED, with the same owner rule as getInvocationTask.
-      parameters: *id010
+      parameters: *id005
       requestBody:
         required: true
         content:
