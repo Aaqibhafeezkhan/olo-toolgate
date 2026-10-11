@@ -196,6 +196,7 @@ public class PostgresStore implements Store {
         }
         public void save(Directory before, Directory after) {
             try {
+                io.ololabs.toolgate.control.application.BootstrapAdministrator.validate(this,after);
                 if(after.equals(before))return;
                 if(after.revision()<before.revision() || !after.entries().equals(before.entries())&&after.revision()<=before.revision())throw Failure.conflict();
                 try (var statement = statement("INSERT INTO control_tenants (tenant_id,revision,authorization_epoch,cutover_revision) VALUES (?,?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET revision=excluded.revision,authorization_epoch=GREATEST(control_tenants.authorization_epoch+1,excluded.authorization_epoch)", after.revision(),after.revision(),after.revision())) {
@@ -217,6 +218,16 @@ public class PostgresStore implements Store {
             try (var statement = statement("SELECT 1 FROM control_record_ids WHERE tenant_id=? AND kind=? AND record_id=?", id.kind().name(), id.value()); var rows = statement.executeQuery()) {
                 return rows.next();
             } catch (SQLException e) { throw Failure.unavailable(); }
+        }
+        public String bootstrapAdminUserId() {
+            try(var s=statement("SELECT user_id FROM control_bootstrap_admins WHERE tenant_id=?");var rows=s.executeQuery()){return rows.next()?rows.getString(1):null;}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void protectBootstrapAdmin(String userId) {
+            io.ololabs.toolgate.control.domain.Ids.valid(userId);
+            try(var s=statement("INSERT INTO control_bootstrap_admins(tenant_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",userId)){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+            if(!userId.equals(bootstrapAdminUserId()))throw Failure.conflict();
         }
         public Reply replay(String actor, String key, String digest) {
             try {

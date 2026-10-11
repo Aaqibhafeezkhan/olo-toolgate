@@ -4,6 +4,8 @@
 import base64
 import hashlib
 import json
+import os
+import re
 import time
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, ec
@@ -27,6 +29,9 @@ def prepare(data, tenant, issuer, key, atomic, profiles):
         return device, packet_path, trust_path
     if (data / 'state/control.sqlite').exists():
         raise ValueError('Existing state requires externally reviewed recovery; automatic privilege conversion is unavailable')
+    admin_email = os.environ.get('TOOLGATE_ADMIN_EMAIL', 'admin@admin.com').strip()
+    if len(admin_email) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', admin_email):
+        raise ValueError('TOOLGATE_ADMIN_EMAIL must be a valid email address')
     now = int(time.time() * 1000)
     # Workload bindings require a later reviewed configuration, even when disabled.
     snapshot = dict(formatVersion=2, tenantId=tenant, revision=0, users=[], teams=[], agents=[], tools=[],
@@ -36,6 +41,7 @@ def prepare(data, tenant, issuer, key, atomic, profiles):
     administrators = ['admin', 'reviewer-1', 'reviewer-2']
     subjects = administrators + ['test-readonly', 'test-readwrite', 'test-admin']
     snapshot['users'] = [dict(id=user, name='Quickstart '+user, enabled=user in administrators, revision=1) for user in subjects]
+    snapshot['users'][0]['email'] = admin_email
     snapshot['teams'] = [dict(id='team-default', name='Default team', enabled=True, revision=1,
                               userIds=subjects, roleIds=[]),
                          dict(id='installation-administrators', name='Installation administrators', enabled=True,
@@ -49,7 +55,7 @@ def prepare(data, tenant, issuer, key, atomic, profiles):
     actions = ['read','create','update','delete','enable','disable','recover','manage-role','grant','import','export',
                'audit','simulate','publish','policy','attest','rotate-credential','approve-configuration',
                'approve-operation','cancel-operation','approve-device','revoke','build','deploy','vault-read','vault-write']
-    snapshot['roles'] = [dict(id='installation-management', name='Installation management', enabled=True,
+    snapshot['roles'] = [dict(id='installation-management', name='Super Admin', enabled=True,
                              revision=1, portalRole='SUPER_ADMIN', roleType='MANAGEMENT',
                              managementRules=[dict(actions=actions, groupType=kind, groups=all_groups,
                                                    grantableScopes=[ceiling], conditions=conditions)

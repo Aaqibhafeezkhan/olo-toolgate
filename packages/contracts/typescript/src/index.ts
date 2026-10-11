@@ -5,6 +5,7 @@ import type * as V2 from "./v2/index.js";
 /** Server-verified administrator portal session. */
 export interface AdminSession {
   readonly role: UserRole;
+  readonly bootstrapAdminUserId?: string;
 }
 /** Immutable artifact identity; digest must be verified by consumers. */
 export interface ArtifactDescriptor {
@@ -607,6 +608,7 @@ export interface ControlUser {
   readonly name: string;
   readonly enabled: boolean;
   readonly revision: number;
+  readonly email?: string;
 }
 /** Cursor page; nextCursor is absent after the last item. */
 export interface ControlUserPage {

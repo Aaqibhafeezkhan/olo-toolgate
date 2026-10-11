@@ -11,6 +11,8 @@ pub mod v2;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdminSession {
     pub role: UserRole,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bootstrap_admin_user_id: Option<String>,
 }
 /// Immutable artifact identity; digest must be verified by consumers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -940,6 +942,8 @@ pub struct ControlUser {
     pub name: String,
     pub enabled: bool,
     pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
 }
 /// Cursor page; nextCursor is absent after the last item.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
