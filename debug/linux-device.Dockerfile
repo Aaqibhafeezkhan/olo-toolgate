@@ -9,6 +9,7 @@ COPY apps/gateway/Cargo.toml apps/gateway/Cargo.toml
 COPY apps/gateway/src apps/gateway/src
 COPY apps/gateway/benches apps/gateway/benches
 COPY apps/endpoint-client apps/endpoint-client
+COPY apps/tool-host apps/tool-host
 COPY tool-sdk/cli tool-sdk/cli
 RUN --mount=type=cache,id=toolgate-devices-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=toolgate-devices-target,target=/src/target,sharing=locked \
