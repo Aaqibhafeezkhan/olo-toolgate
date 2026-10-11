@@ -11,6 +11,7 @@ COPY apps/gateway/src apps/gateway/src
 COPY apps/gateway/benches apps/gateway/benches
 COPY apps/endpoint-client/Cargo.toml apps/endpoint-client/Cargo.toml
 COPY apps/endpoint-client/src apps/endpoint-client/src
+COPY tool-sdk/cli tool-sdk/cli
 COPY packages/contracts/tools packages/contracts/tools
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-gateway-musl-${TARGETARCH},target=/src/target,sharing=locked \
