@@ -198,7 +198,15 @@ def render_version(ver, version, outputs):
             if name == 'ContractSet' and not v2:
                 java += ['    }', '    /** Stable package identity. */', '    public static final String NAME = "olo-toolgate-contracts";', '    /** Canonical contract-set version. */', f'    public static final String VERSION = "{version}";', '    /** Embedded canonical schema inventory. */', '    public static final java.util.List<String> SCHEMA_FILES = java.util.List.of('+','.join('\"'+p.name+'\"' for p in sorted((CONTRACTS/'schemas/v1').glob('*.json')))+');', '    /** Current contract-set marker.\n     * @return the canonical identity and version\n     */', '    public static ContractSet current() { return new ContractSet(NAME, VERSION); }', '}']
             else:
-                java += ['    }', '}']
+                java += ['    }']
+                # Retain the pre-email/pre-bootstrap-metadata Java construction API.
+                if not v2 and name in ('ControlUser', 'AdminSession'):
+                    previous = [key for key in props if key in required]
+                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
+                    arguments = ', '.join(java_ident(key) if key in required else 'null' for key in props)
+                    java += ['    /** Construct a record without optional installation metadata.\n     *\n' + '\n'.join(f'     * @param {java_ident(key)} canonical {key} value' for key in previous) + '\n     */',
+                             f'    public {name}({signature}) {{ this({arguments}); }}']
+                java += ['}']
             rust += [f'/// {description}'.rstrip(), '#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]', '#[serde(rename_all = "camelCase", deny_unknown_fields)]', f'pub struct {name} {{']
             ts += [f'/** {description} */', f'export interface {name} {{']
             php += [f'/** {description} */', f'final readonly class {name} implements \\JsonSerializable {{', '    public function __construct(']

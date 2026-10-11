@@ -30,6 +30,15 @@ classifications remain a compatibility floor; managed role assignments replace
 legacy runtime template grants. Deploy matching Control/UI/contracts versions.
 Gateway bundle wire versions remain unchanged.
 
+The first administrator in a fresh reviewed setup is recorded separately from
+the editable directory and cannot be deleted or disabled through CRUD, reviewed
+configuration, or import. Existing active Quickstart setup identities receive
+this protection on upgrade without reseeding their profile or roles. This
+account protection grants no authority: Super Admin checks still resolve current
+enabled Team and Management Role assignments. Removing its role removes its
+privileges, subject to the existing last-active-Super-Admin invariant. User email
+is optional for compatibility and is unrelated to identity binding or authority.
+
 Role device scope applies to the trusted registered execution identity, not an
 arbitrary device ID supplied by a caller. Installed-client enrollment binds the
 reviewed key to a registered human owner. Owner/device enablement and connection

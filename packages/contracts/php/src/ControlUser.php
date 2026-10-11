@@ -11,19 +11,21 @@ final readonly class ControlUser implements \JsonSerializable {
         public string $id,
         public string $name,
         public bool $enabled,
-        public int $revision
+        public int $revision,
+        public ?string $email = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision']) || array_diff(['id', 'name', 'enabled', 'revision'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'email']) || array_diff(['id', 'name', 'enabled', 'revision'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['id'],
             $data['name'],
             $data['enabled'],
-            $data['revision']
+            $data['revision'],
+            array_key_exists('email', $data) ? $data['email'] : null
         );
     }
 

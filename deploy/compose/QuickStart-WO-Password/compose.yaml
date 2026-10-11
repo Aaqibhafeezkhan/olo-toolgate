@@ -13,6 +13,8 @@ services:
     cpus: 2
     stop_grace_period: 35s
     environment:
+      # Used only when the setup administrator is first created.
+      TOOLGATE_ADMIN_EMAIL: ${TOOLGATE_ADMIN_EMAIL:-admin@admin.com}
       TOOLGATE_DISABLE_ADMIN_PASSWORD: ${TOOLGATE_DISABLE_ADMIN_PASSWORD:-false}
       TOOLGATE_QUICKSTART_DATABASE_MODE: ${TOOLGATE_QUICKSTART_DATABASE_MODE:-sqlite}
       # Client check-in (env-owned; shown read-only in the console). 500 ms is the job pickup latency.

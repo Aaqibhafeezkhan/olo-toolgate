@@ -122,7 +122,8 @@ export class ControlClient {
     const query = new URLSearchParams({ limit: '50' }); if (cursor) query.set('cursor', cursor);
     return this.send(listOperations[kind], { query, signal });
   }
-  adminSession():Promise<AdminSession>{return this.send(operations.getAdminSession);}
+  bootstrapAdminUserId?:string;
+  async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;return session;}
   audit(cursor:string,signal?:AbortSignal):Promise<ControlAuditPage>{return this.send(operations.listAudit,{query:new URLSearchParams({cursor,limit:'50'}),signal});}
   record<K extends DirectoryKind>(kind:K,id:string):Promise<DirectoryRecords[K]> {return this.send(getOperations[kind],{id});}
   async all<K extends DirectoryKind>(kind:K,signal?:AbortSignal):Promise<DirectoryRecords[K][]> {

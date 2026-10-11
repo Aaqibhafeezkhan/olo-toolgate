@@ -5,7 +5,7 @@ import {ConfigurationPending,ControlClient} from './api';
 import type {DirectoryKind,DirectoryRecords} from './operations.generated';
 import {Failure} from './Failure';
 
-export const protectedRecord=(kind:DirectoryKind,id:string)=>({teams:'team-default',agentGroups:'default-agents',toolGroups:'default-tools',deviceGroups:'default-devices'} as Partial<Record<DirectoryKind,string>>)[kind]===id;
+export const protectedRecord=(kind:DirectoryKind,id:string,bootstrapAdminUserId?:string)=>kind==='users'&&id===bootstrapAdminUserId||({teams:'team-default',agentGroups:'default-agents',toolGroups:'default-tools',deviceGroups:'default-devices'} as Partial<Record<DirectoryKind,string>>)[kind]===id;
 type RecordValue=DirectoryRecords[DirectoryKind];
 type Report={id:string;error?:unknown;message?:string};
 export function useRecordActions(client:ControlClient,kind:DirectoryKind,refresh:()=>void){
@@ -17,7 +17,7 @@ export function useRecordActions(client:ControlClient,kind:DirectoryKind,refresh
     const results:Report[]=[];
     try{for(const record of records){
       if(operation!=='delete'&&record.enabled===(operation==='enable'))continue;
-      if(protectedRecord(kind,record.id)&&(operation==='delete'||operation==='disable'))continue;
+      if(protectedRecord(kind,record.id,client.bootstrapAdminUserId)&&(operation==='delete'||operation==='disable'))continue;
       const body=JSON.stringify({operation,record});
       let request=pending.current.get(body);
       if(!request){

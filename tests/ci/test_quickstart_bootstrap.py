@@ -6,6 +6,7 @@ import ast
 import http.client
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import subprocess
@@ -76,6 +77,33 @@ class QuickstartBootstrapTests(unittest.TestCase):
         with patch.object(bootstrap.time, 'time', return_value=0):
             self.assertEqual(self.prepare(), first)
         self.assertEqual([path.read_bytes() for path in first[1:]], originals)
+
+    def test_first_admin_has_default_email_and_super_admin_role(self):
+        with patch.dict(os.environ, {}, clear=True):
+            _, path, _ = self.prepare()
+        snapshot = json.loads(path.read_text(encoding='utf-8'))['authorization']['snapshot']
+        self.assertEqual('admin@admin.com', snapshot['users'][0]['email'])
+        admin = snapshot['users'][0]['id']
+        roles = {role['id']: role for role in snapshot['roles']}
+        self.assertTrue(any(admin in team['userIds'] and any(roles[r]['portalRole'] == 'SUPER_ADMIN' for r in team['roleIds']) for team in snapshot['teams']))
+        self.assertTrue(all('email' not in user for user in snapshot['users'][1:]))
+
+    def test_email_override_is_applied_only_on_first_creation(self):
+        with patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': 'owner@example.com'}):
+            first = self.prepare()
+        original = first[1].read_bytes()
+        self.assertEqual('owner@example.com', json.loads(original)['authorization']['snapshot']['users'][0]['email'])
+        (self.data/'state/control.sqlite').touch()
+        with patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': 'invalid-on-restart'}):
+            self.assertEqual(first, self.prepare())
+        self.assertEqual(original, first[1].read_bytes())
+
+    def test_invalid_email_is_rejected_before_signing_the_installation(self):
+        for value in ('', 'admin', 'admin@localhost', 'admin @example.com', 'a'*250+'@example.com'):
+            with self.subTest(value=value), patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': value}):
+                with self.assertRaisesRegex(ValueError, 'TOOLGATE_ADMIN_EMAIL'):
+                    self.prepare()
+        self.assertFalse((self.data/'installation-review.json').exists())
 
     def test_existing_database_without_installation_review_is_not_reseeded(self):
         (self.data/'state/control.sqlite').touch()
