@@ -26,6 +26,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 254,
+          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
         }
       },
       "required": [
@@ -777,6 +783,9 @@
       "properties": {
         "role": {
           "$ref": "control.schema.json#/$defs/UserRole"
+        },
+        "bootstrapAdminUserId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
         }
       },
       "required": [

@@ -8,16 +8,18 @@ namespace OloLabs\ToolGate\Contracts;
 /** Server-verified administrator portal session. */
 final readonly class AdminSession implements \JsonSerializable {
     public function __construct(
-        public UserRole $role
+        public UserRole $role,
+        public ?string $bootstrapAdminUserId = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['role']) || array_diff(['role'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['role', 'bootstrapAdminUserId']) || array_diff(['role'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
-            UserRole::from($data['role'])
+            UserRole::from($data['role']),
+            array_key_exists('bootstrapAdminUserId', $data) ? $data['bootstrapAdminUserId'] : null
         );
     }
 

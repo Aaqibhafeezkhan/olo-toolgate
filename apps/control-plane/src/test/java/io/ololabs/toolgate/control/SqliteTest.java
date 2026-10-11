@@ -53,9 +53,9 @@ final class SqliteTest {
         }
         var upgraded=SqliteState.open(path);
         try(var c=upgraded.getConnection();var s=c.createStatement()){
-            try(var r=s.executeQuery("SELECT count(*) FROM quickstart_migrations")){assertTrue(r.next());assertEquals(11,r.getInt(1));}
+            try(var r=s.executeQuery("SELECT count(*) FROM quickstart_migrations")){assertTrue(r.next());assertEquals(12,r.getInt(1));}
             try(var r=s.executeQuery("SELECT document FROM control_records WHERE record_id='kept'")){assertTrue(r.next());assertTrue(r.getString(1).contains("Kept"));}
-            s.execute("INSERT INTO quickstart_migrations VALUES(12,'future')");
+            s.execute("INSERT INTO quickstart_migrations VALUES(13,'future')");
         }
         assertThrows(IllegalStateException.class,()->SqliteState.open(path));
     }

@@ -15,6 +15,9 @@ public interface Store {
         default BuilderStore builder() { throw Failure.unavailable(); }
         default McpStore mcp() { throw Failure.unavailable(); }
         Directory load();
+        /** Immutable setup identity, separate from editable roles and identity bindings. */
+        default String bootstrapAdminUserId() { return null; }
+        default void protectBootstrapAdmin(String userId) { throw Failure.unavailable(); }
         boolean used(io.ololabs.toolgate.control.domain.Ids.RecordId id);
         void save(Directory before, Directory after);
         default void observeIdentity(io.ololabs.toolgate.contracts.ControlIdentityBinding identity){throw Failure.unavailable();}

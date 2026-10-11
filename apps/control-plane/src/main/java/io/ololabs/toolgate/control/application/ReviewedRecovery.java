@@ -53,7 +53,9 @@ public final class ReviewedRecovery {
             if(initial)StandardAccessPresets.install(entries,codec);
             var after=new Directory(before.revision()+1,entries);after.validate(512,1048576);codec.validatePolicies(after);
             boolean recovery=after.entries().values().stream().filter(e->e.id().kind()==Ids.Kind.USER&&e.enabled()).anyMatch(e->{var access=new ManagementAccess(codec).access(after,e.id().value());return access.portalRole()==UserRole.SUPER_ADMIN&&GroupGraph.DEFAULTS.keySet().stream().allMatch(kind->access.grants().stream().anyMatch(rule->rule.groupType().name().equals(kind.name())&&rule.groups().all()&&rule.actions().contains("recover")&&ManagementAccess.current(rule.conditions(),now)));});
-            if(!recovery)throw ManagementAccess.denied();tx.save(before,after);tx.enterprise().rememberRecovery(digest);
+            if(!recovery)throw ManagementAccess.denied();
+            if(initial){var management=new ManagementAccess(codec);var first=authorization.snapshot().users().stream().filter(ControlUser::enabled).filter(user->management.superAdministrator(after,user.id())).findFirst().orElseThrow(ManagementAccess::denied);tx.protectBootstrapAdmin(first.id());}
+            tx.save(before,after);tx.enterprise().rememberRecovery(digest);
             tx.audit(DirectoryService.digest(String.join("\n",new TreeSet<>(reviewers))),"RECOVERY_APPLY","reviewed-group-graph",after.revision(),"recovery-"+digest.substring(0,32),digest);return null;});
     }
 }
