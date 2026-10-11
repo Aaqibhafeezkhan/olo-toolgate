@@ -5,6 +5,7 @@ olo-toolgate/
 ├── apps/
 │   ├── gateway/
 │   ├── control-plane/
+│   ├── tool-host/
 │   ├── admin-ui/
 │   ├── endpoint-client/
 │   ├── marketplace-api/

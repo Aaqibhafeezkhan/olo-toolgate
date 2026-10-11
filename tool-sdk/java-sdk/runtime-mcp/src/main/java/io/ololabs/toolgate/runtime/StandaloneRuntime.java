@@ -166,6 +166,15 @@ public final class StandaloneRuntime implements ToolCatalog {
         return start(loader, Config.test(fixtures), exchanges, workingDirectory, diagnostics, null);
     }
 
+    /**
+     * Governed mode (Governed): one invocation under a Tool Host, with the host's values and claims in {@code config}
+     * and every route call sent to the host's broker through {@code broker}.
+     */
+    static StandaloneRuntime startGoverned(ClassLoader loader, Config config, TestExchanges broker, Path workingDirectory,
+            PrintStream diagnostics) {
+        return start(loader, config, broker, workingDirectory, diagnostics, null);
+    }
+
     private static StandaloneRuntime start(ClassLoader loader, Config config, TestExchanges exchanges, Path workingDirectory,
             PrintStream diagnostics, Tasks tasks) {
         Map<String, String> env = config.env;
@@ -191,11 +200,15 @@ public final class StandaloneRuntime implements ToolCatalog {
         List<JsonNode> tcpDestinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("tcp").forEach(tcpDestinations::add);
         runtime.egress.resolveTcp(config, tcpDestinations, diagnostics);
+        // Under a Tool Host, Control reserves business keys (plan.md §12.3), so the local store is not used.
+        if (config.mode == Config.Mode.GOVERNED) runtime.byMcpName.values().forEach(t -> t.reserves = false);
         if (runtime.byMcpName.values().stream().anyMatch(t -> t.reserves)) runtime.reservations = openReservations(env, workingDirectory);
         Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
         for (Tool tool : runtime.byMcpName.values()) runtime.bindVariables(tool, globals);
-        diagnostics.println("toolgate: standalone runtime for " + index.path("id").asText() + " (" + runtime.byMcpName.size()
-                + " tools). There is no enterprise audit in standalone mode; diagnostics stay local.");
+        if (config.mode != Config.Mode.GOVERNED) {
+            diagnostics.println("toolgate: standalone runtime for " + index.path("id").asText() + " (" + runtime.byMcpName.size()
+                    + " tools). There is no enterprise audit in standalone mode; diagnostics stay local.");
+        }
         if (config.mode == Config.Mode.DEVELOPMENT) {
             diagnostics.println("toolgate: WARNING development mode: claims come from toolgate.dev.json fixtures and results are marked as fixture identity.");
         }
@@ -492,7 +505,8 @@ public final class StandaloneRuntime implements ToolCatalog {
             if (value != null) {
                 value = coerce(type, value, "secret " + name);
                 redactor.add(value);
-            } else {
+            } else if (config.mode != Config.Mode.GOVERNED) {
+                // Under a Tool Host a secret without a handle is injected by the broker, never seen here.
                 diagnostics.println("toolgate: WARNING secret " + name + " of " + tool.toolId + " has no value; set TOOLGATE_SECRET_"
                         + name.toUpperCase(java.util.Locale.ROOT) + " or secrets." + name + " in toolgate.dev.json");
             }
@@ -510,6 +524,12 @@ public final class StandaloneRuntime implements ToolCatalog {
             out.put(c.path("name").asText(), new DeclaredValues.Entry(c.path("type").asText(), value));
         }
         return out;
+    }
+
+    /** The MCP name of the tool with this tool id, or null. */
+    String mcpNameOf(String toolId) {
+        for (Tool t : byMcpName.values()) if (t.toolId.equals(toolId)) return t.mcpName;
+        return null;
     }
 
     // ---- ToolCatalog ----
@@ -610,7 +630,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         // Identities come from the authenticated request only, never from arguments.
         String user = null;
         String sub = null;
-        if (config.mode.fixtures()) {
+        if (config.mode.configuredClaims()) {
             JsonNode claims = config.claims();
             if (claims != null && claims.path("sub").isTextual()) {
                 sub = claims.get("sub").asText();
@@ -806,7 +826,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         String invocationId = UUID.randomUUID().toString();
         Instant deadline = Instant.now().plusMillis(tool.deadlineMs);
         // Claims come from fixtures in development and test, and only from the verified credential otherwise (runtime-modes.md §4).
-        JsonNode identity = config.mode.fixtures() ? config.claims() : meta.identity() == null ? null : meta.identity().claims();
+        JsonNode identity = config.mode.configuredClaims() ? config.claims() : meta.identity() == null ? null : meta.identity().claims();
         DeclaredValues claims = new DeclaredValues("claim", claims(tool, identity),
                 n -> new PlatformError(PlatformError.Code.CLAIMS_UNAVAILABLE, "Claim " + n + " is not available"));
         claims.identity = identity;

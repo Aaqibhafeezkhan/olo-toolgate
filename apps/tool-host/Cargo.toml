@@ -1,0 +1,41 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "olo-toolgate-tool-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The ToolGate Tool Host: admits Control-signed permits and runs server tools from verified packages"
+
+[lib]
+name = "tool_host"
+path = "src/lib.rs"
+
+[[bin]]
+name = "olo-toolgate-tool-host"
+path = "src/main.rs"
+
+[dependencies]
+olo-toolgate-contracts.workspace = true
+toolgate-cli = { path = "../../tool-sdk/cli" }
+serde.workspace = true
+serde_json.workspace = true
+axum.workspace = true
+tokio.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+base64.workspace = true
+ring.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+x509-parser.workspace = true
+futures-util.workspace = true
+regex = "1.13.1"
+ryu-js = "1.0.3"
+
+[dev-dependencies]
+rsa = { version = "0.9.10", features = ["sha2"] }
+rand = "0.8.5"

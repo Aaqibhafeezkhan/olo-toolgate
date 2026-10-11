@@ -82,7 +82,7 @@ final class Egress {
             String value = config.destination(setting);
             if (value == null) {
                 // Test mode answers route calls from recorded exchanges, so no host is needed.
-                if (config.mode != Config.Mode.TEST) {
+                if (!config.mode.transported()) {
                     diagnostics.println("toolgate: WARNING destination " + id + " has no host; set " + variable + " or destinations." + setting
                             + " in toolgate.dev.json");
                 }
@@ -110,6 +110,11 @@ final class Egress {
         for (JsonNode d : destinations) {
             String id = d.path("id").asText();
             if (tcpTargets.containsKey(id)) continue;
+            if (config.mode == Config.Mode.GOVERNED) {
+                // TCP under a Tool Host goes through its CONNECT tunnel (plan.md §11.9), which is not built yet.
+                tcpTargets.put(id, new TcpTarget(id, null, -1, "TCP destination " + id + " is not available under a Tool Host yet"));
+                continue;
+            }
             String setting = d.path("hostSetting").asText();
             String variable = "TOOLGATE_DESTINATION_" + setting.toUpperCase(Locale.ROOT);
             String value = config.destination(setting);
