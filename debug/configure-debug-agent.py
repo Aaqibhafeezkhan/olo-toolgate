@@ -209,9 +209,9 @@ def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWri
         credentialSha256=digest,credentialEpoch=epoch,expiresAtUnixMs=expires))
     private_file(path,token)
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires,
-        context=dict(requestId='debug-mimic',tenantId='quickstart',mode='SERVICE',agentId='debug-mimic-agent',
-            workloadBindingId='debug-mimic-workload',chain=[],credentialEpoch=epoch,credentialSha256=digest,
-            bindingId='standard-ReadAndWrite-ReadAndWrite',deviceId=device))
+        context=dict(requestId='debug-mimic',tenantId='quickstart',mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='debug-mimic-agent',
+            workloadBindingId='debug-mimic-workload',chain=[],credentialEpoch=epoch,expiresAtUnixMs=expires,credentialSha256=digest,
+            bindingId='standard-ReadAndWrite-ReadAndWrite'))
     docker_script("import sys,json,time,os;os.umask(0o077);sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
         "p=s.DATA/'client-runtime-credentials.json';v=s.strict(p.read_bytes()) if p.exists() else [];c=json.load(sys.stdin);"
         "v=[x for x in v if x['expiresAtUnixMs']>int(time.time()*1000) and x['context'].get('workloadBindingId')!='debug-mimic-workload'];"

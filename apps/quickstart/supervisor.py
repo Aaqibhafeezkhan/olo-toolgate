@@ -297,9 +297,10 @@ def configure():
     digest=hashlib.sha256(runtime.encode()).hexdigest()
     device, packet, trust = prepare(DATA,TENANT,ISSUER,key,atomic,profiles)
     # This disabled workload is an authentication identity only. Installation creates no workload grants.
-    context=dict(requestId='local-workload',tenantId=TENANT,mode='SERVICE',agentId='agent-local',
+    # No device in the context: Control places each call on a device of binding-default's group.
+    context=dict(requestId='local-workload',tenantId=TENANT,mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='agent-local',
                  workloadBindingId='workload-local',chain=[],credentialEpoch=1,bindingId='binding-default',
-                 deviceId=device,credentialSha256=digest)
+                 credentialSha256=digest)
     credentials=[dict(tokenSha256=digest,context=context,expiresAtUnixMs=int(time.time()*1000)+86400000)]
     credentials.extend(client_credentials())
     atomic(DATA/'run/credentials.json',json.dumps(credentials))

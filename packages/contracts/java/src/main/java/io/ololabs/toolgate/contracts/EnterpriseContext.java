@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it.
+/** Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it. deviceId is the device Control placed the call on: the one online device of the execution binding device group (the user's own first), or the device a human chose.
  *
  * @param requestId canonical requestId value
  * @param tenantId canonical tenantId value

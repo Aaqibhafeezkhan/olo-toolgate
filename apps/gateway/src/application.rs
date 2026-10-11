@@ -38,7 +38,7 @@ impl Gateway {
             downstream_idempotency_key: None,
         };
         let invocation = self.authority.invoke(&submission).await?;
-        // A dependency cannot substitute another actor, binding, target or input.
+        // A dependency cannot substitute another actor, binding or input. Control chooses the device.
         let e = &invocation.evaluation;
         if invocation.id != context.request_id
             || e.context.request_id != context.request_id
@@ -50,8 +50,7 @@ impl Gateway {
             || e.context.chain != context.chain
             || e.context.session_epoch != context.session_epoch
             || e.context.credential_epoch != context.credential_epoch
-            || e.context.binding_id != context.binding_id
-            || e.context.device_id != context.device_id
+            || context.binding_id.as_deref() != Some(e.context.binding_id.as_str())
             || e.tool_id != submission.request.tool_id
             || e.action != submission.request.action
             || e.arguments_digest

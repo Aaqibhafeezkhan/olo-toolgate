@@ -336,7 +336,6 @@ async fn tools_call(
     })?;
     loop {
         if response.record.request_id != context.request_id
-            || response.record.device_id != context.device_id
             || response.record.agent_id != context.agent_id
             || response.record.tool_id != submission.request.tool_id
         {
