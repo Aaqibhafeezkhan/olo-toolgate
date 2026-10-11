@@ -18,6 +18,7 @@ TcpDestination(id, hostSetting, defaultHost?, port)
 |---|---|
 | Host values | `hostSetting` names a **service-profile setting**, confirmed by an admin at enable and part of the security delta. It is not a global and is not readable through `global()`. `defaultHost` is only the proposed value. |
 | `path` | RFC 6570 level-1 template. Every variable carries a pattern: `{name:regex}`. A variable without a pattern is an error. The patterns `.*` and `.+` are rejected; a variable never matches `/`. |
+| `tls` | `spkiPins` are `sha256/<base64>` of a certificate's SubjectPublicKeyInfo; with pins, a server is trusted only when a certificate in its chain matches one. Without pins or `caBundle`, the system CA store applies. |
 | `method` | One of `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`. Fixed per route. |
 | `query`, `headers` | Allowlists of names. `Authorization`, `Proxy-Authorization`, `Cookie`, `Host`, `X-Forwarded-*` and any header used by the route's auth are never allowed. |
 | `streaming` | `NONE` (default), `RESPONSE`, `BIDIRECTIONAL` |

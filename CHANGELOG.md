@@ -6,6 +6,17 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java standalone runtime has the routes HTTP client (M0 part 8). `context.http()` calls
+  only the routes a tool lists, with path variables matched against their patterns (never
+  `/`), allowlisted query names and headers, the route's size limits and a timeout a call
+  can only shorten. Destination hosts come from `TOOLGATE_DESTINATION_<HOSTSETTING>` or
+  `toolgate.dev.json`, SPKI pins are enforced, and `API_KEY`, `BASIC` and OAuth 2.0 client
+  credentials come from local secrets. Failures map to `UPSTREAM_4XX`, `UPSTREAM_5XX`,
+  `UPSTREAM_TIMEOUT` and `UPSTREAM_CONNECTION` with `effectUncertain`, and a ledger tool whose
+  request was sent without a complete answer ends `OUTCOME_UNKNOWN`. The processor now
+  refuses a route path variable without a pattern, and descriptor vector tool-03 declares
+  `/orders/{orderId:[0-9]{6,12}}/refunds`, so its digest changed.
+
 - The Java standalone runtime verifies bearer tokens (M0 part 7, adapter A4). With
   `TOOLGATE_AUTH_*` it checks JWTs against a JWKS URL or pinned keys (exact issuer and
   audience, an allowlist that never admits `none` or HMAC, `exp` and `nbf` within 60 s), or

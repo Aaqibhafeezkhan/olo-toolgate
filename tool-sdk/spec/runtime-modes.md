@@ -20,7 +20,7 @@ Defines the two runtimes behind the one authoring contract, the invariant that b
 | Input and output schemas | Identical | Identical |
 | Authoring API | Identical | Identical |
 | Route definitions | Same descriptor; the SDK HTTP client refuses undeclared routes (developer feedback, not a security boundary) | Same descriptor; enforced by the broker |
-| Destination hosts | Local setting `TOOLGATE_DESTINATION_<HOSTSETTING>` or `toolgate.dev.json`, validated against the declared destination (port, TLS, pins) | Reviewed service-profile setting |
+| Destination hosts | Local setting `TOOLGATE_DESTINATION_<HOSTSETTING>` or `toolgate.dev.json` (`host` or `host:port`), validated against the declared destination (port, TLS, pins). Only in development may a loopback host use another port or plain `http://`, for a local mock | Reviewed service-profile setting |
 | Globals | Env or `toolgate.dev.json`, validated against the same declarations | Approved configuration revision |
 | Secrets | Env, OS keychain or `toolgate.dev.json` | Vault and the credential broker; brokered secrets never enter the sandbox |
 | JWT claims | Verified identity, or a development fixture (§4) | Gateway-verified identity |

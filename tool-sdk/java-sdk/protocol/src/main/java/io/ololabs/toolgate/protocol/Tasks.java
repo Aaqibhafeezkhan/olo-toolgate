@@ -111,9 +111,15 @@ public final class Tasks implements AutoCloseable {
 
     /** Ends the task with a protocol-level error. */
     public void fail(String taskId, int code, String message) {
+        fail(taskId, code, message, null);
+    }
+
+    /** Ends the task with a protocol-level error that carries {@code data}. */
+    public void fail(String taskId, int code, String message, com.fasterxml.jackson.databind.JsonNode data) {
         end(taskId, t -> {
             t.status = TaskStatus.FAILED;
             t.error = JSON.objectNode().put("code", code).put("message", message);
+            if (data != null) t.error.set("data", data);
         });
     }
 

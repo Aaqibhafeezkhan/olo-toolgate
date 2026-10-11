@@ -61,6 +61,12 @@ class ConformanceTest {
             Map.entry("startup/fixtures-outside-development", "IdentityTest#overStdioThereIsNoTokenSoIdentityToolsGetClaimsUnavailable"),
             Map.entry("startup/verifier-config", "IdentityTest#verifierConfigurationIsCheckedAtStartup"),
             Map.entry("official-sdk/bearer-a4", "IdentityTest#claimsComeFromTheVerifiedToken,aMissingOrInvalidTokenGets401AtTheTransport"),
+            Map.entry("error-model/upstream-codes", "RoutesTest#upstreamFailuresMapToTheirCodes,aCallTimeoutNeverExtendsTheRouteTimeout,aConnectionThatFailsBeforeSendIsNotUncertain"),
+            Map.entry("error-model/effect-uncertain", "RoutesTest#aConnectionThatFailsBeforeSendIsNotUncertain,aLedgerToolWhoseRequestWasSentEndsOutcomeUnknown"),
+            Map.entry("route-analysis/path-variable-regex", "RoutesTest#pathVariablesMustMatchTheirPatternAndNeverMatchASlash"),
+            Map.entry("route-analysis/forbidden-headers", "RoutesTest#forbiddenAndUnlistedHeadersAreRefused"),
+            Map.entry("route-analysis/timeout-shorten-only", "RoutesTest#aCallTimeoutNeverExtendsTheRouteTimeout"),
+            Map.entry("route-analysis/no-free-url-api", "RoutesTest#thereIsNoFreeFormUrlApi"),
             Map.entry("official-sdk/a3-request-state", "MrtrTest#aStateIsRefusedWhenTamperedReplayedOrPresentedWithOtherArgumentsOrByAnotherIdentity"));
 
     @Test

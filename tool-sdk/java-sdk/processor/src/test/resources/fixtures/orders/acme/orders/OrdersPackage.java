@@ -16,7 +16,7 @@ import io.ololabs.toolgate.sdk.annotations.ToolPackage;
         scopes = "refunds:write", audience = "https://api.acme.com")
 @HttpRoute(id = "orders.get", destination = "acme-api", method = HttpMethod.GET, path = "/orders/{orderId:[0-9]{6,12}}",
         query = "since", headers = "X-On-Behalf-Of", auth = "acme-key")
-@HttpRoute(id = "orders.refund", destination = "acme-api", method = HttpMethod.POST, path = "/orders/{orderId}/refunds",
+@HttpRoute(id = "orders.refund", destination = "acme-api", method = HttpMethod.POST, path = "/orders/{orderId:[0-9]{6,12}}/refunds",
         headers = "Idempotency-Key", maxRequestBytes = 65536, maxResponseBytes = 65536, timeoutMs = 15000,
         auth = "acme-oauth")
 public final class OrdersPackage {}

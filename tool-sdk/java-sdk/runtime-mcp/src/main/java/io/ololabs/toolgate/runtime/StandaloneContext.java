@@ -58,6 +58,7 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     private volatile ObjectNode responses;
     private volatile ObjectNode pendingInput;
     volatile Thread worker;
+    private HttpClient http;
 
     StandaloneContext(DeclaredValues inputs, DeclaredValues globals, DeclaredValues secrets, DeclaredValues claims,
             String invocationId, String toolId, Instant deadline, Redactor redactor, PrintStream diagnostics) {
@@ -90,7 +91,8 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
 
     @Override
     public HttpClient http() {
-        throw new ToolConfigurationError("The routes HTTP client (toolgate-sdk-http) is not in this runtime yet");
+        if (http == null) throw new ToolConfigurationError("The routes HTTP client is not available here");
+        return http;
     }
 
     @Override
@@ -99,6 +101,11 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     }
 
     @Override public Invocation invocation() { return this; }
+
+    /** Gives this invocation its routes HTTP client. */
+    void attachHttp(HttpClient http) {
+        this.http = http;
+    }
 
     /** Makes this invocation a task's: progress and input requests go to it. */
     void attachTask(Tasks tasks, String taskId) {

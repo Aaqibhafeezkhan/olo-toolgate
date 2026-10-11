@@ -826,7 +826,7 @@
         "kind": "ROUTE",
         "toolId": "acme.orders/orders.refund",
         "widening": true,
-        "summary": "New route orders.refund (POST /orders/{orderId}/refunds)"
+        "summary": "New route orders.refund (POST /orders/{orderId:[0-9]{6,12}}/refunds)"
       }
     ],
     "bindingDraft": {
@@ -1117,7 +1117,7 @@
     "kind": "ROUTE",
     "toolId": "acme.orders/orders.refund",
     "widening": true,
-    "summary": "New route orders.refund (POST /orders/{orderId}/refunds)"
+    "summary": "New route orders.refund (POST /orders/{orderId:[0-9]{6,12}}/refunds)"
   },
   "SecurityDeltaKind": "ROUTE",
   "SemanticVersion": "1.4.0",

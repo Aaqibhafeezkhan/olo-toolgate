@@ -37,7 +37,7 @@
   "reconcileTool": "orders.refund-status",
   "routes": [
     {
-      "id": "orders.refund", "destination": "acme-api", "method": "POST", "path": "/orders/{orderId}/refunds",
+      "id": "orders.refund", "destination": "acme-api", "method": "POST", "path": "/orders/{orderId:[0-9]{6,12}}/refunds",
       "query": [], "headers": ["Idempotency-Key"], "requestContentTypes": ["application/json"],
       "maxRequestBytes": 65536, "maxResponseBytes": 65536, "streaming": "NONE", "timeoutMs": 15000, "auth": "acme-oauth"
     }
