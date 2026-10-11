@@ -7,12 +7,16 @@ every Tool Host threat names an existing case, every invocation transition and
 persistence row has a case, and every referenced fixture exists. Runners for the
 cases arrive with the milestones listed in suites.json.
 """
+import importlib.util
+import io
 import json
 import re
 import subprocess
 import sys
 import unittest
+import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import Draft202012Validator
 
@@ -113,6 +117,26 @@ class ConformanceCaseTests(unittest.TestCase):
     def test_package_fixtures_match_their_generator(self):
         result = subprocess.run([sys.executable, str(PACKAGES/'generate.py'), '--check'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_backslash_fixture_preserves_unsafe_entry_on_all_platforms(self):
+        spec = importlib.util.spec_from_file_location('package_fixtures', PACKAGES/'generate.py')
+        generator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(generator)
+        committed = (PACKAGES/'backslash.tgpkg').read_bytes()
+        unsafe_name = 'tools\\evil.json'
+        for separator, alternate in (('/', None), ('\\', '/')):
+            with self.subTest(separator=separator):
+                with patch.object(zipfile.os, 'sep', separator), patch.object(zipfile.os, 'altsep', alternate):
+                    data = generator.fixtures()['backslash']
+                with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                    entries = {entry.orig_filename: entry for entry in archive.infolist()}
+                    self.assertIn(unsafe_name, entries)
+                    entry = entries[unsafe_name]
+                    name_length = int.from_bytes(data[entry.header_offset + 26:entry.header_offset + 28], 'little')
+                    local_name = data[entry.header_offset + 30:entry.header_offset + 30 + name_length]
+                    self.assertEqual(local_name, unsafe_name.encode())
+                    self.assertIn(b'  ' + unsafe_name.encode() + b'\n', archive.read('CHECKSUMS.sha256'))
+                self.assertEqual(data, committed)
 
 
 if __name__ == '__main__':
