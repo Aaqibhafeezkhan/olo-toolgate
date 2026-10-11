@@ -22,6 +22,32 @@ class LocalCiTests(unittest.TestCase):
         expected = {f'{name}.{job}' for name, document in self.workflows.items() for job in document['jobs']}
         self.assertEqual({row['id'] for row in rows}, expected)
 
+    def test_replayable_selection_follows_inventory_without_a_second_job_list(self):
+        rows = local.inventory(self.workflows)
+        rows.append(dict(id='future.validation', kind='replay'))
+        selected = local.replayable_jobs(rows)
+        self.assertIn('future.validation', selected)
+        self.assertEqual(set(selected), {row['id'] for row in rows if row['kind'] == 'replay'})
+        code, report, _ = self.run_mocked(local.replayable_jobs(local.inventory(self.workflows)))
+        self.assertEqual(code, 0)
+        self.assertTrue(report['passed'])
+        self.assertFalse(report['allGitHubTriggersVerified'])
+
+    def test_empty_replayable_scope_cannot_pass(self):
+        with self.assertRaisesRegex(ValueError, 'No replayable jobs'):
+            local.replayable_jobs([dict(id='release.publish', kind='publication')])
+
+    def test_job_selection_flags_cannot_be_used_for_an_audit_or_plan(self):
+        for command in ('plan', 'audit'):
+            with self.subTest(command=command), self.assertRaises(SystemExit) as error:
+                local.main([command, '--replayable'])
+            self.assertEqual(error.exception.code, 2)
+
+    def test_replayable_and_explicit_job_selection_are_mutually_exclusive(self):
+        with self.assertRaises(SystemExit) as error:
+            local.main(['run', '--replayable', '--job', 'preflight.metadata'])
+        self.assertEqual(error.exception.code, 2)
+
     def test_yaml_changes_flow_into_replay_without_mutating_source(self):
         source = self.workflows['foundation']['jobs']['check']
         source['steps'][1]['with']['java-version'] = '25'

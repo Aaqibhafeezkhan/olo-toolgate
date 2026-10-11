@@ -293,6 +293,14 @@ def build_runner(root=ROOT):
              '-f', 'tools/ci/local.Dockerfile', '.'], root)
 
 
+def replayable_jobs(rows):
+    """Select supported bodies from the validated inventory, including new ones."""
+    selected = [row['id'] for row in rows if row['kind'] == 'replay']
+    if not selected:
+        raise ValueError('No replayable jobs found; local coverage needs review')
+    return selected
+
+
 def run_jobs(workflows, rows, selected, output, executable='act', image=IMAGE, root=ROOT):
     baseline = fingerprint(root)
     leaves = [row for row in rows if row['kind'] != 'reusable']
@@ -359,13 +367,18 @@ def run_jobs(workflows, rows, selected, output, executable='act', image=IMAGE, r
         print('Report: ' + str(output / 'report.json'), flush=True)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['plan', 'audit', 'run'], nargs='?', default='plan')
-    parser.add_argument('--job', action='append', help='Replay a WORKFLOW.JOB; repeat to select several')
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument('--job', action='append', help='Replay a WORKFLOW.JOB; repeat to select several')
+    selection.add_argument('--replayable', action='store_true',
+                           help='Replay every locally supported job body (used by RC: commits)')
     parser.add_argument('--act', default='act', help='Path to an installed act executable')
     parser.add_argument('--image', default=IMAGE, help='Custom Ubuntu runner image; default is built locally')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.command != 'run' and (args.job or args.replayable):
+        parser.error('--job and --replayable require run')
     output = ROOT / 'build/local-ci'
     try:
         workflows = load_workflows()
@@ -391,7 +404,8 @@ def main():
         if args.command == 'audit':
             print('CI configuration/admission/metadata audit passed; job bodies have not been replayed.')
             return 0
-        result = run_jobs(workflows, rows, args.job, output, args.act, args.image)
+        selected = replayable_jobs(rows) if args.replayable else args.job
+        result = run_jobs(workflows, rows, selected, output, args.act, args.image)
         print('Selected job bodies passed.' if result == 0 else 'Local coverage is incomplete; see report.json.')
         print('Hosted native jobs, event routing and publication still require GitHub validation.')
         return result

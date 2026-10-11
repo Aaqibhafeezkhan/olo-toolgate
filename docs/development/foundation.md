@@ -32,10 +32,17 @@ into the staged scan; the full CI source scan remains enabled.
 Stage UI/check changes before committing; the hook rejects unstaged changes in
 those paths so the tested files match the proposed commit. A failing check blocks
 the commit. Existing custom hook paths are preserved: add
-`node tools/ci/precommit.mjs` to their pre-commit hook. Installs using
+`node tools/ci/precommit.mjs` to their pre-commit hook and
+`node tools/ci/commit-msg.mjs "$1"` to their commit-msg hook. Installs using
 `--ignore-scripts` need the explicit hook installation command. CI does not install
 local Git hooks and continues running the full browser/accessibility and integration
 gates; these fast checks supplement that coverage.
+
+Commit subjects starting exactly with `RC:` also run every locally replayable
+CI job before committing. Python validation dependencies and act are required
+for this additional gate, and all source changes must be staged. Other subjects
+keep only the existing smaller checks. See the
+[local CI tools README](../../tools/ci/README.md#commit-checks) for setup and usage.
 
 Module 00 provides contracts, builds and verification. Modules 01/02 add the Gateway
 and Control Plane runtimes; Marketplace modules remain buildable markers. `make dev` and the quickstart remain

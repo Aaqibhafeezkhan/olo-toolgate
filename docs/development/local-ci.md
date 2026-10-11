@@ -39,6 +39,9 @@ python tools/ci/local.py run --job foundation.check --job gateway.container-and-
 
 # Attempt all supported bodies and report every remaining gap.
 python tools/ci/local.py run
+
+# Run the complete locally replayable scope, as required for RC: commits.
+python tools/ci/local.py run --replayable
 ```
 
 The default is `plan`; it needs Python and PyYAML. `audit` and `run` need Docker;
@@ -72,9 +75,17 @@ invalidates the result.
 | 2 | Requested jobs include work that could not be verified locally. |
 
 All-job execution currently returns **2**, even if supported jobs pass.
+`--replayable` selects every supported body from the inventory and returns **0**
+only if those jobs pass. It cannot be combined with `--job`.
 New executable jobs fail inventory until their coverage policy is assigned.
 New context expressions, conditional steps, actions or runner types in
 replayable jobs need review; they cannot silently be discarded or skipped.
+
+Installed Git hooks retain the existing smaller checks for every commit. A
+subject starting exactly with `RC:` additionally runs the complete `--replayable`
+scope from `commit-msg` and blocks the commit on failure. See
+[tools/ci/README.md](../../tools/ci/README.md#commit-checks) for installation,
+staging requirements and executable overrides.
 
 ## Triggers and limits
 
