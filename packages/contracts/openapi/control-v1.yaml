@@ -3266,7 +3266,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/common.schema.json#/$defs/RequestContext
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
   /api/control/v1/mcp/requests:
     post:
       operationId: submitLocalMcpRequest
@@ -3353,7 +3353,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/common.schema.json#/$defs/RequestContext
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
   /api/control/v1/mcp/authorize:
     post:
       operationId: authorizeClientMcpRequest

@@ -27,19 +27,19 @@ impl Contracts {
             .prepare()
             .map_err(|_| "invalid embedded registry")?;
         for (name, file) in [
-            ("AuthorizationRequest", "runtime"),
-            ("RequestContext", "common"),
-            ("EnterpriseInvocationRequest", "enterprise"),
-            ("EnterpriseInvocation", "enterprise"),
-            ("EnterpriseReservationRequest", "enterprise"),
-            ("EnterpriseReservation", "enterprise"),
-            ("EnterpriseAuthorizationOutcome", "enterprise"),
-            ("LocalToolCatalog", "endpoint"),
-            ("RemoteToolSubmission", "endpoint"),
-            ("RemoteToolResponse", "endpoint"),
+            ("AuthorizationRequest", "v1/runtime"),
+            ("RequestContext", "v2/common"),
+            ("EnterpriseInvocationRequest", "v1/enterprise"),
+            ("EnterpriseInvocation", "v1/enterprise"),
+            ("EnterpriseReservationRequest", "v1/enterprise"),
+            ("EnterpriseReservation", "v1/enterprise"),
+            ("EnterpriseAuthorizationOutcome", "v1/enterprise"),
+            ("LocalToolCatalog", "v1/endpoint"),
+            ("RemoteToolSubmission", "v1/endpoint"),
+            ("RemoteToolResponse", "v1/endpoint"),
         ] {
             let options = jsonschema::options().with_registry(&registry);
-            let schema = json!({"$schema":"https://json-schema.org/draft/2020-12/schema", "$ref":format!("https://schemas.ololabs.io/toolgate/v1/{file}.schema.json#/$defs/{name}")});
+            let schema = json!({"$schema":"https://json-schema.org/draft/2020-12/schema", "$ref":format!("https://schemas.ololabs.io/toolgate/{file}.schema.json#/$defs/{name}")});
             validators.insert(
                 name,
                 options

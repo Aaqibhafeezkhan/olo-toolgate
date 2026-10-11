@@ -6,6 +6,8 @@ import io.ololabs.toolgate.control.domain.Directory;
 import io.ololabs.toolgate.control.domain.Ids;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.ActorHop;
+import io.ololabs.toolgate.contracts.v2.RequestMode;
 import java.time.*;
 import java.util.*;
 import static io.ololabs.toolgate.contracts.EnterpriseDecisionReason.*;
@@ -85,10 +87,10 @@ public final class EnterpriseEvaluator {
             identity();
             var grants=records(Kind.GRANT,ControlAccessGrant.class);
             var witnesses=new ArrayList<EnterpriseWitness>();
-            if(context.mode()==EnterpriseRequestMode.HUMAN) {
+            if(context.mode()==RequestMode.HUMAN) {
                 for(var team:teams)for(var grant:grants)if(grant.purpose()==EnterpriseGrantPurpose.HUMAN&&source(grant,Kind.TEAM,team)&&matches(grant.scope(),false,"GRANT:"+grant.id())&&secret(grants,Kind.TEAM,team))
                     witnesses.add(new EnterpriseWitness(team,grant.id(),null,null,null,null,binding.id(),List.of(team,grant.id(),binding.id())));
-            } else if(context.mode()==EnterpriseRequestMode.SERVICE) {
+            } else if(context.mode()==RequestMode.SERVICE) {
                 for(var group:actorGroups.getFirst())for(var service:grants)if(service.purpose()==EnterpriseGrantPurpose.SERVICE&&source(service,Kind.AGENT_GROUP,group)&&matches(service.scope(),false,"GRANT:"+service.id()))
                     for(var cap:capabilities(grants,group))for(var path:chain(grants,0,group,new ArrayList<>(List.of(group,service.id(),cap.id()))))
                         witnesses.add(new EnterpriseWitness(null,null,path.group,path.capability,null,service.id(),binding.id(),path.ids));
@@ -102,8 +104,8 @@ public final class EnterpriseEvaluator {
             var obligations=new TreeSet<String>();
             var finalGroups=actorGroups.isEmpty()?List.<String>of():actorGroups.getLast();
             for(var policy:records(Kind.POLICY,ControlPolicy.class)) {
-                boolean applies=context.mode()==EnterpriseRequestMode.SERVICE?policy.teams().all():intersects(policy.teams(),teams);
-                applies&=context.mode()==EnterpriseRequestMode.HUMAN?policy.agentGroups().all():intersects(policy.agentGroups(),finalGroups);
+                boolean applies=context.mode()==RequestMode.SERVICE?policy.teams().all():intersects(policy.teams(),teams);
+                applies&=context.mode()==RequestMode.HUMAN?policy.agentGroups().all():intersects(policy.agentGroups(),finalGroups);
                 if(!applies||!matches(policy.scope(),true,"POLICY:"+policy.id()))continue;
                 if(policy.decision()==Decision.BLOCK)throw new Rejected(BLOCKED);
                 if(policy.decision()==Decision.ASK)obligations.add(policy.id());
@@ -112,17 +114,17 @@ public final class EnterpriseEvaluator {
             return result(obligations.isEmpty()?Decision.ALLOW:Decision.ASK,obligations.isEmpty()?MATCHED:APPROVAL_REQUIRED,List.copyOf(witnesses),List.copyOf(obligations));
         }
         void identity() {
-            if(context.mode()!=EnterpriseRequestMode.SERVICE) {
+            if(context.mode()!=RequestMode.SERVICE) {
                 var user=active(Kind.USER,context.userId(),ControlUser.class,IDENTITY_DISABLED);
                 require(context.sessionEpoch()!=null,INVALID_CONTEXT);
                 require(records(Kind.IDENTITY_BINDING,ControlIdentityBinding.class).stream().anyMatch(b->b.userId().equals(user.id())&&b.sessionEpoch().equals(context.sessionEpoch())),IDENTITY_DISABLED);
                 teams.addAll(GroupGraph.memberships(directory,codec,Kind.USER,user.id(),true));require(!teams.isEmpty(),GROUP_UNAVAILABLE);
             } else require(context.userId()==null&&context.sessionEpoch()==null,INVALID_CONTEXT);
-            if(context.mode()==EnterpriseRequestMode.HUMAN) {
+            if(context.mode()==RequestMode.HUMAN) {
                 require(context.agentId()==null&&context.workloadBindingId()==null&&context.credentialEpoch()==null&&context.chain().isEmpty(),INVALID_CONTEXT);return;
             }
             require(context.chain().size()<8&&context.credentialEpoch()!=null,INVALID_CONTEXT);
-            var hops=new ArrayList<>(context.chain());hops.add(new EnterpriseActorHop(context.agentId(),context.workloadBindingId()));
+            var hops=new ArrayList<>(context.chain());hops.add(new ActorHop(context.agentId(),context.workloadBindingId()));
             var seen=new HashSet<String>();String previous=null;
             for(var hop:hops) {
                 require(seen.add(hop.agentId()),INVALID_CONTEXT);active(Kind.AGENT,hop.agentId(),ControlAgent.class,IDENTITY_DISABLED);

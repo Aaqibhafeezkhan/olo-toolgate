@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Workload authentication facts are administrator mounted; group grants live only in Control.
 use crate::{digest, validation::Contracts};
-use olo_toolgate_contracts::{CredentialKind, EnterpriseRequestMode, RequestContext};
+use olo_toolgate_contracts::v2::{CredentialKind, RequestContext, RequestMode};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use subtle::ConstantTimeEq;
@@ -38,7 +38,7 @@ impl Authenticator {
                     .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
                 || !hashes.insert(&c.token_sha256)
                 || c.expires_at_unix_ms <= now
-                || context.mode == EnterpriseRequestMode::Human
+                || context.mode == RequestMode::Human
                 || context.credential_kind != CredentialKind::StaticToken
                 || context
                     .expires_at_unix_ms
@@ -47,9 +47,9 @@ impl Authenticator {
                 || context.agent_id.is_none()
                 || context.credential_epoch.is_none()
                 || context.credential_sha256.as_deref() != Some(c.token_sha256.as_str())
-                || context.mode == EnterpriseRequestMode::Delegated
+                || context.mode == RequestMode::Delegated
                     && (context.user_id.is_none() || context.session_epoch.is_none())
-                || context.mode == EnterpriseRequestMode::Service
+                || context.mode == RequestMode::Service
                     && (context.user_id.is_some()
                         || context.session_epoch.is_some()
                         || !context.chain.is_empty())

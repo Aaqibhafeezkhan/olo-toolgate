@@ -7,6 +7,9 @@ import io.ololabs.toolgate.control.application.*;
 import io.ololabs.toolgate.control.domain.*;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.CredentialKind;
+import io.ololabs.toolgate.contracts.v2.RequestContext;
+import io.ololabs.toolgate.contracts.v2.RequestMode;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -30,7 +33,7 @@ class EnterpriseOperationTest {
         gateway=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"a".repeat(64),false);reviewer=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"c".repeat(64),true,false,"admin");
     }
     void saveGraph(){store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{var d=tx.load();tx.save(d,new Directory(d.revision()+1,graph.entries));return null;});}
-    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),EnterpriseRequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null);}
+    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null);}
     EnterpriseInvocation submit(String id){return graph.codec.model(operations.submit(gateway,graph.codec.json(request(id,"data/report.txt"))).body(),EnterpriseInvocation.class);}
     EnterpriseReservation reserve(EnterpriseInvocation i){return graph.codec.model(operations.reserve(gateway,graph.codec.json(new EnterpriseReservationRequest(i.id(),i.revision()))).body(),EnterpriseReservation.class);}
     String consumption(EnterpriseReservation r){var e=r.invocation().evaluation();return graph.codec.json(new EnterprisePermitConsumption(r.invocation().id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest()));}

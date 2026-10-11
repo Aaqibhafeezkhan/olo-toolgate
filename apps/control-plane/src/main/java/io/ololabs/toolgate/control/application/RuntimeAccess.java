@@ -5,6 +5,8 @@ package io.ololabs.toolgate.control.application;
 import io.ololabs.toolgate.control.domain.*;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.RequestContext;
+import io.ololabs.toolgate.contracts.v2.RequestMode;
 import java.util.*;
 
 /** One authoritative adapter for submission, dispatch, checkpoints and response retrieval. */
@@ -15,7 +17,7 @@ public final class RuntimeAccess {
     public EnterpriseEvaluation evaluation(Ids.TenantId tenant,Directory directory,RequestContext c,String device,AuthorizationRequest request,String toolDigest,String packageDigest,long now) {
         if(device==null||c.bindingId()==null)throw ManagementAccess.denied();
         if(!tenant.value().equals(c.tenantId()))throw ManagementAccess.denied();
-        if(c.mode()!=EnterpriseRequestMode.HUMAN) {
+        if(c.mode()!=RequestMode.HUMAN) {
             var entry=c.workloadBindingId()==null?null:directory.entries().get(Kind.WORKLOAD_BINDING.id(c.workloadBindingId()));if(entry==null||!entry.enabled()||c.credentialSha256()==null)throw ManagementAccess.denied();
             var binding=codec.model(entry.document(),ControlWorkloadBinding.class);
             if(!java.security.MessageDigest.isEqual(binding.credentialSha256().getBytes(java.nio.charset.StandardCharsets.US_ASCII),c.credentialSha256().getBytes(java.nio.charset.StandardCharsets.US_ASCII)))throw ManagementAccess.denied();

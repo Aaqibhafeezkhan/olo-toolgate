@@ -10,7 +10,7 @@ final readonly class RemoteToolSubmission implements \JsonSerializable {
     public function __construct(
         public AuthorizationRequest $request,
         public int $expiresAtUnixMs,
-        public RequestContext $context,
+        public \OloLabs\ToolGate\Contracts\V2\RequestContext $context,
         public string $invocationId
     ) {}
 
@@ -22,7 +22,7 @@ final readonly class RemoteToolSubmission implements \JsonSerializable {
         return new self(
             AuthorizationRequest::fromArray($data['request']),
             $data['expiresAtUnixMs'],
-            RequestContext::fromArray($data['context']),
+            \OloLabs\ToolGate\Contracts\V2\RequestContext::fromArray($data['context']),
             $data['invocationId']
         );
     }

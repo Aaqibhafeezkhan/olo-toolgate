@@ -13,7 +13,7 @@ package io.ololabs.toolgate.contracts;
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EnterpriseInvocationRequest(
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "context", required = true) RequestContext context,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "context", required = true) io.ololabs.toolgate.contracts.v2.RequestContext context,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "request", required = true) AuthorizationRequest request,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolDigest", required = true) String toolDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "packageDigest", required = true) String packageDigest,

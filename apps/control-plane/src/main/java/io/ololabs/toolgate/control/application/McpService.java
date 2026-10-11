@@ -4,6 +4,7 @@ package io.ololabs.toolgate.control.application;
 
 import io.ololabs.toolgate.control.domain.Ids;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.RequestContext;
 import java.time.Clock;
 import java.util.*;
 

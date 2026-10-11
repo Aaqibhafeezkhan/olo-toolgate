@@ -5,6 +5,7 @@ package io.ololabs.toolgate.control.application;
 import io.ololabs.toolgate.control.domain.*;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.RequestMode;
 import java.time.Clock;
 import java.util.*;
 
@@ -61,9 +62,9 @@ public final class EnterpriseOperations {
             for(var review:approval.reviews())if(review.decision()==EnterpriseReviewDecision.APPROVE)reviewer(tx,review.reviewerUserId(),i,review.obligationId(),now);
         }
     }
-    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==EnterpriseRequestMode.HUMAN)throw ManagementAccess.denied();return submitVerified(actor,request,null);}
+    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==RequestMode.HUMAN)throw ManagementAccess.denied();return submitVerified(actor,request,null);}
     /** A person names the device; it must belong to the execution binding's device group. */
-    public Store.Reply submitHuman(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String device){if(actor.userId()==null||device==null||request.context().mode()!=EnterpriseRequestMode.HUMAN||!actor.userId().equals(request.context().userId()))throw ManagementAccess.denied();return submitVerified(actor,request,device);}
+    public Store.Reply submitHuman(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String device){if(actor.userId()==null||device==null||request.context().mode()!=RequestMode.HUMAN||!actor.userId().equals(request.context().userId()))throw ManagementAccess.denied();return submitVerified(actor,request,device);}
     private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){String document=codec.json(request)+(chosen==null?"":"\n"+chosen);
         return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
             // A replay keeps the device the first submission was placed on, whatever the pool's load is now.

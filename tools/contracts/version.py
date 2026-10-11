@@ -25,8 +25,11 @@ def expected():
     cargo = ROOT/'Cargo.toml'
     for lock in sorted((ROOT/'apps').glob('*/gradle-artifact.lockfile')):
         outputs[lock]=re.sub(r'(?m)^(io\.ololabs\.toolgate:toolgate-contracts:)[^=]+=',lambda m:m[1]+contracts+'=',lock.read_text())
-    outputs[cargo] = re.sub(r'^version = "[^"]+"', f'version = "{contracts}"', cargo.read_text(), flags=re.M)
+    # Rust applications ship with the product; the contracts crate carries the contract-set version.
+    outputs[cargo] = re.sub(r'^version = "[^"]+"', f'version = "{product}"', cargo.read_text(), flags=re.M)
     outputs[cargo] = re.sub(r'(olo-toolgate-contracts = \{[^\n]*version = ")[^"]+', lambda m: m[1]+contracts, outputs[cargo])
+    crate = ROOT/'packages/contracts/rust/Cargo.toml'
+    outputs[crate] = re.sub(r'^version(?:\.workspace = true| = "[^"]+")', f'version = "{contracts}"', crate.read_text(), flags=re.M)
     for path in ('package.json','packages/contracts/typescript/package.json','apps/admin-ui/package.json'):
         p = ROOT/path
         content = json.loads(p.read_text())

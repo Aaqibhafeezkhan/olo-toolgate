@@ -10,7 +10,7 @@ final readonly class EnterpriseContext implements \JsonSerializable {
     public function __construct(
         public string $requestId,
         public string $tenantId,
-        public EnterpriseRequestMode $mode,
+        public \OloLabs\ToolGate\Contracts\V2\RequestMode $mode,
         public array $chain,
         public string $bindingId,
         public string $deviceId,
@@ -29,8 +29,8 @@ final readonly class EnterpriseContext implements \JsonSerializable {
         return new self(
             $data['requestId'],
             $data['tenantId'],
-            EnterpriseRequestMode::from($data['mode']),
-            array_map(static fn ($item) => EnterpriseActorHop::fromArray($item), $data['chain']),
+            \OloLabs\ToolGate\Contracts\V2\RequestMode::from($data['mode']),
+            array_map(static fn ($item) => \OloLabs\ToolGate\Contracts\V2\ActorHop::fromArray($item), $data['chain']),
             $data['bindingId'],
             $data['deviceId'],
             array_key_exists('userId', $data) ? $data['userId'] : null,

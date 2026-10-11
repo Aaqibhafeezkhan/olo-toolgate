@@ -6,6 +6,9 @@ import io.ololabs.toolgate.control.adapter.*;
 import io.ololabs.toolgate.control.application.*;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.CredentialKind;
+import io.ololabs.toolgate.contracts.v2.RequestContext;
+import io.ololabs.toolgate.contracts.v2.RequestMode;
 import java.nio.file.Path;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -22,7 +25,7 @@ class DevicePlacementTest {
         store=new PostgresStore(SqliteState.open(temp.resolve("placement.sqlite")),graph.codec);
         store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});
     }
-    RequestContext context(String request,String user){return new RequestContext(request,EnterpriseConformanceTest.TENANT.value(),user==null?EnterpriseRequestMode.SERVICE:EnterpriseRequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,user,"agent","workload",List.of(),user==null?null:1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);}
+    RequestContext context(String request,String user){return new RequestContext(request,EnterpriseConformanceTest.TENANT.value(),user==null?RequestMode.SERVICE:RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,user,"agent","workload",List.of(),user==null?null:1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);}
     String place(RequestContext context){return store.transaction(EnterpriseConformanceTest.TENANT,false,tx->placement.place(tx,context,EnterpriseConformanceTest.NOW));}
 
     @Test void onlyEnrolledOnlineGroupMembersAreCandidates(){

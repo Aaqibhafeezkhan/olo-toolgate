@@ -6,7 +6,7 @@ declare(strict_types=1);
 spl_autoload_register(static function (string $class): void {
     $prefix = 'OloLabs\\ToolGate\\Contracts\\';
     if (str_starts_with($class, $prefix)) {
-        require __DIR__ . '/../src/' . substr($class, strlen($prefix)) . '.php';
+        require __DIR__ . '/../src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
     }
 });
 
@@ -25,7 +25,7 @@ foreach ($fixtures as $name => $fixture) {
     }
     $count++;
 }
-if ($count !== 251) { throw new RuntimeException('Incomplete fixture coverage'); }
+if ($count !== 247) { throw new RuntimeException('Incomplete fixture coverage'); }
 foreach ([['decision' => 'UNKNOWN'], ['bypass' => true], ['decision' => null]] as $change) {
     try {
         $bad = array_replace($fixtures['EnterpriseDecision'], $change);

@@ -8,7 +8,7 @@ namespace OloLabs\ToolGate\Contracts;
 /** Exact authenticated invocation with original arguments and installed code digests. */
 final readonly class EnterpriseInvocationRequest implements \JsonSerializable {
     public function __construct(
-        public RequestContext $context,
+        public \OloLabs\ToolGate\Contracts\V2\RequestContext $context,
         public AuthorizationRequest $request,
         public string $toolDigest,
         public string $packageDigest,
@@ -21,7 +21,7 @@ final readonly class EnterpriseInvocationRequest implements \JsonSerializable {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
-            RequestContext::fromArray($data['context']),
+            \OloLabs\ToolGate\Contracts\V2\RequestContext::fromArray($data['context']),
             AuthorizationRequest::fromArray($data['request']),
             $data['toolDigest'],
             $data['packageDigest'],

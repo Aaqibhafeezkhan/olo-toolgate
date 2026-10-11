@@ -14,15 +14,6 @@
       ],
       "description": "Reviewed configuration workflow bound to the exact group graph revision."
     },
-    "EnterpriseRequestMode": {
-      "type": "string",
-      "enum": [
-        "HUMAN",
-        "DELEGATED",
-        "SERVICE"
-      ],
-      "description": "Reviewed configuration workflow bound to the exact group graph revision."
-    },
     "EnterpriseGroupType": {
       "type": "string",
       "enum": [
@@ -756,7 +747,7 @@
           "$ref": "identifiers.schema.json#/$defs/Identifier"
         },
         "mode": {
-          "$ref": "enterprise.schema.json#/$defs/EnterpriseRequestMode"
+          "$ref": "../v2/common.schema.json#/$defs/RequestMode"
         },
         "issuer": {
           "type": "string",
@@ -1005,23 +996,6 @@
       ],
       "description": "Reviewed configuration workflow bound to the exact group graph revision."
     },
-    "EnterpriseActorHop": {
-      "type": "object",
-      "description": "Verified identity/delegation chain entry; not caller-asserted authority.",
-      "additionalProperties": false,
-      "properties": {
-        "agentId": {
-          "$ref": "identifiers.schema.json#/$defs/Identifier"
-        },
-        "workloadBindingId": {
-          "$ref": "identifiers.schema.json#/$defs/Identifier"
-        }
-      },
-      "required": [
-        "agentId",
-        "workloadBindingId"
-      ]
-    },
     "EnterpriseContext": {
       "type": "object",
       "description": "Trusted complete runtime identity. Authentication adapters construct it; ordinary arguments cannot change it. deviceId is the device Control placed the call on: the one online device of the execution binding device group (the user's own first), or the device a human chose.",
@@ -1034,7 +1008,7 @@
           "$ref": "identifiers.schema.json#/$defs/Identifier"
         },
         "mode": {
-          "$ref": "enterprise.schema.json#/$defs/EnterpriseRequestMode"
+          "$ref": "../v2/common.schema.json#/$defs/RequestMode"
         },
         "userId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
@@ -1048,7 +1022,7 @@
         "chain": {
           "type": "array",
           "items": {
-            "$ref": "enterprise.schema.json#/$defs/EnterpriseActorHop"
+            "$ref": "../v2/common.schema.json#/$defs/ActorHop"
           },
           "maxItems": 8,
           "uniqueItems": true
@@ -1869,7 +1843,7 @@
       "description": "Exact authenticated invocation with original arguments and installed code digests.",
       "properties": {
         "context": {
-          "$ref": "common.schema.json#/$defs/RequestContext"
+          "$ref": "../v2/common.schema.json#/$defs/RequestContext"
         },
         "request": {
           "$ref": "runtime.schema.json#/$defs/AuthorizationRequest"

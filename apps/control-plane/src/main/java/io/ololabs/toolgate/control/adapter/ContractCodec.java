@@ -42,15 +42,17 @@ public class ContractCodec implements Codec {
         mapper = JsonMapper.builder(factory).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
         try {
             var definitions = mapper.createObjectNode();
+            var crossVersion = new java.util.ArrayList<String>();
             for (var file : io.ololabs.toolgate.contracts.ContractSet.SCHEMA_FILES) {
                 var path = "/io/ololabs/toolgate/contracts/schemas/v1/" + file;
                 try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream(path)) {
                     if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                     var schema = mapper.readTree(input);
+                    schema.path("$defs").findValuesAsText("$ref").stream().filter(ref -> ref.startsWith("../v2/")).forEach(crossVersion::add);
                     schema.path("$defs").properties().forEach(e -> definitions.set(e.getKey(), localReferences(e.getValue().deepCopy())));
                 }
             }
-            adoptV2(definitions);
+            adoptV2(definitions, crossVersion);
             var factorySchema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
             canonicalDefinitions = definitions;
             // One schema resource shares reference validators across all models. Rebuilding the
@@ -65,12 +67,13 @@ public class ContractCodec implements Codec {
             }
         } catch (java.io.IOException e) { throw new IllegalStateException("Cannot initialize canonical contracts", e); }
     }
-    /** v2 schema files Control already serves, validated by their v2 binding names. They move here one at a time
-     *  while the v1 set is retired, so every adopted name must be new or identical to its v1 definition. */
+    /** v2 schema files Control already serves, validated by their v2 binding names. v1 definitions that reference v2
+     *  (`../v2/...`, such as the request context) pull in those definitions too. Every adopted name must be new or
+     *  identical to its v1 definition apart from descriptions, since both share one flat namespace. */
     static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json");
-    private void adoptV2(ObjectNode definitions) throws java.io.IOException {
+    private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
-        for (var file : java.util.List.of("identifiers.schema.json", "settings.schema.json")) {
+        for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));
@@ -78,6 +81,7 @@ public class ContractCodec implements Codec {
         }
         var pending = new java.util.ArrayDeque<java.util.Map.Entry<String, String>>();
         for (var file : V2_FILES) v2.get(file).fieldNames().forEachRemaining(name -> pending.add(java.util.Map.entry(file, name)));
+        for (var ref : crossVersion) { int split = ref.indexOf("#/$defs/"); pending.add(java.util.Map.entry(ref.substring("../v2/".length(), split), ref.substring(split + 8))); }
         var adopted = new java.util.HashSet<String>();
         while (!pending.isEmpty()) {
             var next = pending.poll(); var name = next.getValue();
@@ -89,9 +93,15 @@ public class ContractCodec implements Codec {
                 pending.add(java.util.Map.entry(split <= 0 ? next.getKey() : ref.substring(0, split), ref.substring(split + 8)));
             });
             var local = localReferences(definition.deepCopy());
-            if (definitions.has(name) && !definitions.get(name).equals(local)) throw new IllegalStateException("v2 definition " + name + " conflicts with v1");
+            if (definitions.has(name) && !withoutDescriptions(definitions.get(name)).equals(withoutDescriptions(local))) throw new IllegalStateException("v2 definition " + name + " conflicts with v1");
             definitions.set(name, local);
         }
+    }
+    private static JsonNode withoutDescriptions(JsonNode node) {
+        var copy = node.deepCopy();
+        if (copy.isObject()) { ((ObjectNode) copy).remove("description"); copy.properties().forEach(e -> e.setValue(withoutDescriptions(e.getValue()))); }
+        else if (copy.isArray()) for (int i = 0; i < copy.size(); i++) ((com.fasterxml.jackson.databind.node.ArrayNode) copy).set(i, withoutDescriptions(copy.get(i)));
+        return copy;
     }
     private JsonNode localReferences(JsonNode node) {
         if (node.isObject() && node.has("$ref")) {

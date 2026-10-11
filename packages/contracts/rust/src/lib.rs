@@ -958,7 +958,7 @@ pub struct ControlWorkloadBinding {
     pub enabled: bool,
     pub revision: u64,
     pub agent_id: String,
-    pub mode: EnterpriseRequestMode,
+    pub mode: v2::RequestMode,
     pub issuer: String,
     pub subject: String,
     pub audience: String,
@@ -979,16 +979,6 @@ pub struct ControlWorkloadBindingPage {
     pub items: Vec<ControlWorkloadBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
-}
-/// Canonical CredentialKind wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CredentialKind {
-    #[serde(rename = "STATIC_TOKEN")]
-    StaticToken,
-    #[serde(rename = "JWT")]
-    Jwt,
-    #[serde(rename = "INTROSPECTION")]
-    Introspection,
 }
 /// Canonical Decision wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1268,13 +1258,6 @@ pub enum EnrollmentState {
     #[serde(rename = "CONSUMED")]
     Consumed,
 }
-/// Verified identity/delegation chain entry; not caller-asserted authority.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct EnterpriseActorHop {
-    pub agent_id: String,
-    pub workload_binding_id: String,
-}
 /// Certificate-authenticated current device acknowledgement. Acknowledgement is metadata, never an execution capability.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1515,14 +1498,14 @@ pub struct EnterpriseConfigurationTransition {
 pub struct EnterpriseContext {
     pub request_id: String,
     pub tenant_id: String,
-    pub mode: EnterpriseRequestMode,
+    pub mode: v2::RequestMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workload_binding_id: Option<String>,
-    pub chain: Vec<EnterpriseActorHop>,
+    pub chain: Vec<v2::ActorHop>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_epoch: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1734,7 +1717,7 @@ pub struct EnterpriseInvocationPage {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseInvocationRequest {
-    pub context: RequestContext,
+    pub context: v2::RequestContext,
     pub request: AuthorizationRequest,
     pub tool_digest: String,
     pub package_digest: String,
@@ -1911,16 +1894,6 @@ pub struct EnterpriseRecoveryAuthorization {
 pub struct EnterpriseRecoveryProof {
     pub key_id: String,
     pub signature: String,
-}
-/// Canonical EnterpriseRequestMode wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum EnterpriseRequestMode {
-    #[serde(rename = "HUMAN")]
-    Human,
-    #[serde(rename = "DELEGATED")]
-    Delegated,
-    #[serde(rename = "SERVICE")]
-    Service,
 }
 /// Durable invocation reservation and its exact signed capability.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2637,7 +2610,7 @@ pub enum RemoteToolState {
 pub struct RemoteToolSubmission {
     pub request: AuthorizationRequest,
     pub expires_at_unix_ms: u64,
-    pub context: RequestContext,
+    pub context: v2::RequestContext,
     pub invocation_id: String,
 }
 /// Bounded lease delivered only over device-authenticated polling; executable definitions are never accepted from an agent.
@@ -2658,36 +2631,6 @@ pub struct ReportedPackage {
     pub package_id: String,
     pub version: String,
     pub state: PackageState,
-}
-/// Authenticated Gateway runtime context. Carries no device: Control places a client tool call on a device from the execution binding device group (ADR 015 amendment), and server-side agents have none.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RequestContext {
-    pub request_id: String,
-    pub tenant_id: String,
-    pub mode: EnterpriseRequestMode,
-    pub credential_kind: CredentialKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub issuer: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub workload_binding_id: Option<String>,
-    pub chain: Vec<EnterpriseActorHop>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_epoch: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub credential_epoch: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub delegated_session_epoch: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expires_at_unix_ms: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub binding_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub credential_sha256: Option<String>,
 }
 /// Declared resource identity; does not grant access or validate a path.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2766,7 +2709,7 @@ impl ContractSet {
     pub fn current() -> Self {
         Self {
             name: "olo-toolgate-contracts".into(),
-            version: "0.10.0-dev".into(),
+            version: "1.0.0".into(),
         }
     }
 }
@@ -2843,5 +2786,53 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v1/tool.schema.json",
         include_str!("../schemas/v1/tool.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/catalog.schema.json",
+        include_str!("../schemas/v2/catalog.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/common.schema.json",
+        include_str!("../schemas/v2/common.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/deployment-binding.schema.json",
+        include_str!("../schemas/v2/deployment-binding.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/descriptor.schema.json",
+        include_str!("../schemas/v2/descriptor.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",
+        include_str!("../schemas/v2/identifiers.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/invocation.schema.json",
+        include_str!("../schemas/v2/invocation.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/kill.schema.json",
+        include_str!("../schemas/v2/kill.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
+        include_str!("../schemas/v2/package.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/permit.schema.json",
+        include_str!("../schemas/v2/permit.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",
+        include_str!("../schemas/v2/protocol.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/service-profile.schema.json",
+        include_str!("../schemas/v2/service-profile.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/settings.schema.json",
+        include_str!("../schemas/v2/settings.schema.json"),
     ),
 ];
