@@ -35,7 +35,7 @@ The enabled/disabled states shown are the local demo's current configuration.
 </details>
 
 <details>
-<summary>Configuration reviews — complete export, import modes and preview</summary>
+<summary>Configuration > Backup/Restore — complete export, import modes and preview</summary>
 
 ![Real ToolGate console showing complete configuration export, JSON file selection, Replace and Merge import modes, and independent review guidance](docs/media/console-configuration.jpg)
 

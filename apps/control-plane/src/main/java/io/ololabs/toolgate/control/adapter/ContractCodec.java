@@ -50,6 +50,7 @@ public class ContractCodec implements Codec {
                     schema.path("$defs").properties().forEach(e -> definitions.set(e.getKey(), localReferences(e.getValue().deepCopy())));
                 }
             }
+            adoptV2(definitions);
             var factorySchema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
             canonicalDefinitions = definitions;
             // One schema resource shares reference validators across all models. Rebuilding the
@@ -63,6 +64,34 @@ public class ContractCodec implements Codec {
                 validators.put(definition.getKey(),root.getSubSchema(path));
             }
         } catch (java.io.IOException e) { throw new IllegalStateException("Cannot initialize canonical contracts", e); }
+    }
+    /** v2 schema files Control already serves, validated by their v2 binding names. They move here one at a time
+     *  while the v1 set is retired, so every adopted name must be new or identical to its v1 definition. */
+    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json");
+    private void adoptV2(ObjectNode definitions) throws java.io.IOException {
+        var v2 = mapper.createObjectNode();
+        for (var file : java.util.List.of("identifiers.schema.json", "settings.schema.json")) {
+            try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
+                if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
+                v2.set(file, mapper.readTree(input).path("$defs"));
+            }
+        }
+        var pending = new java.util.ArrayDeque<java.util.Map.Entry<String, String>>();
+        for (var file : V2_FILES) v2.get(file).fieldNames().forEachRemaining(name -> pending.add(java.util.Map.entry(file, name)));
+        var adopted = new java.util.HashSet<String>();
+        while (!pending.isEmpty()) {
+            var next = pending.poll(); var name = next.getValue();
+            if (!adopted.add(name)) continue;
+            var definition = v2.path(next.getKey()).path(name);
+            if (definition.isMissingNode()) throw new IllegalStateException("Unsupported canonical schema reference");
+            definition.findValuesAsText("$ref").forEach(ref -> {
+                int split = ref.indexOf("#/$defs/");
+                pending.add(java.util.Map.entry(split <= 0 ? next.getKey() : ref.substring(0, split), ref.substring(split + 8)));
+            });
+            var local = localReferences(definition.deepCopy());
+            if (definitions.has(name) && !definitions.get(name).equals(local)) throw new IllegalStateException("v2 definition " + name + " conflicts with v1");
+            definitions.set(name, local);
+        }
     }
     private JsonNode localReferences(JsonNode node) {
         if (node.isObject() && node.has("$ref")) {

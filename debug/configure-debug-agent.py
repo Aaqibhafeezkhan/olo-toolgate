@@ -130,7 +130,7 @@ class Configuration:
         if all(user in self.tokens for user in reviewers):
             for user in reviewers: change = transition('APPROVE', user)
         else:
-            print('Independent review required: '+self.origin+'/console/#configuration?id='+change['id'],flush=True)
+            print('Independent review required: '+self.origin+'/console/#config-reviews?id='+change['id'],flush=True)
             deadline=time.monotonic()+600
             while change['state']=='PENDING' and time.monotonic()<deadline:
                 time.sleep(2);change=self.api('/api/control/v1/configuration-changes/'+change['id'])

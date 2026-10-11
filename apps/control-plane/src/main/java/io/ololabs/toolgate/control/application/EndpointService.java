@@ -93,9 +93,9 @@ public final class EndpointService {
             if(tx.load().entries().values().stream().noneMatch(e->e.id().kind()==Ids.Kind.USER&&e.enabled()))throw forbidden();
             String id=random(16),deviceCode=random(32),userCode=random(8).toUpperCase(Locale.ROOT);long expires=now+600000;
             // Administrator-enabled auto-approval registers a new key for a bounded period under the configured owner.
-            var settings=new ServerSettingsService(store,codec).current(tx);
+            var settings=new ServerSettingsService(store,codec,checkInPolicy).current(tx);
             String autoOwner=device==null?ServerSettingsService.autoApprovalOwner(tx,settings):null;
-            Long autoExpires=autoOwner==null?null:Math.min(9007199254740991L,now+settings.autoApproveDurationDays()*86400000L);
+            Long autoExpires=autoOwner==null?null:Math.min(9007199254740991L,now+ServerSettingsService.autoApprovalMs(settings));
             var review=new EndpointEnrollmentReview(id,userCode,start.deviceId(),start.platform(),fingerprint,device==null&&autoOwner==null?EnrollmentState.PENDING:EnrollmentState.APPROVED,expires,device==null?autoExpires:device.connectionExpiresAtUnixMs(),device==null?(autoOwner==null?null:Boolean.FALSE):Boolean.valueOf(device.connectionExpiresAtUnixMs()==null));
             // A verified CSR for the exact approved registered key can recover its public certificate.
             // It cannot change approval, owner, activation, key or connection deadline.
@@ -184,7 +184,7 @@ public final class EndpointService {
         transaction((tx,now)->{authenticate(tx,peer,now);return null;});
     }
     /** Configured gateway name sent to devices in enrollment and check-in replies. */
-    private String serverName(Store.Session tx){return new ServerSettingsService(store,codec).current(tx).gatewayName();}
+    private String serverName(Store.Session tx){return new ServerSettingsService(store,codec,checkInPolicy).current(tx).gateway().gatewayName();}
     private Store.Reply interval(Store.Reply reply,boolean milliseconds,String serverName) {
         var ack=codec.model(reply.body(),EndpointCheckInAck.class);
         long now=clock.millis();var identity=ack.identity()!=null&&ack.identity().expiresAtUnixMs()<=now?null:ack.identity();

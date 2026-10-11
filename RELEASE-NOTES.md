@@ -13,6 +13,15 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The console has a **Configuration** menu (plan.md §18): Server (gateway name), Device
+  (device approval and the read-only check-in values) and Backup/Restore (configuration
+  import/export and the server settings file). Each page saves only its own group with
+  `PATCH /api/control/v1/settings`; a stale revision reloads the current values. Audit >
+  Configuration reviews keeps only the review queue, now at `#config-reviews`; old
+  `#configuration` links redirect. Server settings are formatVersion 2 (grouped, with
+  `clientCheckIn`); formatVersion 1 documents and files are no longer accepted, and
+  saved v1 settings reset to the defaults.
+
 - Client check-in is configurable (plan.md §17.2): `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS`,
   `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` and `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS`,
   set by Helm `control.clientCheckIn.*`. Quickstart keeps 500 ms; other deployments now

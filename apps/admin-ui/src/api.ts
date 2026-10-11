@@ -4,7 +4,7 @@ import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRoll
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
 import type { BuilderDraft, BuilderDraftPage, BuilderDraftRequest, BuilderTestPage, BuilderTestRequest, BuilderTestRecord, BuilderDefinition } from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage } from '@olo-labs/toolgate-contracts';
-import type {ControlServerSettings} from '@olo-labs/toolgate-contracts';
+import type {ControlServerSettings,ControlServerSettingsPatch} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
 
 /** Human-safe messages never render server text, exception bodies or credentials. */
@@ -70,13 +70,13 @@ export class ControlClient {
   }
   dispose(): void { this.token = ''; this.lifetime.abort(); }
 
-  private async send<T>(operation: Operation, options: { id?: string; query?: URLSearchParams; body?: unknown; revision?: number; key?: string; signal?: AbortSignal } = {}): Promise<T> {
+  private async send<T>(operation: Operation, options: { id?: string; query?: URLSearchParams; body?: unknown; revision?: number; key?: string; signal?: AbortSignal; contentType?: string } = {}): Promise<T> {
     if (this.lifetime.signal.aborted) throw new DOMException('Session ended', 'AbortError');
     const timeout = AbortSignal.timeout(15000);
     const signal = AbortSignal.any([this.lifetime.signal, timeout, ...(options.signal ? [options.signal] : [])]);
     const path = operation.path.replace('{id}', encodeURIComponent(options.id ?? ''));
     const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${this.token}` });
-    if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+    if (options.body !== undefined) headers.set('Content-Type', options.contentType ?? 'application/json');
     if (options.key) headers.set('Idempotency-Key', options.key);
     if (options.revision !== undefined) headers.set('If-Match', `"${options.revision}"`);
     let response: Response;
@@ -135,7 +135,10 @@ export class ControlClient {
   saveMemberships(entity:'users'|'agents'|'tools'|'devices',body:GroupMembership,key:string):Promise<GroupMembership>{const operation={users:operations.updateUserGroupMembership,agents:operations.updateAgentGroupMembership,tools:operations.updateToolGroupMembership,devices:operations.updateDeviceGroupMembership}[entity];return this.send(operation,{id:body.entityId,body,revision:body.revision,key});}
   simulateAccess(body:EnterpriseEvaluation):Promise<EnterpriseDecision>{return this.send(operations.simulateEnterpriseAccess,{body});}
   serverSettings(signal?:AbortSignal):Promise<ControlServerSettings>{return this.send(operations.getServerSettings,{signal});}
-  saveServerSettings(settings:ControlServerSettings,revision:number,key:string):Promise<ControlServerSettings>{return this.send(operations.updateServerSettings,{body:settings,revision,key});}
+  /** Restores a full exported record; clientCheckIn in the body is ignored by Control. */
+  restoreServerSettings(settings:ControlServerSettings,revision:number,key:string):Promise<ControlServerSettings>{return this.send(operations.updateServerSettings,{body:settings,revision,key});}
+  /** Saves only the groups one Configuration page owns. */
+  patchServerSettings(groups:ControlServerSettingsPatch,revision:number,key:string):Promise<ControlServerSettings>{return this.send(operations.patchServerSettings,{body:groups,revision,key,contentType:'application/merge-patch+json'});}
   exportConfig():Promise<ControlSnapshot>{return this.send(operations.exportConfig);}
   installPresets(snapshot:ControlSnapshot,key:string):Promise<unknown>{return this.send(operations.importConfig,{body:{snapshot,mode:'MERGE',dryRun:false},revision:snapshot.revision,key});}
   previewConfiguration(snapshot:ControlSnapshot,mode:'MERGE'|'REPLACE'):Promise<{changes:readonly {kind:string;id:string;operation:string}[]}>{return this.send(operations.importConfig,{body:{snapshot,mode,dryRun:true},revision:snapshot.revision,key:crypto.randomUUID()});}

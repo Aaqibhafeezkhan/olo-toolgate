@@ -32,7 +32,7 @@ class UiContractTest(unittest.TestCase):
         self.assertEqual(generator.TARGET.read_text(encoding='utf-8'),generator.output())
         self.assertIn("from '@olo-labs/toolgate-contracts'",generator.output())
         api=yaml.safe_load((ROOT/'packages/contracts/openapi/control-v1.yaml').read_text())
-        operations=[operation['operationId'] for methods in api['paths'].values() for method,operation in methods.items() if method in ('get','post','put','delete')]
+        operations=[operation['operationId'] for methods in api['paths'].values() for method,operation in methods.items() if method in ('get','post','put','patch','delete')]
         self.assertEqual(generator.output().count('method:'),len(operations))
         for operation in operations:self.assertEqual(generator.output().count(operation+': {'),1)
 

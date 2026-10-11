@@ -70,6 +70,7 @@ export const operations = {
   importConfig: { method: 'POST', path: '/api/control/v1/config/import' },
   getServerSettings: { method: 'GET', path: '/api/control/v1/settings' },
   updateServerSettings: { method: 'PUT', path: '/api/control/v1/settings' },
+  patchServerSettings: { method: 'PATCH', path: '/api/control/v1/settings' },
   listAudit: { method: 'GET', path: '/api/control/v1/audit' },
   listFleetReleases: { method: 'GET', path: '/api/control/v1/fleet/releases' },
   publishFleetRelease: { method: 'POST', path: '/api/control/v1/fleet/releases' },

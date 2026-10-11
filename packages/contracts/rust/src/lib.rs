@@ -844,19 +844,6 @@ pub struct ControlRolePage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
 }
-/// Tenant-scoped control-plane settings shown in the administrative Configuration page. Auto-approval issues bounded device identities without a human decision and is off unless an administrator enables it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ControlServerSettings {
-    pub format_version: u64,
-    pub revision: u64,
-    pub auto_approve_devices: bool,
-    pub auto_approve_duration_days: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auto_approve_owner_user_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub gateway_name: Option<String>,
-}
 /// Enterprise group graph. Individual ACLs and retired snapshot formats are rejected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

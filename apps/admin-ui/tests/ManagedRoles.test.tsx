@@ -21,11 +21,11 @@ it('malformed advanced JSON disables guided fields and saving',()=>{
   const transport=vi.fn<typeof fetch>();render(<DirectoryEditor client={new ControlClient('token',vi.fn(),transport)} kind="roles" saved={vi.fn()} close={vi.fn()}/>);
   fireEvent.change(screen.getByLabelText('Configuration (JSON)'),{target:{value:'[]'}});expect(screen.getByRole('alert')).toBeTruthy();expect(screen.getByRole('button',{name:'Save role'}).hasAttribute('disabled')).toBe(true);expect(transport).not.toHaveBeenCalled();
 });
-it('groups all navigation into five expandable submenus and exposes Roles',async()=>{
+it('groups all navigation into six expandable submenus and exposes Roles',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>new Response(JSON.stringify({items:[]}))));render(<App/>);
   fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'token'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
-  await screen.findByRole('navigation');expect(document.querySelectorAll('nav details')).toHaveLength(5);
-  expect([...document.querySelectorAll('nav summary')].map(element=>element.textContent)).toEqual(['Audit','Tools','Devices','Users','Agents']);
+  await screen.findByRole('navigation');expect(document.querySelectorAll('nav details')).toHaveLength(6);
+  expect([...document.querySelectorAll('nav summary')].map(element=>element.textContent)).toEqual(['Audit','Configuration','Tools','Devices','Users','Agents']);
   expect(screen.getByRole('link',{name:'Typed roles'}).closest('details')?.querySelector('summary')?.textContent).toBe('Users');
   expect(screen.getByRole('link',{name:'Tool builder'}).closest('details')?.querySelector('summary')?.textContent).toBe('Tools');
   expect(screen.getByRole('link',{name:'Enroll device'}).closest('details')?.querySelector('summary')?.textContent).toBe('Devices');

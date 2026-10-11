@@ -531,15 +531,6 @@ export interface ControlRolePage {
   readonly items: ReadonlyArray<ControlRole>;
   readonly nextCursor?: string;
 }
-/** Tenant-scoped control-plane settings shown in the administrative Configuration page. Auto-approval issues bounded device identities without a human decision and is off unless an administrator enables it. */
-export interface ControlServerSettings {
-  readonly formatVersion: number;
-  readonly revision: number;
-  readonly autoApproveDevices: boolean;
-  readonly autoApproveDurationDays: number;
-  readonly autoApproveOwnerUserId?: string;
-  readonly gatewayName?: string;
-}
 /** Enterprise group graph. Individual ACLs and retired snapshot formats are rejected. */
 export interface ControlSnapshot {
   readonly formatVersion: number;

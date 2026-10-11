@@ -19,7 +19,7 @@ def output():
     records = {}
     for path, methods in spec['paths'].items():
         for method, operation in methods.items():
-            if method not in ('get', 'post', 'put', 'delete'): continue
+            if method not in ('get', 'post', 'put', 'patch', 'delete'): continue
             operations.append(f"  {operation['operationId']}: {{ method: '{method.upper()}', path: '{path}' }},")
             if method == 'get' and operation['operationId'].startswith('listControl'):
                 kind = path.rsplit('/', 1)[1]

@@ -18,6 +18,19 @@ describe('Management shell states', () => {
     expect(screen.getByText('Build').nextElementSibling?.textContent).toBe('local');
   });
 
+  it('redirects old configuration links and keeps review links working', async () => {
+    const settings={formatVersion:2,revision:1,gateway:{gatewayName:'ToolGate'},deviceApproval:{autoApprove:false,durationMs:2592000000},clientCheckIn:{checkInMs:2000,jitterPct:20,offlineAfterMs:120000,source:'DEFAULT'}};
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>url==='/api/control/v1/settings'?new Response(JSON.stringify(settings)):url.includes('/configuration-changes/')?new Response('{}',{status:404}):response()));
+    window.location.hash='#configuration';render(<App/>);await connect();
+    expect(window.location.hash).toBe('#config-server');
+    expect(await screen.findByRole('heading',{name:'Server',level:1})).toBeTruthy();
+    const id='config-'+'a'.repeat(40);
+    window.location.hash='#configuration?id='+id;fireEvent(window,new HashChangeEvent('hashchange'));
+    expect(window.location.hash).toBe('#config-reviews?id='+id);
+    expect(await screen.findByRole('heading',{name:'Configuration reviews'})).toBeTruthy();
+    for(const route of ['config-server','config-device','config-backup'])expect(document.querySelector(`nav a[href="#${route}"]`)?.closest('details')?.querySelector('summary')?.textContent).toBe('Configuration');
+  });
+
   it('keeps navigation controls in landmarks and main outside nested landmarks', async () => {
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
@@ -37,7 +50,7 @@ describe('Management shell states', () => {
     localStorage.clear();
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
-    expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].map(group=>group.open)).toEqual([true,false,false,false,false]);
+    expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].map(group=>group.open)).toEqual([true,false,false,false,false,false]);
     const resize = screen.getByRole('separator',{name:'Resize navigation'});
     expect(screen.getByRole('region',{name:'Navigation controls'}).contains(resize)).toBe(true);
     fireEvent.keyDown(resize,{key:'End'}); expect(resize.getAttribute('aria-valuenow')).toBe('420');

@@ -12,14 +12,14 @@ function setup(post?:()=>Promise<Response>){const fetcher=vi.fn<typeof fetch>().
 async function open(){fireEvent.click(await screen.findByRole('button',{name:change().id}));await screen.findByText('Review configuration impact');}
 it('shows exact group impact safely and requires explicit confirmation before submit',async()=>{setup();await open();expect(screen.getByText('USER:<img src=x onerror=alert(1)>')).toBeTruthy();expect(document.querySelector('img')).toBeNull();expect(screen.getByRole('button',{name:'Submit draft for independent review'}).hasAttribute('disabled')).toBe(true);expect(screen.queryByRole('button',{name:'Apply reviewed change'})).toBeNull();});
 it('binds submission to the exact change revision and preserves retry keys after transport failure',async()=>{const fetcher=setup(async()=>new Response(JSON.stringify({code:'DEPENDENCY_UNAVAILABLE'}),{status:503}));await open();fireEvent.click(screen.getByLabelText('I reviewed the affected groups, inherited access, complete configuration and digests.'));fireEvent.click(screen.getByRole('button',{name:'Submit draft for independent review'}));await screen.findByRole('alert');fireEvent.click(screen.getByRole('button',{name:'Submit draft for independent review'}));await waitFor(()=>expect(fetcher.mock.calls.filter(c=>c[1]?.method==='POST')).toHaveLength(2));const posts=fetcher.mock.calls.filter(c=>c[1]?.method==='POST');expect(JSON.parse(posts[0][1]?.body as string)).toEqual({expectedRevision:1,action:'SUBMIT'});expect(new Headers(posts[0][1]?.headers).get('Idempotency-Key')).toBe(new Headers(posts[1][1]?.headers).get('Idempotency-Key'));expect(document.body.textContent).not.toContain('secret');});
-it('renders a created draft as an actionable review link',()=>{render(<Failure error={new ConfigurationPending(change().id)}/>);expect(screen.getByRole('link',{name:'Review configuration draft'}).getAttribute('href')).toBe('#configuration?id='+change().id);expect(screen.queryByRole('alert')).toBeNull();});
+it('renders a created draft as an actionable review link',()=>{render(<Failure error={new ConfigurationPending(change().id)}/>);expect(screen.getByRole('link',{name:'Review configuration draft'}).getAttribute('href')).toBe('#config-reviews?id='+change().id);expect(screen.queryByRole('alert')).toBeNull();});
 it('opens a different review from its link while the review screen remains mounted',async()=>{
   const first={...change(),state:'APPLIED' as const};const second={...change(),id:'config-'+'b'.repeat(40),state:'PENDING' as const,requestDigest:'d'.repeat(64)};
   const fetcher=vi.fn<typeof fetch>().mockImplementation(async url=>new Response(JSON.stringify(String(url).split('?')[0].endsWith('configuration-changes')?{items:[first,second]}:String(url).endsWith(second.id)?second:first)));
-  window.location.hash='#configuration?id='+first.id;
+  window.location.hash='#config-reviews?id='+first.id;
   render(<ConfigurationRequests client={new ControlClient('secret',vi.fn(),fetcher)}/>);
   await screen.findByText('APPLIED',{selector:'strong'});
-  window.location.hash='#configuration?id='+second.id;fireEvent(window,new HashChangeEvent('hashchange'));
+  window.location.hash='#config-reviews?id='+second.id;fireEvent(window,new HashChangeEvent('hashchange'));
   await screen.findByRole('button',{name:'Approve exact configuration'});
   expect(screen.getByText(second.requestDigest)).toBeTruthy();
   expect((screen.getByLabelText('I reviewed the affected groups, inherited access, complete configuration and digests.') as HTMLInputElement).checked).toBe(false);
