@@ -480,10 +480,15 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (tool == null) throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Unknown tool: " + name);
         if (tool.async && !meta.declares(RequestMeta.TASKS)) throw ProtocolError.missingExtension(RequestMeta.TASKS);
         Prepared prepared = prepare(tool, (ObjectNode) arguments);
-        if (prepared.context != null && !tool.async) prepared.context.attachProgress(meta.progressToken(), meta.notifications());
+        if (prepared.context != null && !tool.async) {
+            prepared.context.attachProgress(meta.progressToken(), meta.notifications());
+            prepared.context.attachInputResponses(meta.inputResponses());
+        }
         if (prepared.refused != null) return marked(prepared.refused);
         if (tool.async) return startTask(tool, prepared, meta);
-        return marked(execute(tool, prepared));
+        ObjectNode result = execute(tool, prepared);
+        ObjectNode pending = prepared.context.pendingInput();
+        return pending != null ? pending : marked(result);
     }
 
     @Override
@@ -602,6 +607,8 @@ public final class StandaloneRuntime implements ToolCatalog {
         try {
             running = workers.submit(() -> {
                 context.worker = Thread.currentThread();
+                // A cancel that arrived before this thread started interrupted nobody; deliver it now.
+                if (context.isCancelled()) Thread.currentThread().interrupt();
                 try {
                     Object value = tool.method.invoke(tool.instance, args);
                     if (value instanceof CompletionStage<?> stage) {
@@ -704,6 +711,7 @@ public final class StandaloneRuntime implements ToolCatalog {
 
     /** The error mapping of errors.md §2. */
     private ObjectNode thrown(Tool tool, Redactor redact, Throwable t) {
+        if (t instanceof StandaloneContext.InputNeeded) return JSON.objectNode(); // the round ends with its InputRequiredResult
         if (t instanceof ToolInputError e) return failure(tool, redact, "INVALID_ARGUMENT", e.getMessage(), false, null);
         if (t instanceof ToolConfigurationError e) return failure(tool, redact, "CONFIGURATION", e.getMessage(), false, null);
         if (t instanceof PlatformError e) return platform(tool, redact, e.platformCode(), e.getMessage());

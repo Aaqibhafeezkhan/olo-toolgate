@@ -70,6 +70,16 @@ public final class FixtureServer implements ToolCatalog {
         add("protocol_error_job", "Ends its task failed.", schema(), TaskSupport.REQUIRED);
         add("confirm_delete", "Asks for confirmation.", schema("filename", "string"), TaskSupport.REQUIRED);
         add("multi_input", "Asks two questions at once.", schema(), TaskSupport.REQUIRED);
+        // MRTR (SEP-2322): the core verifies requestState and carries earlier answers in RequestMeta.inputResponses.
+        add("test_input_required_result_elicitation", "Asks for a name by MRTR.", schema(), TaskSupport.FORBIDDEN);
+        add("test_input_required_result_sampling", "Asks for a sampled answer by MRTR.", schema(), TaskSupport.FORBIDDEN);
+        add("test_input_required_result_list_roots", "Asks for the client's roots by MRTR.", schema(), TaskSupport.FORBIDDEN);
+        add("test_input_required_result_request_state", "Asks for a confirmation with requestState.", schema(), TaskSupport.FORBIDDEN);
+        add("test_input_required_result_multiple_inputs", "Asks three kinds of input at once.", schema(), TaskSupport.FORBIDDEN);
+        add("test_input_required_result_multi_round", "Asks in two rounds.", schema(), TaskSupport.FORBIDDEN);
+        add("test_input_required_result_tampered_state", "Asks with an integrity-protected requestState.", schema(), TaskSupport.FORBIDDEN);
+        add("test_input_required_result_capabilities", "Asks only for declared capabilities.", schema(), TaskSupport.FORBIDDEN);
+        add("test_tool_with_task", "Asks by MRTR, then runs as a task.", schema(), TaskSupport.REQUIRED);
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -129,8 +139,43 @@ public final class FixtureServer implements ToolCatalog {
         if (f == null) throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Unknown tool: " + name);
         boolean asTask = meta.declares(RequestMeta.TASKS) && f.tasks != TaskSupport.FORBIDDEN;
         if (f.tasks == TaskSupport.REQUIRED && !asTask) throw ProtocolError.missingExtension(RequestMeta.TASKS);
+        ObjectNode answers = meta.inputResponses();
+        // MRTR before Tasks (SEP-2663): the input is gathered synchronously, and only the final round creates the task.
+        if (name.equals("test_tool_with_task") && !accepted(answers, "user_name")) return inputRequired(Map.of("user_name", form("What is your name?", "name", "string")));
         if (asTask) return task(name, arguments, meta);
         return switch (name) {
+            case "test_input_required_result_elicitation" -> accepted(answers, "user_name")
+                    ? text("Hello, " + content(answers, "user_name", "name") + "!")
+                    : inputRequired(Map.of("user_name", form("What is your name?", "name", "string")));
+            case "test_input_required_result_sampling" -> answers.has("capital_question")
+                    ? text("Sampled: " + answers.path("capital_question").path("content").path("text").asText())
+                    : inputRequired(Map.of("capital_question", sampling("What is the capital of France?", 100)));
+            case "test_input_required_result_list_roots" -> answers.has("client_roots")
+                    ? text("Roots: " + answers.path("client_roots").path("roots").size())
+                    : inputRequired(Map.of("client_roots", roots()));
+            case "test_input_required_result_request_state", "test_input_required_result_tampered_state" -> accepted(answers, "confirm")
+                    ? text("state-ok: confirmed " + answers.path("confirm").path("content").path("ok").asBoolean())
+                    : inputRequired(Map.of("confirm", form("Please confirm", "ok", "boolean")));
+            case "test_input_required_result_multiple_inputs" -> {
+                Map<String, ObjectNode> missing = new LinkedHashMap<>();
+                if (!accepted(answers, "user_name")) missing.put("user_name", form("What is your name?", "name", "string"));
+                if (!answers.has("greeting")) missing.put("greeting", sampling("Generate a greeting", 50));
+                if (!answers.has("client_roots")) missing.put("client_roots", roots());
+                yield missing.isEmpty() ? text("Hello, " + content(answers, "user_name", "name") + "!") : inputRequired(missing);
+            }
+            case "test_input_required_result_multi_round" -> {
+                if (!accepted(answers, "step1")) yield inputRequired(Map.of("step1", form("Step 1: What is your name?", "name", "string")));
+                if (!accepted(answers, "step2")) yield inputRequired(Map.of("step2", form("Step 2: What is your favorite color?", "color", "string")));
+                yield text(content(answers, "step1", "name") + " likes " + content(answers, "step2", "color"));
+            }
+            case "test_input_required_result_capabilities" -> {
+                Map<String, ObjectNode> asks = new LinkedHashMap<>();
+                if (meta.declaresCapability("elicitation")) asks.put("user_name", form("What is your name?", "name", "string"));
+                if (meta.declaresCapability("sampling")) asks.put("greeting", sampling("Generate a greeting", 50));
+                if (meta.declaresCapability("roots")) asks.put("client_roots", roots());
+                asks.keySet().removeIf(answers::has);
+                yield asks.isEmpty() ? text("Nothing more to ask.") : inputRequired(asks);
+            }
             case "test_simple_text" -> text("This is a simple text response for testing.");
             case "test_image_content" -> content(image());
             case "test_audio_content" -> content(JSON.objectNode().put("type", "audio").put("data", WAV).put("mimeType", "audio/wav"));
@@ -197,6 +242,7 @@ public final class FixtureServer implements ToolCatalog {
                         if (answers == null) tasks.cancelled(id);
                         else finish(id, text("Hello, " + answers.path("name").path("content").path("name").asText() + "!"));
                     }
+                    case "test_tool_with_task" -> finish(id, text("Hello, " + content(meta.inputResponses(), "user_name", "name") + "!"));
                     default -> tasks.fail(id, ProtocolError.INTERNAL_ERROR, "Unknown task tool");
                 }
             } catch (InterruptedException e) {
@@ -225,6 +271,40 @@ public final class FixtureServer implements ToolCatalog {
         params.put("mode", "form");
         params.put("message", message);
         params.set("requestedSchema", schema(field, type));
+        return request;
+    }
+
+    private static ObjectNode inputRequired(Map<String, ObjectNode> requests) {
+        ObjectNode result = JSON.objectNode();
+        result.put("resultType", "input_required");
+        ObjectNode inputs = result.putObject("inputRequests");
+        requests.forEach(inputs::set);
+        return result;
+    }
+
+    private static boolean accepted(ObjectNode answers, String key) {
+        return "accept".equals(answers.path(key).path("action").asText());
+    }
+
+    private static String content(ObjectNode answers, String key, String field) {
+        return answers.path(key).path("content").path(field).asText();
+    }
+
+    private static ObjectNode sampling(String question, int maxTokens) {
+        ObjectNode request = JSON.objectNode();
+        request.put("method", "sampling/createMessage");
+        ObjectNode params = request.putObject("params");
+        ObjectNode message = params.putArray("messages").addObject();
+        message.put("role", "user");
+        message.putObject("content").put("type", "text").put("text", question);
+        params.put("maxTokens", maxTokens);
+        return request;
+    }
+
+    private static ObjectNode roots() {
+        ObjectNode request = JSON.objectNode();
+        request.put("method", "roots/list");
+        request.putObject("params");
         return request;
     }
 

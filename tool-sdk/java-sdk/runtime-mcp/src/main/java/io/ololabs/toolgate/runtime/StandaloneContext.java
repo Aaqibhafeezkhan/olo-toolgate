@@ -55,6 +55,8 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     private volatile JsonNode progressToken;
     private volatile java.util.function.Consumer<ObjectNode> notifications;
     private volatile String taskId;
+    private volatile ObjectNode responses;
+    private volatile ObjectNode pendingInput;
     volatile Thread worker;
 
     StandaloneContext(DeclaredValues inputs, DeclaredValues globals, DeclaredValues secrets, DeclaredValues claims,
@@ -104,6 +106,28 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
         this.taskId = taskId;
     }
 
+    /** Makes a sync call answer {@code requestInput()} by MRTR from this round's input responses (adapter A3). */
+    void attachInputResponses(ObjectNode responses) {
+        this.responses = responses;
+    }
+
+    /**
+     * The {@code InputRequiredResult} this round ends with, or null. It is recorded before {@link InputNeeded} is thrown,
+     * so a handler that catches the exception still ends the round asking for input.
+     */
+    ObjectNode pendingInput() {
+        return pendingInput;
+    }
+
+    /** Ends a sync round that needs an answer the client has not sent yet. */
+    static final class InputNeeded extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        InputNeeded() {
+            super("input required", null, false, false);
+        }
+    }
+
     /** Makes a sync call report progress as {@code notifications/progress} for the request's progress token. */
     void attachProgress(JsonNode token, java.util.function.Consumer<ObjectNode> sink) {
         this.progressToken = token;
@@ -144,13 +168,13 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     @Override public CancellationToken cancellation() { return this; }
 
     /**
-     * In a task, moves it to {@code input_required} with one form elicitation and waits for the answer from
-     * {@code tasks/update}. In a sync call it needs MRTR {@code requestState} (adapter A3), which is not here yet.
+     * Asks for one form elicitation. In a task it moves the task to {@code input_required} and waits for the answer
+     * from {@code tasks/update}. In a sync call it is MRTR: the handler runs again from the start on each round, and
+     * the n-th call answers from the round's input response {@code input-n}, or ends the round with an
+     * {@code InputRequiredResult} asking for it.
      */
     @Override
     public <T> T requestInput(InputRequest<T> request) {
-        Tasks t = tasks;
-        if (t == null) throw new ToolConfigurationError("requestInput in a sync call needs requestState (adapter A3), which is not in this runtime yet");
         String key = "input-" + inputRequests.incrementAndGet();
         ObjectNode elicitation = JsonNodeFactory.instance.objectNode();
         elicitation.put("method", "elicitation/create");
@@ -159,18 +183,32 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
         params.put("message", redactor.apply(request.message()));
         JsonNode schema = Converter.toJson(request.requestedSchema());
         params.set("requestedSchema", schema);
-        ObjectNode answers;
-        try {
-            answers = t.awaitInput(taskId, JsonNodeFactory.instance.objectNode().set(key, elicitation), deadline);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new PlatformError(PlatformError.Code.CANCELLED, "The invocation was cancelled");
+        Tasks t = tasks;
+        JsonNode answer;
+        if (t == null) {
+            ObjectNode round = responses;
+            answer = round == null ? null : round.get(key);
+            if (answer == null) {
+                ObjectNode result = JsonNodeFactory.instance.objectNode();
+                result.put("resultType", "input_required");
+                result.putObject("inputRequests").set(key, elicitation);
+                pendingInput = result;
+                throw new InputNeeded();
+            }
+        } else {
+            ObjectNode answers;
+            try {
+                answers = t.awaitInput(taskId, JsonNodeFactory.instance.objectNode().set(key, elicitation), deadline);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new PlatformError(PlatformError.Code.CANCELLED, "The invocation was cancelled");
+            }
+            if (answers == null) {
+                if (isCancelled() || t.cancelRequested(taskId)) throw new PlatformError(PlatformError.Code.CANCELLED, "The invocation was cancelled");
+                throw new PlatformError(PlatformError.Code.DEADLINE_EXCEEDED, "No input arrived before the deadline");
+            }
+            answer = answers.path(key);
         }
-        if (answers == null) {
-            if (isCancelled() || t.cancelRequested(taskId)) throw new PlatformError(PlatformError.Code.CANCELLED, "The invocation was cancelled");
-            throw new PlatformError(PlatformError.Code.DEADLINE_EXCEEDED, "No input arrived before the deadline");
-        }
-        JsonNode answer = answers.path(key);
         if (!"accept".equals(answer.path("action").asText())) {
             throw new PlatformError(PlatformError.Code.CANCELLED, "The input request was " + (answer.path("action").asText("declined").equals("cancel") ? "cancelled" : "declined"));
         }

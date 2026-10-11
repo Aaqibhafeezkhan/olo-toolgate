@@ -67,8 +67,26 @@ public class TaskTools {
         return Map.of("ticked", true);
     }
 
-    @ServerTool(name = "demo.inline", title = "Inline", description = "Asks for input in a sync call.", effect = EffectSafety.READ_ONLY)
-    public Map<String, Object> inline(ToolContext context) {
-        return Map.of("v", context.requestInput(InputRequest.of("?", Map.of("type", "string"), String.class)));
+    public record Colour(String colour) {}
+
+    @ServerTool(name = "demo.inline", title = "Inline", description = "Asks for two answers in a sync call.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> inline(@Param(description = "Greeting", defaultValue = "Hello") String greeting, ToolContext context) {
+        Answer name = context.requestInput(InputRequest.of("What is your name?",
+                Map.of("type", "object", "properties", Map.of("name", Map.of("type", "string")), "required", java.util.List.of("name")),
+                Answer.class));
+        Colour colour = context.requestInput(InputRequest.of("What is your favourite colour?",
+                Map.of("type", "object", "properties", Map.of("colour", Map.of("type", "string")), "required", java.util.List.of("colour")),
+                Colour.class));
+        return Map.of("greeting", greeting + ", " + name.name() + "! " + colour.colour() + " it is.");
+    }
+
+    @ServerTool(name = "demo.swallow", title = "Swallow", description = "Catches everything requestInput throws.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> swallow(ToolContext context) {
+        try {
+            return Map.of("name", context.requestInput(InputRequest.of("Name?",
+                    Map.of("type", "object", "properties", Map.of("name", Map.of("type", "string"))), Answer.class)).name());
+        } catch (RuntimeException e) {
+            return Map.of("name", "nobody");
+        }
     }
 }
