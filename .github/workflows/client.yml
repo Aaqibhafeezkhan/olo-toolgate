@@ -8,9 +8,10 @@ on:
         type: string
         default: ''
   pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       comment:
@@ -24,6 +25,7 @@ jobs:
     uses: ./.github/workflows/admission.yml
     with:
       comment: ${{ inputs.comment || '' }}
+      main_only: true
   preflight:
     needs: admission
     if: needs.admission.outputs.allow == 'true'

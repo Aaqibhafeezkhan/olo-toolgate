@@ -46,7 +46,7 @@ POLICY = {
     'manual-development-release.publish': 'publication',
 }
 REASONS = {
-    'admission': 'Shared admission logic is tested offline by tests/ci; GitHub API lookup is hosted.',
+    'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',
     'native': 'Requires all six native VMs and system service/installer support.',
     'artifacts': 'Requires genuine artifacts from the complete six-platform native matrix.',
     'publication': 'Requires protected environments, credentials or GitHub release/registry writes.',

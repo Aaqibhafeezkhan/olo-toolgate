@@ -89,10 +89,14 @@ staging requirements and executable overrides.
 
 ## Triggers and limits
 
-`plan` reads declarations rather than assuming branch names. Current automatic
-workflows run on PRs, `main` pushes and `v*` tag pushes. There are no `master`,
-`dev` or `release/*` push triggers. PRs have no base-branch filter. Development
-publication follows a completed `control` run on `main`, with further success,
+`plan` reads declarations rather than assuming branch names. The five CI
+workflows (`foundation`, `endpoint-client`, `control`, `gateway`, `quickstart`)
+run automatically on `main` pushes and PRs targeting `main`. Their manual and
+reusable runs are also restricted to `main` or PRs targeting `main` by shared
+admission. They do not run on tag pushes or other branches/PR targets. GitHub
+still displays PR runs under their source branch. The separate
+`release-foundation` workflow retains `v*` tag pushes. Development publication
+follows a completed `control` run on `main`, with further success,
 source-repository and admission checks; both development-release workflows
 also support manual dispatch.
 
@@ -100,7 +104,7 @@ Replay deliberately runs the **job body**, independently of admission and
 upstream dependencies, using a synthetic dispatch workflow. Real GitHub job
 conditions and event payload routing are recorded in the plan and are not
 represented as locally verified. Shared offline admission tests cover RC
-messages, PR head commits, manual inputs, upstream conclusions, the pause
+messages, PR titles, manual inputs, upstream conclusions, the pause
 variable and the IST resume boundary. Replay does not change
 `TOOLGATE_CI_ENABLED`, enable automatic CI, or bypass those rules on GitHub.
 

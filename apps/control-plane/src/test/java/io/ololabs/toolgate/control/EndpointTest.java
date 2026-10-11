@@ -60,6 +60,13 @@ final class EndpointTest {
     private void decide(Setup s,EndpointEnrollmentChallenge challenge,EnrollmentChoice choice,String key){var review=review(s,challenge);s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(challenge.userCode(),review.keyFingerprint(),choice,START+604800000,null)),key,"request");}
     private EndpointEnrollmentResult poll(Setup s,EndpointEnrollmentChallenge challenge){return codec.model(s.service.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class);}
     private java.security.cert.X509Certificate certificate(DeviceIdentity identity)throws Exception{return (java.security.cert.X509Certificate)java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(identity.certificatePem().getBytes(java.nio.charset.StandardCharsets.US_ASCII)));}
+    @Test void discoveryUsesProductClientVersion()throws Exception{
+        var service=new EndpointService(null,codec,issuer(),new MutableClock(),true,"endpoint","server","Organization","https://control.example.test","https://gateway.example.test");
+        var envelope=codec.model(service.discovery().body(),SignedClientDiscovery.class);
+        var payload=new String(Base64.getUrlDecoder().decode(envelope.payload()),java.nio.charset.StandardCharsets.UTF_8);
+        var discovery=codec.model(payload,ClientDiscovery.class);
+        assertEquals(System.getProperty("toolgate.productVersion"),discovery.minimumClientVersion());
+    }
     @Test void queuedBuildAndDeploymentCannotOutliveTheirCreatorsGroupAuthority()throws Exception{
         var s=setup();
         // This proof exercises a restricted role; an installation owner intentionally retains all management operations.

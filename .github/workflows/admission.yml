@@ -7,6 +7,10 @@ on:
       comment:
         type: string
         default: ''
+      main_only:
+        description: Require main for branch runs or the PR target
+        type: boolean
+        default: false
     outputs:
       allow:
         value: ${{ jobs.admit.outputs.allow }}
@@ -14,7 +18,10 @@ permissions:
   contents: read
 jobs:
   admit:
-    if: vars.TOOLGATE_CI_ENABLED == 'true' && (startsWith(github.event.head_commit.message, 'RC:') || startsWith(github.event.pull_request.title, 'RC:') || startsWith(github.event.workflow_run.head_commit.message, 'RC:') || startsWith(inputs.comment, 'RC:'))
+    if: >-
+      (!inputs.main_only || github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main'))
+      && vars.TOOLGATE_CI_ENABLED == 'true'
+      && (startsWith(github.event.head_commit.message, 'RC:') || startsWith(github.event.pull_request.title, 'RC:') || startsWith(github.event.workflow_run.head_commit.message, 'RC:') || startsWith(inputs.comment, 'RC:'))
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     outputs:
@@ -27,5 +34,4 @@ jobs:
         name: Check pause window and exact RC prefix
         env:
           CI_ENABLED: ${{ vars.TOOLGATE_CI_ENABLED }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: python tools/ci/admission.py

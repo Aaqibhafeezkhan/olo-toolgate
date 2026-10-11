@@ -70,6 +70,14 @@ Supported job bodies are `preflight.metadata`, `foundation.check`,
 `gateway.container-and-replicas` and `policy.enterprise-access`. Use `plan` to
 see the current inventory before selecting jobs.
 
+On GitHub, the five CI workflows run automatically for pushes to `main` and
+PRs targeting `main`. Manual runs must select `main`. PR admission uses the
+`RC:` title plus `TOOLGATE_CI_ENABLED=true`; push admission uses the latest
+commit's `RC:` message, and manual admission uses the `RC:` comment input.
+The existing resume date also applies. Actions displays PR runs under their
+source branch even when the target is `main`. Local replay runs selected job
+bodies independently of these hosted trigger rules.
+
 The first replay builds [`local.Dockerfile`](local.Dockerfile), downloads toolchains
 and can use several GB. Replay runs in a privileged Linux container with its own
 Docker daemon. It exports the current working tree, including uncommitted source,

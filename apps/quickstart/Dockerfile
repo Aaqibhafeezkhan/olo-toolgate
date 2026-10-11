@@ -9,6 +9,7 @@ COPY packages/contracts/rust packages/contracts/rust
 COPY packages/contracts/tools packages/contracts/tools
 COPY apps/gateway apps/gateway
 COPY apps/endpoint-client apps/endpoint-client
+COPY tool-sdk/cli tool-sdk/cli
 COPY tools/gateway/collect-notices.sh /src/collect-notices.sh
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-quickstart-musl,target=/src/target,sharing=locked \

@@ -3,9 +3,10 @@
 name: gateway
 on:
   pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       comment:
@@ -26,6 +27,7 @@ jobs:
     uses: ./.github/workflows/admission.yml
     with:
       comment: ${{ inputs.comment || '' }}
+      main_only: true
   preflight:
     needs: admission
     if: needs.admission.outputs.allow == 'true'
@@ -81,7 +83,7 @@ jobs:
           path: build/gateway/
           if-no-files-found: error
   publish:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' && inputs.publish
+    if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.publish)
     needs: [container-and-replicas, policy-compatibility]
     runs-on: ubuntu-24.04
     environment: gateway-release
