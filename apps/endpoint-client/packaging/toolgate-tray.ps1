@@ -41,10 +41,22 @@ function Get-ToolGateKnownGateways {
     try { $known = [IO.File]::ReadAllText($trayIndex) | ConvertFrom-Json } catch { return @() }
     return @($known | Where-Object { $_.serverUrl -and (Test-ToolGateGatewayAddress ([string]$_.serverUrl)) })
 }
-# The protected client verifies the gateway and its certificate; the tray only asks for elevation.
+# One OS-authenticated presence check, with no implicit approval request or service reset.
+function Invoke-ToolGateRefresh {
+    try {
+        Start-Process -FilePath $trayClient -ArgumentList 'check-in' -WindowStyle Hidden
+        $script:trayDetail = 'Checking the gateway server state...'
+    } catch { $script:trayDetail = 'Could not check the gateway server state.' }
+}
+# The protected client verifies the gateway and its certificate when focus or trust changes.
 function Invoke-ToolGateConfigure([string]$Target) {
     if (-not (Test-ToolGateGatewayAddress $Target)) {
         $script:trayDetail = 'Use an https:// gateway URL or a local console address such as http://127.0.0.1:18091.'
+        return
+    }
+    $settings = Get-ToolGateGatewaySettings
+    if ($settings -and ($Target -eq [string]$settings.serverUrl -or $Target -eq [string]$settings.localConsoleUrl) -and -not $script:trustChanged) {
+        Invoke-ToolGateRefresh
         return
     }
     $peer = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -134,6 +146,10 @@ $trayRepair.add_Click({ Invoke-ToolGateRepair })
 [void]$trayMenu.Items.Insert(3, $trayRepair)
 $trayMenu.add_Opening({
     $traySwitch.DropDownItems.Clear()
+    $trayConfiguration = New-Object System.Windows.Forms.ToolStripMenuItem('Configuration')
+    $trayConfiguration.ToolTipText = 'Check the current gateway once and apply its server state'
+    $trayConfiguration.add_Click({ Invoke-ToolGateRefresh })
+    [void]$traySwitch.DropDownItems.Add($trayConfiguration)
     $trayCurrent = Get-ToolGateGatewaySettings
     foreach ($trayGateway in @(Get-ToolGateKnownGateways)) {
         $trayTarget = if ($trayGateway.consoleUrl) { [string]$trayGateway.consoleUrl } else { [string]$trayGateway.serverUrl }
