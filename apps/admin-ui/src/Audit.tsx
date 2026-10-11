@@ -1,5 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {Table} from './Table';
 import { useEffect, useState } from 'react';
 import type { ControlAuditPage } from '@olo-labs/toolgate-contracts';
 import { ControlClient } from './api';
@@ -15,7 +16,7 @@ export function Audit({client}:{client:ControlClient}) {
   return <><div className="page-heading"><h1>Audit log</h1><button onClick={()=>setAttempt(attempt+1)}>Refresh</button></div>
     <p className="intro">Administrative changes, actor identifiers and request correlations. Tool authorization history remains in Gateway audit output.</p>
     {error!==undefined?<Failure error={error} retry={()=>setAttempt(attempt+1)}/>:!page?<p role="status">Loading audit…</p>:<>
-      {!page.items.length?<p role="status">No audit events on this page.</p>:<div className="table-wrap"><table><caption className="sr-only">Administrative audit events</caption><thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Actor</th><th>Request</th></tr></thead><tbody>{page.items.map(event=><tr key={event.sequence}><td>{event.occurredAt}</td><td>{event.operation}</td><td>{event.target}</td><td><code>{event.actorId}</code></td><td>{event.requestId}</td></tr>)}</tbody></table></div>}
+      {!page.items.length?<p role="status">No audit events on this page.</p>:<div className="table-wrap"><Table><caption className="sr-only">Administrative audit events</caption><thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Actor</th><th>Request</th></tr></thead><tbody>{page.items.map(event=><tr key={event.sequence}><td data-sort-value={Date.parse(event.occurredAt)}>{event.occurredAt}</td><td>{event.operation}</td><td>{event.target}</td><td><code>{event.actorId}</code></td><td>{event.requestId}</td></tr>)}</tbody></Table></div>}
       <div className="actions"><button disabled={cursor==='0'} onClick={()=>setCursor('0')}>First page</button><button disabled={!page.nextCursor} onClick={()=>setCursor(page.nextCursor!)}>Next page</button></div>
     </>}
   </>;

@@ -1,0 +1,28 @@
+// Copyright 2026 OLO Labs
+// SPDX-License-Identifier: Apache-2.0
+import {afterEach,expect,it,vi} from 'vitest';
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {App} from '../src/App';
+const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status});
+afterEach(()=>{cleanup();vi.unstubAllGlobals();localStorage.clear();window.location.hash='';});
+async function setup(status=200){
+  const users=[{id:'alice',name:'Alice',enabled:true,revision:4},{id:'bob',name:'Bob',enabled:false,revision:2}];
+  const fetcher=vi.fn(async(url:string,options:RequestInit)=>{
+    if(['PUT','DELETE'].includes(options.method!)){
+      if(status!==200)return json({id:'config-'+'a'.repeat(40),state:'DRAFT'},status);
+      const id=decodeURIComponent(url.split('/').at(-1)!);if(options.method==='DELETE'){users.splice(users.findIndex(user=>user.id===id),1);return new Response(null,{status:204});}
+      const body=JSON.parse(String(options.body));Object.assign(users.find(user=>user.id===id)!,body,{revision:body.revision+1});return json(body);
+    }
+    return json(url.endsWith('/admin-session')?{role:'ADMINISTRATOR'}:{items:url.startsWith('/api/control/v1/users?')?users:[]});
+  });vi.stubGlobal('fetch',fetcher);window.location.hash='#users';render(<App/>);fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-token'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));await screen.findByRole('switch',{name:'Disable alice'});return fetcher;
+}
+it('changes status in one click with the expected revision and retains backend errors',async()=>{
+  const fetcher=await setup();fireEvent.click(screen.getByRole('switch',{name:'Disable alice'}));await screen.findByRole('switch',{name:'Enable alice'});
+  const mutation=fetcher.mock.calls.find(([,options])=>options.method==='PUT')!;expect(JSON.parse(String(mutation[1].body))).toMatchObject({id:'alice',enabled:false,revision:4});expect(new Headers(mutation[1].headers).get('If-Match')).toBe('"4"');expect(new Headers(mutation[1].headers).get('Idempotency-Key')).toBeTruthy();
+});
+it('requires explicit bulk delete confirmation and reports each result',async()=>{
+  const fetcher=await setup();fireEvent.click(screen.getByRole('checkbox',{name:'Select all rows on this page'}));fireEvent.click(screen.getByRole('button',{name:'Delete selected'}));expect(fetcher.mock.calls.some(([,options])=>options.method==='DELETE')).toBe(false);expect(screen.getByRole('region',{name:'Confirm deletion'})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Confirm delete'}));await screen.findByRole('heading',{name:'No users on this page'});expect(fetcher.mock.calls.filter(([,options])=>options.method==='DELETE')).toHaveLength(2);expect(screen.getAllByText('Deleted. Fresh onboarding requires a new identifier.')).toHaveLength(2);
+});
+it('shows draft links without pretending reviewed changes have already applied',async()=>{
+  await setup(202);fireEvent.click(screen.getByRole('checkbox',{name:'Select Alice'}));fireEvent.click(screen.getByRole('button',{name:'Disable selected'}));await screen.findByRole('link',{name:'Review configuration draft'});await waitFor(()=>expect(screen.getByRole('switch',{name:'Disable alice'}).getAttribute('aria-checked')).toBe('true'));
+});

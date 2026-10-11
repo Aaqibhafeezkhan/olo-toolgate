@@ -23,7 +23,7 @@ public final class DirectoryService {
     }
     public void requirePortal(Actor actor,String userId) {
         if(userId==null)throw ManagementAccess.denied();
-        store.transaction(actor.tenant(),false,tx->{var access=management.access(tx.load(),userId);if(access.portalRole()==UserRole.BASIC||access.grants().stream().noneMatch(r->ManagementAccess.current(r.conditions(),System.currentTimeMillis())))throw ManagementAccess.denied();return null;});
+        store.transaction(actor.tenant(),false,tx->{var access=management.access(tx.load(),userId);if(access.portalRole()!=UserRole.SUPER_ADMIN&&(access.portalRole()==UserRole.BASIC||access.grants().stream().noneMatch(r->ManagementAccess.current(r.conditions(),System.currentTimeMillis()))))throw ManagementAccess.denied();return null;});
     }
     public boolean portalSuper(Actor actor,String userId) {if(userId==null)return false;return store.transaction(actor.tenant(),false,tx->management.access(tx.load(),userId).portalRole()==UserRole.SUPER_ADMIN);}
     public Actor portalActor(TenantId tenant,String principal,String userId) {
@@ -31,7 +31,7 @@ public final class DirectoryService {
     }
     private void require(Actor actor,Directory directory,String action,Directory.Entry entry) {actor.requireAdmin();management.requireEntry(directory,actor.userId(),action,entry,System.currentTimeMillis());}
     private boolean recovery(Directory directory) {
-        return directory.entries().values().stream().filter(e->e.id().kind()==Kind.USER&&e.enabled()).anyMatch(e->{var a=management.access(directory,e.id().value());return a.portalRole()==UserRole.SUPER_ADMIN&&GroupGraph.DEFAULTS.keySet().stream().allMatch(g->a.grants().stream().anyMatch(r->r.groupType().name().equals(g.name())&&r.groups().all()&&r.actions().contains("recover")&&ManagementAccess.current(r.conditions(),System.currentTimeMillis())));});
+        return directory.entries().values().stream().filter(e->e.id().kind()==Kind.USER&&e.enabled()).anyMatch(e->{var a=management.access(directory,e.id().value());return a.portalRole()==UserRole.SUPER_ADMIN;});
     }
     private Directory validated(Directory before,long revision,Map<Ids.RecordId,Directory.Entry> entries) {
         try {var after=new Directory(revision,entries);after.validate(maxRecords,maxBytes);codec.validatePolicies(after);if(recovery(before)&&!recovery(after))throw Failure.conflict();return after;}catch(IllegalArgumentException failure){throw Failure.conflict();}

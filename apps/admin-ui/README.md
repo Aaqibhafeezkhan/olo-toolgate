@@ -14,11 +14,47 @@ state, revision and deadlines, with explicit human confirmation before a decisio
 
 ## Human approval
 
-Connect using an organization-issued token with the tenant-scoped
-`toolgate-approver` role and a signed `user_id` identifying an enabled directory
-user. Control verifies both; an administrator role alone does not grant approval
-permission. An approver without directory access opens directly in Approvals.
-The UI never decodes tokens to infer roles.
+Connect using an organization-issued token with a verified tenant and stable
+human identity. Control resolves the enabled directory user and current Team
+roles. Scoped operation reviewers require management authority and membership
+in the policy's approver Teams; Super Admin has the exception described below.
+Approvers use the approval workspace with Overview and their queue.
+The UI never decodes tokens to infer roles. Token display claims may supply the
+signed-in name and an identity key for browser preferences after authentication;
+Control remains the only authorization authority. Approvers start at Overview
+or their last accessible browser page, then open Approvals.
+
+## Navigation and lists
+
+Fresh browser history starts at Overview with every menu collapsed. The last
+page and expanded menus are kept in local storage for the same origin, issuer,
+tenant and subject. Explicit deep links take priority. No navigation state is
+saved on Control, and browser preferences contain no tokens or passwords.
+Administration is the last navigation group and contains Server, Device,
+Backup/Restore and About. Navigation and workspace scroll separately; the name
+and approval bell remain at the bottom of the sidebar. The bell is green for
+pending scoped operation, configuration or device approvals, and gray when
+clear or unavailable. Its menu opens the relevant queues and refreshes every
+15 seconds and after approval decisions.
+
+All tables support ascending/descending header sorting and page-local checkbox
+selection. Entity lists provide bulk enable, disable and confirmed delete;
+read-only lists export selected rows. Enablement uses red/green switches, and
+action icons have accessible names and tooltips. Sorting and selection affect
+only the displayed server page. Failed and pending bulk changes are reported
+per record; configuration drafts never appear as already applied changes.
+
+An active Super Admin Management Role on an enabled Team supplies all tenant
+management actions. Super Admin directory changes apply immediately and are
+audited; they may also manage and approve any existing configuration request,
+including their own, without a second reviewer. Other Management Roles retain
+scoped ceilings and independent review. Runtime authorization still requires
+all current grants, policies and device checks. See [ADR 022](../../docs/adr/022-super-administrator-review-exception.md).
+
+Deletion removes an active entity completely. Required default groups, internal
+Quickstart executors, valid references and the last active Super Admin remain
+protected. Retired identifiers and credentials cannot restore access: onboard a
+new record, assign groups and credentials, and complete the required approvals.
 
 The queue and details refresh every 15 seconds. Page controls fetch up to 50
 records at a time; the pending filter applies to the current page. Review tenant,
@@ -65,8 +101,8 @@ It requires an independently running Control; it supplies no fake API.
 Wire types come from `@olo-labs/toolgate-contracts`. Generate canonical OpenAPI
 operation bindings with `python tools/ui/generate.py`; `--check` detects drift.
 The transport wraps generated routes/shared types and centralizes cancellation,
-timeouts and safe errors. No claim decoder, policy evaluator or server validation
-is copied into the UI.
+timeouts and safe errors. No policy evaluator or server validation is copied
+into the UI.
 
 `./gradlew :control-plane:build` explicitly builds npm assets and embeds them under
 `META-INF/resources/console`. Docker uses a pinned Node stage, verifies prebuilt

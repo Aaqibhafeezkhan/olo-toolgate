@@ -31,18 +31,18 @@ describe('Device management',()=>{
     const transport=setup([pending]);fireEvent.click(await screen.findByRole('button',{name:'Approve device-2'}));
     fireEvent.change(screen.getByLabelText('Connection duration'),{target:{value:'unlimited'}});expect(screen.queryByLabelText('Allow connection until')).toBeNull();
     const submit=screen.getByRole('button',{name:'Approve device'});expect((submit as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(submit);await screen.findByText('Device approved.');
+    fireEvent.click(screen.getByRole('checkbox',{name:/I compared|I confirm/}));fireEvent.click(submit);await screen.findByText('Device approved.');
     const mutation=transport.mock.calls.find(call=>call[1]?.method==='POST')!;expect(mutation[0]).toBe('/api/control/v1/endpoint/enrollments/decision');expect(JSON.parse(String(mutation[1]?.body))).toEqual({choice:'APPROVE',userCode:pending.enrollment!.userCode,keyFingerprint:pending.enrollment!.keyFingerprint,unlimitedConnection:true});
   });
   it('deapproves without disabling, and disables with directory concurrency independently',async()=>{
     const transport=setup([active]);fireEvent.click(await screen.findByRole('button',{name:'Deapprove device-1'}));await screen.findByText('Device deapproved.');
-    fireEvent.click(screen.getByRole('button',{name:'Disable device-1'}));await screen.findByText('Device disabled.');
+    fireEvent.click(screen.getByRole('switch',{name:'Disable device-1'}));await screen.findByText('Device disabled.');
     const calls=transport.mock.calls.filter(call=>call[1]?.method==='POST');expect(calls.map(call=>call[0])).toEqual(['/api/control/v1/endpoint/devices/device-1/approval','/api/control/v1/endpoint/devices/device-1/enabled']);
     expect(JSON.parse(String(calls[0][1]?.body))).toEqual({expectedApprovalRevision:3,approved:false});expect(JSON.parse(String(calls[1][1]?.body))).toEqual({expectedRevision:4,enabled:false});
   });
   it('reapproves the same enrolled owner for unlimited time and clears a stale decision on conflict',async()=>{
     const transport=setup([{...active,endpointDevice:{...active.endpointDevice!,connectionApproved:false}}],409);
-    fireEvent.click(await screen.findByRole('button',{name:'Approve device-1'}));fireEvent.change(screen.getByLabelText('Connection duration'),{target:{value:'unlimited'}});fireEvent.click(screen.getByRole('checkbox'));await waitFor(()=>expect((screen.getByRole('button',{name:'Approve device'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.click(screen.getByRole('button',{name:'Approve device'}));
+    fireEvent.click(await screen.findByRole('button',{name:'Approve device-1'}));fireEvent.change(screen.getByLabelText('Connection duration'),{target:{value:'unlimited'}});fireEvent.click(screen.getByRole('checkbox',{name:/I compared|I confirm/}));await waitFor(()=>expect((screen.getByRole('button',{name:'Approve device'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.click(screen.getByRole('button',{name:'Approve device'}));
     await screen.findByRole('alert');expect(screen.queryByRole('heading',{name:'Approve device-1'})).toBeNull();
     const mutation=transport.mock.calls.find(call=>call[1]?.method==='POST')!;expect(JSON.parse(String(mutation[1]?.body))).toEqual({expectedApprovalRevision:3,approved:true,unlimitedConnection:true});
     expect(new Headers(mutation[1]?.headers).has('Idempotency-Key')).toBe(true);

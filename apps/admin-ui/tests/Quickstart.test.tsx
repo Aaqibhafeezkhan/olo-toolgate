@@ -6,7 +6,7 @@ import { App } from '../src/App';
 import { QuickstartTools } from '../src/QuickstartTools';
 import { ControlClient } from '../src/api';
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status});
-afterEach(()=>{cleanup();document.querySelector('meta[name=toolgate-mode]')?.remove();vi.unstubAllGlobals();window.location.hash='';});
+afterEach(()=>{cleanup();document.querySelector('meta[name=toolgate-mode]')?.remove();vi.unstubAllGlobals();window.location.hash='';localStorage.clear();});
 describe('Quickstart',()=>{
   it('automatically enters only when the server explicitly disables password login',async()=>{
     const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);
@@ -14,14 +14,14 @@ describe('Quickstart',()=>{
     vi.stubGlobal('fetch',transport);render(<App/>);
     await screen.findByRole('heading',{name:'Your organization, at a glance'});
     expect(screen.queryByLabelText('Password')).toBeNull();
-    expect(localStorage.length).toBe(0);expect(sessionStorage.length).toBe(0);
+    expect(Object.keys(localStorage).every(key=>key.startsWith('toolgate.navigation.'))).toBe(true);expect(JSON.stringify(localStorage)).not.toMatch(/session-secret|restored-session|bootstrap-secret|password-never-stored/);expect(sessionStorage.length).toBe(0);
     expect(document.body.textContent).not.toContain('local-auto-session');
   });
   it('exchanges bootstrap and replacement passwords without persisting credentials',async()=>{
     const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);
     const transport=vi.fn(async(input:string)=>input.endsWith('/session')?response({},401):input.endsWith('/login')?response({accessToken:'session-secret'}):input.includes('/api/public/')?response({},503):response({items:[]}));vi.stubGlobal('fetch',transport);
     render(<App/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Connect to workspace'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.change(screen.getByLabelText('Password'),{target:{value:'bootstrap-secret'}});fireEvent.change(screen.getByLabelText('New password (required on first login)'),{target:{value:'a-different-strong-password'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
-    await screen.findByRole('heading',{name:'Your organization, at a glance'});expect(document.body.textContent).toContain('Quickstart · Non-HA');expect(localStorage.length).toBe(0);expect(sessionStorage.length).toBe(0);expect(document.body.textContent).not.toContain('session-secret');
+    await screen.findByRole('heading',{name:'Your organization, at a glance'});expect(document.body.textContent).toContain('Quickstart · Non-HA');expect(Object.keys(localStorage).every(key=>key.startsWith('toolgate.navigation.'))).toBe(true);expect(JSON.stringify(localStorage)).not.toMatch(/session-secret|restored-session|bootstrap-secret|password-never-stored/);expect(sessionStorage.length).toBe(0);expect(document.body.textContent).not.toContain('session-secret');
     fireEvent.click(screen.getByRole('button',{name:'Disconnect'}));expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('');
   });
   it('renders bootstrap failure safely',async()=>{
@@ -48,7 +48,7 @@ describe('Quickstart',()=>{
     expect(transport.mock.calls.filter(([url])=>url.endsWith('/login')).length).toBe(1);
     const restored=transport.mock.calls.filter(([url])=>url.endsWith('/session'));
     expect(restored.length).toBe(2);
-    expect(localStorage.length).toBe(0);expect(sessionStorage.length).toBe(0);
+    expect(Object.keys(localStorage).every(key=>key.startsWith('toolgate.navigation.'))).toBe(true);expect(JSON.stringify(localStorage)).not.toMatch(/session-secret|restored-session|bootstrap-secret|password-never-stored/);expect(sessionStorage.length).toBe(0);
     expect(document.body.textContent).not.toContain('restored-session');
     fireEvent.click(screen.getByRole('button',{name:'Disconnect'}));
     await waitFor(()=>expect(saved).toBe(false));expect(screen.getByLabelText('Password')).toBeTruthy();
@@ -56,7 +56,7 @@ describe('Quickstart',()=>{
   it('does not reconnect a restored reviewer as the password-free administrator',async()=>{
     const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);
     const transport=vi.fn(async(input:string)=>input.endsWith('/session')?response({accessToken:'reviewer-session'}):input.endsWith('/status')?response({passwordRequired:false}):input.endsWith('/admin-session')?response({},403):input.includes('/api/public/')?response({},503):response({items:[]}));
-    vi.stubGlobal('fetch',transport);render(<App/>);await screen.findByRole('heading',{name:'Approvals'});
+    vi.stubGlobal('fetch',transport);render(<App/>);await screen.findByRole('heading',{name:'Your workspace, at a glance'});
     expect(transport.mock.calls.some(([url])=>url.endsWith('/login'))).toBe(false);
   });
   it('rejects an expired restored token and clears the browser session',async()=>{

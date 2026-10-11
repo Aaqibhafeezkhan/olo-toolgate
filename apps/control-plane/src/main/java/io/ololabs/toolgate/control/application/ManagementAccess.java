@@ -17,13 +17,17 @@ public final class ManagementAccess {
         return new RoleResolver(codec).resolve(directory,codec.model(entry.document(),ControlUser.class));
     }
     public boolean allowed(Directory directory,String user,String action,Kind group,String id,long now) {
+        if(superAdministrator(directory,user))return true;
         return access(directory,user).grants().stream().anyMatch(r->r.actions().contains(action)&&r.groupType().name().equals(group.name())&&EnterpriseEvaluator.selected(r.groups(),id)&&current(r.conditions(),now));
     }
+    /** Resolve live directory membership; never trust token roles or an actor's cached flag. */
+    public boolean superAdministrator(Directory directory,String user) {return access(directory,user).portalRole()==UserRole.SUPER_ADMIN;}
     public void require(Directory directory,String user,String action,Kind group,String id,long now) {
         if(!allowed(directory,user,action,group,id,now))throw denied();
     }
     public void requireEntry(Directory directory,String user,String action,Directory.Entry entry,long now) {
         if(entry==null)throw denied();
+        if(superAdministrator(directory,user))return;
         var kind=entry.id().kind();
         if(GroupGraph.group(kind)) {require(directory,user,action,kind,entry.id().value(),now);return;}
         if(GroupGraph.individual(kind)) {
@@ -56,6 +60,7 @@ public final class ManagementAccess {
     /** Receiving-group membership cannot confer management or runtime rights beyond the allocating actor's ceilings. */
     public void requireAllocation(Directory authority,Directory proposed,String user,Directory.Entry group,long now) {
         if(group==null)throw Failure.validation();
+        if(superAdministrator(authority,user))return;
         var roles=GroupGraph.roles(group,codec);
         for(var id:roles){var entry=proposed.entries().get(Kind.ROLE.id(id));if(entry==null)throw Failure.validation();var role=codec.model(entry.document(),ControlRole.class);if(role.enabled())requireRoleCeilings(authority,user,role,now);}
         for(var entry:proposed.entries().values())if(entry.id().kind()==Kind.GRANT&&entry.enabled()) {
@@ -67,6 +72,7 @@ public final class ManagementAccess {
     }
     private void requireRoleCeilings(Directory directory,String user,ControlRole role,long now) {
         var authority=access(directory,user);
+        if(authority.portalRole()==UserRole.SUPER_ADMIN)return;
         if(role.portalRole()==UserRole.SUPER_ADMIN&&authority.portalRole()!=UserRole.SUPER_ADMIN)throw denied();
         if(role.enabled())for(var entry:directory.entries().values())if(entry.id().kind()==Kind.GRANT&&entry.enabled()) {
             var grant=codec.model(entry.document(),ControlAccessGrant.class);
@@ -84,6 +90,7 @@ public final class ManagementAccess {
         return contains(new EnterpriseScope(none,none,List.of(),false,List.of(),ceiling),new EnterpriseScope(none,none,List.of(),false,List.of(),requested));
     }
     public void requireAll(Directory directory,String user,String action,long now) {
+        if(superAdministrator(directory,user))return;
         for(var group:GroupGraph.DEFAULTS.keySet())if(access(directory,user).grants().stream().noneMatch(r->r.groupType().name().equals(group.name())&&r.groups().all()&&r.actions().contains(action)&&current(r.conditions(),now)))throw denied();
     }
     private void requireScopeRead(Directory d,String user,EnterpriseScope scope,long now) {

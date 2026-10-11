@@ -13,8 +13,8 @@ describe('Endpoint enrollment', () => {
   it('supports explicit unlimited approval and omits the finite deadline',async()=>{
     window.location.hash='#enroll?code=ABCDEF0123456789';
     const transport=vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify(review))).mockResolvedValue(new Response(JSON.stringify({...review,state:'APPROVED',unlimitedConnection:true})));
-    render(<Enrollment client={clientFor(transport)}/>);fireEvent.click(screen.getByRole('button',{name:'Review device'}));await screen.findByRole('checkbox');
-    fireEvent.change(screen.getByLabelText('Connection duration'),{target:{value:'unlimited'}});fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Enroll device'}));
+    render(<Enrollment client={clientFor(transport)}/>);fireEvent.click(screen.getByRole('button',{name:'Review device'}));await screen.findByRole('checkbox',{name:/I compared/});
+    fireEvent.change(screen.getByLabelText('Connection duration'),{target:{value:'unlimited'}});fireEvent.click(screen.getByRole('checkbox',{name:/I compared/}));fireEvent.click(screen.getByRole('button',{name:'Enroll device'}));
     await screen.findByText('Connection approved for unlimited time.');
     expect(JSON.parse(String(transport.mock.calls[1][1]?.body))).toEqual({userCode:review.userCode,keyFingerprint:review.keyFingerprint,choice:'APPROVE',unlimitedConnection:true});
   });
@@ -38,7 +38,7 @@ describe('Endpoint enrollment', () => {
     render(<Enrollment client={new ControlClient('test-only-token',vi.fn(),transport)}/>);
     await screen.findByRole('button',{name:'Review device-1'});fireEvent.click(screen.getByRole('button',{name:'Review device-2'}));
     const until=await screen.findByLabelText('Allow connection until');
-    fireEvent.change(until,{target:{value:'2030-01-01T18:30'}});fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(until,{target:{value:'2030-01-01T18:30'}});fireEvent.click(screen.getByRole('checkbox',{name:/I compared/}));
     fireEvent.click(screen.getByRole('button',{name:'Enroll device'}));await screen.findByText('Connection allowed until');
     const decision=transport.mock.calls.find(call=>String(call[0]).endsWith('/decision'))!;
     expect(JSON.parse(String(decision[1]?.body))).toEqual({userCode:second.userCode,keyFingerprint:second.keyFingerprint,choice:'APPROVE',connectionExpiresAtUnixMs:new Date('2030-01-01T18:30').getTime()});
@@ -51,7 +51,7 @@ describe('Endpoint enrollment', () => {
     const transport=vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify(review)))
       .mockResolvedValueOnce(new Response(JSON.stringify({...review,state:'DENIED'})));
     render(<Enrollment client={clientFor(transport)}/>);fireEvent.click(screen.getByRole('button',{name:'Review device'}));
-    const until=await screen.findByLabelText('Allow connection until');fireEvent.click(screen.getByRole('checkbox'));
+    const until=await screen.findByLabelText('Allow connection until');fireEvent.click(screen.getByRole('checkbox',{name:/I compared/}));
     for(const value of ['2000-01-01T00:00','']){fireEvent.change(until,{target:{value}});expect((screen.getByRole('button',{name:'Enroll device'}) as HTMLButtonElement).disabled).toBe(true);}
     fireEvent.click(screen.getByRole('button',{name:'Deny enrollment'}));await screen.findByText('DENIED');
     expect(JSON.parse(String(transport.mock.calls[1][1]?.body))).toEqual({userCode:review.userCode,keyFingerprint:review.keyFingerprint,choice:'DENY'});
@@ -72,7 +72,7 @@ describe('Endpoint enrollment', () => {
     const approve = await screen.findByRole('button',{name:'Enroll device'});
     expect((approve as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Allow connection until'),{target:{value:'2030-01-01T18:30'}});
-    fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(approve);
+    fireEvent.click(screen.getByRole('checkbox',{name:/I compared/})); fireEvent.click(approve);
     await screen.findByText(/protected client will retrieve/);
     const options = transport.mock.calls[1][1]!;
     expect(JSON.parse(String(options.body))).toEqual({userCode:review.userCode,keyFingerprint:review.keyFingerprint,choice:'APPROVE',connectionExpiresAtUnixMs:new Date('2030-01-01T18:30').getTime()});
@@ -84,7 +84,7 @@ describe('Endpoint enrollment', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({code:'CONFLICT',message:'Changed',requestId:'request-1'}),{status:409}));
     render(<Enrollment client={clientFor(transport)} />);
     fireEvent.click(screen.getByRole('button',{name:'Review device'}));
-    await screen.findByRole('checkbox'); fireEvent.click(screen.getByRole('checkbox'));
+    await screen.findByRole('checkbox',{name:/I compared/}); fireEvent.click(screen.getByRole('checkbox',{name:/I compared/}));
     fireEvent.click(screen.getByRole('button',{name:'Deny enrollment'}));
     await screen.findByRole('alert'); expect(screen.queryByRole('button',{name:'Enroll device'})).toBeNull();
   });
@@ -94,7 +94,7 @@ describe('Endpoint enrollment', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({...review,state:'APPROVED'})))
       .mockResolvedValueOnce(new Response(JSON.stringify({deviceId:review.deviceId,keyFingerprint:review.keyFingerprint,state:'ACTIVE',reportSequence:1,lastSeenUnixMs:Date.now()})));
     render(<Enrollment client={clientFor(transport)}/>);
-    fireEvent.click(screen.getByRole('button',{name:'Review device'}));await screen.findByRole('checkbox');fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button',{name:'Review device'}));await screen.findByRole('checkbox',{name:/I compared/});fireEvent.click(screen.getByRole('checkbox',{name:/I compared/}));
     fireEvent.click(screen.getByRole('button',{name:'Enroll device'}));await screen.findByText(/Connected: this device/);
     expect(transport.mock.calls[2][0]).toBe('/api/control/v1/endpoint/devices/device-1');
   });
@@ -104,7 +104,7 @@ describe('Endpoint enrollment', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({...review,state:'APPROVED'})))
       .mockResolvedValueOnce(new Response(JSON.stringify({deviceId:review.deviceId,keyFingerprint:review.keyFingerprint,state:'ACTIVE',reportSequence:1,lastSeenUnixMs:Date.now(),...change})));
     render(<Enrollment client={clientFor(transport)}/>);
-    fireEvent.click(screen.getByRole('button',{name:'Review device'}));await screen.findByRole('checkbox');fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button',{name:'Review device'}));await screen.findByRole('checkbox',{name:/I compared/});fireEvent.click(screen.getByRole('checkbox',{name:/I compared/}));
     fireEvent.click(screen.getByRole('button',{name:'Enroll device'}));
     await screen.findByText(change.state==='REVOKED'?/Device revoked/:/Waiting for this device/);
     expect(screen.queryByText(/Connected: this device/)).toBeNull();

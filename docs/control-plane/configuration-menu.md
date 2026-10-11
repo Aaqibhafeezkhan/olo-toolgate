@@ -1,12 +1,12 @@
-# Console Configuration menu
+# Console Administration menu
 
 ## Purpose
 
-This document specifies the **Configuration** menu of the administration console: a
-new sidebar group with Server, Device and Backup/Restore pages, and the field-level
+This document specifies the **Administration** menu of the administration console: a
+bottom sidebar group with Server, Device, Backup/Restore and About pages, and the field-level
 settings save behind them.
 
-> **Status: implemented in milestone M1.** Changes need an ADR amendment to
+> **Status: implemented in milestone M1; renamed in RC.** See [ADR 022](../adr/022-super-administrator-review-exception.md) for the current administration exception and
 > [ADR 021](../adr/021-client-checkin-configuration-menu.md). Source:
 > [Tool SDK plan §18](../sdk-plan/plan.md).
 
@@ -20,36 +20,39 @@ settings save behind them.
 
 ## Layout
 
-The console has a sidebar group **Configuration** with three pages. Their contents
-moved from Audit > Configuration reviews.
+The console has a bottom sidebar group **Administration** with four pages.
+Server, Device and Backup/Restore moved from Audit > Configuration reviews;
+About now belongs to Administration. Fresh browser history leaves every group collapsed.
 
 | Page | Route | Contents | Moved from |
 |---|---|---|---|
 | Server | `#config-server` | **Gateway**: Gateway name (default from `TOOLGATE_GATEWAY_NAME`) | `ServerSettings` Gateway fieldset |
 | Device | `#config-device` | **Device approval**: auto-approve, duration, owner. **Check-in**: effective values, read-only | `ServerSettings` Device approval fieldset; check-in is new |
 | Backup/Restore | `#config-backup` | **Import and export configuration**, plus the server settings file import/export | `ConfigurationTransfer`, and the settings import/export from `ServerSettings` |
+| About | `#about` | Application version, build and license | Standalone About navigation |
 
 ```text
-Sidebar                      Configuration > Server (#config-server)
+Sidebar                      Administration > Server (#config-server)
 -------------------------    -------------------------------------------
 Overview                     [Gateway]
 > Audit                        Gateway name  [______________]
     Audit log                  (default from TOOLGATE_GATEWAY_NAME)
     Approvals                                               [Save]
     Configuration reviews
-    Effect outcomes          Configuration > Device (#config-device)
+    Effect outcomes          Administration > Device (#config-device)
     Access simulation        -------------------------------------------
-> Configuration              [Device approval]
-    Server                     [x] Auto approve devices
-    Device                     Auto approve duration (days) [___]
-    Backup/Restore             Owner user ID for auto-approved devices [___]
-> Tools                                                     [Save]
-> Devices                    [Check-in]  (read-only, set by environment)
-  ...                          Check-in interval       2000 ms
-                               Jitter                  20 %
-                               Offline after           120000 ms
+> Tools                      [Device approval]
+> Devices                      [x] Auto approve devices
+> Users                        Auto approve duration (days) [___]
+> Agents                       Owner user ID for auto-approved devices [___]
+                                                            [Save]
+> Administration             [Check-in]  (read-only, set by environment)
+    Server                     Check-in interval       2000 ms
+    Device                     Jitter                  20 %
+    Backup/Restore             Offline after           120000 ms
+    About
 
-                             Configuration > Backup/Restore (#config-backup)
+                             Administration > Backup/Restore (#config-backup)
                              -------------------------------------------
                              [Import and export configuration]
                                [Export complete configuration]

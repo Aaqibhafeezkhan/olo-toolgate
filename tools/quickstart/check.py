@@ -179,6 +179,16 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         assert device in ok(api('/api/control/v1/device-groups/default-devices',admin))['deviceIds']
         assert ok(api('/api/quickstart/v1/tools',admin))['tools']==[]
         mark('real native CSR/enrollment/key-bound mTLS/default membership/no implicit discovery')
+        # Keep the maker/checker regression scoped. Reviewer 2 is the installation
+        # owner; admin and reviewer 1 use the same full-scope restrictive role.
+        # This also proves the live Super Admin exception uses the ordinary APIs.
+        management=ok(api('/api/control/v1/roles/installation-management',admin))
+        super_role={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1,'managementRules':[]}
+        ok(api('/api/control/v1/roles',admin,super_role,'POST'),201)
+        ok(api('/api/control/v1/teams',admin,dict(id='smoke-super-team',name='Smoke installation owners',
+            enabled=True,revision=1,userIds=['reviewer-2'],roleIds=[super_role['id']]),'POST'),201)
+        ok(api('/api/control/v1/roles/'+management['id'],admin,{**management,'portalRole':'ADMINISTRATOR'},
+            'PUT',revision=management['revision']))
         def transition(change,action,user):
             return ok(api('/api/control/v1/configuration-changes/'+change['id']+'/transition',tokens[user],
                 {'action':action,'expectedRevision':change['revision']},'POST'))
@@ -369,12 +379,16 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         shadow=ok(api('/api/control/v1/access/shadow',admin,dict(snapshot=proposed,evaluation=evaluation,
             observedLegacyDecision='BLOCK',legacyEvidenceDigest=evidence['archiveDigest']),'POST'))
         assert shadow['accessExpansion'] is False and shadow['decision']['decision']=='BLOCK'
-        reviewed('/api/control/v1/config/import',dict(snapshot=proposed,mode='REPLACE',dryRun=False),revision=baseline['revision'])
+        # A restricted administrator cannot replace a graph containing a Super Admin role.
+        # The installation owner can apply the import directly, with canonical lifecycle checks and audit.
+        import_body=dict(snapshot=proposed,mode='REPLACE',dryRun=False)
+        assert api('/api/control/v1/config/import',admin,import_body,'POST',revision=baseline['revision'])[0]==403
+        ok(api('/api/control/v1/config/import',tokens['reviewer-2'],import_body,'POST',revision=baseline['revision']))
         assert ok(api('/api/control/v1/teams/'+team['id'],admin))['name']=='Reviewed installation operators'
-        evidence.update(shadow=shadow,reviewedImportApplied=True,interpretation='Isolated reviewed conversion/shadow HTTP proof; production plans require their own captured legacy evidence')
+        evidence.update(shadow=shadow,superAdministratorImportApplied=True,interpretation='Isolated conversion/shadow and audited Super Admin import HTTP proof; production plans require their own captured legacy evidence')
         output=ROOT/'build/enterprise';output.mkdir(parents=True,exist_ok=True)
         (output/('migration-postgresql.json' if database_options else 'migration-sqlite.json')).write_text(json.dumps(evidence,indent=2)+'\n',encoding='utf-8')
-        mark('current status/fresh bounds/no-effect simulation/explicit conversion/shadow/two-reviewer import')
+        mark('current status/fresh bounds/no-effect simulation/explicit conversion/shadow/scoped rejection/Super Admin import')
         ports=restart_ready(container)
         port=ports['8080/tcp'][0]['HostPort']
         tls_port=ports['8443/tcp'][0]['HostPort']

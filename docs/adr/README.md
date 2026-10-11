@@ -37,3 +37,4 @@ Use `000-template.md`.
 - [019: Tool SDK authoring contract, runtime modes and MCP SDK compatibility](019-tool-sdk-authoring-contract.md)
 - [020: Deployment binding and configuration precedence](020-deployment-binding.md)
 - [021: Client check-in settings and the Configuration menu](021-client-checkin-configuration-menu.md)
+- [022: Super Administrator review exception](022-super-administrator-review-exception.md)

@@ -144,6 +144,6 @@ test('real group administration, inherited provenance and review impact are acce
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'../../build/ui/enterprise-user-mobile.png',fullPage:true});
-  expect(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie}))).toEqual({local:0,session:0,cookies:''});
+  expect(await page.evaluate(()=>({local:Object.keys(localStorage).filter(key=>!key.startsWith('toolgate.')).length,session:sessionStorage.length,cookies:document.cookie}))).toEqual({local:0,session:0,cookies:''});
   expect(errors).toEqual([]);
 });

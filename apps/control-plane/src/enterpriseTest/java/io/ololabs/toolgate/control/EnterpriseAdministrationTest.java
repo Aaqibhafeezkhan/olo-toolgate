@@ -97,6 +97,10 @@ class EnterpriseAdministrationTest {
     @Test void identifiersRemainRetiredAfterDeletion() {
         var group=new ControlToolGroup("empty-group","Empty group",true,1L,List.of());directory.mutate(administrator,Kind.TOOL_GROUP,group.id(),"CREATE",graph.codec.json(group),0,"create-empty","request");directory.mutate(administrator,Kind.TOOL_GROUP,group.id(),"DELETE",null,1,"delete-empty","request");assertThrows(Failure.class,()->directory.mutate(administrator,Kind.TOOL_GROUP,group.id(),"CREATE",graph.codec.json(group),0,"recreate-empty","request"));
     }
+    @Test void superAdministratorWithoutScopeRulesRetainsManagementAuthority(){
+        store.transaction(administrator.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.put(Kind.ROLE.id("recovery-role"),graph.codec.entry(Kind.ROLE,graph.codec.json(new ControlRole("recovery-role","Super Admin",true,2L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()))));tx.save(before,new Directory(before.revision()+1,entries));return null;});
+        directory.requirePortal(administrator,"admin");assertEquals(201,directory.mutate(administrator,Kind.USER,"exceptional-user","CREATE",graph.codec.json(new ControlUser("exceptional-user","Pending review",false,1L)),0,"exceptional-user-key","request").status());assertThrows(Failure.class,()->directory.mutate(administrator,Kind.USER,"admin","UPDATE",graph.codec.json(new ControlUser("admin","Admin",false,1L)),1,"disable-super","request"));
+    }
     @Test void shadowComparesCapturedLegacyDecisionWithoutApplyingGrantsOrConsumingAuthority(){
         var proposed=graph.codec.model(graph.codec.snapshot(administrator.tenant(),graph.directory(),false),ControlSnapshot.class);var evaluation=graph.input(graph.context(EnterpriseRequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
         var before=store.transaction(administrator.tenant(),false,tx->List.of(tx.load().revision(),tx.enterprise().authorizationEpoch(),tx.enterprise().invocationsSince(0)));

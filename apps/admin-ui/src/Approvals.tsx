@@ -1,5 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {Table} from './Table';
 import { useEffect, useRef, useState } from 'react';
 import type { EnterpriseApproval, EnterpriseApprovalPage, EnterpriseInvocation, EnterpriseReviewDecision } from '@olo-labs/toolgate-contracts';
 import { ApiError, ControlClient } from './api';
@@ -26,9 +27,9 @@ export function Approvals({ client }: { client: ControlClient }) {
     <p className="intro">Each operation approval binds one invocation, all affected resources, its arguments digest, tool version and execution target. Every required policy obligation must be reviewed. Current grants and reviewer permissions are checked again before execution.</p>
     {Boolean(error) && <Failure error={error} retry={refresh} />}
     {!page && !error && <p role="status">Loading approvals…</p>}
-    {page && <><div className="table-wrap"><table><caption className="sr-only">Approval requests</caption><thead><tr><th>Request</th><th>Type</th><th>Invocation</th><th>Reviews</th><th>State</th><th>Expires</th></tr></thead><tbody>
-      {page.items.map(a => <tr key={a.id}><th scope="row"><button className="record-link" onClick={() => setSelected(a.id)} aria-label={`Review approval ${a.id}`}>{a.id}</button></th><td>{a.approvalType}</td><td><code>{a.invocationId}</code></td><td>{a.reviews.filter(r => r.decision === 'APPROVE').length} / {a.obligationIds.length}</td><td>{labels[a.state]}</td><td>{timestamp(a.expiresAtUnixMs)}</td></tr>)}
-    </tbody></table></div>{page.items.length === 0 && <p>No approvals in your current scope.</p>}
+    {page && <><div className="table-wrap"><Table><caption className="sr-only">Approval requests</caption><thead><tr><th>Request</th><th>Type</th><th>Invocation</th><th>Reviews</th><th>State</th><th>Expires</th></tr></thead><tbody>
+      {page.items.map(a => <tr key={a.id}><th scope="row"><button className="record-link" onClick={() => setSelected(a.id)} aria-label={`Review approval ${a.id}`}>{a.id}</button></th><td>{a.approvalType}</td><td><code>{a.invocationId}</code></td><td>{a.reviews.filter(r => r.decision === 'APPROVE').length} / {a.obligationIds.length}</td><td>{labels[a.state]}</td><td data-sort-value={a.expiresAtUnixMs}>{timestamp(a.expiresAtUnixMs)}</td></tr>)}
+    </tbody></Table></div>{page.items.length === 0 && <p>No approvals in your current scope.</p>}
       <div className="pagination"><button disabled={!history.length} onClick={() => { setCursor(history.at(-1)); setHistory(history.slice(0, -1)); }}>Previous approvals page</button><button disabled={!page.nextCursor} onClick={() => { setHistory([...history, cursor]); setCursor(page.nextCursor); }}>Next approvals page</button></div></>}
     {selected && <ApprovalDetails key={selected} client={client} id={selected} close={() => setSelected(undefined)} changed={refresh} />}
   </>;
@@ -50,12 +51,12 @@ function ApprovalDetails({ client, id, close, changed }: { client: ControlClient
     const body = { expectedRevision: approval.revision, obligationId: obligation, decision }; const encoded = JSON.stringify(body);
     if (pending.current?.body !== encoded) pending.current = { body: encoded, key: crypto.randomUUID() };
     locked.current = true; setBusy(true); setError(undefined);
-    try { const a = await client.decideApproval(id, body, pending.current.key); if (alive.current) { setApproval(a); setConfirmed(false); pending.current = undefined; changed(); setAttempt(value => value + 1); } }
+    try { const a = await client.decideApproval(id, body, pending.current.key); if (alive.current) { setApproval(a); setConfirmed(false); pending.current = undefined; changed(); setAttempt(value => value + 1); window.dispatchEvent(new Event('toolgate:approval-change')); } }
     catch (failure) { if (alive.current) { setError(failure); if (failure instanceof ApiError && failure.status === 409) { pending.current = undefined; setAttempt(value => value + 1); } } }
     finally { locked.current = false; if (alive.current) setBusy(false); }
   }
   async function cancel() { if (!invocation || locked.current || !confirmed) return; locked.current = true; setBusy(true);
-    try { await client.cancelInvocation(invocation.id, invocation.revision); if (alive.current) { changed(); setAttempt(value => value + 1); } }
+    try { await client.cancelInvocation(invocation.id, invocation.revision); if (alive.current) { changed(); setAttempt(value => value + 1); window.dispatchEvent(new Event('toolgate:approval-change')); } }
     catch (failure) { if (alive.current) setError(failure); } finally { locked.current = false; if (alive.current) setBusy(false); }
   }
   const e = invocation?.evaluation; const expired = approval && approval.expiresAtUnixMs <= Date.now();
