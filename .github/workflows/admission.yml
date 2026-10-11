@@ -31,7 +31,7 @@ jobs:
         with:
           persist-credentials: false
       - id: admission
-        name: Check pause window and exact RC prefix
+        name: Check CI enablement and exact RC prefix
         env:
           CI_ENABLED: ${{ vars.TOOLGATE_CI_ENABLED }}
         run: python tools/ci/admission.py

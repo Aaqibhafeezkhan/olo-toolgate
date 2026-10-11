@@ -1,6 +1,5 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-from datetime import timedelta
 from contextlib import redirect_stdout
 import io
 import json
@@ -10,11 +9,11 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 import yaml
-from tools.ci.admission import decision, trigger_message, main, RESUME_AT
+from tools.ci.admission import decision, trigger_message, main
 
 
 class AdmissionTests(unittest.TestCase):
-    def run_pr_admission(self, enabled, now=RESUME_AT):
+    def run_pr_admission(self, enabled):
         with tempfile.TemporaryDirectory() as directory:
             event=Path(directory)/'event.json'
             output=Path(directory)/'output.txt'
@@ -23,8 +22,7 @@ class AdmissionTests(unittest.TestCase):
             if enabled is not None:
                 environment['CI_ENABLED']=enabled
             # No GitHub API credentials or repository name: PR admission is local.
-            with patch.dict(os.environ,environment,clear=True), patch('tools.ci.admission.datetime') as clock, redirect_stdout(io.StringIO()):
-                clock.now.return_value=now
+            with patch.dict(os.environ,environment,clear=True), redirect_stdout(io.StringIO()):
                 main()
             return output.read_text(encoding='utf-8')
 
@@ -57,9 +55,8 @@ class AdmissionTests(unittest.TestCase):
                     if job.get('needs')=='admission':
                         self.assertIn("needs.admission.outputs.allow == 'true'",job['if'])
 
-    def test_week_boundary_is_ist_midnight_and_never_bypassed_by_rc(self):
-        self.assertFalse(decision('RC: build', RESUME_AT - timedelta(seconds=1))[0])
-        self.assertTrue(decision('RC: build', RESUME_AT)[0])
+    def test_enabled_rc_trigger_is_admitted(self):
+        self.assertEqual(decision('RC: build'), (True, 'RC: trigger admitted'))
 
     def test_pr_workflows_observe_title_edits(self):
         root=Path(__file__).resolve().parents[2]
@@ -99,9 +96,6 @@ class AdmissionTests(unittest.TestCase):
             with self.subTest(enabled=enabled):
                 self.assertEqual(self.run_pr_admission(enabled),'allow='+str(enabled=='true').lower()+'\n')
 
-    def test_pr_title_does_not_bypass_date_pause(self):
-        self.assertEqual(self.run_pr_admission('true',RESUME_AT-timedelta(seconds=1)),'allow=false\n')
-
     def test_manual_development_release_has_no_test_or_ci_dependencies(self):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/manual-development-release.yml').read_text(encoding='utf-8'))
@@ -117,9 +111,9 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotIn('workflow_runs',script)
 
     def test_disabled_and_non_rc_triggers_cannot_start_work(self):
-        self.assertFalse(decision('RC: build', RESUME_AT, False)[0])
+        self.assertFalse(decision('RC: build', enabled=False)[0])
         for message in ('fix: build', 'rc: build', ' RC: build', '', None):
-            self.assertFalse(decision(message, RESUME_AT)[0])
+            self.assertFalse(decision(message)[0])
 
     def test_push_uses_head_commit_not_an_older_commit(self):
         event={'head_commit':{'message':'fix: current'},'commits':[{'message':'RC: previous'}]}
@@ -131,21 +125,21 @@ class AdmissionTests(unittest.TestCase):
                 event={'pull_request':{'title':'RC: test','head':head}}
                 message=trigger_message(event,'pull_request')
                 self.assertEqual(message,'RC: test')
-                self.assertTrue(decision(message,RESUME_AT)[0])
+                self.assertTrue(decision(message)[0])
 
     def test_non_rc_pr_title_cannot_be_admitted_by_an_rc_commit(self):
         for title in ('fix: test','rc: test',' RC: test','',None,42):
             with self.subTest(title=title):
                 event={'pull_request':{'title':title,'head':{'message':'RC: head'}},'head_commit':{'message':'RC: head'}}
-                self.assertFalse(decision(trigger_message(event,'pull_request'),RESUME_AT)[0])
-        self.assertFalse(decision(trigger_message({'pull_request':{}},'pull_request'),RESUME_AT)[0])
+                self.assertFalse(decision(trigger_message(event,'pull_request'))[0])
+        self.assertFalse(decision(trigger_message({'pull_request':{}},'pull_request'))[0])
 
     def test_pr_title_edit_uses_current_title(self):
         event={'action':'edited','changes':{'title':{'from':'fix: test'}},'pull_request':{'title':'RC: test'}}
-        self.assertTrue(decision(trigger_message(event,'pull_request'),RESUME_AT)[0])
+        self.assertTrue(decision(trigger_message(event,'pull_request'))[0])
         event['changes']['title']['from']='RC: test'
         event['pull_request']['title']='fix: test'
-        self.assertFalse(decision(trigger_message(event,'pull_request'),RESUME_AT)[0])
+        self.assertFalse(decision(trigger_message(event,'pull_request'))[0])
 
     def test_manual_and_release_events_cannot_bypass_prefix(self):
         self.assertEqual(trigger_message({'inputs':{'comment':'RC: manual'}},'workflow_dispatch'),'RC: manual')

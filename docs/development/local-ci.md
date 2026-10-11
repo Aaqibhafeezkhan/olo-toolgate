@@ -104,9 +104,9 @@ Replay deliberately runs the **job body**, independently of admission and
 upstream dependencies, using a synthetic dispatch workflow. Real GitHub job
 conditions and event payload routing are recorded in the plan and are not
 represented as locally verified. Shared offline admission tests cover RC
-messages, PR titles, manual inputs, upstream conclusions, the pause
-variable and the IST resume boundary. Replay does not change
-`TOOLGATE_CI_ENABLED`, enable automatic CI, or bypass those rules on GitHub.
+messages, PR titles, manual inputs, upstream conclusions and the pause variable.
+Replay does not change `TOOLGATE_CI_ENABLED`, enable automatic CI, or bypass those
+rules on GitHub.
 
 The client matrix needs six genuine OS/architecture VMs. Service/installer
 checks require systemd, Windows services or launchd, which a Linux container
