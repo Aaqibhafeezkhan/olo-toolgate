@@ -4,7 +4,14 @@ param([Parameter(Mandatory=$true)][string]$Python)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $version = (Get-Content "$root/VERSION" -Raw).Trim()
-$releases = Invoke-RestMethod 'https://api.github.com/repos/olo-labs/olo-toolgate/releases?per_page=30'
+$githubHeaders = @{
+    Accept = 'application/vnd.github+json'
+    'User-Agent' = 'toolgate-debug-client-assets'
+}
+if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+    $githubHeaders.Authorization = 'Bearer ' + $env:GITHUB_TOKEN.Trim()
+}
+$releases = Invoke-RestMethod -Uri 'https://api.github.com/repos/olo-labs/olo-toolgate/releases?per_page=30' -Headers $githubHeaders
 $release = $releases | Where-Object {
     -not $_.draft -and ($_.assets.name -contains 'installers.json') -and
     ($_.assets.name -contains "olo-toolgate-client-$version-x86_64-pc-windows-msvc.setup.exe")

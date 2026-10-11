@@ -180,7 +180,9 @@ class FoundationTests(unittest.TestCase):
     def test_ci_smoke(self):
         ci = yaml.load((ROOT/'.github/workflows/foundation.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual('read', ci['permissions']['contents'])
-        self.assertIn('pull_request', ci['on'])
+        self.assertEqual({'push', 'workflow_dispatch'}, set(ci['on']))
+        self.assertEqual(['main'], ci['on']['push']['branches'])
+        self.assertEqual("github.ref == 'refs/heads/main'", ci['jobs']['admission']['if'])
         commands = '\n'.join(s.get('run','') for s in ci['jobs']['check']['steps'])
         self.assertIn('make check', commands)
         self.assertIn('tools/check.py --scans', commands)
