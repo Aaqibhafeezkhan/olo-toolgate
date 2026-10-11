@@ -6,6 +6,7 @@ pub mod auth;
 pub mod config;
 mod diagnostics;
 pub mod http;
+mod legacy;
 pub mod limits;
 mod mcp;
 pub mod relay;

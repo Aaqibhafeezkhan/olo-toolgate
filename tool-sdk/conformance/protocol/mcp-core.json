@@ -201,7 +201,8 @@
       "then": [
         "Method not found"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "apps/gateway/tests/core.rs modern_core_drops_ping_and_discovers_every_supported_version"
     },
     {
       "id": "mcp-core/trace-propagation",

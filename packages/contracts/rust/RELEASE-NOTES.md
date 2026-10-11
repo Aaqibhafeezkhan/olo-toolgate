@@ -13,6 +13,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Gateway's `/mcp` route serves session-era MCP clients on `2025-11-25` and
+  `2025-06-18` through a legacy adapter (ADR 018): `initialize`, notifications, `ping`,
+  `tools/list` and `tools/call` run on the stateless core, and the returned
+  `Mcp-Session-Id` is never stored or used for identity or scope. `server/discover`
+  lists all three versions, and `ping` is no longer answered on the 2026-07-28 path.
+
 - A fresh Windows install enrolls with the gateway it was downloaded from. Uninstall
   parks the focused gateway's enrollment in its profile, and setup parks an enrollment
   an older uninstall left behind (or retires it when that gateway was recreated), so the
