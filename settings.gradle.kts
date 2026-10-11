@@ -25,3 +25,6 @@ project(":sdk-java-protocol").projectDir = file("tool-sdk/java-sdk/protocol")
 
 include(":sdk-java-runtime-mcp")
 project(":sdk-java-runtime-mcp").projectDir = file("tool-sdk/java-sdk/runtime-mcp")
+
+include(":sdk-java-conformance-server")
+project(":sdk-java-conformance-server").projectDir = file("tool-sdk/java-sdk/conformance-server")

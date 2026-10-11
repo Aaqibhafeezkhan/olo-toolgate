@@ -51,7 +51,7 @@ public final class StdioServer {
                     continue;
                 }
                 workers.execute(() -> {
-                    JsonNode response = core.handle(message, connection);
+                    JsonNode response = core.handle(message, connection, null, frame -> write(out, frame));
                     if (response != null) write(out, response);
                 });
             }

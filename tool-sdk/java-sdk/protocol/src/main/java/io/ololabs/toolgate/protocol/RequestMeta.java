@@ -3,7 +3,9 @@
 package io.ololabs.toolgate.protocol;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * The per-request {@code _meta} of a 2026-07-28 request. Features are used only when this request declares them.
@@ -13,8 +15,11 @@ import java.util.Set;
  * @param extensions the extension ids declared in {@code clientCapabilities.extensions}
  * @param transport {@code stdio} or {@code http}
  * @param owner who owns the tasks this request creates: the verified identity, or the connection when there is none
+ * @param progressToken the request's {@code _meta.progressToken}, or null
+ * @param notifications where notifications about this request go (progress), ahead of its response
  */
-public record RequestMeta(String protocolVersion, JsonNode clientCapabilities, Set<String> extensions, String transport, String owner) {
+public record RequestMeta(String protocolVersion, JsonNode clientCapabilities, Set<String> extensions, String transport, String owner,
+        JsonNode progressToken, Consumer<ObjectNode> notifications) {
     public static final String TASKS = "io.modelcontextprotocol/tasks";
 
     public boolean declares(String extension) {

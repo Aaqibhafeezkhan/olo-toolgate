@@ -1,0 +1,810 @@
+// Copyright 2026 OLO Labs
+// SPDX-License-Identifier: Apache-2.0
+package io.ololabs.toolgate.runtime;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.ololabs.toolgate.protocol.MemoryTaskStore;
+import io.ololabs.toolgate.protocol.ProtocolCore;
+import io.ololabs.toolgate.protocol.ProtocolError;
+import io.ololabs.toolgate.protocol.RequestMeta;
+import io.ololabs.toolgate.protocol.StdioServer;
+import io.ololabs.toolgate.protocol.StreamableHttpServer;
+import io.ololabs.toolgate.protocol.TaskRecord;
+import io.ololabs.toolgate.protocol.Tasks;
+import io.ololabs.toolgate.protocol.ToolCatalog;
+import io.ololabs.toolgate.sdk.annotations.ClientTool;
+import io.ololabs.toolgate.sdk.annotations.ServerTool;
+import io.ololabs.toolgate.sdk.context.ToolRegistry;
+import io.ololabs.toolgate.sdk.context.ToolResult;
+import io.ololabs.toolgate.sdk.errors.PlatformError;
+import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
+import io.ololabs.toolgate.sdk.errors.ToolConfigurationError;
+import io.ololabs.toolgate.sdk.errors.ToolError;
+import io.ololabs.toolgate.sdk.errors.ToolInputError;
+import io.ololabs.toolgate.sdk.errors.ToolRetryableError;
+import io.ololabs.toolgate.sdk.errors.UpstreamError;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.TreeMap;
+import java.util.UUID;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+/**
+ * The standalone runtime (toolgate-sdk-runtime-mcp): serves the tools the descriptor processor found on the class
+ * path as a plain MCP server. Same descriptors, error model and execution rules as governed mode
+ * (runtime-modes.md §3); only deployment values come from the environment or {@code toolgate.dev.json}.
+ */
+public final class StandaloneRuntime implements ToolCatalog {
+    static final int MAX_INPUT_BYTES = 1024 * 1024;
+    static final int MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+    static final int MAX_ARGUMENTS = 256;
+    static final long SYNC_CEILING_MS = 60_000;
+    static final long TASK_CEILING_MS = 900_000;
+    /** After cancellation is requested, the handler gets this long to stop before it is abandoned (execution.md §3). */
+    static final long CANCEL_GRACE_MS = 5_000;
+    static final long CONCURRENCY_WAIT_MS = 1_000;
+    static final int MAX_MESSAGE_BYTES = 1024;
+    static final int MAX_DATA_BYTES = 8 * 1024;
+    static final String FAILED = "The tool failed.";
+    private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
+
+    private final ObjectMapper json = new ObjectMapper();
+    private final Config config;
+    private final PrintStream diagnostics;
+    private final Redactor redactor = new Redactor();
+    private final Map<String, Tool> byMcpName = new TreeMap<>();
+    private final ObjectNode packageInfo;
+    private final Tasks tasks;
+    private InetSocketAddress httpAddress;
+    private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "toolgate-tool");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** One served tool. */
+    private static final class Tool {
+        String name;
+        String toolId;
+        String mcpName;
+        String digest;
+        JsonNode descriptor;
+        Method method;
+        Object instance;
+        List<String> parameters;
+        SchemaValidator input;
+        SchemaValidator output;
+        Semaphore concurrency;
+        boolean async;
+        boolean cancelIfAbandoned;
+        boolean ledger;
+        long deadlineMs;
+        Map<String, SchemaValidator> errorData = new HashMap<>();
+        Map<String, DeclaredValues.Entry> globals = new LinkedHashMap<>();
+        Map<String, DeclaredValues.Entry> secrets = new LinkedHashMap<>();
+        Map<String, DeclaredValues.Entry> claims = new LinkedHashMap<>();
+    }
+
+    private StandaloneRuntime(Config config, PrintStream diagnostics, ObjectNode packageInfo, Tasks tasks) {
+        this.config = config;
+        this.diagnostics = diagnostics;
+        this.packageInfo = packageInfo;
+        this.tasks = tasks;
+    }
+
+    /**
+     * Loads the package from the class path and applies the startup rules of runtime-modes.md §2 and §4.
+     *
+     * @throws StartupRefused with the fixed code when the runtime cannot honour a declaration
+     */
+    public static StandaloneRuntime start(ClassLoader loader, Map<String, String> env, Path workingDirectory, PrintStream diagnostics) {
+        return start(loader, env, workingDirectory, diagnostics, new Tasks(new MemoryTaskStore(), Tasks.DEFAULT_TTL_MS, Tasks.DEFAULT_POLL_INTERVAL_MS));
+    }
+
+    /** As {@link #start(ClassLoader, Map, Path, PrintStream)} with the given task service. */
+    static StandaloneRuntime start(ClassLoader loader, Map<String, String> env, Path workingDirectory, PrintStream diagnostics, Tasks tasks) {
+        Config config = Config.load(env, workingDirectory);
+        if (config.mode == Config.Mode.TEST) {
+            throw new StartupRefused("CONFIGURATION", "TOOLGATE_MODE=test is only for ToolHarness; the runtime entry points reject it");
+        }
+        if (config.mode == Config.Mode.DEVELOPMENT && env.containsKey("TOOLGATE_AUTH_ISSUER")) {
+            throw new StartupRefused("CONFIGURATION", "development mode refuses to start when a production issuer is configured");
+        }
+        ObjectMapper json = new ObjectMapper();
+        ObjectNode index = readIndex(loader, json);
+        StandaloneRuntime runtime = new StandaloneRuntime(config, diagnostics, index, tasks);
+        runtime.httpAddress = httpAddress(env.get("TOOLGATE_HTTP_ADDRESS"), config.mode);
+        Map<String, JsonNode> globalDeclarations = new TreeMap<>();
+        for (JsonNode entry : index.path("tools")) {
+            Tool tool = runtime.load(loader, entry);
+            for (JsonNode g : tool.descriptor.path("variables").path("globals")) globalDeclarations.putIfAbsent(g.path("name").asText(), g);
+            if (runtime.byMcpName.put(tool.mcpName, tool) != null) {
+                throw new StartupRefused("CONFIGURATION", "two tools share the MCP name " + tool.mcpName);
+            }
+        }
+        Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
+        for (Tool tool : runtime.byMcpName.values()) runtime.bindVariables(tool, globals);
+        diagnostics.println("toolgate: standalone runtime for " + index.path("id").asText() + " (" + runtime.byMcpName.size()
+                + " tools). There is no enterprise audit in standalone mode; diagnostics stay local.");
+        if (config.mode == Config.Mode.DEVELOPMENT) {
+            diagnostics.println("toolgate: WARNING development mode: claims come from toolgate.dev.json fixtures and results are marked as fixture identity.");
+        }
+        for (String w : config.warnings) diagnostics.println("toolgate: WARNING " + w);
+        return runtime;
+    }
+
+    /**
+     * {@code TOOLGATE_HTTP_ADDRESS} as {@code host:port}. Development binds only to stdio or loopback
+     * (runtime-modes.md §4); production does too until the identity verifier (adapter A4) can authenticate HTTP.
+     */
+    private static InetSocketAddress httpAddress(String value, Config.Mode mode) {
+        if (value == null || value.isBlank()) return null;
+        String v = value.trim();
+        int colon = v.lastIndexOf(':');
+        if (colon <= 0) throw new StartupRefused("CONFIGURATION", "TOOLGATE_HTTP_ADDRESS must be host:port, for example 127.0.0.1:8080");
+        String host = v.substring(0, colon);
+        if (host.startsWith("[") && host.endsWith("]")) host = host.substring(1, host.length() - 1);
+        int port;
+        InetAddress ip;
+        try {
+            port = Integer.parseInt(v.substring(colon + 1));
+            ip = InetAddress.getByName(host);
+        } catch (NumberFormatException | UnknownHostException e) {
+            throw new StartupRefused("CONFIGURATION", "TOOLGATE_HTTP_ADDRESS must be host:port, for example 127.0.0.1:8080");
+        }
+        if (port < 0 || port > 65535) throw new StartupRefused("CONFIGURATION", "TOOLGATE_HTTP_ADDRESS has an invalid port");
+        if (!ip.isLoopbackAddress()) {
+            throw new StartupRefused("CONFIGURATION", mode == Config.Mode.DEVELOPMENT
+                    ? "development mode binds only to stdio or a loopback address, not " + v
+                    : "Streamable HTTP binds only to a loopback address until the identity verifier (adapter A4) is in this runtime, not " + v);
+        }
+        return new InetSocketAddress(ip, port);
+    }
+
+    /** The configured Streamable HTTP address, or null to serve stdio. */
+    public InetSocketAddress httpAddress() {
+        return httpAddress;
+    }
+
+    /** Serves MCP 2026-07-28 over Streamable HTTP at {@code /mcp} until closed. */
+    public StreamableHttpServer serveHttp(InetSocketAddress address) throws IOException {
+        StreamableHttpServer server = StreamableHttpServer.start(new ProtocolCore(this), address, "/mcp");
+        diagnostics.println("toolgate: serving MCP 2026-07-28 at http://" + address.getHostString() + ":" + server.port() + "/mcp");
+        return server;
+    }
+
+    /** Serves MCP 2026-07-28 over stdio until the input closes. */
+    public void serveStdio(InputStream in, OutputStream out) throws IOException {
+        new StdioServer(new ProtocolCore(this)).serve(in, out);
+    }
+
+    private static ObjectNode readIndex(ClassLoader loader, ObjectMapper json) {
+        List<URL> found;
+        try {
+            found = Collections.list(loader.getResources("META-INF/toolgate/package.json"));
+        } catch (IOException e) {
+            throw new StartupRefused("CONFIGURATION", "cannot read META-INF/toolgate/package.json: " + e.getMessage());
+        }
+        if (found.size() != 1) {
+            throw new StartupRefused("CONFIGURATION", "expected one META-INF/toolgate/package.json on the class path, found " + found.size()
+                    + "; build the tool project with toolgate-sdk-processor");
+        }
+        try (InputStream in = found.get(0).openStream()) {
+            return (ObjectNode) json.readTree(in);
+        } catch (IOException | ClassCastException e) {
+            throw new StartupRefused("CONFIGURATION", "META-INF/toolgate/package.json is not a JSON object");
+        }
+    }
+
+    private Tool load(ClassLoader loader, JsonNode entry) {
+        Tool tool = new Tool();
+        tool.name = entry.path("name").asText();
+        byte[] bytes;
+        try (InputStream in = loader.getResourceAsStream("META-INF/toolgate/tools/" + tool.name + ".json")) {
+            if (in == null) throw new StartupRefused("CONFIGURATION", "the descriptor of " + tool.name + " is missing");
+            bytes = in.readAllBytes();
+            tool.descriptor = json.readTree(bytes);
+        } catch (IOException e) {
+            throw new StartupRefused("CONFIGURATION", "cannot read the descriptor of " + tool.name);
+        }
+        tool.digest = sha256(bytes);
+        if (!tool.digest.equals(entry.path("toolDescriptorDigest").asText())) {
+            throw new StartupRefused("CONFIGURATION", "the descriptor of " + tool.name + " does not match its digest; rebuild the project");
+        }
+        JsonNode d = tool.descriptor;
+        tool.toolId = d.path("toolId").asText();
+        tool.mcpName = d.path("mcpName").asText();
+        if (d.path("kind").asText().equals("CLIENT")) {
+            throw new StartupRefused("CLIENT_TOOLS_UNAVAILABLE", "client tool " + tool.toolId + " needs endpoint device services, which this standalone runtime does not have");
+        }
+        if (d.path("businessKey").path("required").asBoolean()) {
+            throw new StartupRefused("CONFIGURATION", "tool " + tool.toolId + " requires a business key; the local reservation store is not in this runtime yet");
+        }
+        if (config.mode == Config.Mode.PRODUCTION && needsIdentity(d)) {
+            throw new StartupRefused("CONFIGURATION", "tool " + tool.toolId + " needs a verified identity (claims, a USER secret, TOKEN_EXCHANGE or the DELEGATED_USER namespace);"
+                    + " production mode needs a verifier (adapter A4), which is not in this runtime yet. Use TOOLGATE_MODE=development with fixtures to develop it.");
+        }
+        tool.async = d.path("execution").path("async").asBoolean();
+        tool.cancelIfAbandoned = d.path("execution").path("cancelIfAbandoned").asBoolean();
+        String safety = d.path("effect").path("safety").asText();
+        tool.ledger = safety.equals("NON_IDEMPOTENT") || safety.equals("UNKNOWN");
+        tool.deadlineMs = Math.min(d.path("execution").path("maxDurationMs").asLong(30_000), tool.async ? TASK_CEILING_MS : SYNC_CEILING_MS);
+        if (d.path("execution").has("maxConcurrency")) tool.concurrency = new Semaphore(d.path("execution").path("maxConcurrency").asInt(), true);
+        tool.input = new SchemaValidator(d.path("inputSchema"));
+        if (d.has("outputSchema")) tool.output = new SchemaValidator(d.get("outputSchema"));
+        tool.parameters = new ArrayList<>();
+        for (JsonNode p : entry.path("parameters")) tool.parameters.add(p.asText());
+        Iterator<Map.Entry<String, JsonNode>> schemas = entry.path("errorDataSchemas").properties().iterator();
+        while (schemas.hasNext()) {
+            Map.Entry<String, JsonNode> s = schemas.next();
+            try {
+                tool.errorData.put(s.getKey(), new SchemaValidator(json.readTree(s.getValue().asText())));
+            } catch (JsonProcessingException e) {
+                throw new StartupRefused("CONFIGURATION", "the dataSchema of error " + s.getKey() + " in " + tool.toolId + " is not JSON");
+            }
+        }
+        bindHandler(loader, tool, entry);
+        return tool;
+    }
+
+    private static boolean needsIdentity(JsonNode d) {
+        if (d.path("variables").path("claims").size() > 0) return true;
+        for (JsonNode s : d.path("variables").path("secrets")) if (s.path("scope").asText().equals("USER")) return true;
+        for (JsonNode a : d.path("httpAuth")) if (a.path("type").asText().equals("TOKEN_EXCHANGE")) return true;
+        return d.path("businessKey").path("namespace").asText().equals("DELEGATED_USER");
+    }
+
+    private final Map<Class<?>, Object> instances = new HashMap<>();
+
+    private void bindHandler(ClassLoader loader, Tool tool, JsonNode entry) {
+        String className = entry.path("handlerClass").asText();
+        String methodName = entry.path("handlerMethod").asText();
+        Class<?> type;
+        try {
+            type = Class.forName(className, true, loader);
+        } catch (ClassNotFoundException e) {
+            throw new StartupRefused("CONFIGURATION", "handler class " + className + " is not on the class path");
+        }
+        for (Method m : type.getMethods()) {
+            if (!m.getName().equals(methodName)) continue;
+            ServerTool s = m.getAnnotation(ServerTool.class);
+            ClientTool c = m.getAnnotation(ClientTool.class);
+            String declared = s != null ? s.name() : c != null ? c.name() : null;
+            if (tool.name.equals(declared)) tool.method = m;
+        }
+        if (tool.method == null) throw new StartupRefused("CONFIGURATION", "handler " + className + "#" + methodName + " for " + tool.name + " was not found");
+        if (tool.method.getParameterCount() != tool.parameters.size()) {
+            throw new StartupRefused("CONFIGURATION", "handler " + className + "#" + methodName + " does not match its descriptor; rebuild the project");
+        }
+        tool.instance = instances.computeIfAbsent(type, t -> instance(loader, t));
+    }
+
+    private static Object instance(ClassLoader loader, Class<?> type) {
+        for (ToolRegistry registry : ServiceLoader.load(ToolRegistry.class, loader)) {
+            for (Object handler : registry.handlers()) if (handler.getClass() == type) return handler;
+        }
+        try {
+            return type.getConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new StartupRefused("CONFIGURATION", type.getName() + " needs a public no-argument constructor or a ToolRegistry provider");
+        }
+    }
+
+    /** Resolves every declared global once, validated against its declaration as governed configuration is. */
+    private Map<String, JsonNode> resolveGlobals(Map<String, JsonNode> declarations) {
+        Map<String, JsonNode> values = new HashMap<>();
+        for (Map.Entry<String, JsonNode> e : declarations.entrySet()) {
+            JsonNode decl = e.getValue();
+            String type = decl.path("type").asText();
+            JsonNode raw = config.global(e.getKey(), json);
+            JsonNode value = raw == null ? decl.get("default") : coerce(type, raw, "global " + e.getKey());
+            if (value == null) {
+                if (decl.path("required").asBoolean()) {
+                    throw new StartupRefused("CONFIGURATION", "global " + e.getKey() + " is required; set TOOLGATE_GLOBAL_"
+                            + e.getKey().toUpperCase(java.util.Locale.ROOT) + " or globals." + e.getKey() + " in toolgate.dev.json");
+                }
+                continue;
+            }
+            String failure = new SchemaValidator(globalSchema(decl)).validate(value);
+            if (failure != null) throw new StartupRefused("CONFIGURATION", "global " + e.getKey() + " is invalid: " + failure.substring(1));
+            if (decl.path("sensitive").asBoolean()) redactor.add(value);
+            values.put(e.getKey(), value);
+        }
+        return values;
+    }
+
+    private JsonNode coerce(String type, JsonNode raw, String what) {
+        if (!raw.isTextual()) return raw;
+        String text = raw.asText().trim();
+        try {
+            return switch (type) {
+                case "INT", "LONG" -> JSON.numberNode(Long.parseLong(text));
+                case "NUMBER" -> JSON.numberNode(new java.math.BigDecimal(text));
+                case "BOOLEAN" -> {
+                    if (!text.equals("true") && !text.equals("false")) throw new NumberFormatException();
+                    yield JSON.booleanNode(Boolean.parseBoolean(text));
+                }
+                case "OBJECT", "ARRAY" -> json.readTree(text);
+                default -> raw;
+            };
+        } catch (NumberFormatException | JsonProcessingException e) {
+            throw new StartupRefused("CONFIGURATION", what + " is not a valid " + type);
+        }
+    }
+
+    private static JsonNode globalSchema(JsonNode decl) {
+        ObjectNode schema = JSON.objectNode();
+        switch (decl.path("type").asText()) {
+            case "INT" -> {
+                schema.put("type", "integer");
+                schema.put("minimum", Integer.MIN_VALUE);
+                schema.put("maximum", Integer.MAX_VALUE);
+            }
+            case "LONG" -> {
+                schema.put("type", "integer");
+                schema.put("minimum", -9007199254740991L);
+                schema.put("maximum", 9007199254740991L);
+            }
+            case "NUMBER" -> schema.put("type", "number");
+            case "BOOLEAN" -> schema.put("type", "boolean");
+            case "OBJECT" -> schema.put("type", "object");
+            case "ARRAY" -> schema.put("type", "array");
+            case "DATE" -> schema.put("type", "string").put("format", "date");
+            case "DATE_TIME" -> schema.put("type", "string").put("format", "date-time");
+            case "DURATION" -> schema.put("type", "string").put("format", "duration");
+            case "URI" -> schema.put("type", "string").put("format", "uri");
+            case "BINARY" -> schema.put("type", "string").put("contentEncoding", "base64");
+            default -> schema.put("type", "string");
+        }
+        for (String k : List.of("minimum", "maximum", "minLength", "maxLength", "pattern", "enum", "format")) {
+            if (decl.has(k)) schema.set(k, decl.get(k));
+        }
+        return schema;
+    }
+
+    private void bindVariables(Tool tool, Map<String, JsonNode> globals) {
+        for (JsonNode g : tool.descriptor.path("variables").path("globals")) {
+            String name = g.path("name").asText();
+            tool.globals.put(name, new DeclaredValues.Entry(g.path("type").asText(), globals.get(name)));
+        }
+        for (JsonNode s : tool.descriptor.path("variables").path("secrets")) {
+            String name = s.path("name").asText();
+            String type = s.path("type").asText();
+            JsonNode value = config.secret(name, json);
+            if (value != null) {
+                value = coerce(type, value, "secret " + name);
+                redactor.add(value);
+            } else {
+                diagnostics.println("toolgate: WARNING secret " + name + " of " + tool.toolId + " has no value; set TOOLGATE_SECRET_"
+                        + name.toUpperCase(java.util.Locale.ROOT) + " or secrets." + name + " in toolgate.dev.json");
+            }
+            tool.secrets.put(name, new DeclaredValues.Entry(type, value));
+        }
+        JsonNode fixture = config.claims();
+        for (JsonNode c : tool.descriptor.path("variables").path("claims")) {
+            String claim = c.path("claim").asText();
+            JsonNode value = fixture == null ? null : claim.startsWith("/") ? fixture.at(claim) : fixture.get(claim);
+            if (value != null && value.isMissingNode()) value = null;
+            tool.claims.put(c.path("name").asText(), new DeclaredValues.Entry(c.path("type").asText(), value));
+        }
+    }
+
+    // ---- ToolCatalog ----
+
+    @Override
+    public ObjectNode serverInfo() {
+        ObjectNode info = JSON.objectNode();
+        info.put("name", packageInfo.path("id").asText());
+        info.put("version", "standalone");
+        return info;
+    }
+
+    @Override
+    public ObjectNode discoverMeta() {
+        ObjectNode meta = JSON.objectNode();
+        ObjectNode digests = meta.putObject("io.ololabs.toolgate/descriptorDigests");
+        TreeMap<String, String> byToolId = new TreeMap<>();
+        for (Tool t : byMcpName.values()) byToolId.put(t.toolId, t.digest);
+        StringBuilder set = new StringBuilder("[");
+        for (Map.Entry<String, String> e : byToolId.entrySet()) {
+            digests.put(e.getKey(), e.getValue());
+            if (set.length() > 1) set.append(',');
+            set.append("{\"toolDescriptorDigest\":\"").append(e.getValue()).append("\",\"toolId\":\"").append(e.getKey()).append("\"}");
+        }
+        meta.put("io.ololabs.toolgate/descriptorSetDigest", sha256(set.append(']').toString().getBytes(StandardCharsets.UTF_8)));
+        return meta;
+    }
+
+    @Override
+    public JsonNode tools(RequestMeta meta) {
+        ArrayNode tools = JSON.arrayNode();
+        for (Tool t : byMcpName.values()) {
+            if (t.async && !meta.declares(RequestMeta.TASKS)) continue; // never offer work the client cannot collect (plan.md §12.5)
+            JsonNode d = t.descriptor;
+            ObjectNode tool = tools.addObject();
+            tool.put("name", t.mcpName);
+            tool.put("title", d.path("title").asText());
+            String description = d.path("description").asText();
+            if (d.has("useWhen")) description += "\n\nUse when: " + d.path("useWhen").asText();
+            tool.put("description", description);
+            tool.set("inputSchema", d.path("inputSchema"));
+            if (d.has("outputSchema")) tool.set("outputSchema", d.get("outputSchema"));
+            ObjectNode annotations = tool.putObject("annotations");
+            String safety = d.path("effect").path("safety").asText();
+            annotations.put("readOnlyHint", safety.equals("READ_ONLY"));
+            annotations.put("destructiveHint", d.path("effect").path("destructive").asBoolean());
+            annotations.put("idempotentHint", safety.equals("READ_ONLY") || safety.equals("IDEMPOTENT"));
+            annotations.put("openWorldHint", d.path("effect").path("openWorld").asBoolean());
+            if (t.async) tool.putObject("execution").put("taskSupport", "required");
+        }
+        return tools;
+    }
+
+    @Override
+    public ObjectNode call(String name, JsonNode arguments, RequestMeta meta) {
+        Tool tool = byMcpName.get(name);
+        if (tool == null) throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Unknown tool: " + name);
+        if (tool.async && !meta.declares(RequestMeta.TASKS)) throw ProtocolError.missingExtension(RequestMeta.TASKS);
+        Prepared prepared = prepare(tool, (ObjectNode) arguments);
+        if (prepared.context != null && !tool.async) prepared.context.attachProgress(meta.progressToken(), meta.notifications());
+        if (prepared.refused != null) return marked(prepared.refused);
+        if (tool.async) return startTask(tool, prepared, meta);
+        return marked(execute(tool, prepared));
+    }
+
+    @Override
+    public Tasks tasks() {
+        return tasks;
+    }
+
+    private ObjectNode marked(ObjectNode result) {
+        if (config.mode == Config.Mode.DEVELOPMENT) result.putObject("_meta").put("io.ololabs.toolgate/identity", "fixture");
+        return result;
+    }
+
+    /** Runs an async tool as a task: the CreateTaskResult goes back at once and the handler runs on. */
+    private ObjectNode startTask(Tool tool, Prepared prepared, RequestMeta meta) {
+        StandaloneContext context = prepared.context;
+        TaskRecord task = tasks.create(meta.owner(), tool.cancelIfAbandoned, "Running", context::cancel);
+        context.attachTask(tasks, task.taskId);
+        workers.execute(() -> {
+            try {
+                ObjectNode result = execute(tool, prepared);
+                if (tasks.cancelRequested(task.taskId)) tasks.cancelled(task.taskId);
+                else tasks.complete(task.taskId, marked(result));
+            } catch (RuntimeException e) {
+                diagnostics.println("toolgate: task " + task.taskId + " of " + tool.toolId + " failed: " + prepared.redact.apply(String.valueOf(e)));
+                tasks.fail(task.taskId, ProtocolError.INTERNAL_ERROR, "Internal error");
+            }
+        });
+        return Tasks.createResult(task);
+    }
+
+    // ---- Invocation ----
+
+    /** A validated call ready to run, or the error result that refused it before the handler. */
+    private static final class Prepared {
+        ObjectNode refused;
+        Redactor redact;
+        StandaloneContext context;
+        Object[] args;
+        Instant deadline;
+    }
+
+    private Prepared prepare(Tool tool, ObjectNode arguments) {
+        Prepared prepared = new Prepared();
+        Redactor redact = redactor.copy();
+        prepared.redact = redact;
+        JsonNode properties = tool.descriptor.path("inputSchema").path("properties");
+        Iterator<Map.Entry<String, JsonNode>> fields = arguments.properties().iterator();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> f = fields.next();
+            if (properties.path(f.getKey()).path("x-toolgate-sensitive").asBoolean()) redact.add(f.getValue());
+        }
+        try {
+            if (json.writeValueAsBytes(arguments).length > MAX_INPUT_BYTES) {
+                prepared.refused = failure(tool, redact, "INVALID_ARGUMENT", "The arguments are larger than 1 MiB", false, null);
+                return prepared;
+            }
+        } catch (JsonProcessingException e) {
+            prepared.refused = failure(tool, redact, "INVALID_ARGUMENT", "The arguments are not valid JSON", false, null);
+            return prepared;
+        }
+        if (arguments.size() > MAX_ARGUMENTS) {
+            prepared.refused = failure(tool, redact, "INVALID_ARGUMENT", "More than " + MAX_ARGUMENTS + " arguments", false, null);
+            return prepared;
+        }
+        String invalid = tool.input.validate(arguments);
+        if (invalid != null) {
+            prepared.refused = failure(tool, redact, "INVALID_ARGUMENT", "Invalid arguments: " + invalid.substring(1), false, null);
+            return prepared;
+        }
+        ObjectNode filled = arguments.deepCopy();
+        Iterator<Map.Entry<String, JsonNode>> declared = properties.properties().iterator();
+        Map<String, DeclaredValues.Entry> inputs = new LinkedHashMap<>();
+        while (declared.hasNext()) {
+            Map.Entry<String, JsonNode> p = declared.next();
+            if (!filled.has(p.getKey()) && p.getValue().has("default")) filled.set(p.getKey(), p.getValue().get("default"));
+            inputs.put(p.getKey(), new DeclaredValues.Entry(DeclaredValues.typeOf(p.getValue()), filled.get(p.getKey())));
+        }
+
+        String invocationId = UUID.randomUUID().toString();
+        Instant deadline = Instant.now().plusMillis(tool.deadlineMs);
+        DeclaredValues claims = new DeclaredValues("claim", tool.claims,
+                n -> new PlatformError(PlatformError.Code.CLAIMS_UNAVAILABLE, "Claim " + n + " is not available"));
+        claims.identity = config.claims();
+        StandaloneContext context = new StandaloneContext(
+                new DeclaredValues("input", inputs, n -> new ToolConfigurationError("input " + n + " has no value")),
+                new DeclaredValues("global", tool.globals, n -> new ToolConfigurationError("global " + n + " has no value")),
+                new DeclaredValues("secret", tool.secrets, n -> new ToolConfigurationError("secret " + n + " has no value; set TOOLGATE_SECRET_" + n.toUpperCase(java.util.Locale.ROOT))),
+                claims, invocationId, tool.toolId, deadline, redact, diagnostics);
+
+        prepared.context = context;
+        prepared.deadline = deadline;
+        try {
+            prepared.args = bind(tool, filled, context);
+        } catch (Converter.ConversionException e) {
+            prepared.refused = failure(tool, redact, "INVALID_ARGUMENT", "Invalid arguments: " + e.getMessage(), false, null);
+        }
+        return prepared;
+    }
+
+    private ObjectNode execute(Tool tool, Prepared prepared) {
+        Redactor redact = prepared.redact;
+        StandaloneContext context = prepared.context;
+        Object[] args = prepared.args;
+        Instant deadline = prepared.deadline;
+        if (tool.concurrency != null) {
+            boolean acquired;
+            try {
+                acquired = tool.concurrency.tryAcquire(CONCURRENCY_WAIT_MS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                acquired = false;
+            }
+            if (!acquired) return platform(tool, redact, PlatformError.Code.CONCURRENCY_LIMIT, "Too many concurrent calls to this tool");
+        }
+        Future<Object> running;
+        try {
+            running = workers.submit(() -> {
+                context.worker = Thread.currentThread();
+                try {
+                    Object value = tool.method.invoke(tool.instance, args);
+                    if (value instanceof CompletionStage<?> stage) {
+                        long left = Math.max(1, deadline.toEpochMilli() - System.currentTimeMillis());
+                        value = stage.toCompletableFuture().get(left, TimeUnit.MILLISECONDS);
+                    }
+                    return value;
+                } finally {
+                    if (tool.concurrency != null) tool.concurrency.release();
+                }
+            });
+        } catch (RuntimeException e) {
+            if (tool.concurrency != null) tool.concurrency.release();
+            throw e;
+        }
+        Object value;
+        long cancelSeen = 0;
+        try {
+            while (true) {
+                long left = deadline.toEpochMilli() - System.currentTimeMillis();
+                if (left <= 0) {
+                    context.cancel();
+                    running.cancel(true);
+                    return platform(tool, redact, PlatformError.Code.DEADLINE_EXCEEDED, "The tool did not finish within " + tool.deadlineMs + " ms");
+                }
+                try {
+                    value = running.get(Math.min(left, 100), TimeUnit.MILLISECONDS);
+                    break;
+                } catch (TimeoutException e) {
+                    if (!context.isCancelled()) continue;
+                    long now = System.currentTimeMillis();
+                    if (cancelSeen == 0) cancelSeen = now;
+                    else if (now - cancelSeen >= CANCEL_GRACE_MS) {
+                        // A handler that ignores cancellation is abandoned and its outcome discarded (execution.md §3).
+                        running.cancel(true);
+                        diagnostics.println("toolgate: " + tool.toolId + " " + context.invocationId() + " did not stop within the cancellation grace; abandoned");
+                        return platform(tool, redact, PlatformError.Code.CANCELLED, "The invocation was cancelled");
+                    }
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            context.cancel();
+            running.cancel(true);
+            return platform(tool, redact, PlatformError.Code.CANCELLED, "The invocation was cancelled");
+        } catch (ExecutionException e) {
+            return thrown(tool, redact, unwrap(e.getCause()));
+        }
+        return complete(tool, redact, value);
+    }
+
+    private static Throwable unwrap(Throwable t) {
+        while ((t instanceof InvocationTargetException || t instanceof ExecutionException
+                || t instanceof java.util.concurrent.CompletionException) && t.getCause() != null) {
+            t = t.getCause();
+        }
+        return t;
+    }
+
+    private static Object[] bind(Tool tool, ObjectNode arguments, StandaloneContext context) {
+        Type[] types = tool.method.getGenericParameterTypes();
+        Object[] args = new Object[types.length];
+        for (int i = 0; i < types.length; i++) {
+            String name = tool.parameters.get(i);
+            args[i] = name.equals("$context") ? context : Converter.fromJson(arguments.get(name), types[i]);
+        }
+        return args;
+    }
+
+    private ObjectNode complete(Tool tool, Redactor redact, Object value) {
+        ObjectNode result = JSON.objectNode();
+        try {
+            if (value instanceof ToolResult r) {
+                result.set("content", Converter.toJson(r.content()));
+                if (r.structuredContent() != null) result.set("structuredContent", Converter.toJson(r.structuredContent()));
+            } else {
+                JsonNode structured = Converter.toJson(value);
+                if (tool.output != null) {
+                    String invalid = tool.output.validate(structured);
+                    if (invalid != null) {
+                        diagnostics.println("toolgate: " + tool.toolId + " returned output that does not match its outputSchema: " + redact.apply(invalid));
+                        return failure(tool, redact, "INTERNAL_TOOL_ERROR", FAILED, false, null);
+                    }
+                }
+                String text = json.writeValueAsString(structured);
+                result.putArray("content").addObject().put("type", "text").put("text", text);
+                result.set("structuredContent", structured);
+            }
+            if (json.writeValueAsBytes(result).length > MAX_OUTPUT_BYTES) {
+                diagnostics.println("toolgate: " + tool.toolId + " output is larger than 4 MiB");
+                return failure(tool, redact, "INTERNAL_TOOL_ERROR", FAILED, false, null);
+            }
+        } catch (Converter.ConversionException | JsonProcessingException e) {
+            diagnostics.println("toolgate: " + tool.toolId + " returned a value that is not JSON: " + e.getMessage());
+            return failure(tool, redact, "INTERNAL_TOOL_ERROR", FAILED, false, null);
+        }
+        result.put("isError", false);
+        return result;
+    }
+
+    /** The error mapping of errors.md §2. */
+    private ObjectNode thrown(Tool tool, Redactor redact, Throwable t) {
+        if (t instanceof ToolInputError e) return failure(tool, redact, "INVALID_ARGUMENT", e.getMessage(), false, null);
+        if (t instanceof ToolConfigurationError e) return failure(tool, redact, "CONFIGURATION", e.getMessage(), false, null);
+        if (t instanceof PlatformError e) return platform(tool, redact, e.platformCode(), e.getMessage());
+        if (t instanceof UpstreamError e) {
+            ObjectNode data = JSON.objectNode();
+            data.put("route", e.route());
+            e.status().ifPresent(s -> data.put("status", s));
+            e.upstreamRequestId().ifPresent(id -> data.put("upstreamRequestId", id));
+            data.put("effectUncertain", e.effectUncertain());
+            return failure(tool, redact, e.code(), e.getMessage(), retryable(tool, e.code()), data);
+        }
+        if (t instanceof ToolRetryableError e) {
+            if (!declared(tool, e.code())) return undeclared(tool, redact, e);
+            ObjectNode data = JSON.objectNode();
+            e.retryAfter().ifPresent(d -> data.put("retryAfterMs", d.toMillis()));
+            return failure(tool, redact, e.code(), e.getMessage(), retryable(tool, e.code()), data);
+        }
+        if (t instanceof ToolBusinessError e) {
+            if (!declared(tool, e.code())) return undeclared(tool, redact, e);
+            JsonNode data;
+            try {
+                data = Converter.toJson(e.data());
+            } catch (Converter.ConversionException ce) {
+                return internal(tool, redact, ce);
+            }
+            SchemaValidator schema = tool.errorData.get(e.code());
+            if (schema != null && schema.validate(data) != null) {
+                diagnostics.println("toolgate: " + tool.toolId + " raised " + e.code() + " with data that does not match its dataSchema");
+                return failure(tool, redact, "INTERNAL_TOOL_ERROR", FAILED, false, null);
+            }
+            return failure(tool, redact, e.code(), e.getMessage(), false, data);
+        }
+        if (t instanceof ToolError e) return failure(tool, redact, e.code(), e.getMessage(), false, null);
+        return internal(tool, redact, t);
+    }
+
+    private ObjectNode internal(Tool tool, Redactor redact, Throwable t) {
+        java.io.StringWriter trace = new java.io.StringWriter();
+        t.printStackTrace(new java.io.PrintWriter(trace));
+        diagnostics.println("toolgate: " + tool.toolId + " failed: " + redact.apply(trace.toString()));
+        return failure(tool, redact, "INTERNAL_TOOL_ERROR", FAILED, false, null);
+    }
+
+    private ObjectNode undeclared(Tool tool, Redactor redact, ToolError e) {
+        ObjectNode data = JSON.objectNode();
+        data.put("originalCode", e.code());
+        return failure(tool, redact, "UNDECLARED_ERROR", e.getMessage(), false, data);
+    }
+
+    private static boolean declared(Tool tool, String code) {
+        for (JsonNode e : tool.descriptor.path("errors")) if (e.path("code").asText().equals(code)) return true;
+        return false;
+    }
+
+    /** Retryable only when the tool needs no execution ledger; the downgrade is recorded. */
+    private boolean retryable(Tool tool, String code) {
+        if (tool.ledger) {
+            diagnostics.println("toolgate: " + tool.toolId + " " + code + " reported as not retryable: the tool is "
+                    + tool.descriptor.path("effect").path("safety").asText());
+            return false;
+        }
+        return true;
+    }
+
+    private ObjectNode platform(Tool tool, Redactor redact, PlatformError.Code code, String message) {
+        boolean retryable = (code == PlatformError.Code.DEADLINE_EXCEEDED || code == PlatformError.Code.CONCURRENCY_LIMIT) && !tool.ledger;
+        return failure(tool, redact, code.name(), message, retryable, null);
+    }
+
+    /** The result shape of errors.md §3, redacted and capped (§4). */
+    private ObjectNode failure(Tool tool, Redactor redact, String code, String message, boolean retryable, JsonNode data) {
+        String text = Redactor.cap(redact.apply(message == null || message.isEmpty() ? code : message), MAX_MESSAGE_BYTES);
+        JsonNode safeData = data == null ? JSON.objectNode() : redact.apply(data);
+        try {
+            if (json.writeValueAsBytes(safeData).length > MAX_DATA_BYTES) {
+                ObjectNode truncated = JSON.objectNode();
+                truncated.put("truncated", true);
+                safeData = truncated;
+            }
+        } catch (JsonProcessingException e) {
+            safeData = JSON.objectNode();
+        }
+        ObjectNode result = JSON.objectNode();
+        result.putArray("content").addObject().put("type", "text").put("text", text);
+        ObjectNode error = result.putObject("structuredContent").putObject("error");
+        error.put("code", code);
+        error.put("message", text);
+        error.put("retryable", retryable);
+        error.set("data", safeData);
+        result.put("isError", true);
+        return result;
+    }
+
+    static String sha256(byte[] bytes) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(bytes);
+            StringBuilder hex = new StringBuilder("sha256:");
+            for (byte b : hash) hex.append(Character.forDigit((b >> 4) & 0xf, 16)).append(Character.forDigit(b & 0xf, 16));
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+}
