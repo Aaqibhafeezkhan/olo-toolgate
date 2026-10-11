@@ -139,7 +139,7 @@ public final class ProtocolCore {
             if (headers != null) checkRoutingHeaders(method, params, headers);
             connection.lock(VERSION);
             RequestMeta request = new RequestMeta(VERSION, capabilities, extensions(capabilities), connection.transport, connection.owner,
-                    connection.identity, meta.get("progressToken"), notify, JSON.objectNode());
+                    connection.identity, meta.get("progressToken"), notify, JSON.objectNode(), headers == null ? null : headers.apply("Idempotency-Key"));
             ObjectNode result = switch (method) {
                 case "server/discover" -> discover();
                 case "tools/list" -> list(request);

@@ -6,6 +6,15 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java standalone runtime reserves business keys (M0 part 9). Tools that require a key, or
+  declare `businessKeyArgument`, run only after the key (from that argument or the
+  `Idempotency-Key` header) is reserved in a local SQLite store at `TOOLGATE_STATE_DB`. Repeats
+  return the first result or task; other arguments get `IDEMPOTENCY_CONFLICT`, another caller
+  of a `TENANT` key gets `IDEMPOTENCY_KEY_IN_USE`, a running repeat gets `IN_PROGRESS`, and a
+  key past `TOOLGATE_BUSINESS_KEY_RETENTION` gets `EXPIRED_KEY`. `@Idempotency` forwards the key
+  upstream per namespace (`a.<hash>.<key>`, `u.<hash>.<key>` or the raw `TENANT` key). Such
+  tools no longer refuse startup.
+
 - The Java standalone runtime has the routes HTTP client (M0 part 8). `context.http()` calls
   only the routes a tool lists, with path variables matched against their patterns (never
   `/`), allowlisted query names and headers, the route's size limits and a timeout a call

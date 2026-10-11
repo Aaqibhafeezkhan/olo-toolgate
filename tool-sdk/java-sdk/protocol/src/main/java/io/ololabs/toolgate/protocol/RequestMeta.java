@@ -20,9 +20,11 @@ import java.util.function.Consumer;
  * @param identity the caller adapter A4 verified, or null (stdio, development, or HTTP without a verifier)
  * @param inputResponses the MRTR answers of this {@code tools/call}: those its verified {@code requestState} carries
  *     from earlier rounds, then its own {@code inputResponses}; empty on a first round
+ * @param idempotencyKey the request's {@code Idempotency-Key} header over HTTP, or null
  */
 public record RequestMeta(String protocolVersion, JsonNode clientCapabilities, Set<String> extensions, String transport, String owner,
-        VerifiedIdentity identity, JsonNode progressToken, Consumer<ObjectNode> notifications, ObjectNode inputResponses) {
+        VerifiedIdentity identity, JsonNode progressToken, Consumer<ObjectNode> notifications, ObjectNode inputResponses,
+        String idempotencyKey) {
     public static final String TASKS = "io.modelcontextprotocol/tasks";
 
     public boolean declares(String extension) {
@@ -35,6 +37,6 @@ public record RequestMeta(String protocolVersion, JsonNode clientCapabilities, S
     }
 
     RequestMeta withInputResponses(ObjectNode responses) {
-        return new RequestMeta(protocolVersion, clientCapabilities, extensions, transport, owner, identity, progressToken, notifications, responses);
+        return new RequestMeta(protocolVersion, clientCapabilities, extensions, transport, owner, identity, progressToken, notifications, responses, idempotencyKey);
     }
 }

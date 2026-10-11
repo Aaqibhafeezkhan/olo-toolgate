@@ -29,6 +29,8 @@ private/
 # Local ToolGate state
 # -----------------------------------------------------------------------------
 .dev/
+.toolgate/
+toolgate.dev.json
 .data/
 data/
 runtime/

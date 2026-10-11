@@ -180,6 +180,11 @@ public final class Tasks implements AutoCloseable {
         }
     }
 
+    /** The task {@code taskId} if {@code owner} owns it and it still exists. */
+    public java.util.Optional<TaskRecord> find(String owner, String taskId) {
+        return store.get(taskId, owner);
+    }
+
     // ---- protocol side ----
 
     /** {@code tasks/get}. */

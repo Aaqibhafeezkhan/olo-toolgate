@@ -12,14 +12,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * RFC 8785 canonical JSON of a Jackson tree, for {@code argsHash}: keys by UTF-16 code units, ECMAScript numbers and
+ * RFC 8785 canonical JSON of a Jackson tree, for {@code argsHash} and business-key fingerprints: keys by UTF-16 code units, ECMAScript numbers and
  * strings, UTF-8. Integers keep every digit, so two different large integers never share a digest.
  */
-final class Jcs {
+public final class Jcs {
     private Jcs() {}
 
     /** The {@code sha256:} digest of the canonical form. */
-    static String digest(JsonNode value) {
+    public static String digest(JsonNode value) {
         StringBuilder out = new StringBuilder();
         write(out, value);
         try {
@@ -32,7 +32,8 @@ final class Jcs {
         }
     }
 
-    static String canonical(JsonNode value) {
+    /** The canonical form. */
+    public static String canonical(JsonNode value) {
         StringBuilder out = new StringBuilder();
         write(out, value);
         return out.toString();

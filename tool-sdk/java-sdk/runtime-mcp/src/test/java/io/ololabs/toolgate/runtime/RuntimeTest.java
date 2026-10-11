@@ -257,7 +257,9 @@ class RuntimeTest {
                     public java.util.Map<String, Object> cancel() { return java.util.Map.of(); }
                 }
                 """));
-        assertTrue(refused(keyed, env()).getMessage().contains("requires a business key"));
+        // A tool that needs reservations never runs unreserved: a store that cannot open refuses startup.
+        String notAFile = Files.createTempDirectory("toolgate-state").toString();
+        assertTrue(refused(keyed, env("TOOLGATE_STATE_DB", notAFile)).getMessage().contains("business-key store"));
 
         ClassLoader required = Fixtures.compile(Map.of("acme/r/Tools.java", """
                 package acme.r;
