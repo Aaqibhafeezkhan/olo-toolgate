@@ -1,0 +1,223 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "kill-merge",
+  "title": "Kill event merge and break-glass",
+  "sources": [
+    "plan.md §15",
+    "ADR 017",
+    "docs/control-plane/kill-switch.md"
+  ],
+  "cases": [
+    {
+      "id": "kill-merge/older-snapshot",
+      "title": "An older snapshot never removes a kill",
+      "requirements": [
+        "plan.md §15.1",
+        "§21 security"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "when": "A component holding kill K receives a push or page that predates K",
+      "then": [
+        "K stays effective",
+        "The component logs the stale delivery"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/replay-adds-only",
+      "title": "Replayed and reordered pushes can only add kills",
+      "requirements": [
+        "ADR 017 decision 2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "Pushes K1, R1 (supersedes K1), K2 are delivered as K2, K1, R1, K1, K2",
+      "then": [
+        "Final effective set is {K2}",
+        "No ordering of the same events yields a different set"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/terminate-beats-stop-new",
+      "title": "TERMINATE beats STOP_NEW for overlapping scopes",
+      "requirements": [
+        "ADR 017 decision 2"
+      ],
+      "level": "unit",
+      "targets": [
+        "tool-host",
+        "gateway"
+      ],
+      "when": "A STOP_NEW kill on a package and a TERMINATE kill on its publisher are both effective",
+      "then": [
+        "The package's running work is terminated"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/scope-matching",
+      "title": "Each scope kind matches what it names",
+      "requirements": [
+        "kill-switch.md scope matching"
+      ],
+      "level": "unit",
+      "targets": [
+        "control",
+        "tool-host",
+        "gateway"
+      ],
+      "when": "One kill per scope kind PACKAGE, PACKAGE_DIGEST, PUBLISHER, TOOL, POOL, RUNTIME_IMAGE and TENANT is evaluated against a matrix of invocations",
+      "then": [
+        "Each kill matches exactly the invocations in the expected table",
+        "A TENANT kill has no scope value"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/stale-full-fetch",
+      "title": "A full fetch older than the highest epoch seen is refused",
+      "requirements": [
+        "kill-switch.md",
+        "ADR 017 decision 2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A host that has seen epoch 42 receives a correctly signed full page at epoch 41",
+      "then": [
+        "The page is refused and the current set kept",
+        "A page at epoch 42 or later replaces the set"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/typ-separation",
+      "title": "Kill signatures do not cross-verify with other fleet documents",
+      "requirements": [
+        "ADR 017 decision 4"
+      ],
+      "level": "unit",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "when": "A fleet-signed policy bundle is presented as a kill event, and a kill event as a kill push",
+      "then": [
+        "Both are rejected on typ"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/epoch-bump",
+      "title": "A kill commits with an epoch bump and stops new work at once",
+      "requirements": [
+        "ADR 017 decision 3"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "A kill commits while a reserve for the killed package is in flight",
+      "then": [
+        "The reserve fails the epoch check",
+        "Matching stored work is cancelled in the same commit"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/breakglass-two-of-three",
+      "title": "Break-glass needs two distinct operator keys",
+      "requirements": [
+        "ADR 017 decision 6"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "Break-glass requests with one approval, two approvals from the same key, and two from distinct keys",
+      "then": [
+        "Only the last succeeds",
+        "The kill has issuer control-breakglass and is audited"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/breakglass-reuse-expiry",
+      "title": "Operator approvals are single-use and short-lived",
+      "requirements": [
+        "ADR 017 decision 6"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A valid approval set is replayed, and another is presented after notAfterUnixMs or with a window over 10 minutes",
+      "then": [
+        "All three are refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/breakglass-cannot-recover",
+      "title": "Break-glass cannot issue recoveries",
+      "requirements": [
+        "ADR 017 decision 6"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A break-glass request asks for a RECOVERY",
+      "then": [
+        "Schema validation fails",
+        "A direct insert of a control-breakglass RECOVERY fails the database check"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/breakglass-listener",
+      "title": "Break-glass needs the operator listener and no admin token",
+      "requirements": [
+        "ADR 017 decision 6"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "POST break-glass/kills is sent to the public listener with an admin token, and to the operator listener without one",
+      "then": [
+        "Public listener: not found",
+        "Operator listener with valid approvals: accepted"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill-merge/recovery-review",
+      "title": "A recovery needs two reviewers who are not the requester",
+      "requirements": [
+        "ADR 017 decision 7"
+      ],
+      "level": "component",
+      "targets": [
+        "control",
+        "quickstart"
+      ],
+      "when": "A recovery is approved by the requester, by one reviewer, and by two distinct reviewers",
+      "then": [
+        "Only the last applies",
+        "Cancelled work stays cancelled after recovery"
+      ],
+      "status": "authored"
+    }
+  ]
+}

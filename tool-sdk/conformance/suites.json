@@ -1,0 +1,87 @@
+{
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "source": "docs/sdk-plan/plan.md §21",
+  "suites": [
+    {
+      "id": "contract-descriptor",
+      "name": "Contract and descriptor",
+      "contents": "Schema validation, cross-SDK descriptor fixtures, package archive checks, the three SDK descriptor tests, route analysis, error model mapping, digest rules and library composition",
+      "runsWhen": "Every commit touching contracts, the packager or SDK generators",
+      "blocks": "That commit",
+      "runner": "packager, each SDK, tests/contracts",
+      "firstPassing": "M0, M1"
+    },
+    {
+      "id": "sdk-unit",
+      "name": "SDK unit",
+      "contents": "Per-language annotations, generators, runtime, context accessors and the local dev server",
+      "runsWhen": "Every commit to that SDK",
+      "blocks": "That SDK's merge",
+      "runner": "each SDK's own test tree",
+      "firstPassing": "M0"
+    },
+    {
+      "id": "protocol",
+      "name": "Protocol compatibility",
+      "contents": "Tool protocol stdin v1 and v2, MCP 2026-07-28 core and the legacy adapter per supported version, the Tasks extension, launcher and protocol-range handshakes",
+      "runsWhen": "Every Gateway, Tool Host, client or SDK release, and PRs touching protocol code",
+      "blocks": "The release; protocol PRs",
+      "runner": "gateway, tool-host, endpoint-client and SDK test trees",
+      "firstPassing": "M1, M2"
+    },
+    {
+      "id": "security",
+      "name": "Security and authorisation",
+      "contents": "Credentials and IdP templates, delegation, permits, catalog scope, broker channel, egress, service-profile deltas, business keys, effect class, kill merge, namespaces, transports, and every Tool Host threat-model case",
+      "runsWhen": "Every PR touching auth, Gateway policy, broker or egress, ledger or reservation, kill switch, or packaging trust",
+      "blocks": "Those PRs (always blocking)",
+      "runner": "tests/security and component test trees",
+      "firstPassing": "M1, M2"
+    },
+    {
+      "id": "integration",
+      "name": "Integration and failure injection",
+      "contents": "Duplicate execution, effect semantics and reconcile, break-glass propagation, rollout, delta corruption, OpenAPI import, every persistence transition and its failure case",
+      "runsWhen": "CI on main, plus every release candidate",
+      "blocks": "Release candidates",
+      "runner": "tests/integration",
+      "firstPassing": "M2, M3, M4"
+    },
+    {
+      "id": "mode-equivalence",
+      "name": "Mode equivalence",
+      "contents": "Every example and fixture in standalone and governed modes with the same inputs, plus startup refusals",
+      "runsWhen": "Every SDK or runtime change",
+      "blocks": "That change",
+      "runner": "tool-sdk/conformance runner per SDK",
+      "firstPassing": "M0, M2, M5"
+    },
+    {
+      "id": "official-sdk",
+      "name": "Official MCP SDK compatibility",
+      "contents": "modelcontextprotocol/conformance plus ToolGate MRTR, Tasks and identity cases against each pinned official SDK",
+      "runsWhen": "Every official SDK version change",
+      "blocks": "That change",
+      "runner": "tool-sdk/spec/sdk-compat probes, then each SDK",
+      "firstPassing": "M0"
+    },
+    {
+      "id": "chaos-load",
+      "name": "Multi-host chaos and load",
+      "contents": "Gateway and Tool Host partitions, store failover, kill propagation timing, warm-pool isolation under load, polling and socket scale",
+      "runsWhen": "Nightly and release validation",
+      "blocks": "Releases",
+      "runner": "tests/performance and a deployed cluster",
+      "firstPassing": "M4"
+    },
+    {
+      "id": "language-matrix",
+      "name": "Full language matrix",
+      "contents": "Every SDK across supported language versions, operating systems and Tool Host and client versions",
+      "runsWhen": "Each SDK release",
+      "blocks": "That SDK release",
+      "runner": "release pipelines",
+      "firstPassing": "M0, M5, M6"
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "contract-descriptor",
+  "area": "route-analysis",
+  "title": "Route analysis",
+  "sources": [
+    "tool-sdk/spec/authoring/http.md",
+    "plan.md §5.4",
+    "plan.md §21"
+  ],
+  "cases": [
+    {
+      "id": "route-analysis/literal-single-route",
+      "title": "A provable convenience call packages",
+      "requirements": [
+        "http.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "get(dest, \"/orders/{id}\") uses literals, matches exactly one route, and the route is in the tool's routes",
+      "then": [
+        "Packaging succeeds"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/concatenation",
+      "title": "A concatenated template fails packaging",
+      "requirements": [
+        "http.md §3",
+        "plan.md §21"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The template is built by string concatenation",
+      "then": [
+        "Packaging fails naming the call site"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/global-template",
+      "title": "A template from a global fails packaging",
+      "requirements": [
+        "http.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The template or destination comes from a global value",
+      "then": [
+        "Packaging fails"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/ambiguous",
+      "title": "A template matching two routes fails",
+      "requirements": [
+        "http.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The template matches two declared routes",
+      "then": [
+        "Packaging fails naming both routes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/unlisted",
+      "title": "A route not in the tool's routes fails",
+      "requirements": [
+        "http.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The template matches a package route the tool does not list",
+      "then": [
+        "Packaging fails"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/reflection",
+      "title": "Dynamic dispatch of HTTP calls fails",
+      "requirements": [
+        "http.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The call is made through reflection (Java, .NET), getattr (Python) or a computed property (TypeScript)",
+      "then": [
+        "Packaging fails"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/no-free-url-api",
+      "title": "No free-form URL API exists",
+      "requirements": [
+        "http.md §3",
+        "plan.md §5.4"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The public API surface is scanned for url(), base URL and host parameters",
+      "then": [
+        "None exist"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/path-variable-regex",
+      "title": "Every path variable needs a pattern and never matches /",
+      "requirements": [
+        "http.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "Routes declare {id}, {id:.*}, {id:.+} and {id:[0-9]+}, and a variable value contains /",
+      "then": [
+        "Only {id:[0-9]+} packages",
+        "A value with / is refused at runtime"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/forbidden-headers",
+      "title": "Forbidden headers are refused",
+      "requirements": [
+        "http.md §2"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Tool code sets Authorization, Proxy-Authorization, Cookie, Host, X-Forwarded-For and the route auth header",
+      "then": [
+        "Each is refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/timeout-shorten-only",
+      "title": "A call timeout can only shorten the route timeout",
+      "requirements": [
+        "http.md §2"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A call sets a timeout longer than the route's",
+      "then": [
+        "The effective timeout is never longer than the route timeout"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "route-analysis/transport-unavailable",
+      "title": "Unavailable transports fail at packaging",
+      "requirements": [
+        "plan.md §11.9"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager"
+      ],
+      "when": "A tool declares UDP, a raw database driver destination and a gRPC route",
+      "then": [
+        "Packaging fails saying each is unavailable in release 1"
+      ],
+      "status": "authored"
+    }
+  ]
+}

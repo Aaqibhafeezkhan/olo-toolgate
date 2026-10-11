@@ -1,0 +1,562 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "contract-descriptor",
+  "area": "packages",
+  "title": "Package archive verification",
+  "sources": [
+    "plan.md §7.2",
+    "plan.md §7.6",
+    "tool-sdk/conformance/fixtures/packages/README.md"
+  ],
+  "cases": [
+    {
+      "id": "packages/valid-accepted",
+      "title": "The baseline package passes at every hop",
+      "requirements": [
+        "plan.md §7.6"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The valid package is verified by the CLI, Control upload, Tool Host before mount and client before mount",
+      "then": [
+        "Accepted at every hop with the digest in expected.json"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/valid.tgpkg",
+        "tool-sdk/conformance/fixtures/packages/expected.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/zip-slip",
+      "title": "A package with an entry named ../evil is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The zip-slip package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/zip-slip.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/absolute-path",
+      "title": "A package with an entry named /etc/evil is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The absolute-path package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/absolute-path.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/backslash",
+      "title": "A package with an entry named tools\\\\a.json is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The backslash package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/backslash.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/drive-letter",
+      "title": "A package with an entry named C:/evil is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The drive-letter package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/drive-letter.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/duplicate-entry",
+      "title": "A package with two entries with the same name is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The duplicate-entry package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/duplicate-entry.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/case-collision",
+      "title": "A package with tools/A.json and tools/a.json is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The case-collision package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/case-collision.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/nfc-collision",
+      "title": "A package with NFC and NFD spellings of one name is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The nfc-collision package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/nfc-collision.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/symlink",
+      "title": "A package with a symlink entry is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The symlink package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/symlink.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/encrypted-entry",
+      "title": "A package with an entry with the encryption flag is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The encrypted-entry package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/encrypted-entry.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/zip-bomb-ratio",
+      "title": "A package with an entry over the compression ratio ceiling is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The zip-bomb-ratio package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/zip-bomb-ratio.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/data-outside-central-directory",
+      "title": "A package with bytes before the first local header is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The data-outside-central-directory package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/data-outside-central-directory.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/unlisted-file",
+      "title": "A package with a file absent from CHECKSUMS is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The unlisted-file package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/unlisted-file.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/missing-listed-file",
+      "title": "A package with a CHECKSUMS line without a file is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The missing-listed-file package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/missing-listed-file.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/checksums-crlf",
+      "title": "A package with CRLF line endings in CHECKSUMS is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The checksums-crlf package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/checksums-crlf.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/checksums-unsorted",
+      "title": "A package with CHECKSUMS not sorted bytewise is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The checksums-unsorted package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/checksums-unsorted.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/checksums-uppercase-hex",
+      "title": "A package with uppercase hex in CHECKSUMS is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The checksums-uppercase-hex package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/checksums-uppercase-hex.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/checksums-comment",
+      "title": "A package with a comment line in CHECKSUMS is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The checksums-comment package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/checksums-comment.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/checksums-blank-line",
+      "title": "A package with a blank line in CHECKSUMS is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The checksums-blank-line package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/checksums-blank-line.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/manifest-digest-mismatch",
+      "title": "A package with a manifest artifact digest that differs from CHECKSUMS is rejected",
+      "requirements": [
+        "plan.md §7.6",
+        "plan.md §21"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control",
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The manifest-digest-mismatch package is verified at every hop",
+      "then": [
+        "Rejected at every hop, before anything is extracted or mounted",
+        "Nothing is repaired automatically"
+      ],
+      "fixtures": [
+        "tool-sdk/conformance/fixtures/packages/manifest-digest-mismatch.tgpkg"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/content-addressed-mount",
+      "title": "Sandboxes mount only from the content-addressed store",
+      "requirements": [
+        "plan.md §7.6"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "when": "The package file is replaced on disk after verification and before mount",
+      "then": [
+        "The mounted bytes are the verified ones"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/image-signature",
+      "title": "Base images must be signed by a trusted image signer",
+      "requirements": [
+        "plan.md §7.6"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "when": "A pool prepares an image unsigned, signed by an untrusted signer, and signed by a trusted signer",
+      "then": [
+        "Only the last is used"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "packages/signature-not-a-substitute",
+      "title": "A valid signature never replaces digest checks",
+      "requirements": [
+        "plan.md §7.6"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A correctly signed package has an unlisted file",
+      "then": [
+        "Rejected"
+      ],
+      "status": "authored"
+    }
+  ]
+}

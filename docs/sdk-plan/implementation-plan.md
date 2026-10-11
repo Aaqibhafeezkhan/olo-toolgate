@@ -79,6 +79,8 @@ Every finding, with file and line references, is in plan.md §2.1.
 
 The cases for every suite in plan.md §21 are written under `tool-sdk/conformance/` and `tests/`, not yet passing. They must pass before any milestone exits.
 
+**Format:** declarative JSON case files with a schema and a suite index ([tool-sdk/conformance/README.md](../../tool-sdk/conformance/README.md)). Each milestone's runners read them, and `tests/contracts/test_conformance_cases.py` checks that every threat, transition and persistence row has a case.
+
 ## 4. Coding milestones
 
 Once D0 to D2 have passed, M0 and M1 run in parallel. M2 needs M1, and D3 must also pass before M2 can exit.

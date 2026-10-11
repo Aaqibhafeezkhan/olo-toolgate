@@ -1,0 +1,114 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "service-profile-delta",
+  "title": "Service-profile delta classifier",
+  "sources": [
+    "plan.md §8.3"
+  ],
+  "cases": [
+    {
+      "id": "service-profile-delta/widening",
+      "title": "Each widening needs re-approval",
+      "requirements": [
+        "plan.md §8.3",
+        "§21 security"
+      ],
+      "level": "unit",
+      "targets": [
+        "control"
+      ],
+      "when": "Profile pairs: new destination, new route, /orders/{id:[0-9]+} to /orders/{path:.*}, new query name, new header name, larger limits, streaming on, different credential, TLS pin removed, redirects allowed, longer timeout, new method, new content type",
+      "then": [
+        "Every pair classifies as WIDENING",
+        "Enable is blocked until re-approval"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "service-profile-delta/narrowing",
+      "title": "Narrowing is shown but needs no re-approval",
+      "requirements": [
+        "plan.md §8.3"
+      ],
+      "level": "unit",
+      "targets": [
+        "control"
+      ],
+      "when": "The reverse of each widening pair",
+      "then": [
+        "Every pair classifies as NARROWING and is shown in review"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "service-profile-delta/unclassifiable",
+      "title": "A change the classifier cannot classify counts as widening",
+      "requirements": [
+        "plan.md §8.3"
+      ],
+      "level": "unit",
+      "targets": [
+        "control"
+      ],
+      "when": "A pattern change the classifier cannot compare (two unrelated regexes)",
+      "then": [
+        "Classified as WIDENING"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "service-profile-delta/always-security",
+      "title": "Some changes are always a security delta",
+      "requirements": [
+        "plan.md §8.3"
+      ],
+      "level": "unit",
+      "targets": [
+        "control"
+      ],
+      "when": "Changes: CREDENTIALS_IN_SANDBOX added, UNKNOWN to IDEMPOTENT, businessKeyNamespace changed, a host setting changed",
+      "then": [
+        "Each is a security delta"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "service-profile-delta/permit-digest",
+      "title": "The broker loads the profile by the permit digest",
+      "requirements": [
+        "plan.md §8.3",
+        "ADR 013 decision 6"
+      ],
+      "level": "integration",
+      "targets": [
+        "broker",
+        "control"
+      ],
+      "when": "A profile is widened and approved while an invocation holding the old digest runs",
+      "then": [
+        "The running invocation uses the old profile",
+        "New permits carry the new digest"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "service-profile-delta/library-not-widened",
+      "title": "Library tools cannot be widened by the host",
+      "requirements": [
+        "plan.md §8.3",
+        "plan.md §7.7"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control"
+      ],
+      "when": "A host package re-declares a library route with a broader pattern",
+      "then": [
+        "Packaging or enable fails"
+      ],
+      "status": "authored"
+    }
+  ]
+}

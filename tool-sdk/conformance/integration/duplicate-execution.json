@@ -1,0 +1,171 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "duplicate-execution",
+  "title": "Duplicate execution and effect semantics",
+  "sources": [
+    "plan.md §11.4",
+    "plan.md §11.7",
+    "docs/security/threat-models/tool-host.md"
+  ],
+  "cases": [
+    {
+      "id": "ledger/ambiguous-dispatch",
+      "title": "An ambiguous dispatch is never retried elsewhere",
+      "requirements": [
+        "plan.md §11.4",
+        "T-AD-4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The connection resets after DISPATCH is sent for a NON_IDEMPOTENT tool",
+      "then": [
+        "The Gateway queries Control; if claimed it collects the outcome; if unclaimed after exp it retries with a new permit"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "ledger/crash-after-admitted",
+      "title": "A host crash after ADMITTED ends OUTCOME_UNKNOWN",
+      "requirements": [
+        "plan.md §11.4",
+        "T-AD-4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The host process is killed after ADMITTED for a ledger tool, and for an idempotent tool",
+      "then": [
+        "Ledger: lease expiry, OUTCOME_UNKNOWN, no retry",
+        "Idempotent: retried"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "duplicate/gateway-crash",
+      "title": "A Gateway crash does not duplicate execution",
+      "requirements": [
+        "plan.md §21 integration"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The Gateway crashes after dispatch; the client retries on another replica with the same key",
+      "then": [
+        "One execution; the retry returns EXISTING or the task"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "duplicate/client-reissue",
+      "title": "A client re-issue matches the existing invocation",
+      "requirements": [
+        "plan.md §11.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "A client re-sends with a new JSON-RPC id and the same idempotency key, and within the dedupe window without a key",
+      "then": [
+        "No second invocation for non-idempotent tools"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "duplicate/refused-retry",
+      "title": "REFUSED is retried on another host",
+      "requirements": [
+        "plan.md §11.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "tool-host"
+      ],
+      "when": "A host refuses BUSY",
+      "then": [
+        "Retry elsewhere with a new permit for both classes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effects/reconcile",
+      "title": "Reconcile answers update OUTCOME_UNKNOWN",
+      "requirements": [
+        "plan.md §11.7 reconciliation",
+        "execution.md §5"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "tool-host"
+      ],
+      "when": "A tool with @Reconcile ends OUTCOME_UNKNOWN; reconcile answers APPLIED, NOT_APPLIED and UNKNOWN in three runs",
+      "then": [
+        "Outcome updated with evidence; \"effectively once\" only with commit evidence",
+        "NOT_APPLIED re-execution only on opt-in, same key, new invocationId linked in audit"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effects/no-reconcile-no-reexecute",
+      "title": "Tools without reconcile are never re-executed",
+      "requirements": [
+        "plan.md §11.7"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "A tool without the hook ends OUTCOME_UNKNOWN",
+      "then": [
+        "No automatic re-execution"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effects/broker-evidence",
+      "title": "The broker records evidence for each request",
+      "requirements": [
+        "plan.md §11.7 rules"
+      ],
+      "level": "integration",
+      "targets": [
+        "broker"
+      ],
+      "when": "A ledger tool sends a request that times out",
+      "then": [
+        "Route, status and upstream request id are recorded and attached to OUTCOME_UNKNOWN"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effects/retry-library-warning",
+      "title": "The packager warns about retry libraries",
+      "requirements": [
+        "plan.md §11.7 rules"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager"
+      ],
+      "when": "A NON_IDEMPOTENT tool configures a known retry library",
+      "then": [
+        "A packaging warning"
+      ],
+      "status": "authored"
+    }
+  ]
+}

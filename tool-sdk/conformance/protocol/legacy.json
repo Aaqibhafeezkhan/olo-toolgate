@@ -1,0 +1,156 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "protocol",
+  "area": "legacy",
+  "title": "Legacy MCP adapter",
+  "sources": [
+    "plan.md §10.2",
+    "ADR 018"
+  ],
+  "cases": [
+    {
+      "id": "legacy/2025-11-25-flow",
+      "title": "The 2025-11-25 flow works through the adapter",
+      "requirements": [
+        "plan.md §10.2"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A 2025-11-25 client runs initialize, notifications/initialized, ping, tools/list, tools/call, the GET SSE stream and receives list_changed",
+      "then": [
+        "Each works on the stateless core"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "legacy/2025-06-18-flow",
+      "title": "The 2025-06-18 flow works through the adapter",
+      "requirements": [
+        "plan.md §10.2"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A 2025-06-18 client runs initialize, notifications/initialized, ping, tools/list, tools/call, the GET SSE stream and receives list_changed",
+      "then": [
+        "Each works on the stateless core"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "legacy/other-versions",
+      "title": "Other versions are refused",
+      "requirements": [
+        "plan.md §10.2"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "initialize with 2025-03-26",
+      "then": [
+        "UnsupportedProtocolVersion"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "legacy/reauth-every-request",
+      "title": "The adapter re-authenticates every request",
+      "requirements": [
+        "plan.md §10.2"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A session is initialized, then the token is revoked, then the same Mcp-Session-Id calls a tool",
+      "then": [
+        "401; identity is never pinned to the session"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "legacy/scope-not-pinned",
+      "title": "Scope is never pinned to a session",
+      "requirements": [
+        "plan.md §10.2"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "The caller loses the tool grant mid-session",
+      "then": [
+        "The next call is refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "legacy/version-header",
+      "title": "MCP-Protocol-Version is honoured only on the legacy path",
+      "requirements": [
+        "gateway-v1.proposed.yaml"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A 2026-07-28 request carries MCP-Protocol-Version 2025-06-18",
+      "then": [
+        "The _meta version decides"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "legacy/approval-link",
+      "title": "A legacy client gets an approval link for ASK and nothing runs",
+      "requirements": [
+        "plan.md §12.5"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A legacy client calls an ASK tool",
+      "then": [
+        "An error with an approval link",
+        "Nothing executes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "legacy/stdio-era-lock",
+      "title": "A stdio connection locks to the first version",
+      "requirements": [
+        "plan.md §5.10",
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 8"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A 2026-07-28 message is followed by initialize on the same stdio connection, and the reverse",
+      "then": [
+        "The second era is refused (-32022, the TS and Python behaviour, applied everywhere)"
+      ],
+      "status": "authored"
+    }
+  ]
+}

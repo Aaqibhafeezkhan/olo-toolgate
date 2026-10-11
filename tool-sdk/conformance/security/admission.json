@@ -1,0 +1,229 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "admission",
+  "title": "Permit admission at the Tool Host",
+  "sources": [
+    "docs/security/threat-models/tool-host.md §4.1",
+    "plan.md §11.2–§11.4",
+    "ADR 013"
+  ],
+  "cases": [
+    {
+      "id": "admission/forged-permit",
+      "title": "A permit with an invalid signature is refused",
+      "requirements": [
+        "T-AD-1",
+        "ADR 013 decision 2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "given": [
+        "A Tool Host pinned to Control effect key kid k1",
+        "A permit signed by an unrelated RSA key that claims kid k1"
+      ],
+      "when": "The Gateway dispatches a permit whose signature does not verify against the pinned Control effect keys",
+      "then": [
+        "The host answers REFUSED with reason PERMIT_INVALID",
+        "No sandbox starts and no permits/consume call is made",
+        "The refusal is audited with the permit jti"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/unknown-kid",
+      "title": "A permit signed with a kid outside the pinned set is refused",
+      "requirements": [
+        "T-AD-1",
+        "ADR 013 decision 2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The Gateway dispatches a correctly signed permit whose kid is neither the current nor the previous effect key",
+      "then": [
+        "REFUSED with PERMIT_INVALID; nothing runs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/wrong-typ",
+      "title": "A v1 enterprise permit is not accepted as a v2 invocation permit",
+      "requirements": [
+        "ADR 013 decision 2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The Gateway dispatches a permit signed by the effect key with typ toolgate-effect-permit+jws",
+      "then": [
+        "REFUSED with PERMIT_INVALID: only toolgate-invocation-permit+jws is accepted for v2 dispatch"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/wrong-aud",
+      "title": "A permit addressed to another host is refused",
+      "requirements": [
+        "T-AD-1",
+        "plan.md §11.2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "Host B receives a valid permit whose aud is host A",
+      "then": [
+        "Host B answers REFUSED with PERMIT_INVALID",
+        "Control would also refuse consumption because the caller SAN host id differs from aud"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/expired-window",
+      "title": "A permit past exp is refused even if the nonce is unused",
+      "requirements": [
+        "plan.md §11.4",
+        "invocation-state-v2.md T5"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "A valid permit arrives one millisecond after exp",
+      "then": [
+        "The host answers REFUSED with PERMIT_EXPIRED",
+        "permits/consume called directly with the same permit returns 409 and leaves the invocation RESERVED"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/window-cap",
+      "title": "Control never mints a permit with exp - iat above 10 s",
+      "requirements": [
+        "ADR 013 decision 2"
+      ],
+      "level": "unit",
+      "targets": [
+        "control"
+      ],
+      "when": "Permits are minted for deadlines of 1 s, 60 s and 15 min",
+      "then": [
+        "Every permit has exp - iat <= 10000 ms",
+        "deadlineUnixMs carries the execution deadline separately"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/replay-same-host",
+      "title": "The same permit dispatched twice to one host runs once",
+      "requirements": [
+        "T-AD-2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The Gateway sends the same DISPATCH twice to the same host",
+      "then": [
+        "The second DISPATCH is REFUSED by the per-host jti cache",
+        "Only one permits/consume call reaches Control"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/replay-other-host",
+      "title": "A permit replayed to a second host never runs there",
+      "requirements": [
+        "T-AD-2"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "A captured permit for host A is replayed to host B, and separately to host A after A consumed it",
+      "then": [
+        "Host B refuses on aud",
+        "Host A refuses on jti; Control refuses the already consumed nonce with 409"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/args-swap",
+      "title": "Arguments that do not match the permit digest are refused",
+      "requirements": [
+        "T-AD-3"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The Gateway sends a valid permit with arguments whose JCS digest differs from argumentsDigest",
+      "then": [
+        "REFUSED with PERMIT_INVALID before consumption; nothing runs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/digest-swap",
+      "title": "Any package, artifact, runtime, globals, profile or binding digest mismatch is refused",
+      "requirements": [
+        "T-AD-3",
+        "plan.md §11.2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "For each digest claim in PermitTarget, the host is given content whose digest differs from the claim",
+      "then": [
+        "Every variant is REFUSED (DIGEST_NOT_PRESENT when the content is absent, PERMIT_INVALID when it differs)",
+        "No variant reaches permits/consume"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/stale-epoch",
+      "title": "A permit minted before an authorization epoch bump is refused at consumption",
+      "requirements": [
+        "plan.md §15.2",
+        "invocation-state-v2.md §5"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "tool-host"
+      ],
+      "when": "A grant is revoked (epoch bump) between reserve and permits/consume",
+      "then": [
+        "permits/consume returns 403 after re-evaluation",
+        "The invocation does not reach EXECUTING"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "admission/gateway-has-no-key",
+      "title": "The Gateway process holds no permit, requestState or MAC key",
+      "requirements": [
+        "ADR 013 decisions 2 and 9",
+        "plan.md §11.2"
+      ],
+      "level": "system",
+      "targets": [
+        "gateway"
+      ],
+      "when": "The Gateway configuration, environment, mounted secrets and memory-resident keystores are inspected in a deployed cluster",
+      "then": [
+        "No private or symmetric key material is present",
+        "Gateway start does not fail for lack of one"
+      ],
+      "status": "authored"
+    }
+  ]
+}

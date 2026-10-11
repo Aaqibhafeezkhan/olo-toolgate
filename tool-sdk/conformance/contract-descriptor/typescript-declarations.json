@@ -1,0 +1,78 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "contract-descriptor",
+  "area": "typescript-declarations",
+  "title": "TypeScript declaration analysis",
+  "sources": [
+    "tool-sdk/spec/authoring/typescript.md",
+    "tool-sdk/spec/descriptor/README.md §5"
+  ],
+  "cases": [
+    {
+      "id": "typescript-declarations/module-constants",
+      "title": "Declarations must be module-level object literals",
+      "requirements": [
+        "typescript.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "typescript"
+      ],
+      "when": "Declarations are built in a loop, in a conditional, from a spread of a computed object, and as exported constants",
+      "then": [
+        "Only the exported constants package"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "typescript-declarations/describe-required",
+      "title": "Every Zod property calls describe()",
+      "requirements": [
+        "typescript.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "typescript"
+      ],
+      "when": "A schema property lacks .describe()",
+      "then": [
+        "Packaging fails naming the property"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "typescript-declarations/zod-disallowed",
+      "title": "Disallowed Zod constructs fail",
+      "requirements": [
+        "descriptor/README.md §5",
+        "typescript.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "typescript"
+      ],
+      "when": "Schemas use unions, intersections, nullable, transform, refine, preprocess, lazy, any, unknown, bigint and z.date()",
+      "then": [
+        "Each fails packaging with the construct named",
+        "Every allowed construct in the §5 table converts to the listed JSON Schema"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "typescript-declarations/zod-pinned",
+      "title": "Zod 3.x is converted by the SDK converter",
+      "requirements": [
+        "typescript.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "typescript"
+      ],
+      "when": "A project uses a Zod major other than 3",
+      "then": [
+        "Packaging fails"
+      ],
+      "status": "authored"
+    }
+  ]
+}

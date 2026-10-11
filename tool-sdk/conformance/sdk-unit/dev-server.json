@@ -1,0 +1,178 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "sdk-unit",
+  "area": "dev-server",
+  "title": "Local development server and harness",
+  "sources": [
+    "plan.md §5.5",
+    "tool-sdk/spec/runtime-modes.md §5"
+  ],
+  "cases": [
+    {
+      "id": "dev-server/serves-mcp",
+      "title": "toolgate dev serves the artifact over stdio and Streamable HTTP",
+      "requirements": [
+        "plan.md §5.5"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "toolgate dev (or the build-tool task) starts and a client connects with 2026-07-28 and then 2025-11-25",
+      "then": [
+        "Both versions list and call the tools"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "dev-server/digests",
+      "title": "toolgate dev --digests reports descriptor digests",
+      "requirements": [
+        "runtime-modes.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "toolgate dev --digests runs for the vector tools",
+      "then": [
+        "Digests equal the packaged descriptor digests"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "dev-server/dev-json-git-ignored",
+      "title": "toolgate check fails when toolgate.dev.json is tracked",
+      "requirements": [
+        "runtime-modes.md §5"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "toolgate.dev.json is committed to git, then ignored",
+      "then": [
+        "Tracked: check fails",
+        "Ignored: check passes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "dev-server/dev-json-validated",
+      "title": "toolgate.dev.json values are validated against declarations",
+      "requirements": [
+        "runtime-modes.md §5"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "dev.json has an unknown global, a wrongly typed global and an undeclared destination",
+      "then": [
+        "Startup fails naming each"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "dev-server/claims-only-in-development",
+      "title": "dev.json claims are read only in development mode",
+      "requirements": [
+        "runtime-modes.md §4"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "dev.json has claims and TOOLGATE_MODE is production, then development",
+      "then": [
+        "production: startup warning, claims ignored",
+        "development: fixture claims used and results marked as fixture"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "dev-server/examples-as-self-tests",
+      "title": "Examples run in check and need no network",
+      "requirements": [
+        "execution.md §7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "toolgate check runs examples, one of which calls a route without a recorded exchange",
+      "then": [
+        "Examples with recorded exchanges pass",
+        "The other fails for missing a recorded mock exchange"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "dev-server/tool-harness",
+      "title": "ToolHarness runs tools with mock egress",
+      "requirements": [
+        "plan.md §5.5"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A test uses ToolHarness with a recorded exchange",
+      "then": [
+        "The tool runs in test mode and route calls are recorded by route id and variables"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "dev-server/build-plugins",
+      "title": "Build integrations expose dev, package and check",
+      "requirements": [
+        "java.md",
+        "python.md",
+        "typescript.md",
+        "dotnet.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The language build integration is invoked: Gradle and Maven, toolgate CLI, package.json config, MSBuild",
+      "then": [
+        "Each has dev, package and check entry points"
+      ],
+      "status": "authored"
+    }
+  ]
+}

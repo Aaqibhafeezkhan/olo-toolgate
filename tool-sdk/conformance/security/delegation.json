@@ -1,0 +1,63 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "delegation",
+  "title": "Delegation double approval",
+  "sources": [
+    "plan.md §9.3"
+  ],
+  "cases": [
+    {
+      "id": "delegation/both-approvals-required",
+      "title": "Delegation needs the issuer and Control to agree",
+      "requirements": [
+        "plan.md §9.3",
+        "§21 security"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "Four requests: issuer-delegated token with a DELEGATED binding covering the user; issuer-delegated token with a SERVICE binding; DELEGATED binding not covering the user; a client-credentials token claiming a user in arguments",
+      "then": [
+        "Only the first is accepted as DELEGATED",
+        "The others are refused with the same error as an unknown identity"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "delegation/rule-covers-user",
+      "title": "A delegation rule or delegatedUserId covers the user",
+      "requirements": [
+        "plan.md §9.3"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A DELEGATED binding is configured with delegatedUserId, then with a rule matching a group of users",
+      "then": [
+        "Users covered are accepted; others are refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "delegation/service-no-user",
+      "title": "SERVICE mode has no user",
+      "requirements": [
+        "plan.md §9.3"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A SERVICE token carries a sub that looks like a user",
+      "then": [
+        "RequestContext has mode SERVICE and no userId",
+        "jwt().getUserName() is empty in the tool"
+      ],
+      "status": "authored"
+    }
+  ]
+}

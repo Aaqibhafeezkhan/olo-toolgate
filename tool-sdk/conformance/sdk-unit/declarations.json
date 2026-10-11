@@ -1,0 +1,304 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "sdk-unit",
+  "area": "declarations",
+  "title": "Declarations, identifiers and defaults",
+  "sources": [
+    "tool-sdk/spec/authoring/README.md",
+    "java.md",
+    "python.md",
+    "typescript.md",
+    "dotnet.md"
+  ],
+  "cases": [
+    {
+      "id": "declarations/identifier-grammar",
+      "title": "Identifiers follow the grammars",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Package ids, tool local names, variable names, route, destination and auth ids, and error codes are declared at and beyond each grammar boundary, plus toolIds of 128 and 129 characters",
+      "then": [
+        "Valid values package; invalid ones fail at compile time or packaging, naming the identifier"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/reserved-prefixes",
+      "title": "Reserved prefixes are rejected",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A package id or tool name starts with toolgate., hotfolder. or builtin.",
+      "then": [
+        "Packaging fails"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/variable-name-unique",
+      "title": "Variable names are unique per tool, case-insensitively",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool declares a param orderId and a global OrderID",
+      "then": [
+        "Packaging fails naming both"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/tool-defaults",
+      "title": "Tool attributes take the specified defaults",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A server tool with routes and a client tool are declared with only id and description",
+      "then": [
+        "effect UNKNOWN, destructive false, async false, stateless false",
+        "openWorld true for the server tool, false for the client tool",
+        "maxDurationMs 30000, maxConcurrency unlimited, businessKeyNamespace AGENT",
+        "client tiers [OCI_SANDBOX]"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/requires-business-key-default",
+      "title": "NON_IDEMPOTENT and destructive implies requiresBusinessKey",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool is declared NON_IDEMPOTENT and destructive without requiresBusinessKey",
+      "then": [
+        "The descriptor has requiresBusinessKey true"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/async-duration",
+      "title": "Async tools default to 900000 ms",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "An async tool without maxDurationMs",
+      "then": [
+        "maxDurationMs 900000"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/title-text-alias",
+      "title": "title and text are aliases and exclusive",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool sets text, then both title and text",
+      "then": [
+        "text alone sets title",
+        "Both together fail"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/client-tool-restrictions",
+      "title": "Client tools cannot declare egress or secrets",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A client tool declares routes, tcp, a secret and HttpAuth in turn",
+      "then": [
+        "Each fails at compile time where the language can, otherwise at packaging"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/no-override",
+      "title": "A tool-level declaration never overrides a scope-level one",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool declares a global with the same name as a package-level global",
+      "then": [
+        "Packaging fails"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/typed-grouped-identical",
+      "title": "Typed and grouped forms produce byte-identical descriptors",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §4",
+        "plan.md §5.2"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The same tool is written in the typed form and the grouped ToolVariables form",
+      "then": [
+        "Canonical descriptor bytes are identical"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/closed-objects",
+      "title": "Objects are closed unless explicitly maps",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §4"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Inputs use a record or class, and an explicit map",
+      "then": [
+        "The record is additionalProperties false",
+        "The map is additionalProperties with the value schema"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/long-range",
+      "title": "LONG outside the safe-integer range is rejected",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A LONG argument of 2^53 is sent",
+      "then": [
+        "INVALID_ARGUMENT"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/examples-limit",
+      "title": "At most 8 examples per tool",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §6"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool declares 9 examples",
+      "then": [
+        "Packaging fails"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "declarations/language-idioms",
+      "title": "Each language exposes the documented attribute names",
+      "requirements": [
+        "java.md",
+        "python.md",
+        "typescript.md",
+        "dotnet.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The language reference example from its authoring page is compiled and packaged",
+      "then": [
+        "It packages, and the descriptor uses upper-snake enum values whatever the language spelling"
+      ],
+      "status": "authored"
+    }
+  ]
+}

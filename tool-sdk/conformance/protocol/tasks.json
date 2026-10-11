@@ -1,0 +1,263 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "protocol",
+  "area": "tasks",
+  "title": "Tasks extension",
+  "sources": [
+    "plan.md §12.4",
+    "plan.md §12.5",
+    "plan.md §12.6",
+    "ADR 016"
+  ],
+  "cases": [
+    {
+      "id": "tasks/capability-per-request",
+      "title": "A task is returned only to a request that declared Tasks",
+      "requirements": [
+        "plan.md §12.4",
+        "§21 protocol"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The same client calls an async tool with and without the extension in that request's _meta",
+      "then": [
+        "With: CreateTaskResult",
+        "Without: the tool is hidden from tools/list and a direct call gets -32021"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/durable-before-response",
+      "title": "The task exists before CreateTaskResult is sent",
+      "requirements": [
+        "plan.md §12.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "The Gateway crashes right after the client receives CreateTaskResult",
+      "then": [
+        "tasks/get on another replica returns the task"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/foreign-identity",
+      "title": "Another identity gets not-found",
+      "requirements": [
+        "plan.md §12.6",
+        "§21 protocol"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Another user calls tasks/get, tasks/update and tasks/cancel on a task id",
+      "then": [
+        "Not found, never forbidden, identical to an unknown id"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/ttl-purge",
+      "title": "Expired tasks are purged",
+      "requirements": [
+        "plan.md §12.6"
+      ],
+      "level": "component",
+      "targets": [
+        "control",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A task passes its ttlMs",
+      "then": [
+        "tasks/get returns not found and the payload is tombstoned"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/state-mapping",
+      "title": "Invocation states map to task states",
+      "requirements": [
+        "invocation-state-v2.md §2",
+        "plan.md §12.4"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "An invocation passes through every state",
+      "then": [
+        "tasks/get shows the mapped task status for each"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/cancel",
+      "title": "tasks/cancel requests cancellation",
+      "requirements": [
+        "plan.md §12.4"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A client cancels a running task",
+      "then": [
+        "Status cancelled after the tool stops or the grace ends"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/cancel-if-abandoned",
+      "title": "cancelIfAbandoned cancels after 3 missed polls",
+      "requirements": [
+        "execution.md §6"
+      ],
+      "level": "component",
+      "targets": [
+        "control",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "No poll arrives for 3 × pollIntervalMs, with and without cancelIfAbandoned",
+      "then": [
+        "With: cancellation requested",
+        "Without: the task continues"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/input-required",
+      "title": "requestInput maps to input_required and tasks/update",
+      "requirements": [
+        "execution.md §6"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool requests input in a task",
+      "then": [
+        "Status input_required; tasks/update resumes it"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/status-push",
+      "title": "Status changes are pushed over subscriptions/listen",
+      "requirements": [
+        "tool-sdk/spec/protocol-layer.md A2",
+        "results.md gap 3"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A client listens and a task changes state",
+      "then": [
+        "notifications/tasks arrives for each change"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/bounded-sync",
+      "title": "Bounded sync mode runs an async tool only if it fits",
+      "requirements": [
+        "plan.md §12.5",
+        "protocol-layer.md §2"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Bounded sync mode is on; a client without Tasks calls async tools with max duration 10 s and 120 s",
+      "then": [
+        "10 s: runs synchronously within the sync deadline",
+        "120 s: refused with -32021"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/mrtr-ask",
+      "title": "ASK with an MRTR client starts only after approval",
+      "requirements": [
+        "plan.md §12.5",
+        "ADR 013 decision 9"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "An MRTR client calls an ASK tool, approves at the URL and retries with requestState",
+      "then": [
+        "InputRequiredResult with a URL elicitation",
+        "Execution starts only on the retry"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "tasks/offline-client-tool",
+      "title": "An offline client tool returns PICKUP_TIMEOUT before running",
+      "requirements": [
+        "plan.md §12.5"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "endpoint-client"
+      ],
+      "when": "The target device is offline",
+      "then": [
+        "PICKUP_TIMEOUT; nothing runs"
+      ],
+      "status": "authored"
+    }
+  ]
+}

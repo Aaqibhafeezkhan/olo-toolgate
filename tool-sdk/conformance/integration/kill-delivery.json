@@ -1,0 +1,160 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "kill-delivery",
+  "title": "Kill delivery and break-glass propagation",
+  "sources": [
+    "plan.md §15",
+    "ADR 017"
+  ],
+  "cases": [
+    {
+      "id": "kill/terminate-running",
+      "title": "TERMINATE stops running work everywhere",
+      "requirements": [
+        "plan.md §15.5",
+        "T-AD-5"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host",
+        "broker",
+        "endpoint-client"
+      ],
+      "when": "A TERMINATE kill commits while sandboxes run on hosts and clients",
+      "then": [
+        "Sandboxes killed; fencing tokens invalid; broker drops connections",
+        "Invocations end CANCELLED, or OUTCOME_UNKNOWN when an effect may have been sent",
+        "Queued tasks CANCELLED, running tasks CANCEL_REQUESTED"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill/stop-new",
+      "title": "STOP_NEW hides and refuses new work",
+      "requirements": [
+        "plan.md §15.5"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "A STOP_NEW kill commits",
+      "then": [
+        "Hidden from catalogs; new calls and admissions refused; running work continues"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill/partitioned-host",
+      "title": "A partitioned host cannot start new work",
+      "requirements": [
+        "plan.md §15.5",
+        "T-AD-5"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "A host is partitioned from Control when a kill commits, with and without selfTerminateOnControlLoss",
+      "then": [
+        "No new admission, redemption or report",
+        "Without the setting: running work continues to its deadline",
+        "With it: running work terminates after the window"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill/breakglass-control-down",
+      "title": "Break-glass and Control down",
+      "requirements": [
+        "plan.md §15.4",
+        "plan.md §21 integration"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "Control is fully down",
+      "then": [
+        "Nothing new runs",
+        "Running work is bounded by deadline and selfTerminateOnControlLoss",
+        "After recovery the break-glass kill is pushed and acknowledged"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill/ack",
+      "title": "Acknowledgements record path and epoch",
+      "requirements": [
+        "ADR 017 decision 5"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "A kill is delivered by push, check-in and poll to different components",
+      "then": [
+        "control_kill_acks records the epoch and path; acks only move forward"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill/fencing",
+      "title": "A kill invalidates the fencing token on every check",
+      "requirements": [
+        "plan.md §15.2"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "broker"
+      ],
+      "when": "After a kill, the host redeems a secret, the broker checks a capability, and the host reports progress",
+      "then": [
+        "All refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill/archive",
+      "title": "Superseded kills leave the push set after acks or 30 days",
+      "requirements": [
+        "ADR 017 decision 8"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "A recovery is acknowledged by all components, and another is not for 30 days",
+      "then": [
+        "Both move to the archive; event rows remain"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "kill/suspended-lifecycle",
+      "title": "A kill suspends the package version",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "A package kill commits, then a reviewed recovery",
+      "then": [
+        "Version SUSPENDED, then back to its previous state"
+      ],
+      "status": "authored"
+    }
+  ]
+}

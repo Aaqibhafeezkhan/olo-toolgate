@@ -1,0 +1,150 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "catalog-scope",
+  "title": "Catalog scope routes",
+  "sources": [
+    "plan.md §9.4",
+    "ADR 015"
+  ],
+  "cases": [
+    {
+      "id": "catalog-scope/routes",
+      "title": "Each route serves only its scope",
+      "requirements": [
+        "plan.md §9.4"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "The same caller lists tools at /mcp, /mcp/agent/{agent}, /mcp/agent-group/{group} and /mcp/agent-group/{group}/{agent}",
+      "then": [
+        "/mcp: permitted tools only",
+        "agent route: only when the caller is the agent or holds a delegation in chain",
+        "group route: only tools permitted through that group, caller an enabled member",
+        "agent-in-group: both"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog-scope/no-existence-oracle",
+      "title": "A mismatch looks the same whether or not the target exists",
+      "requirements": [
+        "plan.md §9.4",
+        "ADR 015",
+        "§21 security"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A caller requests an agent and a group that exist but are not theirs, and ones that do not exist",
+      "then": [
+        "Byte-identical 403 or JSON-RPC error bodies",
+        "No catalog and no fallback to /mcp"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog-scope/recheck-per-call",
+      "title": "tools/call re-checks scope and authorization",
+      "requirements": [
+        "plan.md §9.4"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "A tool is listed, then the caller is removed from the group, then tools/call is sent",
+      "then": [
+        "The call is refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog-scope/url-does-not-change-identity",
+      "title": "The URL never changes who the caller is",
+      "requirements": [
+        "plan.md §9.4"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "Agent A calls /mcp/agent/b without a delegation",
+      "then": [
+        "403 as above"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog-scope/toolset-filter",
+      "title": "?toolset= filters visibility only",
+      "requirements": [
+        "plan.md §9.4"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "tools/list with ?toolset=x, then tools/call of a permitted tool outside x",
+      "then": [
+        "The list is filtered",
+        "The call is still authorized by policy alone"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog-scope/slug-grammar",
+      "title": "Route slugs follow the grammar",
+      "requirements": [
+        "plan.md §9.4"
+      ],
+      "level": "unit",
+      "targets": [
+        "gateway"
+      ],
+      "when": "Slugs with uppercase, a leading hyphen, 64 characters and path traversal are requested",
+      "then": [
+        "All get the same 403 as a non-existent scope"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog-scope/cache-key",
+      "title": "The decision cache is keyed by scope and epochs",
+      "requirements": [
+        "plan.md §9.4"
+      ],
+      "level": "unit",
+      "targets": [
+        "gateway"
+      ],
+      "when": "The same identity calls through two scopes, then the authorization epoch bumps",
+      "then": [
+        "No decision is reused across scopes or epochs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog-scope/protected-resource-metadata",
+      "title": "RFC 9728 metadata is served without auth",
+      "requirements": [
+        "ADR 015",
+        "gateway-v1.proposed.yaml"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "GET /.well-known/oauth-protected-resource without credentials",
+      "then": [
+        "200 naming the tenant's trusted issuers for this resource",
+        "A 401 elsewhere points at it in WWW-Authenticate"
+      ],
+      "status": "authored"
+    }
+  ]
+}

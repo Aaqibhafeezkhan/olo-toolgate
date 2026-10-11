@@ -1,0 +1,236 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "contract-descriptor",
+  "area": "error-model",
+  "title": "Error model mapping",
+  "sources": [
+    "tool-sdk/spec/authoring/errors.md",
+    "plan.md §21"
+  ],
+  "cases": [
+    {
+      "id": "error-model/input-error",
+      "title": "ToolInputError maps to INVALID_ARGUMENT",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler throws ToolInputError",
+      "then": [
+        "isError true, code INVALID_ARGUMENT, retryable false"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/declared-business",
+      "title": "A declared business error keeps its code",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler throws ToolBusinessError with a declared code and data",
+      "then": [
+        "That code, data validated against dataSchema"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/undeclared",
+      "title": "An undeclared code becomes UNDECLARED_ERROR",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler throws an undeclared code",
+      "then": [
+        "UNDECLARED_ERROR with data.originalCode"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/retryable-downgrade",
+      "title": "ToolRetryableError is not retryable on ledger tools",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "ToolRetryableError is thrown by a READ_ONLY tool and a NON_IDEMPOTENT tool",
+      "then": [
+        "READ_ONLY: retryable true",
+        "NON_IDEMPOTENT: retryable false and the downgrade recorded"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/upstream-codes",
+      "title": "UpstreamError maps to enumerated codes",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Upstream 404, 503, timeout and connection reset",
+      "then": [
+        "UPSTREAM_4XX, UPSTREAM_5XX, UPSTREAM_TIMEOUT, UPSTREAM_CONNECTION"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/effect-uncertain",
+      "title": "effectUncertain is set only after a full send",
+      "requirements": [
+        "errors.md",
+        "execution.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A connection fails before the request is sent, and a timeout after it is sent, in a ledger tool",
+      "then": [
+        "Before: effectUncertain false, FAILED",
+        "After: effectUncertain true, OUTCOME_UNKNOWN"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/uncaught",
+      "title": "Uncaught errors are INTERNAL_TOOL_ERROR with a fixed message",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler throws a null dereference",
+      "then": [
+        "INTERNAL_TOOL_ERROR, message \"The tool failed.\", no stack trace"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/result-shape",
+      "title": "The error result shape is fixed",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Any ToolError is returned",
+      "then": [
+        "resultType complete, isError true, content[0].text equals message, structuredContent.error has code, message, retryable, data"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/redaction",
+      "title": "Secrets are redacted and sizes capped",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "An error message includes a secret value and is 2 KiB, with 16 KiB of data",
+      "then": [
+        "The secret becomes [REDACTED]",
+        "Message capped at 1 KiB, data at 8 KiB"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/platform-codes",
+      "title": "Platform codes and their retryability",
+      "requirements": [
+        "errors.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Each platform code is produced: CANCELLED, DEADLINE_EXCEEDED, ROUTE_REFUSED, AUDIT_UNAVAILABLE, CLAIMS_UNAVAILABLE, CLIENT_TOOLS_UNAVAILABLE, UNSUPPORTED_TIER, CONCURRENCY_LIMIT",
+      "then": [
+        "Only DEADLINE_EXCEEDED and CONCURRENCY_LIMIT on non-ledger tools are retryable"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "error-model/output-schema",
+      "title": "Output not matching outputSchema becomes INTERNAL_TOOL_ERROR",
+      "requirements": [
+        "execution.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler returns a value missing a required output field",
+      "then": [
+        "INTERNAL_TOOL_ERROR"
+      ],
+      "status": "authored"
+    }
+  ]
+}

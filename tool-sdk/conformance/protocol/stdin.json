@@ -1,0 +1,175 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "protocol",
+  "area": "stdin",
+  "title": "Tool protocol stdin v1 and v2",
+  "sources": [
+    "plan.md §13.3",
+    "packages/contracts/schemas/v2/protocol.schema.json",
+    "packages/contracts/schemas/v1/execution.schema.json"
+  ],
+  "cases": [
+    {
+      "id": "stdin/v1-accepted",
+      "title": "Protocol v1 frames are still accepted",
+      "requirements": [
+        "plan.md §13.3"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "A v1 artifact receives LocalToolInput and returns LocalToolOutput",
+      "then": [
+        "The request binding and output schema are verified; the call succeeds"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/v1-binding",
+      "title": "A v1 output for another request is rejected",
+      "requirements": [
+        "execution.schema.json"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "when": "The v1 output carries a different requestId",
+      "then": [
+        "The result is rejected"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/v2-input-frame",
+      "title": "The v2 ToolInput frame carries the required fields",
+      "requirements": [
+        "plan.md §13.3"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A v2 runtime receives ToolInput with and without each optional field",
+      "then": [
+        "Required fields present; secretHandles are handles, never values; traceparent matches the pattern"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/v2-output-frames",
+      "title": "Each v2 output frame kind is parsed",
+      "requirements": [
+        "protocol.schema.json"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool emits PROGRESS, LOG, INPUT_REQUEST and RESULT frames",
+      "then": [
+        "Each is accepted; resultType is complete, input_required or task"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/v2-invalid-frames",
+      "title": "Malformed frames end the invocation safely",
+      "requirements": [
+        "protocol.schema.json",
+        "T-SB-4"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "Frames with unknown kind, extra properties, fraction 1.5, log message over 8192 and two RESULT frames",
+      "then": [
+        "The invocation fails with a fixed error; the host is unaffected"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/limits",
+      "title": "Input and output ceilings",
+      "requirements": [
+        "plan.md §13.5"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "Inputs of 1 MiB, 1 MiB + 1, 257 argument properties, and outputs of 4 MiB + 1",
+      "then": [
+        "Within limits succeed; others are refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/ceiling-layering",
+      "title": "Negotiated limits never exceed a ceiling",
+      "requirements": [
+        "plan.md §13.5"
+      ],
+      "level": "unit",
+      "targets": [
+        "control",
+        "tool-host"
+      ],
+      "when": "A tool asks for more than its pool, and a pool for more than the platform",
+      "then": [
+        "Effective limit is the lowest layer"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/sync-deadline",
+      "title": "The sync deadline is the lower of 60 s and the Gateway timeout",
+      "requirements": [
+        "plan.md §13.5",
+        "ADR 016"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "tool-host"
+      ],
+      "when": "A sync tool runs 31 s with a 30 s Gateway request timeout",
+      "then": [
+        "DEADLINE_EXCEEDED at 30 s"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "stdin/no-tier-fallback",
+      "title": "There is no fallback to a weaker tier",
+      "requirements": [
+        "plan.md §13.4"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "when": "A tool requires a tier the host does not offer",
+      "then": [
+        "UNSUPPORTED_TIER"
+      ],
+      "status": "authored"
+    }
+  ]
+}

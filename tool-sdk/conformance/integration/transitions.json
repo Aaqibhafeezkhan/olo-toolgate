@@ -1,0 +1,304 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "transitions",
+  "title": "Invocation state transitions",
+  "sources": [
+    "docs/control-plane/invocation-state-v2.md",
+    "plan.md §12.2"
+  ],
+  "cases": [
+    {
+      "id": "transitions/t01-create",
+      "title": "T1 creates the invocation with its rows in one commit",
+      "requirements": [
+        "invocation-state-v2.md §3 T1"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "A task tool is called with a business key, and an ASK tool without one",
+      "then": [
+        "Invocation, task, business-key and approval rows exist exactly as T1 lists",
+        "CreateTaskResult is sent only after the commit"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t02-approve",
+      "title": "T2 approval queues the invocation in one transaction",
+      "requirements": [
+        "invocation-state-v2.md §3 T2"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "An approver approves all obligations",
+      "then": [
+        "Approval APPROVED and invocation QUEUED in one commit"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t03-deny",
+      "title": "T3 deny cancels and rejects the key",
+      "requirements": [
+        "invocation-state-v2.md §3 T3"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "An approver denies, then another approval is revoked",
+      "then": [
+        "Invocation CANCELLED, task REJECTED, business-key outcome REJECTED"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t04-reserve",
+      "title": "T4 reserve consumes the approval once and mints the permit",
+      "requirements": [
+        "invocation-state-v2.md §3 T4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "Two reserve calls race for one approved invocation",
+      "then": [
+        "One nonce row and one permit; the other gets the same state back or a refusal"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t05-consume",
+      "title": "T5 consume starts the lease and returns the fencing token",
+      "requirements": [
+        "invocation-state-v2.md §3 T5"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The host in aud consumes the permit",
+      "then": [
+        "lease_holder and lease_expires_at set; fencingToken equals the nonce"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t06-heartbeat",
+      "title": "T6 heartbeats renew the lease within the deadline",
+      "requirements": [
+        "invocation-state-v2.md §3 T6"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The host heartbeats every lease/3 past the deadline",
+      "then": [
+        "lease_expires_at never exceeds deadline + 5 s",
+        "A TERMINATE kill stops renewal"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t07-input-required",
+      "title": "T7 enters and leaves INPUT_REQUIRED",
+      "requirements": [
+        "invocation-state-v2.md §3 T7"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The host sends inputRequest, then the Gateway posts input with the owner digest",
+      "then": [
+        "task_input_deadline_at is set then cleared; the next LeaseRenewal carries inputResponses",
+        "A wrong owner digest gets not found"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t08-cancel",
+      "title": "T8 cancel invalidates the fencing token",
+      "requirements": [
+        "invocation-state-v2.md §3 T8"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "tasks/cancel arrives for QUEUED, PENDING_APPROVAL and EXECUTING invocations",
+      "then": [
+        "QUEUED and PENDING_APPROVAL go to CANCELLED",
+        "EXECUTING goes to CANCEL_REQUESTED; secret delivery and broker checks fail; the next heartbeat returns cancelRequested"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t09-result",
+      "title": "T9 result commits terminal state, result, key outcome and outbox",
+      "requirements": [
+        "invocation-state-v2.md §3 T9"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The host reports a result with a valid token, then repeats it",
+      "then": [
+        "One terminal transition; the repeat is a no-op",
+        "A result above 64 KiB lands in control_invocation_results"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t10-not-started",
+      "title": "T10 FAILED notStarted allows rebinding",
+      "requirements": [
+        "invocation-state-v2.md §3 T10"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The host reports FAILED with notStarted after a spool failure",
+      "then": [
+        "not_started true; the business key may be rebound"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t11-lease-expiry",
+      "title": "T11 lease expiry by effect class",
+      "requirements": [
+        "invocation-state-v2.md §3 T11"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "Leases expire for a ledger tool, a non-ledger task at attempt 1 and at attempt 3",
+      "then": [
+        "Ledger: OUTCOME_UNKNOWN",
+        "Non-ledger attempt 1: QUEUED with a new attempt",
+        "Attempt 3: FAILED; lease columns kept"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t12-expiry",
+      "title": "T12 expiry before consumption",
+      "requirements": [
+        "invocation-state-v2.md §3 T12"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "An approval, a queued pickup and an input request each pass their deadline",
+      "then": [
+        "EXPIRED; any nonce left unconsumed"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t13-late-result",
+      "title": "T13 a late result or reconcile resolves OUTCOME_UNKNOWN once",
+      "requirements": [
+        "invocation-state-v2.md §3 T13"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "A late report arrives with the old token, then a second contradicting one",
+      "then": [
+        "First moves to SUCCEEDED, FAILED or PARTIAL with evidence",
+        "Second is evidence only; never back to OUTCOME_UNKNOWN"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/t14-purge",
+      "title": "T14 purge tombstones results without changing state",
+      "requirements": [
+        "invocation-state-v2.md §3 T14"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "retain_until passes",
+      "then": [
+        "Payload replaced by tombstone; business-key row tombstoned; state unchanged"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/undefined-refused",
+      "title": "A transition not in the table gets 409",
+      "requirements": [
+        "invocation-state-v2.md §3 "
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A host reports a result for a QUEUED invocation, and a heartbeat for a SUCCEEDED one",
+      "then": [
+        "409 each"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transitions/control-idempotency",
+      "title": "Control calls replay on Idempotency-Key",
+      "requirements": [
+        "invocation-state-v2.md §3 retries"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "Each caller endpoint is called twice with the same Idempotency-Key and the response is dropped the first time",
+      "then": [
+        "The second call replays the first response; nothing is applied twice"
+      ],
+      "status": "authored"
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "chaos-load",
+  "area": "load",
+  "title": "Polling and socket scale",
+  "sources": [
+    "plan.md §17.2",
+    "plan.md §17.3"
+  ],
+  "cases": [
+    {
+      "id": "load/polling-500ms",
+      "title": "10,000 devices at 500 ms",
+      "requirements": [
+        "plan.md §17.3"
+      ],
+      "level": "system",
+      "targets": [
+        "control"
+      ],
+      "when": "10,000 simulated devices check in every 500 ms",
+      "then": [
+        "Control sustains about 20,000 requests/s within its latency objective"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "load/polling-2s",
+      "title": "10,000 devices at 2 s",
+      "requirements": [
+        "plan.md §17.3"
+      ],
+      "level": "system",
+      "targets": [
+        "control"
+      ],
+      "when": "10,000 devices check in every 2 s with 20% jitter",
+      "then": [
+        "About 5,000 requests/s within the latency objective"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "load/heartbeat-phase-b",
+      "title": "Phase B heartbeats at 30 s",
+      "requirements": [
+        "plan.md §17.3"
+      ],
+      "level": "system",
+      "targets": [
+        "control",
+        "endpoint-client"
+      ],
+      "when": "10,000 persistent sockets heartbeat every 30 s",
+      "then": [
+        "About 333 heartbeats/s; pushes reach sockets within the objective"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "load/control-round-trips",
+      "title": "Control handles 2 to 3 round trips per server-tool call",
+      "requirements": [
+        "plan.md §12.8"
+      ],
+      "level": "system",
+      "targets": [
+        "control",
+        "gateway",
+        "tool-host"
+      ],
+      "when": "Server-tool calls at the target call rate",
+      "then": [
+        "Control latency and error rate stay within objectives"
+      ],
+      "status": "authored"
+    }
+  ]
+}

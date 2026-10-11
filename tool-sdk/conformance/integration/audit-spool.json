@@ -1,0 +1,68 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "audit-spool",
+  "title": "Audit spool exhaustion and fencing",
+  "sources": [
+    "plan.md §12.7 row 11",
+    "docs/security/threat-models/tool-host.md"
+  ],
+  "cases": [
+    {
+      "id": "audit/spool-full",
+      "title": "Normal space exhausted refuses new contacts",
+      "requirements": [
+        "plan.md §12.7 row 11",
+        "T-AD-6"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "tool-host"
+      ],
+      "when": "The host spool has only headroom left while a tool runs",
+      "then": [
+        "New requests REFUSED(AUDIT_UNAVAILABLE)",
+        "New secret redemptions, broker requests and tunnel connections fail with AUDIT_UNAVAILABLE",
+        "Terminal records use the headroom"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "audit/fenced",
+      "title": "Headroom exhausted fences the host",
+      "requirements": [
+        "plan.md §12.7 row 11",
+        "T-AD-6"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "The headroom is exhausted, then the spool disk fails",
+      "then": [
+        "The host enters FENCED, kills non-built-in sandboxes, invalidates tokens and reports unhealthy",
+        "Ledger work ends OUTCOME_UNKNOWN, others FAILED"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "audit/fenced-recovery",
+      "title": "A FENCED host recovers and replays",
+      "requirements": [
+        "plan.md §21 integration"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "The spool recovers",
+      "then": [
+        "In-memory records replay to the spool; outcomes are resolved from ledger and broker evidence; the host accepts work again only after reporting healthy"
+      ],
+      "status": "authored"
+    }
+  ]
+}

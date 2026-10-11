@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/conformance/case.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "ToolGate conformance case file",
+  "description": "One file of conformance cases for one area of one suite (tool-sdk/conformance/README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string"},
+    "suite": {"$ref": "#/$defs/SuiteId"},
+    "area": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,40}$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "sources": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 200}, "minItems": 1, "maxItems": 16},
+    "cases": {"type": "array", "items": {"$ref": "#/$defs/Case"}, "minItems": 1, "maxItems": 200}
+  },
+  "required": ["suite", "area", "title", "sources", "cases"],
+  "$defs": {
+    "SuiteId": {
+      "type": "string",
+      "enum": ["contract-descriptor", "sdk-unit", "protocol", "security", "integration", "mode-equivalence", "official-sdk", "chaos-load", "language-matrix"]
+    },
+    "Target": {
+      "type": "string",
+      "enum": ["java", "python", "typescript", "dotnet", "packager", "gateway", "control", "tool-host", "broker", "egress-proxy", "endpoint-client", "quickstart", "marketplace", "admin-ui"]
+    },
+    "Level": {
+      "type": "string",
+      "enum": ["unit", "component", "integration", "system"],
+      "description": "unit: one module; component: one deployable with fakes; integration: real components together; system: a deployed cluster."
+    },
+    "Status": {
+      "type": "string",
+      "enum": ["authored", "passing"],
+      "description": "authored at D3; a milestone sets passing and names the runner evidence."
+    },
+    "Case": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)+$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 160},
+        "requirements": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 120}, "minItems": 1, "maxItems": 8, "uniqueItems": true},
+        "level": {"$ref": "#/$defs/Level"},
+        "targets": {"type": "array", "items": {"$ref": "#/$defs/Target"}, "minItems": 1, "uniqueItems": true},
+        "perTarget": {"type": "boolean", "description": "true: the case runs once for each target (for example once per SDK language)."},
+        "given": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 400}, "maxItems": 12},
+        "when": {"type": "string", "minLength": 1, "maxLength": 400},
+        "then": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 400}, "minItems": 1, "maxItems": 12},
+        "fixtures": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9._/-]+$"}, "maxItems": 16, "uniqueItems": true},
+        "status": {"$ref": "#/$defs/Status"},
+        "evidence": {"type": "string", "minLength": 1, "maxLength": 300}
+      },
+      "required": ["id", "title", "requirements", "level", "targets", "when", "then", "status"]
+    }
+  }
+}

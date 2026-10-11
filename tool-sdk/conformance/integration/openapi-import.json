@@ -1,0 +1,178 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "openapi-import",
+  "title": "OpenAPI import",
+  "sources": [
+    "plan.md §14.2"
+  ],
+  "cases": [
+    {
+      "id": "openapi/versions",
+      "title": "3.1, 3.0 and Swagger 2.0 are imported",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager"
+      ],
+      "when": "Fixture documents of each version are imported",
+      "then": [
+        "3.x natively; 2.0 converted with the conversion in the report"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/serialisation",
+      "title": "Supported parameter styles serialise exactly",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "broker"
+      ],
+      "when": "Operations use every supported path, query, header and cookie style",
+      "then": [
+        "The broker sends the bytes the operation declares"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/not-importable",
+      "title": "Unfaithful combinations are not importable",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager"
+      ],
+      "when": "An operation uses a style combination the broker cannot serialise, and an unsupported auth scheme",
+      "then": [
+        "Both are listed as not importable with the reason, never approximated"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/content-type",
+      "title": "Exactly one request content type per tool",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control"
+      ],
+      "when": "An operation offers JSON and multipart bodies",
+      "then": [
+        "Review picks one; it is fixed on the route; multipart parts become capped BINARY inputs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/responses",
+      "title": "Responses map to output and errors",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "broker",
+        "tool-host"
+      ],
+      "when": "Responses 200, two 2xx schemas, 404, 408, 429, 503, 302 and an undeclared 418, for ledger and non-ledger tools",
+      "then": [
+        "2xx become outputSchema (oneOf with discriminator)",
+        "408, 429 and 5xx retryable only without a ledger",
+        "Undeclared: UPSTREAM_ERROR with the status"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/no-auto-pagination",
+      "title": "Pagination is never followed automatically",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "An operation declares x-toolgate-pagination cursor",
+      "then": [
+        "The tool takes a cursor input and returns one page and the next cursor"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/auth-alternative",
+      "title": "Exactly one auth alternative per operation",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "security lists two AND-sets",
+      "then": [
+        "Review picks exactly one; it becomes the route credential binding"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/effect-unknown",
+      "title": "Imported operations default to UNKNOWN",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager"
+      ],
+      "when": "An unsigned document has x-toolgate-effect READ_ONLY, and a signed publisher package has the same",
+      "then": [
+        "Unsigned: UNKNOWN",
+        "Signed: READ_ONLY, shown in review as a security delta"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/provenance",
+      "title": "The source and transformation report are stored",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager"
+      ],
+      "when": "A document is imported, then a new version re-imported",
+      "then": [
+        "openapi/source.* and transform-report.json are in the package",
+        "Re-import produces a classified semantic diff"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "openapi/curl",
+      "title": "cURL import produces the same package shape",
+      "requirements": [
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager"
+      ],
+      "when": "A cURL command is imported",
+      "then": [
+        "An OPENAPI package with one tool and a report"
+      ],
+      "status": "authored"
+    }
+  ]
+}

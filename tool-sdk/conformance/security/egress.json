@@ -1,0 +1,215 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "egress",
+  "title": "Egress isolation and the release-1 transport matrix",
+  "sources": [
+    "docs/security/threat-models/tool-host.md §4.4",
+    "plan.md §11.6, §11.9",
+    "ADR 013 decisions 5 and 7"
+  ],
+  "cases": [
+    {
+      "id": "egress/no-route",
+      "title": "A sandbox has no network route except its own listeners",
+      "requirements": [
+        "T-EG-1"
+      ],
+      "level": "system",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A tool opens TCP to a public IP, the node IP, the Kubernetes API, the metadata address and another sandbox's listener",
+      "then": [
+        "Every attempt fails fast"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/udp-dropped",
+      "title": "Raw DNS, UDP, QUIC and ICMP leave nothing",
+      "requirements": [
+        "T-EG-1"
+      ],
+      "level": "system",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A tool sends DNS to 8.8.8.8:53, DoT to :853, a QUIC handshake and an ICMP echo",
+      "then": [
+        "All are dropped; the sandbox has no resolver"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/tunnel-to-brokered",
+      "title": "CONNECT to a brokered destination is refused",
+      "requirements": [
+        "T-EG-2"
+      ],
+      "level": "component",
+      "targets": [
+        "egress-proxy"
+      ],
+      "when": "A tool sends CONNECT orders.example.com:443 where that destination is approved as brokered",
+      "then": [
+        "The proxy refuses the tunnel"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/sni-mismatch",
+      "title": "Tunnel SNI must equal the CONNECT host",
+      "requirements": [
+        "T-EG-3"
+      ],
+      "level": "component",
+      "targets": [
+        "egress-proxy"
+      ],
+      "when": "A tool opens CONNECT approved.example.com:443 and sends a ClientHello for other.example.com, then one with an encrypted ClientHello toward a non-approved front domain",
+      "then": [
+        "Both tunnels are closed and audited"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/tcp-only-approved",
+      "title": "TCP tunnels reach only approved (host, port) entries",
+      "requirements": [
+        "T-EG-4",
+        "plan.md §11.9"
+      ],
+      "level": "component",
+      "targets": [
+        "egress-proxy"
+      ],
+      "when": "A tool declared @TcpDestination orders-db port 5432 connects to orders-db:5433, to another host on 5432, and to orders-db:5432",
+      "then": [
+        "Only orders-db:5432 is allowed"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/rebinding",
+      "title": "Every resolved address is checked at connect time",
+      "requirements": [
+        "T-BR-5",
+        "plan.md §11.6"
+      ],
+      "level": "component",
+      "targets": [
+        "broker",
+        "egress-proxy"
+      ],
+      "when": "An approved hostname resolves first to a public address and then to 169.254.169.254, 127.0.0.1, a cluster CIDR and an unapproved private range",
+      "then": [
+        "Every connection to a blocked address is refused, including on a new connection after rebinding"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/redirect-out",
+      "title": "Redirects never leave approved destinations",
+      "requirements": [
+        "T-BR-5"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The upstream for an idempotent tool redirects to another host, then to an approved route on the same destination",
+      "then": [
+        "The cross-host redirect is refused; the same-destination approved route is followed and re-checked"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/bad-cert",
+      "title": "The broker verifies upstream certificates and pins",
+      "requirements": [
+        "T-BR-6"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The upstream presents a self-signed certificate, an expired one, and a valid chain that does not match the admin SPKI pin",
+      "then": [
+        "All three are refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/broker-isolation",
+      "title": "Broker and proxy cannot reach the platform or other tenants",
+      "requirements": [
+        "T-EG-6"
+      ],
+      "level": "system",
+      "targets": [
+        "broker",
+        "egress-proxy"
+      ],
+      "when": "From inside the broker and proxy namespaces, connections are attempted to the Kubernetes API, node metadata, Control, the Gateway admin listener and another tenant's broker",
+      "then": [
+        "All fail under NetworkPolicy"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "egress/kill-drops-connections",
+      "title": "TERMINATE drops open brokered and tunnel connections",
+      "requirements": [
+        "plan.md §11.6 item 6",
+        "kill-switch.md §5"
+      ],
+      "level": "integration",
+      "targets": [
+        "broker",
+        "egress-proxy",
+        "control"
+      ],
+      "when": "A TERMINATE kill covers a tool with an open tunnel and an in-flight brokered request",
+      "then": [
+        "Both connections close; new connections are refused; the fencing token is invalid"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transport/unavailable-fails-fast",
+      "title": "Unavailable transports fail at packaging and at runtime",
+      "requirements": [
+        "T-EG-5",
+        "plan.md §11.9"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "tool-host"
+      ],
+      "when": "A tool declares a Unix-socket destination; separately, a native binary ignores proxy settings at runtime",
+      "then": [
+        "Packaging fails naming the unavailable transport",
+        "At runtime the connection fails fast with no route"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "transport/driver-warning",
+      "title": "The packager warns on a database driver without a declared TCP destination",
+      "requirements": [
+        "plan.md §11.9"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager"
+      ],
+      "when": "A Java tool depends on org.postgresql:postgresql and declares no @TcpDestination",
+      "then": [
+        "Packaging warns and names the dependency"
+      ],
+      "status": "authored"
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "contract-descriptor",
+  "area": "schemas",
+  "title": "Contract schema validation",
+  "sources": [
+    "plan.md §21",
+    "packages/contracts/schemas/v2/README.md"
+  ],
+  "cases": [
+    {
+      "id": "schemas/v2-valid",
+      "title": "Every v2 valid fixture validates",
+      "requirements": [
+        "plan.md §21 contract"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager"
+      ],
+      "when": "Each entry of the v2 valid fixture file is validated against its schema",
+      "then": [
+        "All validate"
+      ],
+      "fixtures": [
+        "tests/fixtures/contracts/v2/valid.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "schemas/v2-invalid",
+      "title": "Every v2 invalid fixture is rejected for its stated reason",
+      "requirements": [
+        "plan.md §21 contract"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager"
+      ],
+      "when": "Each entry of the v2 invalid fixture file is validated",
+      "then": [
+        "Each fails, at the path the fixture names"
+      ],
+      "fixtures": [
+        "tests/fixtures/contracts/v2/invalid.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "schemas/generated-bindings",
+      "title": "Generated bindings accept and reject the same fixtures",
+      "requirements": [
+        "plan.md §20"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "typescript",
+        "gateway",
+        "control"
+      ],
+      "perTarget": true,
+      "when": "The v2 fixtures are parsed by each generated binding",
+      "then": [
+        "Valid fixtures parse and round-trip to the same JCS bytes",
+        "Invalid fixtures are rejected"
+      ],
+      "fixtures": [
+        "tests/fixtures/contracts/v2/valid.json",
+        "tests/fixtures/contracts/v2/invalid.json"
+      ],
+      "status": "authored"
+    }
+  ]
+}
