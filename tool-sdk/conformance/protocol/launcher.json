@@ -1,0 +1,144 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "protocol",
+  "area": "launcher",
+  "title": "Launcher and protocol-range handshake",
+  "sources": [
+    "plan.md §5.6",
+    "plan.md §7.4"
+  ],
+  "cases": [
+    {
+      "id": "launcher/range-check-at-enable",
+      "title": "Enable rejects non-overlapping protocol ranges",
+      "requirements": [
+        "plan.md §5.6"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A package declares sdk.protocol 3..3 while hosts advertise 1..2",
+      "then": [
+        "Enable is rejected naming the ranges"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "launcher/registration-fields",
+      "title": "Tool Host registration advertises protocol and launcher",
+      "requirements": [
+        "protocol.schema.json ToolHostRegistration"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "A host registers",
+      "then": [
+        "protocol {min,max}, launcherVersion and tiers are recorded"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "launcher/digest-reverify",
+      "title": "The launcher re-verifies the artifact digest",
+      "requirements": [
+        "plan.md §7.4"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The mounted artifact differs from the permit digest",
+      "then": [
+        "The launcher refuses to start with a fixed code"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "launcher/clean-environment",
+      "title": "The entry point starts with a cleared environment and fixed argv",
+      "requirements": [
+        "plan.md §7.4"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The host process has extra environment variables",
+      "then": [
+        "The tool sees only the documented variables and argv"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "launcher/pass-through",
+      "title": "Frames pass through unchanged",
+      "requirements": [
+        "plan.md §7.4"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A tool emits every frame kind",
+      "then": [
+        "Bytes at the host equal bytes from the tool"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "launcher/frame-size-deadline",
+      "title": "The launcher enforces frame size and deadline",
+      "requirements": [
+        "plan.md §7.4"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A tool emits an oversized frame, then never exits",
+      "then": [
+        "Each fails with a fixed launch code"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "launcher/oldest-supported",
+      "title": "New packages run on the oldest supported host and client",
+      "requirements": [
+        "plan.md §21 protocol"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "perTarget": true,
+      "when": "The fixture package runs on the oldest supported Tool Host and endpoint client",
+      "then": [
+        "Calls succeed or enable rejects with a range error"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "launcher/container-launcher",
+      "title": "CONTAINER packages include a compatible launcher or speak v2",
+      "requirements": [
+        "plan.md §7.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control",
+        "tool-host"
+      ],
+      "when": "A CONTAINER package without a launcher and not speaking v2",
+      "then": [
+        "Rejected at enable or launch"
+      ],
+      "status": "authored"
+    }
+  ]
+}

@@ -1,0 +1,195 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "sdk-unit",
+  "area": "runtime",
+  "title": "SDK runtime execution semantics",
+  "sources": [
+    "tool-sdk/spec/authoring/execution.md",
+    "plan.md §5.7"
+  ],
+  "cases": [
+    {
+      "id": "runtime/one-call",
+      "title": "A handler is called once per invocation",
+      "requirements": [
+        "execution.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "An invocation fails after the handler starts",
+      "then": [
+        "The SDK never re-invokes the handler"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/input-validation",
+      "title": "Input is validated before the handler",
+      "requirements": [
+        "execution.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Arguments violate the schema",
+      "then": [
+        "INVALID_ARGUMENT and the handler is not called"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/size-limits",
+      "title": "Input and output limits are enforced",
+      "requirements": [
+        "execution.md §1",
+        "plan.md §13.5"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Inputs of 1 MiB + 1 byte and outputs of 4 MiB + 1 byte",
+      "then": [
+        "Both are refused with the documented errors"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/concurrency",
+      "title": "maxConcurrency queues up to 1 s, then fails",
+      "requirements": [
+        "execution.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "maxConcurrency 1 with two concurrent calls, the first taking 2 s",
+      "then": [
+        "The second fails with CONCURRENCY_LIMIT after about 1 s"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/deadline",
+      "title": "The deadline is request time plus maxDurationMs, capped",
+      "requirements": [
+        "execution.md §2"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A sync tool with maxDurationMs 120000, and a caller credential expiring in 10 s",
+      "then": [
+        "Effective deadline is the lowest of maxDurationMs, the platform ceiling and credential expiry",
+        "Exceeding it gives DEADLINE_EXCEEDED"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/cancel-grace",
+      "title": "Cancellation ends CANCELLED after the grace period",
+      "requirements": [
+        "execution.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler ignores cancellation for 10 s",
+      "then": [
+        "After 5 s the handler is abandoned (standalone) or killed (governed)",
+        "Outcome CANCELLED and any later result discarded"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/no-state",
+      "title": "No state survives between invocations",
+      "requirements": [
+        "plan.md §5.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Two invocations in one standalone process, the first writing to a static field",
+      "then": [
+        "The SDK provides no API that carries state; the mode-equivalence suite compares outputs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/reentrant",
+      "title": "Concurrent invocations do not share context",
+      "requirements": [
+        "execution.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Two concurrent invocations read their own arguments and invocation ids",
+      "then": [
+        "Each sees only its own"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "runtime/mode-branch-warning",
+      "title": "Branching on invocation().mode is warned",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Handler code branches on mode",
+      "then": [
+        "The analyser or packager warns"
+      ],
+      "status": "authored"
+    }
+  ]
+}

@@ -1,0 +1,311 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "business-keys",
+  "title": "Business-key reservation and namespaces",
+  "sources": [
+    "plan.md §11.7",
+    "ADR 016",
+    "docs/control-plane/invocation-state-v2.md §4"
+  ],
+  "cases": [
+    {
+      "id": "business-keys/concurrent-gateways",
+      "title": "Two Gateways racing on one key create one invocation",
+      "requirements": [
+        "plan.md §11.7 atomic reservation",
+        "§21 security"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "Two Gateway replicas submit the same tool, namespace identity and business key at the same instant, 100 times",
+      "then": [
+        "Exactly one NEW per round; the other caller gets EXISTING for the same invocationId",
+        "control_business_keys has one row per round",
+        "The tool executes once per round"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/existing-same-fingerprint",
+      "title": "A repeat with the same fingerprint returns the original",
+      "requirements": [
+        "plan.md §11.7 outcomes"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "The same caller repeats a completed call with the same key and arguments",
+      "then": [
+        "EXISTING with the original result",
+        "No new invocation row, permit or execution"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/existing-in-progress",
+      "title": "A repeat while running returns IN_PROGRESS to a client without Tasks",
+      "requirements": [
+        "plan.md §11.7 outcomes"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "The same caller repeats while the first invocation is EXECUTING, without the Tasks extension",
+      "then": [
+        "Retryable IN_PROGRESS error",
+        "With the Tasks extension: the original task"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/conflict",
+      "title": "Different arguments under one key conflict",
+      "requirements": [
+        "plan.md §11.7 outcomes"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "The same caller reuses a key with different arguments",
+      "then": [
+        "IDEMPOTENCY_CONFLICT",
+        "The original result is never returned"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/fingerprint-fields",
+      "title": "The fingerprint holds exactly the specified fields",
+      "requirements": [
+        "plan.md §11.7 namespace"
+      ],
+      "level": "unit",
+      "targets": [
+        "control"
+      ],
+      "when": "Repeat with each of argumentsDigest, package major, resolved effect class, catalog scope kind and (AGENT, TENANT) userId changed in turn",
+      "then": [
+        "Each change gives IDEMPOTENCY_CONFLICT or IDEMPOTENCY_KEY_IN_USE",
+        "Changing only the package minor version gives EXISTING",
+        "The namespace identity is not part of the fingerprint"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/cross-identity-reveals-nothing",
+      "title": "Another identity learns nothing from a key in use",
+      "requirements": [
+        "plan.md §11.7 cross-identity",
+        "§21 security"
+      ],
+      "level": "component",
+      "targets": [
+        "control",
+        "gateway"
+      ],
+      "when": "Another agent (TENANT) or the same agent for another user (AGENT) reuses the key, with matching and non-matching fingerprints",
+      "then": [
+        "IDEMPOTENCY_KEY_IN_USE in both cases with byte-identical bodies",
+        "No invocation id, task id, result, status or timestamp",
+        "Median latency of the two cases differs by less than 5% over 1,000 calls",
+        "Audit records both callers"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/delegated-user-across-agents",
+      "title": "A user's second agent sees the original only if authorised now",
+      "requirements": [
+        "plan.md §11.7 DELEGATED_USER"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "In DELEGATED_USER, agent B repeats agent A's call for the same user and fingerprint, once with the tool granted to B and once without",
+      "then": [
+        "Granted: EXISTING through B's catalog scope check",
+        "Not granted: the same 403 an unknown tool gets"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/tenant-share-results",
+      "title": "TENANT results are shared only when approved",
+      "requirements": [
+        "plan.md §11.7 shareResultsWithinTenant"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A different caller repeats a TENANT-namespace call with the same fingerprint, with shareResultsWithinTenant false and true",
+      "then": [
+        "false: IDEMPOTENCY_KEY_IN_USE",
+        "true: EXISTING",
+        "Audit records both callers in both cases"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/namespace-mismatch",
+      "title": "DELEGATED_USER refuses SERVICE callers",
+      "requirements": [
+        "plan.md §11.7",
+        "tool-sdk/spec/authoring/execution.md §4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A SERVICE-mode caller calls a DELEGATED_USER tool with a key",
+      "then": [
+        "BUSINESS_KEY_NAMESPACE_MISMATCH",
+        "No reservation row"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/identity-from-auth-only",
+      "title": "The namespace identity never comes from arguments",
+      "requirements": [
+        "plan.md §11.7 reservation scope"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "Arguments carry agentId, userId and tenantId fields that differ from the authenticated caller",
+      "then": [
+        "The reservation uses the authenticated identities",
+        "The constraint key ignores the argument values"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/agreement",
+      "title": "Constraint, fingerprint, forwarded value and retention use one namespace",
+      "requirements": [
+        "plan.md §11.7 one namespace",
+        "§21 security"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "broker"
+      ],
+      "when": "One call per namespace AGENT, DELEGATED_USER and TENANT with an upstream that records Idempotency-Key",
+      "then": [
+        "Constraint row key matches the namespace table",
+        "Forwarded value is a.<agentIdHash>.<key>, u.<userIdHash>.<key> or the raw key",
+        "Retention and tombstone use businessKeyRetention for that namespace"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/missing-key-policy",
+      "title": "A missing key follows the tool policy",
+      "requirements": [
+        "plan.md §11.7 missing key"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "A requiresBusinessKey tool is called without a key under REJECT, ASK and ALLOW_WITH_DEDUPE",
+      "then": [
+        "REJECT: an error naming the missing key, nothing runs",
+        "ASK: an approval is created and nothing runs before it",
+        "ALLOW_WITH_DEDUPE: a repeat inside dedupeWindow returns EXISTING; after it, NEW"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/expired-key",
+      "title": "A reused key past retention never creates a second operation",
+      "requirements": [
+        "plan.md §11.7 retention",
+        "invocation-state-v2.md §4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A key is reused after its result was purged and only the tombstone remains",
+      "then": [
+        "EXPIRED_KEY",
+        "Policy rejects by default or routes to ASK",
+        "No new invocation is created silently"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/rebind-rules",
+      "title": "A key rebinds only after a not-started end",
+      "requirements": [
+        "invocation-state-v2.md §4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A key is reused after its invocation ended EXPIRED before consume, FAILED with notStarted, REJECTED and COMPLETED",
+      "then": [
+        "EXPIRED before consume and FAILED notStarted: NEW, rebinding the key",
+        "REJECTED: never rebound",
+        "COMPLETED: EXISTING"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/store-down-fails-closed",
+      "title": "Tools needing a reservation fail closed when the store is down",
+      "requirements": [
+        "plan.md §11.7 hard dependency"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "The state database is unavailable and a requiresBusinessKey tool is called",
+      "then": [
+        "A retryable error",
+        "Nothing executes unreserved"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "business-keys/credential-ownership",
+      "title": "The broker credential matches the namespace",
+      "requirements": [
+        "plan.md §11.7 credential ownership",
+        "§21 security"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "broker"
+      ],
+      "when": "Calls in each cell of the credential ownership table, plus a SERVICE call to a tool bound to a user-scoped secret",
+      "then": [
+        "Allowed cells succeed",
+        "Rejected cells fail at review or enable",
+        "A user-scoped account is looked up by the permit userId, never an argument",
+        "A SERVICE call never uses a user-scoped credential"
+      ],
+      "status": "authored"
+    }
+  ]
+}

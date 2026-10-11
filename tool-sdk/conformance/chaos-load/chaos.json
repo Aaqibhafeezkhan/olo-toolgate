@@ -1,0 +1,117 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "chaos-load",
+  "area": "chaos",
+  "title": "Multi-host chaos",
+  "sources": [
+    "plan.md §21",
+    "docs/security/threat-models/tool-host.md"
+  ],
+  "cases": [
+    {
+      "id": "chaos/gateway-partition",
+      "title": "A Gateway partition loses no work and duplicates nothing",
+      "requirements": [
+        "plan.md §21 chaos"
+      ],
+      "level": "system",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "One Gateway replica is partitioned mid-load",
+      "then": [
+        "Ledger tools execute at most once; clients retrying elsewhere get EXISTING or the task"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "chaos/tool-host-partition",
+      "title": "A Tool Host partition is bounded by deadlines",
+      "requirements": [
+        "plan.md §21 chaos",
+        "plan.md §15.5"
+      ],
+      "level": "system",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "A host is partitioned under load",
+      "then": [
+        "No new admission; running work ends by deadline or selfTerminateOnControlLoss; ledger work OUTCOME_UNKNOWN"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "chaos/store-failover",
+      "title": "Store failover keeps acknowledged commits",
+      "requirements": [
+        "plan.md §21 chaos",
+        "plan.md §12.8"
+      ],
+      "level": "system",
+      "targets": [
+        "control"
+      ],
+      "when": "The PostgreSQL primary fails over under load",
+      "then": [
+        "No acknowledged transition is lost; callers re-read by invocationId"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "chaos/kill-propagation",
+      "title": "Kill propagation timing",
+      "requirements": [
+        "plan.md §21 chaos",
+        "plan.md §15.2"
+      ],
+      "level": "system",
+      "targets": [
+        "control",
+        "tool-host",
+        "gateway"
+      ],
+      "when": "A TERMINATE kill commits under load across all hosts",
+      "then": [
+        "New work stops at commit; push acknowledgements and terminations are measured and reported per component"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "chaos/warm-pool-isolation",
+      "title": "Warm pools never leak across tenants under load",
+      "requirements": [
+        "plan.md §21 chaos",
+        "T-SB-2"
+      ],
+      "level": "system",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "Two tenants run stateless tools with reuse at peak load",
+      "then": [
+        "No sandbox serves two tenants or identity classes; canary values never cross"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "limits/exhaustion",
+      "title": "Resource exhaustion is contained per sandbox",
+      "requirements": [
+        "T-SB-5"
+      ],
+      "level": "system",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A tool forks, allocates memory and fills disk past its quotas",
+      "then": [
+        "The sandbox is killed; other sandboxes on the host meet their latency budget"
+      ],
+      "status": "authored"
+    }
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "mode-equivalence",
+  "area": "startup-refusals",
+  "title": "Startup refusals and identity rules",
+  "sources": [
+    "tool-sdk/spec/runtime-modes.md §4",
+    "plan.md §5.9"
+  ],
+  "cases": [
+    {
+      "id": "startup/claims-without-verifier",
+      "title": "Production refuses to start without a verifier when identity is needed",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Production mode with a tool declaring a claim, a USER secret, TOKEN_EXCHANGE auth or DELEGATED_USER, and no TOOLGATE_AUTH_* configuration",
+      "then": [
+        "Startup fails with CONFIGURATION for each"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/stdio-claims",
+      "title": "Over stdio identity tools return CLAIMS_UNAVAILABLE",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A production stdio server receives a call to a claim-declaring tool",
+      "then": [
+        "CLAIMS_UNAVAILABLE"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/http-missing-token",
+      "title": "HTTP without a valid token gets 401",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A production HTTP server receives a request without a token and with an invalid one",
+      "then": [
+        "401 at the transport"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/client-tools",
+      "title": "Client tools without device services are refused",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §2"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A standalone runtime starts with a client tool and no endpoint device services",
+      "then": [
+        "Startup fails with CLIENT_TOOLS_UNAVAILABLE"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/development-explicit",
+      "title": "Development mode must be explicit and local",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "TOOLGATE_MODE unset, then development with a non-loopback bind, then development naming a production issuer, then development on loopback",
+      "then": [
+        "Unset: production",
+        "Non-loopback or production issuer: startup refused",
+        "Loopback: warning banner and every result marked identity=fixture"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/fixtures-outside-development",
+      "title": "Fixture claims are never accepted in production",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "dev.json claims are present in production",
+      "then": [
+        "A startup warning; claims ignored; claim tools behave as with no identity"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/test-mode",
+      "title": "test mode exists only inside ToolHarness",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "TOOLGATE_MODE=test is set for a runtime entry point",
+      "then": [
+        "The entry point refuses to start"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/claims-sources",
+      "title": "Claims never come from arguments, headers or env",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Claims are supplied in arguments, X-User headers and environment variables",
+      "then": [
+        "None are used"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/audit-banner",
+      "title": "Standalone prints that there is no enterprise audit",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §2"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A standalone runtime starts",
+      "then": [
+        "The banner says audit is local only"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "startup/verifier-config",
+      "title": "Verifier env variables configure A4",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "TOOLGATE_AUTH_ALGORITHMS includes none and HS256",
+      "then": [
+        "Startup fails; none and HMAC are always rejected"
+      ],
+      "status": "authored"
+    }
+  ]
+}

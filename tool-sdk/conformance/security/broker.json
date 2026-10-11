@@ -1,0 +1,215 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "broker",
+  "title": "Broker request channel",
+  "sources": [
+    "docs/security/threat-models/tool-host.md §4.3",
+    "plan.md §11.8",
+    "ADR 013 decision 6"
+  ],
+  "cases": [
+    {
+      "id": "broker/url-not-accepted",
+      "title": "The broker refuses a request that names a URL or host",
+      "requirements": [
+        "T-BR-1"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The sandbox posts /v1/call with a url or host member instead of a route id",
+      "then": [
+        "400 ROUTE_REFUSED; nothing is sent upstream; the refusal is audited"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/unknown-route",
+      "title": "A route outside the permit route set is refused",
+      "requirements": [
+        "T-BR-1",
+        "plan.md §5.4"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The sandbox calls a route id that exists in the service profile but not in the permit's routes",
+      "then": [
+        "ROUTE_REFUSED; audited with the route id"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/profile-by-digest",
+      "title": "The broker enforces the profile named by the permit digest only",
+      "requirements": [
+        "plan.md §11.8 item 3"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The admin approves a newer service profile revision while an invocation admitted on the older digest is running",
+      "then": [
+        "The running invocation keeps using the older profile",
+        "A profile digest absent from the content store refuses every request"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/path-traversal",
+      "title": "Path variables cannot escape their template",
+      "requirements": [
+        "T-BR-2"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "pathVars contain \"/\", \"..\", \"%2e%2e\", \"%2F\", overlong UTF-8 and values that violate the variable pattern",
+      "then": [
+        "Every variant is refused before connect",
+        "Valid values are percent-encoded exactly once"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/header-smuggle",
+      "title": "Disallowed query names, headers, methods, content types and sizes are refused",
+      "requirements": [
+        "T-BR-2"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The sandbox sends an unknown query name, a header not in allowedHeaders, a CRLF in a header value, a body above maxRequestBytes, and a content type not in requestContentTypes",
+      "then": [
+        "Each request is refused with ROUTE_REFUSED",
+        "No request reaches the upstream"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/auth-header-refused",
+      "title": "Client-supplied auth headers are stripped and refused, never merged",
+      "requirements": [
+        "T-BR-3"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The sandbox sends Authorization, Proxy-Authorization, Cookie, Host, X-Forwarded-For and the route's auth header name",
+      "then": [
+        "The request is refused",
+        "A request without them reaches the upstream with Host from the destination and the injected credential only"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/credential-echo-filter",
+      "title": "Responses are filtered before they reach the sandbox",
+      "requirements": [
+        "T-BR-3"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "The upstream returns Set-Cookie, WWW-Authenticate with realm details, and a body above maxResponseBytes",
+      "then": [
+        "Set-Cookie and auth challenge details are removed",
+        "The response is cut at maxResponseBytes with an error"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/foreign-capability",
+      "title": "A capability from another sandbox or invocation is refused",
+      "requirements": [
+        "T-BR-4",
+        "plan.md §11.8 item 2"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "Sandbox A presents sandbox B's capability on A's socket, and a capability after its invocation was cancelled",
+      "then": [
+        "Both are refused; attribution is by accepting socket"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/no-retry-ledger",
+      "title": "The broker never retries or redirects for a ledger tool",
+      "requirements": [
+        "plan.md §11.7, §11.8 item 6"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "An upstream for a NON_IDEMPOTENT tool returns 503, then a 307 within the same destination",
+      "then": [
+        "Exactly one upstream request is sent",
+        "The redirect is not followed",
+        "The tool receives the 503 and the effect evidence is recorded"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/limits",
+      "title": "Per-invocation and per-route rate, byte and connection caps hold",
+      "requirements": [
+        "plan.md §11.8 item 6"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "A tool exceeds the route request rate, total egress bytes and concurrent connections",
+      "then": [
+        "Requests over each cap are refused with CONCURRENCY_LIMIT or ROUTE_REFUSED and audited"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/streaming-refused",
+      "title": "Streaming is refused unless the route allows it",
+      "requirements": [
+        "plan.md §11.8 item 4"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "A NONE-streaming route receives a chunked upload and a server-sent-events response",
+      "then": [
+        "The request is refused; the response is buffered to maxResponseBytes or refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "broker/audit-record",
+      "title": "Every broker decision is audited without bodies or credentials",
+      "requirements": [
+        "plan.md §11.8 item 7"
+      ],
+      "level": "component",
+      "targets": [
+        "broker"
+      ],
+      "when": "Accepted and refused requests are made",
+      "then": [
+        "Each audit record has invocationId, route id, destination id, method, status, bytes, duration, upstream request id or refusal reason",
+        "No record contains a body or credential"
+      ],
+      "status": "authored"
+    }
+  ]
+}

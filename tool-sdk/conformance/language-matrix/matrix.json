@@ -1,0 +1,154 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "language-matrix",
+  "area": "matrix",
+  "title": "Full language matrix",
+  "sources": [
+    "plan.md §5.6",
+    "plan.md §21"
+  ],
+  "cases": [
+    {
+      "id": "matrix/java",
+      "title": "Java 17 and later",
+      "requirements": [
+        "plan.md §5.6"
+      ],
+      "level": "system",
+      "targets": [
+        "java"
+      ],
+      "when": "The SDK suites run on Java 17, 21 and the latest LTS, with Kotlin through KSP and kapt",
+      "then": [
+        "All SDK-unit, contract and protocol cases pass"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "matrix/python",
+      "title": "Python 3.10 and later",
+      "requirements": [
+        "plan.md §5.6"
+      ],
+      "level": "system",
+      "targets": [
+        "python"
+      ],
+      "when": "The suites run on Python 3.10 to 3.13",
+      "then": [
+        "All pass"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "matrix/typescript",
+      "title": "Node 20 and later with TypeScript 5",
+      "requirements": [
+        "plan.md §5.6"
+      ],
+      "level": "system",
+      "targets": [
+        "typescript"
+      ],
+      "when": "The suites run on Node 20 and 22 with TypeScript 5, CJS and ESM builds",
+      "then": [
+        "All pass; instanceof works across builds"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "matrix/dotnet",
+      "title": ".NET 8 and later",
+      "requirements": [
+        "plan.md §5.6"
+      ],
+      "level": "system",
+      "targets": [
+        "dotnet"
+      ],
+      "when": "The suites run on .NET 8 and 10",
+      "then": [
+        "All pass"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "matrix/operating-systems",
+      "title": "Supported operating systems",
+      "requirements": [
+        "plan.md §21 matrix"
+      ],
+      "level": "system",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The packager and dev server run on Linux, macOS and Windows",
+      "then": [
+        "Reproducible descriptors and digests on every OS"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "matrix/host-client-versions",
+      "title": "Tool Host and client versions in the compatibility matrix",
+      "requirements": [
+        "plan.md §5.6",
+        "plan.md §21 matrix"
+      ],
+      "level": "system",
+      "targets": [
+        "tool-host",
+        "endpoint-client"
+      ],
+      "when": "Packages from each SDK run on every Tool Host and client version in the published matrix",
+      "then": [
+        "Calls succeed or enable rejects with a range error"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "matrix/cli-distribution",
+      "title": "The CLI installs from each ecosystem registry",
+      "requirements": [
+        "plan.md §5.6"
+      ],
+      "level": "system",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The toolgate CLI is installed from Maven with OS classifier, npm platform packages, Python wheels and the NuGet tool, offline from a mirror",
+      "then": [
+        "Each install verifies its signature and checksum"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "matrix/release-statement",
+      "title": "Release pages state conformance, protocol and contracts versions",
+      "requirements": [
+        "plan.md §5.6"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "An SDK release is prepared",
+      "then": [
+        "The release page states \"Conformance x.y, protocol 2, contracts 1.x\" and the release is blocked unless that conformance version passed"
+      ],
+      "status": "authored"
+    }
+  ]
+}

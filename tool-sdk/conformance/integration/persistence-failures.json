@@ -1,0 +1,304 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "persistence-failures",
+  "title": "Persistence failures and hand-offs",
+  "sources": [
+    "plan.md §12.7",
+    "plan.md §12.8"
+  ],
+  "cases": [
+    {
+      "id": "persistence/row01-spool-fails",
+      "title": "Gateway spool failure rejects before any state",
+      "requirements": [
+        "plan.md §12.7 row 1"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway"
+      ],
+      "when": "The Gateway spool append fails",
+      "then": [
+        "A retryable error; no Control call was made"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row02-commit-unknown",
+      "title": "A lost commit acknowledgement is resolved by re-read",
+      "requirements": [
+        "plan.md §12.7 row 2"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "The commit response is lost, once after commit and once before",
+      "then": [
+        "After commit: re-read finds it and no second row is created",
+        "Before: one retry, then a retryable error"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row02-unique-violation",
+      "title": "A unique-constraint loss returns the winner",
+      "requirements": [
+        "plan.md §12.7 row 2"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "Two submissions with one key commit concurrently",
+      "then": [
+        "The loser reads and returns the winner's row"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row03-control-down",
+      "title": "ASK waits while Control is down, then expires",
+      "requirements": [
+        "plan.md §12.7 row 3"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "Control is down while an approval is pending past its input deadline",
+      "then": [
+        "The task stays AWAITING_APPROVAL, then EXPIRED"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row04-swap-lost",
+      "title": "A lost approval swap reuses the same attempt's state",
+      "requirements": [
+        "plan.md §12.7 row 4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "The consume_approval response is lost, then retried by the same invocation and by another",
+      "then": [
+        "Same invocation: reuses the state",
+        "Another invocation: refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row05-spool-full",
+      "title": "No permit while the Gateway spool is full",
+      "requirements": [
+        "plan.md §12.7 row 5",
+        "plan.md §12.7 row 11"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway"
+      ],
+      "when": "The Gateway spool has only headroom left",
+      "then": [
+        "No permit is minted; a retryable error"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row06-store-down",
+      "title": "Ledger admission is refused while the store is down",
+      "requirements": [
+        "plan.md §12.7 row 6"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "Control is unreachable at admission",
+      "then": [
+        "REFUSED(STORE_UNAVAILABLE); nothing ran; retry allowed"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row06-admitted-lost",
+      "title": "A lost ADMITTED is resolved through the ledger",
+      "requirements": [
+        "plan.md §12.7 row 6",
+        "plan.md §11.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "The ADMITTED message is dropped for a ledger tool",
+      "then": [
+        "The Gateway queries by invocationId and never re-dispatches"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row06-host-spool-after-cas",
+      "title": "A host spool failure after the claim becomes notStarted",
+      "requirements": [
+        "plan.md §12.7 row 6"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "The host spool fails right after consume, then also the refusal report fails",
+      "then": [
+        "First: ABANDONED_BEFORE_START and FAILED notStarted",
+        "Second: OUTCOME_UNKNOWN with evidence \"not started\""
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row07-heartbeat-fails",
+      "title": "A heartbeat that cannot commit ends the work at lease end",
+      "requirements": [
+        "plan.md §12.7 row 7"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "Heartbeats fail for longer than the lease",
+      "then": [
+        "The host terminates the sandbox at lease end; OUTCOME_UNKNOWN"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row08-outbox",
+      "title": "Results wait in the host outbox while the store is down",
+      "requirements": [
+        "plan.md §12.7 row 8",
+        "plan.md §12.8"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "Control is down when the result is ready, then recovers",
+      "then": [
+        "The Gateway reports working; the outbox re-sends and the result commits once"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row08-stale-token",
+      "title": "A result with a stale fencing token is evidence only",
+      "requirements": [
+        "plan.md §12.7 row 8"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "The invocation was cancelled before the result arrives",
+      "then": [
+        "State stays CANCELLED; the result is recorded as evidence"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row09-purge-resumable",
+      "title": "The purge job is idempotent and resumable",
+      "requirements": [
+        "plan.md §12.7 row 9"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "The purge job is killed half-way and restarted",
+      "then": [
+        "Every eligible payload is tombstoned exactly once"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row10-audit-at-least-once",
+      "title": "Audit ships at least once with dedupe ids",
+      "requirements": [
+        "plan.md §12.7 row 10"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "tool-host",
+        "control"
+      ],
+      "when": "The receiver drops acknowledgements, then recovers",
+      "then": [
+        "Records are re-sent and deduplicated; segments truncate only after acknowledgement"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/row11-soft-limit",
+      "title": "Above the soft limit an alert is raised",
+      "requirements": [
+        "plan.md §12.7 row 11"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The spool passes 80%",
+      "then": [
+        "Work continues; an alert is raised"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/primary-failover",
+      "title": "Primary failover after an acknowledged commit loses nothing",
+      "requirements": [
+        "plan.md §12.8",
+        "plan.md §21 integration"
+      ],
+      "level": "system",
+      "targets": [
+        "control"
+      ],
+      "when": "The PostgreSQL primary fails over just after acknowledging a T9 commit",
+      "then": [
+        "The result is present on the new primary (synchronous commit)"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "persistence/plain-sync-spools-only",
+      "title": "Plain synchronous calls touch only the spools",
+      "requirements": [
+        "plan.md §12.7"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "A READ_ONLY sync tool without key, task or ASK is called",
+      "then": [
+        "Rows 1, 5 and 6 go to spools; no invocation task row is written beyond the invocation record"
+      ],
+      "status": "authored"
+    }
+  ]
+}

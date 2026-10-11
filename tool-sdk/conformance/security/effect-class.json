@@ -1,0 +1,110 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "effect-class",
+  "title": "Resolved effect class",
+  "sources": [
+    "plan.md §11.7",
+    "tool-sdk/spec/authoring/execution.md §4",
+    "plan.md §8.3"
+  ],
+  "cases": [
+    {
+      "id": "effect-class/unknown-uses-ledger",
+      "title": "UNKNOWN is treated as NON_IDEMPOTENT everywhere",
+      "requirements": [
+        "plan.md §11.7",
+        "§21 security"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host",
+        "broker"
+      ],
+      "when": "An UNKNOWN tool is dispatched, the ADMITTED message is dropped, and the tool issues a request that times out",
+      "then": [
+        "A ledger row exists and admission uses the fencing token",
+        "The Gateway never re-dispatches; it queries the ledger",
+        "The broker never retries",
+        "The invocation ends OUTCOME_UNKNOWN with broker evidence"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effect-class/default-unknown",
+      "title": "Every source without a declaration resolves to UNKNOWN",
+      "requirements": [
+        "plan.md §11.7 default",
+        "plan.md §14.1",
+        "plan.md §14.2"
+      ],
+      "level": "component",
+      "targets": [
+        "packager",
+        "control"
+      ],
+      "when": "Tools arrive from an SDK without effect, a v1 package, a legacy manifest, an OPENAPI import of GET and POST operations, and an MCP_PROXY snapshot with readOnlyHint=true",
+      "then": [
+        "Every resolved effect class is UNKNOWN until review sets it",
+        "The HTTP method and upstream hints are never used to infer it"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effect-class/hints-derived",
+      "title": "MCP hints are derived from the effect class",
+      "requirements": [
+        "plan.md §11.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "gateway"
+      ],
+      "when": "tools/list is served for one tool of each class",
+      "then": [
+        "readOnlyHint is true only for READ_ONLY",
+        "idempotentHint is true only for READ_ONLY and IDEMPOTENT"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effect-class/weakening-is-delta",
+      "title": "Weakening the effect class is a security delta",
+      "requirements": [
+        "plan.md §8.3",
+        "plan.md §11.7"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A new version changes UNKNOWN to IDEMPOTENT, then NON_IDEMPOTENT to READ_ONLY, then READ_ONLY to NON_IDEMPOTENT",
+      "then": [
+        "The first two need security re-approval",
+        "The third is shown as narrowing and needs no re-approval"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "effect-class/retry-matrix",
+      "title": "Retries follow the class",
+      "requirements": [
+        "plan.md §11.7 table",
+        "execution.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "broker"
+      ],
+      "when": "Each class gets an upstream 503 then 200 on a route with a retry policy",
+      "then": [
+        "READ_ONLY and IDEMPOTENT: retried per policy",
+        "NON_IDEMPOTENT and UNKNOWN: no retry, no redirect followed"
+      ],
+      "status": "authored"
+    }
+  ]
+}

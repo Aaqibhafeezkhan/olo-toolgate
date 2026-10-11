@@ -1,0 +1,94 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "identity",
+  "title": "Tool Host and Gateway workload identity",
+  "sources": [
+    "docs/security/threat-models/tool-host.md §4.5",
+    "ADR 013 decision 3"
+  ],
+  "cases": [
+    {
+      "id": "identity/device-as-host",
+      "title": "A device certificate cannot act as a Tool Host",
+      "requirements": [
+        "T-ID-1"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "An enrolled device certificate calls tool-hosts/registrations and permits/consume for a Tool Host permit",
+      "then": [
+        "403 for both: the device CA is not the workload CA pin"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "identity/san-mismatch",
+      "title": "Registration and every Tool Host call are bound to the certificate SAN",
+      "requirements": [
+        "T-ID-1"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A Tool Host certificate for host-1 registers as host-2, and later calls the heartbeat for an invocation leased to host-2",
+      "then": [
+        "Both are refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "identity/disabled-host",
+      "title": "A disabled host is refused at its next Control call",
+      "requirements": [
+        "T-ID-2"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "tool-host"
+      ],
+      "when": "An admin disables host-1 while it runs an invocation",
+      "then": [
+        "The next heartbeat, secret delivery and consumption are refused",
+        "The running invocation ends per lease rules"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "identity/cross-tenant",
+      "title": "A host identity never acts for another tenant",
+      "requirements": [
+        "T-ID-3"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A certificate whose SAN names tenant A consumes a permit for tenant B",
+      "then": [
+        "403; nothing changes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "identity/gateway-only-dispatch",
+      "title": "The Tool Host accepts dispatch only from Gateway identities",
+      "requirements": [
+        "ADR 013 decision 3"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A Tool Host certificate and a device certificate each open the dispatch stream",
+      "then": [
+        "Both are refused at TLS or first frame"
+      ],
+      "status": "authored"
+    }
+  ]
+}

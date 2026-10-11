@@ -1,0 +1,122 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "sandbox",
+  "title": "Sandbox and supervisor isolation",
+  "sources": [
+    "docs/security/threat-models/tool-host.md §4.2",
+    "plan.md §11.5, §13.4, §13.5",
+    "ADR 009"
+  ],
+  "cases": [
+    {
+      "id": "sandbox/escape-probes",
+      "title": "The ADR 009 escape probes fail inside a Tool Host sandbox",
+      "requirements": [
+        "T-SB-1",
+        "ADR 009"
+      ],
+      "level": "system",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The existing ADR 009 escape-probe tool (mount, ptrace, raw socket, device access, capability use, host path writes, kernel keyring) runs as a server tool",
+      "then": [
+        "Every probe is denied",
+        "The host node shows no changes outside the sandbox scratch space"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "sandbox/no-weaker-tier",
+      "title": "A tool allowed only OCI_SANDBOX never falls back to another tier",
+      "requirements": [
+        "T-SB-1",
+        "plan.md §13.4"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "The pool has no OCI_SANDBOX capacity and the tool declares only OCI_SANDBOX",
+      "then": [
+        "The call fails with UNSUPPORTED_TIER or BUSY",
+        "No WASI or HOST_NATIVE execution happens"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "sandbox/reuse-isolation",
+      "title": "A reused sandbox carries nothing between invocations",
+      "requirements": [
+        "T-SB-2",
+        "plan.md §11.5"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A stateless tool runs twice in one reuse pool; the first run writes scratch files, sets environment variables and caches a redeemed secret in memory",
+      "then": [
+        "The second run sees no scratch files and no secret",
+        "Reuse never crosses identity class (agent, user)",
+        "A non-stateless tool always gets a fresh sandbox"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "sandbox/cross-tenant-permit",
+      "title": "A pool refuses a permit for another tenant",
+      "requirements": [
+        "T-SB-3"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A valid permit for tenant B is dispatched to a pool of tenant A",
+      "then": [
+        "REFUSED with PERMIT_INVALID; nothing runs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "protocol/frame-fuzz",
+      "title": "Malformed tool output frames never crash or confuse the supervisor",
+      "requirements": [
+        "T-SB-4",
+        "protocol.schema.json"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A fuzzer emits truncated JSON, duplicate keys, unknown fields, wrong kinds, invalid UTF-8 and interleaved partial frames on the tool's stdout",
+      "then": [
+        "The supervisor stays up",
+        "The invocation ends FAILED (or OUTCOME_UNKNOWN for a ledger tool that had begun effects) with an INTERNAL_TOOL_ERROR result",
+        "No frame content is executed or reflected unescaped"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "protocol/oversize",
+      "title": "Oversized frames and outputs are cut off at the caps",
+      "requirements": [
+        "T-SB-4",
+        "plan.md §13.5"
+      ],
+      "level": "component",
+      "targets": [
+        "tool-host"
+      ],
+      "when": "A tool emits a 5 MiB result, 10,000 progress frames and a 2 MiB log frame",
+      "then": [
+        "The result is refused above the 4 MiB output ceiling",
+        "Frame counts and log bytes stop at the invocation caps",
+        "The supervisor memory stays bounded"
+      ],
+      "status": "authored"
+    }
+  ]
+}

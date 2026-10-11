@@ -1,0 +1,221 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "mode-equivalence",
+  "area": "equivalence",
+  "title": "Standalone and governed equivalence",
+  "sources": [
+    "tool-sdk/spec/runtime-modes.md §3",
+    "plan.md §5.8",
+    "plan.md §21"
+  ],
+  "cases": [
+    {
+      "id": "equivalence/descriptor-digest",
+      "title": "Descriptor digests are equal in both modes",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §3 rule 1",
+        "plan.md §7.2"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The vector tools run standalone and as a governed package",
+      "then": [
+        "server/discover _meta io.ololabs.toolgate/descriptorDigests equals the packaged digests",
+        "descriptorSetDigest is equal"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/descriptor/vectors/expected.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/examples",
+      "title": "Every example gives the same result in both modes",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §3 rule 5"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Every Example and shared fixture runs in both modes with the same inputs",
+      "then": [
+        "Outputs, error codes, and route calls (route id and variables) are equal"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/timeout-after-send",
+      "title": "Timeout after send behaves the same",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §3 rule 5"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A ledger tool's upstream accepts the request and never answers, in both modes",
+      "then": [
+        "Both end OUTCOME_UNKNOWN with effectUncertain true; neither retries"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/connection-reset",
+      "title": "Connection reset behaves the same",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §3 rule 5"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The upstream resets the connection before and after the request is sent",
+      "then": [
+        "Same error codes and effect flags in both modes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/upstream-5xx",
+      "title": "Upstream 5xx behaves the same",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §3 rule 5"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The upstream returns 503 for an IDEMPOTENT and a NON_IDEMPOTENT tool",
+      "then": [
+        "Same retries (only IDEMPOTENT) and same final error in both modes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/no-mode-only-api",
+      "title": "No API exists in only one mode",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §3 rule 3"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The public API surface is diffed between the standalone and governed runtimes",
+      "then": [
+        "Identical; capabilities a runtime cannot honour fail with CLIENT_TOOLS_UNAVAILABLE, CLAIMS_UNAVAILABLE or CONFIGURATION, never with empty data"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/no-gained-permission",
+      "title": "Governed mode adds no route, secret, claim, destination or weaker effect",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §3 rule 2"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The governed package descriptor is compared with the standalone declarations",
+      "then": [
+        "No addition and no weaker effect class"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/undeclared-route",
+      "title": "Undeclared routes are refused in both modes",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §2"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Tool code calls an undeclared route in both modes",
+      "then": [
+        "Standalone: the SDK client refuses it",
+        "Governed: the broker refuses it",
+        "Same error code"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/business-keys",
+      "title": "Business-key outcomes match",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §2",
+        "execution.md §4"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The same key sequence (new, repeat, conflict) runs against SQLite standalone and Control governed",
+      "then": [
+        "Same outcomes NEW, EXISTING, IDEMPOTENCY_CONFLICT"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "equivalence/tasks",
+      "title": "Task behaviour matches",
+      "requirements": [
+        "tool-sdk/spec/runtime-modes.md §2"
+      ],
+      "level": "integration",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "An async tool runs with progress, input and cancel in both modes",
+      "then": [
+        "Same task states and results"
+      ],
+      "status": "authored"
+    }
+  ]
+}

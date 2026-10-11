@@ -1,0 +1,221 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "sdk-unit",
+  "area": "context",
+  "title": "ToolContext accessors",
+  "sources": [
+    "tool-sdk/spec/authoring/README.md §8",
+    "plan.md §5.3"
+  ],
+  "cases": [
+    {
+      "id": "context/typed-getters",
+      "title": "Typed getters return declared values",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §8"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler reads each declared variable kind with its typed getter",
+      "then": [
+        "Values equal the inputs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/undeclared-name",
+      "title": "An undeclared name or wrong type is an error",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §8"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler reads an undeclared name and reads a declared name with the wrong type",
+      "then": [
+        "Compile error where the language can detect it (generator literals, analyzers), otherwise ToolConfigurationError"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/jwt-declared-only",
+      "title": "Only declared claims are readable",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §8"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler reads a declared claim and an undeclared claim present in the token",
+      "then": [
+        "Declared: the value",
+        "Undeclared: ToolConfigurationError"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/invocation-info",
+      "title": "invocation() carries the specified fields",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §8"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler reads invocation()",
+      "then": [
+        "invocationId, toolId, deadline, attempt and mode are set; agentId, userId, catalogRevision and businessKey when applicable"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/progress",
+      "title": "progress() is bounded and monotonic",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §8"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler reports 0.5, 0.3, 1.2, then 0.9 in a task",
+      "then": [
+        "0.3 is ignored as non-monotonic, 1.2 is rejected",
+        "In a sync call without a progress token all are ignored"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/cancellation",
+      "title": "isCancelled and the language token are set together",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §8",
+        "execution.md §3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "tasks/cancel arrives while the handler polls isCancelled and waits on the language token",
+      "then": [
+        "Both observe cancellation"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/request-input",
+      "title": "requestInput suspends for input",
+      "requirements": [
+        "tool-sdk/spec/authoring/README.md §8",
+        "execution.md §6"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler calls requestInput in a task and in a sync MRTR call",
+      "then": [
+        "Task: input_required then resumed by tasks/update",
+        "Sync: InputRequiredResult with requestState"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/log-redaction",
+      "title": "log() redacts and caps",
+      "requirements": [
+        "execution.md §8"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A handler logs a secret value and 300 KiB of text",
+      "then": [
+        "The secret is [REDACTED]",
+        "4 KiB per entry and 256 KiB per invocation"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/brokered-secret-in-governed",
+      "title": "secret() on a brokered-only secret fails in governed mode",
+      "requirements": [
+        "http.md §5"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A governed handler calls secret() for a brokered-only secret",
+      "then": [
+        "ToolConfigurationError"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "context/generator-accessors",
+      "title": "Generated accessors match declarations",
+      "requirements": [
+        "java.md",
+        "dotnet.md",
+        "plan.md §5.2"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The generator runs for a tool with a global timeoutSeconds",
+      "then": [
+        "A typed accessor (OrderToolsVars.global(context).timeoutSeconds() or its language equivalent) exists",
+        "Python and TypeScript expose typed access through their declared types"
+      ],
+      "status": "authored"
+    }
+  ]
+}

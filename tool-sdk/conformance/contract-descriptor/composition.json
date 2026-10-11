@@ -1,0 +1,342 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "contract-descriptor",
+  "area": "composition",
+  "title": "Library composition",
+  "sources": [
+    "tool-sdk/spec/composition.md",
+    "plan.md §7.7"
+  ],
+  "cases": [
+    {
+      "id": "composition/c01-namespacing",
+      "title": "Library declarations are namespaced by prefix",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "The toolIds, secrets and routes listed in the case"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c02-share-and-exclude",
+      "title": "A mapping shares a secret and excludes a tool",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "The composition record listed in the case"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c03-incompatible-mapping",
+      "title": "An incompatible mapping fails",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "COMPOSITION_INCOMPATIBLE_MAPPING"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c04-two-versions",
+      "title": "Two versions of one library fail",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "COMPOSITION_DUPLICATE_LIBRARY"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c05-widen-route",
+      "title": "Widening a library route fails",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "COMPOSITION_WIDENING"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c06-weaken-effect",
+      "title": "Weakening a library effect class fails",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "COMPOSITION_EFFECT_WEAKENED"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c07-tool-id-conflict",
+      "title": "A duplicate toolId after prefixing fails",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "COMPOSITION_TOOL_ID_CONFLICT"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c08-order-independent",
+      "title": "Discovery order does not change the result",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "Identical canonical bytes for every permutation"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c09-unknown-target",
+      "title": "A mapping to a missing item fails",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "COMPOSITION_UNKNOWN_MAPPING_TARGET"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/c10-narrow-allowed",
+      "title": "Narrowing is allowed and recorded",
+      "requirements": [
+        "tool-sdk/spec/composition.md",
+        "plan.md §7.7"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "The packager composes the case's host and libraries",
+      "then": [
+        "The narrowed list in the case"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/composition/cases.json"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/generation-unsupported",
+      "title": "A fragment generation the packager cannot normalise fails",
+      "requirements": [
+        "composition.md §2"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "A library fragment uses an unsupported generation, or one whose rewrite changes semantics",
+      "then": [
+        "COMPOSITION_GENERATION_UNSUPPORTED"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/mcp-name-conflict",
+      "title": "A duplicate mcpName, including after shortening, fails",
+      "requirements": [
+        "composition.md §6",
+        "plan.md §10.4"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "Two tools differ only past the 64th character under llm-strict",
+      "then": [
+        "COMPOSITION_MCP_NAME_CONFLICT"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/declaration-conflict",
+      "title": "A duplicate declaration id after prefixing fails",
+      "requirements": [
+        "composition.md §6"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet",
+        "packager"
+      ],
+      "perTarget": true,
+      "when": "A library declares a secret whose prefixed id equals a host secret id",
+      "then": [
+        "COMPOSITION_DECLARATION_CONFLICT"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "composition/failure-report",
+      "title": "Each failure names library, item and mapping location",
+      "requirements": [
+        "composition.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager"
+      ],
+      "when": "Any composition failure",
+      "then": [
+        "The report names the library, the item and the build file location"
+      ],
+      "status": "authored"
+    }
+  ]
+}

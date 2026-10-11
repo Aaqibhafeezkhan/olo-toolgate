@@ -1,0 +1,147 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "protocol",
+  "area": "catalog",
+  "title": "Catalog revisions and tool names",
+  "sources": [
+    "plan.md §16",
+    "plan.md §10.4"
+  ],
+  "cases": [
+    {
+      "id": "catalog/revision-in-list",
+      "title": "tools/list returns the catalog revision",
+      "requirements": [
+        "plan.md §16"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "tools/list",
+      "then": [
+        "_meta carries the revision; the permit records it"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog/stale-revision",
+      "title": "A stale revision with a changed schema is rejected",
+      "requirements": [
+        "plan.md §16"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A call carries an old revision whose tool schema changed since",
+      "then": [
+        "A stale-catalog error and toolsListChanged is signalled"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog/stale-unchanged",
+      "title": "A stale revision for an unchanged tool succeeds",
+      "requirements": [
+        "plan.md §16"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A call carries an old revision whose tool did not change",
+      "then": [
+        "The call proceeds"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog/digest-pin",
+      "title": "Each invocation is pinned to one package digest",
+      "requirements": [
+        "plan.md §16"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "A rollout changes the digest while a task runs",
+      "then": [
+        "The task completes on its admitted digest"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog/canary-sticky",
+      "title": "Canary cohorts are sticky per agent",
+      "requirements": [
+        "plan.md §16"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "One agent calls repeatedly during a canary",
+      "then": [
+        "Every call uses the same version"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog/mcp-name-grammar",
+      "title": "mcpName grammar and default",
+      "requirements": [
+        "plan.md §10.4"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager",
+        "control"
+      ],
+      "when": "Tools without mcpName and with invalid characters",
+      "then": [
+        "Default <packageAlias>.<tool>; invalid names rejected"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog/llm-strict-alias",
+      "title": "llm-strict aliases are derived deterministically",
+      "requirements": [
+        "plan.md §10.4"
+      ],
+      "level": "unit",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "Names with dots, 80 characters, and two colliding after truncation",
+      "then": [
+        "Disallowed characters become _",
+        "Long or colliding names are truncated with _ and 8 hex of SHA-256(toolId)",
+        "A remaining collision rejects enable naming the tools"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "catalog/name-or-alias",
+      "title": "Calls accept the name or the alias",
+      "requirements": [
+        "plan.md §10.4"
+      ],
+      "level": "component",
+      "targets": [
+        "gateway"
+      ],
+      "when": "A tool is called by mcpName and by alias",
+      "then": [
+        "Both resolve to the same toolId before policy"
+      ],
+      "status": "authored"
+    }
+  ]
+}

@@ -1,0 +1,529 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "official-sdk",
+  "area": "compat",
+  "title": "Official MCP SDK compatibility",
+  "sources": [
+    "tool-sdk/spec/sdk-compat/README.md",
+    "tool-sdk/spec/sdk-compat/2026-10-10/results.md",
+    "plan.md §5.10"
+  ],
+  "cases": [
+    {
+      "id": "official-sdk/typescript-pin-resolves",
+      "title": "typescript builds resolve exactly the pinned artifacts",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §5.10"
+      ],
+      "level": "component",
+      "targets": [
+        "typescript"
+      ],
+      "when": "The typescript SDK build resolves its dependencies",
+      "then": [
+        "Exactly @modelcontextprotocol/server 2.3.1 from the lockfile in 2026-10-10/pins/typescript"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/pins/typescript"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/typescript-2026-required",
+      "title": "typescript passes the 37 required 2026-07-28 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §21 official-sdk"
+      ],
+      "level": "component",
+      "targets": [
+        "typescript"
+      ],
+      "when": "modelcontextprotocol/conformance 0.2.0-alpha.12 runs the required server scenarios against the typescript runtime with adapters A2, A3, A4",
+      "then": [
+        "37/37 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2026.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/typescript-2025-required",
+      "title": "typescript passes the 30 required 2025-11-25 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md"
+      ],
+      "level": "component",
+      "targets": [
+        "typescript"
+      ],
+      "when": "The suite runs the required 2025-11-25 server scenarios against the typescript runtime",
+      "then": [
+        "30/30 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2025.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/python-pin-resolves",
+      "title": "python builds resolve exactly the pinned artifacts",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §5.10"
+      ],
+      "level": "component",
+      "targets": [
+        "python"
+      ],
+      "when": "The python SDK build resolves its dependencies",
+      "then": [
+        "Exactly mcp 2.3.0 from the lockfile in 2026-10-10/pins/python"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/pins/python"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/python-2026-required",
+      "title": "python passes the 37 required 2026-07-28 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §21 official-sdk"
+      ],
+      "level": "component",
+      "targets": [
+        "python"
+      ],
+      "when": "modelcontextprotocol/conformance 0.2.0-alpha.12 runs the required server scenarios against the python runtime with adapters A2, A3, A4",
+      "then": [
+        "37/37 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2026.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/python-2025-required",
+      "title": "python passes the 30 required 2025-11-25 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md"
+      ],
+      "level": "component",
+      "targets": [
+        "python"
+      ],
+      "when": "The suite runs the required 2025-11-25 server scenarios against the python runtime",
+      "then": [
+        "30/30 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2025.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/dotnet-pin-resolves",
+      "title": "dotnet builds resolve exactly the pinned artifacts",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §5.10"
+      ],
+      "level": "component",
+      "targets": [
+        "dotnet"
+      ],
+      "when": "The dotnet SDK build resolves its dependencies",
+      "then": [
+        "Exactly ModelContextProtocol 2.2.0 (stateless or hybrid only) from the lockfile in 2026-10-10/pins/dotnet"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/pins/dotnet"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/dotnet-2026-required",
+      "title": "dotnet passes the 37 required 2026-07-28 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §21 official-sdk"
+      ],
+      "level": "component",
+      "targets": [
+        "dotnet"
+      ],
+      "when": "modelcontextprotocol/conformance 0.2.0-alpha.12 runs the required server scenarios against the dotnet runtime with adapters A2 to A5",
+      "then": [
+        "37/37 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2026.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/dotnet-2025-required",
+      "title": "dotnet passes the 30 required 2025-11-25 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md"
+      ],
+      "level": "component",
+      "targets": [
+        "dotnet"
+      ],
+      "when": "The suite runs the required 2025-11-25 server scenarios against the dotnet runtime",
+      "then": [
+        "30/30 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2025.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/java-pin-resolves",
+      "title": "java builds resolve exactly the pinned artifacts",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §5.10"
+      ],
+      "level": "component",
+      "targets": [
+        "java"
+      ],
+      "when": "The java SDK build resolves its dependencies",
+      "then": [
+        "Exactly io.modelcontextprotocol.sdk:mcp 2.0.1 from the lockfile in 2026-10-10/pins/java"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/pins/java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/java-2026-required",
+      "title": "java passes the 37 required 2026-07-28 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md",
+        "plan.md §21 official-sdk"
+      ],
+      "level": "component",
+      "targets": [
+        "java"
+      ],
+      "when": "modelcontextprotocol/conformance 0.2.0-alpha.12 runs the required server scenarios against the java runtime with adapters A1 to A5",
+      "then": [
+        "37/37 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2026.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/java-2025-required",
+      "title": "java passes the 30 required 2025-11-25 server scenarios",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md"
+      ],
+      "level": "component",
+      "targets": [
+        "java"
+      ],
+      "when": "The suite runs the required 2025-11-25 server scenarios against the java runtime",
+      "then": [
+        "30/30 pass"
+      ],
+      "fixtures": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/raw/list-req-2025.txt"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/java-2026-core",
+      "title": "Java 2026-07-28 core is served by A1 and A5",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 1"
+      ],
+      "level": "component",
+      "targets": [
+        "java"
+      ],
+      "when": "2026-07-28 requests, MRTR scenarios and subscriptions/listen reach the Java runtime",
+      "then": [
+        "No HTTP 400 or stack trace; A1 serves the core and A5 routes methods"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/tasks-adapter",
+      "title": "Tasks are served by A2 in every language",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 2"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The 10 tasks-* scenarios and ToolGate Tasks cases run",
+      "then": [
+        "All pass; tasks/get without the extension gives -32021, never -32601"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/tasks-status-push",
+      "title": "Task status push is served by A2",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 3"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A listening client watches a task change state",
+      "then": [
+        "notifications/tasks arrives; a ToolGate case covers what the suite skips"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/dotnet-one-url",
+      "title": ".NET serves both versions on one URL",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 4"
+      ],
+      "level": "component",
+      "targets": [
+        "dotnet"
+      ],
+      "when": "A 2025 and a 2026 client use the same .NET endpoint",
+      "then": [
+        "Both work; Stateful mode is never configured"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/dotnet-result-type",
+      "title": ".NET custom methods return resultType",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 5"
+      ],
+      "level": "component",
+      "targets": [
+        "dotnet"
+      ],
+      "when": "A5-routed methods respond",
+      "then": [
+        "resultType is present; no MCPEXP002 API is used"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/schema-preserved",
+      "title": "Schemas are served exactly as in the descriptor",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 6"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A tool uses composition, conditional and anchor keywords",
+      "then": [
+        "inputSchema is byte-identical to the descriptor in every language"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/bearer-a4",
+      "title": "Bearer verification is done by A4, not the SDK",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 7"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Requests carry each A4 fixture token",
+      "then": [
+        "Results match the A4 table; no SDK bearer support is used"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/stdio-era",
+      "title": "stdio era pinning follows the TS and Python rule",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 8"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "initialize follows 2026 traffic on one stdio connection",
+      "then": [
+        "-32022 in every language, including .NET"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/dotnet-list-changed",
+      "title": ".NET toolsListChanged is covered by a ToolGate case",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/2026-10-10/results.md results.md other failures"
+      ],
+      "level": "component",
+      "targets": [
+        "dotnet"
+      ],
+      "when": "The catalog changes while a .NET client listens",
+      "then": [
+        "toolsListChanged is delivered"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/a4-fixtures",
+      "title": "A4 identity fixtures",
+      "requirements": [
+        "tool-sdk/spec/protocol-layer.md A4"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Tokens: good, expired, not yet valid, wrong issuer, wrong audience, alg none, HS256 signed with the public key, unknown kid then known after refresh, revoked by introspection",
+      "then": [
+        "Only good and the refreshed kid succeed",
+        "JWKS refresh at most once per 30 s",
+        "Introspection cache bounded by exp and 5 min"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/a3-request-state",
+      "title": "A3 requestState cases",
+      "requirements": [
+        "tool-sdk/spec/protocol-layer.md A3"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "Standalone requestState is tampered, expired, used by another identity, with other arguments, and replayed",
+      "then": [
+        "All refused; a fresh one succeeds once"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/a5-with-and-without-hook",
+      "title": "Routing cases pass with and without the hook",
+      "requirements": [
+        "tool-sdk/spec/protocol-layer.md A5"
+      ],
+      "level": "component",
+      "targets": [
+        "typescript",
+        "python"
+      ],
+      "perTarget": true,
+      "when": "The A5 cases run with the routing hook and without it",
+      "then": [
+        "Both pass"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/no-experimental-api",
+      "title": "No experimental or patched SDK API is used",
+      "requirements": [
+        "tool-sdk/spec/protocol-layer.md §1"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The SDK sources are scanned for experimental attributes and patched or forked SDK code",
+      "then": [
+        "None found"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/d0-rule",
+      "title": "Every relied-on feature is PASS or adapter-owned",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "The feature table is checked for the release",
+      "then": [
+        "No SUPPORTED-BY-SOURCE or UNKNOWN feature is relied on"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "official-sdk/record-immutable",
+      "title": "Pin changes add a new record",
+      "requirements": [
+        "tool-sdk/spec/sdk-compat/README.md"
+      ],
+      "level": "unit",
+      "targets": [
+        "packager"
+      ],
+      "when": "A pin changes",
+      "then": [
+        "A new dated record directory is added; earlier records are unchanged"
+      ],
+      "status": "authored"
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "security",
+  "area": "request-state",
+  "title": "Governed requestState (MRTR approval retries)",
+  "sources": [
+    "ADR 013 decision 9",
+    "tool-sdk/spec/protocol-layer.md A3",
+    "plan.md §12.5"
+  ],
+  "cases": [
+    {
+      "id": "request-state/control-mints",
+      "title": "Control returns requestState only for an ASK outcome to an MRTR client",
+      "requirements": [
+        "ADR 013 decision 9"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "POST access/invocations with tasks.declared=false for a tool whose policy is ASK, once from an MRTR client and once from a legacy client",
+      "then": [
+        "The MRTR request gets InvocationAdmission with requestState and approvalUrl",
+        "The legacy request gets no requestState"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "request-state/tampered",
+      "title": "A modified requestState is refused",
+      "requirements": [
+        "plan.md §5.10 A3",
+        "ADR 013 decision 9"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "The retry carries requestState with one payload byte changed",
+      "then": [
+        "409; the invocation does not continue; audit records the rejection"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "request-state/expired",
+      "title": "An expired requestState is refused",
+      "requirements": [
+        "plan.md §5.10 A3"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "The retry arrives after exp (which is at most the approval expiry and at most 10 minutes)",
+      "then": [
+        "Refused; nothing runs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "request-state/other-identity",
+      "title": "A requestState presented by another identity or scope is refused",
+      "requirements": [
+        "plan.md §5.10 A3"
+      ],
+      "level": "component",
+      "targets": [
+        "control",
+        "gateway"
+      ],
+      "when": "A second agent retries with the first agent's requestState",
+      "then": [
+        "Refused; the response reveals nothing about the first invocation"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "request-state/other-arguments",
+      "title": "A requestState presented with different arguments is refused",
+      "requirements": [
+        "plan.md §5.10 A3"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "The retry carries the original requestState but different arguments",
+      "then": [
+        "Refused; argumentsDigest does not match"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "request-state/replay",
+      "title": "A requestState is accepted once",
+      "requirements": [
+        "plan.md §5.10 A3"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "The same valid requestState is presented twice after approval",
+      "then": [
+        "The first retry continues the invocation; the second is refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "request-state/standalone-key",
+      "title": "Standalone SDKs mint requestState with a per-process key of at least 256 bits",
+      "requirements": [
+        "tool-sdk/spec/protocol-layer.md A3"
+      ],
+      "level": "unit",
+      "targets": [
+        "java",
+        "python",
+        "typescript",
+        "dotnet"
+      ],
+      "perTarget": true,
+      "when": "A standalone runtime starts twice and issues requestState each time",
+      "then": [
+        "Both tokens are HS256",
+        "A token from the first process is rejected by the second"
+      ],
+      "status": "authored"
+    }
+  ]
+}

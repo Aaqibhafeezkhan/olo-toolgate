@@ -1,0 +1,115 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "client-delivery",
+  "title": "Client delivery, check-in and permissions",
+  "sources": [
+    "plan.md §2.1",
+    "plan.md §17"
+  ],
+  "cases": [
+    {
+      "id": "client/fleet-conversion",
+      "title": "Control converts client-tool uploads to the fleet format",
+      "requirements": [
+        "plan.md §2.1",
+        "ADR 014"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "endpoint-client"
+      ],
+      "when": "A client-tool .tgpkg is uploaded and enabled",
+      "then": [
+        "Devices receive the RS256 FleetPackageDocument and OCI image; no zip reaches the device"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "client/fleet-limits",
+      "title": "Client-tool packages keep release-1 client limits",
+      "requirements": [
+        "plan.md §2.1"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A client-tool package has 33 tools, and a tool with 64 KiB + 1 input",
+      "then": [
+        "Both are rejected"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "client/checkin-config",
+      "title": "Check-in values come from env and are validated",
+      "requirements": [
+        "plan.md §17.2",
+        "ADR 021"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "Control starts with check-in 26000 ms and 0% jitter, then with valid values",
+      "then": [
+        "Refuses to start when check-in + jitter + 5 s exceeds 30 s",
+        "Valid values are served as nextIntervalMs"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "client/socket-drop",
+      "title": "A socket drop is DEGRADED, not unavailable",
+      "requirements": [
+        "plan.md §17.1"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "endpoint-client"
+      ],
+      "when": "The WebSocket drops while a non-idempotent job is leased",
+      "then": [
+        "DEGRADED; the job is never rescheduled and ends OUTCOME_UNKNOWN at lease expiry"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "client/settings-patch",
+      "title": "Settings PATCH uses merge-patch with If-Match",
+      "requirements": [
+        "ADR 021"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A PATCH with a stale revision, and one without Idempotency-Key",
+      "then": [
+        "Stale: 409 with the current record"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "delta/corruption-recovery",
+      "title": "A corrupt permission delta falls back to a snapshot",
+      "requirements": [
+        "plan.md §17.4",
+        "plan.md §21 integration"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "endpoint-client"
+      ],
+      "when": "A delta arrives with the wrong base revision, and another whose result digest does not match",
+      "then": [
+        "The client rejects both and requests a full snapshot"
+      ],
+      "status": "authored"
+    }
+  ]
+}

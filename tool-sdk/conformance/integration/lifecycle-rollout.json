@@ -1,0 +1,194 @@
+{
+  "$schema": "../case.schema.json",
+  "suite": "integration",
+  "area": "lifecycle-rollout",
+  "title": "Package lifecycle and rollout",
+  "sources": [
+    "plan.md §8.4",
+    "plan.md §16"
+  ],
+  "cases": [
+    {
+      "id": "lifecycle/happy-path",
+      "title": "A version moves from UPLOADED to ACTIVE",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "A package is uploaded, verified, reviewed, enabled and rolled out",
+      "then": [
+        "States UPLOADED, VERIFIED, IN_REVIEW, APPROVED, ROLLING_OUT, ACTIVE, each audited"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/rejected",
+      "title": "Verification or review can reject",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "A package fails verification, another fails review",
+      "then": [
+        "REJECTED from VERIFIED and from IN_REVIEW"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/invalid-transition",
+      "title": "Transitions outside the diagram are refused",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "unit",
+      "targets": [
+        "control"
+      ],
+      "when": "An API call moves UPLOADED to ACTIVE",
+      "then": [
+        "Refused"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/self-tests-gate",
+      "title": "A host failing self-tests does not serve the version",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "tool-host",
+        "control"
+      ],
+      "when": "One host fails self-tests during pre-stage",
+      "then": [
+        "That host never serves the version"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/health-gate-pause",
+      "title": "A failing health gate pauses and rolls back",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "gateway"
+      ],
+      "when": "The new version's OUTCOME_UNKNOWN rate exceeds the baseline during soak",
+      "then": [
+        "Automatic pause, then ROLLED_BACK when configured"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/manual-controls",
+      "title": "Pause, resume, promote and rollback work",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "An admin pauses, resumes, promotes, then rolls back",
+      "then": [
+        "Each transition happens and bumps the catalog revision where exposure changes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/rollback-keeps-version",
+      "title": "Rollback never deletes the new version",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "A rolled-back version is resumed",
+      "then": [
+        "Only as a new version, or the same digest after review"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/coexistence",
+      "title": "At most two versions are routable",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control"
+      ],
+      "when": "A third version starts rolling out",
+      "then": [
+        "Refused unless policy raises the limit to three"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/draining-retired",
+      "title": "Retirement waits for references and retention",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control",
+        "tool-host"
+      ],
+      "when": "An old version drains with one task still running",
+      "then": [
+        "Stays DRAINING until no task or invocation references the digest and retention passes"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/config-revision-pinned",
+      "title": "In-flight work keeps its config revision",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "gateway",
+        "control",
+        "tool-host"
+      ],
+      "when": "A global value changes while a task runs",
+      "then": [
+        "The task keeps the admitted revision; new work uses the new one"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "lifecycle/auto-update-stops-on-delta",
+      "title": "Auto-update stops at review on a non-empty delta",
+      "requirements": [
+        "plan.md §8.4"
+      ],
+      "level": "integration",
+      "targets": [
+        "control"
+      ],
+      "when": "A PATCH channel receives a delta-free update and one with a security delta",
+      "then": [
+        "The first rolls out; the second stops at IN_REVIEW"
+      ],
+      "status": "authored"
+    }
+  ]
+}
