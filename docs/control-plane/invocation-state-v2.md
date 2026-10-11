@@ -140,8 +140,8 @@ The trigger `control_business_key_guard` allows a rebind only from outcome `EXPI
 |---|---|---|---|
 | Flyway (PostgreSQL) | [V18__invocation_tasks_v2.sql](migrations-v2/flyway/V18__invocation_tasks_v2.sql) | `db/migration/V18__invocation_tasks_v2.sql`, milestone M1 | §2–§7 columns, constraints and indexes; `control_business_keys`; `control_invocation_results`; guard triggers; grants |
 | Quickstart (SQLite) | [V11.sql](migrations-v2/quickstart/V11.sql) | `db/quickstart/V11.sql`, M1, with the `SqliteState` cap raised from 10 to 11 | Same state. Cross-column checks are triggers, because SQLite can't add table constraints. |
-| Flyway | [V19__kill_switch.sql](migrations-v2/flyway/V19__kill_switch.sql) | `db/migration/V19__kill_switch.sql`, with the kill switch | [kill-switch.md](kill-switch.md) §2 |
-| Quickstart | [V12.sql](migrations-v2/quickstart/V12.sql) | `db/quickstart/V12.sql`, cap raised to 12 | Same |
+| Flyway | [V20__kill_switch.sql](migrations-v2/flyway/V20__kill_switch.sql) | `db/migration/V20__kill_switch.sql`, with the kill switch | [kill-switch.md](kill-switch.md) §2 |
+| Quickstart | [V13.sql](migrations-v2/quickstart/V13.sql) | `db/quickstart/V13.sql`, cap raised to 13 | Same |
 
 **Rules:**
 - **Frozen content.** The files ship byte-for-byte; the Quickstart runner checksums each file. Only the version number may change, if another migration lands first, and then both trees and this table move together.

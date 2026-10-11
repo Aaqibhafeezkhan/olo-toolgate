@@ -1,6 +1,6 @@
 -- Copyright 2026 OLO Labs
 -- SPDX-License-Identifier: Apache-2.0
--- SPECIFICATION (gate D2). Ships unchanged as db/migration/V19__kill_switch.sql with the kill switch;
+-- SPECIFICATION (gate D2). Ships unchanged as db/migration/V20__kill_switch.sql with the kill switch;
 -- only the version number may change if another migration lands first.
 -- Grow-only signed kill and recovery events (plan.md §15). Normative description:
 -- docs/control-plane/kill-switch.md.
