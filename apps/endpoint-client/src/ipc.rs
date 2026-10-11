@@ -271,6 +271,13 @@ async fn handle<S: AsyncWrite + Unpin>(
     if let Err(failure) = result {
         response.error = Some(code(failure));
     }
+    if matches!(
+        request.operation,
+        ClientIpcOperation::Enroll | ClientIpcOperation::CheckIn
+    ) {
+        // Recalculate the background timer after this one-shot command; do not ping twice.
+        state.schedule_changed.notify_one();
+    }
     let bytes = contracts.encode("ClientIpcResponse", &response)?;
     drop(state);
     tokio::time::timeout(Duration::from_secs(5), write(stream, &bytes))

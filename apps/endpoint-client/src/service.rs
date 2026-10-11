@@ -42,6 +42,7 @@ struct RemoteJournal {
 /// One instance per machine, protected by OS lease and serialized command handling.
 pub struct ClientService {
     pub activity: Arc<crate::activity::Activity>,
+    pub(crate) schedule_changed: Arc<tokio::sync::Notify>,
     remote_job: Option<crate::remote::Job>,
     remote_result: Option<RemoteToolResult>,
     adoption: Option<EndpointAdoption>,
@@ -142,6 +143,7 @@ impl ClientService {
         };
         Ok(Self {
             activity: crate::activity::Activity::open(config.state_directory.clone())?,
+            schedule_changed: Arc::new(tokio::sync::Notify::new()),
             remote_job: None,
             remote_result: None,
             adoption: match store.read("adoption.json")? {
@@ -672,6 +674,9 @@ impl ClientService {
         if directive.state == EndpointState::Revoked {
             self.enroll_inner(Some(directive.report_sequence)).await
         } else {
+            if directive.action == EndpointConnectionAction::Enroll {
+                self.follow_enrollment(&directive)?;
+            }
             self.enroll().await
         }
     }
@@ -767,6 +772,18 @@ impl ClientService {
         self.builder_result = None;
         self.state = EndpointState::Unenrolled;
     }
+    fn follow_enrollment(&mut self, directive: &EndpointConnectionDirective) -> Result<()> {
+        if self.journal.identity.is_some()
+            || self.journal.revoked
+            || (directive.state == EndpointState::Unenrolled && self.journal.challenge.is_some())
+        {
+            self.reset_enrollment();
+        }
+        // A report may have been accepted just before deletion but its ack lost.
+        self.journal.sequence = directive.report_sequence;
+        self.journal.reenrollment = true;
+        self.save()
+    }
     pub async fn tick(&mut self) -> Result<()> {
         let result = self.tick_inner().await;
         if let Err(failure) = result {
@@ -784,7 +801,7 @@ impl ClientService {
                 self.state = EndpointState::Revoked;
                 self.journal.revoked = true;
                 self.save()?;
-            } else if self.journal.identity.is_some() {
+            } else if self.journal.identity.is_some() && !self.journal.revoked {
                 self.state = EndpointState::Offline;
             }
             tracing::warn!(event="client_check_in",result="rejected",error=?failure);
@@ -816,18 +833,7 @@ impl ClientService {
                 return Ok(());
             }
             EndpointConnectionAction::Enroll => {
-                if self.journal.identity.is_some()
-                    || self.journal.revoked
-                    || (directive.state == EndpointState::Unenrolled
-                        && self.journal.challenge.is_some())
-                {
-                    self.reset_enrollment();
-                }
-                // A report may have been accepted just before deletion but its ack lost.
-                // The server's sequence is authoritative for the fresh enrollment.
-                self.journal.sequence = directive.report_sequence;
-                self.journal.reenrollment = true;
-                self.save()?;
+                self.follow_enrollment(&directive)?;
             }
             EndpointConnectionAction::CheckIn => {
                 self.journal.revoked = false;
@@ -1067,6 +1073,9 @@ impl ClientService {
     pub fn server_url(&self) -> &str {
         &self.config.server_url
     }
+    pub(crate) fn is_revoked(&self) -> bool {
+        self.journal.revoked
+    }
     pub fn next_delay_millis(&self) -> u64 {
         if self.journal.revoked {
             return crate::platform::next_local_hour_millis(
@@ -1102,6 +1111,7 @@ mod tests {
 
     struct Gateway {
         pings: AtomicU64,
+        ping_unavailable: AtomicBool,
         directive: std::sync::Mutex<Option<EndpointConnectionDirective>>,
         polls: AtomicU64,
         desired: AtomicU64,
@@ -1117,6 +1127,9 @@ mod tests {
         fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
             Box::pin(async move {
                 self.pings.fetch_add(1, Ordering::SeqCst);
+                if self.ping_unavailable.load(Ordering::SeqCst) {
+                    return Err(Failure::Unavailable);
+                }
                 Ok(self
                     .directive
                     .lock()
@@ -1272,6 +1285,7 @@ mod tests {
         };
         let gateway = Arc::new(Gateway {
             pings: AtomicU64::new(0),
+            ping_unavailable: AtomicBool::new(false),
             directive: std::sync::Mutex::new(None),
             polls: AtomicU64::new(0),
             desired: AtomicU64::new(0),
@@ -1545,6 +1559,102 @@ mod tests {
         std::fs::remove_dir_all(directory).unwrap();
     }
     #[tokio::test]
+    async fn revoked_ping_failure_keeps_revoked_health_and_hourly_schedule() {
+        let (mut service, gateway, directory) = test_service();
+        service.journal.identity =
+            Some(serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap());
+        service.journal.revoked = true;
+        service.state = EndpointState::Revoked;
+        gateway.ping_unavailable.store(true, Ordering::SeqCst);
+        assert_eq!(service.tick().await, Err(Failure::Unavailable));
+        assert_eq!(service.health().state, EndpointState::Revoked);
+        assert!(service.journal.revoked);
+        assert!((1..=3600000).contains(&service.next_delay_millis()));
+        assert_eq!(gateway.pings.load(Ordering::SeqCst), 1);
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn manual_check_pings_once_and_only_follows_server_changes() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut service, gateway, directory) = test_service();
+        service.journal.identity =
+            Some(serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap());
+        service.journal.revoked = true;
+        service.state = EndpointState::Revoked;
+        let fingerprint = service.key.fingerprint();
+        let device_id = service.device();
+        let activity = service.activity.clone();
+        let schedule_changed = service.schedule_changed.clone();
+        let service = Arc::new(tokio::sync::Mutex::new(service));
+        let contracts = crate::contracts::Contracts::new().unwrap();
+        for (index, state, action) in [
+            (1, EndpointState::Revoked, EndpointConnectionAction::Wait),
+            (
+                2,
+                EndpointState::Unenrolled,
+                EndpointConnectionAction::Enroll,
+            ),
+        ] {
+            *gateway.directive.lock().unwrap() = Some(EndpointConnectionDirective {
+                device_id: device_id.clone(),
+                state,
+                action,
+                report_sequence: 7,
+                next_interval_ms: 5000,
+            });
+            let request = ClientIpcRequest {
+                protocol_version: 1,
+                request_id: format!("manual-check-{index}"),
+                operation: ClientIpcOperation::CheckIn,
+            };
+            let bytes = contracts.encode("ClientIpcRequest", &request).unwrap();
+            let (mut stream, mut peer) = tokio::io::duplex(16384);
+            peer.write_u32(bytes.len() as u32).await.unwrap();
+            peer.write_all(&bytes).await.unwrap();
+            crate::ipc::connection(
+                &mut stream,
+                "authorized",
+                &["authorized".into()],
+                &service,
+                &contracts,
+                &activity,
+            )
+            .await
+            .unwrap();
+            let mut response = vec![0; peer.read_u32().await.unwrap() as usize];
+            peer.read_exact(&mut response).await.unwrap();
+            let response: ClientIpcResponse =
+                contracts.decode("ClientIpcResponse", &response).unwrap();
+            assert_eq!(gateway.pings.load(Ordering::SeqCst), index);
+            assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+            tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                schedule_changed.notified(),
+            )
+            .await
+            .unwrap();
+            let state = service.lock().await;
+            assert_eq!(state.key.fingerprint(), fingerprint);
+            assert!(!state.health().ready);
+            if index == 1 {
+                assert!(response.error.is_none());
+                assert!(state.journal.revoked);
+                assert!(state.journal.identity.is_some());
+            } else {
+                // Mock discovery is unavailable, but the changed server state is applied durably.
+                assert_eq!(response.error, Some(ErrorCode::Unsupported));
+                assert!(!state.journal.revoked);
+                assert!(state.journal.identity.is_none());
+                assert!(state.journal.reenrollment);
+                assert_eq!(state.journal.sequence, 7);
+            }
+        }
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
     async fn deletion_between_ping_and_check_in_recovers_the_servers_report_sequence() {
         let (mut service, gateway, directory) = test_service();
         let mut identity: DeviceIdentity =
@@ -1590,6 +1700,19 @@ mod tests {
         assert_eq!(gateway.pings.load(Ordering::SeqCst), 1);
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
         assert!((1..=3600000).contains(&service.next_delay_millis()));
+        *gateway.directive.lock().unwrap() = Some(EndpointConnectionDirective {
+            device_id: service.device(),
+            state: EndpointState::Unenrolled,
+            action: EndpointConnectionAction::Enroll,
+            report_sequence: 7,
+            next_interval_ms: 5000,
+        });
+        // An admin may already have reopened the server while this client was sleeping.
+        assert_eq!(service.request_approval().await, Err(Failure::Unsupported));
+        assert!(!service.journal.revoked);
+        assert!(service.journal.reenrollment);
+        assert_eq!(service.journal.sequence, 7);
+        assert_eq!(service.key.fingerprint(), fingerprint);
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
     }

@@ -42,6 +42,15 @@ calculates the next interval from the supplied offset; the client recalculates t
 local boundary before sleeping, including after transport failures. Admin changes
 are stored on the server and do not push to or wake a disconnected client.
 
+The tray's **Repair gateway connection** and **Switch gateway → Configuration**
+actions make one immediate OS-authenticated presence check of the focused gateway,
+including while revoked. They apply Control's directive without implicitly
+requesting approval or resetting its enrollment. An unchanged revoked directive
+leaves the device disconnected on its hourly schedule. A changed directive updates
+the journal, connection display and background interval immediately; rescheduling
+does not send a second ping. Switching to another gateway starts its existing
+connection flow, and changed gateway trust retains the explicit repair flow.
+
 An explicit **Request approval again** admin action or OS-authenticated
 `request-approval` client command may reopen a revoked identity for review. The
 admin action leaves it awaiting a fresh CSR at its next scheduled ping; the local
@@ -103,6 +112,8 @@ include it when choosing the existing client check-in interval.
 - Client tests cover continued pings while waiting and revoked, durable
   reenrollment, report-sequence recovery when deletion races with check-in, and
   retry after enrollment-challenge expiry.
+- Manual-check IPC tests cover one ping, unchanged revocation and changed server
+  state; scheduler tests ensure network latency cannot shift the hourly boundary.
 - Server and client scheduling tests cover whole-hour, half-hour and quarter-hour
   offsets; integration tests cover client and admin reopening, stale revisions,
   admin replay and mandatory fresh approval despite initial automatic approval.

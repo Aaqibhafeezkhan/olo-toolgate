@@ -48,6 +48,10 @@ when less than 12 hours remain. The active device and owner are checked on every
 check-in. Administrative revocation blocks protected access and renewal. Revoked
 clients ping at each local X:00:00 hour boundary, including after a failed ping,
 so an admin state change is discovered at the next scheduled ping without a push.
+The tray's **Repair gateway connection** and **Switch gateway → Configuration**
+actions check Control once immediately, including while revoked. They follow its
+current state without requesting approval or resetting enrollment. An unchanged
+revocation keeps the hourly schedule; a changed state updates the client and timer.
 Use `olo-toolgate-client request-approval` (or **Request device approval** in the
 Windows tray) to request a fresh admin review immediately. The admin console also
 offers **Request approval again**; both flows retain the device ID and key and
