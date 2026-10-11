@@ -5,8 +5,17 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {AgentToolMapping,DeviceMembership,PublishAccess} from '../src/AccessMapping';
 import {ScopePicker} from '../src/ScopePicker';
 import {ControlClient} from '../src/api';
+import {emptyScope} from '../src/EnterpriseScopeEditor';
 afterEach(cleanup);
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status});
+it('opens an existing mapping from its edit icon and leaves the name read-only',async()=>{
+  const grant={id:'capability',name:'Read ledger',enabled:true,revision:3,sourceType:'AGENT_GROUP',sourceId:'finance',purpose:'CAPABILITY',scope:emptyScope};
+  const transport=vi.fn<typeof fetch>().mockImplementation(async path=>json({items:String(path).includes('agent-groups')?[{id:'finance',name:'Finance agents',enabled:true,revision:1,agentIds:[],roleIds:[]}]:String(path).includes('/grants')?[grant]:[]}));
+  render(<AgentToolMapping client={new ControlClient('token',vi.fn(),transport)}/>);await screen.findByRole('option',{name:'Finance agents (finance)'});fireEvent.change(screen.getByLabelText('Agent Group'),{target:{value:'finance'}});
+  fireEvent.click(screen.getByText('Read ledger'));expect(screen.queryByRole('dialog')).toBeNull();
+  const edit=screen.getByRole('button',{name:'Edit capability'});edit.focus();fireEvent.click(edit);expect(screen.getByRole('dialog',{name:'Edit capability mapping'})).toBeTruthy();expect((screen.getByLabelText('Grant identifier') as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button',{name:'Close editor'}));expect(document.activeElement).toBe(edit);expect(screen.queryByRole('dialog')).toBeNull();
+});
 it('maps an Agent Group through a capability grant and preserves an exact retry key',async()=>{
   let fail=true;const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>options?.method==='POST'?json({},fail?503:200):json({items:String(path).includes('agent-groups')?[{id:'finance',name:'Finance agents',enabled:true,revision:1,agentIds:[],roleIds:[]}]:[]}));
   render(<AgentToolMapping client={new ControlClient('token',vi.fn(),transport)}/>);await screen.findByRole('option',{name:'Finance agents (finance)'});

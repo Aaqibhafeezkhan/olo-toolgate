@@ -11,6 +11,12 @@ const pending:EndpointManagedDevice={deviceId:'device-2',systemExecutor:false,en
 const system:EndpointManagedDevice={deviceId:'local-builtins',systemExecutor:true,systemExecutorKind:'BUILTINS',systemAvailable:true,directoryDevice:{id:'local-builtins',name:'Quickstart fixed executor',ownerUserId:'local-tools',enabled:true,revision:1},registeredUser:{id:'local-tools',name:'Local tool requester',enabled:true,revision:1}};
 function setup(items:EndpointManagedDevice[],mutationStatus=200){const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>new Response(JSON.stringify(String(path).endsWith('/groups')?{entityType:'DEVICE',entityId:String(path).split('/').at(-2),groupIds:['default-devices'],revision:1}:options?.method==='POST'?{}:{items}),{status:options?.method==='POST'?mutationStatus:200}));render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);return transport;}
 describe('Device management',()=>{
+  it('shows group-loading failures inside the approval popup and keeps approval disabled',async()=>{
+    const transport=vi.fn<typeof fetch>().mockImplementation(async path=>new Response(JSON.stringify(String(path).endsWith('/groups')?{}:{items:[active]}),{status:String(path).endsWith('/groups')?503:200}));
+    render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);fireEvent.click(await screen.findByRole('button',{name:'Change approval device-1'}));
+    const dialog=screen.getByRole('dialog',{name:'Approve device-1'});expect(dialog.contains(await screen.findByRole('alert'))).toBe(true);expect((screen.getByRole('button',{name:'Approve device'}) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button',{name:'Close approval'}));expect(screen.queryByRole('dialog')).toBeNull();
+  });
   it('shows reported system names and observed IPs, with honest missing metadata',async()=>{
     setup([{...active,systemName:'trading-desktop',ipAddress:'192.0.2.15'},pending]);
     expect(await screen.findByText('trading-desktop')).toBeTruthy();expect(screen.getByText('192.0.2.15')).toBeTruthy();

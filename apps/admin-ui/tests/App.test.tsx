@@ -114,13 +114,13 @@ describe('Management shell states', () => {
     fireEvent.click(screen.getByRole('button',{name:'Add client'}));
     fireEvent.change(screen.getByLabelText('Display name'),{target:{value:'Keep this draft'}});
     enrolled=true;
-    expect(await screen.findByRole('button',{name:record.name},{timeout:3500})).toBeTruthy();expect(await screen.findByText('Connected')).toBeTruthy();
+    expect(await screen.findByText(record.name,undefined,{timeout:3500})).toBeTruthy();expect(await screen.findByText('Connected')).toBeTruthy();
     expect((screen.getByLabelText('Display name') as HTMLInputElement).value).toBe('Keep this draft');
   });
   it('renders untrusted record labels as text without executable HTML', async () => {
     window.location.hash='#users';const name='<img src=x onerror=alert(1)>';
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async () => response([{id:'untrusted-label',name,enabled:true,revision:1}])));
-    render(<App />);await connect();await screen.findByRole('button',{name});expect(document.querySelector('main img')).toBeNull();
+    render(<App />);await connect();await screen.findByText(name);expect(document.querySelector('main img')).toBeNull();
   });
   it('submits a user via server validation and shows a reader denial', async () => {
     window.location.hash = '#users'; vi.stubGlobal('fetch',vi.fn().mockImplementation(async (_url, options) => options.method === 'POST' ? new Response('{}',{status:403}) : response()));

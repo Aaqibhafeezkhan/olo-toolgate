@@ -26,6 +26,7 @@ import {AgentToolMapping,PublishAccess,GroupMembershipEditor} from './AccessMapp
 import {Table,ActionButton,StatusToggle} from './Table';
 import {protectedRecord,useRecordActions} from './RecordActions';
 import {ApprovalBell} from './ApprovalBell';
+import {EditorDialog} from './EditorDialog';
 import {sessionPresentation} from './SessionPresentation';
 import oloLogo from './assets/olo.png';
 
@@ -268,7 +269,7 @@ function Directory({ client, kind }: { client: ControlClient; kind: DirectoryKin
     {kind==='devices'&&<p className="hint">Green means an active client checked in within the last two minutes. Red means the client is offline or unavailable; the status label explains why. The client list and connection status refresh every two seconds.</p>}
     {error ? <Failure error={error} retry={refresh} /> : !page ? <p role="status">Loading {label.toLowerCase()}…</p> : <>
       {page.items.length === 0 ? <section className="empty"><h2>No {label.toLowerCase()} on this page</h2><p>{kind === 'users' ? 'Add a directory user to get started.' : 'Records will appear here when they are added to Control.'}</p></section> :
-        <div className="table-wrap"><Table disabled={actions.busy} bulkActions={keys=>{const records=page.items.filter(record=>keys.includes(record.id)),mutable=records.filter(record=>!protectedRecord(kind,record.id));return <><button disabled={actions.busy||!records.some(record=>!record.enabled)} onClick={()=>void actions.run(records,'enable')}>Enable selected</button><button disabled={actions.busy||!mutable.some(record=>record.enabled)} onClick={()=>void actions.run(mutable,'disable')}>Disable selected</button><button className="danger" disabled={actions.busy||!mutable.length} onClick={()=>actions.requestDelete(mutable)}>Delete selected</button></>;}}><caption className="sr-only">{label} directory</caption><thead><tr><th scope="col">Name</th><th scope="col">Identifier</th>{kind==='devices'&&<th scope="col">Connection</th>}<th scope="col">Directory status</th><th scope="col">Revision</th><th scope="col">Actions</th></tr></thead><tbody>{page.items.map(record => <tr key={record.id}><th scope="row"><button className="record-link" onClick={() => { setSelected(record); setCreating(false); }}>{record.name}</button></th><td><code>{record.id}</code></td>{kind==='devices'&&<td><ClientConnection client={client} id={record.id} enabled={record.enabled} ownerUserId={'ownerUserId' in record?record.ownerUserId:''}/></td>}<td data-sort-value={record.enabled?'Enabled':'Disabled'}><StatusToggle enabled={record.enabled} label={record.id} disabled={actions.busy||protectedRecord(kind,record.id)} onClick={()=>void actions.run([record],record.enabled?'disable':'enable')}/></td><td data-sort-value={record.revision}>{record.revision}</td><td><div className="actions"><ActionButton icon="edit" label={`Edit ${record.id}`} disabled={actions.busy} onClick={()=>{setSelected(record);setCreating(false);}}/><ActionButton icon="delete" label={`Delete ${record.id}`} title={protectedRecord(kind,record.id)?'Required default groups cannot be deleted':`Delete ${record.id}; fresh onboarding will be required`} disabled={actions.busy||protectedRecord(kind,record.id)} onClick={()=>actions.requestDelete([record])}/></div></td></tr>)}</tbody></Table></div>}
+        <div className="table-wrap"><Table disabled={actions.busy} bulkActions={keys=>{const records=page.items.filter(record=>keys.includes(record.id)),mutable=records.filter(record=>!protectedRecord(kind,record.id));return <><button disabled={actions.busy||!records.some(record=>!record.enabled)} onClick={()=>void actions.run(records,'enable')}>Enable selected</button><button disabled={actions.busy||!mutable.some(record=>record.enabled)} onClick={()=>void actions.run(mutable,'disable')}>Disable selected</button><button className="danger" disabled={actions.busy||!mutable.length} onClick={()=>actions.requestDelete(mutable)}>Delete selected</button></>;}}><caption className="sr-only">{label} directory</caption><thead><tr><th scope="col">Name</th><th scope="col">Identifier</th>{kind==='devices'&&<th scope="col">Connection</th>}<th scope="col">Directory status</th><th scope="col">Revision</th><th scope="col">Actions</th></tr></thead><tbody>{page.items.map(record => <tr key={record.id}><th scope="row">{record.name}</th><td><code>{record.id}</code></td>{kind==='devices'&&<td><ClientConnection client={client} id={record.id} enabled={record.enabled} ownerUserId={'ownerUserId' in record?record.ownerUserId:''}/></td>}<td data-sort-value={record.enabled?'Enabled':'Disabled'}><StatusToggle enabled={record.enabled} label={record.id} disabled={actions.busy||protectedRecord(kind,record.id)} onClick={()=>void actions.run([record],record.enabled?'disable':'enable')}/></td><td data-sort-value={record.revision}>{record.revision}</td><td><div className="actions"><ActionButton icon="edit" label={`Edit ${record.id}`} disabled={actions.busy} onClick={()=>{setSelected(record);setCreating(false);}}/><ActionButton icon="delete" label={`Delete ${record.id}`} title={protectedRecord(kind,record.id)?'Required default groups cannot be deleted':`Delete ${record.id}; fresh onboarding will be required`} disabled={actions.busy||protectedRecord(kind,record.id)} onClick={()=>actions.requestDelete([record])}/></div></td></tr>)}</tbody></Table></div>}
       <div className="pagination"><span>{page.items.length} records on this page</span><div className="actions"><button disabled={!history.length} onClick={() => { setCursor(history.at(-1)); setHistory(history.slice(0,-1)); }}>Previous page</button><button disabled={!page.nextCursor} onClick={() => { setHistory([...history,cursor]); setCursor(page.nextCursor); }}>Next page</button></div></div>
     </>}
     {actions.feedback}
@@ -281,9 +282,9 @@ function Directory({ client, kind }: { client: ControlClient; kind: DirectoryKin
 function UserEditor({ client, user, close, saved }: { client: ControlClient; user?: ControlUser; close: () => void; saved: () => void }) {
   const [id,setId] = useState(user?.id ?? ''); const [name,setName] = useState(user?.name ?? ''); const [enabled,setEnabled] = useState(user?.enabled ?? false);
   const [current,setCurrent] = useState(user); const [busy,setBusy] = useState(false); const [error,setError] = useState<unknown>(); const [confirm,setConfirm] = useState(false);
-  const heading = useRef<HTMLHeadingElement>(null); const alive = useRef(true);
+  const alive = useRef(true);
   const pending = useRef<{ body: string; key: string } | undefined>(undefined);
-  useEffect(() => { alive.current = true; heading.current?.focus(); return () => { alive.current = false; }; },[]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; },[]);
   const mutationKey = (body: string) => { if (pending.current?.body !== body) pending.current = {body,key:crypto.randomUUID()}; return pending.current!.key; };
   async function submit(event: FormEvent) {
     event.preventDefault(); if (busy) return; setBusy(true); setError(undefined);
@@ -301,7 +302,7 @@ function UserEditor({ client, user, close, saved }: { client: ControlClient; use
     try { await client.deleteUser(current,mutationKey(`delete:${current.id}:${current.revision}`)); if (alive.current) saved(); }
     catch (failure) { if (alive.current) setError(failure); } finally { if (alive.current) setBusy(false); }
   }
-  return <section className="detail" aria-label="User editor"><div className="page-heading"><h2 ref={heading} tabIndex={-1}>{current ? 'Edit user' : 'Add directory user'}</h2><button onClick={close} disabled={busy}>Close editor</button></div>
+  return <EditorDialog title={current ? 'Edit user' : 'Add directory user'} close={close} busy={busy}><section aria-label="User editor">
     {Boolean(error) && <Failure error={error} />}
     <form onSubmit={submit} className="user-form"><label htmlFor="user-id">Identifier</label><input id="user-id" value={id} required maxLength={128} disabled={!!current || busy} onChange={e => setId(e.target.value)} />
       <label htmlFor="user-name">Display name</label><input id="user-name" value={name} required maxLength={200} disabled={busy} onChange={e => setName(e.target.value)} />
@@ -310,5 +311,5 @@ function UserEditor({ client, user, close, saved }: { client: ControlClient; use
     </form>
     {current&&<GroupMembershipEditor client={client} entity="users" id={current.id} saved={saved}/>}
     {current && <div className="delete-area">{confirm ? <><p>Delete this directory record? Its identifier cannot be reused. Referenced users cannot be deleted.</p><button disabled={busy} className="danger" onClick={remove}>Confirm delete</button> <button disabled={busy} onClick={() => setConfirm(false)}>Cancel delete</button></> : <button className="danger" disabled={busy} onClick={() => setConfirm(true)}>Delete user</button>}</div>}
-  </section>;
+  </section></EditorDialog>;
 }
