@@ -97,7 +97,7 @@ test('real group administration, inherited provenance and review impact are acce
     await applyDraft();
     await page.goto(origin+'/console/#mapping');
     await page.getByRole('combobox',{name:'Agent Group',exact:true}).selectOption('default-agents');
-    await page.getByRole('button',{name:'Browser reviewed capability',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-capability',exact:true}).click();
     await expect(page.getByLabel('Resource locator')).toHaveValue('builtin/calculator.evaluate');
     console.info('PASS reviewed capability mapping persisted');
     await page.goto(origin+'/console/#users');
@@ -108,7 +108,7 @@ test('real group administration, inherited provenance and review impact are acce
     await page.getByRole('button',{name:'Save user',exact:true}).click();
     await applyDraft();
     await page.goto(origin+'/console/#users');
-    await page.getByRole('button',{name:'Browser pending user',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-pending-user',exact:true}).click();
     await expect(page.getByLabel('Enabled in directory')).not.toBeChecked();
     await expect(page.getByText('team-default',{exact:true}).first()).toBeVisible();
     console.info('PASS reviewed disabled user/default membership persisted');
@@ -121,7 +121,7 @@ test('real group administration, inherited provenance and review impact are acce
     await applyDraft();
     console.info('PASS reviewed Team creation persisted');
     await page.goto(origin+'/console/#users');
-    await page.getByRole('button',{name:'Browser pending user',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-pending-user',exact:true}).click();
     const membership=page.getByRole('region',{name:'Group membership',exact:true});
     await membership.getByRole('button',{name:'Choose teams',exact:true}).click();
     await page.getByRole('dialog').getByLabel(/team-default/).uncheck();
@@ -131,14 +131,14 @@ test('real group administration, inherited provenance and review impact are acce
     await membership.getByRole('button',{name:'Save group membership'}).click();
     await applyDraft();
     await page.goto(origin+'/console/#users');
-    await page.getByRole('button',{name:'Browser pending user',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-pending-user',exact:true}).click();
     await expect(page.getByRole('region',{name:'Group membership',exact:true}).getByText('browser-team',{exact:true}).first()).toBeVisible();
     console.info('PASS reviewed membership transfer persisted');
     await page.goto(origin+'/console/#local');
     await expect(page.getByLabel('Tool',{exact:true}).locator('option')).toHaveCount(0);
   } finally { await Promise.all(contexts.map(c=>c.close())); }
   await page.goto(origin+'/console/#users');
-  await page.getByRole('button',{name:'Quickstart admin',exact:true}).click();
+  await page.getByRole('button',{name:'Edit admin',exact:true}).click();
   await expect(page.getByText(/Inherited access/).first()).toBeVisible();
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   await page.setViewportSize({width:390,height:844});

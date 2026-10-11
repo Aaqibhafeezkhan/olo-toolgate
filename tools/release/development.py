@@ -19,7 +19,8 @@ WORKFLOWS = {'control':'control.yml', 'gateway':'gateway.yml', 'quickstart':'qui
              'foundation':'foundation.yml', 'client':'client.yml'}
 IMAGES = {'control':('olo-toolgate-control:module05','olo-toolgate-control'),
           'gateway':('olo-toolgate-gateway:module05','olo-toolgate-gateway'),
-          'quickstart':('olo-toolgate-quickstart:module11','olo-toolgate-quickstart')}
+          'quickstart':('olo-toolgate-quickstart:module11','olo-toolgate-quickstart'),
+          'device':('olo-toolgate-device:module11','olo-toolgate-device')}
 
 
 def run(*arguments, capture=False, input=None):
@@ -83,6 +84,7 @@ def prepare():
                           ('quickstart','quickstart-evidence'),('foundation','foundation-evidence'),
                           ('client','public-client-bundle')]:
         run('gh','run','download',str(selected[name]),'--repo',repo,'--name',artifact,'--dir',str(OUTPUT/name))
+    run('gh','run','download',str(selected['quickstart']),'--repo',repo,'--name','device-evidence','--dir',str(OUTPUT/'device'))
     run(sys.executable,'tools/client/manifest.py','--source',str(OUTPUT/'client'),'--output',str(assets))
     if not (assets/'installers.json').exists():raise ValueError('Native installers required for release')
     # ZIP archives remain CI build inputs, never public Windows installation assets.

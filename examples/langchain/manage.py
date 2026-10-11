@@ -279,6 +279,33 @@ def verify_discovery(selection, directory, target, timeout=30):
                      f'registered in .state/devices/{device}.json. {remedy}')
 
 
+def configure_execution(config, name, agent, device, profiles):
+    """Keep the shared selection group, then bind this run to its selected device and tools."""
+    base = dict(enabled=True, revision=1)
+    devices, agents, tools = name+'-devices', name+'-agents', 'ReadAndWriteToolGroup'
+    config.upsert('device-groups', dict(**base, id=devices, name='LangChain selected device', deviceIds=[device]))
+    config.upsert('agent-groups', dict(**base, id=agents, name='LangChain selected agent', agentIds=[agent], roleIds=[]))
+    # Tools have exactly one group. Keep their existing shared allocation; the
+    # execution binding narrows placement to the selected prepared device.
+    config.memberships('agents', agent, ['ReadAndWriteAgentGroup', agents])
+    scope = config.api('/api/control/v1/grants/standard-ReadAndWrite-capability')['scope']
+    scope = {**scope, 'toolGroups': dict(ids=[tools], all=False), 'deviceGroups': dict(ids=[devices], all=False),
+             'actions': sorted({action['name'] for profile in profiles for action in profile['tool']['definition']['actions']}),
+             'allActions': False}
+    for purpose in ('CAPABILITY', 'SERVICE'):
+        config.upsert('grants', dict(**base, id=name+'-'+purpose.lower(), name='LangChain '+purpose.lower(),
+                                    sourceType='AGENT_GROUP', sourceId=agents, purpose=purpose, scope=scope))
+    config.upsert('policies', dict(**base, id=name+'-access', name='LangChain selected-device access', decision='ALLOW',
+        scope=scope, teams=dict(ids=[], all=False), agentGroups=dict(ids=[agents], all=False),
+        approverTeams=dict(ids=[], all=False)))
+    binding = name+'-binding'
+    config.upsert('bindings', dict(**base, id=binding, name='LangChain selected-device execution',
+        toolGroupId=tools, deviceGroupId=devices, actions=scope['actions'],
+        allowedPackageDigests=sorted({profile['tool']['packageDigest'] for profile in profiles}),
+        requireOnline=True, ownerDependency=False))
+    return binding, devices
+
+
 def provision(args):
     origin = wait_ready()
     config = Configuration(origin, args.bootstrap_local)
@@ -301,12 +328,7 @@ def provision(args):
     workload = name + '-workload'
     config.upsert('agents', dict(id=agent, name='LangChain ' + args.target + ' example', enabled=True,
                                 revision=1, ownerUserId=config.username))
-    config.memberships('agents', agent, ['ReadAndWriteAgentGroup'])
-    binding_id = 'standard-ReadAndWrite-ReadAndWrite'
-    binding = config.api('/api/control/v1/bindings/' + binding_id)
-    binding['allowedPackageDigests'] = sorted(set(binding['allowedPackageDigests']) |
-                                            {profile['tool']['packageDigest'] for profile in selected})
-    config.upsert('bindings', binding)
+    binding_id, execution_group = configure_execution(config, name, agent, device, selected)
     expires = int(time.time()*1000) + 86400000
     token = secrets.token_urlsafe(48)
     digest = hashlib.sha256(token.encode()).hexdigest()
@@ -315,7 +337,7 @@ def provision(args):
     config.upsert('workload-bindings', dict(id=workload, name='LangChain example credential', enabled=True,
         revision=1, agentId=agent, mode='SERVICE', issuer='gateway', subject=name, audience='gateway',
         credentialSha256=digest, credentialEpoch=epoch, expiresAtUnixMs=expires))
-    # The context names no device; Control places calls on a device of the binding's group.
+    # The context names no device; this binding's group contains only the selected member.
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires, context=dict(requestId=name,
         tenantId='quickstart', mode='SERVICE', credentialKind='STATIC_TOKEN', agentId=agent, workloadBindingId=workload,
         chain=[], credentialEpoch=epoch, expiresAtUnixMs=expires, credentialSha256=digest, bindingId=binding_id))
@@ -327,7 +349,8 @@ def provision(args):
         "assert len(v)<32;s.atomic(p,json.dumps(v+[c]))"], json.dumps(credential))
     directory = STATE / 'agents'
     shared.private_file(directory / (args.target + '.token'), token)
-    descriptor = dict(deviceId=device, platform=selection['platform'], deviceGroupId=DEVICE_GROUP,
+    descriptor = dict(deviceId=device, platform=selection['platform'], deviceGroupId=execution_group,
+                      selectionGroupId=DEVICE_GROUP,
                       agentId=agent, bindingId=binding_id, expiresAtUnixMs=expires, gateway=gateway_url())
     shared.private_file(directory / (args.target + '.json'), json.dumps(descriptor))
     shared.private_file(directory / 'gateway-ca.crt', docker('quickstart', ['cat', '/data/keys/device-ca.crt']))
@@ -346,7 +369,7 @@ def provision(args):
     print('Waiting for a fresh device check-in after the Gateway restart (up to 6 minutes for client retry backoff).', flush=True)
     wait_device(config, device, seen_after=reconnect_after, timeout=360)
     verify_discovery(selection, directory, args.target)
-    print(f'Configured {selection["platform"]}: {device} in {DEVICE_GROUP}. Group changes were independently reviewed. Credentials expire in 24 hours.')
+    print(f'Configured {selection["platform"]}: {device} in {DEVICE_GROUP}. Configuration applied through the Control API. Credentials expire in 24 hours.')
     print('Private runner credentials: ' + str(directory))
 
 
