@@ -65,12 +65,10 @@ paths:
       description: Stateless 2026-07-28 ingress. Discovery uses current group grants
         and installed profiles. Calls preserve original arguments. ASK returns a durable
         pending invocation; approved calls enter the same device-bound permit pipeline.
-        Mirrored metadata headers required. A request with no _meta protocol version
-        that calls initialize, or names 2025-11-25 or 2025-06-18 in MCP-Protocol-Version,
-        is served by the legacy adapter (ADR 018) - initialize, notifications (202),
-        ping, tools/list and tools/call - with an opaque Mcp-Session-Id that is never
-        stored and never carries identity or scope. Other versions get -32022 listing
-        the supported versions. GET and DELETE return 405.
+        Mirrored metadata headers required. Only 2026-07-28 is served; a request with
+        no _meta protocol version that calls initialize or names another version in
+        MCP-Protocol-Version gets -32022 listing the supported version. GET and DELETE
+        return 405.
       requestBody:
         required: true
         content:
@@ -80,29 +78,20 @@ paths:
       parameters:
       - in: header
         name: MCP-Protocol-Version
-        description: Required on every request except legacy initialize. On a 2026-07-28
-          request it must equal the _meta protocol version.
+        required: true
+        description: Must equal the _meta protocol version.
         schema:
           type: string
-          enum:
-          - '2026-07-28'
-          - '2025-11-25'
-          - '2025-06-18'
+          const: '2026-07-28'
       - in: header
         name: Mcp-Method
-        description: Required on 2026-07-28 requests.
+        required: true
         schema:
           type: string
       - in: header
         name: Mcp-Name
         schema:
           type: string
-      - in: header
-        name: Mcp-Session-Id
-        description: Legacy only. Accepted when well formed and otherwise ignored.
-        schema:
-          type: string
-          maxLength: 128
       - in: header
         name: Accept
         required: true
@@ -111,17 +100,10 @@ paths:
       responses:
         '200':
           description: JSON-RPC result or explicit authorization/unsupported error
-          headers:
-            Mcp-Session-Id:
-              description: Returned by legacy initialize only.
-              schema:
-                type: string
           content:
             application/json:
               schema:
                 type: object
-        '202':
-          description: Legacy notification accepted; no body
         '400':
           description: Invalid frame, parameters, unsupported version or header mismatch
         '401':

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Stateless MCP ingress with an optional device-scoped client relay.
 //!
-//! The core speaks MCP 2026-07-28. Requests without a `_meta` protocol version
-//! that use a session-era version go to the legacy adapter in `legacy.rs`
-//! (ADR 018), which translates them onto the same core functions.
+//! Only MCP 2026-07-28 is served. Session-era clients (`initialize`, or an
+//! older `MCP-Protocol-Version` without a `_meta` version) get -32022 listing
+//! the supported version.
 use crate::http::{error, parse, single_header, status, AppState};
 use crate::unix_ms;
 use axum::{
@@ -23,14 +23,11 @@ use std::sync::{atomic::Ordering, Arc};
 
 /// The stateless core version.
 pub(crate) const MODERN_VERSION: &str = "2026-07-28";
-/// Session-era versions served by the legacy adapter for the MCP deprecation window.
-pub(crate) const LEGACY_VERSIONS: [&str; 2] = ["2025-11-25", "2025-06-18"];
-
-pub(crate) fn supported_versions() -> Value {
-    json!([MODERN_VERSION, LEGACY_VERSIONS[0], LEGACY_VERSIONS[1]])
+fn supported_versions() -> Value {
+    json!([MODERN_VERSION])
 }
 
-pub(crate) fn unsupported_version(id: Value, requested: Option<&str>) -> Response {
+fn unsupported_version(id: Value, requested: Option<&str>) -> Response {
     rpc_error(
         StatusCode::BAD_REQUEST,
         id,
@@ -40,21 +37,30 @@ pub(crate) fn unsupported_version(id: Value, requested: Option<&str>) -> Respons
     )
 }
 
-/// Both transports require a client that accepts JSON and SSE responses.
-pub(crate) fn accepts_json_and_sse(headers: &HeaderMap) -> bool {
+/// The client must accept JSON and SSE responses.
+fn accepts_json_and_sse(headers: &HeaderMap) -> bool {
     let accept = single_header(headers, "accept").unwrap_or("");
     accept.split(',').any(|v| v.trim() == "application/json")
         && accept.split(',').any(|v| v.trim() == "text/event-stream")
 }
 
-/// A request is legacy when it carries no `_meta` version and either opens a
-/// session or names a version other than the core's in the header. A request
-/// with a `_meta` version is always judged by the core, whatever its header says.
-fn is_legacy(value: &Value, headers: &HeaderMap) -> bool {
-    value["params"]["_meta"]["io.modelcontextprotocol/protocolVersion"].is_null()
-        && (value["method"] == "initialize"
-            || single_header(headers, "mcp-protocol-version").is_some_and(|v| v != MODERN_VERSION))
+/// A session-era request carries no `_meta` version and either opens a session
+/// or names another version in the header. A request with a `_meta` version is
+/// always judged by the 2026-07-28 rules, whatever its header says.
+fn session_era_version<'a>(value: &'a Value, headers: &'a HeaderMap) -> Option<&'a str> {
+    if !value["params"]["_meta"]["io.modelcontextprotocol/protocolVersion"].is_null() {
+        return None;
+    }
+    if value["method"] == "initialize" {
+        return Some(
+            value["params"]["protocolVersion"]
+                .as_str()
+                .unwrap_or("unknown"),
+        );
+    }
+    single_header(headers, "mcp-protocol-version").filter(|v| *v != MODERN_VERSION)
 }
+
 pub(crate) fn rpc_error(
     http_status: StatusCode,
     id: Value,
@@ -104,16 +110,8 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             Value::Null,
         );
     };
-    if is_legacy(&value, &headers) {
-        return crate::legacy::handle(
-            &s,
-            &value,
-            context,
-            &correlation.request_id,
-            &headers,
-            credential_deadline,
-        )
-        .await;
+    if let Some(requested) = session_era_version(&value, &headers) {
+        return unsupported_version(id, Some(requested));
     }
     if value["jsonrpc"] == "2.0" && value["method"].is_string() && !object.contains_key("id") {
         // Notifications have no JSON-RPC reply. The core has no client
@@ -197,7 +195,7 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             )
             .await
         }
-        // ping is not part of 2026-07-28; only the legacy adapter answers it.
+        // ping is not part of 2026-07-28.
         _ => Err(rpc_error(
             StatusCode::NOT_FOUND,
             id.clone(),
@@ -213,11 +211,7 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
 }
 
 /// The caller's enabled tools, looked up again on every request.
-pub(crate) async fn tools_list(
-    s: &AppState,
-    context: &RequestContext,
-    id: &Value,
-) -> Result<Value, Response> {
+async fn tools_list(s: &AppState, context: &RequestContext, id: &Value) -> Result<Value, Response> {
     match s.gateway.authority.catalog(context).await {
         Ok(catalog) => Ok(
             json!({"tools":catalog.tools.iter().filter(|tool|tool.enabled).map(|tool|json!({"name":tool.tool_id,"description":tool.description,"inputSchema":tool.input_schema})).collect::<Vec<_>>(),"ttlMs":0,"cacheScope":"private"}),
@@ -233,7 +227,7 @@ pub(crate) async fn tools_list(
 }
 
 /// Authorizes and relays one tool call. Nothing is cached between requests.
-pub(crate) async fn tools_call(
+async fn tools_call(
     s: &AppState,
     context: RequestContext,
     request_id: &str,

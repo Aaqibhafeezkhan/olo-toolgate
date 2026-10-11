@@ -24,10 +24,11 @@ paths:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
       - name: MCP-Protocol-Version
         in: header
-        required: false
-        description: Legacy adapter only; 2026-07-28 requests carry the version in _meta
+        required: true
+        description: Must equal the _meta protocol version (2026-07-28 only; ADR 018 amendment)
         schema:
           type: string
+          const: '2026-07-28'
       - name: Idempotency-Key
         in: header
         required: false
@@ -81,10 +82,11 @@ paths:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
       - name: MCP-Protocol-Version
         in: header
-        required: false
-        description: Legacy adapter only; 2026-07-28 requests carry the version in _meta
+        required: true
+        description: Must equal the _meta protocol version (2026-07-28 only; ADR 018 amendment)
         schema:
           type: string
+          const: '2026-07-28'
       - name: Idempotency-Key
         in: header
         required: false
@@ -142,10 +144,11 @@ paths:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
       - name: MCP-Protocol-Version
         in: header
-        required: false
-        description: Legacy adapter only; 2026-07-28 requests carry the version in _meta
+        required: true
+        description: Must equal the _meta protocol version (2026-07-28 only; ADR 018 amendment)
         schema:
           type: string
+          const: '2026-07-28'
       - name: Idempotency-Key
         in: header
         required: false

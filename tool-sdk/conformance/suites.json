@@ -23,7 +23,7 @@
     {
       "id": "protocol",
       "name": "Protocol compatibility",
-      "contents": "Tool protocol stdin v1 and v2, MCP 2026-07-28 core and the legacy adapter per supported version, the Tasks extension, launcher and protocol-range handshakes",
+      "contents": "Tool protocol stdin v1 and v2, MCP 2026-07-28 core, the Tasks extension, launcher and protocol-range handshakes",
       "runsWhen": "Every Gateway, Tool Host, client or SDK release, and PRs touching protocol code",
       "blocks": "The release; protocol PRs",
       "runner": "gateway, tool-host, endpoint-client and SDK test trees",
