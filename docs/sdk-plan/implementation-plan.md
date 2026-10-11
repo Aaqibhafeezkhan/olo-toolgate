@@ -71,7 +71,7 @@ Every finding, with file and line references, is in plan.md §2.1.
 | Threat model for Tool Host, broker, egress proxy, transport matrix, Tool Host workload identity, and Tool Host secret delivery | Threat model | `docs/security/threat-models/tool-host.md` |
 | Persistence specification: the §12.7 transitions mapped onto Control's existing states (`PENDING_APPROVAL → QUEUED → RESERVED → EXECUTING → …`), new columns and tables (task fields, business-key unique index, result payloads above 64 KiB, lease heartbeat), with the exact Flyway and Quickstart migration contents | Spec | `docs/control-plane/invocation-state-v2.md` |
 | Kill events: storage, authorization-epoch bump, push protocol, break-glass endpoint with 2-of-3 operator keys | Spec | `docs/control-plane/kill-switch.md` |
-| ADR 013 (Tool Host, egress, broker, secrets, transports; supersedes the Gateway-signing parts of ADRs 005 and 006), ADR 016 (tasks, effect safety, business keys, persistence), ADR 017 (kill switch) | ADRs | `docs/adr/` |
+| ADR 013 (Tool Host, egress, broker, secrets, transports; supersedes the Gateway permit-signing parts of ADR 006; ADR 005 is unchanged), ADR 016 (tasks, effect safety, business keys, persistence), ADR 017 (kill switch) | ADRs | `docs/adr/` |
 
 **Passes when** security review signs off the threat model and the persistence and kill specs.
 

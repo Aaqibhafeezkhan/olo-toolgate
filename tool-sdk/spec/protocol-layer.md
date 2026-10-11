@@ -61,7 +61,7 @@ Rules that hold in every language:
 
 **Used in:** all four languages.
 
-- A compact JWS, HS256, with a per-process random key (at least 256 bits) in standalone mode and the Gateway key in governed mode.
+- A compact JWS, HS256, with a per-process random key (at least 256 bits) in standalone mode. In governed mode the SDK never mints or verifies `requestState`: Control mints it with the ASK outcome and verifies it on the retry, and the Gateway holds no key (ADR 013, decision 9).
 - Payload `{toolId, argsHash, identity, scope, approvalId?, exp, nonce}`; `argsHash` is the `sha256:` digest of the JCS canonical arguments; `exp` at most 10 minutes after issue.
 - Verified before any re-dispatch: signature, `exp`, same `toolId`, same `argsHash`, same identity and scope. Each `nonce` is accepted once within its lifetime.
 - **Acceptance:** ToolGate MRTR cases: tampered payload, expired, other identity, other arguments, replay.

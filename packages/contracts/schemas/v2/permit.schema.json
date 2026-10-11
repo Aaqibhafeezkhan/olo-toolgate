@@ -260,6 +260,29 @@
         "deadlineUnixMs"
       ]
     },
+    "PermitReservationRequest": {
+      "type": "object",
+      "description": "v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4).",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "audience": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        }
+      },
+      "required": [
+        "invocationId",
+        "audience",
+        "attempt"
+      ]
+    },
     "PermitConsumption": {
       "type": "object",
       "description": "Tool Host or device consumes the single-use nonce; returns the fencing token.",
@@ -316,7 +339,7 @@
     },
     "LeaseHeartbeat": {
       "type": "object",
-      "description": "Lease renewal for a running ledger invocation (every lease/3).",
+      "description": "Lease renewal for a running ledger invocation (every lease/3). Also carries the latest progress and, while the tool waits for input, its input request (invocation-state-v2.md T6, T7).",
       "additionalProperties": false,
       "properties": {
         "invocationId": {
@@ -324,11 +347,45 @@
         },
         "fencingToken": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "progress": {
+          "$ref": "invocation.schema.json#/$defs/TaskProgress"
+        },
+        "inputRequest": {
+          "$ref": "protocol.schema.json#/$defs/InputRequestFrame"
         }
       },
       "required": [
         "invocationId",
         "fencingToken"
+      ]
+    },
+    "LeaseRenewal": {
+      "type": "object",
+      "description": "Heartbeat response: the renewed lease, whether cancellation was requested, and any task input waiting for the tool (invocation-state-v2.md T6–T8).",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "leaseExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "cancelRequested": {
+          "type": "boolean"
+        },
+        "inputResponses": {
+          "description": "MCP inputResponses object from tasks/update, passed to the tool unchanged."
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "leaseExpiresAtUnixMs",
+        "cancelRequested"
       ]
     }
   }

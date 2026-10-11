@@ -5,7 +5,7 @@ openapi: 3.1.0
 info:
   title: OLO ToolGate Control Plane API (proposed v2 additions)
   version: 0.10.0-dev
-  description: Proposed at design gate D1 (ADRs 014, 015, 018, 020, 021). Not served. Milestone M1 moves each operation into
+  description: Proposed at design gate D1 (ADRs 014, 015, 018, 020, 021), with the invocation, reserve and task endpoints added at D2 (ADR 016). Not served. Milestone M1 moves each operation into
     the served file when it is implemented, so the served contract never advertises an unimplemented endpoint.
 security:
 - adminAccessToken: []
@@ -294,6 +294,58 @@ paths:
         '409': *id001
         '500': *id001
         '503': *id001
+  /api/control/v1/access/invocations:
+    post:
+      operationId: submitInvocationV2
+      description: Extends the existing endpoint with a v2 body (a body with toolId is v2; the served v1 body stays accepted).
+        Control evaluates policy, reserves the business key and creates the invocation, task columns and reservation in one
+        transaction (invocation-state-v2.md T1, §4). Idempotent by invocationId. Business-key refusals are 409 with the code
+        IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE or EXPIRED_KEY and no other detail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../../schemas/v2/invocation.schema.json#/$defs/InvocationSubmission
+      responses:
+        '200':
+          description: NEW or EXISTING invocation
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/invocation.schema.json#/$defs/InvocationAdmission
+        '400': *id001
+        '401': *id001
+        '403': *id001
+        '409': *id001
+        '413': *id001
+        '500': *id001
+        '503': *id001
+  /api/control/v1/access/invocations/reserve:
+    post:
+      operationId: reserveInvocationPermitV2
+      description: Extends the existing endpoint with a v2 body. Mints one Control-signed permit for one attempt, addressed to
+        one Tool Host or device, and reserves its single-use nonce (invocation-state-v2.md T4, ADR 013).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../../schemas/v2/permit.schema.json#/$defs/PermitReservationRequest
+      responses:
+        '200':
+          description: Signed permit
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/permit.schema.json#/$defs/SignedInvocationPermit
+        '400': *id001
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '500': *id001
+        '503': *id001
   /api/control/v1/access/permits/consume:
     post:
       operationId: consumeInvocationPermitV2
@@ -326,8 +378,8 @@ paths:
       operationId: renewInvocationLease
       security:
       - workloadCertificate: []
-      description: Lease renewal for a running ledger invocation; refused once the fencing token is invalid or the authorization
-        epoch moved.
+      description: Lease renewal for a running v2 invocation, carrying progress and input requests and returning cancellation
+        and task input (invocation-state-v2.md T6-T8); refused once the fencing token is invalid or a kill covers it.
       parameters:
       - name: id
         in: path
@@ -347,7 +399,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../../schemas/v2/permit.schema.json#/$defs/PermitConsumed
+                $ref: ../../schemas/v2/permit.schema.json#/$defs/LeaseRenewal
         '400': *id001
         '401': *id001
         '403': *id001
@@ -379,10 +431,73 @@ paths:
         '413': *id001
         '500': *id001
         '503': *id001
+  /api/control/v1/access/tasks/{taskId}:
+    get:
+      operationId: getInvocationTask
+      description: Task state for MCP tasks/get (invocation-state-v2.md §7). Control compares the owner digest the Gateway
+        derived from the authenticated caller; a task owned by anyone else is 404, never 403.
+      parameters: &id010
+      - name: taskId
+        in: path
+        required: true
+        description: Task id
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{22,64}$
+      - name: ToolGate-Task-Owner
+        in: header
+        required: true
+        description: Lowercase hex SHA-256 owner digest (invocation-state-v2.md §7)
+        schema:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+      responses:
+        '200':
+          description: Current task; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/invocation.schema.json#/$defs/TaskView
+        '400': *id001
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '500': *id001
+        '503': *id001
+  /api/control/v1/access/tasks/{taskId}/input:
+    post:
+      operationId: submitInvocationTaskInput
+      description: MCP tasks/update input for a task in INPUT_REQUIRED, with the same owner rule as getInvocationTask.
+      parameters: *id010
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../../schemas/v2/invocation.schema.json#/$defs/TaskInputSubmission
+      responses:
+        '200':
+          description: Input accepted; the task returns to RUNNING
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/invocation.schema.json#/$defs/TaskView
+        '400': *id001
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '413': *id001
+        '500': *id001
+        '503': *id001
   /api/control/v1/kill-events:
     get:
       operationId: listKillEvents
-      description: Requires toolgate-admin.
+      security:
+      - adminAccessToken: []
+      - workloadCertificate: []
+      description: Effective kills and unarchived recoveries. Requires toolgate-admin, or a Tool Host or device workload certificate
+        for the full fetch that replaces its kill set (kill-switch.md §8).
       responses:
         '200':
           description: Events

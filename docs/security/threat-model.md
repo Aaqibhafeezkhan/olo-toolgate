@@ -8,6 +8,8 @@ See [Device registry and tool-call controls](../control-plane/device-registry.md
 
 Threats include malicious internet users, compromised AI agents, malicious MCP servers, compromised endpoint processes, stolen devices, malicious community packages, admin compromise and supply-chain attacks.
 
+Server-tool execution (Tool Host, broker, egress proxy, transports, workload identity and secret delivery) has its own model: [threat-models/tool-host.md](threat-models/tool-host.md).
+
 ## Enterprise authorization boundaries
 
 Control is the sole authority for current group grants and durable invocation

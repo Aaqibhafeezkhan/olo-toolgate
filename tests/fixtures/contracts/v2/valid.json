@@ -285,6 +285,14 @@
       "mode": "form"
     }
   },
+  "InvocationAdmission": {
+    "invocationId": "inv-5",
+    "state": "AWAITING_APPROVAL",
+    "reservation": "NEW",
+    "approvalId": "appr-1",
+    "approvalUrl": "https://toolgate.example.com/approvals/appr-1",
+    "requestState": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+  },
   "InvocationOutcome": "COMPLETED",
   "InvocationPermitClaims": {
     "jti": "permit-9",
@@ -342,6 +350,55 @@
     "invocationId": "inv-5",
     "fencingToken": "nonce-77",
     "outcome": "OUTCOME_UNKNOWN"
+  },
+  "InvocationSubmission": {
+    "invocationId": "inv-5",
+    "context": {
+      "requestId": "req-1",
+      "tenantId": "tenant-1",
+      "mode": "DELEGATED",
+      "credentialKind": "JWT",
+      "issuer": "https://login.example.com/",
+      "userId": "user-1",
+      "agentId": "agent-1",
+      "workloadBindingId": "wb-1",
+      "chain": [],
+      "credentialEpoch": 3,
+      "delegatedSessionEpoch": 2,
+      "expiresAtUnixMs": 1791676860000
+    },
+    "catalogScope": {
+      "kind": "AGENT_IN_GROUP",
+      "agentId": "order-bot",
+      "agentGroupId": "finance-bots",
+      "toolsets": [
+        "finance"
+      ],
+      "revision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "toolId": "acme.orders/orders.refund",
+    "toolDescriptorDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "arguments": {
+      "orderId": "123456",
+      "amount": "10.00"
+    },
+    "argumentsDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "businessKey": {
+      "toolId": "acme.orders/orders.refund",
+      "namespace": "TENANT",
+      "businessKeyHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "source": "ARGUMENT",
+      "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "caller": {
+        "agentId": "agent-1",
+        "userId": "user-1"
+      }
+    },
+    "tasks": {
+      "declared": true,
+      "ownerDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
   },
   "InvocationTask": {
     "taskId": "Zm9vYmFyYmF6cXV4cXV1eDEyMzQ",
@@ -445,7 +502,22 @@
   "KillScopeKind": "TENANT",
   "LeaseHeartbeat": {
     "invocationId": "inv-5",
-    "fencingToken": "nonce-77"
+    "fencingToken": "nonce-77",
+    "progress": {
+      "fraction": 0.5,
+      "atUnixMs": 1791676802000
+    }
+  },
+  "LeaseRenewal": {
+    "invocationId": "inv-5",
+    "fencingToken": "nonce-77",
+    "leaseExpiresAtUnixMs": 1791676830000,
+    "cancelRequested": false,
+    "inputResponses": {
+      "confirm": {
+        "action": "accept"
+      }
+    }
   },
   "LimitOverride": {
     "toolId": "acme.orders/orders.lookup",
@@ -868,6 +940,11 @@
       "UserName": "dana"
     }
   },
+  "PermitReservationRequest": {
+    "invocationId": "inv-5",
+    "audience": "host-7",
+    "attempt": 1
+  },
   "PermitTarget": {
     "toolId": "acme.orders/orders.refund",
     "toolDescriptorDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1121,6 +1198,20 @@
   "Slug": "finance-bots",
   "Streaming": "NONE",
   "TargetKind": "DEVICE_GROUP",
+  "TaskCapability": {
+    "declared": true,
+    "ownerDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "TaskInputSubmission": {
+    "inputResponses": {
+      "confirm": {
+        "action": "accept",
+        "content": {
+          "approved": true
+        }
+      }
+    }
+  },
   "TaskProgress": {
     "fraction": 0.4,
     "message": "fetching",
@@ -1132,6 +1223,44 @@
     "to": "DISPATCHED",
     "actor": "GATEWAY",
     "atUnixMs": 1791676800100
+  },
+  "TaskView": {
+    "invocationId": "inv-5",
+    "task": {
+      "taskId": "Zm9vYmFyYmF6cXV4cXV1eDEyMzQ",
+      "state": "RUNNING",
+      "status": "working",
+      "ttlMs": 3600000,
+      "pollIntervalMs": 2000,
+      "progress": {
+        "fraction": 0.4,
+        "atUnixMs": 1791676801000
+      },
+      "cancelIfAbandoned": false,
+      "transitions": [
+        {
+          "from": "QUEUED",
+          "to": "DISPATCHED",
+          "actor": "GATEWAY",
+          "atUnixMs": 1791676800100
+        }
+      ],
+      "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "result": {
+      "kind": "RESULT",
+      "resultType": "complete",
+      "content": [
+        {
+          "type": "text",
+          "text": "OPEN"
+        }
+      ],
+      "structuredContent": {
+        "status": "OPEN"
+      },
+      "isError": false
+    }
   },
   "TcpDeclaration": {
     "id": "orders-db",

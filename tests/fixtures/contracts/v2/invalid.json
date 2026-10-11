@@ -182,6 +182,14 @@
       }
     }
   ],
+  "InvocationAdmission": [
+    {
+      "case": "an admission names its invocation",
+      "value": {
+        "state": "QUEUED"
+      }
+    }
+  ],
   "InvocationPermitClaims": [
     {
       "case": "missing route set target",
@@ -278,6 +286,67 @@
       }
     }
   ],
+  "InvocationResultReport": [
+    {
+      "case": "notStarted names a refusal reason",
+      "value": {
+        "invocationId": "inv-5",
+        "fencingToken": "nonce-77",
+        "outcome": "FAILED",
+        "notStarted": "CRASHED"
+      }
+    }
+  ],
+  "InvocationSubmission": [
+    {
+      "case": "the task capability is always stated",
+      "value": {
+        "invocationId": "inv-5",
+        "context": {
+          "requestId": "req-1",
+          "tenantId": "tenant-1",
+          "mode": "DELEGATED",
+          "credentialKind": "JWT",
+          "issuer": "https://login.example.com/",
+          "userId": "user-1",
+          "agentId": "agent-1",
+          "workloadBindingId": "wb-1",
+          "chain": [],
+          "credentialEpoch": 3,
+          "delegatedSessionEpoch": 2,
+          "expiresAtUnixMs": 1791676860000
+        },
+        "catalogScope": {
+          "kind": "AGENT_IN_GROUP",
+          "agentId": "order-bot",
+          "agentGroupId": "finance-bots",
+          "toolsets": [
+            "finance"
+          ],
+          "revision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "toolId": "acme.orders/orders.refund",
+        "toolDescriptorDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "arguments": {
+          "orderId": "123456",
+          "amount": "10.00"
+        },
+        "argumentsDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "businessKey": {
+          "toolId": "acme.orders/orders.refund",
+          "namespace": "TENANT",
+          "businessKeyHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source": "ARGUMENT",
+          "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "caller": {
+            "agentId": "agent-1",
+            "userId": "user-1"
+          }
+        }
+      }
+    }
+  ],
   "KillEvent": [
     {
       "case": "event id without issuer",
@@ -292,6 +361,21 @@
         "reason": "Advisory TG-2026-07",
         "issuedAtUnixMs": 1791676800000,
         "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+      }
+    }
+  ],
+  "LeaseRenewal": [
+    {
+      "case": "cancellation state is always stated",
+      "value": {
+        "invocationId": "inv-5",
+        "fencingToken": "nonce-77",
+        "leaseExpiresAtUnixMs": 1791676830000,
+        "inputResponses": {
+          "confirm": {
+            "action": "accept"
+          }
+        }
       }
     }
   ],
@@ -824,6 +908,16 @@
       }
     }
   ],
+  "PermitReservationRequest": [
+    {
+      "case": "attempts are bounded",
+      "value": {
+        "invocationId": "inv-5",
+        "audience": "host-7",
+        "attempt": 17
+      }
+    }
+  ],
   "RecoveryEvent": [
     {
       "case": "break-glass cannot recover",
@@ -914,6 +1008,52 @@
           "spkiPins": []
         },
         "mode": "BROKERED"
+      }
+    }
+  ],
+  "TaskCapability": [
+    {
+      "case": "owner digest is lowercase hex",
+      "value": {
+        "declared": false,
+        "ownerDigest": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+      }
+    }
+  ],
+  "TaskInputSubmission": [
+    {
+      "case": "unknown fields are rejected",
+      "value": {
+        "inputResponses": {},
+        "taskId": "Zm9vYmFyYmF6cXV4cXV1eDEyMzQ"
+      }
+    }
+  ],
+  "TaskView": [
+    {
+      "case": "a task view always names its invocation",
+      "value": {
+        "task": {
+          "taskId": "Zm9vYmFyYmF6cXV4cXV1eDEyMzQ",
+          "state": "RUNNING",
+          "status": "working",
+          "ttlMs": 3600000,
+          "pollIntervalMs": 2000,
+          "progress": {
+            "fraction": 0.4,
+            "atUnixMs": 1791676801000
+          },
+          "cancelIfAbandoned": false,
+          "transitions": [
+            {
+              "from": "QUEUED",
+              "to": "DISPATCHED",
+              "actor": "GATEWAY",
+              "atUnixMs": 1791676800100
+            }
+          ],
+          "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
       }
     }
   ],

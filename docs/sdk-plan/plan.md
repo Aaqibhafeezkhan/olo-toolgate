@@ -1,6 +1,6 @@
 # ToolGate Tool SDK and governed MCP platform: plan
 
-Status: design, revision 10 (design freeze, reconciled with the code at commit `8ea5091`). No design gate has passed yet (§22.1). Nothing is implemented.
+Status: design, revision 10 (design freeze, reconciled with the code at commit `8ea5091`). Gates D0 and D1 have passed; D2 is in review (§22.1). Nothing is implemented.
 Repository: `olo-labs/olo-toolgate` (read at `main`, contracts `0.10.0-dev`).
 MCP baseline: specification **2026-07-28** (checked against the published changelog).
 
@@ -636,7 +636,7 @@ The official SDK owns framing, transports, JSON-RPC and schema types, and the le
 |---|---|---|
 | **A1 Protocol core** (used where the official SDK lacks the 2026-07-28 server core; Java today) | Implements `server/discover`, `tools/list`, `tools/call` with `resultType`, per-request `_meta` validation, errors -32020 / -32021 / -32022, and `subscriptions/listen` for `toolsListChanged`. Routes requests by version: a 2026-07-28 request goes to A1; `initialize` goes to the official SDK's legacy path. Reuses the official schema types where they match. | The official conformance scenarios for 2026-07-28 servers that apply to tools, at the same pass level a Tier 1 SDK must reach, plus the ToolGate protocol cases |
 | **A2 Tasks** (all languages) | `CreateTaskResult`, `tasks/get`, `tasks/update`, `tasks/cancel`, `notifications/tasks`; state mapping §12.4; ownership and TTL §12.6; never returns a task to a request that didn't declare the extension. Uses a `TaskStore` port (`create`, `get`, `transition`, `submitInput`, `requestCancel`, `purgeExpired`) with memory and SQLite implementations in standalone mode and §12 in governed mode. | ToolGate Tasks cases (capability per request, foreign identity not-found, TTL purge, state mapping) |
-| **A3 `requestState`** (all languages) | Compact JWS (HS256 with a per-process key in standalone, the Gateway key in governed) over `{toolId, argsHash, identity, scope, approvalId?, exp, nonce}`; verified before any re-dispatch; single use per nonce within its lifetime | ToolGate MRTR cases (tampering, expiry, other identity, replay) |
+| **A3 `requestState`** (all languages) | Compact JWS (HS256 with a per-process key in standalone; in governed mode minted and verified by Control, which holds the key, ADR 013) over `{toolId, argsHash, identity, scope, approvalId?, exp, nonce}`; verified before any re-dispatch; single use per nonce within its lifetime | ToolGate MRTR cases (tampering, expiry, other identity, replay) |
 | **A4 Identity** (all languages) | `verify(bearer) -> VerifiedIdentity {issuer, subject, claims, expiresAt} \| Reject(reason)`: JWKS caching with refresh on unknown `kid` and rate limits, issuer, audience, algorithm allowlist, `exp`/`nbf` with at most 60 s skew, RFC 7662 introspection with caching bounded by `exp`; runs before dispatch (§5.9) | Shared token fixtures (good, expired, wrong audience, `alg: none`, unknown `kid`, revoked by introspection) identical in every language |
 | **A5 Method routing** (where the official SDK has no custom-method hook) | The ToolGate transport handler sees each request first, routes `tasks/*` and other ToolGate-owned methods to A2 to A4, and passes the rest to the official SDK unchanged | The same protocol compatibility cases pass with and without the hook |
 
@@ -1447,7 +1447,7 @@ A record is created when any of these is true:
 - the permit's resolved `requiresExecutionLedger` is true (`NON_IDEMPOTENT` or `UNKNOWN`): it always gets an execution-ledger row (§11.3);
 - a business key or dedupe window applies: it always gets an atomic reservation row (§11.7).
 
-Plain short synchronous calls create no row; they only write audit. This keeps the database off the hot path.
+Plain short synchronous calls create no task record: their invocation row, which every governed call has (§11.3), gets no task columns, business-key row or result row ([invocation-state-v2.md](../control-plane/invocation-state-v2.md) §1, ADR 016).
 
 "`TaskStore`" in this plan means Control's invocation state, reached only through Control's API (§12.8): PostgreSQL in production, SQLite in Quickstart. Where §12.7 says a component writes the `TaskStore`, that component calls the Control endpoint listed in §12.8.
 
@@ -1575,7 +1575,7 @@ Execution never continues without the ability to audit its effects. The cost is 
 
 | §12.7 step | Control endpoint (existing or extended) | Transaction inside Control |
 |---|---|---|
-| Reservation + invocation creation (row 2) | `POST /access/invocations`, extended with business key, namespace and fingerprint | New unique index on `control_enterprise_invocations (tenant, tool, namespace, namespace_identity, business_key_hash)`, inserted with the invocation |
+| Reservation + invocation creation (row 2) | `POST /access/invocations`, extended with business key, namespace and fingerprint (`InvocationSubmission`) | Table `control_business_keys`, primary key `(tenant, tool, namespace, namespace_identity, business_key_hash)`, inserted with the invocation (revised at D2: a tombstone outlives the invocation's result; ADR 016) |
 | Approval decision and consumption (rows 3, 4) | Existing approval endpoints; `POST /access/invocations/{id}/reserve` | Approval state, invocation state and single-use nonce in one transaction |
 | Admission / ledger claim (row 6) | Existing `permits/consume`, now also for Tool Host workload certificates | `RESERVED → EXECUTING` with nonce consumption: the nonce is the fencing token |
 | Running (row 7) | Existing secret delivery, extended to Tool Host identity; new lease heartbeat | Checks `EXECUTING` and the nonce |
@@ -1644,7 +1644,7 @@ Three layers. Each must be at most the one below it:
 2. pool or device configuration, set by the admin;
 3. **platform ceiling**, compiled-in defaults that operators can only lower.
 
-Starting ceilings, for review: sync deadline 60 s; task deadline 15 min; memory 4 GiB; input 1 MiB; output 4 MiB; 256 argument properties; signed descriptor 1 MiB; 64 tools per package.
+Starting ceilings, for review: sync deadline 60 s (the effective deadline is the lower of this and the Gateway's request timeout, at most 30 s in release 1; ADR 016); task deadline 15 min; memory 4 GiB; input 1 MiB; output 4 MiB; 256 argument properties; signed descriptor 1 MiB; 64 tools per package.
 
 Each value raises today's v1 limit (64 KiB, 32 properties, 32 KiB descriptor) under the v2 schema. Negotiation can never exceed a ceiling.
 
@@ -1874,7 +1874,7 @@ Phase A makes that value configurable:
 | `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` | 0 | 20 |
 | `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS` | 120000 | max(120000, 6 × check-in) |
 
-**Honest constraint.** In Phase A, an idle device only learns of a job at its next check-in. The check-in value is therefore the job pickup latency. Control rejects values where check-in + jitter + a 5 s execution margin exceed the 30 s sync deadline. Longer client work must use tasks (§12).
+**Honest constraint.** In Phase A, an idle device only learns of a job at its next check-in. The check-in value is therefore the job pickup latency. Control rejects values where check-in + jitter + a 5 s execution margin exceed the 30 s sync deadline, which is release 1's effective maximum (the Gateway request timeout cap, below the 60 s platform ceiling of §13.5; ADR 016). Longer client work must use tasks (§12).
 
 **Where it's set:** Helm `control.clientCheckIn.*` (added to `values.schema.json`). These are env-owned values (§8.5), shown read-only under Configuration > Device.
 
@@ -1989,8 +1989,8 @@ Design completion and coding are tracked separately. A **design gate** produces 
 | Gate | Design artifacts it produces (all normative, all reviewed) | Location | Status |
 |---|---|---|---|
 | **D0: Authoring contract frozen** | Authoring contract (§5.7) per language: annotation and `ToolContext` API signatures, error model, execution semantics; runtime modes (§5.8); standalone identity (§5.9); library composition (§7.7); descriptor generation 1 rules; **official SDK compatibility record** with test results, known gaps and adapter contracts (§5.10); ADR 019 | `tool-sdk/spec/`, `docs/adr/019-*.md` | **Passed** (PR #39, merged 2026-10-10, ADR 019 accepted). |
-| **D1: Contracts frozen** | **The complete v2 schema files**, written here, not in M1: `PackageManifest`, `ToolDefinition` (including `toolDescriptorDigest` rules), `CatalogScope`, `InvocationPermit`, `Task`, `KillEvent`, `ServiceProfile`, `DeploymentBinding`, business-key reservation, protocol v2 frames; valid and invalid example fixtures for each; the MCP version model; OpenAPI changes (`control-v1.yaml` settings PATCH, uploads, deployments, effective values; `gateway-v1.yaml`); check-in environment variables (§17.2); Configuration menu specification (§18); contract generator design for v2 (namespaced bindings in Rust, Java, TypeScript and PHP; stale-copy check); renumbering the duplicate ADR 012; `ROADMAP.md` rewritten to point at §22; ADRs 014, 015, 018, 020, 021 | `packages/contracts/schemas/v2/` (marked frozen), `tests/fixtures/contracts/v2/`, `packages/contracts/openapi/proposed/`, `docs/adr/` | In review (PR 2) |
-| **D2: Trust and persistence reviewed** | Threat model for Tool Host, broker, egress and the transport matrix (§11.6 to §11.9); the physical transaction model and persistence transitions (§12.7, §12.8) as a reviewed state-machine specification; business-key namespaces (§11.7); the migrations that extend Control's invocation tables (§12.8); ADRs 013, 016, 017 | `docs/security/threat-models/`, `docs/adr/`, migration specifications for Control's Flyway and Quickstart trees | Not passed |
+| **D1: Contracts frozen** | **The complete v2 schema files**, written here, not in M1: `PackageManifest`, `ToolDefinition` (including `toolDescriptorDigest` rules), `CatalogScope`, `InvocationPermit`, `Task`, `KillEvent`, `ServiceProfile`, `DeploymentBinding`, business-key reservation, protocol v2 frames; valid and invalid example fixtures for each; the MCP version model; OpenAPI changes (`control-v1.yaml` settings PATCH, uploads, deployments, effective values; `gateway-v1.yaml`); check-in environment variables (§17.2); Configuration menu specification (§18); contract generator design for v2 (namespaced bindings in Rust, Java, TypeScript and PHP; stale-copy check); renumbering the duplicate ADR 012; `ROADMAP.md` rewritten to point at §22; ADRs 014, 015, 018, 020, 021 | `packages/contracts/schemas/v2/` (marked frozen), `tests/fixtures/contracts/v2/`, `packages/contracts/openapi/proposed/`, `docs/adr/` | **Passed** (PR #40, merged 2026-10-10, ADRs 014, 015, 018, 020, 021 accepted). Amended at D2 by ADR 016 (additive). |
+| **D2: Trust and persistence reviewed** | Threat model for Tool Host, broker, egress and the transport matrix (§11.6 to §11.9); the physical transaction model and persistence transitions (§12.7, §12.8) as a reviewed state-machine specification; business-key namespaces (§11.7); the migrations that extend Control's invocation tables (§12.8); ADRs 013, 016, 017 | `docs/security/threat-models/`, `docs/adr/`, migration specifications for Control's Flyway and Quickstart trees (`docs/control-plane/migrations-v2/`, with `invocation-state-v2.md` and `kill-switch.md`) | In review (PR 3) |
 | **D3: Conformance authored** | Fixtures and cases written (not yet passing) for every suite in §21, including the cases added in revisions 8 and 9 | `tool-sdk/conformance/`, `tests/` | Not passed |
 
 Revision 9 completes the plan content behind every gate. Each gate passes when its artifacts are merged and its named reviewers (architecture for D0 and D1; security for D2; QA for D3) sign off.

@@ -404,7 +404,7 @@
     },
     "InvocationResultReport": {
       "type": "object",
-      "description": "Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token.",
+      "description": "Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10).",
       "additionalProperties": false,
       "properties": {
         "invocationId": {
@@ -418,6 +418,9 @@
         },
         "result": {
           "$ref": "protocol.schema.json#/$defs/ResultFrame"
+        },
+        "notStarted": {
+          "$ref": "protocol.schema.json#/$defs/RefusalReason"
         }
       },
       "required": [

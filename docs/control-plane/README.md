@@ -11,6 +11,9 @@ import/export. See [configuration](configuration.md), [API](../api/control-plane
 The console [Configuration menu](configuration-menu.md) and the client check-in
 settings in [configuration](configuration.md#client-check-in-specification-design-gate-d1)
 are frozen D1 specifications, implemented in milestone M1.
+The v2 [invocation state](invocation-state-v2.md) (tasks, execution ledger, business keys)
+and the [emergency kill switch](kill-switch.md), with their
+[migration specifications](migrations-v2/README.md), are D2 specifications.
 The remaining ownership list below describes the wider architecture; approvals,
 fleet deployment, vault bindings and Marketplace workflows are later modules.
 

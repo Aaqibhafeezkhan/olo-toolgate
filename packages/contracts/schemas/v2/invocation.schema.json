@@ -164,6 +164,39 @@
         "packageDigest"
       ]
     },
+    "TaskView": {
+      "type": "object",
+      "description": "A task as Control returns it to the Gateway for tasks/get (invocation-state-v2.md §7). result is present only in a terminal state.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "task": {
+          "$ref": "invocation.schema.json#/$defs/InvocationTask"
+        },
+        "result": {
+          "$ref": "protocol.schema.json#/$defs/ResultFrame"
+        }
+      },
+      "required": [
+        "invocationId",
+        "task"
+      ]
+    },
+    "TaskInputSubmission": {
+      "type": "object",
+      "description": "tasks/update input, relayed by the Gateway to the waiting tool (invocation-state-v2.md §7).",
+      "additionalProperties": false,
+      "properties": {
+        "inputResponses": {
+          "description": "MCP inputResponses object, passed to the tool unchanged and bounded by the 1 MiB input ceiling."
+        }
+      },
+      "required": [
+        "inputResponses"
+      ]
+    },
     "MissingKeyPolicy": {
       "type": "string",
       "enum": [
@@ -296,6 +329,110 @@
         "outcome",
         "createdAtUnixMs",
         "purgedAtUnixMs"
+      ]
+    },
+    "TaskCapability": {
+      "type": "object",
+      "description": "Whether this request declared the MCP Tasks extension, and the owner digest a task would be bound to (invocation-state-v2.md §7).",
+      "additionalProperties": false,
+      "properties": {
+        "declared": {
+          "type": "boolean"
+        },
+        "ownerDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        }
+      },
+      "required": [
+        "declared",
+        "ownerDigest"
+      ]
+    },
+    "InvocationSubmission": {
+      "type": "object",
+      "description": "v2 body of POST /access/invocations (invocation-state-v2.md T1). The Gateway generates invocationId; Control evaluates policy, reserves the business key and decides whether a task exists.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "context": {
+          "$ref": "common.schema.json#/$defs/RequestContext"
+        },
+        "catalogScope": {
+          "$ref": "catalog.schema.json#/$defs/CatalogScope"
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "toolDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "arguments": {
+          "type": "object",
+          "description": "Canonical tool arguments, a JSON object bounded by the 1 MiB input ceiling."
+        },
+        "argumentsDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "businessKey": {
+          "$ref": "invocation.schema.json#/$defs/BusinessKeyReservationRequest"
+        },
+        "tasks": {
+          "$ref": "invocation.schema.json#/$defs/TaskCapability"
+        },
+        "requestState": {
+          "$ref": "identifiers.schema.json#/$defs/CompactJws"
+        }
+      },
+      "required": [
+        "invocationId",
+        "context",
+        "catalogScope",
+        "toolId",
+        "toolDescriptorDigest",
+        "packageDigest",
+        "arguments",
+        "argumentsDigest",
+        "tasks"
+      ]
+    },
+    "InvocationAdmission": {
+      "type": "object",
+      "description": "Response to a v2 POST /access/invocations for NEW and EXISTING reservations. IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE and EXPIRED_KEY are 409 errors with that code and carry nothing else. requestState is present with an ASK outcome for an MRTR client.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "invocation.schema.json#/$defs/TaskState"
+        },
+        "reservation": {
+          "$ref": "invocation.schema.json#/$defs/ReservationOutcome"
+        },
+        "task": {
+          "$ref": "invocation.schema.json#/$defs/InvocationTask"
+        },
+        "approvalId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "approvalUrl": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "requestState": {
+          "$ref": "identifiers.schema.json#/$defs/CompactJws"
+        }
+      },
+      "required": [
+        "invocationId",
+        "state"
       ]
     }
   }

@@ -13,3 +13,4 @@ Start with:
 4. `credentials-and-vaults.md`
 5. `endpoint-enforcement.md`
 6. `supply-chain.md`
+7. `threat-models/tool-host.md`: Tool Host, broker, egress and secrets (design gate D2)
