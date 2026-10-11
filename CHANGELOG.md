@@ -6,6 +6,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Client check-in is configurable (plan.md §17.2): `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS`,
+  `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` and `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS`,
+  set by Helm `control.clientCheckIn.*`. Quickstart keeps 500 ms; other deployments now
+  default to 2 s with 20 % jitter. The burst guard and the offline threshold follow the
+  configured values, and Control refuses values that leave no room for a client job
+  inside the 30 s sync deadline. The v2 invocation task migrations (Flyway V18,
+  Quickstart V11) now ship in the product.
+
 - The Gateway's `/mcp` route serves session-era MCP clients on `2025-11-25` and
   `2025-06-18` through a legacy adapter (ADR 018): `initialize`, notifications, `ping`,
   `tools/list` and `tools/call` run on the stateless core, and the returned

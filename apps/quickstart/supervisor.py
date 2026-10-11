@@ -343,6 +343,10 @@ def configure():
                 'TOOLGATE_CONTROL_VAULT_KEY_PATH':'/data/keys/vault.key',
                 'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(trust)),
                 'TOOLGATE_CONTROL_ENDPOINT_ENABLED': 'true',
+                # Quickstart check-in defaults (plan.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
+                'TOOLGATE_CONTROL_CLIENT_CHECKIN_MS': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_MS') or '500',
+                'TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT') or '0',
+                'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS': env.get('TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS') or '120000',
                 'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': '/data/keys/device-ca.pem', 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': '/data/keys/device-ca.crt',
                 'TOOLGATE_CONTROL_ENDPOINT_TENANT_ID': TENANT, 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
                 'TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION': 'Quickstart',

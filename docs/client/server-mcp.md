@@ -5,7 +5,7 @@ Managed tool execution uses a trusted registered device, current owner/device en
 
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 
-An enrolled client checks in with Control every 500 ms while connected. Each
+An enrolled client checks in with Control at the configured check-in interval while connected (500 ms on Quickstart, 2 s with jitter by default elsewhere; see [client check-in](../control-plane/configuration.md#client-check-in)). Each
 poll reports the tools actually installed and ready on that device. Control caches
 the device's effective permissions and their digest. A change sends a complete
 replacement on the next poll; Control repeats it until the client acknowledges the
@@ -108,13 +108,13 @@ it performs no installation, enrollment, approval, policy or credential setup.
 Both commands print responses and keep timestamped console logs under
 `.dev/debug/logs/`.
 
-Current clients request millisecond intervals with `X-ToolGate-Poll-Interval-Unit: milliseconds`. Control replies with `nextIntervalMs: 500`; that value takes precedence over the legacy `nextIntervalSeconds`. Older clients receive the original two-second response, and current clients fall back to seconds against an older server.
+Current clients request millisecond intervals with `X-ToolGate-Poll-Interval-Unit: milliseconds`. Control replies with `nextIntervalMs` set to the configured check-in; that value takes precedence over the legacy `nextIntervalSeconds`. Older clients receive the interval in whole seconds (at least two), and current clients fall back to seconds against an older server.
 
 When a remote tool or builder job is delivered, the client opens a direct mTLS
 WebSocket at `/api/control/v1/endpoint/socket`. Check-ins, permission replacements,
 job authorization and results then share that bidirectional channel. WebSocket
 ping/pong frames run every five seconds, including during execution. The client
-closes the channel 30 seconds after jobs finish, then continues 500 ms HTTPS polls.
+closes the channel 30 seconds after jobs finish, then continues HTTPS polls at the check-in interval.
 A dropped or unavailable channel falls back to the existing durable HTTP protocol;
 lease, permission, sequence and replay checks apply to every socket message too.
 Packet diagnostics show connection, ping/pong, idle disconnect and fallback states.

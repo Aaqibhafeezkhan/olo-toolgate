@@ -3,7 +3,8 @@
 """Design gate D2: the migration specifications apply cleanly and enforce their invariants.
 
 The specification files under docs/control-plane/migrations-v2/ ship unchanged in the
-milestone that implements them. These checks apply them on top of the current
+milestone that implements them; a shipped file must stay byte-identical to its
+specification. These checks apply the files not yet shipped on top of the current
 Quickstart tree (SQLite, always) and the current Flyway tree (PostgreSQL, when
 TOOLGATE_D2_POSTGRES names a server as host:port), then run the same scenarios on
 both, so the two dialects can't drift apart.
@@ -147,6 +148,18 @@ def versions(directory, pattern):
     return sorted(directory.glob(pattern), key=lambda p: int(re.match(r'V(\d+)', p.name).group(1)))
 
 
+def pending(dialect, product, pattern):
+    """Specification files not yet shipped. A shipped file must be byte-identical to its specification."""
+    files = []
+    for spec in versions(SPEC/dialect, pattern):
+        shipped = product/spec.name
+        if shipped.exists():
+            assert shipped.read_bytes() == spec.read_bytes(), f'{shipped} differs from its specification'
+        else:
+            files.append(spec)
+    return files
+
+
 class SqliteRun:
     def __init__(self, files):
         self.db = sqlite3.connect(':memory:', isolation_level=None)
@@ -196,21 +209,21 @@ class MigrationSpecificationTest(unittest.TestCase):
     def test_files_are_versioned_after_the_current_trees(self):
         flyway = [int(re.match(r'V(\d+)__', p.name).group(1)) for p in FLYWAY.glob('V*.sql')]
         quickstart = [int(re.match(r'V(\d+)\.sql', p.name).group(1)) for p in QUICKSTART.glob('V*.sql')]
-        spec_flyway = [int(re.match(r'V(\d+)__', p.name).group(1)) for p in (SPEC/'flyway').glob('V*.sql')]
-        spec_quickstart = [int(re.match(r'V(\d+)\.sql', p.name).group(1)) for p in (SPEC/'quickstart').glob('V*.sql')]
+        spec_flyway = [int(re.match(r'V(\d+)__', p.name).group(1)) for p in pending('flyway', FLYWAY, 'V*__*.sql')]
+        spec_quickstart = [int(re.match(r'V(\d+)\.sql', p.name).group(1)) for p in pending('quickstart', QUICKSTART, 'V*.sql')]
         self.assertEqual(sorted(spec_flyway), list(range(max(flyway) + 1, max(flyway) + 1 + len(spec_flyway))))
         self.assertEqual(sorted(spec_quickstart),
                          list(range(max(quickstart) + 1, max(quickstart) + 1 + len(spec_quickstart))))
         self.assertEqual(len(spec_flyway), len(spec_quickstart))
 
     def test_quickstart_specifications(self):
-        files = versions(QUICKSTART, 'V*.sql') + versions(SPEC/'quickstart', 'V*.sql')
+        files = versions(QUICKSTART, 'V*.sql') + pending('quickstart', QUICKSTART, 'V*.sql')
         scenarios(self, SqliteRun(files), SCENARIOS)
         scenarios(self, SqliteRun(files), KILL_SCENARIOS)
 
     @unittest.skipUnless(os.environ.get('TOOLGATE_D2_POSTGRES'), 'set TOOLGATE_D2_POSTGRES=host:port to run')
     def test_flyway_specifications(self):
-        files = versions(FLYWAY, 'V*__*.sql') + versions(SPEC/'flyway', 'V*__*.sql')
+        files = versions(FLYWAY, 'V*__*.sql') + pending('flyway', FLYWAY, 'V*__*.sql')
         database = PostgresRun(os.environ['TOOLGATE_D2_POSTGRES'], files)
         scenarios(self, database, SCENARIOS)
         scenarios(self, database, KILL_SCENARIOS)

@@ -643,7 +643,8 @@
         "bundle",
         "fleet",
         "effect",
-        "recovery"
+        "recovery",
+        "clientCheckIn"
       ],
       "properties": {
         "enabled": {
@@ -1252,6 +1253,33 @@
           "properties": {
             "enabled": {
               "type": "boolean"
+            }
+          }
+        },
+        "clientCheckIn": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Env-owned Phase A client check-in (plan.md §17.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
+          "required": [
+            "checkInMs",
+            "jitterPct",
+            "offlineAfterMs"
+          ],
+          "properties": {
+            "checkInMs": {
+              "type": "integer",
+              "minimum": 500,
+              "maximum": 25000
+            },
+            "jitterPct": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 50
+            },
+            "offlineAfterMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 86400000
             }
           }
         },

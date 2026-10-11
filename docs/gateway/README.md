@@ -43,4 +43,4 @@ explicitly unsupported; their absence never becomes ALLOW.
 
 Current Gateway builds support signed bundles, approvals and an optional
 [client MCP relay](../client/server-mcp.md). Enrolled clients receive permission
-replacements and remote tool requests through their 500 ms polls.
+replacements and remote tool requests through their check-in polls.

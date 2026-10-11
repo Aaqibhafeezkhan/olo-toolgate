@@ -27,7 +27,7 @@ installation, health indicator or deployment assignment never grants tool access
 Pending devices show **Awaiting registration** until an owner is established.
 Installed clients show connected/offline state from authenticated check-ins;
 the console uses a two-minute freshness window and does not treat approval alone
-as a connection. The current client normally polls every 500 ms; older clients
+as a connection. The current client polls at the configured check-in interval (500 ms on Quickstart); older clients
 retain their seconds-based interval.
 
 System name is the protected client's reported OS hostname, separate from its

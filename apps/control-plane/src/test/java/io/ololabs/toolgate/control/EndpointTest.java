@@ -44,7 +44,7 @@ final class EndpointTest {
         try(var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()){statement.execute("CREATE DATABASE "+database);}
         var url=base.replace("/control?","/"+database+"?");
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).target("4").load().migrate();
-        assertEquals(13,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
+        assertEquals(14,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
         var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         return configured(new PostgresStore(source,codec));
     }
@@ -114,10 +114,19 @@ final class EndpointTest {
         var fast=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"millisecond",true).body(),EndpointCheckInAck.class);
         assertEquals(2L,fast.nextIntervalSeconds());
         assertEquals(500L,fast.nextIntervalMs());
-        s.clock.time=START+50000000;var renewed=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"renew").body(),EndpointCheckInAck.class).identity();assertNotNull(renewed);assertTrue(renewed.expiresAtUnixMs()>identity.expiresAtUnixMs());
-        var device=codec.model(s.service.device(s.admin,"device").body(),EndpointDeviceRecord.class);assertEquals(3,device.reportSequence());
+        // A configured check-in changes the negotiated interval and scales the burst guard with it.
+        s.service.checkInPolicy(ClientCheckInPolicy.configure(4000L,0,null));
+        s.clock.time+=1999;
+        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured-burst",true)).status());
+        s.clock.time+=1;
+        var configured=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured",true).body(),EndpointCheckInAck.class);
+        assertEquals(4000L,configured.nextIntervalMs());
+        assertEquals(4L,configured.nextIntervalSeconds());
+        s.service.checkInPolicy(ClientCheckInPolicy.QUICKSTART);
+        s.clock.time=START+50000000;var renewed=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(4L,report,null,null)),"renew").body(),EndpointCheckInAck.class).identity();assertNotNull(renewed);assertTrue(renewed.expiresAtUnixMs()>identity.expiresAtUnixMs());
+        var device=codec.model(s.service.device(s.admin,"device").body(),EndpointDeviceRecord.class);assertEquals(4,device.reportSequence());
         var revoked=s.service.revoke(s.admin,"device",codec.json(new EndpointRevokeRequest(device.revision())),"revoke","request");assertEquals(revoked.body(),s.service.revoke(s.admin,"device",codec.json(new EndpointRevokeRequest(device.revision())),"revoke","request").body());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.checkIn(certificate(renewed),codec.json(new EndpointCheckIn(4L,report,null,null)),"revoked")).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.checkIn(certificate(renewed),codec.json(new EndpointCheckIn(5L,report,null,null)),"revoked")).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.checkIn(peer,body,"replay-after-revoke")).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.verifySocketPeer(peer)).status());
         var audit=s.directory.audit(s.admin,0,100).body();for(var event:List.of("ENROLLMENT_CREATE","ENROLLMENT_APPROVE","ENROLLMENT_CONSUME","DEVICE_CHECK_IN","DEVICE_RENEW","DEVICE_REVOKE"))assertTrue(audit.contains(event));
