@@ -4,7 +4,7 @@
 
 This is the reviewed specification of the emergency kill switch (plan.md §15) behind design gate D2. It covers storage, the authorization-epoch bump, signing, the push protocol, break-glass with 2-of-3 operator keys, recovery and retention.
 
-It is normative. A change after D2 passes needs an amendment to ADR 017. The event shapes are in `packages/contracts/schemas/v2/kill.schema.json`, the proposed endpoints are in `packages/contracts/openapi/proposed/control-v1.proposed.yaml`, and the storage is [V19__kill_switch.sql](migrations-v2/flyway/V19__kill_switch.sql) and [V12.sql](migrations-v2/quickstart/V12.sql).
+It is normative. A change after D2 passes needs an amendment to ADR 017. The event shapes are in `packages/contracts/schemas/v2/kill.schema.json`, the proposed endpoints are in `packages/contracts/openapi/proposed/control-v1.proposed.yaml`, and the storage is [V20__kill_switch.sql](migrations-v2/flyway/V20__kill_switch.sql) and [V13.sql](migrations-v2/quickstart/V13.sql).
 
 ## 1. Model
 
