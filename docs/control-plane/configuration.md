@@ -72,18 +72,17 @@ Module 05 approval behavior defaults disabled. Enable bundle signing and set the
 four `TOOLGATE_CONTROL_APPROVAL_*` fields in [approval configuration](approvals.md).
 The dedicated approver role and signed `user_id` cannot be replaced by admin role.
 
-## Client check-in (specification, design gate D1)
+## Client check-in
 
-> **Status: frozen specification, not yet available.** This section is a design gate D1
-> artifact. It is implemented in milestone M1. None of the variables below are read by
-> the current release. Source: [Tool SDK plan §17.1 and §17.2](../sdk-plan/plan.md).
+Source: [Tool SDK plan §17.1 and §17.2](../sdk-plan/plan.md). Phase A ships with
+milestone M1; Phase B below is still a specification.
 
-Today one value controls every client check-in. Control returns `nextIntervalMs` in
-the check-in reply and currently hard-codes it to 500
-(`apps/control-plane/src/main/java/io/ololabs/toolgate/control/application/EndpointService.java:190`).
-The endpoint client accepts any value from 500 ms to 1 hour and rejects anything else
-(`apps/endpoint-client/src/service.rs:859-865`). The client opens its WebSocket only
-after a poll delivers a job.
+Control returns the check-in interval in each check-in reply. Clients that send
+`X-ToolGate-Poll-Interval-Unit: milliseconds` receive `nextIntervalMs`, which takes
+precedence; older clients receive `nextIntervalSeconds`, the same interval rounded up
+to whole seconds (at least 2). The endpoint client accepts any value from 500 ms to
+1 hour and rejects anything else (`apps/endpoint-client/src/service.rs:859-865`). The
+client opens its WebSocket only after a poll delivers a job.
 
 ### Five settings, not one
 
@@ -103,7 +102,7 @@ if the binding allows it.
 
 ### Phase A variables (no client change)
 
-Phase A makes the existing value configurable and works with clients already deployed.
+Phase A makes the interval configurable and works with clients already deployed.
 
 | Environment variable | Meaning | Quickstart | Enterprise default |
 |---|---|---|---|
@@ -114,17 +113,26 @@ Phase A makes the existing value configurable and works with clients already dep
 In Phase A an idle device only learns of a job at its next check-in, so the check-in
 value is the job pickup latency.
 
+Each reply picks an interval at random within check-in ± jitter. A check-in that
+arrives sooner than half the shortest such interval is rejected with 409 as a request
+burst (250 ms at the Quickstart default, 800 ms at the enterprise default). A device
+with no check-in for the offline threshold gets no local tools in discovery and no
+new client tool jobs.
+
 **Validation rule.** Check-in plus its maximum jitter plus a 5 second execution margin
-must not exceed the 30 second synchronous call deadline. If it does, Control must
-refuse to start with a named configuration error, rather than run with a value that
-makes synchronous client tools time out. Longer client work must use durable tasks.
+must not exceed the 30 second synchronous call deadline, and the offline threshold
+must exceed the longest interval. Otherwise Control refuses to start with a named
+configuration error, rather than run with a value that makes synchronous client tools
+time out. Longer client work must use durable tasks.
 
 **Where it is set.** Helm values `control.clientCheckIn.checkInMs`,
-`control.clientCheckIn.jitterPct` and `control.clientCheckIn.offlineAfterMs`. M1 adds
-them to `deploy/helm/olo-toolgate/values.schema.json`; they are not in the chart yet.
-These are environment-owned values: the console shows the effective values read-only
-under Configuration > Device (see [Configuration menu](configuration-menu.md)) and
-they cannot be changed through the settings API or configuration import.
+`control.clientCheckIn.jitterPct` and `control.clientCheckIn.offlineAfterMs` (0 means
+the derived default); the chart refuses to render values that break the rule above.
+Quickstart sets the Quickstart column in its compose files and supervisor. With none
+of the variables set, Control uses the enterprise defaults. These are
+environment-owned values: they cannot be changed through the settings API or
+configuration import, and the console will show the effective values read-only under
+Configuration > Device (see [Configuration menu](configuration-menu.md)).
 
 ### Phase B variables (future, needs a client release)
 

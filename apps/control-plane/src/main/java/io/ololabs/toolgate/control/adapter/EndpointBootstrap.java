@@ -48,7 +48,12 @@ public class EndpointBootstrap {
             }
             tenant=Ids.valid(setting("tenant-id"));server=Ids.valid(setting("server-id"));organization=setting("organization");control=setting("control-url");gateway=setting("gateway-url");
         }catch(Exception failure){throw new IllegalStateException("Endpoint enrollment requires dedicated external CA and direct HTTPS with requested client certificates");}
-        return new EndpointService(store,codec,issuer,java.time.Clock.systemUTC(),enabled,tenant,server,organization,control,gateway).operations(operations);
+        ClientCheckInPolicy checkIn;
+        try{checkIn=ClientCheckInPolicy.configure(config.getOptionalValue("toolgate.control.client-check-in.check-in-ms",Long.class).orElse(null),
+            config.getOptionalValue("toolgate.control.client-check-in.jitter-pct",Integer.class).orElse(null),
+            config.getOptionalValue("toolgate.control.client-check-in.offline-after-ms",Long.class).orElse(null));
+        }catch(IllegalArgumentException failure){throw new IllegalStateException(failure.getMessage());}
+        return new EndpointService(store,codec,issuer,java.time.Clock.systemUTC(),enabled,tenant,server,organization,control,gateway).operations(operations).checkInPolicy(checkIn);
     }
     @Produces @ApplicationScoped EndpointService endpoint(){if(service==null)service=load();return service;}
 }

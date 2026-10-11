@@ -2,6 +2,8 @@
 {{- if .Values.control.enabled }}
 {{- $g := .Values.control }}
 {{- $name := include "olo-toolgate.controlName" . }}
+{{- $c := $g.clientCheckIn }}
+{{- if gt (add (int $c.checkInMs) (div (mul (int $c.checkInMs) (int $c.jitterPct)) 100) 5000) 30000 }}{{ fail "control.clientCheckIn: check-in plus jitter plus 5 s must fit the 30 s sync deadline" }}{{ end }}
 {{- if le (int $g.terminationGracePeriodSeconds) 20 }}{{ fail "termination grace must exceed application drain deadline" }}{{ end }}
 {{- if and $g.autoscaling.enabled (gt (int $g.autoscaling.minReplicas) (int $g.autoscaling.maxReplicas)) }}{{ fail "HPA minimum must not exceed maximum" }}{{ end }}
 apiVersion: v1
@@ -53,6 +55,11 @@ data:
   {{- end }}
   {{- end }}
   TOOLGATE_CONTROL_ENDPOINT_ENABLED: {{ $g.endpoint.enabled | quote }}
+  TOOLGATE_CONTROL_CLIENT_CHECKIN_MS: {{ printf "%d" (int $c.checkInMs) | quote }}
+  TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT: {{ printf "%d" (int $c.jitterPct) | quote }}
+  {{- if gt (int $c.offlineAfterMs) 0 }}
+  TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS: {{ printf "%d" (int $c.offlineAfterMs) | quote }}
+  {{- end }}
   TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY: {{ ternary "/opt/toolgate/client-downloads" "" $g.clientDownloads.enabled | quote }}
   {{- if $g.endpoint.enabled }}
   TOOLGATE_CONTROL_ENDPOINT_TENANT_ID: {{ required "control.endpoint.tenantId required" $g.endpoint.tenantId | quote }}

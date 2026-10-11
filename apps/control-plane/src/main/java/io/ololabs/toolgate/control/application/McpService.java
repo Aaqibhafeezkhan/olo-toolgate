@@ -38,7 +38,7 @@ public final class McpService {
     }
     public Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body){gateway(actor,gateway);var c=codec.model(body,RequestContext.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);if(!tenant.value().equals(c.tenantId()))throw forbidden();if(tx.endpoint(c.deviceId())==null)return reply(new LocalToolCatalog(List.of()));
-            var d=device(tx,c);if(d.lastSeenUnixMs()==0||now-d.lastSeenUnixMs()>120000)return reply(new LocalToolCatalog(List.of()));var usage=new HashMap<String,Long>();var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));var tools=new ArrayList<BuiltinToolInfo>();
+            var d=device(tx,c);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now))return reply(new LocalToolCatalog(List.of()));var usage=new HashMap<String,Long>();var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));var tools=new ArrayList<BuiltinToolInfo>();
             for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
                 var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
                 if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest()))tools.add(t);
@@ -50,7 +50,7 @@ public final class McpService {
             operations.requireFresh(tenant,tx,i);installed(tx,i,submission.request());var previous=tx.mcp().get(i.id());
             if(previous!=null){if(!task(previous).request().equals(submission.request()))throw Failure.conflict();return reply(new RemoteToolResponse(record(previous),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record(previous).state())&&previous.result()!=null?codec.model(previous.result(),RemoteToolResult.class):null));}
             if(i.state()!=EnterpriseInvocationState.QUEUED||submission.expiresAtUnixMs()<=now||submission.expiresAtUnixMs()>now+30000)throw Failure.conflict();
-            var d=device(tx,submission.context());if(d.lastSeenUnixMs()==0||now-d.lastSeenUnixMs()>120000)throw Failure.unavailable();
+            var d=device(tx,submission.context());if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now))throw Failure.unavailable();
             long expires=Math.min(i.expiresAtUnixMs(),submission.expiresAtUnixMs());if(d.connectionExpiresAtUnixMs()!=null)expires=Math.min(expires,d.connectionExpiresAtUnixMs());
             var reserved=operations.reserveInSession(tenant,tx,new EnterpriseReservationRequest(i.id(),i.revision()),actor.id());
             var task=new RemoteToolTask(i.id(),UUID.randomUUID().toString(),submission.request(),expires,reserved.invocation(),reserved.permit());

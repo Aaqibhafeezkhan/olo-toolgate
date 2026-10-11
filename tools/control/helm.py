@@ -45,6 +45,8 @@ def checks():
             assert config['TOOLGATE_CONTROL_MAX_RECORDS']=='512'
             assert config['TOOLGATE_CONTROL_MAX_CONFIG_BYTES']=='1048576'
             assert config['TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED']==('true' if name=='tracing' else 'false')
+            assert (config['TOOLGATE_CONTROL_CLIENT_CHECKIN_MS'],config['TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT'])==('2000','20')
+            assert 'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS' not in config
             policy=next(doc for doc in docs if doc['kind']=='NetworkPolicy')
             collector_rules=[rule for rule in policy['spec']['egress'] if any(port['port']==4317 for port in rule['ports'])]
             assert bool(collector_rules)==(name=='tracing')
@@ -58,7 +60,8 @@ def checks():
                   ['--set','control.database.sslMode=disable'],['--set','control.securityContext.allowPrivilegeEscalation=true'],
                   ['--set','control.terminationGracePeriodSeconds=20'],['--set','control.limits.maxRecords=513'],
                   ['--set','control.autoscaling.enabled=true','--set','control.autoscaling.minReplicas=9'],['--set','control.ingress.enabled=true'],
-                  ['--set','control.tracing.enabled=true']):
+                  ['--set','control.tracing.enabled=true'],['--set','control.clientCheckIn.checkInMs=400'],
+                  ['--set','control.clientCheckIn.checkInMs=22000'],['--set','control.clientCheckIn.jitterPct=51']):
         run(['helm','template','invalid',chart,*base,*flags],expect_failure=True)
     print('Control Helm install/upgrade variants, strict schemas and negative configuration passed')
 

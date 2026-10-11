@@ -25,7 +25,11 @@ public final class EndpointService {
     private final Ids.TenantId tenant;
     private final String server,organization,control,gateway;
     private final boolean enabled;
+    private ClientCheckInPolicy checkInPolicy=ClientCheckInPolicy.QUICKSTART;
     private EnterpriseOperations operations;
+    /** Env-owned check-in policy; the fixed 500 ms Quickstart behaviour until configured. */
+    public EndpointService checkInPolicy(ClientCheckInPolicy value){checkInPolicy=java.util.Objects.requireNonNull(value);return this;}
+    public ClientCheckInPolicy checkInPolicy(){return checkInPolicy;}
     public EndpointService operations(EnterpriseOperations value){operations=java.util.Objects.requireNonNull(value);return this;}
     public McpService relay(){available();if(operations==null)throw Failure.unavailable();return new McpService(store,codec,this,operations,clock,tenant,server);}
     public EndpointService(Store store,Codec codec,DeviceIssuer issuer,Clock clock,boolean enabled,
@@ -187,7 +191,8 @@ public final class EndpointService {
         // Preserve exact recent replies, but a lost response recovered after a long outage must
         // not reinstall an expired certificate or fail the client's current clock-skew check.
         long serverTime=now-ack.serverTimeUnixMs()>300000?now:ack.serverTimeUnixMs();
-        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,ack.nextIntervalSeconds(),milliseconds?500L:null,identity,ack.adoption(),ack.task(),serverName);
+        long next=checkInPolicy.nextIntervalMs();
+        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,checkInPolicy.nextIntervalSeconds(next),milliseconds?next:null,identity,ack.adoption(),ack.task(),serverName);
         return new Store.Reply(reply.status(),codec.json(negotiated),reply.revision());
     }
     public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,boolean milliseconds) {
@@ -205,8 +210,8 @@ public final class EndpointService {
             if(check.report().appliedRevision()!=0||!check.report().packages().isEmpty())FleetService.validateReport(tx,codec,check.report());
             if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),milliseconds,serverName(tx));}
             if(check.sequence()!=device.reportSequence()+1)throw Failure.conflict();
-            // Allow the 500 ms cycle with transport jitter; reject request bursts.
-            if(device.reportSequence()>0 && now-device.lastSeenUnixMs()<250)throw Failure.conflict();
+            // Allow the configured cycle with its jitter and transport jitter; reject request bursts.
+            if(device.reportSequence()>0 && now-device.lastSeenUnixMs()<checkInPolicy.burstGuardMs())throw Failure.conflict();
             // A certificate already capped at the approved deadline needs no repeated renewal.
             long connectionExpires=device.connectionExpiresAtUnixMs()==null?Long.MAX_VALUE:device.connectionExpiresAtUnixMs();
             DeviceIdentity renewed=null;if(peer.getNotAfter().getTime()-now<43200000&&peer.getNotAfter().getTime()<connectionExpires/1000*1000)renewed=issuer.issue(row.csr(),device.deviceId(),tenant.value(),device.userId(),server,now,connectionExpires);
