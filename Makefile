@@ -3,6 +3,17 @@
 SHELL := /bin/sh
 PYTHON ?= python3
 
+.PHONY: ci-local ci-plan ci-audit
+
+ci-plan:
+	@$(PYTHON) tools/ci/local.py plan
+
+ci-audit:
+	@$(PYTHON) tools/ci/local.py audit
+
+ci-local:
+	@$(PYTHON) tools/ci/local.py run
+
 .PHONY: preflight help java-check java-projects publish-contracts-local dev stop check quickstart-check test integration e2e policy-e2e approval-e2e builder-e2e security benchmark containers client docs contracts contracts-check contracts-release-dry-run clean tree
 
 help:
@@ -12,6 +23,9 @@ help:
 	  '  make dev          Start the contributor development environment' \
 	  '  make stop         Stop the development environment' \
 	  '  make preflight    Check release metadata before expensive builds' \
+	  '  make ci-plan      Inventory CI triggers and local coverage gaps' \
+	  '  make ci-audit     Audit CI metadata, admission tests and workflows' \
+	  '  make ci-local     Replay supported CI jobs and report coverage gaps' \
 	  '  make check        Run formatting/lint/schema/docs checks' \
 	  '  make test         Run unit tests' \
 	  '  make integration  Run integration tests' \

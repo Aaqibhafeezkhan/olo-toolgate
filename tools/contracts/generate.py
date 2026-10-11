@@ -28,7 +28,7 @@ VERSIONS = ('v1', 'v2')
 def definitions(ver='v1'):
     result = {}
     for path in sorted((CONTRACTS / 'schemas' / ver).glob('*.json')):
-        for name, schema in json.loads(path.read_text())['$defs'].items():
+        for name, schema in json.loads(path.read_text(encoding='utf-8'))['$defs'].items():
             if name in result:
                 raise ValueError(f'Duplicate definition: {name}')
             result[name] = schema
@@ -237,7 +237,7 @@ def render_version(ver, version, outputs):
     rust += rust_consts
     rust += ['/// Embedded canonical schemas for offline boundary validation.', 'pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[']
     for path in sorted((CONTRACTS/'schemas'/ver).glob('*.json')):
-        schema = json.loads(path.read_text())
+        schema = json.loads(path.read_text(encoding='utf-8'))
         outputs[f'packages/contracts/rust/schemas/{ver}/{path.name}'] = path.read_text(encoding='utf-8')
         rust += ['    (', f'        "{schema["$id"]}",', f'        include_str!("../schemas/{ver}/{path.name}"),', '    ),']
     rust += ['];']
@@ -248,7 +248,7 @@ def render_version(ver, version, outputs):
 
 
 def render():
-    version = (CONTRACTS / 'VERSION').read_text().strip()
+    version = (CONTRACTS / 'VERSION').read_text(encoding='utf-8').strip()
     outputs = {}
     for ver in VERSIONS:
         render_version(ver, version, outputs)
