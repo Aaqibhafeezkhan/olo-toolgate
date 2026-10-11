@@ -233,8 +233,8 @@ public final class Tasks implements AutoCloseable {
             if (!t.status.terminal()) runCancel(t.taskId);
             cancelHandlers.remove(t.taskId);
         }
-        for (TaskRecord t : store.all()) {
-            if (t.cancelIfAbandoned && !t.status.terminal() && !t.cancelRequested
+        for (TaskRecord t : store.active()) {
+            if (t.cancelIfAbandoned && !t.cancelRequested
                     && now.isAfter(t.lastPolledAt.plusMillis(t.pollIntervalMs * ABANDONED_AFTER_POLLS))) {
                 change(t.taskId, x -> x.cancelRequested = true);
                 runCancel(t.taskId);

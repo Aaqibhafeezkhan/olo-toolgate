@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls; part 7 adds the identity verifier (adapter A4); part 8 adds the routes HTTP client; part 9 adds business keys with a local SQLite reservation store. The governed runtime, the legacy 2025-11-25 path, the TCP connector, `ToolHarness`, the Gradle and Maven plugins, typed accessors and the route convenience analyser arrive in later parts.
+Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls; part 7 adds the identity verifier (adapter A4); part 8 adds the routes HTTP client; part 9 adds business keys with a local SQLite reservation store; part 10 adds the SQLite task store. The governed runtime, the legacy 2025-11-25 path, the TCP connector, `ToolHarness`, the Gradle and Maven plugins, typed accessors and the route convenience analyser arrive in later parts.
 
 ## Modules
 
@@ -12,7 +12,7 @@ Java 17+ implementation of the [authoring contract](../spec/authoring/README.md)
 | [`api/`](api/) | `toolgate-sdk-api` | `io.ololabs.toolgate.sdk.annotations` (the declarations), `.context` (`ToolContext` and the route client interfaces), `.errors` (the [error hierarchy](../spec/authoring/errors.md)) |
 | [`processor/`](processor/) | `toolgate-sdk-processor` | `DescriptorProcessor`, a javac annotation processor |
 | [`protocol/`](protocol/) | `toolgate-protocol` | `ProtocolCore`, adapter A1 of [protocol-layer.md](../spec/protocol-layer.md) §3 (MCP 2026-07-28); `Tasks`, adapter A2, over the `TaskStore` port with `MemoryTaskStore`; `RequestStates`, adapter A3; `StdioServer` and `StreamableHttpServer` |
-| [`runtime-mcp/`](runtime-mcp/) | `toolgate-sdk-runtime-mcp` | `StandaloneRuntime` and its entry point `io.ololabs.toolgate.runtime.Main` |
+| [`runtime-mcp/`](runtime-mcp/) | `toolgate-sdk-runtime-mcp` | `StandaloneRuntime` and its entry point `io.ololabs.toolgate.runtime.Main`; `SqliteTaskStore` |
 | [`conformance-server/`](conformance-server/README.md) | not published | The fixture server the official MCP conformance suite runs against |
 
 All compile with `--release 17`. The API and the processor have no runtime dependencies; the protocol and runtime modules depend on Jackson.
@@ -43,7 +43,8 @@ Put the compiled tools, `toolgate-sdk-runtime-mcp` and its dependencies on the c
 | `TOOLGATE_GLOBAL_<NAME>` | A global's value as text, coerced to its declared type and validated against its schema. A missing required global refuses startup. |
 | `TOOLGATE_SECRET_<NAME>` | A secret's value. A missing secret is a warning; reading it fails the call with `CONFIGURATION`. |
 | `TOOLGATE_DESTINATION_<HOSTSETTING>` | The host of a destination, as `host` or `host:port` (see [Routes](#routes)). A missing host is a warning; calls on its routes fail with `CONFIGURATION`. |
-| `TOOLGATE_STATE_DB` | The SQLite file for business-key reservations (see [Business keys](#business-keys)), default `.toolgate/state.db` in the working directory. It is opened only when a tool needs reservations. |
+| `TOOLGATE_STATE_DB` | The SQLite file for business-key reservations (see [Business keys](#business-keys)) and the SQLite task store, default `.toolgate/state.db` in the working directory. It is opened only when a tool needs reservations or `TOOLGATE_TASK_STORE` is `sqlite`. |
+| `TOOLGATE_TASK_STORE` | `memory` (the default) or `sqlite` (see [Tasks](#tasks)). Any other value refuses startup. |
 | `TOOLGATE_BUSINESS_KEY_RETENTION` | How long a reservation keeps its result, as an ISO-8601 duration, default `P30D`. |
 | `TOOLGATE_DEV_JSON` | The fixture file (default `./toolgate.dev.json`) with `destinations`, `globals`, `secrets` and `claims`. Claims are read only in development. |
 | `TOOLGATE_AUTH_*` | The identity verifier (see [Identity](#identity)). Any of these refuses development mode. |
@@ -91,7 +92,7 @@ The runtime serves the Tasks extension `io.modelcontextprotocol/tasks` (SEP-2663
 - `requestInput()` moves the task to `input_required` with one form `elicitation/create` request; `tasks/update` answers it. A declined answer ends the tool with `CANCELLED`. In a sync call it uses MRTR instead (see below).
 - `tasks/cancel` requests cooperative cancellation: the token is set and the worker interrupted. A handler that has not stopped after 5 s is abandoned, and the task ends `cancelled` either way. A tool declaring `cancelIfAbandoned` is cancelled when no poll arrives for 3 poll intervals.
 - Task ids are 128-bit random. A task belongs to the verified caller that created it, or without a verifier to the stdio connection or the shared HTTP owner; any other owner gets `-32602` exactly as for an unknown id. Tasks are kept for `ttlMs` (1 hour); a poll extends retention by 3 poll intervals, at most 24 hours after creation, and expired tasks are purged.
-- The store is in memory, so tasks end with the process. The SQLite store comes later.
+- The task store is in memory by default, so tasks end with the process. With `TOOLGATE_TASK_STORE=sqlite` tasks and their results are kept in the state file (`synchronous=FULL`) and answer `tasks/get` after a restart. Owners must match as before: verified callers and the shared HTTP owner carry over, a stdio connection's owner does not. A task that was working or waiting for input when the process stopped ends `failed` (`-32603`) with `data.code` `OUTCOME_UNKNOWN`, since its effect may have happened. A store that cannot open refuses startup; a call whose task cannot be stored gets the retryable `TASK_STORE_UNAVAILABLE` and nothing runs.
 
 ## Input in sync calls (MRTR)
 

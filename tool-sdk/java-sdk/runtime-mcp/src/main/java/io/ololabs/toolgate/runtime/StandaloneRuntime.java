@@ -140,10 +140,10 @@ public final class StandaloneRuntime implements ToolCatalog {
      * @throws StartupRefused with the fixed code when the runtime cannot honour a declaration
      */
     public static StandaloneRuntime start(ClassLoader loader, Map<String, String> env, Path workingDirectory, PrintStream diagnostics) {
-        return start(loader, env, workingDirectory, diagnostics, new Tasks(new MemoryTaskStore(), Tasks.DEFAULT_TTL_MS, Tasks.DEFAULT_POLL_INTERVAL_MS));
+        return start(loader, env, workingDirectory, diagnostics, null);
     }
 
-    /** As {@link #start(ClassLoader, Map, Path, PrintStream)} with the given task service. */
+    /** As {@link #start(ClassLoader, Map, Path, PrintStream)} with the given task service, or the configured one when null. */
     static StandaloneRuntime start(ClassLoader loader, Map<String, String> env, Path workingDirectory, PrintStream diagnostics, Tasks tasks) {
         Config config = Config.load(env, workingDirectory);
         if (config.mode == Config.Mode.TEST) {
@@ -154,6 +154,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         }
         ObjectMapper json = new ObjectMapper();
         ObjectNode index = readIndex(loader, json);
+        if (tasks == null) tasks = new Tasks(openTaskStore(env, workingDirectory), Tasks.DEFAULT_TTL_MS, Tasks.DEFAULT_POLL_INTERVAL_MS);
         StandaloneRuntime runtime = new StandaloneRuntime(config, diagnostics, index, tasks);
         if (config.mode == Config.Mode.PRODUCTION) runtime.verifier = Verifiers.fromEnv(env);
         if (env.get("TOOLGATE_AUTH_CLIENT_SECRET") != null) runtime.redactor.add(json.getNodeFactory().textNode(env.get("TOOLGATE_AUTH_CLIENT_SECRET")));
@@ -219,7 +220,7 @@ public final class StandaloneRuntime implements ToolCatalog {
      * reservations never run unreserved, so a store that cannot open refuses startup.
      */
     private static Reservations openReservations(Map<String, String> env, Path workingDirectory) {
-        Path file = env.containsKey("TOOLGATE_STATE_DB") ? Path.of(env.get("TOOLGATE_STATE_DB")) : workingDirectory.resolve(".toolgate").resolve("state.db");
+        Path file = stateFile(env, workingDirectory);
         long retentionMs;
         try {
             retentionMs = java.time.Duration.parse(env.getOrDefault("TOOLGATE_BUSINESS_KEY_RETENTION", "P30D")).toMillis();
@@ -232,6 +233,27 @@ public final class StandaloneRuntime implements ToolCatalog {
         } catch (java.sql.SQLException e) {
             throw new StartupRefused("CONFIGURATION", "the business-key store " + file + " cannot be opened: " + e.getMessage());
         }
+    }
+
+    /**
+     * The task store {@code TOOLGATE_TASK_STORE} names: {@code memory} (the default), whose tasks end with the process, or
+     * {@code sqlite}, kept in the state file so tasks and their results survive a restart.
+     */
+    private static io.ololabs.toolgate.protocol.TaskStore openTaskStore(Map<String, String> env, Path workingDirectory) {
+        String kind = env.getOrDefault("TOOLGATE_TASK_STORE", "memory");
+        if (kind.equals("memory")) return new MemoryTaskStore();
+        if (!kind.equals("sqlite")) throw new StartupRefused("CONFIGURATION", "TOOLGATE_TASK_STORE must be memory or sqlite, not " + kind);
+        Path file = stateFile(env, workingDirectory);
+        try {
+            return SqliteTaskStore.open(file);
+        } catch (java.sql.SQLException e) {
+            throw new StartupRefused("CONFIGURATION", "the task store " + file + " cannot be opened: " + e.getMessage());
+        }
+    }
+
+    /** {@code TOOLGATE_STATE_DB}, default {@code .toolgate/state.db} in the working directory. */
+    private static Path stateFile(Map<String, String> env, Path workingDirectory) {
+        return env.containsKey("TOOLGATE_STATE_DB") ? Path.of(env.get("TOOLGATE_STATE_DB")) : workingDirectory.resolve(".toolgate").resolve("state.db");
     }
 
     /** The configured Streamable HTTP address, or null to serve stdio. */
@@ -674,7 +696,15 @@ public final class StandaloneRuntime implements ToolCatalog {
     /** Runs an async tool as a task: the CreateTaskResult goes back at once and the handler runs on. */
     private ObjectNode startTask(Tool tool, Prepared prepared, RequestMeta meta) {
         StandaloneContext context = prepared.context;
-        TaskRecord task = tasks.create(meta.owner(), tool.cancelIfAbandoned, "Running", context::cancel);
+        TaskRecord task;
+        try {
+            task = tasks.create(meta.owner(), tool.cancelIfAbandoned, "Running", context::cancel);
+        } catch (RuntimeException e) {
+            // No task exists, so nothing runs; a reserved key goes back to the caller's next attempt.
+            diagnostics.println("toolgate: task store failed to create a task for " + tool.toolId + ": " + prepared.redact.apply(String.valueOf(e)));
+            if (prepared.reserved) finish(prepared, Reservations.NOT_STARTED, null);
+            return marked(failure(tool, prepared.redact, "TASK_STORE_UNAVAILABLE", "The task store is unavailable; nothing ran", true, null));
+        }
         context.attachTask(tasks, task.taskId);
         if (prepared.reserved) {
             try {

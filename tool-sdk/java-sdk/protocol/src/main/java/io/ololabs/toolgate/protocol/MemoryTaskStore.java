@@ -72,9 +72,9 @@ public final class MemoryTaskStore implements TaskStore {
     }
 
     @Override
-    public synchronized List<TaskRecord> all() {
+    public synchronized List<TaskRecord> active() {
         List<TaskRecord> copies = new ArrayList<>();
-        for (TaskRecord t : tasks.values()) copies.add(t.copy());
+        for (TaskRecord t : tasks.values()) if (!t.status.terminal()) copies.add(t.copy());
         return copies;
     }
 
