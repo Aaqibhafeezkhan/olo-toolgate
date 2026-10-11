@@ -20,7 +20,9 @@ test('real group administration, inherited provenance and review impact are acce
     await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
     expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   }
-  await page.getByRole('button',{name:/^config-/}).first().click();
+  await page.goto(origin+'/console/#config-reviews');
+  await expect(page.getByRole('heading',{name:'Configuration reviews',exact:true})).toBeVisible();
+  await page.getByRole('table',{name:'Reviewed configuration changes',exact:true}).getByRole('button',{name:/^config-/}).first().click();
   await expect(page.getByRole('heading',{name:'Review configuration impact'})).toBeVisible();
   await expect(page.getByText('Exact change digest',{exact:true})).toBeVisible();
   await expect(page.getByRole('table',{name:'Exact record changes',exact:true})).toBeVisible();
