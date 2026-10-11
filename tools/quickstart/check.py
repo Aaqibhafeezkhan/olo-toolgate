@@ -183,7 +183,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         # owner; admin and reviewer 1 use the same full-scope restrictive role.
         # This also proves the live Super Admin exception uses the ordinary APIs.
         management=ok(api('/api/control/v1/roles/installation-management',admin))
-        super_role={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1}
+        super_role={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1,'managementRules':[]}
         ok(api('/api/control/v1/roles',admin,super_role,'POST'),201)
         ok(api('/api/control/v1/teams',admin,dict(id='smoke-super-team',name='Smoke installation owners',
             enabled=True,revision=1,userIds=['reviewer-2'],roleIds=[super_role['id']]),'POST'),201)
