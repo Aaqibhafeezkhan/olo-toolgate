@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Control is the online authority. Catalog entries are metadata, never effect grants.
 use crate::{relay::RelayPort, validation::Contracts};
+use olo_toolgate_contracts::v2::RequestContext;
 use olo_toolgate_contracts::*;
 use std::sync::Arc;
 

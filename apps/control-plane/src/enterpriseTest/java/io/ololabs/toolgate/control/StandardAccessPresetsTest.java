@@ -4,6 +4,7 @@ package io.ololabs.toolgate.control;
 import io.ololabs.toolgate.control.application.*;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.RequestMode;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,15 +24,15 @@ class StandardAccessPresetsTest {
         var id="standard-"+tool+"-"+device;
         var binding=f.codec.model(f.entries.get(Kind.BINDING.id(id)).document(),ControlExecutionBinding.class);
         f.add(Kind.BINDING,new ControlExecutionBinding(id,id,true,2L,binding.toolGroupId(),binding.deviceGroupId(),binding.actions(),List.of(EnterpriseConformanceTest.DIGEST),true,false));
-        f.workload("workload","agent",EnterpriseRequestMode.SERVICE,null,null);f.codec.validatePolicies(f.directory());return f;
+        f.workload("workload","agent",RequestMode.SERVICE,null,null);f.codec.validatePolicies(f.directory());return f;
     }
-    EnterpriseDecision decide(EnterpriseConformanceTest f,String action,EnterpriseRequestMode mode,String tool,String device,boolean online) {
+    EnterpriseDecision decide(EnterpriseConformanceTest f,String action,RequestMode mode,String tool,String device,boolean online) {
         var r=f.input(f.context(mode,"standard-"+tool+"-"+device),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
         return new EnterpriseEvaluator(f.codec).evaluate(EnterpriseConformanceTest.TENANT,f.directory(),new EnterpriseEvaluation(r.context(),r.toolId(),action,r.argumentsDigest(),r.resources(),r.toolDigest(),r.packageDigest(),r.nowUnixMs(),r.authorityRevision(),online,null,null));
     }
     @Test void allActorToolDeviceCombinationsEnforceTheLowestLevelForHumansAndServices() {
         var tiers=List.of("ReadOnly","ReadAndWrite","Admin");
-        for(var actor:tiers)for(var tool:tiers)for(var device:tiers)for(var mode:List.of(EnterpriseRequestMode.HUMAN,EnterpriseRequestMode.SERVICE)) {
+        for(var actor:tiers)for(var tool:tiers)for(var device:tiers)for(var mode:List.of(RequestMode.HUMAN,RequestMode.SERVICE)) {
             var f=setup(actor,tool,device);assertEquals(Decision.ALLOW,decide(f,"read",mode,tool,device,true).decision());
             var expected=actor.equals("ReadOnly")||tool.equals("ReadOnly")||device.equals("ReadOnly")?Decision.BLOCK:Decision.ALLOW;
             assertEquals(expected,decide(f,"write",mode,tool,device,true).decision(),actor+"/"+tool+"/"+device+"/"+mode);
@@ -45,10 +46,10 @@ class StandardAccessPresetsTest {
     @Test void defaultsAndUnpinnedPackagesStillDenyAfterInstallingPresets() {
         var f=setup("Admin","Admin","Admin");
         GroupGraph.setMemberships(f.entries,f.codec,Kind.AGENT,"agent",List.of("default-agents"));
-        assertEquals(Decision.BLOCK,decide(f,"read",EnterpriseRequestMode.SERVICE,"Admin","Admin",true).decision());
+        assertEquals(Decision.BLOCK,decide(f,"read",RequestMode.SERVICE,"Admin","Admin",true).decision());
         f=setup("Admin","Admin","Admin");
         f.add(Kind.BINDING,new ControlExecutionBinding("standard-Admin-Admin","No approved package",true,2L,"AdminToolGroup","AdminDeviceGroup",List.of("read"),List.of(),true,false));
-        assertEquals(EnterpriseDecisionReason.NO_BINDING,decide(f,"read",EnterpriseRequestMode.SERVICE,"Admin","Admin",true).reason());
+        assertEquals(EnterpriseDecisionReason.NO_BINDING,decide(f,"read",RequestMode.SERVICE,"Admin","Admin",true).reason());
     }
     @Test void sensitiveAdminExecutionStillRequiresAnIndependentRuntimeReview() {
         var f=setup("Admin","Admin","Admin");
@@ -56,7 +57,7 @@ class StandardAccessPresetsTest {
         var action=((com.fasterxml.jackson.databind.node.ArrayNode)node.path("definition").path("actions")).addObject();
         action.put("name","execute");action.putArray("resourceKinds").add("FILE");
         f.entries.put(Kind.TOOL.id("tool"),f.codec.entry(Kind.TOOL,f.codec.json(node)));
-        for(var mode:List.of(EnterpriseRequestMode.HUMAN,EnterpriseRequestMode.SERVICE)){
+        for(var mode:List.of(RequestMode.HUMAN,RequestMode.SERVICE)){
             var result=decide(f,"execute",mode,"Admin","Admin",true);
             assertEquals(Decision.ASK,result.decision());assertTrue(result.obligations().contains("standard-admin-sensitive-review"));
         }

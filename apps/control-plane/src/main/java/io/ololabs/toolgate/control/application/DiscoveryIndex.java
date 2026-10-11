@@ -5,6 +5,7 @@ package io.ololabs.toolgate.control.application;
 import io.ololabs.toolgate.control.domain.*;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.RequestContext;
 import java.util.*;
 
 /** Read-only metadata probes. Visibility never substitutes for authorizing real extracted arguments. */

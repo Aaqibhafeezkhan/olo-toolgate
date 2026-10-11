@@ -28,7 +28,7 @@ public record ControlWorkloadBinding(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "enabled", required = true) Boolean enabled,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "revision", required = true) Long revision,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agentId", required = true) String agentId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "mode", required = true) EnterpriseRequestMode mode,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "mode", required = true) io.ololabs.toolgate.contracts.v2.RequestMode mode,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "issuer", required = true) String issuer,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "subject", required = true) String subject,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "audience", required = true) String audience,

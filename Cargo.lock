@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "olo-toolgate-contracts"
-version = "0.10.0-dev"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",

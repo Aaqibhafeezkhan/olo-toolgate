@@ -1,6 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
+import type * as V2 from "./v2/index.js";
 /** Server-verified administrator portal session. */
 export interface AdminSession {
   readonly role: UserRole;
@@ -619,7 +620,7 @@ export interface ControlWorkloadBinding {
   readonly enabled: boolean;
   readonly revision: number;
   readonly agentId: string;
-  readonly mode: EnterpriseRequestMode;
+  readonly mode: V2.RequestMode;
   readonly issuer: string;
   readonly subject: string;
   readonly audience: string;
@@ -635,7 +636,6 @@ export interface ControlWorkloadBindingPage {
   readonly items: ReadonlyArray<ControlWorkloadBinding>;
   readonly nextCursor?: string;
 }
-export type CredentialKind = "STATIC_TOKEN" | "JWT" | "INTROSPECTION";
 export type Decision = "ALLOW" | "ASK" | "BLOCK";
 /** Organization assignment with independent Marketplace evidence; grants no runtime permission. */
 export interface DeploymentAssignment {
@@ -803,11 +803,6 @@ export interface EndpointRevokeRequest {
 export type EndpointState = "UNENROLLED" | "PENDING" | "ACTIVE" | "OFFLINE" | "REVOKED";
 export type EnrollmentChoice = "APPROVE" | "DENY";
 export type EnrollmentState = "PENDING" | "APPROVED" | "DENIED" | "EXPIRED" | "CONSUMED";
-/** Verified identity/delegation chain entry; not caller-asserted authority. */
-export interface EnterpriseActorHop {
-  readonly agentId: string;
-  readonly workloadBindingId: string;
-}
 /** Certificate-authenticated current device acknowledgement. Acknowledgement is metadata, never an execution capability. */
 export interface EnterpriseAdoptionStatus {
   readonly deviceId: string;
@@ -933,11 +928,11 @@ export interface EnterpriseConfigurationTransition {
 export interface EnterpriseContext {
   readonly requestId: string;
   readonly tenantId: string;
-  readonly mode: EnterpriseRequestMode;
+  readonly mode: V2.RequestMode;
   readonly userId?: string;
   readonly agentId?: string;
   readonly workloadBindingId?: string;
-  readonly chain: ReadonlyArray<EnterpriseActorHop>;
+  readonly chain: ReadonlyArray<V2.ActorHop>;
   readonly sessionEpoch?: number;
   readonly credentialEpoch?: number;
   readonly bindingId: string;
@@ -1043,7 +1038,7 @@ export interface EnterpriseInvocationPage {
 }
 /** Exact authenticated invocation with original arguments and installed code digests. */
 export interface EnterpriseInvocationRequest {
-  readonly context: RequestContext;
+  readonly context: V2.RequestContext;
   readonly request: AuthorizationRequest;
   readonly toolDigest: string;
   readonly packageDigest: string;
@@ -1144,7 +1139,6 @@ export interface EnterpriseRecoveryProof {
   readonly keyId: string;
   readonly signature: string;
 }
-export type EnterpriseRequestMode = "HUMAN" | "DELEGATED" | "SERVICE";
 /** Durable invocation reservation and its exact signed capability. */
 export interface EnterpriseReservation {
   readonly invocation: EnterpriseInvocation;
@@ -1579,7 +1573,7 @@ export type RemoteToolState = "RECEIVED" | "WAITING_FOR_POLL" | "SUBMITTED" | "R
 export interface RemoteToolSubmission {
   readonly request: AuthorizationRequest;
   readonly expiresAtUnixMs: number;
-  readonly context: RequestContext;
+  readonly context: V2.RequestContext;
   readonly invocationId: string;
 }
 /** Bounded lease delivered only over device-authenticated polling; executable definitions are never accepted from an agent. */
@@ -1596,24 +1590,6 @@ export interface ReportedPackage {
   readonly packageId: string;
   readonly version: string;
   readonly state: PackageState;
-}
-/** Authenticated Gateway runtime context. Carries no device: Control places a client tool call on a device from the execution binding device group (ADR 015 amendment), and server-side agents have none. */
-export interface RequestContext {
-  readonly requestId: string;
-  readonly tenantId: string;
-  readonly mode: EnterpriseRequestMode;
-  readonly credentialKind: CredentialKind;
-  readonly issuer?: string;
-  readonly userId?: string;
-  readonly agentId?: string;
-  readonly workloadBindingId?: string;
-  readonly chain: ReadonlyArray<EnterpriseActorHop>;
-  readonly sessionEpoch?: number;
-  readonly credentialEpoch?: number;
-  readonly delegatedSessionEpoch?: number;
-  readonly expiresAtUnixMs?: number;
-  readonly bindingId?: string;
-  readonly credentialSha256?: string;
 }
 /** Declared resource identity; does not grant access or validate a path. */
 export interface ResourceDescriptor {
@@ -1649,5 +1625,5 @@ export interface ToolDefinition {
   readonly outputSchema: Record<string, unknown>;
 }
 export type UserRole = "BASIC" | "ADMINISTRATOR" | "SUPER_ADMIN";
-export const CONTRACT_SET_VERSION = "0.10.0-dev" as const;
+export const CONTRACT_SET_VERSION = "1.0.0" as const;
 export const CONTRACT_SET_NAME = "olo-toolgate-contracts" as const;

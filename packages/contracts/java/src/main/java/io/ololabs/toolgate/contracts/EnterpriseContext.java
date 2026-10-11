@@ -21,11 +21,11 @@ package io.ololabs.toolgate.contracts;
 public record EnterpriseContext(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "requestId", required = true) String requestId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "tenantId", required = true) String tenantId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "mode", required = true) EnterpriseRequestMode mode,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "mode", required = true) io.ololabs.toolgate.contracts.v2.RequestMode mode,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "userId", required = false) String userId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agentId", required = false) String agentId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "workloadBindingId", required = false) String workloadBindingId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "chain", required = true) java.util.List<EnterpriseActorHop> chain,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "chain", required = true) java.util.List<io.ololabs.toolgate.contracts.v2.ActorHop> chain,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "sessionEpoch", required = false) Long sessionEpoch,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "credentialEpoch", required = false) Long credentialEpoch,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "bindingId", required = true) String bindingId,

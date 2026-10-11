@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.ololabs.toolgate.control.application.*;
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.ActorHop;
+import io.ololabs.toolgate.contracts.v2.RequestMode;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -20,12 +22,12 @@ class EnterpriseScenarioTest {
         var document=(ObjectNode)f.codec.value(f.entries.get(kind.id(id)).document());
         document.put("enabled",value);f.entries.put(kind.id(id),f.codec.entry(kind,f.codec.json(document)));
     }
-    EnterpriseDecision human(){return f.decide(f.context(EnterpriseRequestMode.HUMAN,"binding-a"));}
-    EnterpriseDecision delegated(){return f.decide(f.context(EnterpriseRequestMode.DELEGATED,"binding-a"));}
+    EnterpriseDecision human(){return f.decide(f.context(RequestMode.HUMAN,"binding-a"));}
+    EnterpriseDecision delegated(){return f.decide(f.context(RequestMode.DELEGATED,"binding-a"));}
     EnterpriseScope scope(EnterpriseConditions conditions){var s=f.scope("tools-a","devices-a");return new EnterpriseScope(s.toolGroups(),s.deviceGroups(),s.actions(),s.allActions(),s.resources(),conditions);}
     void condition(EnterpriseConditions c){f.grant("human","team-a",EnterpriseSourceType.TEAM,EnterpriseGrantPurpose.HUMAN,scope(c));}
     EnterpriseDecision input(String action,boolean online,Long amount,Long count){
-        var r=f.input(f.context(EnterpriseRequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
+        var r=f.input(f.context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
         return new EnterpriseEvaluator(f.codec).evaluate(TENANT,f.directory(),new EnterpriseEvaluation(r.context(),r.toolId(),action,r.argumentsDigest(),r.resources(),r.toolDigest(),r.packageDigest(),r.nowUnixMs(),r.authorityRevision(),online,amount,null),count);
     }
     @Test void eachRequiredAuthorityDimensionIndependentlyDenies(){
@@ -75,7 +77,7 @@ class EnterpriseScenarioTest {
         f.add(Kind.TOOL_GROUP,new ControlToolGroup("tools-a","Tools A",true,2L,List.of()));f.add(Kind.TOOL_GROUP,new ControlToolGroup("tools-b","Tools B",true,2L,List.of("tool")));
         assertEquals(Decision.BLOCK,human().decision());f.graph();
         f.add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-a","Devices A",true,2L,List.of()));
-        assertEquals(Decision.BLOCK,human().decision());assertEquals(Decision.BLOCK,f.decide(f.context(EnterpriseRequestMode.HUMAN,"binding-b")).decision());
+        assertEquals(Decision.BLOCK,human().decision());assertEquals(Decision.BLOCK,f.decide(f.context(RequestMode.HUMAN,"binding-b")).decision());
     }
     @Test void administrativeOwnerSuppliesNoRightsAndDependencyIsExplicit(){
         enabled(Kind.USER,"bob",false);assertEquals(Decision.ALLOW,delegated().decision());
@@ -84,14 +86,14 @@ class EnterpriseScenarioTest {
     }
     @Test void downstreamAgentCannotExceedAnyUpstreamCeilingOrReuseIdentity(){
         f.add(Kind.AGENT,new ControlAgent("downstream","Downstream",null,true,1L,"bob"));f.add(Kind.AGENT_GROUP,new ControlAgentGroup("downstream-group","Downstream",null,true,1L,List.of("downstream"),List.of()));
-        f.workload("child-workload","downstream",EnterpriseRequestMode.DELEGATED,"alice","workload");
+        f.workload("child-workload","downstream",RequestMode.DELEGATED,"alice","workload");
         f.grant("child-capability","downstream-group",EnterpriseSourceType.AGENT_GROUP,EnterpriseGrantPurpose.CAPABILITY,f.scope("tools-a","devices-a"));
         f.add(Kind.AGENT_DELEGATION,new ControlAgentDelegation("edge","Edge",true,1L,"group-a","downstream-group",f.scope("tools-a","devices-a"),1L));
-        var chain=new EnterpriseContext("request",TENANT.value(),EnterpriseRequestMode.DELEGATED,"alice","downstream","child-workload",List.of(new EnterpriseActorHop("agent","workload")),1L,1L,"binding-a","device");
+        var chain=new EnterpriseContext("request",TENANT.value(),RequestMode.DELEGATED,"alice","downstream","child-workload",List.of(new ActorHop("agent","workload")),1L,1L,"binding-a","device");
         assertEquals(Decision.ALLOW,f.decide(chain).decision());
         enabled(Kind.GRANT,"capability",false);assertEquals(Decision.BLOCK,f.decide(chain).decision());enabled(Kind.GRANT,"capability",true);
         var s=f.scope("tools-a","devices-b");f.add(Kind.AGENT_DELEGATION,new ControlAgentDelegation("edge","Edge",true,1L,"group-a","downstream-group",s,1L));assertEquals(Decision.BLOCK,f.decide(chain).decision());
-        var cycle=new EnterpriseContext("request",TENANT.value(),EnterpriseRequestMode.DELEGATED,"alice","agent","workload",List.of(new EnterpriseActorHop("agent","workload")),1L,1L,"binding-a","device");assertEquals(Decision.BLOCK,f.decide(cycle).decision());
+        var cycle=new EnterpriseContext("request",TENANT.value(),RequestMode.DELEGATED,"alice","agent","workload",List.of(new ActorHop("agent","workload")),1L,1L,"binding-a","device");assertEquals(Decision.BLOCK,f.decide(cycle).decision());
     }
     @Test void disabledAgentGroupRemovesItsPathWhileIndependentPathsSurvive(){
         f.grant("other-capability","group-b",EnterpriseSourceType.AGENT_GROUP,EnterpriseGrantPurpose.CAPABILITY,f.scope("tools-a","devices-a"));f.add(Kind.DELEGATION,new ControlDelegation("other-delegation","Other",true,1L,"team-a","group-b",f.scope("tools-a","devices-a")));

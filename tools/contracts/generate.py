@@ -7,6 +7,7 @@ This generator deliberately fails on unsupported structural types rather than
 silently emitting untyped models. No timestamps or machine paths enter outputs.
 """
 import argparse
+import functools
 import hashlib
 import json
 import re
@@ -25,6 +26,7 @@ def source_sha256(path):
 VERSIONS = ('v1', 'v2')
 
 
+@functools.lru_cache(maxsize=None)
 def definitions(ver='v1'):
     result = {}
     for path in sorted((CONTRACTS / 'schemas' / ver).glob('*.json')):
@@ -49,9 +51,22 @@ def named(schema):
     return schema['$ref'].rsplit('/', 1)[1]
 
 
+# v1 models may reference v2 definitions (`../v2/...`), which the bindings name in the v2 namespace.
+V2_QUALIFIED = {'java': 'io.ololabs.toolgate.contracts.v2.', 'rust': 'v2::', 'ts': 'V2.', 'php': '\\OloLabs\\ToolGate\\Contracts\\V2\\'}
+
+
+def cross_version(schema):
+    return schema['$ref'].startswith('../v2/')
+
+
 def field_type(schema, language, defs):
     if '$ref' in schema:
         name = named(schema)
+        if cross_version(schema):
+            target = definitions('v2')[name]
+            if target.get('type') == 'object' or 'enum' in target:
+                return V2_QUALIFIED[language] + name
+            return field_type(target, language, definitions('v2'))
         target = defs[name]
         if target.get('type') == 'object' or 'enum' in target:
             return name
@@ -83,11 +98,14 @@ def snake(name):
 def php_value(schema, expr, defs):
     if '$ref' in schema:
         name = named(schema)
+        qualified = name
+        if cross_version(schema):
+            defs, qualified = definitions('v2'), V2_QUALIFIED['php'] + name
         target = defs[name]
         if 'enum' in target:
-            return f'{name}::from({expr})'
+            return f'{qualified}::from({expr})'
         if target.get('type') == 'object':
-            return f'{name}::fromArray({expr})'
+            return f'{qualified}::fromArray({expr})'
         return php_value(target, expr, defs)
     if 'type' not in schema:
         return expr
@@ -138,7 +156,7 @@ def render_version(ver, version, outputs):
                 '                Err(serde::de::Error::custom(concat!(', '                    "expected constant ",', '                    stringify!($value)', '                )))', '            }', '        }', '    };', '}']
     else:
         rust = ['//! Shared structural contracts. Validate canonical schemas at input boundaries.', '// ' + HEADER.replace('\n', '\n// '), 'use serde::{Deserialize, Serialize};', '', '/// Contract set v2 models, side by side with v1 during migration.', 'pub mod v2;']
-    ts = ['// ' + HEADER.replace('\n', '\n// ')]
+    ts = ['// ' + HEADER.replace('\n', '\n// ')] + ([] if v2 else ['import type * as V2 from "./v2/index.js";'])
     rust_consts = []
     for name, schema in sorted(defs.items()):
         java = ['// ' + HEADER.replace('\n', '\n// '), f'package {java_package};', '']
@@ -235,11 +253,13 @@ def render_version(ver, version, outputs):
     if not v2:
         rust += ['impl ContractSet {', '    /// Current canonical contract set.', '    pub fn current() -> Self {', '        Self {', '            name: "olo-toolgate-contracts".into(),', f'            version: "{version}".into(),', '        }', '    }', '}']
     rust += rust_consts
+    # v1 references v2 definitions, so the v1 inventory embeds both sets; v2 is self-contained.
     rust += ['/// Embedded canonical schemas for offline boundary validation.', 'pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[']
-    for path in sorted((CONTRACTS/'schemas'/ver).glob('*.json')):
-        schema = json.loads(path.read_text(encoding='utf-8'))
-        outputs[f'packages/contracts/rust/schemas/{ver}/{path.name}'] = path.read_text(encoding='utf-8')
-        rust += ['    (', f'        "{schema["$id"]}",', f'        include_str!("../schemas/{ver}/{path.name}"),', '    ),']
+    for embedded in ((ver,) if v2 else VERSIONS):
+        for path in sorted((CONTRACTS/'schemas'/embedded).glob('*.json')):
+            schema = json.loads(path.read_text(encoding='utf-8'))
+            outputs[f'packages/contracts/rust/schemas/{embedded}/{path.name}'] = path.read_text(encoding='utf-8')
+            rust += ['    (', f'        "{schema["$id"]}",', f'        include_str!("../schemas/{embedded}/{path.name}"),', '    ),']
     rust += ['];']
     if not v2:
         ts += [f'export const CONTRACT_SET_VERSION = "{version}" as const;', 'export const CONTRACT_SET_NAME = "olo-toolgate-contracts" as const;']

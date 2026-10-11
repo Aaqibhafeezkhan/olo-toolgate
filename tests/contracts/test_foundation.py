@@ -24,7 +24,10 @@ def schemas_at(directory):
 
 
 def registry(schemas):
-    return Registry().with_resources((s['$id'], Resource.from_contents(s)) for s in schemas.values())
+    # v1 models reference v2 definitions (the request context), so v2 always resolves alongside.
+    v2 = [json.loads(p.read_text(encoding='utf-8')) for p in sorted((ROOT/'packages/contracts/schemas/v2').glob('*.schema.json'))]
+    resources = {s['$id']: s for s in [*v2, *schemas.values()]}
+    return Registry().with_resources((i, Resource.from_contents(s)) for i, s in resources.items())
 
 
 def validators(schemas):
@@ -120,7 +123,8 @@ class FoundationTests(unittest.TestCase):
         archival=validators(baseline)
         for name,fixture in corpus['fixtures'].items():archival[name].validate(fixture)
         # Group-only runtime contracts deliberately reject the frozen principal shape.
-        with self.assertRaises(ValidationError):self.validators['RequestContext'].validate(corpus['fixtures']['RequestContext'])
+        # The request context is defined in v2 now; it still rejects the frozen device-bound shape.
+        with self.assertRaises(ValidationError):validators(schemas_at(ROOT/'packages/contracts/schemas/v2'))['RequestContext'].validate(corpus['fixtures']['RequestContext'])
         with self.assertRaises(ValueError):compatible(baseline['common.schema.json'],self.schemas['common.schema.json'])
         for name,schema in baseline.items():
             if name not in ('common.schema.json','policy.schema.json','runtime.schema.json'):

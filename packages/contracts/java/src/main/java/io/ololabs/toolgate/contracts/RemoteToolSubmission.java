@@ -14,7 +14,7 @@ package io.ololabs.toolgate.contracts;
 public record RemoteToolSubmission(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "request", required = true) AuthorizationRequest request,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "expiresAtUnixMs", required = true) Long expiresAtUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "context", required = true) RequestContext context,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "context", required = true) io.ololabs.toolgate.contracts.v2.RequestContext context,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationId", required = true) String invocationId
 ) {
     /** Reject absent required references and copy collections to retain value semantics.

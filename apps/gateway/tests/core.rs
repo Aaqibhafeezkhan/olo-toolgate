@@ -5,6 +5,7 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+use olo_toolgate_contracts::v2::{RequestContext, RequestMode};
 use olo_toolgate_contracts::*;
 use olo_toolgate_gateway::{
     application::Gateway,
@@ -278,7 +279,7 @@ fn credentials_bind_all_facts_and_cannot_be_human_or_rebound() {
         .is_none());
     assert!(Authenticator::new(vec![c.clone(), c.clone()], &contracts, 1).is_err());
     let mut human = c.clone();
-    human.context.mode = EnterpriseRequestMode::Human;
+    human.context.mode = RequestMode::Human;
     assert!(Authenticator::new(vec![human], &contracts, 1).is_err());
     let mut changed = c;
     changed.context.credential_sha256 = Some("0".repeat(64));

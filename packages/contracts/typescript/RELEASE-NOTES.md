@@ -1,7 +1,7 @@
 <!-- GENERATED FILE: tools/contracts/version.py; do not edit -->
 # OLO ToolGate 0.10.0-dev release notes
 
-Contracts version: `0.10.0-dev`.
+Contracts version: `1.0.0`.
 
 License: Apache-2.0. See LICENSE and bundled third-party notices/SBOMs.
 
@@ -12,6 +12,15 @@ All notable project changes should be documented here.
 The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
+
+- The contract set is `1.0.0` (v2-generation.md decision 7). The v1 schemas now use the
+  v2 request context: `RequestContext`, `CredentialKind`, `RequestMode` (was
+  `EnterpriseRequestMode`) and `ActorHop` (was `EnterpriseActorHop`) are defined only in
+  `schemas/v2/common.schema.json`, and v1 models such as `EnterpriseContext` reference
+  them there. The wire format is unchanged. Bindings name them in the v2 namespace
+  (`olo_toolgate_contracts::v2`, `io.ololabs.toolgate.contracts.v2`, `V2` in TypeScript
+  and PHP); the v1 copies are removed. The Rust `CANONICAL_SCHEMAS` inventory embeds
+  both sets so v1 validators resolve the v2 references offline.
 
 - Agents and agent groups have an optional route slug (`slug`, lowercase letters,
   numbers and hyphens), unique among agents and among agent groups. It names them in the

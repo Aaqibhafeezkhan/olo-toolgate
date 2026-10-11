@@ -4,6 +4,7 @@ package io.ololabs.toolgate.control.application;
 
 import io.ololabs.toolgate.control.domain.Ids.Kind;
 import io.ololabs.toolgate.contracts.*;
+import io.ololabs.toolgate.contracts.v2.RequestContext;
 import java.util.*;
 
 /** Places a call on one device (ADR 015 amendment). The request context carries no device, so Control picks from the

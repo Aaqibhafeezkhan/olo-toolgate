@@ -865,7 +865,7 @@
           "maximum": 9007199254740991
         },
         "context": {
-          "$ref": "common.schema.json#/$defs/RequestContext"
+          "$ref": "../v2/common.schema.json#/$defs/RequestContext"
         },
         "invocationId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"

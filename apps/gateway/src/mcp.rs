@@ -14,9 +14,10 @@ use axum::{
     Json,
 };
 use base64::Engine;
+use olo_toolgate_contracts::v2::RequestContext;
 use olo_toolgate_contracts::{
     AuthorizationRequest, EnterpriseInvocationState, ErrorCode, RemoteToolState,
-    RemoteToolSubmission, RequestContext,
+    RemoteToolSubmission,
 };
 use serde_json::{json, Value};
 use std::sync::{atomic::Ordering, Arc};

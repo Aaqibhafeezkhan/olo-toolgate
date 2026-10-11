@@ -38,7 +38,9 @@ class ControlAssetsTests(unittest.TestCase):
             self.assertEqual(6,metadata['controlDatabase']['sqliteSchema'])
             self.assertEqual([3],metadata['policyBundle']['supportedFormatVersions'])
             self.assertEqual('ghcr.io/olo-labs/olo-toolgate-control:'+version,metadata['controlImage'])
-            with tarfile.open(output/('olo-toolgate-contracts-'+version+'.tar.gz')) as archive:
+            contracts=(ROOT/'packages/contracts/VERSION').read_text().strip()
+            self.assertEqual(contracts,metadata['contractsVersion'])
+            with tarfile.open(output/('olo-toolgate-contracts-'+contracts+'.tar.gz')) as archive:
                 self.assertIn('schemas/v1/control.schema.json',archive.getnames())
                 self.assertIn('openapi/control-v1.yaml',archive.getnames())
             self.assertIn('compatibility.json',(output/'SHA256SUMS').read_text())

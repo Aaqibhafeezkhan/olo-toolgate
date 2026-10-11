@@ -18,8 +18,9 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use olo_toolgate_contracts::v2::RequestContext;
 use olo_toolgate_contracts::{
-    AuthorizationRequest, EnterpriseInvocationState, ErrorCode, ErrorEnvelope, RequestContext,
+    AuthorizationRequest, EnterpriseInvocationState, ErrorCode, ErrorEnvelope,
 };
 use serde_json::Value;
 use std::sync::{

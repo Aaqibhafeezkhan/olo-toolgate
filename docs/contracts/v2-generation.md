@@ -2,7 +2,7 @@
 
 ## Purpose
 
-How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the frozen v2 schemas in [packages/contracts/schemas/v2](../../packages/contracts/schemas/v2/README.md), alongside the existing v1 bindings, and how the contract-set version moves to 1.0. This is a design note (gate D1). M1 part 1 implemented decisions 1 to 6 and 8 in `tools/contracts/generate.py`. Decision 7, the move to `1.0.0`, ships with the last M1 part, when the Gateway and Control consume v2.
+How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the frozen v2 schemas in [packages/contracts/schemas/v2](../../packages/contracts/schemas/v2/README.md), alongside the existing v1 bindings, and how the contract-set version moves to 1.0. This is a design note (gate D1). M1 part 1 implemented decisions 1 to 6 and 8 in `tools/contracts/generate.py`. Decision 7, the move to `1.0.0`, shipped with the last M1 part, when the Gateway and Control began to consume v2 (decision 10).
 
 ## Current state (v1)
 
@@ -47,6 +47,8 @@ How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the froze
    - Property names that are Java keywords (`default`, `enum`) get a trailing underscore on the Java record component, and the `@JsonProperty` name is kept.
    - A definition that is only a `$ref` (`ServiceRoute`) is a Rust and TypeScript type alias. Java and PHP use the target type.
    - The stale-copy rule covers every generated directory, and `rust/schemas/v1/approval.schema.json` is removed.
+
+10. **v1 consumes v2 (last M1 part).** The request context exists once, in v2. `RequestContext`, `CredentialKind`, `RequestMode` and `ActorHop` are removed from the v1 schemas (the last two were `EnterpriseRequestMode` and `EnterpriseActorHop`, wire-identical), and v1 models reference them as `../v2/common.schema.json#/$defs/...`. The generator names a cross-version reference in the v2 namespace (`v2::RequestContext`, `io.ololabs.toolgate.contracts.v2.RequestContext`, `V2.RequestContext`, `\OloLabs\ToolGate\Contracts\V2\RequestContext`). v2 stays self-contained. The Rust `CANONICAL_SCHEMAS` inventory embeds v1 and v2, and Control's `ContractCodec` adopts every v2 definition a v1 schema references, so offline validators resolve the references. The contracts crate carries the contract-set version; the Rust applications keep the product version.
 
 ## Acceptance for M1
 
