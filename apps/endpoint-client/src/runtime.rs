@@ -163,13 +163,26 @@ fn heartbeat(
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let activity = service.lock().await.activity.clone();
+        let (activity, schedule_changed) = {
+            let state = service.lock().await;
+            (state.activity.clone(), state.schedule_changed.clone())
+        };
         let mut last_health = None;
         let mut next = tokio::time::Instant::now();
         loop {
-            tokio::select! {_=shutdown.changed()=>break,_=tokio::time::sleep_until(next)=>{}}
+            tokio::select! {
+                _=shutdown.changed()=>break,
+                _=schedule_changed.notified()=>{
+                    let state = service.lock().await;
+                    connection.publish(&state);
+                    let finished = tokio::time::Instant::now();
+                    next = heartbeat_deadline(finished, finished, state.next_delay_millis(), state.is_revoked());
+                    continue;
+                },
+                _=tokio::time::sleep_until(next)=>{}
+            }
             let started = tokio::time::Instant::now();
-            let delay = {
+            let (delay, revoked) = {
                 let mut state = service.lock().await;
                 let result = state.tick().await;
                 let health = state.health();
@@ -182,13 +195,22 @@ fn heartbeat(
                     activity.event("Check in", &format!("{:?}", failure));
                 }
                 connection.publish(&state);
-                state.next_delay_millis()
+                (state.next_delay_millis(), state.is_revoked())
             };
-            // Network time counts toward the cycle; never overlap or catch up missed requests.
-            next = (started + std::time::Duration::from_millis(delay))
-                .max(tokio::time::Instant::now());
+            next = heartbeat_deadline(started, tokio::time::Instant::now(), delay, revoked);
         }
     })
+}
+fn heartbeat_deadline(
+    started: tokio::time::Instant,
+    finished: tokio::time::Instant,
+    delay: u64,
+    revoked: bool,
+) -> tokio::time::Instant {
+    // Revoked delay is measured from receipt time to the next local hour.
+    // Other intervals include network time; never overlap or catch up requests.
+    let anchor = if revoked { finished } else { started };
+    (anchor + std::time::Duration::from_millis(delay)).max(finished)
 }
 #[cfg(windows)]
 pub mod windows {
@@ -238,5 +260,24 @@ pub mod windows {
             ServiceState::Stopped,
             if outcome.is_ok() { 0 } else { 1 },
         ));
+    }
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    #[test]
+    fn network_latency_does_not_move_the_revoked_hour_boundary() {
+        let started = tokio::time::Instant::now();
+        let finished = started + std::time::Duration::from_secs(2);
+        let next = super::heartbeat_deadline(started, finished, 3598000, true);
+        assert_eq!(next, started + std::time::Duration::from_secs(3600));
+        assert_eq!(
+            super::heartbeat_deadline(started, finished, 5000, false),
+            started + std::time::Duration::from_secs(5)
+        );
+        assert_eq!(
+            super::heartbeat_deadline(started, finished, 500, false),
+            finished
+        );
     }
 }

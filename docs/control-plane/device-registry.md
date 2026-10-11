@@ -88,6 +88,12 @@ the delay to the next local hour. The client recalculates that boundary when
 scheduling the next ping, including after a failed ping. An admin reopening review
 does not push to the disconnected device or shorten its waiting period.
 
+In the Windows tray, **Repair gateway connection** and **Switch gateway →
+Configuration** make one immediate presence check. They apply any changed server
+state and reschedule the background loop without a second ping. When the server
+still says revoked, the client keeps its identity, remains disconnected and waits
+for the next local hour. These checks do not request approval or grant access.
+
 Use **Request approval again** on a revoked row in Clients, or run
 `olo-toolgate-client request-approval` on the device (Windows tray: **Request
 device approval**). A local explicit request contacts Control immediately. Both
@@ -158,7 +164,7 @@ an operation. Their runtime credentials still expire and rotate privately.
 | `GET /api/control/v1/endpoint/devices` | Bounded combined snapshot of directory devices, endpoint approvals, pending reviews, registered users and server-device metadata; admin role. |
 | `POST /api/control/v1/endpoint/devices/{id}/approval` | `expectedApprovalRevision`, `approved`, optional `connectionExpiresAtUnixMs` or `unlimitedConnection`. |
 | `POST /api/control/v1/endpoint/devices/{id}/enabled` | `expectedRevision` of the directory record and `enabled`; revision zero only for an unregistered, still-pending request. |
-| `POST /api/control/v1/endpoint/devices/{id}/revoke` | Existing irreversible key-retirement API with endpoint `expectedRevision`. |
+| `POST /api/control/v1/endpoint/devices/{id}/revoke` | Blocks the key until an explicit new request and fresh approval; requires endpoint `expectedRevision`. |
 
 Use `Idempotency-Key` for each administrative mutation. Exact retries replay the
 transactional result; changed payloads or stale revisions fail with 409. Approval
