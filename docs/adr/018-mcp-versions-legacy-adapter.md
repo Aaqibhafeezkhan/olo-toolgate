@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # ADR 018: MCP protocol versions and the legacy compatibility adapter
 
-**Status:** Accepted (design gate D1), on merge of the PR that adds this file
+**Status:** Accepted (design gate D1). Amended in M1: decisions 2 and 3 are withdrawn, see [Amendment](#amendment-m1-legacy-adapter-withdrawn).
 
 ## Context
 
@@ -20,6 +20,10 @@ The Gateway's `/mcp` route already implements the stateless MCP 2026-07-28 core:
 7. **SDK side** (plan.md §5.10, summary). Standalone SDK runtimes use the pinned official MCP SDKs where they pass the 2026-07-28 conformance scenarios, and ToolGate adapters A1 (Java protocol core), A2 (Tasks), A3 (`requestState`), A4 (identity) and A5 (method routing) for every gap, as frozen by ADR [019](019-tool-sdk-authoring-contract.md). The same version model applies in both modes.
 
 Contract surface: task fields and states are in `packages/contracts/schemas/v2/invocation.schema.json`; scoped routes, `subscriptions/listen` and legacy behaviour are described in `packages/contracts/openapi/proposed/gateway-v1.proposed.yaml`. The served `packages/contracts/openapi/gateway-v1.yaml` changes only when M1 implements each endpoint, so the served spec never advertises an unimplemented endpoint.
+
+## Amendment (M1): legacy adapter withdrawn
+
+ToolGate has no production deployments, so there are no existing clients to keep working. The project owner chose to serve only 2026-07-28 at the Gateway. Decisions 2 and 3 are withdrawn and register row B is reversed: the adapter shipped in M1 (PR #44) was removed. A request with no `_meta` protocol version that calls `initialize` or names another version in `MCP-Protocol-Version` gets -32022 `UnsupportedProtocolVersion` listing only `2026-07-28`; `server/discover` lists only `2026-07-28`; GET and DELETE on `/mcp` return 405. Decision 6's legacy-client row no longer applies at the Gateway. The SDK side (decision 7) is unchanged: standalone runtimes may still accept older versions through the official SDKs, and the MCP proxy's client role (plan.md §16) still probes older upstream servers.
 
 ## Alternatives Considered
 

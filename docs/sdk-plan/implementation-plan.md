@@ -97,7 +97,7 @@ Phase 0:  D0 ─┐
 | Component | Work | Files |
 |---|---|---|
 | Contracts | Implement the v2 generator design; generate Rust, Java, TypeScript and PHP bindings; stale-copy check | `tools/contracts/generate.py`, `packages/contracts/{rust,java,typescript,php}` |
-| Gateway | `RequestContext` v2 without device; legacy MCP adapter for 2025-11-25 and 2025-06-18 (accept `initialize` and notifications on the legacy path; keep `ping` there only); MCP version model | `apps/gateway/src/{application.rs,mcp.rs,http.rs,relay.rs,auth.rs}` |
+| Gateway | `RequestContext` v2 without device; MCP version model, 2026-07-28 only (the legacy adapter was built in PR #44 and withdrawn by the ADR 018 amendment); `ping` removed | `apps/gateway/src/{application.rs,mcp.rs,http.rs,relay.rs,auth.rs}` |
 | Control | `RequestContext` v2 consumers; agent and group slugs; `PATCH /settings` with `formatVersion` 2, 409 on conflict, env-owned fields excluded from `ConfigurationImportBootstrap`; configurable check-in with the burst guard scaled to the interval | `adapter/ControlResource.java`, `ServerSettingsService.java`, `EndpointService.java:190,208,226`, `application.properties`, Flyway V18, Quickstart V11 |
 | Helm and Quickstart | `control.clientCheckIn.*` values and schema; env defaults 500 ms (Quickstart) and 2000 ms (enterprise) | `deploy/helm/olo-toolgate/{values.yaml,values.schema.json,templates/control.yaml}`, `deploy/compose/QuickStart*/compose.yaml` |
 | Console | Configuration group with Server, Device and Backup/Restore pages; review page keeps only the queue; `#configuration` redirect | `apps/admin-ui/src/{App.tsx,ServerSettings.tsx,ConfigurationRequests.tsx,ConfigurationTransfer.tsx,api.ts}` plus new page files |

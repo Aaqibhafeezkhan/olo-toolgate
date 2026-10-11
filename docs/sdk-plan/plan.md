@@ -1056,12 +1056,14 @@ Each property, and how the Gateway handles it:
 - **Results:** every result carries `resultType`: `complete`, `input_required` (MRTR), or `task` (Tasks extension, only when the client declared it on that request, §12.4).
 - **Subscriptions:** `subscriptions/listen`, with opt-in `toolsListChanged` and server-tagged `subscriptionId`. Progress flows on the originating request's response stream.
 - **Logging:** per-request `io.modelcontextprotocol/logLevel`. The deprecated Logging feature isn't added.
-- **Removed methods:** `ping` is removed from the modern path and stays available only in the legacy adapter. The Gateway currently answers it at `mcp.rs:144`.
+- **Removed methods:** `ping` is removed (M1, PR #44).
 - **Errors:** the renumbered codes (`HeaderMismatch` -32020, `MissingRequiredClientCapability` -32021, `UnsupportedProtocolVersion` -32022), returned with the supported versions.
 - **Tracing:** `traceparent` / `tracestate` / `baggage` in `_meta` are propagated (§19).
 - **Stream loss:** a broken stream loses the request, and clients re-issue it with a new id. Non-idempotent safety therefore comes from §12, not from transport redelivery.
 
-### 10.2 Legacy compatibility adapter
+### 10.2 Legacy compatibility adapter (withdrawn)
+
+> **Withdrawn in M1** (ADR 018 amendment). ToolGate has no production deployments, so the Gateway serves only 2026-07-28; session-era requests get -32022. The text below is kept for history.
 
 - **Placement:** a separate module in front of the core, so the core never grows session state.
 - **Supported versions (decision B, ADR 018):** `2025-11-25` and `2025-06-18`, for at least twelve months, matching the MCP deprecation window. Any other version gets `UnsupportedProtocolVersionError`.
@@ -2034,7 +2036,7 @@ Every decision is closed. **ACCEPTED** means it is in P0 or P1 scope as written.
 | 8 | Tool contract may change (MAJOR) | ACCEPTED | 014 | Rahul's instruction | Extend v1 compatibly | Schemas v2 |
 | 9 | `toolId` / `mcpName` / `compatibilityAlias` naming | ACCEPTED | 018 | Stable ids across clients' naming limits | One name field | `ToolDefinition`, catalog |
 | A | **Control issues every invocation permit**, including Tool Host permits, through the existing reserve path (revised in revision 10) | ACCEPTED | 013 | Matches the code and the no-offline-ALLOW invariant; no second policy system | Gateway signs permits from a snapshot (REJECTED, row R1) | `InvocationPermit`, Tool Host mTLS identity |
-| B | Legacy MCP adapter for `2025-11-25` and `2025-06-18`, at least twelve months | ACCEPTED | 018 | Existing clients keep working; bounded cost | Modern only; unbounded support | Gateway transport |
+| B | Legacy MCP adapter for `2025-11-25` and `2025-06-18`, at least twelve months | WITHDRAWN in M1 (modern only) | 018 | Existing clients keep working; bounded cost | Modern only; unbounded support | Gateway transport |
 | C | Single-use warm sandboxes; reuse opt-in for `stateless` tools | ACCEPTED | 013 | No cross-invocation leakage by default | Reuse by default | Pool configuration |
 | D | Settings field-level PATCH with `If-Match`; PUT kept for import | ACCEPTED | 021 | Two pages edit one record without overwriting each other | Separate records per page | `control-v1.yaml` server settings |
 | E | At-most-once execution through Control's existing `RESERVED → EXECUTING` transition with a single-use nonce as fencing token | ACCEPTED | 016 | At most one execution per invocation, reusing existing state | Separate ledger table | Invocation tables, permit, broker |
