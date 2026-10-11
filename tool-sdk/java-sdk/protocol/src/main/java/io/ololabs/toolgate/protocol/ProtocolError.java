@@ -30,6 +30,13 @@ public final class ProtocolError extends RuntimeException {
         this(code, message, null);
     }
 
+    /** -32021 naming one required extension, with the {@code requiredCapabilities} data the schema requires. */
+    public static ProtocolError missingExtension(String extension) {
+        com.fasterxml.jackson.databind.node.ObjectNode data = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        data.putObject("requiredCapabilities").putObject("extensions").putObject(extension);
+        return new ProtocolError(MISSING_REQUIRED_CLIENT_CAPABILITY, "Missing required client capability", data);
+    }
+
     public int code() { return code; }
     public JsonNode data() { return data; }
 }

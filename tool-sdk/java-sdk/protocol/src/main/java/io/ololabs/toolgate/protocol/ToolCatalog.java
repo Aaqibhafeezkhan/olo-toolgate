@@ -17,8 +17,14 @@ public interface ToolCatalog {
     JsonNode tools(RequestMeta meta);
 
     /**
-     * Runs one {@code tools/call}. Returns the result object without {@code resultType}; throws {@link ProtocolError}
-     * for an unknown tool, malformed parameters or a missing capability.
+     * Runs one {@code tools/call}. Returns the result object without {@code resultType}, or a {@code CreateTaskResult}
+     * with {@code resultType: "task"}; throws {@link ProtocolError} for an unknown tool, malformed parameters or a
+     * missing capability.
      */
     ObjectNode call(String name, JsonNode arguments, RequestMeta meta);
+
+    /** The Tasks extension (adapter A2) this catalog serves, or null when it serves none. */
+    default Tasks tasks() {
+        return null;
+    }
 }

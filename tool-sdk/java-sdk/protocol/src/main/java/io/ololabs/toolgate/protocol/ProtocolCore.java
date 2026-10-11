@@ -20,7 +20,8 @@ public final class ProtocolCore {
     static final String META_SERVER_INFO = "io.modelcontextprotocol/serverInfo";
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private static final Set<String> TOP_LEVEL = Set.of("jsonrpc", "id", "method", "params");
-    private static final Set<String> CALL_PARAMS = Set.of("name", "arguments", "_meta");
+    // "task" is the pre-SEP-2663 task hint; it is tolerated and ignored, since task creation is server-directed.
+    private static final Set<String> CALL_PARAMS = Set.of("name", "arguments", "_meta", "task");
 
     private final ToolCatalog catalog;
 
@@ -31,6 +32,7 @@ public final class ProtocolCore {
     /** One connection's protocol era. A stdio connection is locked to the era of its first accepted message. */
     public static final class Connection {
         private final String transport;
+        private final String owner = "connection:" + java.util.UUID.randomUUID();
         private String era;
 
         public Connection(String transport) {
@@ -80,11 +82,12 @@ public final class ProtocolCore {
                 throw new ProtocolError(ProtocolError.INVALID_PARAMS, "_meta " + META_CAPABILITIES + " is required");
             }
             connection.lock(VERSION);
-            RequestMeta request = new RequestMeta(VERSION, capabilities, extensions(capabilities), connection.transport);
+            RequestMeta request = new RequestMeta(VERSION, capabilities, extensions(capabilities), connection.transport, connection.owner);
             ObjectNode result = switch (method) {
                 case "server/discover" -> discover();
                 case "tools/list" -> list(request);
                 case "tools/call" -> call(params, request);
+                case "tasks/get", "tasks/update", "tasks/cancel" -> task(method, params, request);
                 default -> throw new ProtocolError(ProtocolError.METHOD_NOT_FOUND, "Method not found");
             };
             if (!result.has("resultType")) result.put("resultType", "complete");
@@ -135,7 +138,9 @@ public final class ProtocolCore {
     private ObjectNode discover() {
         ObjectNode result = JSON.objectNode();
         result.putArray("supportedVersions").add(VERSION);
-        result.putObject("capabilities").putObject("tools");
+        ObjectNode capabilities = result.putObject("capabilities");
+        capabilities.putObject("tools");
+        if (catalog.tasks() != null) capabilities.putObject("extensions").putObject(RequestMeta.TASKS);
         result.put("ttlMs", 0);
         result.put("cacheScope", "private");
         result.putObject("_meta").setAll(catalog.discoverMeta());
@@ -161,6 +166,18 @@ public final class ProtocolCore {
             throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Invalid parameters");
         }
         return catalog.call(name.asText(), arguments == null ? JSON.objectNode() : arguments, request);
+    }
+
+    private ObjectNode task(String method, JsonNode params, RequestMeta request) {
+        Tasks tasks = catalog.tasks();
+        if (tasks == null) throw new ProtocolError(ProtocolError.METHOD_NOT_FOUND, "Method not found");
+        // The capability gate comes before any lookup, so an undeclared request learns nothing about task ids.
+        if (!request.declares(RequestMeta.TASKS)) throw ProtocolError.missingExtension(RequestMeta.TASKS);
+        return switch (method) {
+            case "tasks/get" -> tasks.get(params, request);
+            case "tasks/update" -> tasks.update(params, request);
+            default -> tasks.cancel(params, request);
+        };
     }
 
     /** A JSON-RPC error response. */

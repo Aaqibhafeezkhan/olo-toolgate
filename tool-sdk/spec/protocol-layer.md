@@ -30,7 +30,7 @@ ProtocolLayer.handle(envelope) ->
 
 Rules that hold in every language:
 
-- **Version lock on stdio.** A stdio connection is locked to the protocol version of its first message; a later message for another version gets `ProtocolError(-32600)`. (TS and Python do this already; .NET accepts a later `initialize`, so the layer enforces it there.)
+- **Version lock on stdio.** A stdio connection is locked to the protocol version of its first message; a later message for another version gets `ProtocolError(-32022)` with the supported versions, as case `legacy/stdio-era-lock` requires. (TS and Python do this already; .NET accepts a later `initialize`, so the layer enforces it there.)
 - **Capability per request.** In 2026-07-28 a feature is used only if the request's `meta.clientCapabilities` or `meta.extensions` declares it. A task is never returned to a request that did not declare the Tasks extension; a tool marked `async` then runs synchronously within its sync deadline or fails with `DEADLINE_EXCEEDED`.
 - **Schemas as declared.** `tools/list` serves `inputSchema` and `outputSchema` byte-for-byte as in the descriptor (after JSON parsing; no SDK post-processing).
 - **Digests.** `server/discover` result `_meta["io.ololabs.toolgate/descriptorDigests"]` is a map `toolId → toolDescriptorDigest`, plus `descriptorSetDigest`.

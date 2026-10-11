@@ -18,8 +18,11 @@ Variables and set `TOOLGATE_CI_ENABLED=true`. To pause again, set it to `false`.
 - Push: the latest commit message must start with the exact, case-sensitive
   prefix `RC:`, for example `RC: validate Windows installer`. An earlier RC
   commit in the same push does not qualify the latest non-RC commit.
-- Pull request: both its title and actual head commit message must start with
-  `RC:`. Ordinary issue/PR comments do not trigger a run.
+- Pull request: its title alone must start with the exact, case-sensitive `RC:`
+  prefix; the head commit message is not checked. Opening, reopening, updating
+  commits or editing the title triggers admission, still requiring
+  `TOOLGATE_CI_ENABLED=true` and the resume boundary above. Ordinary issue/PR
+  comments do not trigger a run.
 - Manual dispatch: supply the required `comment` input beginning with `RC:`.
 - Development release: the successful originating push must have an `RC:`
   head commit. Failed/cancelled upstream runs cannot publish.
