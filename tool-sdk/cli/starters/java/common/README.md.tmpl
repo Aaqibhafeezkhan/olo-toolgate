@@ -1,0 +1,22 @@
+# {{title}}
+
+ToolGate tools written with the Java Tool SDK, started from `toolgate init`.
+
+| Command | Does |
+|---|---|
+| `toolgate dev` | Builds the tools and serves them as an MCP server over stdio, with the values in `toolgate.dev.json` |
+| `toolgate dev --http 127.0.0.1:8080` | The same over Streamable HTTP on a loopback address |
+| `toolgate dev --digests` | Prints each tool's `toolDescriptorDigest`, to compare with a governed package |
+| `toolgate check` | Compiles, runs the unit tests and every `@Example` in test mode |
+| `toolgate pack` | Builds the `.tgpkg` package for ToolGate and validates it |
+
+{{buildCommands}}
+
+## Layout
+
+- `src/main/java/{{packagePath}}/{{className}}.java`: the tools. Each `@ServerTool` method is one tool; `@Example` cases run as tests.
+- `src/main/resources/exchanges/`: recorded HTTP exchanges the examples use, so tests never reach a network.
+- `src/test/java/{{packagePath}}/{{className}}Test.java`: unit tests with `ToolHarness`.
+- `toolgate.dev.json`: local globals, secrets, destinations and fixture claims for `toolgate dev`. It is git-ignored; keep it that way.
+
+The SDK reference is `tool-sdk/java-sdk/README.md` in the ToolGate repository.

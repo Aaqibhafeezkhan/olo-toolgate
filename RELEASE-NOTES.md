@@ -13,6 +13,18 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The `toolgate` CLI creates and drives tool projects (M0 part 12). `toolgate init <name>`
+  writes the Java starter for Gradle (the default) or Maven (`--build maven`): a tool reading a
+  global through its typed accessor, a tool calling a declared route with a recorded exchange,
+  examples, a `ToolHarness` test and a git-ignored `toolgate.dev.json`. In a project,
+  `toolgate dev` serves the tools over stdio (or `--http` on loopback), `toolgate dev
+  --digests` prints the descriptor digests, `toolgate check` (and `toolgate validate <dir>`)
+  runs the tests and examples, and `toolgate pack` builds and validates the `.tgpkg`. The CLI
+  drives each build through one adapter per language and build tool, and starters are layered
+  templates embedded in the binary, so a new language adds a starter and an adapter.
+  `./gradlew publishJavaSdkToMavenLocal` publishes the SDK where starters find it. The Java
+  end-to-end run now builds the starter instead of a separate sample.
+
 - The Java Tool SDK is complete for standalone use (M0 part 11). `context.tcp()` connects only
   to the TCP destinations a tool lists, directly or through a socket factory. The processor
   proves URL-style convenience calls at build time (literal arguments, exactly one route the

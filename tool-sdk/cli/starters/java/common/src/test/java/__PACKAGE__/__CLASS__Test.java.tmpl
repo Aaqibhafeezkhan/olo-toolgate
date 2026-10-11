@@ -1,0 +1,37 @@
+package {{javaPackage}};
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import io.ololabs.toolgate.testing.RecordedExchange;
+import io.ololabs.toolgate.testing.ToolHarness;
+import io.ololabs.toolgate.testing.ToolResult;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+/** Runs the tools in test mode: the same runtime as production, with fixtures and recorded exchanges instead of a network. */
+class {{className}}Test {
+    @Test
+    void greetUsesTheGreetingGlobal() {
+        try (ToolHarness tools = ToolHarness.builder().global("Greeting", "Hi").build()) {
+            assertEquals("Hi, Grace", tools.call("greet", Map.of("name", "Grace")).output().path("text").asText());
+        }
+    }
+
+    @Test
+    void getItemCallsTheItemsRoute() {
+        try (ToolHarness tools = ToolHarness.builder()
+                .exchange(RecordedExchange.on("items.get").variable("id", "7").replyJson(200, Map.of("id", "7", "name", "Seventh")))
+                .build()) {
+            ToolResult result = tools.call("items.get", Map.of("id", "7"));
+            assertEquals("Seventh", result.output().path("name").asText(), result.toString());
+            assertEquals("items.get", tools.routeCalls().get(0).route());
+        }
+    }
+
+    @Test
+    void everyExampleHolds() {
+        try (ToolHarness tools = ToolHarness.builder().build()) {
+            tools.assertExamples();
+        }
+    }
+}
