@@ -1,0 +1,29 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "toolgate-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The toolgate CLI: validate, digest and pack ToolGate tool packages offline"
+publish = false
+
+[lib]
+name = "toolgate_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "toolgate"
+path = "src/main.rs"
+
+[dependencies]
+olo-toolgate-contracts.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jsonschema.workspace = true
+sha2.workspace = true
+unicode-normalization = "0.1.25"
+ryu-js = "1.0.3"
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+crc32fast = "1.5.2"

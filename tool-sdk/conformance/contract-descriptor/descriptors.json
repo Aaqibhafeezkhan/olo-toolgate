@@ -127,7 +127,8 @@
       "then": [
         "Each change gives a different toolDescriptorDigest"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "tool-sdk/cli/tests/descriptor_vectors.rs every_semantic_member_changes_the_digest"
     },
     {
       "id": "descriptors/package-digest-exact-bytes",
