@@ -76,6 +76,11 @@ def maven_license(group, artifact, version, cache):
         elif 'classpath' in lowered or name == 'GPL2 w/ CPE': result.append('GPL-2.0-only WITH Classpath-exception-2.0')
         elif name == 'LGPL, version 2.1': result.append('LGPL-2.1-only')
         elif name == 'Universal Permissive License, Version 1.0': result.append('UPL-1.0')
+        elif coordinate == 'aopalliance:aopalliance:1.0' and name == 'Public Domain':
+            # The upstream declaration is public domain, not CC0. Preserve it
+            # under a private SPDX reference; audit() requires the exact
+            # version/scope review rather than accepting it globally.
+            result.append('LicenseRef-AOP-Alliance-Public-Domain')
         elif 'public domain' in lowered:
             urls = [node.text or '' for node in pom.findall('m:licenses/m:license/m:url', ns)]
             if not any('cc0' in url or 'creativecommons.org/publicdomain/zero/1.0' in url for url in urls):
