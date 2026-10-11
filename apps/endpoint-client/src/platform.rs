@@ -2,6 +2,49 @@
 // SPDX-License-Identifier: Apache-2.0
 //! OS custody/service abstractions. Privileged service and unprivileged browser/CLI stay separate.
 use crate::{Failure, Result};
+/// Current OS UTC offset, including daylight saving time; scheduling only.
+pub fn utc_offset_minutes() -> Result<i64> {
+    #[cfg(unix)]
+    {
+        let now = unsafe { libc::time(std::ptr::null_mut()) };
+        let mut local = std::mem::MaybeUninit::<libc::tm>::uninit();
+        if unsafe { libc::localtime_r(&now, local.as_mut_ptr()) }.is_null() {
+            return Err(Failure::Unavailable);
+        }
+        Ok(unsafe { local.assume_init() }.tm_gmtoff / 60)
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::{
+            SystemServices::{TIME_ZONE_ID_DAYLIGHT, TIME_ZONE_ID_STANDARD},
+            Time::*,
+        };
+        let mut zone = TIME_ZONE_INFORMATION::default();
+        let state = unsafe { GetTimeZoneInformation(&mut zone) };
+        if state == TIME_ZONE_ID_INVALID {
+            return Err(Failure::Unavailable);
+        }
+        let adjustment = match state {
+            TIME_ZONE_ID_DAYLIGHT => zone.DaylightBias,
+            TIME_ZONE_ID_STANDARD => zone.StandardBias,
+            _ => 0,
+        };
+        Ok(-i64::from(zone.Bias + adjustment))
+    }
+}
+pub fn utc_offset() -> String {
+    let minutes = utc_offset_minutes().unwrap_or(0).clamp(-840, 840);
+    format!(
+        "{}{:02}:{:02}",
+        if minutes < 0 { '-' } else { '+' },
+        minutes.abs() / 60,
+        minutes.abs() % 60
+    )
+}
+pub(crate) fn next_local_hour_millis(now: u64, offset_minutes: i64) -> u64 {
+    let local = i128::from(now) + i128::from(offset_minutes) * 60000;
+    (3600000 - local.rem_euclid(3600000)) as u64
+}
 /// Informational hostname only; never used as device identity or an authorization input.
 pub fn system_name() -> Option<String> {
     #[cfg(windows)]
@@ -557,6 +600,19 @@ pub mod windows {
             } else {
                 Ok(())
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    #[test]
+    fn revoked_schedule_uses_local_hour_boundaries() {
+        let now = 1700000000000;
+        for (offset, delay) in [(0, 2800000), (330, 1000000), (345, 100000), (-210, 1000000)] {
+            assert_eq!(super::next_local_hour_millis(now, offset), delay);
+            assert_eq!(super::next_local_hour_millis(now + delay, offset), 3600000);
+            assert_eq!(super::next_local_hour_millis(now + delay - 1, offset), 1);
         }
     }
 }

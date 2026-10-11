@@ -36,6 +36,7 @@ pub enum Failure {
     Conflict,
     Unavailable,
     Revoked,
+    EnrollmentRequired,
     Expired,
     Unsupported,
 }

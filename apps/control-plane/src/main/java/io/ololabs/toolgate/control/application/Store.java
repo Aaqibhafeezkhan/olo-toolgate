@@ -35,6 +35,7 @@ public interface Store {
         long pendingEnrollments(long now);
         java.util.List<EnrollmentRecord> enrollments(long now);
         void pruneEnrollments(long now);
+        void deleteEnrollments(String deviceId);
         EndpointRecord endpoint(String deviceId);
         EndpointRecord endpointKey(String fingerprint);
         void saveEndpoint(EndpointRecord endpoint);

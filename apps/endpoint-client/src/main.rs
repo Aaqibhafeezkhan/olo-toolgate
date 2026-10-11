@@ -235,10 +235,10 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             });
             olo_toolgate_client::runtime::run(config, rx).await
         }
-        "health" | "enroll" | "check-in" if arguments.len() == 1 => {
+        "health" | "enroll" | "request-approval" | "check-in" if arguments.len() == 1 => {
             let request = match operation {
                 "health" => ClientIpcOperation::Health,
-                "enroll" => ClientIpcOperation::Enroll,
+                "enroll" | "request-approval" => ClientIpcOperation::Enroll,
                 _ => ClientIpcOperation::CheckIn,
             };
             let response = tokio::time::timeout(

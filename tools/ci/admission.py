@@ -26,8 +26,10 @@ def merged_pr_title(repository, sha):
     headers = {'Accept': 'application/vnd.github+json',
                'X-GitHub-Api-Version': '2022-11-28',
                'User-Agent': 'toolgate-ci-admission'}
-    if os.environ.get('GH_TOKEN'):
-        headers['Authorization'] = 'Bearer ' + os.environ['GH_TOKEN']
+    token = (os.environ.get('GH_TOKEN', '').strip()
+             or os.environ.get('GITHUB_TOKEN', '').strip())
+    if token:
+        headers['Authorization'] = 'Bearer ' + token
     page = 1
     while True:
         url = f'https://api.github.com/repos/{repository}/commits/{sha}/pulls?per_page=100&page={page}'
@@ -47,11 +49,10 @@ def merged_pr_title(repository, sha):
 
 
 def trigger_message(event, event_name):
-    if event_name == 'pull_request':
-        pr = event.get('pull_request') or {}
-        if (pr.get('base') or {}).get('ref') != 'main':
+    if event_name in ('push', 'workflow_dispatch'):
+        ref = os.environ.get('GITHUB_REF', '')
+        if ref != 'refs/heads/main' and not ref.startswith('refs/tags/'):
             return ''
-        return pr.get('title', '')
     repository = os.environ.get('GITHUB_REPOSITORY', '')
     if event_name == 'push':
         sha = event.get('after', '')

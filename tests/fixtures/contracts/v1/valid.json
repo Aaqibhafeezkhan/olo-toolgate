@@ -1977,6 +1977,14 @@
     "serverTimeUnixMs": 1,
     "nextIntervalSeconds": 10
   },
+  "EndpointConnectionAction": "ENROLL",
+  "EndpointConnectionDirective": {
+    "deviceId": "device-1",
+    "state": "UNENROLLED",
+    "action": "ENROLL",
+    "reportSequence": 0,
+    "nextIntervalMs": 500
+  },
   "EndpointDeviceRecord": {
     "deviceId": "device-1",
     "tenantId": "device-1",
@@ -2048,6 +2056,16 @@
   },
   "EndpointManagedDevicePage": {
     "items": []
+  },
+  "EndpointPresencePing": {
+    "announcement": {
+      "deviceId": "device-1",
+      "clientVersion": "0.1.0-dev",
+      "platform": "WINDOWS",
+      "csrPem": "example",
+      "capabilities": []
+    },
+    "utcOffset": "+05:30"
   },
   "EndpointRevokeRequest": {
     "expectedRevision": 1

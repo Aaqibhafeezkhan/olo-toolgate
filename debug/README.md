@@ -55,7 +55,13 @@ survive container restarts and removal while their named volumes are retained.
 
 Requires Docker Desktop running Linux containers, Git, Node.js/npm, Python 3.11+
 and internet access for dependencies and base images. A Python environment is
-created under `.dev/debug/venv`. The matching Playwright Chromium browser is
+created under `.dev/debug/venv`. Set `GITHUB_TOKEN` in the launching process's
+environment to authenticate the GitHub release lookup and use the token's higher
+API rate limit. The token is optional; without it the lookup uses public access.
+After adding or changing a Windows environment variable, open a new terminal
+before running `start.bat` or `restart.bat` so the scripts inherit it. The token
+is sent only in the release API request header and is never printed or passed to
+asset download commands. The matching Playwright Chromium browser is
 installed automatically after npm dependencies. Native archives and one-click
 installers are fetched from the latest published GitHub release matching VERSION,
 verified by the canonical manifest tool, and included in the local image. The

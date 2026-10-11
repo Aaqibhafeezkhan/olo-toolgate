@@ -170,10 +170,7 @@ mod tests {
     }
 
     fn directory() -> std::path::PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("local-tools-{}", crate::identity::nonce().unwrap()));
-        ProtectedStore::open(path.clone()).unwrap();
-        path
+        crate::storage::test_directory("local-tools")
     }
 
     fn config(root: &Path) -> Config {
@@ -275,6 +272,8 @@ mod tests {
         // The service can build its executor from the restored settings.
         let executor = crate::builtins::Executor::new(&tools, std::sync::Arc::new(Deny)).unwrap();
         assert_eq!(executor.catalog().len(), 2);
+        // Windows refuses to remove files the executor still holds open.
+        drop(executor);
         std::fs::remove_dir_all(root).unwrap();
     }
 

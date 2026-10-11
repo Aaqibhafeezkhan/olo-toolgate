@@ -23,6 +23,8 @@ struct Journal {
     pending_report: Option<EndpointCheckIn>,
     revoked: bool,
     #[serde(default)]
+    reenrollment: bool,
+    #[serde(default)]
     observed_time: u64,
     /// Display name the gateway last sent; shown beside its URL on the device.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -657,17 +659,40 @@ impl ClientService {
         }
     }
     pub async fn enroll(&mut self) -> Result<EndpointEnrollmentPrompt> {
+        self.enroll_inner(None).await
+    }
+    /// Only an explicit OS-authenticated local request may reopen a revoked device.
+    pub async fn request_approval(&mut self) -> Result<EndpointEnrollmentPrompt> {
+        let directive = self.control.ping(self.presence()?).await?;
+        if directive.device_id != self.device()
+            || !(500..=3600000).contains(&directive.next_interval_ms)
+        {
+            return Err(Failure::Unauthorized);
+        }
+        if directive.state == EndpointState::Revoked {
+            self.enroll_inner(Some(directive.report_sequence)).await
+        } else {
+            self.enroll().await
+        }
+    }
+    async fn enroll_inner(
+        &mut self,
+        requested_sequence: Option<u64>,
+    ) -> Result<EndpointEnrollmentPrompt> {
         let now = self.clock()?;
         let expired = self
             .journal
             .identity
             .as_ref()
             .is_some_and(|identity| identity.expires_at_unix_ms <= now);
-        if (self.journal.revoked || self.journal.identity.is_some()) && !expired {
+        if requested_sequence.is_none()
+            && (self.journal.revoked || self.journal.identity.is_some())
+            && !expired
+        {
             return Err(Failure::Conflict);
         }
         if let Some(challenge) = &self.journal.challenge {
-            if challenge.expires_at_unix_ms > now {
+            if requested_sequence.is_none() && challenge.expires_at_unix_ms > now {
                 return Ok(self.prompt(challenge));
             }
         }
@@ -689,20 +714,22 @@ impl ClientService {
             now,
             pin.as_deref(),
         )?;
-        let request = EndpointEnrollmentStart {
-            device_id: self.device(),
-            client_version: env!("CARGO_PKG_VERSION").into(),
-            platform: crate::platform::current(),
-            csr_pem: self.key.csr(&self.device())?,
-            capabilities: vec!["endpoint.identity.v1".into(), "endpoint.check-in.v1".into()],
+        let request = self.announcement()?;
+        let challenge = if requested_sequence.is_some() {
+            self.control.request_approval(request).await?
+        } else {
+            self.control.start(request).await?
         };
-        let challenge = self.control.start(request).await?;
         let now = self.clock()?;
         if challenge.verification_uri != manifest.verification_uri
             || challenge.expires_at_unix_ms <= now
             || challenge.expires_at_unix_ms - now > 600000
         {
             return Err(Failure::Unauthorized);
+        }
+        if let Some(sequence) = requested_sequence {
+            self.reset_enrollment();
+            self.journal.sequence = sequence;
         }
         self.journal.manifest = Some(manifest);
         self.journal.identity = None;
@@ -711,6 +738,34 @@ impl ClientService {
         self.state = EndpointState::Pending;
         self.save()?;
         Ok(self.prompt(&challenge))
+    }
+    fn announcement(&self) -> Result<EndpointEnrollmentStart> {
+        Ok(EndpointEnrollmentStart {
+            device_id: self.device(),
+            client_version: env!("CARGO_PKG_VERSION").into(),
+            platform: crate::platform::current(),
+            csr_pem: self.key.csr(&self.device())?,
+            capabilities: vec!["endpoint.identity.v1".into(), "endpoint.check-in.v1".into()],
+        })
+    }
+    fn presence(&self) -> Result<EndpointPresencePing> {
+        Ok(EndpointPresencePing {
+            announcement: self.announcement()?,
+            utc_offset: crate::platform::utc_offset(),
+        })
+    }
+    fn reset_enrollment(&mut self) {
+        self.journal.identity = None;
+        self.journal.challenge = None;
+        self.journal.pending_report = None;
+        self.journal.last_success = None;
+        self.journal.revoked = false;
+        self.journal.reenrollment = true;
+        self.remote_job = None;
+        self.remote_result = None;
+        self.builder_job = None;
+        self.builder_result = None;
+        self.state = EndpointState::Unenrolled;
     }
     pub async fn tick(&mut self) -> Result<()> {
         let result = self.tick_inner().await;
@@ -722,7 +777,10 @@ impl ClientService {
                 job.cancel();
             }
             self.failures = self.failures.saturating_add(1);
-            if failure == Failure::Revoked {
+            if failure == Failure::EnrollmentRequired {
+                self.reset_enrollment();
+                self.save()?;
+            } else if failure == Failure::Revoked {
                 self.state = EndpointState::Revoked;
                 self.journal.revoked = true;
                 self.save()?;
@@ -735,8 +793,54 @@ impl ClientService {
     }
     async fn tick_inner(&mut self) -> Result<()> {
         let now = self.clock()?;
-        if self.journal.revoked {
-            return Err(Failure::Revoked);
+        // Presence continues in every local state. Only Control decides the next action.
+        let directive = self.control.ping(self.presence()?).await?;
+        if directive.device_id != self.device()
+            || !(500..=3600000).contains(&directive.next_interval_ms)
+        {
+            return Err(Failure::Unauthorized);
+        }
+        self.check_in_interval_ms = directive.next_interval_ms;
+        match directive.action {
+            EndpointConnectionAction::Wait => {
+                if let Some(job) = &self.remote_job {
+                    job.cancel();
+                }
+                if let Some(job) = &self.builder_job {
+                    job.cancel();
+                }
+                self.journal.revoked = directive.state == EndpointState::Revoked;
+                self.state = directive.state;
+                self.failures = 0;
+                self.save()?;
+                return Ok(());
+            }
+            EndpointConnectionAction::Enroll => {
+                if self.journal.identity.is_some()
+                    || self.journal.revoked
+                    || (directive.state == EndpointState::Unenrolled
+                        && self.journal.challenge.is_some())
+                {
+                    self.reset_enrollment();
+                }
+                // A report may have been accepted just before deletion but its ack lost.
+                // The server's sequence is authoritative for the fresh enrollment.
+                self.journal.sequence = directive.report_sequence;
+                self.journal.reenrollment = true;
+                self.save()?;
+            }
+            EndpointConnectionAction::CheckIn => {
+                self.journal.revoked = false;
+                if self.journal.identity.is_none() && self.journal.challenge.is_none() {
+                    self.enroll().await?;
+                }
+            }
+        }
+        if self.journal.reenrollment
+            && self.journal.identity.is_none()
+            && self.journal.challenge.is_none()
+        {
+            self.enroll().await?;
         }
         if self
             .journal
@@ -777,6 +881,7 @@ impl ClientService {
                     verify_identity(&identity, manifest, &self.key, &self.device(), now)?;
                     self.journal.identity = Some(identity);
                     self.journal.challenge = None;
+                    self.journal.reenrollment = false;
                     self.save()?;
                 }
                 EnrollmentState::Pending => return Ok(()),
@@ -963,10 +1068,16 @@ impl ClientService {
         &self.config.server_url
     }
     pub fn next_delay_millis(&self) -> u64 {
+        if self.journal.revoked {
+            return crate::platform::next_local_hour_millis(
+                crate::now(),
+                crate::platform::utc_offset_minutes().unwrap_or(0),
+            );
+        }
         if self.journal.challenge.is_some() {
             return 5000;
         }
-        if self.state == EndpointState::Active {
+        if self.state == EndpointState::Active || self.failures == 0 {
             return self.check_in_interval_ms;
         }
         (5_u64.saturating_mul(1_u64 << self.failures.min(6))).min(300) * 1000
@@ -990,9 +1101,12 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
     struct Gateway {
+        pings: AtomicU64,
+        directive: std::sync::Mutex<Option<EndpointConnectionDirective>>,
         polls: AtomicU64,
         desired: AtomicU64,
         revoked: AtomicBool,
+        deleted: AtomicBool,
         blocked: AtomicBool,
         authorizations: AtomicU64,
         deadline: AtomicU64,
@@ -1000,6 +1114,23 @@ mod tests {
         consumption: std::sync::Mutex<Option<EnterpriseInvocation>>,
     }
     impl ControlPort for Gateway {
+        fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
+            Box::pin(async move {
+                self.pings.fetch_add(1, Ordering::SeqCst);
+                Ok(self
+                    .directive
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .unwrap_or(EndpointConnectionDirective {
+                        device_id: request.announcement.device_id,
+                        state: EndpointState::Active,
+                        action: EndpointConnectionAction::CheckIn,
+                        report_sequence: 0,
+                        next_interval_ms: 500,
+                    }))
+            })
+        }
         fn consume_effect(
             &self,
             identity: DeviceIdentity,
@@ -1048,6 +1179,9 @@ mod tests {
         ) -> Call<'_, EndpointCheckInAck> {
             Box::pin(async move {
                 self.polls.fetch_add(1, Ordering::SeqCst);
+                if self.deleted.load(Ordering::SeqCst) {
+                    return Err(Failure::EnrollmentRequired);
+                }
                 if self.revoked.load(Ordering::SeqCst) {
                     return Err(Failure::Revoked);
                 }
@@ -1137,9 +1271,12 @@ mod tests {
             local_console_url: None,
         };
         let gateway = Arc::new(Gateway {
+            pings: AtomicU64::new(0),
+            directive: std::sync::Mutex::new(None),
             polls: AtomicU64::new(0),
             desired: AtomicU64::new(0),
             revoked: AtomicBool::new(false),
+            deleted: AtomicBool::new(false),
             blocked: AtomicBool::new(false),
             authorizations: AtomicU64::new(0),
             deadline: AtomicU64::new(crate::now() + 29000),
@@ -1353,6 +1490,132 @@ mod tests {
         service.tick().await.unwrap();
         assert_eq!(service.journal.sequence, 1);
         assert!(service.journal.pending_report.is_none());
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn pings_continue_while_waiting_and_revoked_and_follow_server_reenrollment() {
+        let (mut service, gateway, directory) = test_service();
+        let mut identity: DeviceIdentity =
+            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
+        identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.identity = Some(identity);
+        service.journal.sequence = 4;
+        for state in [EndpointState::Offline, EndpointState::Revoked] {
+            *gateway.directive.lock().unwrap() = Some(EndpointConnectionDirective {
+                device_id: service.device(),
+                state: state.clone(),
+                action: EndpointConnectionAction::Wait,
+                report_sequence: 5,
+                next_interval_ms: 5000,
+            });
+            service.tick().await.unwrap();
+            service.tick().await.unwrap();
+            assert!(!service.health().ready);
+            assert_eq!(service.state, state);
+            assert!(service.journal.identity.is_some());
+            if state == EndpointState::Revoked {
+                assert!((1..=3600000).contains(&service.next_delay_millis()));
+            } else {
+                assert_eq!(service.next_delay_millis(), 5000);
+            }
+        }
+        assert_eq!(gateway.pings.load(Ordering::SeqCst), 4);
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        *gateway.directive.lock().unwrap() = Some(EndpointConnectionDirective {
+            device_id: service.device(),
+            state: EndpointState::Unenrolled,
+            action: EndpointConnectionAction::Enroll,
+            report_sequence: 5,
+            next_interval_ms: 5000,
+        });
+        // Discovery is unavailable in this mock: the retry state must still be durable.
+        assert_eq!(service.tick().await, Err(Failure::Unsupported));
+        assert_eq!(service.journal.sequence, 5);
+        assert!(!service.journal.revoked);
+        assert!(service.journal.identity.is_none());
+        assert!(service.journal.reenrollment);
+        let saved: Journal =
+            serde_json::from_slice(&service.store.read("journal.json").unwrap().unwrap()).unwrap();
+        assert!(saved.reenrollment);
+        assert_eq!(saved.sequence, 5);
+        assert_eq!(service.tick().await, Err(Failure::Unsupported));
+        assert_eq!(gateway.pings.load(Ordering::SeqCst), 6);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn deletion_between_ping_and_check_in_recovers_the_servers_report_sequence() {
+        let (mut service, gateway, directory) = test_service();
+        let mut identity: DeviceIdentity =
+            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
+        identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.identity = Some(identity);
+        service.journal.sequence = 4;
+        gateway.deleted.store(true, Ordering::SeqCst);
+        assert_eq!(service.tick().await, Err(Failure::EnrollmentRequired));
+        assert!(service.journal.identity.is_none());
+        assert!(!service.journal.revoked);
+        *gateway.directive.lock().unwrap() = Some(EndpointConnectionDirective {
+            device_id: service.device(),
+            state: EndpointState::Unenrolled,
+            action: EndpointConnectionAction::Enroll,
+            report_sequence: 5,
+            next_interval_ms: 5000,
+        });
+        assert_eq!(service.tick().await, Err(Failure::Unsupported));
+        assert_eq!(service.journal.sequence, 5);
+        assert!(service.journal.pending_report.is_none());
+        assert_eq!(gateway.pings.load(Ordering::SeqCst), 2);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn explicit_revoked_request_keeps_identity_blocked_when_discovery_is_unavailable() {
+        let (mut service, gateway, directory) = test_service();
+        service.journal.revoked = true;
+        service.state = EndpointState::Revoked;
+        let fingerprint = service.key.fingerprint();
+        *gateway.directive.lock().unwrap() = Some(EndpointConnectionDirective {
+            device_id: service.device(),
+            state: EndpointState::Revoked,
+            action: EndpointConnectionAction::Wait,
+            report_sequence: 7,
+            next_interval_ms: 3600000,
+        });
+        assert_eq!(service.request_approval().await, Err(Failure::Unsupported));
+        assert_eq!(service.key.fingerprint(), fingerprint);
+        assert!(service.journal.revoked);
+        assert!(!service.health().ready);
+        assert_eq!(gateway.pings.load(Ordering::SeqCst), 1);
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        assert!((1..=3600000).contains(&service.next_delay_millis()));
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn expired_pending_request_keeps_pinging_and_retries_enrollment() {
+        let (mut service, gateway, directory) = test_service();
+        service.journal.challenge = Some(EndpointEnrollmentChallenge {
+            enrollment_id: "e".repeat(32),
+            device_code: "d".repeat(64),
+            user_code: "A".repeat(16),
+            verification_uri: "https://control.example.test/console/#enroll".into(),
+            expires_at_unix_ms: crate::now() - 1000,
+            poll_interval_seconds: 5,
+        });
+        *gateway.directive.lock().unwrap() = Some(EndpointConnectionDirective {
+            device_id: service.device(),
+            state: EndpointState::Pending,
+            action: EndpointConnectionAction::Enroll,
+            report_sequence: 0,
+            next_interval_ms: 5000,
+        });
+        assert_eq!(service.tick().await, Err(Failure::Expired));
+        assert!(service.journal.challenge.is_none());
+        assert!(service.journal.reenrollment);
+        assert_eq!(service.tick().await, Err(Failure::Unsupported));
+        assert_eq!(gateway.pings.load(Ordering::SeqCst), 2);
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
     }

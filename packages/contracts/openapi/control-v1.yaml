@@ -179,6 +179,30 @@ paths:
         '503':
           description: Dependency unavailable
       security: []
+  /api/control/v1/endpoint/ping:
+    post:
+      operationId: pingEndpoint
+      description: Device presence continues before enrollment, during suspension and
+        after deletion or revocation. A signed CSR proves the announced key. Control
+        returns its current state and the next action; presence grants no access.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointPresencePing
+      responses:
+        '200':
+          description: Authoritative device state and next action; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointConnectionDirective
+        '403':
+          description: Device ID does not match the proved key
+        '503':
+          description: Dependency unavailable
   /api/control/v1/endpoint/enrollments:
     get:
       operationId: listEndpointEnrollments
@@ -227,6 +251,32 @@ paths:
             schema:
               $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentStart
       security: []
+  /api/control/v1/endpoint/enrollments/request-approval:
+    post:
+      operationId: requestEndpointEnrollmentApproval
+      description: Explicit signed-key request to reopen a revoked device for a fresh
+        administrator review. Old enrollment codes are invalidated. This request
+        never approves access and bypasses initial-enrollment automatic approval.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentStart
+      responses:
+        '200':
+          description: Fresh pending enrollment challenge; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentChallenge
+        '403':
+          description: Device ID does not match the proved key
+        '409':
+          description: Device is not revoked or awaiting reenrollment
+        '503':
+          description: Dependency unavailable
   /api/control/v1/endpoint/enrollments/poll:
     post:
       operationId: pollEndpointEnrollment
@@ -384,6 +434,8 @@ paths:
           description: Direct TLS/identity required
         '403': &id015
           description: Wrong tenant/user, inactive or revoked device
+        '410':
+          description: Device deleted; request a fresh enrollment and approval
         '423':
           description: Device is disabled, deapproved or its connection deadline expired;
             retryable suspension
@@ -458,6 +510,46 @@ paths:
           description: Administrator role and enabled user required
         '409':
           description: Approval revision changed or key permanently revoked
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/endpoint/devices/{id}/request-approval:
+    post:
+      operationId: requestEndpointDeviceApproval
+      description: Administrator reopens a revoked device for a fresh enrollment request.
+        Approval and access remain blocked until the live client submits its CSR
+        and an administrator approves it. Does not change directory enablement.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointRevokeRequest
+      responses:
+        '200':
+          description: Awaiting fresh client enrollment; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointDeviceRecord
+        '403':
+          description: Administrator role and enabled user required
+        '409':
+          description: Device revision changed or device is not revoked
         '503':
           description: Dependency unavailable
   /api/control/v1/endpoint/devices/{id}/enabled:

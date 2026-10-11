@@ -29,6 +29,7 @@ COPY tool-sdk/java-sdk/api/build.gradle.kts tool-sdk/java-sdk/api/build.gradle.k
 COPY tool-sdk/java-sdk/processor/build.gradle.kts tool-sdk/java-sdk/processor/build.gradle.kts
 COPY tool-sdk/java-sdk/protocol/build.gradle.kts tool-sdk/java-sdk/protocol/build.gradle.kts
 COPY tool-sdk/java-sdk/runtime-mcp/build.gradle.kts tool-sdk/java-sdk/runtime-mcp/build.gradle.kts
+COPY tool-sdk/java-sdk/conformance-server/build.gradle.kts tool-sdk/java-sdk/conformance-server/build.gradle.kts
 ARG QUARKUS_PROFILE=prod
 RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew --no-daemon -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild
 

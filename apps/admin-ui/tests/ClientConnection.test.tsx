@@ -23,7 +23,7 @@ it.each([
   [{lastSeenUnixMs:Date.now()-121000},'Offline'],
   [{lastSeenUnixMs:0,reportSequence:0},'No check-in yet'],
   [{lastSeenUnixMs:Date.now(),state:'REVOKED'},'Revoked'],
-  [{lastSeenUnixMs:Date.now(),connectionExpiresAtUnixMs:Date.now()-1},'Approval expired'],
+  [{lastSeenUnixMs:Date.now(),connectionExpiresAtUnixMs:Date.now()-1},'Approval required'],
   [{lastSeenUnixMs:Date.now(),userId:'another-owner'},'Enrollment mismatch'],
   [{lastSeenUnixMs:Date.now(),deviceId:'another-client'},'Status unavailable'],
   [{lastSeenUnixMs:'not-a-timestamp'},'Status unavailable'],
@@ -44,7 +44,7 @@ it('stops showing connected when approval expires even with fresh check-ins',asy
   render(<ClientConnection client={client} id="client-1" enabled ownerUserId="owner-1"/>);
   await act(async()=>{await vi.advanceTimersByTimeAsync(0);});expect(screen.getByText('Connected').title).toContain('Allowed until:');
   await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});
-  expect(screen.getByText('Approval expired').className).toContain('offline');
+  expect(screen.getByText('Approval required').className).toContain('offline');
 });
 it('shows disabled clients as red without polling their connection',async()=>{
   const {client,transport}=clientWith({...device,lastSeenUnixMs:Date.now()});

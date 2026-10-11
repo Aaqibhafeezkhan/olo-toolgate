@@ -5,6 +5,33 @@
   "title": "Endpoint identity foundation",
   "$ref": "#/$defs/ClientHealth",
   "$defs": {
+    "EndpointPresencePing": {
+      "type": "object",
+      "description": "Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling.",
+      "additionalProperties": false,
+      "properties": {
+        "announcement": {"$ref": "#/$defs/EndpointEnrollmentStart"},
+        "utcOffset": {"type": "string", "pattern": "^[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00)$"}
+      },
+      "required": ["announcement", "utcOffset"]
+    },
+    "EndpointConnectionAction": {
+      "type": "string",
+      "enum": ["ENROLL", "CHECK_IN", "WAIT"]
+    },
+    "EndpointConnectionDirective": {
+      "type": "object",
+      "description": "Server-authoritative response to a device presence ping; presence never grants tool access.",
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
+        "state": {"$ref": "#/$defs/EndpointState"},
+        "action": {"$ref": "#/$defs/EndpointConnectionAction"},
+        "reportSequence": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+        "nextIntervalMs": {"type": "integer", "minimum": 500, "maximum": 3600000}
+      },
+      "required": ["deviceId", "state", "action", "reportSequence", "nextIntervalMs"]
+    },
     "ClientPlatform": {
       "type": "string",
       "enum": [
