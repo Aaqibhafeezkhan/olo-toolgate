@@ -50,6 +50,7 @@ public final class ProtocolCore {
     public static final class Connection {
         private final String transport;
         private final String owner;
+        private final VerifiedIdentity identity;
         private String era;
 
         /** A stdio connection: its own owner and era lock. */
@@ -61,6 +62,14 @@ public final class ProtocolCore {
         public Connection(String transport, String owner) {
             this.transport = transport;
             this.owner = owner;
+            this.identity = null;
+        }
+
+        /** The requests of one verified caller (adapter A4): it owns their tasks, request states and listen streams. */
+        public Connection(String transport, VerifiedIdentity identity) {
+            this.transport = transport;
+            this.owner = identity.owner();
+            this.identity = identity;
         }
 
         public String transport() { return transport; }
@@ -130,7 +139,7 @@ public final class ProtocolCore {
             if (headers != null) checkRoutingHeaders(method, params, headers);
             connection.lock(VERSION);
             RequestMeta request = new RequestMeta(VERSION, capabilities, extensions(capabilities), connection.transport, connection.owner,
-                    meta.get("progressToken"), notify, JSON.objectNode());
+                    connection.identity, meta.get("progressToken"), notify, JSON.objectNode());
             ObjectNode result = switch (method) {
                 case "server/discover" -> discover();
                 case "tools/list" -> list(request);
@@ -206,7 +215,9 @@ public final class ProtocolCore {
         boolean tools = filter.path("toolsListChanged").asBoolean(false);
         boolean tasks = catalog.tasks() != null && request.declares(RequestMeta.TASKS);
         Subscription s = new Subscription(connection, id, sink, tools, tasks, request.owner());
-        subscriptions.put(key(connection, id), s);
+        if (subscriptions.putIfAbsent(key(connection, id), s) != null) {
+            throw new ProtocolError(ProtocolError.INVALID_PARAMS, "A listen stream with this id is already open");
+        }
         ObjectNode honoured = JSON.objectNode();
         if (tools) honoured.put("toolsListChanged", true);
         ObjectNode ack = JSON.objectNode();
@@ -234,12 +245,13 @@ public final class ProtocolCore {
         try {
             s.sink.accept(frame);
         } catch (RuntimeException e) {
-            subscriptions.remove(key(s.connection, s.id));
+            subscriptions.remove(key(s.connection, s.id), s);
         }
     }
 
     private static String key(Connection connection, JsonNode id) {
-        return System.identityHashCode(connection) + ":" + connection.owner + ":" + id;
+        // By owner, not by object: each HTTP request has its own Connection, and a later POST may cancel the stream.
+        return connection.transport + ":" + connection.owner + ":" + id;
     }
 
     private static void validate(JsonNode message) {

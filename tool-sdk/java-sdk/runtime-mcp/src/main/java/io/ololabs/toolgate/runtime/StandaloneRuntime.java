@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.ololabs.toolgate.protocol.IdentityVerifier;
 import io.ololabs.toolgate.protocol.MemoryTaskStore;
 import io.ololabs.toolgate.protocol.ProtocolCore;
 import io.ololabs.toolgate.protocol.ProtocolError;
@@ -89,6 +90,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     private final Map<String, Tool> byMcpName = new TreeMap<>();
     private final ObjectNode packageInfo;
     private final Tasks tasks;
+    private IdentityVerifier verifier;
     private InetSocketAddress httpAddress;
     private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "toolgate-tool");
@@ -116,7 +118,6 @@ public final class StandaloneRuntime implements ToolCatalog {
         Map<String, SchemaValidator> errorData = new HashMap<>();
         Map<String, DeclaredValues.Entry> globals = new LinkedHashMap<>();
         Map<String, DeclaredValues.Entry> secrets = new LinkedHashMap<>();
-        Map<String, DeclaredValues.Entry> claims = new LinkedHashMap<>();
     }
 
     private StandaloneRuntime(Config config, PrintStream diagnostics, ObjectNode packageInfo, Tasks tasks) {
@@ -141,13 +142,15 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (config.mode == Config.Mode.TEST) {
             throw new StartupRefused("CONFIGURATION", "TOOLGATE_MODE=test is only for ToolHarness; the runtime entry points reject it");
         }
-        if (config.mode == Config.Mode.DEVELOPMENT && env.containsKey("TOOLGATE_AUTH_ISSUER")) {
+        if (config.mode == Config.Mode.DEVELOPMENT && Verifiers.configured(env)) {
             throw new StartupRefused("CONFIGURATION", "development mode refuses to start when a production issuer is configured");
         }
         ObjectMapper json = new ObjectMapper();
         ObjectNode index = readIndex(loader, json);
         StandaloneRuntime runtime = new StandaloneRuntime(config, diagnostics, index, tasks);
-        runtime.httpAddress = httpAddress(env.get("TOOLGATE_HTTP_ADDRESS"), config.mode);
+        if (config.mode == Config.Mode.PRODUCTION) runtime.verifier = Verifiers.fromEnv(env);
+        if (env.get("TOOLGATE_AUTH_CLIENT_SECRET") != null) runtime.redactor.add(json.getNodeFactory().textNode(env.get("TOOLGATE_AUTH_CLIENT_SECRET")));
+        runtime.httpAddress = httpAddress(env.get("TOOLGATE_HTTP_ADDRESS"), config.mode, runtime.verifier != null);
         Map<String, JsonNode> globalDeclarations = new TreeMap<>();
         for (JsonNode entry : index.path("tools")) {
             Tool tool = runtime.load(loader, entry);
@@ -163,15 +166,19 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (config.mode == Config.Mode.DEVELOPMENT) {
             diagnostics.println("toolgate: WARNING development mode: claims come from toolgate.dev.json fixtures and results are marked as fixture identity.");
         }
+        if (runtime.verifier != null) {
+            diagnostics.println("toolgate: HTTP requests need a bearer token, verified as " + Verifiers.describe(env)
+                    + ". Over stdio there is no token, so identity tools return CLAIMS_UNAVAILABLE.");
+        }
         for (String w : config.warnings) diagnostics.println("toolgate: WARNING " + w);
         return runtime;
     }
 
     /**
      * {@code TOOLGATE_HTTP_ADDRESS} as {@code host:port}. Development binds only to stdio or loopback
-     * (runtime-modes.md §4); production does too until the identity verifier (adapter A4) can authenticate HTTP.
+     * (runtime-modes.md §4); production does too unless an identity verifier (adapter A4) authenticates every request.
      */
-    private static InetSocketAddress httpAddress(String value, Config.Mode mode) {
+    private static InetSocketAddress httpAddress(String value, Config.Mode mode, boolean verified) {
         if (value == null || value.isBlank()) return null;
         String v = value.trim();
         int colon = v.lastIndexOf(':');
@@ -187,10 +194,10 @@ public final class StandaloneRuntime implements ToolCatalog {
             throw new StartupRefused("CONFIGURATION", "TOOLGATE_HTTP_ADDRESS must be host:port, for example 127.0.0.1:8080");
         }
         if (port < 0 || port > 65535) throw new StartupRefused("CONFIGURATION", "TOOLGATE_HTTP_ADDRESS has an invalid port");
-        if (!ip.isLoopbackAddress()) {
+        if (!ip.isLoopbackAddress() && (mode == Config.Mode.DEVELOPMENT || !verified)) {
             throw new StartupRefused("CONFIGURATION", mode == Config.Mode.DEVELOPMENT
                     ? "development mode binds only to stdio or a loopback address, not " + v
-                    : "Streamable HTTP binds only to a loopback address until the identity verifier (adapter A4) is in this runtime, not " + v);
+                    : "Streamable HTTP binds a non-loopback address only with an identity verifier (TOOLGATE_AUTH_*), not " + v);
         }
         return new InetSocketAddress(ip, port);
     }
@@ -202,7 +209,7 @@ public final class StandaloneRuntime implements ToolCatalog {
 
     /** Serves MCP 2026-07-28 over Streamable HTTP at {@code /mcp} until closed. */
     public StreamableHttpServer serveHttp(InetSocketAddress address) throws IOException {
-        StreamableHttpServer server = StreamableHttpServer.start(new ProtocolCore(this), address, "/mcp");
+        StreamableHttpServer server = StreamableHttpServer.start(new ProtocolCore(this), address, "/mcp", verifier);
         diagnostics.println("toolgate: serving MCP 2026-07-28 at http://" + address.getHostString() + ":" + server.port() + "/mcp");
         return server;
     }
@@ -254,9 +261,9 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (d.path("businessKey").path("required").asBoolean()) {
             throw new StartupRefused("CONFIGURATION", "tool " + tool.toolId + " requires a business key; the local reservation store is not in this runtime yet");
         }
-        if (config.mode == Config.Mode.PRODUCTION && needsIdentity(d)) {
+        if (config.mode == Config.Mode.PRODUCTION && verifier == null && needsIdentity(d)) {
             throw new StartupRefused("CONFIGURATION", "tool " + tool.toolId + " needs a verified identity (claims, a USER secret, TOKEN_EXCHANGE or the DELEGATED_USER namespace);"
-                    + " production mode needs a verifier (adapter A4), which is not in this runtime yet. Use TOOLGATE_MODE=development with fixtures to develop it.");
+                    + " configure the identity verifier with TOOLGATE_AUTH_*, or use TOOLGATE_MODE=development with fixtures to develop it.");
         }
         tool.async = d.path("execution").path("async").asBoolean();
         tool.cancelIfAbandoned = d.path("execution").path("cancelIfAbandoned").asBoolean();
@@ -414,13 +421,18 @@ public final class StandaloneRuntime implements ToolCatalog {
             }
             tool.secrets.put(name, new DeclaredValues.Entry(type, value));
         }
-        JsonNode fixture = config.claims();
+    }
+
+    /** The declared claims of one call, read from its identity: fixtures in development, the verified credential otherwise. */
+    private static Map<String, DeclaredValues.Entry> claims(Tool tool, JsonNode identity) {
+        Map<String, DeclaredValues.Entry> out = new LinkedHashMap<>();
         for (JsonNode c : tool.descriptor.path("variables").path("claims")) {
             String claim = c.path("claim").asText();
-            JsonNode value = fixture == null ? null : claim.startsWith("/") ? fixture.at(claim) : fixture.get(claim);
+            JsonNode value = identity == null ? null : claim.startsWith("/") ? identity.at(claim) : identity.get(claim);
             if (value != null && value.isMissingNode()) value = null;
-            tool.claims.put(c.path("name").asText(), new DeclaredValues.Entry(c.path("type").asText(), value));
+            out.put(c.path("name").asText(), new DeclaredValues.Entry(c.path("type").asText(), value));
         }
+        return out;
     }
 
     // ---- ToolCatalog ----
@@ -479,7 +491,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         Tool tool = byMcpName.get(name);
         if (tool == null) throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Unknown tool: " + name);
         if (tool.async && !meta.declares(RequestMeta.TASKS)) throw ProtocolError.missingExtension(RequestMeta.TASKS);
-        Prepared prepared = prepare(tool, (ObjectNode) arguments);
+        Prepared prepared = prepare(tool, (ObjectNode) arguments, meta);
         if (prepared.context != null && !tool.async) {
             prepared.context.attachProgress(meta.progressToken(), meta.notifications());
             prepared.context.attachInputResponses(meta.inputResponses());
@@ -530,7 +542,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         Instant deadline;
     }
 
-    private Prepared prepare(Tool tool, ObjectNode arguments) {
+    private Prepared prepare(Tool tool, ObjectNode arguments, RequestMeta meta) {
         Prepared prepared = new Prepared();
         Redactor redact = redactor.copy();
         prepared.redact = redact;
@@ -569,9 +581,11 @@ public final class StandaloneRuntime implements ToolCatalog {
 
         String invocationId = UUID.randomUUID().toString();
         Instant deadline = Instant.now().plusMillis(tool.deadlineMs);
-        DeclaredValues claims = new DeclaredValues("claim", tool.claims,
+        // Claims come from fixtures in development and only from the verified credential otherwise (runtime-modes.md §4).
+        JsonNode identity = config.mode == Config.Mode.DEVELOPMENT ? config.claims() : meta.identity() == null ? null : meta.identity().claims();
+        DeclaredValues claims = new DeclaredValues("claim", claims(tool, identity),
                 n -> new PlatformError(PlatformError.Code.CLAIMS_UNAVAILABLE, "Claim " + n + " is not available"));
-        claims.identity = config.claims();
+        claims.identity = identity;
         StandaloneContext context = new StandaloneContext(
                 new DeclaredValues("input", inputs, n -> new ToolConfigurationError("input " + n + " has no value")),
                 new DeclaredValues("global", tool.globals, n -> new ToolConfigurationError("global " + n + " has no value")),

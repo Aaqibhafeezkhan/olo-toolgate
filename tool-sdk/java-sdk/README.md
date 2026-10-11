@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls. The governed runtime, the identity verifier, the legacy 2025-11-25 path, the route HTTP client, `ToolHarness`, the Gradle and Maven plugins, typed accessors and the route convenience analyser arrive in later parts.
+Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls; part 7 adds the identity verifier (adapter A4). The governed runtime, the legacy 2025-11-25 path, the route HTTP client, `ToolHarness`, the Gradle and Maven plugins, typed accessors and the route convenience analyser arrive in later parts.
 
 ## Modules
 
@@ -43,22 +43,40 @@ Put the compiled tools, `toolgate-sdk-runtime-mcp` and its dependencies on the c
 | `TOOLGATE_GLOBAL_<NAME>` | A global's value as text, coerced to its declared type and validated against its schema. A missing required global refuses startup. |
 | `TOOLGATE_SECRET_<NAME>` | A secret's value. A missing secret is a warning; reading it fails the call with `CONFIGURATION`. |
 | `TOOLGATE_DEV_JSON` | In development, the fixture file (default `./toolgate.dev.json`) with `globals`, `secrets` and `claims`. Claims are read only in development. |
-| `TOOLGATE_AUTH_ISSUER` | Naming a production issuer refuses development mode. |
-| `TOOLGATE_HTTP_ADDRESS` | `host:port` to serve Streamable HTTP, for example `127.0.0.1:8080`. Only loopback addresses start: development mode binds only to stdio or loopback, and production mode does too until the identity verifier (adapter A4) can authenticate HTTP. |
+| `TOOLGATE_AUTH_*` | The identity verifier (see [Identity](#identity)). Any of these refuses development mode. |
+| `TOOLGATE_HTTP_ADDRESS` | `host:port` to serve Streamable HTTP, for example `127.0.0.1:8080`. Development mode binds only to loopback. Production binds a non-loopback address only with an identity verifier. |
 
 A call runs the specified pipeline: input size (1 MiB, 256 properties) and schema validation before the handler, defaults filled in, `maxConcurrency` with a 1 s queue (`CONCURRENCY_LIMIT`), a deadline of `maxDurationMs` capped at 60 s (`DEADLINE_EXCEEDED`), output schema validation and a 4 MiB output cap. Errors follow [errors.md](../spec/authoring/errors.md): declared business codes keep their code and are checked against `dataSchema`, undeclared ones become `UNDECLARED_ERROR`, uncaught ones `INTERNAL_TOOL_ERROR` with a fixed message, `retryable` is downgraded on `NON_IDEMPOTENT` and `UNKNOWN` tools, and secret and sensitive values are redacted from messages, data and logs.
 
-Startup refuses what this runtime cannot serve honestly: client tools (`CLIENT_TOOLS_UNAVAILABLE`), tools that require a business key (the reservation store is not here yet), and, in production, tools that need an identity (a claim, a `USER` secret, `TOKEN_EXCHANGE` or `DELEGATED_USER` auth) until the verifier arrives. `context.http()` and `tcp()` fail with `CONFIGURATION` for now.
+Startup refuses what this runtime cannot serve honestly: client tools (`CLIENT_TOOLS_UNAVAILABLE`), tools that require a business key (the reservation store is not here yet), and, in production without an identity verifier, tools that need an identity (a claim, a `USER` secret, `TOKEN_EXCHANGE` or `DELEGATED_USER` auth). `context.http()` and `tcp()` fail with `CONFIGURATION` for now.
 
 ## Streamable HTTP
 
-Every request is a stateless `POST /mcp`. The transport checks, in order: a missing `MCP-Protocol-Version` header (`-32020`), a missing `_meta` version or capabilities (`-32602`), a header that differs from `_meta` (`-32020`), an unsupported version (`-32022`), and `Mcp-Method` and `Mcp-Name` against the body (`-32020`). Unknown methods, the session-era `initialize` and `ping` among them, get `-32601`. These errors are HTTP 400, except `-32601` (404) and `-32603` (500). Requests whose `Host` or `Origin` is not a loopback name get 403, which guards against DNS rebinding. Bodies over 2 MiB get 413, a JSON array gets `-32600`, and a notification gets 202.
+Every request is a stateless `POST /mcp`. The transport checks, in order: a missing `MCP-Protocol-Version` header (`-32020`), a missing `_meta` version or capabilities (`-32602`), a header that differs from `_meta` (`-32020`), an unsupported version (`-32022`), and `Mcp-Method` and `Mcp-Name` against the body (`-32020`). Unknown methods, the session-era `initialize` and `ping` among them, get `-32601`. These errors are HTTP 400, except `-32601` (404) and `-32603` (500). On a loopback address, requests whose `Host` or `Origin` is not a loopback name get 403, which guards against DNS rebinding. With an identity verifier, a request without a valid bearer token gets 401 before any of these checks. Bodies over 2 MiB get 413, a JSON array gets `-32600`, and a notification gets 202.
 
 A result is JSON, unless the request carries `_meta.progressToken` and accepts `text/event-stream`. Then the response is an SSE stream: `notifications/progress` frames from `progress()` come first, then the result. Over stdio the same notifications are written as lines before the result.
 
 `subscriptions/listen` holds an SSE stream (over stdio, the connection) open. The first frame is `notifications/subscriptions/acknowledged` with the honoured filter. Every frame carries `_meta["io.modelcontextprotocol/subscriptionId"]`, the listen request's id. `toolsListChanged` is honoured. A listener whose request declared the Tasks extension also receives `notifications/tasks` for its owner's tasks on every status or status-message change. The stream ends when the client goes away; on stdio it also ends on `notifications/cancelled` naming the listen request.
 
-Unauthenticated HTTP requests share one task owner, so a task created by one POST can be polled by the next. Isolation between HTTP callers comes with the identity verifier.
+Without a verifier, HTTP requests share one task owner, so a task created by one POST can be polled by the next. With one, each verified caller (issuer and subject) owns its own tasks, request states and listen streams.
+
+## Identity
+
+Adapter A4 of [protocol-layer.md](../spec/protocol-layer.md) §3, configured as [runtime-modes.md](../spec/runtime-modes.md) §4 describes. In production, claims come only from a verified credential; nothing else (arguments, other headers, environment, the dev file) can supply them.
+
+| Variable | Meaning |
+|---|---|
+| `TOOLGATE_AUTH_ISSUER`, `TOOLGATE_AUTH_AUDIENCE` | Matched exactly against `iss` and `aud` (a string, or an array holding the audience). Both are required for JWTs. For introspection they are optional checks on the answer. |
+| `TOOLGATE_AUTH_JWKS_URL` | An HTTPS JWKS URL. Keys are fetched on first use and again after an hour, and an unknown `kid` refreshes them at most once per 30 s. A failed fetch keeps the last good keys. |
+| `TOOLGATE_AUTH_KEYS_FILE` | A JWKS file of pinned keys, read once at startup. |
+| `TOOLGATE_AUTH_ALGORITHMS` | The JWT algorithm allowlist, default `RS256,ES256`. `RS*`, `PS*` and `ES*` are supported; `none` and HMAC refuse startup. RSA keys must be at least 2048 bits. |
+| `TOOLGATE_AUTH_INTROSPECTION_URL` | An HTTPS RFC 7662 endpoint, instead of JWTs. It needs `TOOLGATE_AUTH_CLIENT_ID` and `TOOLGATE_AUTH_CLIENT_SECRET` (sent with HTTP Basic, and redacted from diagnostics). |
+
+- Exactly one of the JWKS URL, the keys file and the introspection URL may be set. An incomplete or unsafe setting refuses startup with `CONFIGURATION`.
+- A JWT needs a valid signature from an allowed algorithm and a matching key, `exp` and `nbf` within 60 s of skew, and a `sub`. A `crit` header is refused.
+- Introspection needs `active: true`, and refuses an expired `exp` or a mismatched `iss` or `aud`. A positive answer is cached for 5 minutes, never past `exp`. Negative answers are not cached, and an unreachable endpoint never admits a token.
+- Over HTTP, a missing or refused token gets 401 with `WWW-Authenticate: Bearer`. Over stdio there is no token, so tools that read claims fail with `CLAIMS_UNAVAILABLE`.
+- The shared fixtures in [conformance/fixtures/identity](../conformance/fixtures/identity/README.md) drive `IdentityTest` in the protocol module; every SDK runs the same tokens.
 
 ## Tasks
 
@@ -69,7 +87,7 @@ The runtime serves the Tasks extension `io.modelcontextprotocol/tasks` (SEP-2663
 - `tasks/get` returns the status; a completed task carries the tool result under `result` (a tool error is `completed` with `isError: true`), and an internal failure is `failed` with a JSON-RPC `error`. `progress()` sets the status message, bounded to 0..1 and monotonic.
 - `requestInput()` moves the task to `input_required` with one form `elicitation/create` request; `tasks/update` answers it. A declined answer ends the tool with `CANCELLED`. In a sync call it uses MRTR instead (see below).
 - `tasks/cancel` requests cooperative cancellation: the token is set and the worker interrupted. A handler that has not stopped after 5 s is abandoned, and the task ends `cancelled` either way. A tool declaring `cancelIfAbandoned` is cancelled when no poll arrives for 3 poll intervals.
-- Task ids are 128-bit random. A task belongs to the connection that created it until the identity verifier arrives; any other owner gets `-32602` exactly as for an unknown id. Tasks are kept for `ttlMs` (1 hour); a poll extends retention by 3 poll intervals, at most 24 hours after creation, and expired tasks are purged.
+- Task ids are 128-bit random. A task belongs to the verified caller that created it, or without a verifier to the stdio connection or the shared HTTP owner; any other owner gets `-32602` exactly as for an unknown id. Tasks are kept for `ttlMs` (1 hour); a poll extends retention by 3 poll intervals, at most 24 hours after creation, and expired tasks are purged.
 - The store is in memory, so tasks end with the process. The SQLite store comes later.
 
 ## Input in sync calls (MRTR)
@@ -101,7 +119,7 @@ Globals, secrets and claims on the `@ToolPackage` class apply to every tool; on 
 
 ## Tests
 
-`./gradlew :sdk-java-processor:test` compiles fixture sources with the processor. `DescriptorVectorTest` compares the output with the [descriptor vectors](../spec/descriptor/vectors/) byte for byte; `DeclarationTest` covers the declaration rules. `./gradlew :sdk-java-runtime-mcp:test` compiles the fixtures under `runtime-mcp/src/test/resources/fixtures` and drives the runtime through the protocol core; `:sdk-java-protocol:test` drives `StdioServer` over piped streams and `StreamableHttpServer` over loopback HTTP, and `HttpTest` drives the runtime over HTTP; `TasksTest` runs the task fixtures under `fixtures/demo` through the Tasks methods, and `MrtrTest` runs sync `requestInput()` through MRTR rounds; `RequestStatesTest` covers the token itself. Each module's `ConformanceTest` lists which test runs which [conformance case](../conformance/) for the `java` target. Those cases also target the other SDKs, so they stay `authored` until every SDK passes them.
+`./gradlew :sdk-java-processor:test` compiles fixture sources with the processor. `DescriptorVectorTest` compares the output with the [descriptor vectors](../spec/descriptor/vectors/) byte for byte; `DeclarationTest` covers the declaration rules. `./gradlew :sdk-java-runtime-mcp:test` compiles the fixtures under `runtime-mcp/src/test/resources/fixtures` and drives the runtime through the protocol core; `:sdk-java-protocol:test` drives `StdioServer` over piped streams and `StreamableHttpServer` over loopback HTTP, and `HttpTest` drives the runtime over HTTP; `TasksTest` runs the task fixtures under `fixtures/demo` through the Tasks methods, and `MrtrTest` runs sync `requestInput()` through MRTR rounds; `RequestStatesTest` covers the token itself. Both modules have an `IdentityTest`: the protocol one runs the shared identity fixtures, and the runtime one runs production mode with bearer tokens over HTTP. Each module's `ConformanceTest` lists which test runs which [conformance case](../conformance/) for the `java` target. Those cases also target the other SDKs, so they stay `authored` until every SDK passes them.
 
 ## Known gaps
 

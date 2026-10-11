@@ -26,8 +26,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * MCP 2026-07-28 over Streamable HTTP: every request is a stateless POST to one path. Responses are JSON, or an SSE
  * stream when the request carries a progress token (notifications precede the result) or is
- * {@code subscriptions/listen}. Only loopback hosts and origins are accepted (DNS rebinding protection): this
- * transport has no authentication until the identity verifier (adapter A4) arrives.
+ * {@code subscriptions/listen}. Without an identity verifier it binds only loopback addresses and accepts only loopback
+ * hosts and origins (DNS rebinding protection). With one (adapter A4), every request needs a valid bearer token or gets
+ * 401, and each caller's requests share an owner of their own.
  */
 public final class StreamableHttpServer implements AutoCloseable {
     /** The largest request body accepted: the 1 MiB input ceiling plus the envelope. */
@@ -41,25 +42,40 @@ public final class StreamableHttpServer implements AutoCloseable {
     private final ObjectMapper json = new ObjectMapper();
     private final String path;
     /** Unauthenticated requests share one owner, so a task created by one POST can be polled by the next. */
-    private final ProtocolCore.Connection connection = new ProtocolCore.Connection("http", "http:anonymous");
+    private final ProtocolCore.Connection anonymous = new ProtocolCore.Connection("http", "http:anonymous");
+    private final IdentityVerifier verifier;
+    private final boolean loopback;
     private volatile boolean closed;
 
-    private StreamableHttpServer(ProtocolCore core, HttpServer server, ExecutorService executor, String path) {
+    private StreamableHttpServer(ProtocolCore core, HttpServer server, ExecutorService executor, String path, IdentityVerifier verifier, boolean loopback) {
         this.core = core;
         this.server = server;
         this.executor = executor;
         this.path = path;
+        this.verifier = verifier;
+        this.loopback = loopback;
     }
 
     /**
-     * Binds a loopback address and serves {@code path}.
+     * Binds a loopback address and serves {@code path} without authentication.
      *
      * @throws IllegalArgumentException when the address is not a loopback address
      */
     public static StreamableHttpServer start(ProtocolCore core, InetSocketAddress address, String path) throws IOException {
+        return start(core, address, path, null);
+    }
+
+    /**
+     * Serves {@code path}. With a verifier any address may be bound and every request is authenticated; without one only
+     * a loopback address.
+     *
+     * @throws IllegalArgumentException when there is no verifier and the address is not a loopback address
+     */
+    public static StreamableHttpServer start(ProtocolCore core, InetSocketAddress address, String path, IdentityVerifier verifier) throws IOException {
         InetAddress ip = address.getAddress();
-        if (ip == null || !ip.isLoopbackAddress()) {
-            throw new IllegalArgumentException("Streamable HTTP binds only loopback addresses until the identity verifier (adapter A4) arrives: " + address);
+        boolean loopback = ip != null && ip.isLoopbackAddress();
+        if (!loopback && verifier == null) {
+            throw new IllegalArgumentException("Streamable HTTP without an identity verifier (adapter A4) binds only loopback addresses: " + address);
         }
         HttpServer server = HttpServer.create(address, 64);
         ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -68,7 +84,7 @@ public final class StreamableHttpServer implements AutoCloseable {
             return t;
         });
         server.setExecutor(executor);
-        StreamableHttpServer http = new StreamableHttpServer(core, server, executor, path);
+        StreamableHttpServer http = new StreamableHttpServer(core, server, executor, path, verifier, loopback);
         server.createContext("/", http::handle);
         server.start();
         return http;
@@ -91,9 +107,28 @@ public final class StreamableHttpServer implements AutoCloseable {
                 plain(exchange, 404, "Not found");
                 return;
             }
-            if (!allowedHost(exchange)) {
+            // A loopback server checks Host and Origin against DNS rebinding. A bound public address has its own host
+            // name, and browsers never attach the bearer token every request needs there.
+            if (loopback && !allowedHost(exchange)) {
                 plain(exchange, 403, "Forbidden host or origin");
                 return;
+            }
+            ProtocolCore.Connection connection = anonymous;
+            if (verifier != null) {
+                String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+                String bearer = authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7) ? authorization.substring(7).trim() : null;
+                if (bearer == null || bearer.isEmpty()) {
+                    exchange.getResponseHeaders().set("WWW-Authenticate", "Bearer");
+                    plain(exchange, 401, "Unauthorized");
+                    return;
+                }
+                try {
+                    connection = new ProtocolCore.Connection("http", verifier.verify(bearer));
+                } catch (IdentityVerifier.Rejected e) {
+                    exchange.getResponseHeaders().set("WWW-Authenticate", "Bearer error=\"invalid_token\"");
+                    plain(exchange, 401, "Unauthorized");
+                    return;
+                }
             }
             if (!exchange.getRequestMethod().equals("POST")) {
                 exchange.getResponseHeaders().set("Allow", "POST");
@@ -129,7 +164,7 @@ public final class StreamableHttpServer implements AutoCloseable {
             JsonNode response = core.handle(message, connection, exchange.getRequestHeaders()::getFirst, stream::send);
             if (listen && response == null) {
                 stream.live();
-                hold(stream, message.get("id"));
+                hold(connection, stream, message.get("id"));
             } else if (stream.isLive()) {
                 stream.send(response);
             } else {
@@ -143,7 +178,7 @@ public final class StreamableHttpServer implements AutoCloseable {
     }
 
     /** Keeps a listen stream open until the client goes away, the subscription ends or the server closes. */
-    private void hold(Stream stream, JsonNode id) {
+    private void hold(ProtocolCore.Connection connection, Stream stream, JsonNode id) {
         try {
             while (!closed && !stream.failed() && core.subscribed(connection, id)) {
                 if (stream.closedWait(KEEPALIVE_MS)) break;

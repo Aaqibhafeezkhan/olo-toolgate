@@ -13,6 +13,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java standalone runtime verifies bearer tokens (M0 part 7, adapter A4). With
+  `TOOLGATE_AUTH_*` it checks JWTs against a JWKS URL or pinned keys (exact issuer and
+  audience, an allowlist that never admits `none` or HMAC, `exp` and `nbf` within 60 s), or
+  calls RFC 7662 introspection. HTTP requests without a valid token get 401, claims come
+  from the token, and each caller owns its own tasks. Production may then bind a
+  non-loopback address, and identity tools no longer refuse startup. Shared token fixtures
+  for every SDK are under `tool-sdk/conformance/fixtures/identity`.
+
 - The Java standalone runtime serves MRTR (M0 part 6, adapter A3). In a sync call
   `requestInput()` ends the round with an `InputRequiredResult` and a `requestState`, and the
   handler runs again with the answers. `requestState` is an HS256 JWS with a per-process

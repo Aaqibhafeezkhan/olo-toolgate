@@ -16,6 +16,13 @@ id = "jwt"
   paths = ['''(^|/)tests/fixtures/(policy/signed-v1|approval/signed-v2|contracts/(v1|pre-enterprise)/valid|fleet/v1/signed|builder/v1/signed)\.json$''']
   regexes = ['''^\s*"jws":\s*"''']
 
+  [[rules.allowlists]]
+  description = "Adapter A4 identity fixtures: tokens for the .invalid fixture issuer whose signing keys were discarded"
+  condition = "AND"
+  regexTarget = "line"
+  paths = ['''(^|/)tool-sdk/conformance/fixtures/identity/tokens\.json$''']
+  regexes = ['''^\s*"token":\s*"''']
+
 [[rules]]
 id = "generic-api-key"
   [[rules.allowlists]]

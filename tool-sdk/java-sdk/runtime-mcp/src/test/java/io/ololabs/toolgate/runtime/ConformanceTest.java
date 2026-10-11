@@ -49,12 +49,18 @@ class ConformanceTest {
             Map.entry("runtime/cancel-grace", "TasksTest#aToolThatIgnoresCancellationIsAbandonedAfterTheGrace"),
             Map.entry("context/request-input", "TasksTest#requestInputMovesTheTaskToInputRequiredUntilTasksUpdate;MrtrTest#eachRoundAsksForTheNextAnswerAndTheLastCompletes"),
             Map.entry("tasks/capability-per-request", "TasksTest#tasksAreOfferedOnlyToRequestsThatDeclareThem,syncToolsStaySyncAndTheOldTaskHintIsIgnored"),
-            Map.entry("tasks/foreign-identity", "TasksTest#anotherOwnerGetsNotFoundExactlyAsForAnUnknownId"),
+            Map.entry("tasks/foreign-identity", "TasksTest#anotherOwnerGetsNotFoundExactlyAsForAnUnknownId;IdentityTest#tasksBelongToTheCallerThatCreatedThem"),
             Map.entry("tasks/ttl-purge", "TasksTest#tasksArePurgedAfterTheirTtl"),
             Map.entry("tasks/cancel", "TasksTest#cancelStopsTheToolAndIsIdempotentOnceTerminal,aToolThatIgnoresCancellationIsAbandonedAfterTheGrace"),
             Map.entry("tasks/cancel-if-abandoned", "TasksTest#cancelIfAbandonedCancelsAfterThreeMissedPolls"),
             Map.entry("tasks/input-required", "TasksTest#requestInputMovesTheTaskToInputRequiredUntilTasksUpdate"),
             Map.entry("startup/development-explicit", "HttpTest#onlyLoopbackAddressesStart"),
+            Map.entry("startup/claims-without-verifier", "RuntimeTest#startupRefusals"),
+            Map.entry("startup/stdio-claims", "IdentityTest#overStdioThereIsNoTokenSoIdentityToolsGetClaimsUnavailable"),
+            Map.entry("startup/http-missing-token", "IdentityTest#aMissingOrInvalidTokenGets401AtTheTransport"),
+            Map.entry("startup/fixtures-outside-development", "IdentityTest#overStdioThereIsNoTokenSoIdentityToolsGetClaimsUnavailable"),
+            Map.entry("startup/verifier-config", "IdentityTest#verifierConfigurationIsCheckedAtStartup"),
+            Map.entry("official-sdk/bearer-a4", "IdentityTest#claimsComeFromTheVerifiedToken,aMissingOrInvalidTokenGets401AtTheTransport"),
             Map.entry("official-sdk/a3-request-state", "MrtrTest#aStateIsRefusedWhenTamperedReplayedOrPresentedWithOtherArgumentsOrByAnotherIdentity"));
 
     @Test
