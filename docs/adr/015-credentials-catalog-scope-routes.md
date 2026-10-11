@@ -35,6 +35,8 @@ Decision 8 removes the device from `RequestContext` but did not say where a call
 3. **The placement is stored** in the invocation's `EnterpriseContext.deviceId`, which the permit, the relay and the result all use. A replay of the same request keeps its device; the Gateway no longer compares devices.
 4. **A person in the console still chooses a device**, which must belong to the binding's device group.
 
+5. **Slugs** (decision on route segments) ship on `ControlAgent.slug` and `ControlAgentGroup.slug`: optional, pattern `^[a-z0-9][a-z0-9-]{0,62}$`, unique per tenant among agents and among agent groups (Control rejects a duplicate as a validation error). An agent and a group may share a slug because their routes differ. The console edits them as **Route slug**. The scoped routes that resolve them arrive with the Gateway router in M2; an agent or group without a slug has no scoped route.
+
 A pool of executor containers is one device group, so scaling out adds devices and calls spread across them. `RequestContext` also gains `credentialKind` (mounted credentials are `STATIC_TOKEN`), `issuer`, `delegatedSessionEpoch` and `expiresAtUnixMs`, and `bindingId` becomes optional, matching the v2 definition.
 
 ## Alternatives Considered

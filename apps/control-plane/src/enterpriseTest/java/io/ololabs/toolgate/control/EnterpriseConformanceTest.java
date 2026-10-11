@@ -34,9 +34,9 @@ class EnterpriseConformanceTest {
         GroupGraph.addDefault(entries,codec,Kind.USER,"bob");GroupGraph.addDefault(entries,codec,Kind.USER,"admin");
         add(Kind.IDENTITY_BINDING,new ControlIdentityBinding("identity-alice","Alice identity",true,1L,"alice","https://identity.example","alice-subject",1L,NOW-1000,NOW,1L,"REVIEWED",0L));
         // Owners are deliberately different from the executing human.
-        add(Kind.AGENT,new ControlAgent("agent","Agent",true,1L,"bob"));
-        add(Kind.AGENT_GROUP,new ControlAgentGroup("group-a","Group A",true,1L,List.of("agent"),List.of()));
-        add(Kind.AGENT_GROUP,new ControlAgentGroup("group-b","Group B",true,1L,List.of("agent"),List.of()));
+        add(Kind.AGENT,new ControlAgent("agent","Agent",null,true,1L,"bob"));
+        add(Kind.AGENT_GROUP,new ControlAgentGroup("group-a","Group A",null,true,1L,List.of("agent"),List.of()));
+        add(Kind.AGENT_GROUP,new ControlAgentGroup("group-b","Group B",null,true,1L,List.of("agent"),List.of()));
         add(Kind.DEVICE,new ControlDevice("device","Device",true,1L,"bob"));
         add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-a","Devices A",true,1L,List.of("device")));
         add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-b","Devices B",true,1L,List.of("device")));
@@ -112,7 +112,14 @@ class EnterpriseConformanceTest {
     }
     @Test void filesystemAndUrlEscapesRejectBeforePermissionEvaluation() {for(var path:List.of("../outside","data/../outside","C:/outside","data\\outside","data/%2e%2e/outside","data/NUL"))assertThrows(Failure.class,()->ResourceExtraction.normalize(ResourceKind.FILE,path));assertThrows(Failure.class,()->ResourceExtraction.normalize(ResourceKind.URL,"https://example.test/a/../private"));assertThrows(Failure.class,()->ResourceExtraction.normalize(ResourceKind.URL,"https://user:pass@example.test/private"));}
     @Test void mandatoryMembershipAndPrimaryToolGroupAreValidated() {GroupGraph.removeMember(entries,codec,Kind.AGENT,"agent");assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));graph();add(Kind.TOOL_GROUP,new ControlToolGroup("tools-b","Tools B",true,2L,List.of("tool")));assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));}
-    @Test void groupRoleTypeCannotBeMisassigned() {add(Kind.ROLE,new ControlRole("human-role","Human role",true,1L,UserRole.BASIC,EnterpriseRoleType.HUMAN,List.of()));add(Kind.AGENT_GROUP,new ControlAgentGroup("group-a","Group A",true,2L,List.of("agent"),List.of("human-role")));assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));}
+    @Test void slugsAreUniquePerKindAndFollowTheRoutePattern() {
+        add(Kind.AGENT,new ControlAgent("agent","Agent","finance-bot",true,2L,"bob"));add(Kind.AGENT_GROUP,new ControlAgentGroup("group-a","Group A","finance-bot",true,2L,List.of("agent"),List.of()));
+        codec.validatePolicies(directory());
+        add(Kind.AGENT_GROUP,new ControlAgentGroup("group-b","Group B","finance-bot",true,2L,List.of("agent"),List.of()));
+        assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));
+        assertThrows(RuntimeException.class,()->codec.entry(Kind.AGENT,codec.json(new ControlAgent("agent","Agent","Finance_Bot",true,3L,"bob"))));
+    }
+    @Test void groupRoleTypeCannotBeMisassigned() {add(Kind.ROLE,new ControlRole("human-role","Human role",true,1L,UserRole.BASIC,EnterpriseRoleType.HUMAN,List.of()));add(Kind.AGENT_GROUP,new ControlAgentGroup("group-a","Group A",null,true,2L,List.of("agent"),List.of("human-role")));assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));}
     @Test void managementRoleCannotBeRuntimeGrantSource() {add(Kind.ROLE,new ControlRole("management","Management",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of()));grant("human","management",EnterpriseSourceType.ROLE,EnterpriseGrantPurpose.HUMAN,scope("tools-a","devices-a"));assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));}
     @Test void deterministicDecisionDoesNotDependOnMapIterationOrder() {var expected=codec.json(decide(context(EnterpriseRequestMode.DELEGATED,"binding-a")));var reverse=new ArrayList<>(entries.entrySet());Collections.reverse(reverse);entries=new LinkedHashMap<>();for(var e:reverse)entries.put(e.getKey(),e.getValue());assertEquals(expected,codec.json(decide(context(EnterpriseRequestMode.DELEGATED,"binding-a"))));}
     @Test void legacyIndividualAssignmentsAreRejected() {assertThrows(Failure.class,()->codec.entry(Kind.USER,"{\"id\":\"user\",\"name\":\"User\",\"enabled\":true,\"revision\":1,\"access\":{\"role\":\"SUPER_ADMIN\"}}"));assertThrows(Failure.class,()->codec.entry(Kind.AGENT,"{\"id\":\"agent\",\"name\":\"Agent\",\"enabled\":true,\"revision\":1,\"ownerUserId\":\"alice\",\"allowedToolIds\":[]}"));}

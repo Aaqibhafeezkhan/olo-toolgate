@@ -492,6 +492,8 @@ pub struct ControlAccessGrantPage {
 pub struct ControlAgent {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slug: Option<String>,
     pub enabled: bool,
     pub revision: u64,
     pub owner_user_id: String,
@@ -523,6 +525,8 @@ pub struct ControlAgentDelegationPage {
 pub struct ControlAgentGroup {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slug: Option<String>,
     pub enabled: bool,
     pub revision: u64,
     pub agent_ids: Vec<String>,

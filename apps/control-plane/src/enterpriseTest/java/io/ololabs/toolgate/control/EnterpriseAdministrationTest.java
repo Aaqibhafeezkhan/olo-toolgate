@@ -56,7 +56,7 @@ class EnterpriseAdministrationTest {
     }
     @Test void everyIndividualCreationAndGroupDeletionKeepsMandatoryMembership(){
         var tool=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.entries.get(Kind.TOOL.id("tool")).document());tool.put("id","new-tool");tool.put("enabled",false);((com.fasterxml.jackson.databind.node.ObjectNode)tool.get("definition")).put("id","new-tool");
-        var records=Map.of(Kind.USER,graph.codec.json(new ControlUser("created-user","Created",false,1L)),Kind.AGENT,graph.codec.json(new ControlAgent("created-agent","Created",false,1L,"bob")),Kind.DEVICE,graph.codec.json(new ControlDevice("created-device","Created",false,1L,"bob")),Kind.TOOL,graph.codec.json(tool));
+        var records=Map.of(Kind.USER,graph.codec.json(new ControlUser("created-user","Created",false,1L)),Kind.AGENT,graph.codec.json(new ControlAgent("created-agent","Created",null,false,1L,"bob")),Kind.DEVICE,graph.codec.json(new ControlDevice("created-device","Created",false,1L,"bob")),Kind.TOOL,graph.codec.json(tool));
         var defaults=Map.of(Kind.USER,"team-default",Kind.AGENT,"default-agents",Kind.DEVICE,"default-devices",Kind.TOOL,"default-tools");
         for(var record:records.entrySet()){
             var id=((com.fasterxml.jackson.databind.JsonNode)graph.codec.value(record.getValue())).get("id").asText();
@@ -69,8 +69,8 @@ class EnterpriseAdministrationTest {
     }
     @Test void lastMembershipCannotBeRemovedByDirectGroupEditing() {
         var group=graph.codec.model(directory.get(administrator,Kind.AGENT_GROUP,"group-a").body(),ControlAgentGroup.class);
-        directory.mutate(administrator,Kind.AGENT_GROUP,group.id(),"UPDATE",graph.codec.json(new ControlAgentGroup(group.id(),group.name(),true,1L,List.of(),List.of())),1,"first","request");
-        var failure=assertThrows(Failure.class,()->directory.mutate(administrator,Kind.AGENT_GROUP,"group-b","UPDATE",graph.codec.json(new ControlAgentGroup("group-b","Group B",true,1L,List.of(),List.of())),1,"second","request"));assertEquals(409,failure.status());
+        directory.mutate(administrator,Kind.AGENT_GROUP,group.id(),"UPDATE",graph.codec.json(new ControlAgentGroup(group.id(),group.name(),null,true,1L,List.of(),List.of())),1,"first","request");
+        var failure=assertThrows(Failure.class,()->directory.mutate(administrator,Kind.AGENT_GROUP,"group-b","UPDATE",graph.codec.json(new ControlAgentGroup("group-b","Group B",null,true,1L,List.of(),List.of())),1,"second","request"));assertEquals(409,failure.status());
     }
     @Test void membershipReplacementRetainsExactlyOnePrimaryToolGroup() {
         var membership=new GroupMembership(EnterpriseMemberType.TOOL,"tool",List.of("tools-b"),7L);var reply=directory.setMemberships(administrator,Kind.TOOL,"tool",graph.codec.json(membership),7,"move","request");assertEquals(List.of("tools-b"),graph.codec.model(reply.body(),GroupMembership.class).groupIds());
