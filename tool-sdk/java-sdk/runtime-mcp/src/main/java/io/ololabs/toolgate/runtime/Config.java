@@ -66,6 +66,14 @@ final class Config {
         return devJson == null ? null : devJson.path("secrets").get(name);
     }
 
+    /** A destination host from {@code TOOLGATE_DESTINATION_<HOSTSETTING>} or the dev file; null when neither sets it. */
+    String destination(String hostSetting) {
+        String fromEnv = env.get("TOOLGATE_DESTINATION_" + hostSetting.toUpperCase(Locale.ROOT));
+        if (fromEnv != null) return fromEnv;
+        JsonNode v = devJson == null ? null : devJson.path("destinations").get(hostSetting);
+        return v == null || !v.isTextual() ? null : v.asText();
+    }
+
     /** Fixture claims, only in development mode. */
     JsonNode claims() {
         return mode == Mode.DEVELOPMENT && devJson != null && devJson.path("claims").isObject() ? devJson.get("claims") : null;

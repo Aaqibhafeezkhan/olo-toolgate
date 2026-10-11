@@ -242,6 +242,12 @@ class DeclarationTest {
     void routesAreChecked() {
         fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{rest:.*}\")",
                 TOOL.formatted("items.list"), GENERATION), "may not use .*");
+        fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{rest:.+}\")",
+                TOOL.formatted("items.list"), GENERATION), "may not use .+");
+        fails(tools("@HttpRoute(id = \"items.one\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{id}\")",
+                TOOL.formatted("items.list"), GENERATION), "path variable id needs a pattern");
+        assertTrue(tools("@HttpRoute(id = \"items.one\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{id:[0-9]+}\")",
+                TOOL.formatted("items.list"), GENERATION).success());
         fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items\", headers = \"Cookie\")",
                 TOOL.formatted("items.list"), GENERATION), "may not allow header Cookie");
         fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items\", headers = \"X-Forwarded-For\")",

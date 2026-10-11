@@ -149,8 +149,9 @@ final class Fixtures {
 
         /** The structured error of a failed call. */
         JsonNode error(String tool, String arguments) {
-            JsonNode result = call(tool, arguments).path("result");
-            if (!result.path("isError").asBoolean()) throw new AssertionError("expected a tool error: " + result);
+            JsonNode response = call(tool, arguments);
+            JsonNode result = response.path("result");
+            if (!result.path("isError").asBoolean()) throw new AssertionError("expected a tool error: " + response);
             return result.path("structuredContent").path("error");
         }
     }

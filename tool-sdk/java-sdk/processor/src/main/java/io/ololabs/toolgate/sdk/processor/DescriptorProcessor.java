@@ -266,7 +266,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
             range(r.timeoutMs(), 1, 900_000, "timeoutMs", d.at);
         }
 
-        /** RFC 6570 level 1 with {name:regex}; the patterns .* and .+ are refused. */
+        /** RFC 6570 level 1 with {name:regex}: every variable needs a pattern, and the patterns .* and .+ are refused. */
         private void pathTemplate(HttpRoute r, Element at) {
             String path = r.path();
             if (!path.startsWith("/")) throw new Problem(at, "route " + r.id() + " path must start with /");
@@ -292,7 +292,10 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 String name = colon < 0 ? body : body.substring(0, colon);
                 variable(name, "path variable of route " + r.id(), at);
                 if (!names.add(name)) throw new Problem(at, "route " + r.id() + " repeats path variable " + name);
-                if (colon >= 0) {
+                if (colon < 0) {
+                    throw new Problem(at, "route " + r.id() + " path variable " + name + " needs a pattern, {" + name + ":regex}");
+                }
+                {
                     String regex = body.substring(colon + 1);
                     if (regex.equals(".*") || regex.equals(".+")) {
                         throw new Problem(at, "route " + r.id() + " path variable " + name + " may not use " + regex);

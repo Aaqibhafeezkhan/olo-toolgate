@@ -81,6 +81,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     static final int MAX_MESSAGE_BYTES = 1024;
     static final int MAX_DATA_BYTES = 8 * 1024;
     static final String FAILED = "The tool failed.";
+    static final String OUTCOME_UNKNOWN = "OUTCOME_UNKNOWN";
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
 
     private final ObjectMapper json = new ObjectMapper();
@@ -92,6 +93,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     private final Tasks tasks;
     private IdentityVerifier verifier;
     private InetSocketAddress httpAddress;
+    private Egress egress;
     private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "toolgate-tool");
         t.setDaemon(true);
@@ -118,6 +120,8 @@ public final class StandaloneRuntime implements ToolCatalog {
         Map<String, SchemaValidator> errorData = new HashMap<>();
         Map<String, DeclaredValues.Entry> globals = new LinkedHashMap<>();
         Map<String, DeclaredValues.Entry> secrets = new LinkedHashMap<>();
+        Map<String, JsonNode> routes = new LinkedHashMap<>();
+        Map<String, JsonNode> auths = new LinkedHashMap<>();
     }
 
     private StandaloneRuntime(Config config, PrintStream diagnostics, ObjectNode packageInfo, Tasks tasks) {
@@ -159,6 +163,9 @@ public final class StandaloneRuntime implements ToolCatalog {
                 throw new StartupRefused("CONFIGURATION", "two tools share the MCP name " + tool.mcpName);
             }
         }
+        List<JsonNode> destinations = new ArrayList<>();
+        for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("destinations").forEach(destinations::add);
+        runtime.egress = Egress.resolve(config, destinations, diagnostics);
         Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
         for (Tool tool : runtime.byMcpName.values()) runtime.bindVariables(tool, globals);
         diagnostics.println("toolgate: standalone runtime for " + index.path("id").asText() + " (" + runtime.byMcpName.size()
@@ -271,6 +278,8 @@ public final class StandaloneRuntime implements ToolCatalog {
         tool.ledger = safety.equals("NON_IDEMPOTENT") || safety.equals("UNKNOWN");
         tool.deadlineMs = Math.min(d.path("execution").path("maxDurationMs").asLong(30_000), tool.async ? TASK_CEILING_MS : SYNC_CEILING_MS);
         if (d.path("execution").has("maxConcurrency")) tool.concurrency = new Semaphore(d.path("execution").path("maxConcurrency").asInt(), true);
+        for (JsonNode r : d.path("routes")) tool.routes.put(r.path("id").asText(), r);
+        for (JsonNode a : d.path("httpAuth")) tool.auths.put(a.path("id").asText(), a);
         tool.input = new SchemaValidator(d.path("inputSchema"));
         if (d.has("outputSchema")) tool.output = new SchemaValidator(d.get("outputSchema"));
         tool.parameters = new ArrayList<>();
@@ -521,7 +530,9 @@ public final class StandaloneRuntime implements ToolCatalog {
         workers.execute(() -> {
             try {
                 ObjectNode result = execute(tool, prepared);
+                JsonNode error = result.path("structuredContent").path("error");
                 if (tasks.cancelRequested(task.taskId)) tasks.cancelled(task.taskId);
+                else if (error.path("code").asText().equals(OUTCOME_UNKNOWN)) tasks.fail(task.taskId, ProtocolError.INTERNAL_ERROR, error.path("message").asText(), error);
                 else tasks.complete(task.taskId, marked(result));
             } catch (RuntimeException e) {
                 diagnostics.println("toolgate: task " + task.taskId + " of " + tool.toolId + " failed: " + prepared.redact.apply(String.valueOf(e)));
@@ -592,6 +603,7 @@ public final class StandaloneRuntime implements ToolCatalog {
                 new DeclaredValues("secret", tool.secrets, n -> new ToolConfigurationError("secret " + n + " has no value; set TOOLGATE_SECRET_" + n.toUpperCase(java.util.Locale.ROOT))),
                 claims, invocationId, tool.toolId, deadline, redact, diagnostics);
 
+        context.attachHttp(new RouteClient(egress, tool.routes, tool.auths, tool.secrets, context, deadline, redact));
         prepared.context = context;
         prepared.deadline = deadline;
         try {
@@ -735,6 +747,12 @@ public final class StandaloneRuntime implements ToolCatalog {
             e.status().ifPresent(s -> data.put("status", s));
             e.upstreamRequestId().ifPresent(id -> data.put("upstreamRequestId", id));
             data.put("effectUncertain", e.effectUncertain());
+            if (tool.ledger && e.effectUncertain()) {
+                // The request went out and no complete response came back: the invocation ends OUTCOME_UNKNOWN (errors.md §2).
+                data.put("upstreamCode", e.code());
+                return failure(tool, redact, OUTCOME_UNKNOWN, "The call on route " + e.route()
+                        + " was sent and no complete response arrived, so its effect may have happened.", false, data);
+            }
             return failure(tool, redact, e.code(), e.getMessage(), retryable(tool, e.code()), data);
         }
         if (t instanceof ToolRetryableError e) {
