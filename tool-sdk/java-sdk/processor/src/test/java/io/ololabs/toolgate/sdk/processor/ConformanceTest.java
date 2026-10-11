@@ -20,6 +20,12 @@ class ConformanceTest {
     static final Map<String, String> RUNS = Map.ofEntries(
             Map.entry("descriptors/canonical-bytes", "DescriptorVectorTest#clientToolMatchesTool01,serverToolMatchesTool02,taskToolWithNonAsciiNamesMatchesTool03"),
             Map.entry("route-analysis/path-variable-regex", "DeclarationTest#routesAreChecked"),
+            Map.entry("route-analysis/literal-single-route", "AnalysisTest#aLiteralCallMatchingOneListedRoutePackages"),
+            Map.entry("route-analysis/concatenation", "AnalysisTest#aConcatenatedTemplateFailsAtTheCallSite"),
+            Map.entry("route-analysis/global-template", "AnalysisTest#aTemplateOrDestinationFromAGlobalFails"),
+            Map.entry("route-analysis/ambiguous", "AnalysisTest#aTemplateMatchingTwoRoutesFailsNamingBoth"),
+            Map.entry("route-analysis/unlisted", "AnalysisTest#aRouteTheToolDoesNotListFails"),
+            Map.entry("route-analysis/reflection", "AnalysisTest#reflectiveAccessToTheNetworkApiFails"),
             Map.entry("descriptors/set-digest", "DescriptorVectorTest#setDigestMatchesSet01"),
             Map.entry("descriptors/excludes-deployment", "DescriptorVectorTest#deploymentValuesAndExamplesDoNotChangeTheDigest"),
             Map.entry("descriptors/generation-required", "DeclarationTest#generationIsRequiredAndHasNoDefault"),

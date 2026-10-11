@@ -66,11 +66,14 @@ public class DemoTools {
                 return Map.of("length", s.length());
             }
             case "long" -> throw new ToolBusinessError("NOT_FOUND", "x".repeat(4000), Map.of("id", "y".repeat(20_000)));
+            // Names the build cannot see, so these reach the runtime's own checks.
             case "undeclared-global" -> {
-                return Map.of("v", context.global().getStringValue("Nope"));
+                String name = "No" + "pe";
+                return Map.of("v", context.global().getStringValue(name));
             }
             case "wrong-type" -> {
-                return Map.of("v", context.global().getStringValue("Limit"));
+                String name = "Lim" + "it";
+                return Map.of("v", context.global().getStringValue(name));
             }
             default -> {
                 return Map.of("kind", kind);

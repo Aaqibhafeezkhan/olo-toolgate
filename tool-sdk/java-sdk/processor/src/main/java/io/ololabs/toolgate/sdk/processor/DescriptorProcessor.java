@@ -40,6 +40,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import com.sun.source.util.Trees;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
@@ -167,7 +168,79 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 });
             }
             if (failed) return;
+            analyse();
+            if (failed) return;
+            accessors(handlers);
+            if (failed) return;
             write(descriptors, handlers);
+        }
+
+        /** The route analyser and literal value-name checks over the handlers' source (http.md §3, java.md). */
+        private void analyse() {
+            Trees trees;
+            try {
+                trees = Trees.instance(processingEnv);
+            } catch (IllegalArgumentException e) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+                        "toolgate: this compiler has no javac Tree API, so convenience calls and value names are not analysed", packageType);
+                return;
+            }
+            List<SourceAnalysis.Route> declared = new ArrayList<>();
+            for (Declared<HttpRoute> r : routes.values()) {
+                declared.add(new SourceAnalysis.Route(r.value.id(), r.value.method().name(), r.value.destination(),
+                        SourceAnalysis.withoutPatterns(r.value.path())));
+            }
+            if (!new SourceAnalysis(processingEnv, declared, facts).run(round.getRootElements())) failed = true;
+        }
+
+        /** One {@code <HandlerClass>Vars} per class that holds tools, over the union of its tools' declarations. */
+        private void accessors(Map<String, ExecutableElement> handlers) {
+            Map<TypeElement, List<SourceAnalysis.Facts>> byClass = new LinkedHashMap<>();
+            for (ExecutableElement h : handlers.values()) {
+                byClass.computeIfAbsent((TypeElement) h.getEnclosingElement(), k -> new ArrayList<>()).add(facts.get(h));
+            }
+            for (Map.Entry<TypeElement, List<SourceAnalysis.Facts>> c : byClass.entrySet()) {
+                guard(() -> {
+                    TypeElement type = c.getKey();
+                    Map<String, String> globals = new TreeMap<>();
+                    Map<String, String> secrets = new TreeMap<>();
+                    Map<String, String> claims = new TreeMap<>();
+                    for (SourceAnalysis.Facts f : c.getValue()) {
+                        union(globals, f.globals(), "global", type);
+                        union(secrets, f.secrets(), "secret", type);
+                        union(claims, f.claims(), "claim", type);
+                    }
+                    List<String> names = new ArrayList<>();
+                    for (Element e = type; e instanceof TypeElement t; e = t.getEnclosingElement()) names.add(0, t.getSimpleName().toString());
+                    String packageName = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
+                    String className = Accessors.className(names);
+                    List<Accessors.Kind> kinds = List.of(
+                            new Accessors.Kind("global", "global", "Globals", "io.ololabs.toolgate.sdk.context.Values", "globals", globals),
+                            new Accessors.Kind("secret", "secret", "Secrets", "io.ololabs.toolgate.sdk.context.Values", "secrets", secrets),
+                            new Accessors.Kind("jwt", "jwt", "Claims", "io.ololabs.toolgate.sdk.context.Jwt", "JWT claims", claims));
+                    for (Accessors.Kind k : kinds) {
+                        String collision = Accessors.collision(k.values());
+                        if (collision != null) throw new Problem(type, k.what() + " " + collision + " would have the same accessor in " + className);
+                    }
+                    String source = Accessors.source(packageName, className, type.getQualifiedName().toString(), kinds);
+                    if (source == null) return;
+                    String qualified = packageName.isEmpty() ? className : packageName + "." + className;
+                    try (java.io.Writer out = processingEnv.getFiler().createSourceFile(qualified, type).openWriter()) {
+                        out.write(source);
+                    } catch (IOException e) {
+                        throw new Problem(type, "cannot write " + qualified + ": " + e.getMessage());
+                    }
+                });
+            }
+        }
+
+        private void union(Map<String, String> into, Map<String, String> values, String what, TypeElement at) {
+            for (Map.Entry<String, String> v : values.entrySet()) {
+                String prior = into.putIfAbsent(v.getKey(), v.getValue());
+                if (prior != null && !prior.equals(v.getValue())) {
+                    throw new Problem(at, what + " " + v.getKey() + " is " + prior + " in one tool and " + v.getValue() + " in another");
+                }
+            }
         }
 
         private void guard(Runnable step) {
@@ -481,6 +554,14 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 }
             }
             parametersByTool.put(name, parameters);
+            Map<String, String> inputTypes = new TreeMap<>();
+            for (Map.Entry<String, Object> p : properties.entrySet()) {
+                if (p.getValue() instanceof Map<?, ?> schema) inputTypes.put(p.getKey(), valueType(schema));
+            }
+            facts.put(method, new SourceAnalysis.Facts(name, routeIds, inputTypes,
+                    vars.globals.stream().collect(Collectors.toMap(Global::name, g -> g.type().name(), (a, b) -> a, TreeMap::new)),
+                    vars.secrets.stream().collect(Collectors.toMap(Secret::name, x -> x.type().name(), (a, b) -> a, TreeMap::new)),
+                    vars.claims.stream().collect(Collectors.toMap(JwtClaim::name, x -> x.type().name(), (a, b) -> a, TreeMap::new))));
             Map<String, Object> dataSchemas = new TreeMap<>();
             for (ErrorDecl e : t.errors) if (!e.dataSchema().isEmpty()) dataSchemas.put(e.code(), e.dataSchema());
             dataSchemasByTool.put(name, dataSchemas);
@@ -488,6 +569,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
         }
 
         private final Map<String, List<String>> parametersByTool = new HashMap<>();
+        private final Map<ExecutableElement, SourceAnalysis.Facts> facts = new HashMap<>();
         private final Map<String, Map<String, Object>> dataSchemasByTool = new HashMap<>();
 
         private void inputs(ExecutableElement method, ToolVariables grouped, Schemas schemas, Map<String, Object> properties,
@@ -836,6 +918,28 @@ public final class DescriptorProcessor extends AbstractProcessor {
     }
 
     private record Declared<A>(A value, Element at) {}
+
+    /** The value type of an input schema, as the runtime's DeclaredValues.typeOf names it. */
+    static String valueType(Map<?, ?> schema) {
+        Object type = schema.get("type");
+        if ("integer".equals(type)) {
+            long max = schema.get("maximum") instanceof Number n ? n.longValue() : Long.MAX_VALUE;
+            long min = schema.get("minimum") instanceof Number n ? n.longValue() : Long.MIN_VALUE;
+            return max <= Integer.MAX_VALUE && min >= Integer.MIN_VALUE ? "INT" : "LONG";
+        }
+        if ("number".equals(type)) return "NUMBER";
+        if ("boolean".equals(type)) return "BOOLEAN";
+        if ("array".equals(type)) return "ARRAY";
+        if (!"string".equals(type)) return "OBJECT";
+        if (schema.containsKey("enum")) return "ENUM";
+        if ("base64".equals(schema.get("contentEncoding"))) return "BINARY";
+        Object format = schema.get("format");
+        if ("date".equals(format)) return "DATE";
+        if ("date-time".equals(format)) return "DATE_TIME";
+        if ("duration".equals(format)) return "DURATION";
+        if ("uri".equals(format)) return "URI";
+        return "STRING";
+    }
 
     /** The constraint members of a global; INT and LONG bounds are not materialised. */
     static Map<String, Object> global(Global g, Element at) {
