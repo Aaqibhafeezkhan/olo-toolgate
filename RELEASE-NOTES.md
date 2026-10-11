@@ -13,6 +13,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java standalone runtime serves MRTR (M0 part 6, adapter A3). In a sync call
+  `requestInput()` ends the round with an `InputRequiredResult` and a `requestState`, and the
+  handler runs again with the answers. `requestState` is an HS256 JWS with a per-process
+  256-bit key that binds the tool, the arguments and the caller, carries earlier answers,
+  lives 10 minutes and is accepted once. The official MCP conformance suite now passes every
+  required 2026-07-28 server scenario that applies to tools, and all ten `tasks-*` scenarios.
+  A task cancelled before its handler thread started is now interrupted when it starts.
+
 - The Java standalone runtime serves Streamable HTTP (M0 part 5). With
   `TOOLGATE_HTTP_ADDRESS` it answers stateless `POST /mcp` requests on a loopback address,
   with the 2026-07-28 header rules and HTTP statuses, DNS-rebinding protection and
