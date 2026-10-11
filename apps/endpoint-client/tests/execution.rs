@@ -407,11 +407,14 @@ async fn real_managed_runtime_security_boundary() {
                 )
                 .await
                 .is_err());
+            // Tools pin the runtime version and image in their package digest, so these checks prepare runtimes only.
             let mut wrong = settings.clone();
+            wrong.tools.clear();
             wrong.runtimes[0].version = "0.0.1".into();
             let mut wrong = Manager::new(wrong, policy.clone()).unwrap();
             assert!(!wrong.prepare().await.unwrap().ready);
             let mut missing = settings.clone();
+            missing.tools.clear();
             missing.runtimes[0].image = format!("sha256:{}", "f".repeat(64));
             let mut missing = Manager::new(missing, policy.clone()).unwrap();
             assert!(!missing.prepare().await.unwrap().ready);

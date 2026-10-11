@@ -163,8 +163,7 @@ mod tests {
     }
     #[test]
     fn journal_retains_one_hundred_entries_and_returns_exactly_one() {
-        let directory =
-            std::env::temp_dir().join(format!("packet-log-{}", crate::identity::nonce().unwrap()));
+        let directory = crate::storage::test_directory("packet-log");
         let log = PacketLog::open(directory.clone()).unwrap();
         for sequence in 0..105 {
             log.save(json!({"sequence":sequence})).unwrap();

@@ -139,10 +139,7 @@ mod tests {
     }
     #[test]
     fn parked_profiles_become_background_connections() {
-        let state = std::env::temp_dir().join(format!(
-            "olo-connections-{}",
-            crate::identity::nonce().unwrap()
-        ));
+        let state = crate::storage::test_directory("olo-connections");
         let primary = config(&state, "https://primary.example");
         for server in ["https://second.example", "https://primary.example"] {
             let profile = state.join("profiles").join(profile_name(server));
