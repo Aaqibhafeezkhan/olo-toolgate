@@ -24,6 +24,11 @@ COPY config/initial/ config/initial/
 COPY --from=console /workspace/apps/admin-ui/dist/ apps/admin-ui/dist/
 COPY apps/marketplace-api/build.gradle.kts apps/marketplace-api/build.gradle.kts
 COPY apps/marketplace-worker/build.gradle.kts apps/marketplace-worker/build.gradle.kts
+# Gradle configures every project included in settings, including the SDK modules.
+COPY tool-sdk/java-sdk/api/build.gradle.kts tool-sdk/java-sdk/api/build.gradle.kts
+COPY tool-sdk/java-sdk/processor/build.gradle.kts tool-sdk/java-sdk/processor/build.gradle.kts
+COPY tool-sdk/java-sdk/protocol/build.gradle.kts tool-sdk/java-sdk/protocol/build.gradle.kts
+COPY tool-sdk/java-sdk/runtime-mcp/build.gradle.kts tool-sdk/java-sdk/runtime-mcp/build.gradle.kts
 ARG QUARKUS_PROFILE=prod
 RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew --no-daemon -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild
 
