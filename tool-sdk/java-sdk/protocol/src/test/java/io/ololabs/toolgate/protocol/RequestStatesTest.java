@@ -20,7 +20,7 @@ class RequestStatesTest {
     static final ObjectMapper JSON = new ObjectMapper();
 
     static RequestMeta meta(String owner) {
-        return new RequestMeta(ProtocolCore.VERSION, JSON.createObjectNode(), Set.of(), "stdio", owner, null, null, n -> {}, JSON.createObjectNode());
+        return new RequestMeta(ProtocolCore.VERSION, JSON.createObjectNode(), Set.of(), "stdio", owner, null, null, n -> {}, JSON.createObjectNode(), null);
     }
 
     static JsonNode json(String text) throws Exception {

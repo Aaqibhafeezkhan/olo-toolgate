@@ -94,6 +94,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     private IdentityVerifier verifier;
     private InetSocketAddress httpAddress;
     private Egress egress;
+    private Reservations reservations;
     private final ExecutorService workers = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "toolgate-tool");
         t.setDaemon(true);
@@ -122,6 +123,8 @@ public final class StandaloneRuntime implements ToolCatalog {
         Map<String, DeclaredValues.Entry> secrets = new LinkedHashMap<>();
         Map<String, JsonNode> routes = new LinkedHashMap<>();
         Map<String, JsonNode> auths = new LinkedHashMap<>();
+        JsonNode businessKey;
+        boolean reserves;
     }
 
     private StandaloneRuntime(Config config, PrintStream diagnostics, ObjectNode packageInfo, Tasks tasks) {
@@ -166,6 +169,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         List<JsonNode> destinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("destinations").forEach(destinations::add);
         runtime.egress = Egress.resolve(config, destinations, diagnostics);
+        if (runtime.byMcpName.values().stream().anyMatch(t -> t.reserves)) runtime.reservations = openReservations(env, workingDirectory);
         Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
         for (Tool tool : runtime.byMcpName.values()) runtime.bindVariables(tool, globals);
         diagnostics.println("toolgate: standalone runtime for " + index.path("id").asText() + " (" + runtime.byMcpName.size()
@@ -207,6 +211,27 @@ public final class StandaloneRuntime implements ToolCatalog {
                     : "Streamable HTTP binds a non-loopback address only with an identity verifier (TOOLGATE_AUTH_*), not " + v);
         }
         return new InetSocketAddress(ip, port);
+    }
+
+    /**
+     * The business-key reservation store: SQLite at {@code TOOLGATE_STATE_DB} (default {@code .toolgate/state.db}), rows
+     * kept with their results for {@code TOOLGATE_BUSINESS_KEY_RETENTION} (ISO-8601, default 30 days). Tools that need
+     * reservations never run unreserved, so a store that cannot open refuses startup.
+     */
+    private static Reservations openReservations(Map<String, String> env, Path workingDirectory) {
+        Path file = env.containsKey("TOOLGATE_STATE_DB") ? Path.of(env.get("TOOLGATE_STATE_DB")) : workingDirectory.resolve(".toolgate").resolve("state.db");
+        long retentionMs;
+        try {
+            retentionMs = java.time.Duration.parse(env.getOrDefault("TOOLGATE_BUSINESS_KEY_RETENTION", "P30D")).toMillis();
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new StartupRefused("CONFIGURATION", "TOOLGATE_BUSINESS_KEY_RETENTION must be an ISO-8601 duration such as P30D");
+        }
+        if (retentionMs <= 0) throw new StartupRefused("CONFIGURATION", "TOOLGATE_BUSINESS_KEY_RETENTION must be positive");
+        try {
+            return Reservations.open(file, retentionMs, System::currentTimeMillis);
+        } catch (java.sql.SQLException e) {
+            throw new StartupRefused("CONFIGURATION", "the business-key store " + file + " cannot be opened: " + e.getMessage());
+        }
     }
 
     /** The configured Streamable HTTP address, or null to serve stdio. */
@@ -265,9 +290,8 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (d.path("kind").asText().equals("CLIENT")) {
             throw new StartupRefused("CLIENT_TOOLS_UNAVAILABLE", "client tool " + tool.toolId + " needs endpoint device services, which this standalone runtime does not have");
         }
-        if (d.path("businessKey").path("required").asBoolean()) {
-            throw new StartupRefused("CONFIGURATION", "tool " + tool.toolId + " requires a business key; the local reservation store is not in this runtime yet");
-        }
+        tool.businessKey = d.path("businessKey");
+        tool.reserves = tool.businessKey.path("required").asBoolean() || tool.businessKey.hasNonNull("argument");
         if (config.mode == Config.Mode.PRODUCTION && verifier == null && needsIdentity(d)) {
             throw new StartupRefused("CONFIGURATION", "tool " + tool.toolId + " needs a verified identity (claims, a USER secret, TOKEN_EXCHANGE or the DELEGATED_USER namespace);"
                     + " configure the identity verifier with TOOLGATE_AUTH_*, or use TOOLGATE_MODE=development with fixtures to develop it.");
@@ -506,10 +530,135 @@ public final class StandaloneRuntime implements ToolCatalog {
             prepared.context.attachInputResponses(meta.inputResponses());
         }
         if (prepared.refused != null) return marked(prepared.refused);
+        if (tool.reserves) {
+            ObjectNode answered = reserve(tool, prepared, meta);
+            if (answered != null) return answered;
+        }
         if (tool.async) return startTask(tool, prepared, meta);
         ObjectNode result = execute(tool, prepared);
         ObjectNode pending = prepared.context.pendingInput();
+        if (prepared.reserved) finish(prepared, pending != null ? Reservations.AWAITING_INPUT : outcome(result), pending != null ? null : result);
         return pending != null ? pending : marked(result);
+    }
+
+    /**
+     * Reserves the call's business key (execution.md §4, plan.md §11.7). Returns the answer when the call must not run
+     * (a refusal, or the existing invocation's result or task), or null when this call may run.
+     */
+    private ObjectNode reserve(Tool tool, Prepared prepared, RequestMeta meta) {
+        Redactor redact = prepared.redact;
+        String argument = tool.businessKey.path("argument").asText("");
+        JsonNode fromArgument = argument.isEmpty() ? null : prepared.filled.get(argument);
+        String key = fromArgument != null && fromArgument.isTextual() ? fromArgument.asText() : null;
+        String header = meta.idempotencyKey();
+        if (key != null && header != null && !key.equals(header)) {
+            return marked(failure(tool, redact, "INVALID_ARGUMENT", "The business key in " + argument + " and the Idempotency-Key header differ", false, null));
+        }
+        if (key == null) key = header;
+        if (key == null) {
+            if (!tool.businessKey.path("required").asBoolean()) return null;
+            return marked(failure(tool, redact, "INVALID_ARGUMENT", "This tool needs a business key: send "
+                    + (argument.isEmpty() ? "" : "the " + argument + " argument or ") + "the Idempotency-Key header", false, null));
+        }
+        if (key.isEmpty() || key.length() > 255) {
+            return marked(failure(tool, redact, "INVALID_ARGUMENT", "A business key has 1 to 255 characters", false, null));
+        }
+        // Identities come from the authenticated request only, never from arguments.
+        String user = null;
+        String sub = null;
+        if (config.mode == Config.Mode.DEVELOPMENT) {
+            JsonNode claims = config.claims();
+            if (claims != null && claims.path("sub").isTextual()) {
+                sub = claims.get("sub").asText();
+                user = "fixture:" + sub;
+            }
+        } else if (meta.identity() != null) {
+            sub = meta.identity().subject();
+            user = meta.identity().owner();
+        }
+        String caller = user != null ? user : "local";
+        String namespace = tool.businessKey.path("namespace").asText("AGENT");
+        String namespaceIdentity;
+        switch (namespace) {
+            case "DELEGATED_USER" -> {
+                if (user == null) {
+                    return marked(failure(tool, redact, "BUSINESS_KEY_NAMESPACE_MISMATCH",
+                            "This tool keys operations per verified user, and this call has none", false, null));
+                }
+                namespaceIdentity = user;
+            }
+            case "TENANT" -> namespaceIdentity = "";
+            default -> namespaceIdentity = caller;
+        }
+        ObjectNode fingerprint = JSON.objectNode();
+        fingerprint.put("argumentsDigest", io.ololabs.toolgate.protocol.Jcs.digest(prepared.filled));
+        fingerprint.put("package", packageInfo.path("id").asText());
+        fingerprint.put("effect", tool.descriptor.path("effect").path("safety").asText());
+        fingerprint.put("scope", "standalone");
+        if (!namespace.equals("DELEGATED_USER") && sub != null) fingerprint.put("userId", user);
+        String invocationId = prepared.context.invocationId();
+        Reservations.Outcome outcome;
+        try {
+            outcome = reservations.reserve(tool.toolId, namespace, namespaceIdentity, key, io.ololabs.toolgate.protocol.Jcs.digest(fingerprint),
+                    caller, invocationId);
+        } catch (java.sql.SQLException e) {
+            diagnostics.println("toolgate: business-key store failed for " + tool.toolId + ": " + e.getMessage());
+            return marked(failure(tool, redact, "BUSINESS_KEY_STORE_UNAVAILABLE", "The business-key store is unavailable; nothing ran", true, null));
+        }
+        switch (outcome.kind()) {
+            case NEW -> {
+                prepared.reserved = true;
+                String forwarded = switch (namespace) {
+                    case "TENANT" -> key;
+                    case "DELEGATED_USER" -> "u." + reservations.identityHash(namespaceIdentity) + "." + key;
+                    default -> "a." + reservations.identityHash(namespaceIdentity) + "." + key;
+                };
+                prepared.context.attachBusinessKey(key);
+                if (tool.businessKey.path("idempotencyScope").asText("").equals("BUSINESS_KEY")) prepared.routes.idempotencyValue(forwarded);
+                return null;
+            }
+            case EXPIRED -> {
+                return marked(failure(tool, redact, "EXPIRED_KEY", "This business key was used before and its record has expired; use a new key", false, null));
+            }
+            case IN_USE -> {
+                return marked(failure(tool, redact, "IDEMPOTENCY_KEY_IN_USE", "This business key is in use", false, null));
+            }
+            case CONFLICT -> {
+                return marked(failure(tool, redact, "IDEMPOTENCY_CONFLICT", "This business key was used with different arguments", false, null));
+            }
+            default -> {
+                // EXISTING: never run again; answer with the original task or result.
+                if (outcome.taskId() != null && meta.declares(RequestMeta.TASKS)) {
+                    java.util.Optional<TaskRecord> task = tasks.find(meta.owner(), outcome.taskId());
+                    if (task.isPresent()) return Tasks.createResult(task.get());
+                }
+                if (outcome.result() != null) return marked(outcome.result());
+                if (outcome.state().equals(Reservations.RUNNING)) {
+                    return marked(failure(tool, redact, "IN_PROGRESS", "The operation with this business key is still running", true, null));
+                }
+                return marked(failure(tool, redact, OUTCOME_UNKNOWN, "The operation with this business key stopped without a result,"
+                        + " so its effect may have happened", false, null));
+            }
+        }
+    }
+
+    private void finish(Prepared prepared, String state, ObjectNode result) {
+        try {
+            reservations.finish(prepared.context.invocationId(), state, result);
+        } catch (java.sql.SQLException e) {
+            diagnostics.println("toolgate: business-key store failed to record " + prepared.context.invocationId() + ": " + e.getMessage());
+        }
+    }
+
+    /** The reservation state a result ends in. */
+    private static String outcome(ObjectNode result) {
+        if (!result.path("isError").asBoolean()) return "COMPLETED";
+        return switch (result.path("structuredContent").path("error").path("code").asText()) {
+            case OUTCOME_UNKNOWN -> OUTCOME_UNKNOWN;
+            case "CONCURRENCY_LIMIT" -> Reservations.NOT_STARTED;
+            case "CANCELLED" -> "CANCELLED";
+            default -> "FAILED";
+        };
     }
 
     @Override
@@ -527,11 +676,20 @@ public final class StandaloneRuntime implements ToolCatalog {
         StandaloneContext context = prepared.context;
         TaskRecord task = tasks.create(meta.owner(), tool.cancelIfAbandoned, "Running", context::cancel);
         context.attachTask(tasks, task.taskId);
+        if (prepared.reserved) {
+            try {
+                reservations.attachTask(context.invocationId(), task.taskId);
+            } catch (java.sql.SQLException e) {
+                diagnostics.println("toolgate: business-key store failed to record task " + task.taskId + ": " + e.getMessage());
+            }
+        }
         workers.execute(() -> {
             try {
                 ObjectNode result = execute(tool, prepared);
                 JsonNode error = result.path("structuredContent").path("error");
-                if (tasks.cancelRequested(task.taskId)) tasks.cancelled(task.taskId);
+                boolean cancelled = tasks.cancelRequested(task.taskId);
+                if (prepared.reserved) finish(prepared, cancelled ? "CANCELLED" : outcome(result), cancelled ? null : result);
+                if (cancelled) tasks.cancelled(task.taskId);
                 else if (error.path("code").asText().equals(OUTCOME_UNKNOWN)) tasks.fail(task.taskId, ProtocolError.INTERNAL_ERROR, error.path("message").asText(), error);
                 else tasks.complete(task.taskId, marked(result));
             } catch (RuntimeException e) {
@@ -551,6 +709,9 @@ public final class StandaloneRuntime implements ToolCatalog {
         StandaloneContext context;
         Object[] args;
         Instant deadline;
+        ObjectNode filled;
+        RouteClient routes;
+        boolean reserved;
     }
 
     private Prepared prepare(Tool tool, ObjectNode arguments, RequestMeta meta) {
@@ -603,7 +764,13 @@ public final class StandaloneRuntime implements ToolCatalog {
                 new DeclaredValues("secret", tool.secrets, n -> new ToolConfigurationError("secret " + n + " has no value; set TOOLGATE_SECRET_" + n.toUpperCase(java.util.Locale.ROOT))),
                 claims, invocationId, tool.toolId, deadline, redact, diagnostics);
 
-        context.attachHttp(new RouteClient(egress, tool.routes, tool.auths, tool.secrets, context, deadline, redact));
+        RouteClient routes = new RouteClient(egress, tool.routes, tool.auths, tool.secrets, context, deadline, redact);
+        String idempotencyHeader = tool.businessKey.path("idempotencyHeader").asText("");
+        // Forwarded upstream only through the declared header: the business key once reserved, else a value stable for this invocation.
+        if (!idempotencyHeader.isEmpty()) routes.idempotency(idempotencyHeader, "i." + invocationId);
+        context.attachHttp(routes);
+        prepared.routes = routes;
+        prepared.filled = filled;
         prepared.context = context;
         prepared.deadline = deadline;
         try {

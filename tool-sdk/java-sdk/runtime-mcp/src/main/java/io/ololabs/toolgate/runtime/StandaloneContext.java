@@ -59,6 +59,7 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     private volatile ObjectNode pendingInput;
     volatile Thread worker;
     private HttpClient http;
+    private volatile String businessKey;
 
     StandaloneContext(DeclaredValues inputs, DeclaredValues globals, DeclaredValues secrets, DeclaredValues claims,
             String invocationId, String toolId, Instant deadline, Redactor redactor, PrintStream diagnostics) {
@@ -101,6 +102,11 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     }
 
     @Override public Invocation invocation() { return this; }
+
+    /** Records the business key this invocation reserved. */
+    void attachBusinessKey(String key) {
+        this.businessKey = key;
+    }
 
     /** Gives this invocation its routes HTTP client. */
     void attachHttp(HttpClient http) {
@@ -266,7 +272,7 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     @Override public Optional<String> userId() { return Optional.empty(); }
     @Override public Optional<Long> catalogRevision() { return Optional.empty(); }
     @Override public Instant deadline() { return deadline; }
-    @Override public Optional<String> businessKey() { return Optional.empty(); }
+    @Override public Optional<String> businessKey() { return Optional.ofNullable(businessKey); }
     @Override public int attempt() { return 1; }
     @Override public InvocationMode mode() { return InvocationMode.STANDALONE; }
 

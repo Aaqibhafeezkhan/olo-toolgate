@@ -60,6 +60,8 @@ final class RouteClient implements HttpClient {
     private final StandaloneContext context;
     private final Instant deadline;
     private final Redactor redactor;
+    private String idempotencyHeader;
+    private volatile String idempotencyValue;
 
     RouteClient(Egress egress, Map<String, JsonNode> routes, Map<String, JsonNode> auths, Map<String, DeclaredValues.Entry> secrets,
             StandaloneContext context, Instant deadline, Redactor redactor) {
@@ -70,6 +72,17 @@ final class RouteClient implements HttpClient {
         this.context = context;
         this.deadline = deadline;
         this.redactor = redactor;
+    }
+
+    /** Sends {@code value} in {@code header} on every route that allows that header, unless the tool set it (execution.md §4). */
+    void idempotency(String header, String value) {
+        this.idempotencyHeader = header;
+        this.idempotencyValue = value;
+    }
+
+    /** Replaces the forwarded value, once the business key is reserved. */
+    void idempotencyValue(String value) {
+        this.idempotencyValue = value;
     }
 
     @Override
@@ -260,6 +273,11 @@ final class RouteClient implements HttpClient {
             String method = route.path("method").asText();
             HttpRequest.Builder request = HttpRequest.newBuilder(uri(target.base)).timeout(Duration.ofMillis(budget));
             headers.forEach(request::header);
+            if (idempotencyHeader != null && !headers.containsKey(idempotencyHeader)) {
+                boolean allowed = false;
+                for (JsonNode h : route.path("headers")) allowed |= h.asText().equalsIgnoreCase(idempotencyHeader);
+                if (allowed) request.header(idempotencyHeader, idempotencyValue);
+            }
             String authorization = authorization(target);
             if (authorization != null) {
                 JsonNode auth = auths.get(route.get("auth").asText());
