@@ -32,6 +32,15 @@ One run publishes:
 The packaged chart points to this run's Docker Hub namespace and unique development
 image tag. Kubernetes deployment credentials and enablement remain installation settings.
 
+| Artifact | Purpose | Location |
+|----------|---------|----------|
+| Control, Gateway, Quickstart containers | Run platform services | Docker Hub (`dev-<commit>` tags) |
+| Native client installers (`.setup.exe`/`.dmg`/`.run`) | Desktop installation | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
+| Java JARs + POM | JVM integration | Maven Central |
+| TypeScript library | Node/browser integration | GitHub npm Packages (`dev` dist-tag) |
+| Rust `.crate` / PHP distribution | Rust and PHP integration | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
+| Helm chart | Kubernetes deployment | GitHub OCI registry |
+
 The source product/wire version stays unchanged; Rust crate/native binary versions
 retain their source version. Release metadata identifies the commit and states
 `verification: not-run` and `tests: not-run`. Production `latest` is unchanged.
