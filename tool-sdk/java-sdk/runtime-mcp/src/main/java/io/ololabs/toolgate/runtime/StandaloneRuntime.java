@@ -123,6 +123,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         Map<String, DeclaredValues.Entry> secrets = new LinkedHashMap<>();
         Map<String, JsonNode> routes = new LinkedHashMap<>();
         Map<String, JsonNode> auths = new LinkedHashMap<>();
+        java.util.Set<String> tcp = new java.util.TreeSet<>();
         JsonNode businessKey;
         boolean reserves;
     }
@@ -170,6 +171,9 @@ public final class StandaloneRuntime implements ToolCatalog {
         List<JsonNode> destinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("destinations").forEach(destinations::add);
         runtime.egress = Egress.resolve(config, destinations, diagnostics);
+        List<JsonNode> tcpDestinations = new ArrayList<>();
+        for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("tcp").forEach(tcpDestinations::add);
+        runtime.egress.resolveTcp(config, tcpDestinations, diagnostics);
         if (runtime.byMcpName.values().stream().anyMatch(t -> t.reserves)) runtime.reservations = openReservations(env, workingDirectory);
         Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
         for (Tool tool : runtime.byMcpName.values()) runtime.bindVariables(tool, globals);
@@ -326,6 +330,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (d.path("execution").has("maxConcurrency")) tool.concurrency = new Semaphore(d.path("execution").path("maxConcurrency").asInt(), true);
         for (JsonNode r : d.path("routes")) tool.routes.put(r.path("id").asText(), r);
         for (JsonNode a : d.path("httpAuth")) tool.auths.put(a.path("id").asText(), a);
+        for (JsonNode t : d.path("tcp")) tool.tcp.add(t.path("id").asText());
         tool.input = new SchemaValidator(d.path("inputSchema"));
         if (d.has("outputSchema")) tool.output = new SchemaValidator(d.get("outputSchema"));
         tool.parameters = new ArrayList<>();
@@ -799,6 +804,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         // Forwarded upstream only through the declared header: the business key once reserved, else a value stable for this invocation.
         if (!idempotencyHeader.isEmpty()) routes.idempotency(idempotencyHeader, "i." + invocationId);
         context.attachHttp(routes);
+        context.attachTcp(new TcpClient(egress, tool.tcp, context, deadline));
         prepared.routes = routes;
         prepared.filled = filled;
         prepared.context = context;

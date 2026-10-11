@@ -51,10 +51,14 @@ final class Egress {
         }
     }
 
+    /** A resolved TCP destination; {@code problem} is set when connections to it must fail with CONFIGURATION. */
+    record TcpTarget(String id, String host, int port, String problem) {}
+
     /** A cached OAuth 2.0 access token. */
     record Token(String value, long expiresAtMs) {}
 
     private final Map<String, Target> targets = new LinkedHashMap<>();
+    private final Map<String, TcpTarget> tcpTargets = new LinkedHashMap<>();
     final Map<String, Token> tokens = new ConcurrentHashMap<>();
     final Config.Mode mode;
 
@@ -87,6 +91,48 @@ final class Egress {
 
     Target target(String destinationId) {
         return targets.get(destinationId);
+    }
+
+    TcpTarget tcpTarget(String destinationId) {
+        return tcpTargets.get(destinationId);
+    }
+
+    /**
+     * Resolves every TCP destination the tools declare, from the same settings as HTTP destinations, as {@code host} or
+     * {@code host:port}. The port must be the declared one; development may point a loopback host at any port.
+     */
+    void resolveTcp(Config config, Iterable<JsonNode> destinations, java.io.PrintStream diagnostics) {
+        for (JsonNode d : destinations) {
+            String id = d.path("id").asText();
+            if (tcpTargets.containsKey(id)) continue;
+            String setting = d.path("hostSetting").asText();
+            String variable = "TOOLGATE_DESTINATION_" + setting.toUpperCase(Locale.ROOT);
+            String value = config.destination(setting);
+            if (value == null) {
+                diagnostics.println("toolgate: WARNING TCP destination " + id + " has no host; set " + variable + " or destinations." + setting
+                        + " in toolgate.dev.json");
+                tcpTargets.put(id, new TcpTarget(id, null, -1, "TCP destination " + id + " has no host; set " + variable));
+                continue;
+            }
+            String authority = value.trim();
+            URI parsed;
+            try {
+                parsed = authority.isEmpty() || authority.contains("/") || authority.contains("@") ? null : new URI("x://" + authority);
+            } catch (java.net.URISyntaxException e) {
+                parsed = null;
+            }
+            if (parsed == null || parsed.getHost() == null || parsed.getPath() != null && !parsed.getPath().isEmpty()) {
+                throw new StartupRefused("CONFIGURATION", variable + " must be a host or host:port, not " + value);
+            }
+            String host = parsed.getHost();
+            if (host.startsWith("[") && host.endsWith("]")) host = host.substring(1, host.length() - 1);
+            int declared = d.path("port").asInt();
+            int port = parsed.getPort() < 0 ? declared : parsed.getPort();
+            if (port != declared && !(mode != Config.Mode.PRODUCTION && isLoopback(host))) {
+                throw new StartupRefused("CONFIGURATION", variable + " names port " + port + ", but TCP destination " + id + " declares port " + declared);
+            }
+            tcpTargets.put(id, new TcpTarget(id, host, port, null));
+        }
     }
 
     private Target target(JsonNode d, String variable, String value) {
