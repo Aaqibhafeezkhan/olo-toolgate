@@ -13,6 +13,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Tool SDK has its Java authoring API and descriptor processor (`tool-sdk/java-sdk`,
+  M0 part 2). `toolgate-sdk-api` holds the annotations of authoring/java.md,
+  `ToolContext` and the error hierarchy; `toolgate-sdk-processor` turns them into
+  generation-1 semantic descriptors at compile time, writes their canonical bytes to
+  `META-INF/toolgate/tools/`, and fails the build on the declaration rules. It needs
+  `-Atoolgate.descriptorGeneration=1`; there is no default. It reproduces descriptor
+  vectors tool-01, tool-02 and tool-03 byte for byte, and the set-01 digest.
+
 - The Tool SDK has its packager: the `toolgate` CLI (`tool-sdk/cli`, M0 part 1). It
   computes canonical descriptor bytes and the `toolDescriptorDigest`,
   `descriptorSetDigest` and `packageDigest`, compares descriptors under the equivalence

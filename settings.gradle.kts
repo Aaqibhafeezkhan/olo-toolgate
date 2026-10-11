@@ -13,3 +13,9 @@ project(":marketplace-api").projectDir = file("apps/marketplace-api")
 
 include(":marketplace-worker")
 project(":marketplace-worker").projectDir = file("apps/marketplace-worker")
+
+include(":sdk-java-api")
+project(":sdk-java-api").projectDir = file("tool-sdk/java-sdk/api")
+
+include(":sdk-java-processor")
+project(":sdk-java-processor").projectDir = file("tool-sdk/java-sdk/processor")
