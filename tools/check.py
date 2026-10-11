@@ -162,6 +162,9 @@ def main():
     run(['cargo','fmt','--all','--check'])
     run(['cargo','test','--workspace','--locked'])
     run(['cargo','clippy','--workspace','--all-targets','--locked','--','-D','warnings'])
+    # The Java SDK's Gradle and Maven plugins on a sample project, end to end through toolgate pack.
+    if os.name != 'nt' and not DOCKER and shutil.which('mvn') and shutil.which('cargo'): run(['bash','tool-sdk/java-sdk/e2e/run.sh'])
+    else: print('Skipping the Java SDK plugin end-to-end run: it needs bash, mvn and a local cargo')
     run(['npm','ci','--ignore-scripts'])
     run(['npm','run','contracts:check'])
     run(['npm','run','contracts:build'])

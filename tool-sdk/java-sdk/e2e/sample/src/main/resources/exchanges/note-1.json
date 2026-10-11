@@ -1,0 +1,6 @@
+[
+  {
+    "request": { "route": "notes.get", "variables": { "id": "1" } },
+    "response": { "status": 200, "body": { "id": "1", "text": "first" } }
+  }
+]

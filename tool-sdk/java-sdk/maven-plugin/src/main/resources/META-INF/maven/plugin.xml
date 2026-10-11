@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
+<!-- Written by hand: the build is Gradle, so maven-plugin-plugin does not generate it. PluginDescriptorTest keeps it honest. -->
+<plugin>
+  <name>ToolGate Maven Plugin</name>
+  <description>Builds, checks, runs and packages ToolGate tools written with the Java SDK</description>
+  <groupId>io.ololabs.toolgate</groupId>
+  <artifactId>toolgate-maven-plugin</artifactId>
+  <version>@version@</version>
+  <goalPrefix>toolgate</goalPrefix>
+  <isolatedRealm>false</isolatedRealm>
+  <inheritedByDefault>true</inheritedByDefault>
+  <requiredJavaVersion>17</requiredJavaVersion>
+  <requiredMavenVersion>3.9.0</requiredMavenVersion>
+  <mojos>
+    <mojo>
+      <goal>dev</goal>
+      <description>Serves the tools over stdio in development mode, with toolgate.dev.json fixtures.</description>
+      <requiresDependencyResolution>runtime</requiresDependencyResolution>
+      <requiresProject>true</requiresProject>
+      <requiresOnline>false</requiresOnline>
+      <inheritedByDefault>true</inheritedByDefault>
+      <implementation>io.ololabs.toolgate.maven.DevMojo</implementation>
+      <language>java</language>
+      <instantiationStrategy>per-lookup</instantiationStrategy>
+      <executionStrategy>once-per-session</executionStrategy>
+      <threadSafe>true</threadSafe>
+      <executePhase>process-classes</executePhase>
+      <parameters>
+        <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The project.</description></parameter>
+        <parameter><name>pluginArtifacts</name><type>java.util.List</type><required>true</required><editable>false</editable><description>The plugin's class path.</description></parameter>
+        <parameter><name>descriptorGeneration</name><type>java.lang.Integer</type><required>false</required><editable>true</editable><description>The descriptor generation; required, no default.</description></parameter>
+      </parameters>
+      <configuration>
+        <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+        <pluginArtifacts implementation="java.util.List" default-value="${plugin.artifacts}"/>
+        <descriptorGeneration implementation="java.lang.Integer">${toolgate.descriptorGeneration}</descriptorGeneration>
+      </configuration>
+    </mojo>
+    <mojo>
+      <goal>check</goal>
+      <description>Runs every @Example in test mode and checks that toolgate.dev.json is not tracked by git.</description>
+      <requiresDependencyResolution>runtime</requiresDependencyResolution>
+      <requiresProject>true</requiresProject>
+      <requiresOnline>false</requiresOnline>
+      <inheritedByDefault>true</inheritedByDefault>
+      <phase>test</phase>
+      <implementation>io.ololabs.toolgate.maven.CheckMojo</implementation>
+      <language>java</language>
+      <instantiationStrategy>per-lookup</instantiationStrategy>
+      <executionStrategy>once-per-session</executionStrategy>
+      <threadSafe>true</threadSafe>
+      <parameters>
+        <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The project.</description></parameter>
+        <parameter><name>pluginArtifacts</name><type>java.util.List</type><required>true</required><editable>false</editable><description>The plugin's class path.</description></parameter>
+        <parameter><name>descriptorGeneration</name><type>java.lang.Integer</type><required>false</required><editable>true</editable><description>The descriptor generation; required, no default.</description></parameter>
+        <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skips the check.</description></parameter>
+      </parameters>
+      <configuration>
+        <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+        <pluginArtifacts implementation="java.util.List" default-value="${plugin.artifacts}"/>
+        <descriptorGeneration implementation="java.lang.Integer">${toolgate.descriptorGeneration}</descriptorGeneration>
+        <skip implementation="boolean" default-value="false">${toolgate.skip}</skip>
+      </configuration>
+    </mojo>
+    <mojo>
+      <goal>package</goal>
+      <description>Stages the package and packs it with the toolgate CLI into target/toolgate.</description>
+      <requiresDependencyResolution>runtime</requiresDependencyResolution>
+      <requiresProject>true</requiresProject>
+      <requiresOnline>false</requiresOnline>
+      <inheritedByDefault>true</inheritedByDefault>
+      <phase>package</phase>
+      <implementation>io.ololabs.toolgate.maven.PackageMojo</implementation>
+      <language>java</language>
+      <instantiationStrategy>per-lookup</instantiationStrategy>
+      <executionStrategy>once-per-session</executionStrategy>
+      <threadSafe>true</threadSafe>
+      <parameters>
+        <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The project.</description></parameter>
+        <parameter><name>pluginArtifacts</name><type>java.util.List</type><required>true</required><editable>false</editable><description>The plugin's class path.</description></parameter>
+        <parameter><name>descriptorGeneration</name><type>java.lang.Integer</type><required>false</required><editable>true</editable><description>The descriptor generation; required, no default.</description></parameter>
+      </parameters>
+      <configuration>
+        <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+        <pluginArtifacts implementation="java.util.List" default-value="${plugin.artifacts}"/>
+        <descriptorGeneration implementation="java.lang.Integer">${toolgate.descriptorGeneration}</descriptorGeneration>
+      </configuration>
+    </mojo>
+  </mojos>
+</plugin>
