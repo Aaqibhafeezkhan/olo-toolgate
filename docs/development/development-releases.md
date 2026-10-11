@@ -18,7 +18,7 @@ their payload format and dependency-download integrity checks.
 
 One run publishes:
 
-- Control, Gateway and Quickstart containers to the configured Docker Hub namespace,
+- Control, Gateway, Quickstart and Linux device containers to the configured Docker Hub namespace,
   with unique `dev-<12-character-commit>-<run-id>-<attempt>` tags, the commit's
   `dev-<12-character-commit>` alias, and `dev` if that commit is still current main.
 - Java main/source/Javadoc JARs and POM to Maven, and the TypeScript library to GitHub
@@ -34,7 +34,7 @@ image tag. Kubernetes deployment credentials and enablement remain installation 
 
 | Artifact | Purpose | Location |
 |----------|---------|----------|
-| Control, Gateway, Quickstart containers | Run platform services | Docker Hub (`dev-<commit>` tags) |
+| Control, Gateway, Quickstart, Linux device containers | Run platform services and endpoint devices | Docker Hub (`dev-<commit>` tags) |
 | Native client installers (`.setup.exe`/`.dmg`/`.run`) | Desktop installation | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
 | Java JARs + POM | JVM integration | Maven Central |
 | TypeScript library | Node/browser integration | GitHub npm Packages (`dev` dist-tag) |
@@ -68,10 +68,18 @@ The token must have push access to the destination repositories:
 - `olo-toolgate-gateway`
 - `olo-toolgate-control`
 - `olo-toolgate-quickstart`
+- `olo-toolgate-device`
 
 Images come from checksummed CI image archives, without rebuilding. Each gets a
 `dev-<12-character-commit>` tag. A successful build of the current main commit also
 updates `dev`. No production `latest` tag is changed.
+
+The Linux device image is built and tested in the existing Quickstart job using
+the same native client archives as Quickstart. Its checksummed `device-evidence`
+artifact is published by the same development release job. The manual release
+also builds the device from its just-built Quickstart image and publishes it in
+the existing container loop. See [Linux device deployment](../deployment/device.md)
+for comma-separated gateway URLs, automatic connection retries and enrollment.
 
 GitHub Releases receives an immutable prerelease named
 `dev-<full-commit>-<publishing-run-id>`, including six native client archives

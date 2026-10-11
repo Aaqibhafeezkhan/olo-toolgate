@@ -40,7 +40,7 @@ jobs:
   image:
     needs: clients
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -88,10 +88,38 @@ jobs:
           docker save olo-toolgate-quickstart:module11 -o build/quickstart/image.tar
           cp CHANGELOG.md docs/deployment/quickstart.md build/quickstart/
           (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json > SHA256SUMS)
+      - name: Build and verify the matching Linux device image
+        run: |
+          docker build -f apps/device/Dockerfile --build-arg QUICKSTART_IMAGE=olo-toolgate-quickstart:module11 --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$GITHUB_SHA" -t olo-toolgate-device:module11 .
+          python tools/device/check.py
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-device:module11
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/device-sbom.cdx.json olo-toolgate-device:module11
+          docker save olo-toolgate-device:module11 -o build/device/image.tar
+          cp docs/deployment/device.md build/device/
+          (cd build/device && sha256sum image.tar device-sbom.cdx.json > SHA256SUMS)
+      - name: LangChain native smoke on the device image being published
+        env:
+          TOOLGATE_QUICKSTART_IMAGE: olo-toolgate-quickstart:module11
+          TOOLGATE_DEVICE_IMAGE: olo-toolgate-device:module11
+          TOOLGATE_HTTP_PORT: "18091"
+          TOOLGATE_TLS_PORT: "18451"
+        working-directory: examples/langchain
+        run: |
+          trap 'docker compose down -v' EXIT
+          export LOCAL_UID="$(id -u)" LOCAL_GID="$(id -g)"
+          docker compose build agent
+          docker compose up -d --wait --wait-timeout 180 quickstart linux-device
+          python manage.py setup --bootstrap-local --approve-linux-device --target linux
+          docker compose run --rm -T agent --target linux --smoke
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: quickstart-evidence
           path: build/quickstart/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: device-evidence
+          path: build/device/
           if-no-files-found: error
   publish:
     if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.publish)
@@ -109,6 +137,10 @@ jobs:
         with:
           name: quickstart-evidence
           path: build/quickstart
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: device-evidence
+          path: build/device
       - name: Publish the exact scanned image
         id: push
         env:
@@ -126,10 +158,22 @@ jobs:
           docker push "$image"
           digest="$(docker inspect "$image" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
           printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          (cd build/device && sha256sum --check SHA256SUMS)
+          docker load -i build/device/image.tar
+          device="ghcr.io/olo-labs/olo-toolgate-device:${version}"
+          docker tag olo-toolgate-device:module11 "$device"
+          docker push "$device"
+          device_digest="$(docker inspect "$device" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
+          printf 'device_digest=%s\n' "$device_digest" >> "$GITHUB_OUTPUT"
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-name: ghcr.io/olo-labs/olo-toolgate-quickstart
           subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ghcr.io/olo-labs/olo-toolgate-device
+          subject-digest: ${{ steps.push.outputs.device_digest }}
           push-to-registry: true
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:

@@ -78,7 +78,8 @@ def enrollment():
 
 
 def publish(health, prompt):
-    status = {'platform': 'LINUX', 'systemName': socket.gethostname(), **health}
+    status = {'platform': 'LINUX', 'systemName': socket.gethostname(),
+              'updatedAtUnixMs': int(time.time() * 1000), **health}
     if prompt:
         status.update(prompt)
     if JOURNAL.exists():
@@ -124,20 +125,75 @@ def reset_gateway(config, settings):
         path.unlink(missing_ok=True)
 
 
+def supervise():
+    """Keep the installed service and its ordinary gateway retry loop in the foreground."""
+    STATUS.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    service = subprocess.Popen([CLIENT, 'service'])
+    try:
+        deadline = time.monotonic() + 60
+        while not STOP.is_set():
+            if service.poll() is not None:
+                raise RuntimeError('The protected client service exited during startup.')
+            try:
+                health = json.loads(cli('health'))
+                break
+            except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('The protected client IPC did not become ready.')
+                STOP.wait(1)
+        if STOP.is_set():
+            return
+        prompt = None
+        enroll_due = health['state'] in ('UNENROLLED', 'PENDING')
+        previous = health['state']
+        while not STOP.is_set():
+            if service.poll() is not None:
+                raise RuntimeError('The protected client service exited.')
+            health = json.loads(cli('health'))
+            # An expired request can be renewed; a deliberate denial stops automatic enrollment.
+            if previous == 'PENDING' and health['state'] == 'UNENROLLED' and prompt:
+                enroll_due = time.time() * 1000 >= prompt['expiresAtUnixMs']
+                if not enroll_due:
+                    prompt = None
+            if enroll_due and health['state'] in ('UNENROLLED', 'PENDING'):
+                try:
+                    prompt = enrollment()
+                    enroll_due = False
+                    health = json.loads(cli('health'))
+                except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+                    print('Gateway enrollment unavailable; retrying in 5 seconds.', flush=True)
+            publish(health, prompt)
+            previous = health['state']
+            STOP.wait(5)
+    finally:
+        if service.poll() is None:
+            service.terminate()
+            try:
+                service.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                service.kill()
+                service.wait()
+
+
 def main(configure=None):
     signal.signal(signal.SIGTERM, lambda *_: STOP.set())
     signal.signal(signal.SIGINT, lambda *_: STOP.set())
     upstream = os.environ['TOOLGATE_DEVICE_UPSTREAM']
     http_port = int(os.environ.get('TOOLGATE_DEVICE_HTTP_PORT', '18090'))
     tls_port = int(os.environ.get('TOOLGATE_DEVICE_TLS_PORT', '18450'))
-    server_url = f'https://localhost:{tls_port}'
-    relays = [Relay(http_port, upstream, 8080), Relay(tls_port, upstream, 8443)]
+    server_url = os.environ.get('TOOLGATE_DEVICE_SERVER_URL', f'https://localhost:{tls_port}')
+    relays = [Relay(http_port, upstream, int(os.environ.get('TOOLGATE_DEVICE_UPSTREAM_HTTP_PORT', '8080'))),
+              Relay(tls_port, upstream, int(os.environ.get('TOOLGATE_DEVICE_UPSTREAM_TLS_PORT', '8443')))]
     for relay in relays:
         threading.Thread(target=relay.serve_forever, daemon=True).start()
-    service = None
     try:
-        deadline = time.monotonic() + 90
+        wait_seconds = int(os.environ.get('TOOLGATE_DEVICE_WAIT_TIMEOUT', '90'))
+        if wait_seconds < 0:
+            raise ValueError('Device wait timeout cannot be negative')
+        deadline = time.monotonic() + wait_seconds if wait_seconds else float('inf')
         while not STOP.is_set():
+            STATUS.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+            publish({'state': 'WAITING_GATEWAY', 'gatewayUrls': [server_url]}, None)
             try:
                 with urllib.request.urlopen(f'http://127.0.0.1:{http_port}/health/ready', timeout=3) as response:
                     if response.status == 200:
@@ -173,43 +229,8 @@ def main(configure=None):
             os.chmod(CLIENT, 0o755)
         if configure is not None:
             configure(config)
-        STATUS.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-        service = subprocess.Popen([CLIENT, 'service'])
-        deadline = time.monotonic() + 60
-        while not STOP.is_set():
-            if service.poll() is not None:
-                raise RuntimeError('The protected client service exited during startup.')
-            try:
-                health = json.loads(cli('health'))
-                break
-            except (RuntimeError, subprocess.TimeoutExpired, ValueError):
-                if time.monotonic() >= deadline:
-                    raise RuntimeError('The protected client IPC did not become ready.')
-                STOP.wait(1)
-        if STOP.is_set():
-            return
-        prompt = enrollment() if health['state'] in ('UNENROLLED', 'PENDING') else None
-        previous = health['state']
-        while not STOP.is_set():
-            if service.poll() is not None:
-                raise RuntimeError('The protected client service exited.')
-            health = json.loads(cli('health'))
-            # Refresh an expired pending request. A deliberate denial stops automatic enrollment.
-            if previous == 'PENDING' and health['state'] == 'UNENROLLED' and prompt:
-                prompt = enrollment() if time.time() * 1000 >= prompt['expiresAtUnixMs'] else None
-                if prompt:
-                    health = json.loads(cli('health'))
-            publish(health, prompt)
-            previous = health['state']
-            STOP.wait(5)
+        supervise()
     finally:
-        if service and service.poll() is None:
-            service.terminate()
-            try:
-                service.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                service.kill()
-                service.wait()
         for relay in relays:
             relay.shutdown()
             relay.server_close()

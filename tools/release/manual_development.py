@@ -20,7 +20,7 @@ from publication import public_asset
 from tools.release.bundle import checksum_assets
 
 HELM_IMAGE = 'alpine/helm:3.17.3'
-IMAGES = {name: 'olo-toolgate-'+name for name in ('control', 'gateway', 'quickstart')}
+IMAGES = {name: 'olo-toolgate-'+name for name in ('control', 'gateway', 'quickstart', 'device')}
 
 
 def run(*args, capture=False, input=None):
@@ -56,6 +56,9 @@ def build():
     run('docker', 'build', '-f', 'apps/quickstart/Dockerfile', *common, *clients,
         '--build-arg', 'CONTROL_IMAGE=olo-toolgate-control:manual-quickstart',
         '-t', 'olo-toolgate-quickstart:manual-development', '.')
+    run('docker', 'build', '-f', 'apps/device/Dockerfile', *common,
+        '--build-arg', 'QUICKSTART_IMAGE=olo-toolgate-quickstart:manual-development',
+        '-t', 'olo-toolgate-device:manual-development', '.')
     for path in sorted(CLIENTS.iterdir()):
         if path.is_file() and public_asset(path):
             shutil.copyfile(path, ASSETS/path.name)
@@ -125,7 +128,7 @@ def publish():
     distribution = json.loads(compatibility.read_text(encoding='utf-8'))
     distribution.update(maven=info['maven'], npm=info['npm'], helmOci=info['helm'],
                         gatewayImage=images['gateway'], controlImage=images['control'],
-                        quickstartImage=images['quickstart'])
+                        quickstartImage=images['quickstart'], deviceImage=images['device'])
     compatibility.write_text(json.dumps(distribution, indent=2)+'\n', encoding='utf-8')
     pom = ROOT/'packages/contracts/java/build/publications/mavenJava/pom-default.xml'
     shutil.copyfile(pom, ASSETS/('toolgate-contracts-'+info['libraryVersion']+'.pom'))

@@ -243,5 +243,29 @@ class LocalRegistrationTests(unittest.TestCase):
         self.assertEqual(refreshed, records)
 
 
+class ExecutionSelectionTests(unittest.TestCase):
+    def test_binding_and_grants_use_only_the_selected_device_and_example_tools(self):
+        stored = {}
+        allocations = []
+        config = SimpleNamespace(upsert=lambda collection, row: stored.__setitem__((collection, row['id']), row),
+            memberships=lambda *args: allocations.append(args),
+            api=lambda path: dict(scope=dict(resources=[dict(kind='FILE', locator='', match='ANY')],
+                                            conditions=dict(requireOnline=True))))
+        profiles = [dict(tool=dict(id=tool, packageDigest='installed-client',
+                                  definition=dict(actions=[dict(name='read' if 'read' in tool else 'write')])) )
+                    for tool in sorted(manage.TOOLS)]
+        binding, devices = manage.configure_execution(config, 'langchain-linux', 'agent', LINUX, profiles)
+        self.assertEqual(stored['device-groups', devices]['deviceIds'], [LINUX])
+        self.assertEqual(stored['bindings', binding]['deviceGroupId'], devices)
+        self.assertEqual(stored['bindings', binding]['allowedPackageDigests'], ['installed-client'])
+        self.assertFalse(any(collection == 'tool-groups' for collection, _ in stored))
+        for purpose in ('capability', 'service'):
+            grant = stored['grants', 'langchain-linux-'+purpose]
+            self.assertEqual(grant['sourceId'], 'langchain-linux-agents')
+            self.assertEqual(grant['scope']['deviceGroups'], dict(ids=[devices], all=False))
+            self.assertEqual(grant['scope']['toolGroups'], dict(ids=['ReadAndWriteToolGroup'], all=False))
+        self.assertEqual(allocations, [('agents', 'agent', ['ReadAndWriteAgentGroup', 'langchain-linux-agents'])])
+
+
 if __name__ == '__main__':
     unittest.main()

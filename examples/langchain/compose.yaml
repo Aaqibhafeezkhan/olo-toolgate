@@ -29,11 +29,8 @@ services:
     volumes:
       - quickstart-data:/data
   linux-device:
-    build:
-      context: ../..
-      dockerfile: examples/langchain/device.Dockerfile
-      args:
-        QUICKSTART_IMAGE: ${TOOLGATE_QUICKSTART_IMAGE:-ololab/olo-toolgate-quickstart:dev}
+    image: ${TOOLGATE_DEVICE_IMAGE:-ololab/olo-toolgate-device:dev}
+    entrypoint: [python, -u, /opt/toolgate/langchain-device.py]
     platform: linux/amd64
     hostname: langchain-linux-device
     restart: unless-stopped
