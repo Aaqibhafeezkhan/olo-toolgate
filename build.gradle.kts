@@ -123,3 +123,8 @@ tasks.register("publishJavaSdkLocally") {
     description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins, to build/sdk-repo."
     dependsOn(javaSdkModules.map { "$it:publishAllPublicationsToSdkLocalRepository" })
 }
+tasks.register("publishJavaSdkToMavenLocal") {
+    group = "publishing"
+    description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins, to the local Maven repository, where toolgate init projects find it."
+    dependsOn(javaSdkModules.map { "$it:publishToMavenLocal" })
+}

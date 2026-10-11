@@ -7,7 +7,9 @@
 pub mod archive;
 pub mod canonical;
 pub mod descriptor;
+pub mod init;
 pub mod package;
+pub mod project;
 pub mod schemas;
 
 use serde_json::Value;

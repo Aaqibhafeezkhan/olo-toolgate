@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls; part 7 adds the identity verifier (adapter A4); part 8 adds the routes HTTP client; part 9 adds business keys with a local SQLite reservation store; part 10 adds the SQLite task store; part 11 completes the SDK for standalone use with the TCP connector, the route convenience analyser and typed accessors, `ToolHarness`, and the Gradle and Maven plugins. The governed runtime and the legacy 2025-11-25 path arrive with the Tool Host.
+Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls; part 7 adds the identity verifier (adapter A4); part 8 adds the routes HTTP client; part 9 adds business keys with a local SQLite reservation store; part 10 adds the SQLite task store; part 11 completes the SDK for standalone use with the TCP connector, the route convenience analyser and typed accessors, `ToolHarness`, and the Gradle and Maven plugins; part 12 adds the Java starter and the `toolgate` project commands. The governed runtime and the legacy 2025-11-25 path arrive with the Tool Host.
 
 ## Modules
 
@@ -18,9 +18,22 @@ Java 17+ implementation of the [authoring contract](../spec/authoring/README.md)
 | [`gradle-plugin/`](gradle-plugin/) | `toolgate-gradle-plugin` | Plugin `io.ololabs.toolgate.sdk` |
 | [`maven-plugin/`](maven-plugin/) | `toolgate-maven-plugin` | Goals `toolgate:dev`, `toolgate:check`, `toolgate:package` |
 | [`conformance-server/`](conformance-server/README.md) | not published | The fixture server the official MCP conformance suite runs against |
-| [`e2e/`](e2e/) | not published | A sample project both plugins build end to end |
+| [`e2e/`](e2e/) | not published | The starter, written by `toolgate init` and built end to end with both plugins |
 
-All compile with `--release 17`. The API and the processor have no runtime dependencies; the protocol and runtime modules depend on Jackson. `./gradlew publishJavaSdkLocally` publishes every artifact to `build/sdk-repo`; there is no public repository yet.
+All compile with `--release 17`. The API and the processor have no runtime dependencies; the protocol and runtime modules depend on Jackson. There is no public repository yet: `./gradlew publishJavaSdkToMavenLocal` publishes every artifact to the local Maven repository, and `./gradlew publishJavaSdkLocally` to `build/sdk-repo`.
+
+## Getting started
+
+```sh
+./gradlew publishJavaSdkToMavenLocal    # from a ToolGate checkout, until the SDK is published
+toolgate init orders                    # or --build maven
+cd orders
+toolgate dev                            # an MCP server over stdio; --http 127.0.0.1:8080 for Streamable HTTP
+toolgate check                          # unit tests and every @Example
+toolgate pack                           # build/toolgate/orders-0.1.0.tgpkg, validated
+```
+
+The starter ([cli/starters/java](../cli/starters/java/)) has a tool that reads a global through its typed accessor, a tool that calls a declared route with a recorded exchange, an `@Example` on each, a `ToolHarness` unit test, a git-ignored `toolgate.dev.json`, and the Gradle bootstrap scripts. `toolgate dev --digests` prints the descriptor digests the governed package will carry.
 
 ## Building with Gradle or Maven
 
@@ -203,7 +216,7 @@ A tool that requires a business key (by default `NON_IDEMPOTENT` and destructive
 
 ## Tests
 
-`./gradlew :sdk-java-processor:test` compiles fixture sources with the processor. `DescriptorVectorTest` compares the output with the [descriptor vectors](../spec/descriptor/vectors/) byte for byte; `DeclarationTest` covers the declaration rules. `./gradlew :sdk-java-runtime-mcp:test` compiles the fixtures under `runtime-mcp/src/test/resources/fixtures` and drives the runtime through the protocol core; `:sdk-java-protocol:test` drives `StdioServer` over piped streams and `StreamableHttpServer` over loopback HTTP, and `HttpTest` drives the runtime over HTTP; `TasksTest` runs the task fixtures under `fixtures/demo` through the Tasks methods, and `MrtrTest` runs sync `requestInput()` through MRTR rounds; `BusinessKeysTest` runs the `fixtures/keys` tools through reservations and `ReservationsTest` covers the store's rules; `RoutesTest` runs the `fixtures/routes` tools against a local upstream, including an HTTPS server checked by SPKI pin; `RequestStatesTest` covers the token itself; `TcpTest` runs the `fixtures/tcp` tools against a local socket. `AnalysisTest` covers the analyser and the accessors. `:sdk-java-testing:test` runs `ToolHarness` over its own test tools, `:sdk-java-build:test` stages and checks a compiled package (and packs it when `TOOLGATE_CLI` points at the CLI), and the plugin modules test their wiring. [`e2e/run.sh`](e2e/run.sh) publishes the SDK to `build/sdk-repo` and builds the sample project with both plugins through `toolgate pack` and `toolgate validate`, checks that both give the same `descriptorSetDigest`, and asks the dev server for `tools/list`; `tools/check.py` runs it where `mvn` and `cargo` are installed. Both modules have an `IdentityTest`: the protocol one runs the shared identity fixtures, and the runtime one runs production mode with bearer tokens over HTTP. Each module's `ConformanceTest` lists which test runs which [conformance case](../conformance/) for the `java` target. Those cases also target the other SDKs, so they stay `authored` until every SDK passes them.
+`./gradlew :sdk-java-processor:test` compiles fixture sources with the processor. `DescriptorVectorTest` compares the output with the [descriptor vectors](../spec/descriptor/vectors/) byte for byte; `DeclarationTest` covers the declaration rules. `./gradlew :sdk-java-runtime-mcp:test` compiles the fixtures under `runtime-mcp/src/test/resources/fixtures` and drives the runtime through the protocol core; `:sdk-java-protocol:test` drives `StdioServer` over piped streams and `StreamableHttpServer` over loopback HTTP, and `HttpTest` drives the runtime over HTTP; `TasksTest` runs the task fixtures under `fixtures/demo` through the Tasks methods, and `MrtrTest` runs sync `requestInput()` through MRTR rounds; `BusinessKeysTest` runs the `fixtures/keys` tools through reservations and `ReservationsTest` covers the store's rules; `RoutesTest` runs the `fixtures/routes` tools against a local upstream, including an HTTPS server checked by SPKI pin; `RequestStatesTest` covers the token itself; `TcpTest` runs the `fixtures/tcp` tools against a local socket. `AnalysisTest` covers the analyser and the accessors. `:sdk-java-testing:test` runs `ToolHarness` over its own test tools, `:sdk-java-build:test` stages and checks a compiled package (and packs it when `TOOLGATE_CLI` points at the CLI), and the plugin modules test their wiring. [`e2e/run.sh`](e2e/run.sh) publishes the SDK to `build/sdk-repo`, writes the starter with `toolgate init` for Gradle and for Maven, runs `toolgate check`, `toolgate pack`, `toolgate dev` (asking for `tools/list`) and `toolgate dev --digests` on each, and checks that both packages and the development server give the same `descriptorSetDigest`; `tools/check.py` runs it where `mvn` and `cargo` are installed. Both modules have an `IdentityTest`: the protocol one runs the shared identity fixtures, and the runtime one runs production mode with bearer tokens over HTTP. Each module's `ConformanceTest` lists which test runs which [conformance case](../conformance/) for the `java` target. Those cases also target the other SDKs, so they stay `authored` until every SDK passes them.
 
 ## Known gaps
 

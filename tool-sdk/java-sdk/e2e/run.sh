@@ -2,45 +2,41 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 #
-# Builds the sample tool project in sample/ with the Gradle plugin and with the Maven plugin, against the SDK published
-# to build/sdk-repo. Each build compiles with the processor, runs the examples in test mode and packs a .tgpkg with the
-# toolgate CLI, which then validates it. Both builds must give the same descriptorSetDigest, and the Gradle dev server
-# must answer tools/list over stdio. Needs a JDK, Maven and cargo.
+# The Java path end to end, as a tool author takes it: `toolgate init` writes the Java starter for Gradle and for
+# Maven against the SDK published to build/sdk-repo, then `toolgate check` compiles it, runs its unit tests and every
+# example, `toolgate pack` builds and validates the .tgpkg, `toolgate dev` answers tools/list over stdio and
+# `toolgate dev --digests` reports the descriptor digests. Both builds, and the development server, must give the same
+# descriptorSetDigest. Needs a JDK, Maven and cargo.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../../.." && pwd)"
-version="$(cat "$root/VERSION")"
 repo="$root/build/sdk-repo"
 out="$root/build/java-sdk-e2e"
-# Maven caches release versions for good, so the SDK goes into a local repository of its own that is cleared each run.
-m2="$root/build/java-sdk-e2e-m2"
 
 (cd "$root" && ./gradlew -q --configure-on-demand publishJavaSdkLocally && cargo build -q -p toolgate-cli)
-export TOOLGATE_CLI="${CARGO_TARGET_DIR:-$root/target}/debug/toolgate"
-rm -rf "$out" "$m2/io/ololabs"
+toolgate="${CARGO_TARGET_DIR:-$root/target}/debug/toolgate"
+rm -rf "$out"
 mkdir -p "$out"
-
-echo "e2e: Gradle"
-cp -R "$here/sample" "$out/gradle"
-gradle_props=(-PtoolgateSdkRepo="$repo" -PtoolgateSdkVersion="$version")
-"$root/gradlew" -q -p "$out/gradle" "${gradle_props[@]}" toolgatePackage
-"$TOOLGATE_CLI" validate "$out/gradle/build/toolgate/notes-1.0.0.tgpkg" | tee "$out/gradle.txt"
+# Maven caches release versions for good, so the SDK goes into a local repository of its own that is cleared each run.
+export MAVEN_OPTS="${MAVEN_OPTS:-} -Dmaven.repo.local=$root/build/java-sdk-e2e-m2"
+rm -rf "$root/build/java-sdk-e2e-m2/io/ololabs"
 
 request='{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
-echo "$request" | "$root/gradlew" -q -p "$out/gradle" "${gradle_props[@]}" toolgateDev >"$out/dev.txt" 2>"$out/dev.log"
-grep -q '"notes.notes.greet"' "$out/dev.txt" || { echo "e2e: toolgateDev did not list the tools"; cat "$out/dev.txt" "$out/dev.log"; exit 1; }
+for build in gradle maven; do
+  echo "e2e: $build"
+  project="$out/$build"
+  "$toolgate" init orders --build "$build" --dir "$project" --id acme.orders --publisher Acme --sdk-repo "$repo" >/dev/null
+  (cd "$project" && "$toolgate" check >"$out/$build-check.log" 2>&1) || { cat "$out/$build-check.log"; exit 1; }
+  (cd "$project" && "$toolgate" pack 2>"$out/$build-pack.log" | tee "$out/$build-pack.txt") || { cat "$out/$build-pack.log"; exit 1; }
+  (cd "$project" && echo "$request" | "$toolgate" dev >"$out/$build-dev.txt" 2>"$out/$build-dev.log")
+  grep -q '"orders.greet"' "$out/$build-dev.txt" || { echo "e2e: toolgate dev did not list the tools"; cat "$out/$build-dev.txt" "$out/$build-dev.log"; exit 1; }
+  (cd "$project" && "$toolgate" dev --digests 2>"$out/$build-digests.log" | tee "$out/$build-digests.txt")
+done
 
-echo "e2e: Maven"
-cp -R "$here/sample" "$out/maven"
-sed -i.bak -e "s#@SDK_REPO_URL@#$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).as_uri())' "$repo")#g" \
-  -e "s#@SDK_VERSION@#$version#g" "$out/maven/pom.xml"
-mvn -q -B -Dmaven.repo.local="$m2" -f "$out/maven/pom.xml" package
-"$TOOLGATE_CLI" validate "$out/maven/target/toolgate/notes-1.0.0.tgpkg" | tee "$out/maven.txt"
-
-gradle_set="$(grep descriptorSetDigest "$out/gradle.txt")"
-maven_set="$(grep descriptorSetDigest "$out/maven.txt")"
-if [ "$gradle_set" != "$maven_set" ]; then
-  echo "e2e: Gradle and Maven packages differ: $gradle_set vs $maven_set"
+sets="$(grep -h descriptorSetDigest "$out"/*-pack.txt "$out"/*-digests.txt | sort -u)"
+if [ "$(echo "$sets" | wc -l)" != 1 ]; then
+  echo "e2e: the builds and the development server disagree:"
+  echo "$sets"
   exit 1
 fi
-echo "e2e: passed ($gradle_set)"
+echo "e2e: passed ($sets)"
