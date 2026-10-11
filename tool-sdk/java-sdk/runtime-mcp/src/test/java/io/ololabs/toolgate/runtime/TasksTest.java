@@ -218,11 +218,6 @@ class TasksTest {
     }
 
     @Test
-    void requestInputInASyncCallNeedsRequestState() {
-        assertEquals("CONFIGURATION", server.error("demo.demo.inline", "{}").path("code").asText());
-    }
-
-    @Test
     void cancelStopsTheToolAndIsIdempotentOnceTerminal() throws InterruptedException {
         String id = start("demo.demo.report", "{\"ms\":10000}");
         until(server, id, status("working"), 1_000);

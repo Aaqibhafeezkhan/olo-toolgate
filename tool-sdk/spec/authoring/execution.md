@@ -44,6 +44,7 @@ A handler marked `Reconcile` receives `{businessKey?, invocationId, arguments}` 
 
 - `async = true` tools always run as tasks. A client that doesn't declare the Tasks extension on the request doesn't see them in `tools/list` and gets `MissingRequiredClientCapability` (-32021) on a direct call, unless an admin enabled bounded sync mode.
 - `progress()` updates the task status message; `requestInput()` moves the task to `input_required` until answered through `tasks/update`.
+- In a sync call `requestInput()` is MRTR (SEP-2322): the round ends with an `InputRequiredResult` and `requestState` ([protocol-layer.md](../protocol-layer.md) A3), and the handler runs again from the start with the answers. Code before `requestInput()` must be safe to repeat.
 - `cancelIfAbandoned`: no poll within 3 × `pollIntervalMs` requests cancellation.
 
 ## 7. Examples and self-tests

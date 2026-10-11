@@ -62,8 +62,9 @@ Rules that hold in every language:
 **Used in:** all four languages.
 
 - A compact JWS, HS256, with a per-process random key (at least 256 bits) in standalone mode. In governed mode the SDK never mints or verifies `requestState`: Control mints it with the ASK outcome and verifies it on the retry, and the Gateway holds no key (ADR 013, decision 9).
-- Payload `{toolId, argsHash, identity, scope, approvalId?, exp, nonce}`; `argsHash` is the `sha256:` digest of the JCS canonical arguments; `exp` at most 10 minutes after issue.
-- Verified before any re-dispatch: signature, `exp`, same `toolId`, same `argsHash`, same identity and scope. Each `nonce` is accepted once within its lifetime.
+- Payload `{toolId, argsHash, identity, scope, approvalId?, exp, nonce, responses}`; `argsHash` is the `sha256:` digest of the JCS canonical arguments; `exp` at most 10 minutes after issue; `responses` is the object of input responses from earlier rounds, so a retry sends only the new answers. The client supplied every response, so the payload is signed, not encrypted.
+- Verified before any re-dispatch: signature, `exp`, same `toolId`, same `argsHash`, same identity and scope. Each `nonce` is accepted once within its lifetime. Every refusal is the same `-32602` and reveals nothing about the original call.
+- The layer mints the state on every `InputRequiredResult`, and refuses with `-32021` an input request whose method needs a client capability the request did not declare (`elicitation`, `sampling` or `roots`). Input responses sent without a state are the client's own answers and are used as they are.
 - **Acceptance:** ToolGate MRTR cases: tampered payload, expired, other identity, other arguments, replay.
 
 ### A4 Identity

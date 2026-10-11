@@ -47,14 +47,15 @@ class ConformanceTest {
             Map.entry("startup/test-mode", "RuntimeTest#startupRefusals"),
             Map.entry("startup/audit-banner", "RuntimeTest#theStartupBannerSaysThereIsNoAudit"),
             Map.entry("runtime/cancel-grace", "TasksTest#aToolThatIgnoresCancellationIsAbandonedAfterTheGrace"),
-            Map.entry("context/request-input", "TasksTest#requestInputMovesTheTaskToInputRequiredUntilTasksUpdate"),
+            Map.entry("context/request-input", "TasksTest#requestInputMovesTheTaskToInputRequiredUntilTasksUpdate;MrtrTest#eachRoundAsksForTheNextAnswerAndTheLastCompletes"),
             Map.entry("tasks/capability-per-request", "TasksTest#tasksAreOfferedOnlyToRequestsThatDeclareThem,syncToolsStaySyncAndTheOldTaskHintIsIgnored"),
             Map.entry("tasks/foreign-identity", "TasksTest#anotherOwnerGetsNotFoundExactlyAsForAnUnknownId"),
             Map.entry("tasks/ttl-purge", "TasksTest#tasksArePurgedAfterTheirTtl"),
             Map.entry("tasks/cancel", "TasksTest#cancelStopsTheToolAndIsIdempotentOnceTerminal,aToolThatIgnoresCancellationIsAbandonedAfterTheGrace"),
             Map.entry("tasks/cancel-if-abandoned", "TasksTest#cancelIfAbandonedCancelsAfterThreeMissedPolls"),
             Map.entry("tasks/input-required", "TasksTest#requestInputMovesTheTaskToInputRequiredUntilTasksUpdate"),
-            Map.entry("startup/development-explicit", "HttpTest#onlyLoopbackAddressesStart"));
+            Map.entry("startup/development-explicit", "HttpTest#onlyLoopbackAddressesStart"),
+            Map.entry("official-sdk/a3-request-state", "MrtrTest#aStateIsRefusedWhenTamperedReplayedOrPresentedWithOtherArgumentsOrByAnotherIdentity"));
 
     @Test
     void everyMappedCaseExistsAndTargetsJava() throws IOException {
@@ -72,10 +73,12 @@ class ConformanceTest {
             JsonNode c = cases.get(run.getKey());
             assertNotNull(c, run.getKey());
             assertTrue(c.path("targets").toString().contains("\"java\""), run.getKey() + " does not target java");
-            String[] parts = run.getValue().split("#");
-            Class<?> type = assertDoesNotThrow(() -> Class.forName(getClass().getPackageName() + "." + parts[0]));
-            for (String method : parts[1].split(",")) {
-                assertDoesNotThrow(() -> type.getDeclaredMethod(method), run.getValue());
+            for (String target : run.getValue().split(";")) {
+                String[] parts = target.split("#");
+                Class<?> type = assertDoesNotThrow(() -> Class.forName(getClass().getPackageName() + "." + parts[0]));
+                for (String method : parts[1].split(",")) {
+                    assertDoesNotThrow(() -> type.getDeclaredMethod(method), run.getValue());
+                }
             }
         }
     }

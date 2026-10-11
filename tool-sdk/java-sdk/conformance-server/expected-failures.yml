@@ -5,18 +5,6 @@
 # @modelcontextprotocol/conformance@0.2.0-alpha.12 --requirements 2026-07-28.
 # The baseline counts warnings too. A scenario leaves this list in the PR that makes it pass; the run fails on a stale entry.
 server:
-  # MRTR InputRequiredResult and requestState: adapter A3, the next Java part.
-  - input-required-result-basic-elicitation
-  - input-required-result-basic-sampling
-  - input-required-result-basic-list-roots
-  - input-required-result-request-state
-  - input-required-result-multiple-input-requests
-  - input-required-result-multi-round
-  - input-required-result-result-type
-  - input-required-result-tampered-state
-  - input-required-result-capability-check
-  - input-required-result-missing-input-response
-  - input-required-result-ignore-extra-params
   # Prompts, resources and completions: ToolGate serves tools only, so these do not apply
   # (protocol-layer.md A1 acceptance counts the scenarios that apply to tools).
   - completion-complete

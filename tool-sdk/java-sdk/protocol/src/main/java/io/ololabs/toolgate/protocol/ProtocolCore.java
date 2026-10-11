@@ -26,11 +26,22 @@ public final class ProtocolCore {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private static final Set<String> TOP_LEVEL = Set.of("jsonrpc", "id", "method", "params");
 
+    /** The client capability each MRTR input request method needs (SEP-2322). */
+    private static final Map<String, String> INPUT_CAPABILITY = Map.of(
+            "elicitation/create", "elicitation", "sampling/createMessage", "sampling", "roots/list", "roots");
+
     private final ToolCatalog catalog;
+    private final RequestStates requestStates;
     private final Map<String, Subscription> subscriptions = new ConcurrentHashMap<>();
 
     public ProtocolCore(ToolCatalog catalog) {
+        this(catalog, new RequestStates());
+    }
+
+    /** A core with its own {@code requestState} signer (adapter A3). */
+    public ProtocolCore(ToolCatalog catalog, RequestStates requestStates) {
         this.catalog = catalog;
+        this.requestStates = requestStates;
         Tasks tasks = catalog.tasks();
         if (tasks != null) tasks.onChange(this::taskChanged);
     }
@@ -119,7 +130,7 @@ public final class ProtocolCore {
             if (headers != null) checkRoutingHeaders(method, params, headers);
             connection.lock(VERSION);
             RequestMeta request = new RequestMeta(VERSION, capabilities, extensions(capabilities), connection.transport, connection.owner,
-                    meta.get("progressToken"), notify);
+                    meta.get("progressToken"), notify, JSON.objectNode());
             ObjectNode result = switch (method) {
                 case "server/discover" -> discover();
                 case "tools/list" -> list(request);
@@ -285,10 +296,39 @@ public final class ProtocolCore {
         // Unrecognised members, such as the pre-SEP-2663 "task" hint, are ignored (SEP-2322); task creation is server-directed.
         JsonNode name = params.get("name");
         JsonNode arguments = params.get("arguments");
-        if (name == null || !name.isTextual() || (arguments != null && !arguments.isObject())) {
+        JsonNode responses = params.get("inputResponses");
+        JsonNode state = params.get("requestState");
+        if (name == null || !name.isTextual() || (arguments != null && !arguments.isObject())
+                || (responses != null && !validResponses(responses)) || (state != null && !state.isTextual())) {
             throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Invalid parameters");
         }
-        return catalog.call(name.asText(), arguments == null ? JSON.objectNode() : arguments, request);
+        JsonNode args = arguments == null ? JSON.objectNode() : arguments;
+        // A3: the state is verified before anything runs. Answers sent without one are only the client's own answers.
+        ObjectNode answers = JSON.objectNode();
+        if (state != null) answers.setAll(requestStates.verify(state.asText(), name.asText(), args, request));
+        if (responses != null) answers.setAll((ObjectNode) responses);
+        RequestMeta round = request.withInputResponses(answers);
+        ObjectNode result = catalog.call(name.asText(), args, round);
+        if ("input_required".equals(result.path("resultType").asText())) {
+            JsonNode inputs = result.path("inputRequests");
+            if (!inputs.isObject() || inputs.isEmpty()) throw new IllegalStateException("an InputRequiredResult needs inputRequests");
+            for (JsonNode input : inputs) {
+                String capability = INPUT_CAPABILITY.get(input.path("method").asText());
+                if (capability == null) throw new IllegalStateException("not an MRTR input request: " + input.path("method").asText());
+                if (!round.declaresCapability(capability)) throw ProtocolError.missingCapability(capability);
+            }
+            result.put("requestState", requestStates.mint(name.asText(), args, round, answers));
+        }
+        return result;
+    }
+
+    /** {@code inputResponses} is an object of response objects (SEP-2322); anything else is a protocol error. */
+    private static boolean validResponses(JsonNode responses) {
+        if (!responses.isObject()) return false;
+        for (JsonNode r : responses) {
+            if (!r.isObject()) return false;
+        }
+        return true;
     }
 
     private ObjectNode task(String method, JsonNode params, RequestMeta request) {

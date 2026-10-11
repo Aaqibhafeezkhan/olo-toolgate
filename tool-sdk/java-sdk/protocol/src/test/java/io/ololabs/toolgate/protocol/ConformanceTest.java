@@ -28,7 +28,9 @@ class ConformanceTest {
             Map.entry("tasks/status-push", "StreamableHttpServerTest#taskStatusChangesArePushedToListenersThatDeclaredTasks"),
             Map.entry("official-sdk/tasks-status-push", "StreamableHttpServerTest#taskStatusChangesArePushedToListenersThatDeclaredTasks"),
             Map.entry("legacy/stdio-era-lock", "StdioServerTest#theConnectionIsLockedToItsFirstEra"),
-            Map.entry("official-sdk/stdio-era", "StdioServerTest#theConnectionIsLockedToItsFirstEra"));
+            Map.entry("official-sdk/stdio-era", "StdioServerTest#theConnectionIsLockedToItsFirstEra"),
+            Map.entry("request-state/standalone-key", "RequestStatesTest#aTokenIsHs256AndBindsToolArgumentsIdentityAndScopeForAtMostTenMinutes,aTokenFromAnotherProcessKeyIsRefused,aKeyShorterThan256BitsIsRefused"),
+            Map.entry("official-sdk/a3-request-state", "RequestStatesTest#anExpiredTokenIsRefused,aForgedUnsignedOrReSignedPayloadIsRefused"));
 
     @Test
     void everyMappedCaseExistsAndTargetsJava() throws IOException {
