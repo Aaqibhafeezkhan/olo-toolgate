@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/service-profile.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Service profile",
+  "description": "Approved network destinations and routes, enforced by the broker by digest (plan.md §11.8, §11.9).",
+  "$ref": "#/$defs/ServiceProfile",
+  "$defs": {
+    "EgressMode": {
+      "type": "string",
+      "enum": [
+        "BROKERED",
+        "TUNNEL"
+      ],
+      "description": "Exclusive egress mode per destination."
+    },
+    "TlsSettings": {
+      "type": "object",
+      "description": "Upstream TLS verification.",
+      "additionalProperties": false,
+      "properties": {
+        "caBundle": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256
+        },
+        "spkiPins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "spkiPins"
+      ]
+    },
+    "DestinationScheme": {
+      "type": "string",
+      "enum": [
+        "https",
+        "tcp"
+      ],
+      "description": "https for routes, tcp for tunnel TCP."
+    },
+    "ServiceDestination": {
+      "type": "object",
+      "description": "Approved destination with its reviewed host.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "scheme": {
+          "$ref": "service-profile.schema.json#/$defs/DestinationScheme"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "tls": {
+          "$ref": "service-profile.schema.json#/$defs/TlsSettings"
+        },
+        "mode": {
+          "$ref": "service-profile.schema.json#/$defs/EgressMode"
+        }
+      },
+      "required": [
+        "id",
+        "scheme",
+        "host",
+        "port",
+        "tls",
+        "mode"
+      ]
+    },
+    "ServiceRoute": {
+      "$ref": "descriptor.schema.json#/$defs/RouteDeclaration",
+      "description": "Same shape as the declared route."
+    },
+    "PrivateRangeApproval": {
+      "type": "object",
+      "description": "Admin-approved private address range.",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "cidr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "maxItems": 32,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "host",
+        "cidr",
+        "ports"
+      ]
+    },
+    "ServiceProfile": {
+      "type": "object",
+      "description": "Service profile. Its digest and revision are pinned in the permit.",
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "destinations": {
+          "type": "array",
+          "items": {
+            "$ref": "service-profile.schema.json#/$defs/ServiceDestination"
+          },
+          "maxItems": 64
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "service-profile.schema.json#/$defs/ServiceRoute"
+          },
+          "maxItems": 256
+        },
+        "privateRanges": {
+          "type": "array",
+          "items": {
+            "$ref": "service-profile.schema.json#/$defs/PrivateRangeApproval"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "profileId",
+        "revision",
+        "packageId",
+        "destinations",
+        "routes",
+        "privateRanges"
+      ]
+    }
+  }
+}

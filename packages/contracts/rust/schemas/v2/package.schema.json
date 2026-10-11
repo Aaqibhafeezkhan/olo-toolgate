@@ -1,0 +1,658 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Tool package manifest v2",
+  "description": "toolgate-package.json in a .tgpkg (plan.md §7). Credential values are forbidden.",
+  "$ref": "#/$defs/PackageManifest",
+  "$defs": {
+    "PackageKind": {
+      "type": "string",
+      "enum": [
+        "SDK",
+        "CONTAINER",
+        "OPENAPI",
+        "MCP_PROXY"
+      ],
+      "description": "How the package executes."
+    },
+    "SdkLanguage": {
+      "type": "string",
+      "enum": [
+        "JAVA",
+        "PYTHON",
+        "TYPESCRIPT",
+        "DOTNET"
+      ],
+      "description": "SDK language."
+    },
+    "ProtocolRange": {
+      "type": "object",
+      "description": "Supported tool protocol range, inclusive.",
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "SdkInfo": {
+      "type": "object",
+      "description": "SDK that built the package.",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "$ref": "package.schema.json#/$defs/SdkLanguage"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "protocol": {
+          "$ref": "package.schema.json#/$defs/ProtocolRange"
+        },
+        "descriptorGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        }
+      },
+      "required": [
+        "language",
+        "version",
+        "protocol",
+        "descriptorGeneration"
+      ]
+    },
+    "PackageCompatibility": {
+      "type": "object",
+      "description": "Version requirements checked at enable.",
+      "additionalProperties": false,
+      "properties": {
+        "contractsVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "minimumToolHostVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "minimumClientVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        }
+      },
+      "required": [
+        "contractsVersion"
+      ]
+    },
+    "RuntimeDeclaration": {
+      "type": "object",
+      "description": "Language runtime a tool needs.",
+      "additionalProperties": false,
+      "properties": {
+        "runtimeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "baseImageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "runtimeId",
+        "language",
+        "version"
+      ]
+    },
+    "PackagedArtifact": {
+      "type": "object",
+      "description": "Executable artifact inside the package; artifactDigest = sha256 over its exact bytes.",
+      "additionalProperties": false,
+      "properties": {
+        "artifactId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^artifacts/[A-Za-z0-9._/-]+$"
+        },
+        "artifactDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runtimeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        }
+      },
+      "required": [
+        "artifactId",
+        "path",
+        "artifactDigest",
+        "sizeBytes",
+        "mediaType"
+      ]
+    },
+    "ToolLimits": {
+      "type": "object",
+      "description": "Tool resource requests; each at most the platform ceiling (plan.md §13.5).",
+      "additionalProperties": false,
+      "properties": {
+        "memoryBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxInputBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxOutputBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxArgumentProperties": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      },
+      "required": []
+    },
+    "ToolDefinition": {
+      "type": "object",
+      "description": "Tool definition v2: the semantic descriptor plus packaging members outside the digest.",
+      "additionalProperties": false,
+      "properties": {
+        "descriptor": {
+          "$ref": "descriptor.schema.json#/$defs/ToolDescriptor"
+        },
+        "toolDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "runtimeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "entryPoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "artifactIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "limits": {
+          "$ref": "package.schema.json#/$defs/ToolLimits"
+        }
+      },
+      "required": [
+        "descriptor",
+        "toolDescriptorDigest",
+        "artifactIds"
+      ]
+    },
+    "MappingKind": {
+      "type": "string",
+      "enum": [
+        "SECRET",
+        "GLOBAL",
+        "CLAIM",
+        "DESTINATION"
+      ],
+      "description": "Library mapping kind."
+    },
+    "CompositionMapping": {
+      "type": "object",
+      "description": "One applied library mapping.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "package.schema.json#/$defs/MappingKind"
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "kind",
+        "from",
+        "to"
+      ]
+    },
+    "CompositionRecord": {
+      "type": "object",
+      "description": "A library merged into the package (composition.md §2).",
+      "additionalProperties": false,
+      "properties": {
+        "libraryId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "fragmentDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "namespacePrefix": {
+          "$ref": "identifiers.schema.json#/$defs/NamespacePrefix"
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/CompositionMapping"
+          },
+          "maxItems": 128
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/ToolLocalName"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "narrowed": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/ToolLocalName"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "libraryId",
+        "version",
+        "fragmentDigest",
+        "namespacePrefix",
+        "mappings",
+        "excluded",
+        "narrowed"
+      ]
+    },
+    "ConnectionRequirement": {
+      "type": "object",
+      "description": "SaaS connection the package needs (plan.md §14.3).",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "scopes"
+      ]
+    },
+    "PackageLimits": {
+      "type": "object",
+      "description": "Package-level ceilings.",
+      "additionalProperties": false,
+      "properties": {
+        "maxTools": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "maxDescriptorBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      },
+      "required": [
+        "maxTools",
+        "maxDescriptorBytes"
+      ]
+    },
+    "PackageManifest": {
+      "type": "object",
+      "description": "Package manifest v2. v1 manifests stay readable and are upgraded on read.",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "const": 2
+        },
+        "kind": {
+          "$ref": "package.schema.json#/$defs/PackageKind"
+        },
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "publisher": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sdk": {
+          "$ref": "package.schema.json#/$defs/SdkInfo"
+        },
+        "compatibility": {
+          "$ref": "package.schema.json#/$defs/PackageCompatibility"
+        },
+        "runtimes": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/RuntimeDeclaration"
+          },
+          "maxItems": 8
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/ToolDefinition"
+          },
+          "maxItems": 64
+        },
+        "descriptorSetDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/PackagedArtifact"
+          },
+          "maxItems": 128
+        },
+        "credentialReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/SecretReference"
+          },
+          "maxItems": 128
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/ConnectionRequirement"
+          },
+          "maxItems": 16
+        },
+        "composition": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/CompositionRecord"
+          },
+          "maxItems": 32
+        },
+        "limits": {
+          "$ref": "package.schema.json#/$defs/PackageLimits"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "id",
+        "version",
+        "publisher",
+        "compatibility",
+        "runtimes",
+        "tools",
+        "descriptorSetDigest",
+        "artifacts",
+        "credentialReferences",
+        "connections",
+        "composition",
+        "limits"
+      ]
+    },
+    "PackageVersionState": {
+      "type": "string",
+      "enum": [
+        "UPLOADED",
+        "VERIFIED",
+        "IN_REVIEW",
+        "APPROVED",
+        "ROLLING_OUT",
+        "ACTIVE",
+        "PAUSED",
+        "ROLLED_BACK",
+        "DEPRECATED",
+        "DRAINING",
+        "RETIRED",
+        "REJECTED",
+        "SUSPENDED"
+      ],
+      "description": "Package version lifecycle state (plan.md §8.4)."
+    },
+    "ApiChange": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "PATCH",
+        "MINOR",
+        "MAJOR"
+      ],
+      "description": "Minimum SemVer bump the API diff requires (plan.md §8.3)."
+    },
+    "SecurityDeltaKind": {
+      "type": "string",
+      "enum": [
+        "PERMISSION",
+        "DESTINATION",
+        "ROUTE",
+        "SECRET",
+        "CONNECTION",
+        "CLAIM",
+        "RUNTIME_TIER",
+        "PUBLISHER_KEY",
+        "BASE_IMAGE",
+        "KIND",
+        "EFFECT_SAFETY",
+        "BUSINESS_KEY_NAMESPACE",
+        "UNCLASSIFIED"
+      ],
+      "description": "Security delta item kind (plan.md §8.3)."
+    },
+    "SecurityDeltaItem": {
+      "type": "object",
+      "description": "One security delta. UNCLASSIFIED counts as widening.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "package.schema.json#/$defs/SecurityDeltaKind"
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "widening": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "kind",
+        "widening",
+        "summary"
+      ]
+    },
+    "PackageVersion": {
+      "type": "object",
+      "description": "A tenant's uploaded package version.",
+      "additionalProperties": false,
+      "properties": {
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "descriptorSetDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "state": {
+          "$ref": "package.schema.json#/$defs/PackageVersionState"
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "uploadedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "manifest": {
+          "$ref": "package.schema.json#/$defs/PackageManifest"
+        }
+      },
+      "required": [
+        "packageId",
+        "version",
+        "packageDigest",
+        "descriptorSetDigest",
+        "state",
+        "revision",
+        "uploadedAtUnixMs"
+      ]
+    },
+    "PackageVersionPage": {
+      "type": "object",
+      "description": "Package versions.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/PackageVersion"
+          },
+          "maxItems": 100
+        },
+        "nextCursor": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "PackageReview": {
+      "type": "object",
+      "description": "Review and enable page data: both diffs and the values to fill.",
+      "additionalProperties": false,
+      "properties": {
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "previousPackageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "apiChange": {
+          "$ref": "package.schema.json#/$defs/ApiChange"
+        },
+        "securityDelta": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/SecurityDeltaItem"
+          },
+          "maxItems": 512
+        },
+        "bindingDraft": {
+          "$ref": "deployment-binding.schema.json#/$defs/DeploymentBinding"
+        }
+      },
+      "required": [
+        "packageId",
+        "version",
+        "packageDigest",
+        "apiChange",
+        "securityDelta",
+        "bindingDraft"
+      ]
+    },
+    "PackageEnableRequest": {
+      "type": "object",
+      "description": "Enable exactly the reviewed digest with this binding.",
+      "additionalProperties": false,
+      "properties": {
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "binding": {
+          "$ref": "deployment-binding.schema.json#/$defs/DeploymentBinding"
+        },
+        "acknowledgedSecurityDelta": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "packageDigest",
+        "binding",
+        "acknowledgedSecurityDelta"
+      ]
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/catalog.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Catalog scope",
+  "description": "Which permitted tools an MCP endpoint shows (plan.md §9.4). Only narrows, never widens.",
+  "$ref": "#/$defs/CatalogScope",
+  "$defs": {
+    "CatalogScopeKind": {
+      "type": "string",
+      "enum": [
+        "ALL",
+        "AGENT",
+        "AGENT_GROUP",
+        "AGENT_IN_GROUP"
+      ],
+      "description": "Scope kind compiled from the URL route."
+    },
+    "CatalogScope": {
+      "type": "object",
+      "description": "Catalog scope.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "catalog.schema.json#/$defs/CatalogScopeKind"
+        },
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Slug"
+        },
+        "agentGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Slug"
+        },
+        "toolsets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "kind",
+        "toolsets",
+        "revision"
+      ]
+    },
+    "CompatibilityProfile": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "LLM_STRICT"
+      ],
+      "description": "Client naming profile (plan.md §10.4)."
+    }
+  }
+}

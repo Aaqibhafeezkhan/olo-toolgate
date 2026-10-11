@@ -22,10 +22,13 @@ final class ContractRoundTripTest {
         int checked = 0;
         while (fields.hasNext()) {
             var fixture = fields.next();
-            if (java.util.Set.of("Identifier", "SemanticVersion", "Sha256", "SecretReference").contains(fixture.getKey())) {
+            Class<?> type;
+            try {
+                type = Class.forName("io.ololabs.toolgate.contracts." + fixture.getKey());
+            } catch (ClassNotFoundException primitiveDefinition) {
+                // Primitive definitions (identifiers, digests, names) have no generated class.
                 continue;
             }
-            var type = Class.forName("io.ololabs.toolgate.contracts." + fixture.getKey());
             var model = mapper.treeToValue(fixture.getValue(), type);
             assertEquals(fixture.getValue(), mapper.readTree(mapper.writeValueAsString(model)), fixture.getKey());
             checked++;

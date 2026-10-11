@@ -171,7 +171,8 @@ def main():
     if not args.contracts_only: python('tools/quickstart/check.py','--build')
     python('tools/ui/package.py')
     run(['php','packages/contracts/php/tests/roundtrip.php'])
-    for source in sorted((ROOT/'packages/contracts/php/src').glob('*.php')):
+    run(['php','packages/contracts/php/tests/roundtrip_v2.php'])
+    for source in sorted((ROOT/'packages/contracts/php/src').rglob('*.php')):
         run(['php','-l',source.relative_to(ROOT).as_posix()], capture=True)
     if not args.contracts_only: helm_checks()
     print('All required foundation, gateway, control and admin UI gates passed')

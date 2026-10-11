@@ -24,6 +24,12 @@ def outputs():
  p=ROOT/'packages/contracts/rust/tests/roundtrip.rs';s=p.read_text(encoding='utf-8');a=s.index('    check!(');b=s.index('    );',a)+len('    );');out[p]=s[:a]+'    check!(\n'+''.join('        '+n+',\n' for n in models)+'    );'+s[b:]
  p=ROOT/'packages/contracts/java/src/test/java/io/ololabs/toolgate/contracts/ContractRoundTripTest.java';out[p]=re.sub(r'assertEquals\(\d+, checked\);',f'assertEquals({len(models)}, checked);',p.read_text(encoding='utf-8'))
  p=ROOT/'packages/contracts/php/tests/roundtrip.php';out[p]=re.sub(r'if \(\$count !== \d+\)',f'if ($count !== {len(models)})',p.read_text(encoding='utf-8'))
+ defs2={n:s for p in (ROOT/'packages/contracts/schemas/v2').glob('*.json') for n,s in json.loads(p.read_text(encoding='utf-8'))['$defs'].items()}
+ # v2: tests/fixtures/contracts/v2/valid.json is the hand-written corpus; aliases are Rust-only types.
+ structural=sorted(n for n,s in defs2.items() if s.get('type')=='object' or 'enum' in s);aliases=sorted(n for n,s in defs2.items() if '$ref' in s)
+ p=ROOT/'packages/contracts/rust/tests/roundtrip_v2.rs';s=p.read_text(encoding='utf-8');a=s.index('    check!(');b=s.index('    );',a)+len('    );');out[p]=s[:a]+'    check!(\n'+''.join('        '+n+',\n' for n in sorted(structural+aliases))+'    );'+s[b:]
+ p=ROOT/'packages/contracts/java/src/test/java/io/ololabs/toolgate/contracts/ContractV2RoundTripTest.java';out[p]=re.sub(r'MODELS = Set\.of\([^)]*\);','MODELS = Set.of(\n'+',\n'.join('        "'+n+'"' for n in structural)+');',p.read_text(encoding='utf-8'))
+ p=ROOT/'packages/contracts/php/tests/roundtrip_v2.php';out[p]=re.sub(r'\$models = \[[^\]]*\];','$models = [\n'+',\n'.join("    '"+n+"'" for n in structural)+'\n];',p.read_text(encoding='utf-8'))
  return out
 
 def main():

@@ -1,0 +1,433 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Tool protocol v2",
+  "description": "Launcher stdin/stdout frames and Tool Host admission messages (plan.md §11.3, §13.3). v1 stays accepted.",
+  "$ref": "#/$defs/ToolInput",
+  "$defs": {
+    "SecretHandle": {
+      "type": "object",
+      "description": "Secret handle, redeemed per call with the fencing token. Never a value.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "handle": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "name",
+        "handle"
+      ]
+    },
+    "ToolInput": {
+      "type": "object",
+      "description": "First stdin frame.",
+      "additionalProperties": false,
+      "properties": {
+        "protocolVersion": {
+          "type": "integer",
+          "const": 2
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "taskId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "entryPoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "arguments": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "globals": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "claims": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "secretHandles": {
+          "type": "array",
+          "items": {
+            "$ref": "protocol.schema.json#/$defs/SecretHandle"
+          },
+          "maxItems": 64
+        },
+        "deadlineUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "catalogRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "traceparent": {
+          "type": "string",
+          "minLength": 55,
+          "maxLength": 55,
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "invocationId",
+        "toolId",
+        "entryPoint",
+        "arguments",
+        "globals",
+        "claims",
+        "secretHandles",
+        "deadlineUnixMs",
+        "catalogRevision"
+      ]
+    },
+    "FrameKind": {
+      "type": "string",
+      "enum": [
+        "RESULT",
+        "PROGRESS",
+        "INPUT_REQUEST",
+        "LOG"
+      ],
+      "description": "Output frame kind."
+    },
+    "ResultType": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "input_required",
+        "task"
+      ],
+      "description": "MCP resultType."
+    },
+    "ToolErrorBody": {
+      "type": "object",
+      "description": "Error per tool-sdk/spec/authoring/errors.md.",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "identifiers.schema.json#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "data": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ]
+    },
+    "ResultFrame": {
+      "type": "object",
+      "description": "Terminal output frame.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "RESULT"
+        },
+        "resultType": {
+          "$ref": "protocol.schema.json#/$defs/ResultType"
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "JSON object; contents validated by the named schema at the boundary."
+          },
+          "maxItems": 256
+        },
+        "structuredContent": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "isError": {
+          "type": "boolean"
+        },
+        "error": {
+          "$ref": "protocol.schema.json#/$defs/ToolErrorBody"
+        }
+      },
+      "required": [
+        "kind",
+        "resultType",
+        "content",
+        "isError"
+      ]
+    },
+    "ProgressFrame": {
+      "type": "object",
+      "description": "Progress frame.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "PROGRESS"
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "kind",
+        "fraction"
+      ]
+    },
+    "InputRequestFrame": {
+      "type": "object",
+      "description": "Tool asks for input (MRTR or tasks/update).",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "INPUT_REQUEST"
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "request": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "kind",
+        "requestId",
+        "request"
+      ]
+    },
+    "LogLevel": {
+      "type": "string",
+      "enum": [
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ],
+      "description": "Log level."
+    },
+    "LogFrame": {
+      "type": "object",
+      "description": "Redacted, size-capped log line.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "LOG"
+        },
+        "level": {
+          "$ref": "protocol.schema.json#/$defs/LogLevel"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "kind",
+        "level",
+        "message"
+      ]
+    },
+    "Dispatch": {
+      "type": "object",
+      "description": "Gateway to Tool Host.",
+      "additionalProperties": false,
+      "properties": {
+        "permit": {
+          "$ref": "permit.schema.json#/$defs/SignedInvocationPermit"
+        },
+        "arguments": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "permit",
+        "arguments"
+      ]
+    },
+    "RefusalReason": {
+      "type": "string",
+      "enum": [
+        "BUSY",
+        "DIGEST_NOT_PRESENT",
+        "STALE_SEQUENCE",
+        "PERMIT_INVALID",
+        "PERMIT_EXPIRED",
+        "STORE_UNAVAILABLE",
+        "AUDIT_UNAVAILABLE",
+        "UNSUPPORTED_TIER",
+        "KILLED"
+      ],
+      "description": "Definitive refusal; nothing ran."
+    },
+    "AdmissionKind": {
+      "type": "string",
+      "enum": [
+        "ADMITTED",
+        "REFUSED"
+      ],
+      "description": "Admission outcome."
+    },
+    "AdmissionResponse": {
+      "type": "object",
+      "description": "Tool Host to Gateway, sent before any sandbox starts.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "protocol.schema.json#/$defs/AdmissionKind"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "reason": {
+          "$ref": "protocol.schema.json#/$defs/RefusalReason"
+        }
+      },
+      "required": [
+        "kind",
+        "invocationId"
+      ]
+    },
+    "InvocationOutcome": {
+      "type": "string",
+      "enum": [
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED",
+        "OUTCOME_UNKNOWN"
+      ],
+      "description": "Result outcome."
+    },
+    "ResultMessage": {
+      "type": "object",
+      "description": "Tool Host to Gateway.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "outcome": {
+          "$ref": "protocol.schema.json#/$defs/InvocationOutcome"
+        },
+        "result": {
+          "$ref": "protocol.schema.json#/$defs/ResultFrame"
+        }
+      },
+      "required": [
+        "invocationId",
+        "outcome"
+      ]
+    },
+    "ToolHostRegistration": {
+      "type": "object",
+      "description": "Tool Host registration with its workload identity (mTLS).",
+      "additionalProperties": false,
+      "properties": {
+        "hostId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "poolId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "protocol": {
+          "$ref": "package.schema.json#/$defs/ProtocolRange"
+        },
+        "launcherVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/RuntimeTier"
+          },
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "hostId",
+        "poolId",
+        "version",
+        "protocol",
+        "launcherVersion",
+        "tiers"
+      ]
+    },
+    "InvocationResultReport": {
+      "type": "object",
+      "description": "Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10).",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "outcome": {
+          "$ref": "protocol.schema.json#/$defs/InvocationOutcome"
+        },
+        "result": {
+          "$ref": "protocol.schema.json#/$defs/ResultFrame"
+        },
+        "notStarted": {
+          "$ref": "protocol.schema.json#/$defs/RefusalReason"
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "outcome"
+      ]
+    }
+  }
+}
