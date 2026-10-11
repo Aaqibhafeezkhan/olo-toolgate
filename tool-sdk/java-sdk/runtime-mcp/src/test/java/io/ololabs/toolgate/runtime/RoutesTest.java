@@ -34,8 +34,8 @@ import org.junit.jupiter.api.Test;
 
 /** The routes HTTP client (http.md) against a local upstream, in development mode over plain loopback HTTP. */
 class RoutesTest {
-    static final String KEY = "k-secret-123456";
-    static final String TOKEN = "tok-abcdef-987654";
+    static final String KEY = "fixture-api-value";
+    static final String TOKEN = "fixture-access-value";
     static ClassLoader shop;
     static HttpServer upstream;
     static Fixtures.Server server;
