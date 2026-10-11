@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
 
 /** An AI-supplied input on a handler parameter, or a property on a record component. */
 @Documented
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.PARAMETER, ElementType.RECORD_COMPONENT})
 public @interface Param {
     /** Defaults to the source spelling of the parameter or component. */

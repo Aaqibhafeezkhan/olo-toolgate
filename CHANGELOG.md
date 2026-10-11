@@ -6,6 +6,17 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java Tool SDK runs tools standalone (`tool-sdk/java-sdk`, M0 part 3).
+  `toolgate-protocol` serves MCP 2026-07-28 over stdio (per-request `_meta`, the stdio
+  era lock, `server/discover`, `tools/list`, `tools/call`), and
+  `toolgate-sdk-runtime-mcp` dispatches calls to annotated handlers with input and
+  output schema validation, size limits, `maxConcurrency`, deadlines, the errors.md
+  error model and redaction. It refuses at startup what it cannot serve yet: client
+  tools, business-key tools, and identity tools in production. Tasks, the identity
+  verifier, the legacy 2025-11-25 path, Streamable HTTP and the route client come in
+  later parts. `@Param` is now retained at run time, and the processor's
+  `package.json` carries each tool's declared error `dataSchema`s.
+
 - The Tool SDK has its Java authoring API and descriptor processor (`tool-sdk/java-sdk`,
   M0 part 2). `toolgate-sdk-api` holds the annotations of authoring/java.md,
   `ToolContext` and the error hierarchy; `toolgate-sdk-processor` turns them into

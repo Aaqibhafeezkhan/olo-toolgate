@@ -39,7 +39,7 @@ allprojects {
 
 tasks.named("check") { dependsOn("javaCheck") }
 tasks.named("build") {
-    dependsOn(":contracts-java:build", ":control-plane:build", ":marketplace-api:build", ":marketplace-worker:build", ":sdk-java-api:build", ":sdk-java-processor:build")
+    dependsOn(":contracts-java:build", ":control-plane:build", ":marketplace-api:build", ":marketplace-worker:build", ":sdk-java-api:build", ":sdk-java-processor:build", ":sdk-java-protocol:build", ":sdk-java-runtime-mcp:build")
 }
 
 subprojects {
@@ -71,6 +71,8 @@ tasks.register("javaCheck") {
         ":marketplace-worker:check",
         ":sdk-java-api:check",
         ":sdk-java-processor:check",
+        ":sdk-java-protocol:check",
+        ":sdk-java-runtime-mcp:check",
     )
 }
 
