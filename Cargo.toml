@@ -6,6 +6,7 @@ members = [
   "packages/contracts/rust",
   "apps/gateway",
   "apps/endpoint-client",
+  "tool-sdk/cli",
 ]
 
 [workspace.package]

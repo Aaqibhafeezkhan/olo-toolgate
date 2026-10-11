@@ -6,6 +6,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Tool SDK has its packager: the `toolgate` CLI (`tool-sdk/cli`, M0 part 1). It
+  computes canonical descriptor bytes and the `toolDescriptorDigest`,
+  `descriptorSetDigest` and `packageDigest`, compares descriptors under the equivalence
+  rewrites, and packs, validates and verifies `.tgpkg` archives offline under the
+  archive rules of plan.md §7.6. It passes the descriptor vectors, all 20 package
+  archive fixtures and the v2 schema fixtures. The archive fixtures' stub manifest now
+  names the artifact digest `artifactDigest`, as `PackagedArtifact` v2 does.
+
 - The contract set is `1.0.0` (v2-generation.md decision 7). The v1 schemas now use the
   v2 request context: `RequestContext`, `CredentialKind`, `RequestMode` (was
   `EnterpriseRequestMode`) and `ActorHop` (was `EnterpriseActorHop`) are defined only in

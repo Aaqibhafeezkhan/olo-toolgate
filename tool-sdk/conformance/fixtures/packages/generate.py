@@ -32,7 +32,7 @@ def manifest(artifact_digest):
     return (json.dumps({
         '$comment': 'Archive-rule fixture only; not a complete PackageManifest.',
         'id': 'acme.orders', 'version': '1.0.0',
-        'artifacts': [{'path': 'artifacts/app.bin', 'digest': 'sha256:' + artifact_digest}],
+        'artifacts': [{'path': 'artifacts/app.bin', 'artifactDigest': 'sha256:' + artifact_digest}],
     }, sort_keys=True, separators=(',', ':')) + '\n').encode()
 
 

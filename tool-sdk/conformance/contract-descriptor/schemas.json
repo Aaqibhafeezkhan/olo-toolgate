@@ -25,7 +25,8 @@
       "fixtures": [
         "tests/fixtures/contracts/v2/valid.json"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "tool-sdk/cli/tests/schemas.rs every_v2_valid_fixture_validates"
     },
     {
       "id": "schemas/v2-invalid",
@@ -44,7 +45,8 @@
       "fixtures": [
         "tests/fixtures/contracts/v2/invalid.json"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "tool-sdk/cli/tests/schemas.rs every_v2_invalid_fixture_is_rejected"
     },
     {
       "id": "schemas/generated-bindings",
