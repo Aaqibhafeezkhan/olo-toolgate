@@ -70,6 +70,30 @@ class AdmissionTests(unittest.TestCase):
                 with self.subTest(workflow=path.name):
                     self.assertTrue({'opened','synchronize','reopened','edited'}.issubset(events['pull_request']['types']))
 
+    def test_five_ci_workflows_only_trigger_for_main_pushes_and_pr_targets(self):
+        root=Path(__file__).resolve().parents[2]
+        for name in ('foundation','client','control','gateway','quickstart'):
+            document=yaml.safe_load((root/f'.github/workflows/{name}.yml').read_text())
+            events=document.get('on',document.get(True,{}))
+            with self.subTest(workflow=name):
+                expected={'push','pull_request','workflow_dispatch'}
+                if name=='client':expected.add('workflow_call')
+                self.assertEqual(set(events),expected)
+                self.assertEqual(events['push'],{'branches':['main']})
+                self.assertEqual(events['pull_request']['branches'],['main'])
+                self.assertTrue(document['jobs']['admission']['with']['main_only'])
+
+    def test_main_only_admission_is_opt_in_for_separate_release_workflows(self):
+        root=Path(__file__).resolve().parents[2]
+        document=yaml.safe_load((root/'.github/workflows/admission.yml').read_text())
+        events=document.get('on',document.get(True,{}))
+        self.assertEqual(events['workflow_call']['inputs']['main_only']['type'],'boolean')
+        self.assertIs(events['workflow_call']['inputs']['main_only']['default'],False)
+        release=yaml.safe_load((root/'.github/workflows/release-foundation.yml').read_text())
+        events=release.get('on',release.get(True,{}))
+        self.assertEqual(events['push'],{'tags':['v*']})
+        self.assertNotIn('main_only',release['jobs']['admission']['with'])
+
     def test_pr_entrypoint_requires_exact_enabled_variable_without_api_credentials(self):
         for enabled in ('true','false','True','',None):
             with self.subTest(enabled=enabled):

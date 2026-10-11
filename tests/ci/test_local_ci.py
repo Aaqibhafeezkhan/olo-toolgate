@@ -90,9 +90,11 @@ class LocalCiTests(unittest.TestCase):
         self.assertEqual(rows['client.native']['kind'], 'native')
 
     def test_real_triggers_including_release_and_development_are_loaded(self):
-        self.assertEqual(self.workflows['foundation']['on']['push']['branches'], ['main'])
-        self.assertEqual(self.workflows['gateway']['on']['push']['tags'], ['v*'])
-        self.assertIn('pull_request', self.workflows['client']['on'])
+        for name in ('foundation', 'client', 'control', 'gateway', 'quickstart'):
+            with self.subTest(workflow=name):
+                self.assertEqual(self.workflows[name]['on']['push'], {'branches': ['main']})
+                self.assertEqual(self.workflows[name]['on']['pull_request']['branches'], ['main'])
+        self.assertEqual(self.workflows['release-foundation']['on']['push']['tags'], ['v*'])
         self.assertEqual(self.workflows['development-release']['on']['workflow_run']['workflows'], ['control'])
         self.assertEqual(set(self.workflows['manual-development-release']['on']), {'workflow_dispatch'})
 

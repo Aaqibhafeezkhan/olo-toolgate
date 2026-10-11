@@ -15,6 +15,20 @@ the earliest allowed execution is Monday October 12 at 00:00 IST.
 To enable later, open GitHub Settings → Secrets and variables → Actions →
 Variables and set `TOOLGATE_CI_ENABLED=true`. To pause again, set it to `false`.
 
+The five CI workflows (`foundation`, `endpoint-client`, `control`, `gateway`
+and `quickstart`) run automatically only for pushes to `main` and PRs targeting
+`main`. Their manual dispatches and reusable calls also require `main`, or a PR
+targeting `main`, through the shared admission workflow's `main_only` input.
+Other branch pushes, PR targets and tag pushes do not trigger these five.
+The separate `release-foundation` workflow retains its `v*` tag trigger.
+Tag publishing in `control`, `gateway` and `quickstart` is unavailable while
+these five workflows are restricted to `main`; their publish jobs require a
+tag and are skipped on `main`, even if a manual dispatch sets `publish=true`.
+
+GitHub shows PR runs under the PR's source branch in Actions, even when the
+target is `main`. Manual dispatch on another branch can create a skipped
+workflow entry; its admission and build jobs do not run.
+
 - Push: the latest commit message must start with the exact, case-sensitive
   prefix `RC:`, for example `RC: validate Windows installer`. An earlier RC
   commit in the same push does not qualify the latest non-RC commit.

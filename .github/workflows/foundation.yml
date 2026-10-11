@@ -3,6 +3,7 @@
 name: foundation
 on:
   pull_request:
+    branches: [main]
     types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
@@ -22,6 +23,7 @@ jobs:
     uses: ./.github/workflows/admission.yml
     with:
       comment: ${{ inputs.comment || '' }}
+      main_only: true
   preflight:
     needs: admission
     if: needs.admission.outputs.allow == 'true'
