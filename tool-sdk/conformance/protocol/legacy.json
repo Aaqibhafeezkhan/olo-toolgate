@@ -64,7 +64,8 @@
       "then": [
         "UnsupportedProtocolVersion"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "apps/gateway/tests/core.rs legacy_adapter_refuses_other_versions_and_never_pins_identity"
     },
     {
       "id": "legacy/reauth-every-request",
@@ -80,7 +81,8 @@
       "then": [
         "401; identity is never pinned to the session"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "apps/gateway/tests/core.rs legacy_adapter_refuses_other_versions_and_never_pins_identity"
     },
     {
       "id": "legacy/scope-not-pinned",
@@ -112,7 +114,8 @@
       "then": [
         "The _meta version decides"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "apps/gateway/tests/core.rs modern_core_drops_ping_and_discovers_every_supported_version"
     },
     {
       "id": "legacy/approval-link",

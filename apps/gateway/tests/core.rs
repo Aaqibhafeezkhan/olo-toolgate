@@ -514,3 +514,165 @@ async fn tcp_service_and_graceful_shutdown_use_the_current_wire() {
     task.await.unwrap().unwrap();
     assert!(TcpStream::connect(address).await.is_err());
 }
+fn legacy(version: Option<&str>, body: Value) -> Request<Body> {
+    let mut r = req("/mcp", body);
+    r.headers_mut().insert(
+        "accept",
+        "application/json, text/event-stream".parse().unwrap(),
+    );
+    if let Some(version) = version {
+        r.headers_mut()
+            .insert("mcp-protocol-version", version.parse().unwrap());
+        r.headers_mut()
+            .insert("mcp-session-id", "4f2a9c".parse().unwrap());
+    }
+    r
+}
+#[tokio::test]
+async fn modern_core_drops_ping_and_discovers_every_supported_version() {
+    let s = state(Arc::new(Authority::default()));
+    let (code, body) = call(runtime_router(s.clone()), mcp("ping", None)).await;
+    assert_eq!(code, StatusCode::NOT_FOUND);
+    assert_eq!(body["error"]["code"], -32601);
+    let (code, body) = call(runtime_router(s.clone()), mcp("server/discover", None)).await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(
+        body["result"]["supportedVersions"],
+        json!(["2026-07-28", "2025-11-25", "2025-06-18"])
+    );
+    assert_eq!(body["result"]["resultType"], "complete");
+    // The _meta version decides: a legacy header on a modern request is a mismatch.
+    let mut r = mcp("tools/list", None);
+    r.headers_mut()
+        .insert("mcp-protocol-version", "2025-06-18".parse().unwrap());
+    let (code, body) = call(runtime_router(s), r).await;
+    assert_eq!(code, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"]["code"], -32020);
+}
+#[tokio::test]
+async fn legacy_session_flow_runs_on_the_stateless_core() {
+    for version in ["2025-11-25", "2025-06-18"] {
+        let a = Arc::new(Authority::default());
+        let s = state(a.clone());
+        let response = runtime_router(s.clone())
+            .oneshot(legacy(
+                None,
+                json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":version,"capabilities":{},"clientInfo":{"name":"legacy-client","version":"1.0.0"}}}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let session = response.headers()["mcp-session-id"]
+            .to_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(session.len(), 32);
+        let bytes = to_bytes(response.into_body(), 1048576).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["result"]["protocolVersion"], version);
+        assert_eq!(
+            body["result"]["capabilities"]["tools"]["listChanged"],
+            false
+        );
+        assert!(body["result"].get("resultType").is_none());
+        let response = runtime_router(s.clone())
+            .oneshot(legacy(
+                Some(version),
+                json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let (code, body) = call(
+            runtime_router(s.clone()),
+            legacy(
+                Some(version),
+                json!({"jsonrpc":"2.0","id":2,"method":"ping"}),
+            ),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK);
+        assert_eq!(body["result"], json!({}));
+        let (code, body) = call(
+            runtime_router(s.clone()),
+            legacy(
+                Some(version),
+                json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}),
+            ),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK);
+        assert_eq!(body["result"]["tools"][0]["name"], "files.read");
+        assert!(body["result"].get("ttlMs").is_none());
+        let (code, body) = call(
+            runtime_router(s.clone()),
+            legacy(
+                Some(version),
+                json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"files.read","arguments":payload()["arguments"]}}),
+            ),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK);
+        assert_eq!(body["result"]["structuredContent"]["ok"], true);
+        assert!(body["result"].get("resultType").is_none());
+        assert!(a.submission.lock().unwrap().is_some());
+        let response = runtime_router(s)
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/mcp")
+                    .header("authorization", format!("Bearer {TOKEN}"))
+                    .header("accept", "text/event-stream")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+    }
+}
+#[tokio::test]
+async fn legacy_adapter_refuses_other_versions_and_never_pins_identity() {
+    let s = state(Arc::new(Authority::default()));
+    let (code, body) = call(
+        runtime_router(s.clone()),
+        legacy(
+            None,
+            json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"old","version":"1"}}}),
+        ),
+    )
+    .await;
+    assert_eq!(code, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"]["code"], -32022);
+    assert_eq!(
+        body["error"]["data"]["supported"],
+        json!(["2026-07-28", "2025-11-25", "2025-06-18"])
+    );
+    let (_, body) = call(
+        runtime_router(s.clone()),
+        legacy(
+            Some("2024-11-05"),
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+        ),
+    )
+    .await;
+    assert_eq!(body["error"]["code"], -32022);
+    assert_eq!(body["error"]["data"]["requested"], "2024-11-05");
+    // A session id is a label, not a credential: without the bearer the request fails.
+    let mut r = legacy(
+        Some("2025-06-18"),
+        json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}),
+    );
+    r.headers_mut().remove("authorization");
+    let response = runtime_router(s.clone()).oneshot(r).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let mut r = legacy(
+        Some("2025-06-18"),
+        json!({"jsonrpc":"2.0","id":4,"method":"tools/list"}),
+    );
+    r.headers_mut()
+        .insert("mcp-session-id", "x".repeat(129).parse().unwrap());
+    let (code, body) = call(runtime_router(s), r).await;
+    assert_eq!(code, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"]["code"], -32600);
+}
