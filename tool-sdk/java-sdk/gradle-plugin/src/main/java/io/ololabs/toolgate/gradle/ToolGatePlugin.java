@@ -31,7 +31,7 @@ public final class ToolGatePlugin implements Plugin<Project> {
     public static final String ID = "io.ololabs.toolgate.sdk";
     static final String GROUP = "io.ololabs.toolgate";
     static final String RUNTIME_MAIN = "io.ololabs.toolgate.runtime.Main";
-    static final String BUILD_MAIN = "io.ololabs.toolgate.build.Main";
+    static final String BUILD_MAIN = "io.ololabs.toolgate.sdkbuild.Main";
     static final String TASK_GROUP = "toolgate";
 
     @Override

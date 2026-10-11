@@ -23,7 +23,7 @@ import org.apache.maven.project.MavenProject;
  */
 abstract class AbstractToolGateMojo extends AbstractMojo {
     static final String RUNTIME_MAIN = "io.ololabs.toolgate.runtime.Main";
-    static final String BUILD_MAIN = "io.ololabs.toolgate.build.Main";
+    static final String BUILD_MAIN = "io.ololabs.toolgate.sdkbuild.Main";
 
     MavenProject project;
     List<Artifact> pluginArtifacts;
