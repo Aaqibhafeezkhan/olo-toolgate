@@ -3,6 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 use serde::{Deserialize, Serialize};
+
+/// Contract set v2 models, side by side with v1 during migration.
+pub mod v2;
 /// Server-verified administrator portal session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

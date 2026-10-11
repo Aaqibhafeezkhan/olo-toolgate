@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/settings.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Control server settings v2",
+  "description": "ControlServerSettings formatVersion 2 and client check-in values (plan.md §17, §18).",
+  "$ref": "#/$defs/ControlServerSettings",
+  "$defs": {
+    "ValueSource": {
+      "type": "string",
+      "enum": [
+        "ENVIRONMENT",
+        "DATABASE",
+        "DEFAULT"
+      ],
+      "description": "Where a setting comes from."
+    },
+    "ClientCheckIn": {
+      "type": "object",
+      "description": "Effective Phase A check-in values. Env-owned, read-only in the console.",
+      "additionalProperties": false,
+      "properties": {
+        "checkInMs": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 3600000
+        },
+        "jitterPct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "offlineAfterMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 86400000
+        },
+        "source": {
+          "$ref": "settings.schema.json#/$defs/ValueSource"
+        }
+      },
+      "required": [
+        "checkInMs",
+        "jitterPct",
+        "offlineAfterMs",
+        "source"
+      ]
+    },
+    "DeviceApproval": {
+      "type": "object",
+      "description": "Device approval settings.",
+      "additionalProperties": false,
+      "properties": {
+        "autoApprove": {
+          "type": "boolean"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ownerUserId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "autoApprove"
+      ]
+    },
+    "GatewaySettings": {
+      "type": "object",
+      "description": "Gateway settings.",
+      "additionalProperties": false,
+      "properties": {
+        "gatewayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "gatewayName"
+      ]
+    },
+    "ControlServerSettings": {
+      "type": "object",
+      "description": "Settings record. revision is compared with If-Match.",
+      "additionalProperties": false,
+      "properties": {
+        "formatVersion": {
+          "type": "integer",
+          "const": 2
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "gateway": {
+          "$ref": "settings.schema.json#/$defs/GatewaySettings"
+        },
+        "deviceApproval": {
+          "$ref": "settings.schema.json#/$defs/DeviceApproval"
+        },
+        "clientCheckIn": {
+          "$ref": "settings.schema.json#/$defs/ClientCheckIn"
+        }
+      },
+      "required": [
+        "formatVersion",
+        "revision",
+        "gateway",
+        "deviceApproval",
+        "clientCheckIn"
+      ]
+    },
+    "ControlServerSettingsPatch": {
+      "type": "object",
+      "description": "application/merge-patch+json body. Env-owned clientCheckIn is not patchable.",
+      "additionalProperties": false,
+      "properties": {
+        "gateway": {
+          "$ref": "settings.schema.json#/$defs/GatewaySettings"
+        },
+        "deviceApproval": {
+          "$ref": "settings.schema.json#/$defs/DeviceApproval"
+        }
+      },
+      "required": []
+    }
+  }
+}

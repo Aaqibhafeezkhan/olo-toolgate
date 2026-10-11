@@ -4,7 +4,7 @@
 
 Canonical v2 wire definitions for the Tool SDK and governed tool platform. They are **frozen design artifacts**: nothing consumes them until milestone M1, and after D1 they change only through an amendment to the ADR that owns them, which reopens D1. ADR 016 amended the set at gate D2 with additive definitions and optional members only (`InvocationSubmission`, `InvocationAdmission`, `TaskCapability`, `TaskView`, `TaskInputSubmission`, `PermitReservationRequest`, `LeaseRenewal`, plus `LeaseHeartbeat.progress`, `LeaseHeartbeat.inputRequest` and `InvocationResultReport.notStarted`).
 
-The v2 set is self-contained: no `$ref` points into `v1`. Bindings for v2 are not generated yet; [docs/contracts/v2-generation.md](../../../../docs/contracts/v2-generation.md) is the generator design M1 implements. Fixtures are in [tests/fixtures/contracts/v2](../../../../tests/fixtures/contracts/v2/) and are checked by `tests/contracts/test_contracts_v2.py`.
+The v2 set is self-contained: no `$ref` points into `v1`. Bindings for v2 are generated side by side with v1 as M1 part 1 implemented them from [docs/contracts/v2-generation.md](../../../../docs/contracts/v2-generation.md): Rust module `olo_toolgate_contracts::v2`, Java package `io.ololabs.toolgate.contracts.v2`, TypeScript subpath `@olo-labs/toolgate-contracts/v2`, PHP namespace `OloLabs\ToolGate\Contracts\V2`. Fixtures are in [tests/fixtures/contracts/v2](../../../../tests/fixtures/contracts/v2/) and are checked by `tests/contracts/test_contracts_v2.py`.
 
 | File | Main definitions | Owning decision |
 |---|---|---|

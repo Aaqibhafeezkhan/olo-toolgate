@@ -2,7 +2,7 @@
 
 ## Purpose
 
-How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the frozen v2 schemas in [packages/contracts/schemas/v2](../../packages/contracts/schemas/v2/README.md), alongside the existing v1 bindings, and how the contract-set version moves to 1.0. This is a design note (gate D1); `tools/contracts/generate.py` is unchanged until M1.
+How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the frozen v2 schemas in [packages/contracts/schemas/v2](../../packages/contracts/schemas/v2/README.md), alongside the existing v1 bindings, and how the contract-set version moves to 1.0. This is a design note (gate D1). M1 part 1 implemented decisions 1 to 6 and 8 in `tools/contracts/generate.py`. Decision 7, the move to `1.0.0`, ships with the last M1 part, when the Gateway and Control consume v2.
 
 ## Current state (v1)
 
@@ -40,6 +40,13 @@ How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the froze
 7. **Version.** The contract set moves from `0.10.0-dev` to `1.0.0` when M1 ships the v2 bindings, because v2 is the major break (no device in `RequestContext`, Control-issued Tool Host permits). v1 bindings stay published in the same artifacts for at least the legacy window in ADR 018.
 
 8. **Descriptor digests are not computed by the bindings.** Canonicalisation and digests live in the SDK packagers and Control, implemented against [tool-sdk/spec/descriptor](../../tool-sdk/spec/descriptor/README.md) and its vectors, not in generated code.
+
+9. **Implementation notes (M1 part 1).**
+   - Constant enforcement applies to v2 only, so the published v1 bindings stay byte-identical.
+   - Enum values that are not identifiers (`KillIssuer` `control-breakglass`) are renamed per language, and the wire value is kept.
+   - Property names that are Java keywords (`default`, `enum`) get a trailing underscore on the Java record component, and the `@JsonProperty` name is kept.
+   - A definition that is only a `$ref` (`ServiceRoute`) is a Rust and TypeScript type alias. Java and PHP use the target type.
+   - The stale-copy rule covers every generated directory, and `rust/schemas/v1/approval.schema.json` is removed.
 
 ## Acceptance for M1
 

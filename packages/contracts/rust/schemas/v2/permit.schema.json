@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/permit.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Invocation permit v2",
+  "description": "Control-issued, single-use, audience-bound permit for one attempt on one Tool Host or device (plan.md §11.2).",
+  "$ref": "#/$defs/InvocationPermitClaims",
+  "$defs": {
+    "PermitHeader": {
+      "type": "object",
+      "description": "JWS protected header.",
+      "additionalProperties": false,
+      "properties": {
+        "alg": {
+          "type": "string",
+          "const": "RS256"
+        },
+        "typ": {
+          "type": "string",
+          "const": "toolgate-invocation-permit+jws"
+        },
+        "kid": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "alg",
+        "typ",
+        "kid"
+      ]
+    },
+    "SignedInvocationPermit": {
+      "type": "object",
+      "description": "Compact JWS over InvocationPermitClaims.",
+      "additionalProperties": false,
+      "properties": {
+        "jws": {
+          "$ref": "identifiers.schema.json#/$defs/CompactJws"
+        }
+      },
+      "required": [
+        "jws"
+      ]
+    },
+    "PermitIdentity": {
+      "type": "object",
+      "description": "Verified identity and epochs.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "mode": {
+          "$ref": "common.schema.json#/$defs/RequestMode"
+        },
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "userId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/ActorHop"
+          },
+          "maxItems": 8
+        },
+        "credentialEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "claims": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "tenantId",
+        "mode",
+        "chain",
+        "authorizationEpoch"
+      ]
+    },
+    "PermitTarget": {
+      "type": "object",
+      "description": "Exact code and configuration the attempt may run.",
+      "additionalProperties": false,
+      "properties": {
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "toolDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "artifactDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "runtimeDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "globalsDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "serviceProfileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "serviceProfileRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "deploymentBindingDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "deploymentBindingRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "configRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "toolId",
+        "toolDescriptorDigest",
+        "packageDigest",
+        "artifactDigest",
+        "runtimeDigest",
+        "globalsDigest",
+        "serviceProfileDigest",
+        "serviceProfileRevision",
+        "deploymentBindingDigest",
+        "deploymentBindingRevision",
+        "configRevision",
+        "routes"
+      ]
+    },
+    "InvocationPermitClaims": {
+      "type": "object",
+      "description": "Permit claims. exp is the short admission window, not the execution deadline.",
+      "additionalProperties": false,
+      "properties": {
+        "jti": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "iss": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "aud": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "iat": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "nbf": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "exp": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "nonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "taskId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "identity": {
+          "$ref": "permit.schema.json#/$defs/PermitIdentity"
+        },
+        "target": {
+          "$ref": "permit.schema.json#/$defs/PermitTarget"
+        },
+        "catalogRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "argumentsDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "action": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "JSON object; contents validated by the named schema at the boundary."
+          },
+          "maxItems": 256
+        },
+        "effectSafety": {
+          "$ref": "descriptor.schema.json#/$defs/EffectSafety"
+        },
+        "requiresExecutionLedger": {
+          "type": "boolean"
+        },
+        "businessKeyHash": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "businessKeyNamespace": {
+          "$ref": "descriptor.schema.json#/$defs/KeyNamespace"
+        },
+        "approvalIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "deadlineUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "jti",
+        "iss",
+        "aud",
+        "iat",
+        "nbf",
+        "exp",
+        "nonce",
+        "invocationId",
+        "attempt",
+        "identity",
+        "target",
+        "catalogRevision",
+        "argumentsDigest",
+        "action",
+        "resources",
+        "effectSafety",
+        "requiresExecutionLedger",
+        "approvalIds",
+        "deadlineUnixMs"
+      ]
+    },
+    "PermitReservationRequest": {
+      "type": "object",
+      "description": "v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4).",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "audience": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        }
+      },
+      "required": [
+        "invocationId",
+        "audience",
+        "attempt"
+      ]
+    },
+    "PermitConsumption": {
+      "type": "object",
+      "description": "Tool Host or device consumes the single-use nonce; returns the fencing token.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "permit": {
+          "$ref": "permit.schema.json#/$defs/SignedInvocationPermit"
+        },
+        "argumentsDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "toolDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "artifactDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "invocationId",
+        "permit",
+        "argumentsDigest",
+        "toolDescriptorDigest",
+        "packageDigest",
+        "artifactDigest"
+      ]
+    },
+    "PermitConsumed": {
+      "type": "object",
+      "description": "Successful consumption.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "leaseExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "leaseExpiresAtUnixMs"
+      ]
+    },
+    "LeaseHeartbeat": {
+      "type": "object",
+      "description": "Lease renewal for a running ledger invocation (every lease/3). Also carries the latest progress and, while the tool waits for input, its input request (invocation-state-v2.md T6, T7).",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "progress": {
+          "$ref": "invocation.schema.json#/$defs/TaskProgress"
+        },
+        "inputRequest": {
+          "$ref": "protocol.schema.json#/$defs/InputRequestFrame"
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken"
+      ]
+    },
+    "LeaseRenewal": {
+      "type": "object",
+      "description": "Heartbeat response: the renewed lease, whether cancellation was requested, and any task input waiting for the tool (invocation-state-v2.md T6–T8).",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "leaseExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "cancelRequested": {
+          "type": "boolean"
+        },
+        "inputResponses": {
+          "description": "MCP inputResponses object from tasks/update, passed to the tool unchanged."
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "leaseExpiresAtUnixMs",
+        "cancelRequested"
+      ]
+    }
+  }
+}

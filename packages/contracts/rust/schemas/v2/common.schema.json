@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/common.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "ToolGate v2 common",
+  "description": "Contract set identity and the authenticated request context.",
+  "$defs": {
+    "ContractSet": {
+      "type": "object",
+      "description": "Identifies the shared contract set.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "olo-toolgate-contracts"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "RequestMode": {
+      "type": "string",
+      "enum": [
+        "HUMAN",
+        "DELEGATED",
+        "SERVICE"
+      ],
+      "description": "Authenticated call mode (plan.md §9.3)."
+    },
+    "CredentialKind": {
+      "type": "string",
+      "enum": [
+        "STATIC_TOKEN",
+        "JWT",
+        "INTROSPECTION"
+      ],
+      "description": "Which validator accepted the credential (plan.md §9.2)."
+    },
+    "ActorHop": {
+      "type": "object",
+      "description": "Verified delegation chain entry; never caller-asserted.",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "workloadBindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "agentId",
+        "workloadBindingId"
+      ]
+    },
+    "RequestContext": {
+      "type": "object",
+      "description": "Authenticated Gateway context v2. Carries no device: server-side agents have none (decision 7).",
+      "additionalProperties": false,
+      "properties": {
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "mode": {
+          "$ref": "common.schema.json#/$defs/RequestMode"
+        },
+        "credentialKind": {
+          "$ref": "common.schema.json#/$defs/CredentialKind"
+        },
+        "issuer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "userId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "workloadBindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/ActorHop"
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "sessionEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "credentialEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "delegatedSessionEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "bindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "credentialSha256": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        }
+      },
+      "required": [
+        "requestId",
+        "tenantId",
+        "mode",
+        "credentialKind",
+        "chain"
+      ]
+    }
+  }
+}

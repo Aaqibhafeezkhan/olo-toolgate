@@ -1,0 +1,711 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/descriptor.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Semantic tool descriptor, generation 1",
+  "description": "Normative in tool-sdk/spec/descriptor/README.md. toolDescriptorDigest is computed over a ToolDescriptor exactly.",
+  "$ref": "#/$defs/ToolDescriptor",
+  "$defs": {
+    "ToolKind": {
+      "type": "string",
+      "enum": [
+        "SERVER",
+        "CLIENT"
+      ],
+      "description": "Where the tool runs."
+    },
+    "EffectSafety": {
+      "type": "string",
+      "enum": [
+        "READ_ONLY",
+        "IDEMPOTENT",
+        "NON_IDEMPOTENT",
+        "UNKNOWN"
+      ],
+      "description": "Declared effect safety (plan.md §11.7)."
+    },
+    "KeyNamespace": {
+      "type": "string",
+      "enum": [
+        "AGENT",
+        "DELEGATED_USER",
+        "TENANT"
+      ],
+      "description": "Business-key namespace (plan.md §11.7)."
+    },
+    "IdempotencyScope": {
+      "type": "string",
+      "enum": [
+        "BUSINESS_KEY",
+        "PER_INVOCATION"
+      ],
+      "description": "What the forwarded upstream key identifies."
+    },
+    "RuntimeTier": {
+      "type": "string",
+      "enum": [
+        "OCI_SANDBOX",
+        "WASI",
+        "HOST_NATIVE"
+      ],
+      "description": "Client runtime isolation tier (plan.md §13.4)."
+    },
+    "ValueType": {
+      "type": "string",
+      "enum": [
+        "STRING",
+        "INT",
+        "LONG",
+        "NUMBER",
+        "BOOLEAN",
+        "DATE",
+        "DATE_TIME",
+        "DURATION",
+        "ENUM",
+        "URI",
+        "OBJECT",
+        "ARRAY",
+        "BINARY"
+      ],
+      "description": "Declared value type (authoring/README.md §7)."
+    },
+    "SecretScope": {
+      "type": "string",
+      "enum": [
+        "GROUP",
+        "USER"
+      ],
+      "description": "Who owns the secret value."
+    },
+    "AuthType": {
+      "type": "string",
+      "enum": [
+        "API_KEY",
+        "BASIC",
+        "OAUTH2_CLIENT_CREDENTIALS",
+        "TOKEN_EXCHANGE",
+        "CONNECTION",
+        "CUSTOM"
+      ],
+      "description": "HTTP auth strategy (plan.md §5.4)."
+    },
+    "HttpMethod": {
+      "type": "string",
+      "enum": [
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "description": "Route method."
+    },
+    "Streaming": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "RESPONSE",
+        "BIDIRECTIONAL"
+      ],
+      "description": "Route streaming mode."
+    },
+    "Permission": {
+      "type": "string",
+      "enum": [
+        "HTTP_ROUTE",
+        "TCP",
+        "CREDENTIALS_IN_SANDBOX",
+        "USER_SECRET",
+        "TOKEN_EXCHANGE",
+        "CONNECTION"
+      ],
+      "description": "Derived permission (descriptor §2)."
+    },
+    "ErrorDeclaration": {
+      "type": "object",
+      "description": "Declared business error.",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "identifiers.schema.json#/$defs/ErrorCode"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "description",
+        "retryable"
+      ]
+    },
+    "ToolEffect": {
+      "type": "object",
+      "description": "Effect settings with defaults resolved.",
+      "additionalProperties": false,
+      "properties": {
+        "safety": {
+          "$ref": "descriptor.schema.json#/$defs/EffectSafety"
+        },
+        "destructive": {
+          "type": "boolean"
+        },
+        "openWorld": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "safety",
+        "destructive",
+        "openWorld"
+      ]
+    },
+    "BusinessKeySettings": {
+      "type": "object",
+      "description": "Business-key settings.",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "namespace": {
+          "$ref": "descriptor.schema.json#/$defs/KeyNamespace"
+        },
+        "argument": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "idempotencyHeader": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9-]{1,128}$"
+        },
+        "idempotencyScope": {
+          "$ref": "descriptor.schema.json#/$defs/IdempotencyScope"
+        }
+      },
+      "required": [
+        "required",
+        "namespace"
+      ]
+    },
+    "ExecutionSettings": {
+      "type": "object",
+      "description": "Execution settings with defaults resolved.",
+      "additionalProperties": false,
+      "properties": {
+        "async": {
+          "type": "boolean"
+        },
+        "maxDurationMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400000
+        },
+        "stateless": {
+          "type": "boolean"
+        },
+        "maxConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "cancelIfAbandoned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "async",
+        "maxDurationMs",
+        "stateless",
+        "cancelIfAbandoned"
+      ]
+    },
+    "RouteDeclaration": {
+      "type": "object",
+      "description": "Declared HTTP route, without host values.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "destination": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "method": {
+          "$ref": "descriptor.schema.json#/$defs/HttpMethod"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^/"
+        },
+        "query": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "requestContentTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "maxRequestBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1073741824
+        },
+        "maxResponseBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1073741824
+        },
+        "streaming": {
+          "$ref": "descriptor.schema.json#/$defs/Streaming"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 900000
+        },
+        "auth": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        }
+      },
+      "required": [
+        "id",
+        "destination",
+        "method",
+        "path",
+        "query",
+        "headers",
+        "requestContentTypes",
+        "maxRequestBytes",
+        "maxResponseBytes",
+        "streaming",
+        "timeoutMs"
+      ]
+    },
+    "DestinationDeclaration": {
+      "type": "object",
+      "description": "Declared destination; the host is a reviewed deployment setting.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "hostSetting": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "spkiPins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "caBundle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "id",
+        "hostSetting",
+        "port",
+        "spkiPins"
+      ]
+    },
+    "HttpAuthDeclaration": {
+      "type": "object",
+      "description": "Declared HTTP auth.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "type": {
+          "$ref": "descriptor.schema.json#/$defs/AuthType"
+        },
+        "header": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "secret": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "connection": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "scopes"
+      ]
+    },
+    "TcpDeclaration": {
+      "type": "object",
+      "description": "Declared TCP destination (tunnel mode).",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "hostSetting": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "id",
+        "hostSetting",
+        "port"
+      ]
+    },
+    "GlobalDeclaration": {
+      "type": "object",
+      "description": "Declared global.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "type": {
+          "$ref": "descriptor.schema.json#/$defs/ValueType"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "default": {
+          "description": "Any JSON value, typed by the declaration it belongs to."
+        },
+        "sensitive": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "enum": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 1024
+          },
+          "maxItems": 256
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "required",
+        "sensitive"
+      ]
+    },
+    "SecretDeclaration": {
+      "type": "object",
+      "description": "Declared secret; never a value.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "type": {
+          "$ref": "descriptor.schema.json#/$defs/ValueType"
+        },
+        "scope": {
+          "$ref": "descriptor.schema.json#/$defs/SecretScope"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "scope"
+      ]
+    },
+    "ClaimDeclaration": {
+      "type": "object",
+      "description": "Declared identity claim.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "type": {
+          "$ref": "descriptor.schema.json#/$defs/ValueType"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "claim",
+        "type",
+        "required"
+      ]
+    },
+    "ToolVariables": {
+      "type": "object",
+      "description": "Declared configuration and identity inputs.",
+      "additionalProperties": false,
+      "properties": {
+        "globals": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/GlobalDeclaration"
+          },
+          "maxItems": 64
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/SecretDeclaration"
+          },
+          "maxItems": 64
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/ClaimDeclaration"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "globals",
+        "secrets",
+        "claims"
+      ]
+    },
+    "ToolDescriptor": {
+      "type": "object",
+      "description": "Semantic tool descriptor, generation 1. Identical in standalone and governed mode.",
+      "additionalProperties": false,
+      "properties": {
+        "descriptorGeneration": {
+          "type": "integer",
+          "const": 1
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "mcpName": {
+          "$ref": "identifiers.schema.json#/$defs/McpName"
+        },
+        "kind": {
+          "$ref": "descriptor.schema.json#/$defs/ToolKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "useWhen": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "inputSchema": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "outputSchema": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/ErrorDeclaration"
+          },
+          "maxItems": 64
+        },
+        "effect": {
+          "$ref": "descriptor.schema.json#/$defs/ToolEffect"
+        },
+        "businessKey": {
+          "$ref": "descriptor.schema.json#/$defs/BusinessKeySettings"
+        },
+        "execution": {
+          "$ref": "descriptor.schema.json#/$defs/ExecutionSettings"
+        },
+        "reconcileTool": {
+          "$ref": "identifiers.schema.json#/$defs/ToolLocalName"
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/RuntimeTier"
+          },
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/RouteDeclaration"
+          },
+          "maxItems": 64
+        },
+        "destinations": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/DestinationDeclaration"
+          },
+          "maxItems": 32
+        },
+        "httpAuth": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/HttpAuthDeclaration"
+          },
+          "maxItems": 32
+        },
+        "tcp": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/TcpDeclaration"
+          },
+          "maxItems": 16
+        },
+        "variables": {
+          "$ref": "descriptor.schema.json#/$defs/ToolVariables"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "descriptor.schema.json#/$defs/Permission"
+          },
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "toolsets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "descriptorGeneration",
+        "toolId",
+        "mcpName",
+        "kind",
+        "title",
+        "description",
+        "inputSchema",
+        "errors",
+        "effect",
+        "businessKey",
+        "execution",
+        "routes",
+        "destinations",
+        "httpAuth",
+        "tcp",
+        "variables",
+        "permissions",
+        "toolsets"
+      ]
+    }
+  }
+}

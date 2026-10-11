@@ -19,6 +19,7 @@ dependencies {
 
 tasks.test {
     systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
+    systemProperty("toolgate.fixturesV2", rootProject.file("tests/fixtures/contracts/v2/valid.json").absolutePath)
     systemProperty("toolgate.contractsVersion", project.version.toString())
 }
 

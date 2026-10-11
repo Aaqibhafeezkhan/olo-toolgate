@@ -13,7 +13,8 @@ spl_autoload_register(static function (string $class): void {
 $fixtures = json_decode(file_get_contents(__DIR__ . '/../../../../tests/fixtures/contracts/v1/valid.json'), true, 512, JSON_THROW_ON_ERROR);
 $count = 0;
 foreach ($fixtures as $name => $fixture) {
-    if (in_array($name, ['Identifier', 'SemanticVersion', 'Sha256', 'SecretReference'], true)) {
+    // Primitive definitions (identifiers, digests, names) have no generated class.
+    if (!is_file(__DIR__ . '/../src/' . $name . '.php')) {
         continue;
     }
     $class = 'OloLabs\\ToolGate\\Contracts\\' . $name;

@@ -1,0 +1,181 @@
+// Copyright 2026 OLO Labs
+// SPDX-License-Identifier: Apache-2.0
+use olo_toolgate_contracts::v2::*;
+use serde_json::{json, Value};
+
+#[test]
+fn v2_fixture_round_trips() {
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/contracts/v2/valid.json"
+    ))
+    .unwrap();
+    macro_rules! check {
+        ($($name:ident),+ $(,)?) => {
+            $(
+                let json = fixtures[stringify!($name)].clone();
+                let model: $name = serde_json::from_value(json.clone()).unwrap();
+                assert_eq!(json, serde_json::to_value(model).unwrap(), stringify!($name));
+            )+
+        };
+    }
+    check!(
+        ActorHop,
+        AdmissionKind,
+        AdmissionResponse,
+        ApiChange,
+        AuthType,
+        BreakGlassRequest,
+        BusinessKeyReservationRequest,
+        BusinessKeyReservationResult,
+        BusinessKeySettings,
+        BusinessKeySource,
+        BusinessKeyTombstone,
+        CallerIdentity,
+        CatalogScope,
+        CatalogScopeKind,
+        ClaimDeclaration,
+        ClientCheckIn,
+        CompatibilityProfile,
+        CompositionMapping,
+        CompositionRecord,
+        ConfigLayer,
+        ConnectionRequirement,
+        ContractSet,
+        ControlServerSettings,
+        ControlServerSettingsPatch,
+        CredentialKind,
+        DeploymentBinding,
+        DeploymentGrant,
+        DeploymentTarget,
+        DestinationDeclaration,
+        DestinationScheme,
+        DeviceApproval,
+        Dispatch,
+        EffectApproval,
+        EffectSafety,
+        EffectiveDeployment,
+        EffectiveValue,
+        EgressMode,
+        ErrorDeclaration,
+        ExecutionSettings,
+        FrameKind,
+        GatewaySettings,
+        GlobalDeclaration,
+        HttpAuthDeclaration,
+        HttpMethod,
+        IdempotencyScope,
+        InputRequestFrame,
+        InvocationAdmission,
+        InvocationOutcome,
+        InvocationPermitClaims,
+        InvocationResultReport,
+        InvocationSubmission,
+        InvocationTask,
+        KeyNamespace,
+        KillEvent,
+        KillEventPage,
+        KillIssuer,
+        KillMode,
+        KillPush,
+        KillRequest,
+        KillScope,
+        KillScopeKind,
+        LeaseHeartbeat,
+        LeaseRenewal,
+        LimitOverride,
+        LogFrame,
+        LogLevel,
+        MappingKind,
+        McpTaskStatus,
+        MissingKeyPolicy,
+        PackageCompatibility,
+        PackageEnableRequest,
+        PackageKind,
+        PackageLimits,
+        PackageManifest,
+        PackageReview,
+        PackageVersion,
+        PackageVersionPage,
+        PackageVersionState,
+        PackagedArtifact,
+        Permission,
+        PermitConsumed,
+        PermitConsumption,
+        PermitHeader,
+        PermitIdentity,
+        PermitReservationRequest,
+        PermitTarget,
+        PrivateRangeApproval,
+        ProgressFrame,
+        ProtocolRange,
+        RecoveryEvent,
+        RecoveryRequest,
+        RefusalReason,
+        RequestContext,
+        RequestMode,
+        ReservationOutcome,
+        ResultFrame,
+        ResultMessage,
+        ResultType,
+        RolloutPlan,
+        RolloutStep,
+        RolloutStrategy,
+        RouteDeclaration,
+        RuntimeDeclaration,
+        RuntimeTier,
+        SdkInfo,
+        SdkLanguage,
+        SecretDeclaration,
+        SecretHandle,
+        SecretScope,
+        SecurityDeltaItem,
+        SecurityDeltaKind,
+        ServiceDestination,
+        ServiceProfile,
+        ServiceRoute,
+        SignedInvocationPermit,
+        Streaming,
+        TargetKind,
+        TaskCapability,
+        TaskInputSubmission,
+        TaskProgress,
+        TaskState,
+        TaskTransition,
+        TaskView,
+        TcpDeclaration,
+        TlsSettings,
+        ToolDefinition,
+        ToolDescriptor,
+        ToolEffect,
+        ToolErrorBody,
+        ToolHostRegistration,
+        ToolInput,
+        ToolKind,
+        ToolLimits,
+        ToolVariables,
+        TransitionActor,
+        ValueSource,
+        ValueType,
+    );
+}
+
+#[test]
+fn v2_constants_and_renamed_values_are_enforced() {
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/contracts/v2/valid.json"
+    ))
+    .unwrap();
+    let mut manifest = fixtures["PackageManifest"].clone();
+    manifest["schemaVersion"] = json!(3);
+    assert!(serde_json::from_value::<PackageManifest>(manifest).is_err());
+    let mut frame = fixtures["ProgressFrame"].clone();
+    frame["kind"] = json!("RESULT");
+    assert!(serde_json::from_value::<ProgressFrame>(frame).is_err());
+    let issuer: KillIssuer = serde_json::from_str("\"control-breakglass\"").unwrap();
+    assert_eq!(issuer, KillIssuer::ControlBreakglass);
+    assert_eq!(
+        serde_json::to_string(&issuer).unwrap(),
+        "\"control-breakglass\""
+    );
+    assert!(serde_json::from_str::<KillIssuer>("\"control_breakglass\"").is_err());
+}
