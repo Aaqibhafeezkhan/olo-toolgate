@@ -16,6 +16,15 @@ async function setup(status=200){
     return json(url.endsWith('/admin-session')?{role:'ADMINISTRATOR'}:{items:url.startsWith('/api/control/v1/users?')?users:[]});
   });vi.stubGlobal('fetch',fetcher);window.location.hash='#users';render(<App/>);fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-token'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));await screen.findByRole('switch',{name:'Disable alice'});return fetcher;
 }
+it('opens editing only from the action icon and keeps the row read-only',async()=>{
+  const fetcher=await setup();fireEvent.click(screen.getByText('Alice'));expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByRole('button',{name:'Alice'})).toBeNull();
+  const edit=screen.getByRole('button',{name:'Edit alice'});edit.focus();fireEvent.click(edit);
+  expect(screen.getByRole('dialog',{name:'Edit user'})).toBeTruthy();expect((screen.getByLabelText('Display name') as HTMLInputElement).value).toBe('Alice');
+  fireEvent.change(screen.getByLabelText('Display name'),{target:{value:'Unsaved change'}});fireEvent.click(screen.getByRole('button',{name:'Close editor'}));
+  expect(document.activeElement).toBe(edit);expect(screen.queryByRole('dialog')).toBeNull();expect(fetcher.mock.calls.some(([,options])=>options.method==='PUT')).toBe(false);
+  fireEvent.click(edit);expect((screen.getByLabelText('Display name') as HTMLInputElement).value).toBe('Alice');
+});
 it('changes status in one click with the expected revision and retains backend errors',async()=>{
   const fetcher=await setup();fireEvent.click(screen.getByRole('switch',{name:'Disable alice'}));await screen.findByRole('switch',{name:'Enable alice'});
   const mutation=fetcher.mock.calls.find(([,options])=>options.method==='PUT')!;expect(JSON.parse(String(mutation[1].body))).toMatchObject({id:'alice',enabled:false,revision:4});expect(new Headers(mutation[1].headers).get('If-Match')).toBe('"4"');expect(new Headers(mutation[1].headers).get('Idempotency-Key')).toBeTruthy();

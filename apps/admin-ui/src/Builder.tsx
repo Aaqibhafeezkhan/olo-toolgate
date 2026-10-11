@@ -4,6 +4,8 @@ import {useEffect,useState,type FormEvent} from 'react';
 import type {BuilderDefinition,BuilderDraft,BuilderTestRecord,LocalRuntimeKind,FleetSelfTest,FleetPackageRelease,LocalToolRegistration,InstalledAuthorizationProfile} from '@olo-labs/toolgate-contracts';
 import {ControlClient} from './api';
 import {Failure} from './Failure';
+import {EditorDialog} from './EditorDialog';
+import {ActionButton} from './Table';
 
 const initialCode="def tool(arguments):\n    return {'text': arguments['text']}\n";
 const initialSchema=JSON.stringify({type:'object',additionalProperties:false,properties:{text:{type:'string',maxLength:256}},required:['text']},null,2);
@@ -16,6 +18,7 @@ function canonical(value:unknown):unknown {if(Array.isArray(value))return value.
 /** All authority, validation, scanning and version immutability belong to Control and the client. */
 export function Builder({client}:{client:ControlClient}){
  const [drafts,setDrafts]=useState<readonly BuilderDraft[]>([]),[tests,setTests]=useState<readonly BuilderTestRecord[]>([]),[selected,setSelected]=useState<BuilderDraft>();
+ const [editorOpen,setEditorOpen]=useState(false);
  const [error,setError]=useState<unknown>(),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[refresh,setRefresh]=useState(0),[message,setMessage]=useState('');
  const [id,setId]=useState<string>(()=>crypto.randomUUID()),[packageId,setPackageId]=useState('custom-echo'),[toolId,setToolId]=useState('custom.echo'),[version,setVersion]=useState('1.0.0'),[name,setName]=useState('Text echo');
  const [kind,setKind]=useState<LocalRuntimeKind>('PYTHON'),[image,setImage]=useState(''),[runtimeVersion,setRuntimeVersion]=useState(''),[code,setCode]=useState(initialCode);
@@ -30,7 +33,8 @@ export function Builder({client}:{client:ControlClient}){
   void load().catch(e=>{if(!abort.signal.aborted){setError(e);setLoading(false);}});return ()=>abort.abort();
  },[client,refresh]);
  async function action(work:()=>Promise<void>){if(busy)return;setBusy(true);setError(undefined);setMessage('');try{await work();setRefresh(v=>v+1);}catch(e){setError(e);}finally{setBusy(false);}}
- function open(draft:BuilderDraft){const d=draft.definition;setSelected(draft);setId(draft.id);setPackageId(d.packageId);setToolId(d.tool.toolId);setVersion(d.version);setName(d.name);setKind(d.runtime.kind);setImage(d.runtime.image);setRuntimeVersion(d.runtime.version);setCode(d.tool.source?.code??'');setDescription(d.description);setUseWhen(d.useWhen);setDoNotUseWhen(d.doNotUseWhen);setInput(JSON.stringify(d.tool.inputSchema,null,2));setOutput(JSON.stringify(d.tool.outputSchema,null,2));setExamples(JSON.stringify(d.examples.map(({arguments:args,expectedOutput})=>({arguments:args,expectedOutput})),null,2));setCredentials(d.credentialRequirements.join(','));setResource(d.resource.locator);setPermission(d.permissions[0]??'COMPUTE');}
+ function create(){setSelected(undefined);setId(crypto.randomUUID());setPackageId('custom-echo');setToolId('custom.echo');setVersion('1.0.0');setName('Text echo');setKind('PYTHON');setImage('');setRuntimeVersion('');setCode(initialCode);setDescription('Returns a bounded text value.');setUseWhen('Return text without accessing files or network.');setDoNotUseWhen('Reading files or accessing external services.');setInput(initialSchema);setOutput(initialSchema);setExamples(initialExamples);setCredentials('');setResource('runtime/custom.echo');setPermission('COMPUTE');setDevice('');setRelease('');setPercentage('10');setError(undefined);setMessage('');setEditorOpen(true);}
+ function open(draft:BuilderDraft){setEditorOpen(true);setError(undefined);setMessage('');setDevice('');setRelease('');const d=draft.definition;setSelected(draft);setId(draft.id);setPackageId(d.packageId);setToolId(d.tool.toolId);setVersion(d.version);setName(d.name);setKind(d.runtime.kind);setImage(d.runtime.image);setRuntimeVersion(d.runtime.version);setCode(d.tool.source?.code??'');setDescription(d.description);setUseWhen(d.useWhen);setDoNotUseWhen(d.doNotUseWhen);setInput(JSON.stringify(d.tool.inputSchema,null,2));setOutput(JSON.stringify(d.tool.outputSchema,null,2));setExamples(JSON.stringify(d.examples.map(({arguments:args,expectedOutput})=>({arguments:args,expectedOutput})),null,2));setCredentials(d.credentialRequirements.join(','));setResource(d.resource.locator);setPermission(d.permissions[0]??'COMPUTE');}
  async function save(event:FormEvent){event.preventDefault();void action(async()=>{const source=code?{code,sha256:await sha256(code)}:undefined;const runtimeId=`runtime-${packageId}`;
   const runtime={id:runtimeId,kind,image,version:runtimeVersion};
   const registration={toolId,action:'execute',runtimeId,entryPoint:entries[kind],inputSchema:JSON.parse(input),outputSchema:JSON.parse(output),limits:{timeoutMs:10000,memoryMiB:512,maxInputBytes:8192,maxOutputBytes:8192},...(source?{source}:{})};
@@ -42,10 +46,10 @@ export function Builder({client}:{client:ControlClient}){
   const draft=await client.saveDraft({id,expectedRevision:selected?.revision??0,definition},crypto.randomUUID());setSelected(draft);setMessage('Draft saved and scanned.');});}
  function clone(){setSelected(undefined);setId(crypto.randomUUID());setVersion('');setMessage('Choose a new immutable version before saving.');}
  const sealed=selected?.sealed??false;
- return <><p className="eyebrow">Local capabilities</p><h1>Custom tool builder</h1><p className="intro">Write a tool, test it on a designated client, and prepare an immutable organization package. The package pins its code and resource definition. Register the exact Tool and extractor, assign its Tool Group and execution binding, and review group grants before runtime use.</p>
- {error!==undefined&&<Failure error={error} retry={()=>setRefresh(v=>v+1)}/>}<p role="status" aria-live="polite">{message}</p>
- {loading?<p role="status">Loading drafts and tests…</p>:<section><h2>Saved drafts</h2>{drafts.length?<ul>{drafts.map(d=><li key={d.id}><button disabled={busy} onClick={()=>open(d)}>{d.definition.name} {d.definition.version}{d.sealed?' — sealed':''}</button></li>)}</ul>:<p>No drafts yet. Create your first tool below.</p>}</section>}
- <form onSubmit={save}><fieldset disabled={busy||sealed}><legend>Tool definition</legend>
+ return <><p className="eyebrow">Local capabilities</p><div className="page-heading"><h1>Custom tool builder</h1><button className="primary" disabled={busy} onClick={create}>Add tool</button></div><p className="intro">Write a tool, test it on a designated client, and prepare an immutable organization package. The package pins its code and resource definition. Register the exact Tool and extractor, assign its Tool Group and execution binding, and review group grants before runtime use.</p>
+ {error!==undefined&&!editorOpen&&<Failure error={error} retry={()=>setRefresh(v=>v+1)}/>}
+ {loading?<p role="status">Loading drafts and tests…</p>:<section><h2>Saved drafts</h2>{drafts.length?<ul>{drafts.map(d=><li key={d.id}>{d.definition.name} {d.definition.version}{d.sealed?' — sealed':''} <ActionButton icon="edit" label={`Edit draft ${d.id}`} disabled={busy} onClick={()=>open(d)}/></li>)}</ul>:<p>No drafts yet. Add a tool to get started.</p>}</section>}
+ {editorOpen&&<EditorDialog title={selected?'Edit tool draft':'Add tool'} close={()=>setEditorOpen(false)} busy={busy}>{error!==undefined&&<Failure error={error} retry={()=>setRefresh(v=>v+1)}/>}<p role="status" aria-live="polite">{message}</p><form onSubmit={save}><fieldset disabled={busy||sealed}><legend>Tool definition</legend>
  <label htmlFor="builder-package">Package ID</label><input id="builder-package" required maxLength={128} value={packageId} onChange={e=>setPackageId(e.target.value)}/>
  <label htmlFor="builder-tool">Tool ID</label><input id="builder-tool" required maxLength={128} value={toolId} onChange={e=>{setToolId(e.target.value);setResource(`runtime/${e.target.value}`);}}/>
  <label htmlFor="builder-version">Version</label><input id="builder-version" required maxLength={128} value={version} onChange={e=>setVersion(e.target.value)}/>
@@ -72,5 +76,5 @@ export function Builder({client}:{client:ControlClient}){
  <button disabled={busy||!sealed} onClick={()=>void action(async()=>{download(await client.publicationDraft(selected.id),`${selected.definition.packageId}-publication.json`);setMessage('Public preparation downloaded. Review it before later publication.');})}>Prepare publication</button>
  <label htmlFor="builder-release">Signed release envelope JSON</label><textarea id="builder-release" maxLength={65536} value={release} onChange={e=>setRelease(e.target.value)}/><button disabled={busy||!sealed||!release} onClick={()=>void action(async()=>{await client.releaseDraft(selected.id,JSON.parse(release) as FleetPackageRelease,crypto.randomUUID());setMessage('Exact sealed package release verified and published.');})}>Publish organization release</button>
  <label htmlFor="builder-percent">Canary percentage</label><input id="builder-percent" type="number" min={1} max={100} value={percentage} onChange={e=>setPercentage(e.target.value)}/><button disabled={busy||!sealed||!device} onClick={()=>void action(async()=>{await client.deployDraft(selected.id,{id:crypto.randomUUID(),packageId:selected.definition.packageId,version:selected.definition.version,deviceIds:device.split(',').map(s=>s.trim()).filter(Boolean),desiredPresence:true,percentage:Number(percentage)},crypto.randomUUID());setMessage('Deployment created. Observe desired/reported state in Packages.');})}>Deploy package</button>
- </section>}</>;
+ </section>}</EditorDialog>}</>;
 }
