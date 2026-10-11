@@ -70,13 +70,13 @@ Supported job bodies are `preflight.metadata`, `foundation.check`,
 `gateway.container-and-replicas` and `policy.enterprise-access`. Use `plan` to
 see the current inventory before selecting jobs.
 
-On GitHub, the five CI workflows run automatically for pushes to `main` and
-PRs targeting `main`. Manual runs must select `main`. PR admission uses the
-`RC:` title plus `TOOLGATE_CI_ENABLED=true`. Push, manual and development-release
+On GitHub, the five CI workflows run automatically only for pushes to `main`.
+Pull requests and feature-branch pushes do not trigger CI. Manual runs must
+select `main`. Push, manual and development-release
 admission resolve the merged PR for the exact commit and check that same title.
+The title must start with `RC:` and `TOOLGATE_CI_ENABLED` must be `true`.
 Commit messages and manual comments do not override PR title admission.
-Actions displays PR runs under their source branch even when the target is
-`main`. Local replay runs selected job bodies independently of these hosted
+Local replay runs selected job bodies independently of these hosted
 trigger rules.
 
 The first replay builds [`local.Dockerfile`](local.Dockerfile), downloads toolchains
