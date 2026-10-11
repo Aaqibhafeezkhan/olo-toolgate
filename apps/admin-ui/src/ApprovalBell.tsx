@@ -6,9 +6,10 @@ import {ApiError,ControlClient} from './api';
 export function ApprovalBell({client,administrator,superAdmin,userId}:{client:ControlClient;administrator:boolean;superAdmin:boolean;userId?:string}){
   const [pending,setPending]=useState<string[]>([]),[unavailable,setUnavailable]=useState(false),[open,setOpen]=useState(false);
   useEffect(()=>{
-    const abort=new AbortController();let loading=false;
+    const abort=new AbortController();let loading=false,refreshPending=false;
     async function load(){
-      if(loading)return;loading=true;
+      if(abort.signal.aborted)return;
+      if(loading){refreshPending=true;return;}loading=true;refreshPending=false;
       const queues:string[]=[];let failed=false;
       try{
         let cursor:string|undefined;const seen=new Set<string>();
@@ -27,6 +28,7 @@ export function ApprovalBell({client,administrator,superAdmin,userId}:{client:Co
         catch(error){if(!(error instanceof ApiError&&error.status===403))failed=true;}
       }
       if(!abort.signal.aborted){setPending(queues);setUnavailable(failed);}loading=false;
+      if(refreshPending&&!abort.signal.aborted)void load();
     }
     void load();const timer=setInterval(()=>void load(),15000);const refresh=()=>void load();window.addEventListener('toolgate:approval-change',refresh);
     return()=>{abort.abort();clearInterval(timer);window.removeEventListener('toolgate:approval-change',refresh);};
