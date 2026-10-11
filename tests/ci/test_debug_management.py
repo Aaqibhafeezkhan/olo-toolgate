@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from tools.contracts import version
+from tools.contracts import generate, version
 
 ROOT = Path(__file__).resolve().parents[2]
 POWERSHELL = shutil.which('powershell.exe')
@@ -28,7 +28,9 @@ class DebugManagementTests(unittest.TestCase):
             ROOT/'tools/contracts/version.py', ROOT/'tools/contracts/generate.py',
             ROOT/'tools/ci/preflight.py',
         }
-        sources.update((ROOT/'packages/contracts/schemas/v1').glob('*.json'))
+        # v1 schemas reference v2 definitions, so copy every supported version.
+        for ver in generate.VERSIONS:
+            sources.update((ROOT/'packages/contracts/schemas'/ver).glob('*.json'))
         for source in sources:
             target = self.root/source.relative_to(ROOT)
             target.parent.mkdir(parents=True, exist_ok=True)
