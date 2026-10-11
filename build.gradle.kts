@@ -39,7 +39,7 @@ allprojects {
 
 tasks.named("check") { dependsOn("javaCheck") }
 tasks.named("build") {
-    dependsOn(":contracts-java:build", ":control-plane:build", ":marketplace-api:build", ":marketplace-worker:build", ":sdk-java-api:build", ":sdk-java-processor:build", ":sdk-java-protocol:build", ":sdk-java-runtime-mcp:build", ":sdk-java-conformance-server:build")
+    dependsOn(":contracts-java:build", ":control-plane:build", ":marketplace-api:build", ":marketplace-worker:build", ":sdk-java-api:build", ":sdk-java-processor:build", ":sdk-java-protocol:build", ":sdk-java-runtime-mcp:build", ":sdk-java-testing:build", ":sdk-java-build:build", ":sdk-java-gradle-plugin:build", ":sdk-java-maven-plugin:build", ":sdk-java-conformance-server:build")
 }
 
 subprojects {
@@ -73,6 +73,10 @@ tasks.register("javaCheck") {
         ":sdk-java-processor:check",
         ":sdk-java-protocol:check",
         ":sdk-java-runtime-mcp:check",
+        ":sdk-java-testing:check",
+        ":sdk-java-build:check",
+        ":sdk-java-gradle-plugin:check",
+        ":sdk-java-maven-plugin:check",
         ":sdk-java-conformance-server:check",
     )
 }
@@ -81,4 +85,41 @@ tasks.register("publishContractsToMavenLocal") {
     group = "publishing"
     description = "Publishes the shared Java contracts to the local Maven repository."
     dependsOn(":contracts-java:publishToMavenLocal")
+}
+
+// The Java Tool SDK publishes to build/sdk-repo, for local builds and the plugin end-to-end run (tool-sdk/java-sdk/e2e).
+val javaSdkModules = listOf(
+    ":sdk-java-api", ":sdk-java-processor", ":sdk-java-protocol", ":sdk-java-runtime-mcp", ":sdk-java-testing",
+    ":sdk-java-build", ":sdk-java-gradle-plugin", ":sdk-java-maven-plugin",
+)
+configure(javaSdkModules.map { project(it) }) {
+    apply(plugin = "maven-publish")
+    // After the module's own script, which names its artifact and applies java-gradle-plugin.
+    afterEvaluate {
+        val artifact = extensions.getByType<BasePluginExtension>().archivesName.get()
+        extensions.configure<PublishingExtension> {
+            repositories {
+                maven {
+                    name = "sdkLocal"
+                    url = uri(rootProject.layout.buildDirectory.dir("sdk-repo"))
+                }
+            }
+            if (!plugins.hasPlugin("java-gradle-plugin")) {
+                publications.create<MavenPublication>("sdk") {
+                    from(components["java"])
+                    artifactId = artifact
+                    if (artifact == "toolgate-maven-plugin") pom { packaging = "maven-plugin" }
+                }
+            }
+            publications.withType<MavenPublication>().configureEach {
+                if (name == "pluginMaven") artifactId = artifact
+            }
+        }
+    }
+}
+
+tasks.register("publishJavaSdkLocally") {
+    group = "publishing"
+    description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins, to build/sdk-repo."
+    dependsOn(javaSdkModules.map { "$it:publishAllPublicationsToSdkLocalRepository" })
 }

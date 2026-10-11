@@ -34,7 +34,7 @@ Exact Java surface of the [authoring contract](README.md). Package `io.ololabs.t
 @Repeatable(TcpDestinations.class) @Target(TYPE) @interface TcpDestination { String id(); String hostSetting(); String defaultHost() default ""; int port(); }
 @Target(METHOD) @interface Idempotency { String header(); IdempotencyScope scope() default IdempotencyScope.BUSINESS_KEY; }
 @Target(METHOD) @interface Reconcile { String tool(); }
-@Repeatable(Examples.class) @Target(METHOD) @interface Example { String arguments(); String expectedOutput() default ""; String expectedError() default ""; }
+@Repeatable(Examples.class) @Target(METHOD) @interface Example { String arguments(); String expectedOutput() default ""; String expectedError() default ""; String exchanges() default ""; }
 @interface ErrorDecl { String code(); String description(); boolean retryable() default false; String dataSchema() default ""; }
 ```
 
@@ -72,10 +72,14 @@ public interface TcpConnector { Socket connect(String destinationId); javax.net.
 
 Generated, typed accessors (from the annotation processor) are added per tool: `OrderToolsVars.global(context).timeoutSeconds()`. Using an undeclared name in a `get*Value` call with a literal argument is a compile error emitted by the processor.
 
+## Testing
+
+Artifact `io.ololabs.toolgate:toolgate-sdk-testing`, package `io.ololabs.toolgate.testing`, as [testing.md](testing.md) defines it: `ToolHarness.builder()` with `global`, `secret`, `claim`, `destination`, `exchange(RecordedExchange...)` and `exchanges(resource)`; `call(tool, arguments)` returning `ToolResult`; `routeCalls()` returning `RouteCallRecord`s; `runExamples()` and `assertExamples()`. `RecordedExchange.on(routeId).variable(...).replyJson(status, body)` builds an exchange in code, and `RecordedExchange.load(stream)` reads the shared format.
+
 ## Errors
 
 `io.ololabs.toolgate.sdk.errors`: `ToolError extends RuntimeException`; subclasses as in [errors.md](errors.md).
 
 ## Build
 
-Gradle plugin id `io.ololabs.toolgate.sdk`; tasks `toolgateDev`, `toolgatePackage`, `toolgateCheck`. Maven plugin `io.ololabs.toolgate:toolgate-maven-plugin` with goals `dev`, `package`, `check`. Both set `descriptorGeneration` (required, no default).
+Gradle plugin id `io.ololabs.toolgate.sdk`; tasks `toolgateDev`, `toolgatePackage`, `toolgateCheck`. Maven plugin `io.ololabs.toolgate:toolgate-maven-plugin` with goals `dev`, `package`, `check`; with `<extensions>true</extensions>` it adds the SDK dependencies and configures the compiler plugin as the Gradle plugin does. Both set `descriptorGeneration` (required, no default). A package holds `artifacts/app.jar` and `artifacts/libs.zip` (the runtime dependencies under `lib/`), and every tool's entry point is `io.ololabs.toolgate.runtime.Main` with both on the class path.

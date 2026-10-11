@@ -14,7 +14,14 @@ import java.util.Map;
 
 /** Standalone configuration: {@code TOOLGATE_MODE}, environment values and {@code toolgate.dev.json} (runtime-modes.md §4, §5). */
 final class Config {
-    enum Mode { PRODUCTION, DEVELOPMENT, TEST }
+    enum Mode {
+        PRODUCTION, DEVELOPMENT, TEST;
+
+        /** Whether claims come from fixtures: {@code toolgate.dev.json} in development, the harness in test. */
+        boolean fixtures() {
+            return this != PRODUCTION;
+        }
+    }
 
     final Mode mode;
     final Map<String, String> env;
@@ -46,10 +53,15 @@ final class Config {
             if (dev == null || !dev.isObject()) throw new StartupRefused("CONFIGURATION", file + " must hold a JSON object");
         }
         Config config = new Config(mode, Map.copyOf(env), dev);
-        if (dev != null && dev.has("claims") && mode != Mode.DEVELOPMENT) {
+        if (dev != null && dev.has("claims") && !mode.fixtures()) {
             config.warnings.add("toolgate.dev.json has claims, which are read only with TOOLGATE_MODE=development; ignoring them");
         }
         return config;
+    }
+
+    /** The configuration of test mode: the harness fixtures, in the shape of {@code toolgate.dev.json}, and no environment. */
+    static Config test(JsonNode fixtures) {
+        return new Config(Mode.TEST, Map.of(), fixtures);
     }
 
     /** A global from {@code TOOLGATE_GLOBAL_<NAME>} (as text, typed later) or the dev file; null when neither sets it. */
@@ -74,8 +86,8 @@ final class Config {
         return v == null || !v.isTextual() ? null : v.asText();
     }
 
-    /** Fixture claims, only in development mode. */
+    /** Fixture claims, only in development and test mode. */
     JsonNode claims() {
-        return mode == Mode.DEVELOPMENT && devJson != null && devJson.path("claims").isObject() ? devJson.get("claims") : null;
+        return mode.fixtures() && devJson != null && devJson.path("claims").isObject() ? devJson.get("claims") : null;
     }
 }

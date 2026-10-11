@@ -19,4 +19,9 @@ public @interface Example {
     String arguments();
     String expectedOutput() default "";
     String expectedError() default "";
+    /**
+     * A class path resource holding the recorded exchanges this example's route calls get, in the format of
+     * spec/authoring/testing.md. An example without one must not call a route.
+     */
+    String exchanges() default "";
 }

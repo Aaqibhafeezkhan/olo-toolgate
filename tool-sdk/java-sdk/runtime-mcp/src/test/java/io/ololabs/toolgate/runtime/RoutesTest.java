@@ -163,10 +163,8 @@ class RoutesTest {
 
     @Test
     void theConvenienceFormResolvesToExactlyOneListedRoute() {
+        // A call that matches no listed route does not compile; the processor tests cover that.
         assertEquals("123456", order("123456", "convenience").path("structuredContent").path("order").path("id").asText());
-        JsonNode e = orderError("123456", "unlisted-template");
-        assertEquals("ROUTE_REFUSED", e.path("code").asText());
-        assertTrue(e.path("message").asText().contains("matches no route"), e.toString());
     }
 
     @Test

@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls; part 7 adds the identity verifier (adapter A4); part 8 adds the routes HTTP client; part 9 adds business keys with a local SQLite reservation store; part 10 adds the SQLite task store. The governed runtime, the legacy 2025-11-25 path, the TCP connector, `ToolHarness`, the Gradle and Maven plugins, typed accessors and the route convenience analyser arrive in later parts.
+Java 17+ implementation of the [authoring contract](../spec/authoring/README.md), exactly as [authoring/java.md](../spec/authoring/java.md) names it. Milestone M0 part 2 added the authoring API and the annotation processor that turns it into semantic descriptors; part 3 adds the standalone runtime, a plain MCP 2026-07-28 server over stdio; part 4 adds the Tasks extension (adapter A2); part 5 adds Streamable HTTP, `subscriptions/listen` and progress notifications; part 6 adds MRTR `requestState` (adapter A3), so `requestInput()` works in sync calls; part 7 adds the identity verifier (adapter A4); part 8 adds the routes HTTP client; part 9 adds business keys with a local SQLite reservation store; part 10 adds the SQLite task store; part 11 completes the SDK for standalone use with the TCP connector, the route convenience analyser and typed accessors, `ToolHarness`, and the Gradle and Maven plugins. The governed runtime and the legacy 2025-11-25 path arrive with the Tool Host.
 
 ## Modules
 
@@ -13,25 +13,46 @@ Java 17+ implementation of the [authoring contract](../spec/authoring/README.md)
 | [`processor/`](processor/) | `toolgate-sdk-processor` | `DescriptorProcessor`, a javac annotation processor |
 | [`protocol/`](protocol/) | `toolgate-protocol` | `ProtocolCore`, adapter A1 of [protocol-layer.md](../spec/protocol-layer.md) §3 (MCP 2026-07-28); `Tasks`, adapter A2, over the `TaskStore` port with `MemoryTaskStore`; `RequestStates`, adapter A3; `StdioServer` and `StreamableHttpServer` |
 | [`runtime-mcp/`](runtime-mcp/) | `toolgate-sdk-runtime-mcp` | `StandaloneRuntime` and its entry point `io.ololabs.toolgate.runtime.Main`; `SqliteTaskStore` |
+| [`testing/`](testing/) | `toolgate-sdk-testing` | `ToolHarness`, `RecordedExchange`: tools in test mode ([testing.md](../spec/authoring/testing.md)) |
+| [`build-support/`](build-support/) | `toolgate-sdk-build` | `check`, `stage` and `pack`, which both plugins fork |
+| [`gradle-plugin/`](gradle-plugin/) | `toolgate-gradle-plugin` | Plugin `io.ololabs.toolgate.sdk` |
+| [`maven-plugin/`](maven-plugin/) | `toolgate-maven-plugin` | Goals `toolgate:dev`, `toolgate:check`, `toolgate:package` |
 | [`conformance-server/`](conformance-server/README.md) | not published | The fixture server the official MCP conformance suite runs against |
+| [`e2e/`](e2e/) | not published | A sample project both plugins build end to end |
 
-All compile with `--release 17`. The API and the processor have no runtime dependencies; the protocol and runtime modules depend on Jackson.
+All compile with `--release 17`. The API and the processor have no runtime dependencies; the protocol and runtime modules depend on Jackson. `./gradlew publishJavaSdkLocally` publishes every artifact to `build/sdk-repo`; there is no public repository yet.
 
-## Using the processor
+## Building with Gradle or Maven
 
 ```kotlin
-dependencies {
-    implementation("io.ololabs.toolgate:toolgate-sdk-api:<version>")
-    annotationProcessor("io.ololabs.toolgate:toolgate-sdk-processor:<version>")
-}
-tasks.withType<JavaCompile>().configureEach {
-    options.compilerArgs.add("-Atoolgate.descriptorGeneration=1")
-}
+plugins { id("io.ololabs.toolgate.sdk") version "<version>" }
+toolgate { descriptorGeneration.set(1) }
 ```
 
-The generation setting is required and has no default (descriptor spec §1, case `descriptors/generation-required`); the Gradle and Maven plugins will set it from `descriptorGeneration`.
+```xml
+<plugin>
+  <groupId>io.ololabs.toolgate</groupId>
+  <artifactId>toolgate-maven-plugin</artifactId>
+  <version><!-- version --></version>
+  <extensions>true</extensions>
+  <configuration><descriptorGeneration>1</descriptorGeneration></configuration>
+  <executions><execution><goals><goal>check</goal><goal>package</goal></goals></execution></executions>
+</plugin>
+```
 
-For each tool the processor writes `META-INF/toolgate/tools/<tool local name>.json`: the generation-1 semantic descriptor as its canonical bytes (NFC, then RFC 8785), so `sha256` of the file is the `toolDescriptorDigest`. It also writes `META-INF/toolgate/package.json` with the package id, name and publisher and, per tool, the digest, the handler class and method, and the parameter order the runtime binds arguments in.
+Both add `toolgate-sdk-api`, the processor, `toolgate-sdk-runtime-mcp` (runtime) and `toolgate-sdk-testing` (tests) at the plugin's version, and pass `descriptorGeneration` to the processor. It is required and has no default (descriptor spec §1, case `descriptors/generation-required`): without it the processor fails the compilation and says so. Maven needs `<extensions>true</extensions>` for this; the extension puts the processor on the compiler plugin's `annotationProcessorPaths`, so other processors must be listed there too.
+
+| Gradle task | Maven goal | Does |
+|---|---|---|
+| `toolgateDev` | `toolgate:dev` | Serves the tools over stdio in development mode, with `toolgate.dev.json` |
+| `toolgateCheck` (part of `check`) | `toolgate:check` (phase `test`) | Runs every `@Example` in test mode, with the dev file's values as fixtures, and fails if `toolgate.dev.json` is tracked by git |
+| `toolgatePackage` | `toolgate:package` (phase `package`) | Stages the package and packs it with the `toolgate` CLI (`TOOLGATE_CLI`, or `toolgate` on the `PATH`) into `build/toolgate/` or `target/toolgate/` as `<name>-<version>.tgpkg` |
+
+Tool code always runs in a forked JVM, never in the build tool. The staging directory holds `toolgate-package.json` and two artifacts: `artifacts/app.jar`, the project jar, and `artifacts/libs.zip`, its runtime dependencies under `lib/` with fixed dates and sorted entries. Every tool's entry point is `io.ololabs.toolgate.runtime.Main` with both on the class path. The CLI computes the digests, so the same sources give the same `descriptorSetDigest` from either build.
+
+Without the plugins, put `toolgate-sdk-api` on the compile class path, `toolgate-sdk-processor` on the processor path and pass `-Atoolgate.descriptorGeneration=1`.
+
+For each tool the processor writes `META-INF/toolgate/tools/<tool local name>.json`: the generation-1 semantic descriptor as its canonical bytes (NFC, then RFC 8785), so `sha256` of the file is the `toolDescriptorDigest`. It also writes `META-INF/toolgate/package.json` with the package id, name and publisher and, per tool, the digest, the handler class and method, the parameter order the runtime binds arguments in, and its examples. Per class that holds tools it generates the typed accessors (below).
 
 ## Running a package standalone
 
@@ -52,7 +73,7 @@ Put the compiled tools, `toolgate-sdk-runtime-mcp` and its dependencies on the c
 
 A call runs the specified pipeline: input size (1 MiB, 256 properties) and schema validation before the handler, defaults filled in, `maxConcurrency` with a 1 s queue (`CONCURRENCY_LIMIT`), a deadline of `maxDurationMs` capped at 60 s (`DEADLINE_EXCEEDED`), output schema validation and a 4 MiB output cap. Errors follow [errors.md](../spec/authoring/errors.md): declared business codes keep their code and are checked against `dataSchema`, undeclared ones become `UNDECLARED_ERROR`, uncaught ones `INTERNAL_TOOL_ERROR` with a fixed message, `retryable` is downgraded on `NON_IDEMPOTENT` and `UNKNOWN` tools, and secret and sensitive values are redacted from messages, data and logs.
 
-Startup refuses what this runtime cannot serve honestly: client tools (`CLIENT_TOOLS_UNAVAILABLE`), tools that need business-key reservations when the store cannot open, and, in production without an identity verifier, tools that need an identity (a claim, a `USER` secret, `TOKEN_EXCHANGE` or `DELEGATED_USER` auth). `context.tcp()` fails with `CONFIGURATION` for now.
+Startup refuses what this runtime cannot serve honestly: client tools (`CLIENT_TOOLS_UNAVAILABLE`), tools that need business-key reservations when the store cannot open, and, in production without an identity verifier, tools that need an identity (a claim, a `USER` secret, `TOKEN_EXCHANGE` or `DELEGATED_USER` auth). TCP destinations work as [TCP](#tcp) describes.
 
 ## Streamable HTTP
 
@@ -117,6 +138,41 @@ A violation is a compile error at the declaration:
 - a reachable auth's secret declared by the tool, `businessKeyArgument` naming an input, at most 8 examples;
 - constraint keywords that fit the value type, defaults that parse as the type, and patterns that compile.
 
+## What the analyser checks
+
+After javac attributes each class, the processor checks the handlers' code and reports a compile error at the call site:
+
+- a convenience call (`get`, `post`, `put`, `patch`, `delete`, `head` with a destination and a template) needs string literals for both, must sit in a tool handler, and must match exactly one declared route, which the tool lists. The error names the candidates, or both routes when there are two;
+- `HttpClient.class`, `RouteCall.class` and `TcpConnector.class` are refused: reflective calls cannot be analysed;
+- a `get*Value` call with a literal name on the context (inputs), on `context.global()`, `context.secret()` or `context.jwt()` must name a value the tool declares, with a getter that reads its type. A name that is not a literal is left to the runtime.
+
+## Typed accessors
+
+For each class that holds tools, the processor generates `<Class>Vars` with `global(context)`, `secret(context)` and `jwt(context)` views. Each declared value gets a method named in lower camel case (`API_KEY` becomes `apiKey()`, a keyword gets a `Value` suffix) that calls the getter for its type; `OBJECT` and `ARRAY` take the class to read as. A view exists only when the class's tools declare values of that kind, and two names that give one method name are a compile error.
+
+```java
+int timeout = OrderToolsVars.global(context).timeoutSeconds();
+```
+
+## TCP
+
+`context.tcp().connect(id)` and `socketFactory(id)` (for drivers that take a socket factory) reach only the TCP destinations the tool lists ([http.md](../spec/authoring/http.md) §6). The host comes from the destination's host setting, like a route destination, as `host` or `host:port`; the port must be the declared one, except that development may point a loopback host at any port. A socket connects only to that host and port, within the invocation deadline (connect timeout at most 10 s), and closes when the invocation is cancelled. An undeclared id is `ROUTE_REFUSED`; a destination without a host is `CONFIGURATION`.
+
+## Testing with ToolHarness
+
+```java
+try (ToolHarness h = ToolHarness.builder()
+        .global("TimeoutSeconds", 5).secret("ApiKey", "test-key").claim("sub", "user-1")
+        .exchange(RecordedExchange.on("orders.get").variable("orderId", "123").replyJson(200, Map.of("id", "123")))
+        .build()) {
+    assertEquals("123", h.call("orders.get", Map.of("orderId", "123")).output().path("order").path("id").asText());
+    assertEquals("orders.get", h.routeCalls().get(0).route());
+    h.assertExamples();
+}
+```
+
+`ToolHarness` runs the tools on the class path in test mode through the protocol core: values and claims come from the builder, every route call is answered by a recorded exchange and recorded by route id and variables, and a call no exchange answers fails with `ROUTE_REFUSED`. Route auth is named but never resolved. Async tools run as tasks and the harness waits for the result. `RecordedExchange.load` reads the shared JSON format of [testing.md](../spec/authoring/testing.md), and `fail(...)` injects `CONNECTION_REFUSED`, `RESET_AFTER_SEND` or `TIMEOUT_AFTER_SEND`. An `@Example` names its exchanges with `exchanges = "<class path resource>"`; `runExamples()` gives each example only those.
+
 ## Declaration scope
 
 Globals, secrets and claims on the `@ToolPackage` class apply to every tool; on a handler class, to the tools in that class; on a handler (or in `@ToolVariables`), to that tool. Destinations, auth, routes and TCP destinations may be declared on any class and are resolved per package. A tool's descriptor carries only the routes it lists and the destinations and auth they reach.
@@ -128,7 +184,7 @@ Globals, secrets and claims on the `@ToolPackage` class apply to every tool; on 
 - **Destinations.** Each destination's host comes from `TOOLGATE_DESTINATION_<HOSTSETTING>` or `destinations.<HostSetting>` in `toolgate.dev.json`, as `host` or `host:port`, and calls use HTTPS. The port must be the declared one. In development a loopback host may use any port and plain `http://`, for example `http://127.0.0.1:8080`, so a local mock can stand in for the upstream; production refuses both at startup.
 - **TLS.** The system trust store, or the destination's `spkiPins` when it declares any: then a server is trusted only when a certificate in its chain has a SubjectPublicKeyInfo whose SHA-256 is one of the pins, written `sha256/<base64>`. A destination with a `caBundle` fails its calls with `CONFIGURATION` for now.
 - **The call.** Every path variable must be set and fully match its pattern, and a value never contains `/`. Query names and headers must be in the route's allowlists; `Authorization`, `Proxy-Authorization`, `Cookie`, `Host`, `X-Forwarded-*` and the auth header are always refused. A `null` query value is omitted. Bodies are JSON when the route accepts `application/json`, and `byte[]` goes as is. `timeout()` can only shorten the route timeout, and the invocation deadline caps both. Request and response sizes are capped at `maxRequestBytes` and `maxResponseBytes`.
-- **Convenience form.** `http().get(destination, template)` and its siblings match method, destination and template (variable names only) against the tool's routes and must find exactly one. The build-time analyser that proves this before packaging arrives in a later part.
+- **Convenience form.** `http().get(destination, template)` and its siblings match method, destination and template (variable names only) against the tool's routes and must find exactly one. The processor proves this at build time ([below](#what-the-analyser-checks)), and the runtime makes the same match.
 - **Credentials** come from the auth's secret: `API_KEY` sends the text secret in the auth's header; `BASIC` takes `{username, password}` or `user:password`; `OAUTH2_CLIENT_CREDENTIALS` takes `{tokenUrl, clientId, clientSecret}`, asks the token endpoint with the auth's scopes and audience, and caches the token until 30 s before it expires. The token is redacted like a secret. `TOKEN_EXCHANGE`, `CONNECTION` and `CUSTOM` fail the call with `CONFIGURATION` in standalone mode.
 - **Failures.** A non-2xx status raises `UpstreamError` with `UPSTREAM_4XX` or `UPSTREAM_5XX`, the status and any `X-Request-Id`. A timeout is `UPSTREAM_TIMEOUT`; a refused connection, failed TLS handshake, reset or oversized response is `UPSTREAM_CONNECTION`. `effectUncertain` is true once the request was handed over in full: after the last body byte for a request with a body, once connected for one without. The client never retries and never follows redirects, and cancellation aborts the call in flight.
 - **`OUTCOME_UNKNOWN`.** When an uncaught `UpstreamError` with `effectUncertain` escapes a `NON_IDEMPOTENT` or `UNKNOWN` tool, the result's error code is `OUTCOME_UNKNOWN` (not retryable, with the upstream code in `data.upstreamCode`), and a task ends `failed` with that error in `error.data`.
@@ -147,8 +203,9 @@ A tool that requires a business key (by default `NON_IDEMPOTENT` and destructive
 
 ## Tests
 
-`./gradlew :sdk-java-processor:test` compiles fixture sources with the processor. `DescriptorVectorTest` compares the output with the [descriptor vectors](../spec/descriptor/vectors/) byte for byte; `DeclarationTest` covers the declaration rules. `./gradlew :sdk-java-runtime-mcp:test` compiles the fixtures under `runtime-mcp/src/test/resources/fixtures` and drives the runtime through the protocol core; `:sdk-java-protocol:test` drives `StdioServer` over piped streams and `StreamableHttpServer` over loopback HTTP, and `HttpTest` drives the runtime over HTTP; `TasksTest` runs the task fixtures under `fixtures/demo` through the Tasks methods, and `MrtrTest` runs sync `requestInput()` through MRTR rounds; `BusinessKeysTest` runs the `fixtures/keys` tools through reservations and `ReservationsTest` covers the store's rules; `RoutesTest` runs the `fixtures/routes` tools against a local upstream, including an HTTPS server checked by SPKI pin; `RequestStatesTest` covers the token itself. Both modules have an `IdentityTest`: the protocol one runs the shared identity fixtures, and the runtime one runs production mode with bearer tokens over HTTP. Each module's `ConformanceTest` lists which test runs which [conformance case](../conformance/) for the `java` target. Those cases also target the other SDKs, so they stay `authored` until every SDK passes them.
+`./gradlew :sdk-java-processor:test` compiles fixture sources with the processor. `DescriptorVectorTest` compares the output with the [descriptor vectors](../spec/descriptor/vectors/) byte for byte; `DeclarationTest` covers the declaration rules. `./gradlew :sdk-java-runtime-mcp:test` compiles the fixtures under `runtime-mcp/src/test/resources/fixtures` and drives the runtime through the protocol core; `:sdk-java-protocol:test` drives `StdioServer` over piped streams and `StreamableHttpServer` over loopback HTTP, and `HttpTest` drives the runtime over HTTP; `TasksTest` runs the task fixtures under `fixtures/demo` through the Tasks methods, and `MrtrTest` runs sync `requestInput()` through MRTR rounds; `BusinessKeysTest` runs the `fixtures/keys` tools through reservations and `ReservationsTest` covers the store's rules; `RoutesTest` runs the `fixtures/routes` tools against a local upstream, including an HTTPS server checked by SPKI pin; `RequestStatesTest` covers the token itself; `TcpTest` runs the `fixtures/tcp` tools against a local socket. `AnalysisTest` covers the analyser and the accessors. `:sdk-java-testing:test` runs `ToolHarness` over its own test tools, `:sdk-java-build:test` stages and checks a compiled package (and packs it when `TOOLGATE_CLI` points at the CLI), and the plugin modules test their wiring. [`e2e/run.sh`](e2e/run.sh) publishes the SDK to `build/sdk-repo` and builds the sample project with both plugins through `toolgate pack` and `toolgate validate`, checks that both give the same `descriptorSetDigest`, and asks the dev server for `tools/list`; `tools/check.py` runs it where `mvn` and `cargo` are installed. Both modules have an `IdentityTest`: the protocol one runs the shared identity fixtures, and the runtime one runs production mode with bearer tokens over HTTP. Each module's `ConformanceTest` lists which test runs which [conformance case](../conformance/) for the `java` target. Those cases also target the other SDKs, so they stay `authored` until every SDK passes them.
 
 ## Known gaps
 
-- Typed accessors (`OrderToolsVars.global(context)`), compile errors for undeclared names in `get*Value` calls, undeclared literal error codes, and the convenience-route analyser need the javac Tree API and arrive with the runtime.
+- Literal error codes in `ToolBusinessError` are not yet checked against the tool's declared errors at build time; the runtime reports them as `UNDECLARED_ERROR`.
+- The analyser needs the javac Tree API. Under another compiler it prints a warning and checks nothing, and the runtime's own checks remain.

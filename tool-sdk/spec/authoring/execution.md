@@ -49,7 +49,7 @@ A handler marked `Reconcile` receives `{businessKey?, invocationId, arguments}` 
 
 ## 7. Examples and self-tests
 
-`Example(arguments, expectedOutput?, expectedError?)` entries (at most 8 per tool) run in `check`/`test` builds in standalone mode, and map onto the existing fleet self-test fields for client tools and onto Tool Host self-tests for server tools. An example must not need network access unless it declares a recorded mock exchange (`ToolHarness` recorder).
+`Example(arguments, expectedOutput?, expectedError?, exchanges?)` entries (at most 8 per tool) run in `check`/`test` builds in test mode, and map onto the existing fleet self-test fields for client tools and onto Tool Host self-tests for server tools. An example must not need network access: its route calls are answered only by the recorded exchanges its `exchanges` resource holds ([testing.md](testing.md)). Examples are not part of the descriptor; the build's package index carries them.
 
 ## 8. Logging
 
@@ -57,4 +57,4 @@ A handler marked `Reconcile` receives `{businessKey?, invocationId, arguments}` 
 
 ## Related Docs
 
-- [errors.md](errors.md), [http.md](http.md), [../runtime-modes.md](../runtime-modes.md)
+- [errors.md](errors.md), [http.md](http.md), [testing.md](testing.md), [../runtime-modes.md](../runtime-modes.md)

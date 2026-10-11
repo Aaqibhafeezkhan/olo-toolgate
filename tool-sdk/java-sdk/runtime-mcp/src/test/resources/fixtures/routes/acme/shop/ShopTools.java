@@ -58,9 +58,6 @@ public class ShopTools {
             case "undeclared" -> {
                 return Map.of("v", http.route("admin.get").send(String.class));
             }
-            case "unlisted-template" -> {
-                return Map.of("v", http.get("shop-api", "/admin").send(String.class));
-            }
             case "missing-var" -> {
                 return Map.of("v", http.route("orders.get").send(String.class));
             }

@@ -26,5 +26,17 @@ project(":sdk-java-protocol").projectDir = file("tool-sdk/java-sdk/protocol")
 include(":sdk-java-runtime-mcp")
 project(":sdk-java-runtime-mcp").projectDir = file("tool-sdk/java-sdk/runtime-mcp")
 
+include(":sdk-java-testing")
+project(":sdk-java-testing").projectDir = file("tool-sdk/java-sdk/testing")
+
+include(":sdk-java-build")
+project(":sdk-java-build").projectDir = file("tool-sdk/java-sdk/build-support")
+
+include(":sdk-java-gradle-plugin")
+project(":sdk-java-gradle-plugin").projectDir = file("tool-sdk/java-sdk/gradle-plugin")
+
+include(":sdk-java-maven-plugin")
+project(":sdk-java-maven-plugin").projectDir = file("tool-sdk/java-sdk/maven-plugin")
+
 include(":sdk-java-conformance-server")
 project(":sdk-java-conformance-server").projectDir = file("tool-sdk/java-sdk/conformance-server")

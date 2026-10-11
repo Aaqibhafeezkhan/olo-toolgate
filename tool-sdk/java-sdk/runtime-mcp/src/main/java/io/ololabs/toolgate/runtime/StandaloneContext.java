@@ -59,6 +59,7 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     private volatile ObjectNode pendingInput;
     volatile Thread worker;
     private HttpClient http;
+    private TcpConnector tcp;
     private volatile String businessKey;
 
     StandaloneContext(DeclaredValues inputs, DeclaredValues globals, DeclaredValues secrets, DeclaredValues claims,
@@ -98,7 +99,13 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
 
     @Override
     public TcpConnector tcp() {
-        throw new ToolConfigurationError("The TCP connector is not in this runtime yet");
+        if (tcp == null) throw new ToolConfigurationError("The TCP connector is not available here");
+        return tcp;
+    }
+
+    /** Attaches the TCP connector for the tool's declared destinations. */
+    void attachTcp(TcpConnector tcp) {
+        this.tcp = tcp;
     }
 
     @Override public Invocation invocation() { return this; }

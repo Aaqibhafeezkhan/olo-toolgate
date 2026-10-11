@@ -4,6 +4,7 @@ package io.ololabs.toolgate.runtime;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.ololabs.toolgate.sdk.context.HttpClient;
 import io.ololabs.toolgate.sdk.context.RawResponse;
 import io.ololabs.toolgate.sdk.context.RouteCall;
@@ -261,23 +262,20 @@ final class RouteClient implements HttpClient {
             for (String name : patterns.keySet()) {
                 if (!variables.containsKey(name)) throw refused("Path variable " + name + " of route " + routeId + " is not set");
             }
+            long left = deadline.toEpochMilli() - System.currentTimeMillis();
+            if (left <= 0) throw new PlatformError(PlatformError.Code.DEADLINE_EXCEEDED, "The invocation deadline has passed");
+            String method = route.path("method").asText();
+            if (egress.exchanges != null) return recorded(method);
             String destinationId = route.path("destination").asText();
             Egress.Target target = egress.target(destinationId);
             if (target == null || target.problem != null) {
                 throw new ToolConfigurationError(target == null ? "destination " + destinationId + " is not declared" : target.problem);
             }
-            long left = deadline.toEpochMilli() - System.currentTimeMillis();
-            if (left <= 0) throw new PlatformError(PlatformError.Code.DEADLINE_EXCEEDED, "The invocation deadline has passed");
             long budget = Math.max(1, Math.min(timeoutMs, left));
 
-            String method = route.path("method").asText();
             HttpRequest.Builder request = HttpRequest.newBuilder(uri(target.base)).timeout(Duration.ofMillis(budget));
             headers.forEach(request::header);
-            if (idempotencyHeader != null && !headers.containsKey(idempotencyHeader)) {
-                boolean allowed = false;
-                for (JsonNode h : route.path("headers")) allowed |= h.asText().equalsIgnoreCase(idempotencyHeader);
-                if (allowed) request.header(idempotencyHeader, idempotencyValue);
-            }
+            if (forwardsIdempotency()) request.header(idempotencyHeader, idempotencyValue);
             String authorization = authorization(target);
             if (authorization != null) {
                 JsonNode auth = auths.get(route.get("auth").asText());
@@ -308,14 +306,87 @@ final class RouteClient implements HttpClient {
             } catch (ExecutionException e) {
                 throw failed(e.getCause(), method, sent);
             }
-            int status = response.statusCode();
-            String requestId = response.headers().firstValue("x-request-id").or(() -> response.headers().firstValue("request-id")).orElse(null);
+            return answer(response.statusCode(), response.headers().map(), response.body());
+        }
+
+        /** Whether the idempotency value goes upstream: the route allows its header and the tool did not set it. */
+        private boolean forwardsIdempotency() {
+            if (idempotencyHeader == null || headers.containsKey(idempotencyHeader)) return false;
+            for (JsonNode h : route.path("headers")) if (h.asText().equalsIgnoreCase(idempotencyHeader)) return true;
+            return false;
+        }
+
+        /** A non-2xx status is an upstream error; anything else is the response. */
+        private Response answer(int status, Map<String, List<String>> responseHeaders, byte[] body) {
+            String requestId = first(responseHeaders, "x-request-id");
+            if (requestId == null) requestId = first(responseHeaders, "request-id");
             if (status < 200 || status > 299) {
-                byte[] b = response.body();
-                String text = new String(b, 0, Math.min(b.length, ERROR_BODY_BYTES), StandardCharsets.UTF_8);
+                String text = new String(body, 0, Math.min(body.length, ERROR_BODY_BYTES), StandardCharsets.UTF_8);
                 throw upstream(status >= 500 ? "UPSTREAM_5XX" : "UPSTREAM_4XX", status, requestId, false, text);
             }
-            return new Response(status, response.headers().map(), response.body());
+            return new Response(status, responseHeaders, body);
+        }
+
+        /**
+         * Test mode: the call goes to the recorded exchanges instead of the network, in the format of
+         * spec/authoring/testing.md. The auth is named, never resolved, so no secret or token leaves the runtime.
+         */
+        private Response recorded(String method) {
+            ObjectNode request = JSON.createObjectNode();
+            request.put("route", routeId).put("method", method).put("destination", route.path("destination").asText());
+            ObjectNode vars = request.putObject("variables");
+            variables.forEach(vars::put);
+            ObjectNode q = request.putObject("query");
+            query.forEach((name, values) -> values.forEach(q.withArrayProperty(name)::add));
+            ObjectNode h = request.putObject("headers");
+            headers.forEach(h::put);
+            if (forwardsIdempotency()) h.put(idempotencyHeader, idempotencyValue);
+            if (route.hasNonNull("auth")) request.put("auth", route.get("auth").asText());
+            else request.putNull("auth");
+            if (body != null) {
+                boolean json = contentType != null && (contentType.equals("application/json") || contentType.endsWith("+json"));
+                if (json) {
+                    try {
+                        request.set("body", JSON.readTree(body));
+                    } catch (IOException e) {
+                        request.put("bodyBase64", Base64.getEncoder().encodeToString(body));
+                    }
+                } else if (contentType != null && contentType.startsWith("text/")) {
+                    request.put("bodyText", new String(body, StandardCharsets.UTF_8));
+                } else {
+                    request.put("bodyBase64", Base64.getEncoder().encodeToString(body));
+                }
+            }
+            JsonNode reply = egress.exchanges.exchange(request);
+            if (reply == null) {
+                throw refused("Test mode: no recorded exchange answers " + method + " on route " + routeId + " with variables " + vars);
+            }
+            String failure = reply.path("failure").asText("");
+            switch (failure) {
+                case "" -> { }
+                case "CONNECTION_REFUSED" -> throw upstream("UPSTREAM_CONNECTION", null, null, false, null);
+                case "RESET_AFTER_SEND" -> throw upstream("UPSTREAM_CONNECTION", null, null, true, null);
+                case "TIMEOUT_AFTER_SEND" -> throw upstream("UPSTREAM_TIMEOUT", null, null, true, null);
+                default -> throw new IllegalArgumentException("unknown recorded failure " + failure);
+            }
+            Map<String, List<String>> replyHeaders = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            reply.path("headers").properties().forEach(e -> {
+                List<String> values = new ArrayList<>();
+                if (e.getValue().isArray()) e.getValue().forEach(v -> values.add(v.asText()));
+                else values.add(e.getValue().asText());
+                replyHeaders.put(e.getKey(), values);
+            });
+            byte[] bytes;
+            try {
+                if (reply.has("body")) bytes = JSON.writeValueAsBytes(reply.get("body"));
+                else if (reply.has("bodyText")) bytes = reply.get("bodyText").asText().getBytes(StandardCharsets.UTF_8);
+                else if (reply.has("bodyBase64")) bytes = Base64.getDecoder().decode(reply.get("bodyBase64").asText());
+                else bytes = new byte[0];
+            } catch (IOException e) {
+                throw new IllegalArgumentException("the recorded body on route " + routeId + " is not JSON", e);
+            }
+            if (bytes.length > route.path("maxResponseBytes").asLong(4_194_304)) throw failed(new TooLarge(), method, new AtomicBoolean(true));
+            return answer(reply.path("status").asInt(200), replyHeaders, bytes);
         }
 
         private URI uri(URI base) {
@@ -459,6 +530,13 @@ final class RouteClient implements HttpClient {
      */
     private static boolean uncertain(String method, boolean hadBody, AtomicBoolean sent) {
         return sent.get() || !hadBody && !(method.equals("POST") || method.equals("PUT") || method.equals("PATCH"));
+    }
+
+    private static String first(Map<String, List<String>> headers, String name) {
+        for (Map.Entry<String, List<String>> e : headers.entrySet()) {
+            if (e.getKey() != null && e.getKey().equalsIgnoreCase(name) && !e.getValue().isEmpty()) return e.getValue().get(0);
+        }
+        return null;
     }
 
     static String encode(String value) {

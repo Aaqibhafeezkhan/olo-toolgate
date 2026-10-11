@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>acme</groupId>
+  <artifactId>notes</artifactId>
+  <version>1.0.0</version>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <repositories>
+    <repository><id>toolgate-sdk</id><url>@SDK_REPO_URL@</url></repository>
+  </repositories>
+  <pluginRepositories>
+    <pluginRepository><id>toolgate-sdk</id><url>@SDK_REPO_URL@</url></pluginRepository>
+  </pluginRepositories>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>io.ololabs.toolgate</groupId>
+        <artifactId>toolgate-maven-plugin</artifactId>
+        <version>@SDK_VERSION@</version>
+        <extensions>true</extensions>
+        <configuration>
+          <descriptorGeneration>1</descriptorGeneration>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+              <goal>package</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

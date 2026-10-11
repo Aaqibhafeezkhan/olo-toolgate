@@ -123,6 +123,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         Map<String, DeclaredValues.Entry> secrets = new LinkedHashMap<>();
         Map<String, JsonNode> routes = new LinkedHashMap<>();
         Map<String, JsonNode> auths = new LinkedHashMap<>();
+        java.util.Set<String> tcp = new java.util.TreeSet<>();
         JsonNode businessKey;
         boolean reserves;
     }
@@ -152,6 +153,22 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (config.mode == Config.Mode.DEVELOPMENT && Verifiers.configured(env)) {
             throw new StartupRefused("CONFIGURATION", "development mode refuses to start when a production issuer is configured");
         }
+        return start(loader, config, null, workingDirectory, diagnostics, tasks);
+    }
+
+    /**
+     * Test mode, for {@code toolgate-sdk-testing} only (spec/authoring/testing.md): deployment values and claims come
+     * from {@code fixtures}, shaped like {@code toolgate.dev.json}, and {@code exchanges} answers every route call in
+     * place of the network. Tasks and business keys stay in memory and in {@code workingDirectory}.
+     */
+    public static StandaloneRuntime startTest(ClassLoader loader, JsonNode fixtures, TestExchanges exchanges, Path workingDirectory,
+            PrintStream diagnostics) {
+        return start(loader, Config.test(fixtures), exchanges, workingDirectory, diagnostics, null);
+    }
+
+    private static StandaloneRuntime start(ClassLoader loader, Config config, TestExchanges exchanges, Path workingDirectory,
+            PrintStream diagnostics, Tasks tasks) {
+        Map<String, String> env = config.env;
         ObjectMapper json = new ObjectMapper();
         ObjectNode index = readIndex(loader, json);
         if (tasks == null) tasks = new Tasks(openTaskStore(env, workingDirectory), Tasks.DEFAULT_TTL_MS, Tasks.DEFAULT_POLL_INTERVAL_MS);
@@ -170,6 +187,10 @@ public final class StandaloneRuntime implements ToolCatalog {
         List<JsonNode> destinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("destinations").forEach(destinations::add);
         runtime.egress = Egress.resolve(config, destinations, diagnostics);
+        runtime.egress.exchanges = exchanges;
+        List<JsonNode> tcpDestinations = new ArrayList<>();
+        for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("tcp").forEach(tcpDestinations::add);
+        runtime.egress.resolveTcp(config, tcpDestinations, diagnostics);
         if (runtime.byMcpName.values().stream().anyMatch(t -> t.reserves)) runtime.reservations = openReservations(env, workingDirectory);
         Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
         for (Tool tool : runtime.byMcpName.values()) runtime.bindVariables(tool, globals);
@@ -326,6 +347,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (d.path("execution").has("maxConcurrency")) tool.concurrency = new Semaphore(d.path("execution").path("maxConcurrency").asInt(), true);
         for (JsonNode r : d.path("routes")) tool.routes.put(r.path("id").asText(), r);
         for (JsonNode a : d.path("httpAuth")) tool.auths.put(a.path("id").asText(), a);
+        for (JsonNode t : d.path("tcp")) tool.tcp.add(t.path("id").asText());
         tool.input = new SchemaValidator(d.path("inputSchema"));
         if (d.has("outputSchema")) tool.output = new SchemaValidator(d.get("outputSchema"));
         tool.parameters = new ArrayList<>();
@@ -588,7 +610,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         // Identities come from the authenticated request only, never from arguments.
         String user = null;
         String sub = null;
-        if (config.mode == Config.Mode.DEVELOPMENT) {
+        if (config.mode.fixtures()) {
             JsonNode claims = config.claims();
             if (claims != null && claims.path("sub").isTextual()) {
                 sub = claims.get("sub").asText();
@@ -689,7 +711,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     }
 
     private ObjectNode marked(ObjectNode result) {
-        if (config.mode == Config.Mode.DEVELOPMENT) result.putObject("_meta").put("io.ololabs.toolgate/identity", "fixture");
+        if (config.mode.fixtures()) result.putObject("_meta").put("io.ololabs.toolgate/identity", "fixture");
         return result;
     }
 
@@ -783,8 +805,8 @@ public final class StandaloneRuntime implements ToolCatalog {
 
         String invocationId = UUID.randomUUID().toString();
         Instant deadline = Instant.now().plusMillis(tool.deadlineMs);
-        // Claims come from fixtures in development and only from the verified credential otherwise (runtime-modes.md §4).
-        JsonNode identity = config.mode == Config.Mode.DEVELOPMENT ? config.claims() : meta.identity() == null ? null : meta.identity().claims();
+        // Claims come from fixtures in development and test, and only from the verified credential otherwise (runtime-modes.md §4).
+        JsonNode identity = config.mode.fixtures() ? config.claims() : meta.identity() == null ? null : meta.identity().claims();
         DeclaredValues claims = new DeclaredValues("claim", claims(tool, identity),
                 n -> new PlatformError(PlatformError.Code.CLAIMS_UNAVAILABLE, "Claim " + n + " is not available"));
         claims.identity = identity;
@@ -799,6 +821,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         // Forwarded upstream only through the declared header: the business key once reserved, else a value stable for this invocation.
         if (!idempotencyHeader.isEmpty()) routes.idempotency(idempotencyHeader, "i." + invocationId);
         context.attachHttp(routes);
+        context.attachTcp(new TcpClient(egress, tool.tcp, context, deadline));
         prepared.routes = routes;
         prepared.filled = filled;
         prepared.context = context;
