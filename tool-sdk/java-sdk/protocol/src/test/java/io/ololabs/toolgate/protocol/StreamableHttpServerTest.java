@@ -43,7 +43,7 @@ class StreamableHttpServerTest {
     static URI uri;
 
     /** One sync tool that reports progress, one that echoes, and Tasks. */
-    static final class Catalog implements ToolCatalog {
+    static class Catalog implements ToolCatalog {
         @Override public ObjectNode serverInfo() { return JSON.createObjectNode().put("name", "test").put("version", "1"); }
         @Override public ObjectNode discoverMeta() { return JSON.createObjectNode(); }
         @Override public Tasks tasks() { return tasks; }
@@ -288,5 +288,52 @@ class StreamableHttpServerTest {
     @Test
     void onlyLoopbackAddressesCanBeBound() {
         assertThrows(IllegalArgumentException.class, () -> StreamableHttpServer.start(core, new InetSocketAddress("0.0.0.0", 0), "/mcp"));
+    }
+
+    @Test
+    void aVerifierAuthenticatesEveryRequestAndGivesEachCallerItsOwnOwner() throws Exception {
+        IdentityVerifier verifier = bearer -> switch (bearer) {
+            case "alice-token", "bob-token" -> new VerifiedIdentity("https://issuer.invalid", bearer.substring(0, bearer.indexOf('-')),
+                    JSON.createObjectNode().put("sub", bearer), Instant.now().plusSeconds(60));
+            default -> throw new IdentityVerifier.Rejected("unknown");
+        };
+        ToolCatalog whoami = new Catalog() {
+            @Override
+            public ObjectNode call(String name, JsonNode arguments, RequestMeta meta) {
+                ObjectNode result = JSON.createObjectNode();
+                result.putObject("structuredContent").put("owner", meta.owner()).put("subject", meta.identity().subject());
+                return result;
+            }
+        };
+        // With a verifier a non-loopback address may be bound.
+        StreamableHttpServer authed = StreamableHttpServer.start(new ProtocolCore(whoami), new InetSocketAddress("0.0.0.0", 0), "/mcp", verifier);
+        try {
+            URI at = URI.create("http://127.0.0.1:" + authed.port() + "/mcp");
+            String call = body("tools/call", "{\"name\":\"echo\"," + meta("2026-07-28", null) + "}");
+            java.util.function.Function<String, HttpRequest.Builder> request = auth -> {
+                HttpRequest.Builder b = HttpRequest.newBuilder(at).POST(HttpRequest.BodyPublishers.ofString(call))
+                        .header("Content-Type", "application/json").header("Accept", "application/json")
+                        .header("MCP-Protocol-Version", "2026-07-28").header("Mcp-Method", "tools/call").header("Mcp-Name", "echo");
+                if (auth != null) b.header("Authorization", auth);
+                return b;
+            };
+
+            HttpResponse<String> none = send(request.apply(null));
+            assertEquals(401, none.statusCode());
+            assertEquals("Bearer", none.headers().firstValue("WWW-Authenticate").orElse(""));
+            HttpResponse<String> bad = send(request.apply("Bearer mallory-token"));
+            assertEquals(401, bad.statusCode());
+            assertTrue(bad.headers().firstValue("WWW-Authenticate").orElse("").contains("invalid_token"));
+            assertEquals(401, send(request.apply("Basic YWxpY2U6eA==")).statusCode());
+
+            JsonNode alice = json(send(request.apply("Bearer alice-token"))).path("result").path("structuredContent");
+            JsonNode bob = json(send(request.apply("bearer bob-token"))).path("result").path("structuredContent");
+            assertEquals("alice", alice.path("subject").asText());
+            assertEquals("bob", bob.path("subject").asText());
+            assertEquals("identity:https://issuer.invalid|alice", alice.path("owner").asText());
+            assertFalse(alice.path("owner").asText().equals(bob.path("owner").asText()));
+        } finally {
+            authed.close();
+        }
     }
 }

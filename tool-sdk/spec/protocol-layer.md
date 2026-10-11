@@ -75,7 +75,7 @@ Rules that hold in every language:
 - JWT: JWKS fetched over HTTPS and cached, refreshed on an unknown `kid` at most once per 30 s; pinned keys as an alternative; issuer and audience exact match; algorithm allowlist (`none` and HMAC always rejected); `exp` and `nbf` required with at most 60 s skew.
 - Introspection: RFC 7662 with client credentials, `active` required, cache bounded by the token's `exp` and at most 5 minutes.
 - Runs before dispatch; behaviour by mode in [runtime-modes.md](runtime-modes.md) §4.
-- **Acceptance:** shared token fixtures, identical in every language: good, expired, not yet valid, wrong issuer, wrong audience, `alg: none`, HS256 with the public key as secret, unknown `kid` (then known after refresh), revoked by introspection.
+- **Acceptance:** shared token fixtures, identical in every language ([conformance/fixtures/identity](../conformance/fixtures/identity/README.md)): good, expired, not yet valid, wrong issuer, wrong audience, `alg: none`, HS256 with the public key as secret, unknown `kid` (then known after refresh), revoked by introspection.
 
 ### A5 Method routing
 

@@ -53,7 +53,7 @@ Defines the two runtimes behind the one authoring contract, the invariant that b
 
 Claims never come from tool arguments, headers other than `Authorization`, or environment variables, in any mode.
 
-Verifier configuration (standalone): `TOOLGATE_AUTH_ISSUER`, `TOOLGATE_AUTH_AUDIENCE`, `TOOLGATE_AUTH_JWKS_URL` or `TOOLGATE_AUTH_KEYS_FILE`, `TOOLGATE_AUTH_ALGORITHMS` (default `RS256,ES256`; `none` and HMAC algorithms are always rejected), or `TOOLGATE_AUTH_INTROSPECTION_URL` with client credentials as secrets.
+Verifier configuration (standalone): `TOOLGATE_AUTH_ISSUER`, `TOOLGATE_AUTH_AUDIENCE`, `TOOLGATE_AUTH_JWKS_URL` or `TOOLGATE_AUTH_KEYS_FILE`, `TOOLGATE_AUTH_ALGORITHMS` (default `RS256,ES256`; `none` and HMAC algorithms are always rejected), or `TOOLGATE_AUTH_INTROSPECTION_URL` with client credentials as secrets (`TOOLGATE_AUTH_CLIENT_ID`, `TOOLGATE_AUTH_CLIENT_SECRET`). Exactly one key source or introspection URL is set. With a verifier, production may bind HTTP to a non-loopback address; without one it binds only loopback, as development always does.
 
 ## 5. `toolgate.dev.json`
 

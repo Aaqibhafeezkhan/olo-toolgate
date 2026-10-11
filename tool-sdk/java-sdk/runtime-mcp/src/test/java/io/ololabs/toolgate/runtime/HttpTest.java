@@ -119,7 +119,7 @@ class HttpTest {
                     new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8));
             throw new AssertionError("the runtime started");
         } catch (StartupRefused e) {
-            assertTrue(e.getMessage().contains("Streamable HTTP binds only to a loopback address until the identity verifier"), e.getMessage());
+            assertTrue(e.getMessage().contains("binds a non-loopback address only with an identity verifier"), e.getMessage());
         }
         wide.put("TOOLGATE_HTTP_ADDRESS", "nonsense");
         assertTrue(refused(wide).contains("must be host:port"));
