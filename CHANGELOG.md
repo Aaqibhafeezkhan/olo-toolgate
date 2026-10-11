@@ -6,6 +6,20 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java Tool SDK is complete for standalone use (M0 part 11). `context.tcp()` connects only
+  to the TCP destinations a tool lists, directly or through a socket factory. The processor
+  proves URL-style convenience calls at build time (literal arguments, exactly one route the
+  tool lists), refuses reflective access to the network API, checks literal `get*Value` names
+  and types, and generates `<Class>Vars` typed accessors; it now analyses after javac's own
+  attribution. `toolgate-sdk-testing` adds `ToolHarness`, which runs tools in test mode with
+  fixtures and recorded route exchanges in a shared format (`spec/authoring/testing.md`);
+  `@Example` gains `exchanges`, and examples travel in the package index. The Gradle plugin
+  `io.ololabs.toolgate.sdk` and `toolgate-maven-plugin` add `dev`, `check` and `package`
+  over the shared `toolgate-sdk-build`, which stages `app.jar` plus a deterministic
+  `libs.zip` and packs with the `toolgate` CLI. `./gradlew publishJavaSdkLocally` publishes
+  the SDK to `build/sdk-repo`, and `tool-sdk/java-sdk/e2e/run.sh` builds a sample with both
+  plugins end to end.
+
 - The Java standalone runtime can keep tasks in SQLite (M0 part 10). With
   `TOOLGATE_TASK_STORE=sqlite` tasks and their results live in the state file at
   `TOOLGATE_STATE_DB` and survive a restart; a task the stopped process had not finished ends

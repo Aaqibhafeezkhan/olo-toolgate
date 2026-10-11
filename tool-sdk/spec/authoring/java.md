@@ -82,4 +82,4 @@ Artifact `io.ololabs.toolgate:toolgate-sdk-testing`, package `io.ololabs.toolgat
 
 ## Build
 
-Gradle plugin id `io.ololabs.toolgate.sdk`; tasks `toolgateDev`, `toolgatePackage`, `toolgateCheck`. Maven plugin `io.ololabs.toolgate:toolgate-maven-plugin` with goals `dev`, `package`, `check`. Both set `descriptorGeneration` (required, no default).
+Gradle plugin id `io.ololabs.toolgate.sdk`; tasks `toolgateDev`, `toolgatePackage`, `toolgateCheck`. Maven plugin `io.ololabs.toolgate:toolgate-maven-plugin` with goals `dev`, `package`, `check`; with `<extensions>true</extensions>` it adds the SDK dependencies and configures the compiler plugin as the Gradle plugin does. Both set `descriptorGeneration` (required, no default). A package holds `artifacts/app.jar` and `artifacts/libs.zip` (the runtime dependencies under `lib/`), and every tool's entry point is `io.ololabs.toolgate.runtime.Main` with both on the class path.
