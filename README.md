@@ -39,6 +39,12 @@ The enabled/disabled states shown are the local demo's current configuration.
 
 ![Real ToolGate console showing complete configuration export, JSON file selection, Replace and Merge import modes, and independent review guidance](docs/media/console-configuration.jpg)
 
+**Merge** keeps existing records that are absent from the import file and updates records that appear in both. For example, if the live configuration has tools A, B, C and the import file contains only B (modified) and D (new), Merge produces A, B (updated), C, D.
+
+**Replace** removes every existing record not present in the import file. With the same starting set A, B, C and import file B (modified), D, Replace produces B (updated), D — tools A and C are deleted.
+
+> Passwords, private keys and live audit/job state are never included in the exported file. Each import mode supports [independent reviews and revision-conflict guidance](docs/enterprise-access-control/operations.md) before changes take effect.
+
 </details>
 
 The enterprise intermediary version uses group-only grants and current Control
