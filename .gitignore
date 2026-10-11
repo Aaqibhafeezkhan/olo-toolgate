@@ -32,6 +32,8 @@ private/
 .data/
 data/
 runtime/
+# source packages named runtime are code, not local state
+!**/src/**/runtime/
 artifacts/
 quarantine/
 hotfolder/

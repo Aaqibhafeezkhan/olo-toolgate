@@ -6,6 +6,19 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java standalone runtime serves Streamable HTTP (M0 part 5). With
+  `TOOLGATE_HTTP_ADDRESS` it answers stateless `POST /mcp` requests on a loopback address,
+  with the 2026-07-28 header rules and HTTP statuses, DNS-rebinding protection and
+  progress notifications over SSE. `subscriptions/listen` delivers
+  `notifications/tools/list_changed` and, to listeners that declare Tasks,
+  `notifications/tasks`. A new fixture server runs the official MCP conformance suite
+  against the Java protocol layer: every required scenario that applies to tools passes
+  except MRTR (adapter A3), and 9 of 10 `tasks-*` scenarios pass. `tools/call` now ignores
+  unrecognised parameters, and `progress()` ignores fractions outside 0..1 instead of
+  clamping them. The Java runtime sources are committed for the first time: a
+  `.gitignore` rule for local `runtime/` state had kept the runtime package out of the
+  M0 part 3 and part 4 merges, so `main` could not build `:sdk-java-runtime-mcp`.
+
 - The Java standalone runtime serves the MCP Tasks extension (M0 part 4, adapter A2).
   Async tools run as tasks for requests that declare `io.modelcontextprotocol/tasks`:
   `tools/call` returns a `CreateTaskResult`, and `tasks/get`, `tasks/update` and

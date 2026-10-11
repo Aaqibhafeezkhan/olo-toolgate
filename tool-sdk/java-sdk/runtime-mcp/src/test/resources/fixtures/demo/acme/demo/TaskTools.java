@@ -58,6 +58,15 @@ public class TaskTools {
         return Map.of("watched", true);
     }
 
+    @ServerTool(name = "demo.tick", title = "Tick", description = "Reports progress in a sync call.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> tick(ToolContext context) {
+        context.progress(0.25, "a quarter");
+        context.progress(0.1, "backwards, ignored");
+        context.progress(1.2, "out of range, ignored");
+        context.progress(1.0, "done");
+        return Map.of("ticked", true);
+    }
+
     @ServerTool(name = "demo.inline", title = "Inline", description = "Asks for input in a sync call.", effect = EffectSafety.READ_ONLY)
     public Map<String, Object> inline(ToolContext context) {
         return Map.of("v", context.requestInput(InputRequest.of("?", Map.of("type", "string"), String.class)));

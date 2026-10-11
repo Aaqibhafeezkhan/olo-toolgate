@@ -34,6 +34,7 @@ public final class Tasks implements AutoCloseable {
     private final long ttlMs;
     private final long pollIntervalMs;
     private final Map<String, Runnable> cancelHandlers = new ConcurrentHashMap<>();
+    private final java.util.List<java.util.function.Consumer<TaskRecord>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Object changed = new Object();
     private final SecureRandom random = new SecureRandom();
     private final ScheduledExecutorService sweeper = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -49,6 +50,11 @@ public final class Tasks implements AutoCloseable {
         this.pollIntervalMs = pollIntervalMs;
         long sweep = Math.max(10, pollIntervalMs / 2);
         sweeper.scheduleWithFixedDelay(this::sweep, sweep, sweep, TimeUnit.MILLISECONDS);
+    }
+
+    /** Called with the task after each change of status or status message, for {@code notifications/tasks}. */
+    public void onChange(java.util.function.Consumer<TaskRecord> listener) {
+        listeners.add(listener);
     }
 
     // ---- runtime side ----
@@ -243,11 +249,23 @@ public final class Tasks implements AutoCloseable {
     }
 
     private void change(String taskId, java.util.function.Consumer<TaskRecord> change) {
-        store.transition(taskId, t -> {
+        String[] before = new String[1];
+        Optional<TaskRecord> after = store.transition(taskId, t -> {
+            before[0] = t.status + "\u0000" + t.statusMessage;
             change.accept(t);
             t.lastUpdatedAt = Instant.now();
         });
         signal();
+        after.ifPresent(t -> {
+            if (before[0].equals(t.status + "\u0000" + t.statusMessage)) return;
+            for (java.util.function.Consumer<TaskRecord> l : listeners) {
+                try {
+                    l.accept(t);
+                } catch (RuntimeException e) {
+                    // a listener failure never affects the task
+                }
+            }
+        });
     }
 
     private void end(String taskId, java.util.function.Consumer<TaskRecord> change) {
