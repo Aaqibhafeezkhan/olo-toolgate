@@ -9,16 +9,13 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      comment:
-        description: "Trigger comment must start with RC:"
-        type: string
-        required: true
       publish:
         description: Publish the tested image from the matching version tag
         type: boolean
         default: false
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
   group: control-${{ github.ref }}
   cancel-in-progress: false
@@ -26,7 +23,6 @@ jobs:
   admission:
     uses: ./.github/workflows/admission.yml
     with:
-      comment: ${{ inputs.comment || '' }}
       main_only: true
   preflight:
     needs: admission
@@ -35,8 +31,6 @@ jobs:
   clients:
     needs: preflight
     uses: ./.github/workflows/client.yml
-    with:
-      comment: ${{ inputs.comment || '' }}
   policy-compatibility:
     needs: preflight
     uses: ./.github/workflows/policy.yml

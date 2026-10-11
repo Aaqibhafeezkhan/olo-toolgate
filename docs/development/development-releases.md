@@ -60,6 +60,12 @@ main. It waits up to 30 minutes for Control, Gateway, Quickstart, Foundation and
 Endpoint Client CI to pass for the same commit. Failed, cancelled or missing gates
 prevent publication. Manual dispatch on main follows the same gates.
 
+Automatic CI and development release admission require `TOOLGATE_CI_ENABLED=true`
+and a PR title starting with `RC:`. Push and release events resolve the merged PR
+for the exact commit through GitHub's API, so the default `Merge pull request ...`
+commit message is accepted when the PR has an RC title. Manual dispatch checks
+the selected commit's merged PR title and requires no comment input.
+
 Configure the `development-release` GitHub environment. Repository secrets also
 work: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are required. The optional repository
 variable `DOCKERHUB_NAMESPACE` overrides the Docker Hub username as the destination.

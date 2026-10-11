@@ -103,8 +103,8 @@ also support manual dispatch.
 Replay deliberately runs the **job body**, independently of admission and
 upstream dependencies, using a synthetic dispatch workflow. Real GitHub job
 conditions and event payload routing are recorded in the plan and are not
-represented as locally verified. Shared offline admission tests cover RC
-messages, PR titles, manual inputs, upstream conclusions and the pause variable.
+represented as locally verified. Shared offline admission tests cover PR titles,
+merged PR lookup, upstream conclusions and the pause variable.
 Replay does not change `TOOLGATE_CI_ENABLED`, enable automatic CI, or bypass those
 rules on GitHub.
 
@@ -121,4 +121,4 @@ images, GitHub APIs, permissions, approvals, artifacts, registries and upstream
 dependencies can differ or fail. The report always sets
 `allGitHubTriggersVerified` to `false`. Use hosted CI on the final commit, with
 the actual native matrix and release environments, to close these gaps. See
-[RC admission](ci-admission.md) for the current automatic CI pause.
+[RC admission](ci-admission.md) for the automatic CI enablement and PR title rules.

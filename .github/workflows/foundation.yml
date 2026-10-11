@@ -8,13 +8,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      comment:
-        description: "Trigger comment must start with RC:"
-        type: string
-        required: true
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
   group: foundation-${{ github.ref }}
   cancel-in-progress: false
@@ -22,7 +18,6 @@ jobs:
   admission:
     uses: ./.github/workflows/admission.yml
     with:
-      comment: ${{ inputs.comment || '' }}
       main_only: true
   preflight:
     needs: admission

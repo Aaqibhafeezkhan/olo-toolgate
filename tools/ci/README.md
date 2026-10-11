@@ -72,8 +72,9 @@ see the current inventory before selecting jobs.
 
 On GitHub, the five CI workflows run automatically for pushes to `main` and
 PRs targeting `main`. Manual runs must select `main`. PR admission uses the
-`RC:` title plus `TOOLGATE_CI_ENABLED=true`; push admission uses the latest
-commit's `RC:` message, and manual admission uses the `RC:` comment input.
+`RC:` title plus `TOOLGATE_CI_ENABLED=true`. Push, manual and development-release
+admission resolve the merged PR for the exact commit and check that same title.
+Commit messages and manual comments do not override PR title admission.
 Actions displays PR runs under their source branch even when the target is
 `main`. Local replay runs selected job bodies independently of these hosted
 trigger rules.
@@ -137,6 +138,6 @@ a local pass cannot guarantee every GitHub trigger will succeed.
 
 See the [full local CI guide](../../docs/development/local-ci.md) for trigger
 coverage, execution isolation and limitations, and
-[CI admission](../../docs/development/ci-admission.md) for RC message rules and
+[CI admission](../../docs/development/ci-admission.md) for PR title rules and
 the automatic CI pause. Local replay does not enable automatic CI or publish
 releases.

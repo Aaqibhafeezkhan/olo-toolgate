@@ -3,28 +3,19 @@
 name: endpoint-client
 on:
   workflow_call:
-    inputs:
-      comment:
-        type: string
-        default: ''
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      comment:
-        description: "Trigger comment must start with RC:"
-        type: string
-        required: true
 permissions:
   contents: read
+  pull-requests: read
 jobs:
   admission:
     uses: ./.github/workflows/admission.yml
     with:
-      comment: ${{ inputs.comment || '' }}
       main_only: true
   preflight:
     needs: admission

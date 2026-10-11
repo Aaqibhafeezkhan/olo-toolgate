@@ -8,17 +8,27 @@ import unittest
 from pathlib import Path
 import tempfile
 from unittest.mock import patch
+from urllib.error import HTTPError
 import yaml
-from tools.ci.admission import decision, trigger_message, main
+from tools.ci.admission import decision, trigger_message, merged_pr_title, main
+
+
+REPOSITORY = 'olo-labs/olo-toolgate'
+MERGE_SHA = '6dd6ee460fb440615e0ca70c9468e3988c3831f6'
+RC_TITLE = 'RC: Tool SDK: MRTR requestState in the Java runtime (M0 part 6, adapter A3)'
 
 
 class AdmissionTests(unittest.TestCase):
-    def run_pr_admission(self, enabled):
+    def run_admission(self, enabled, payload=None, event_name='pull_request'):
         with tempfile.TemporaryDirectory() as directory:
             event=Path(directory)/'event.json'
             output=Path(directory)/'output.txt'
-            event.write_text(json.dumps({'pull_request':{'title':'RC: validate','head':{'sha':'a'*40}}}),encoding='utf-8')
-            environment={'GITHUB_EVENT_PATH':str(event),'GITHUB_EVENT_NAME':'pull_request','GITHUB_OUTPUT':str(output)}
+            if payload is None:
+                payload={'pull_request':{'title':RC_TITLE,'base':{'ref':'main'},'head':{'sha':'a'*40}}}
+            event.write_text(json.dumps(payload),encoding='utf-8')
+            environment={'GITHUB_EVENT_PATH':str(event),'GITHUB_EVENT_NAME':event_name,
+                         'GITHUB_OUTPUT':str(output),'GITHUB_REPOSITORY':REPOSITORY,
+                         'GITHUB_SHA':MERGE_SHA}
             if enabled is not None:
                 environment['CI_ENABLED']=enabled
             # No GitHub API credentials or repository name: PR admission is local.
@@ -55,8 +65,37 @@ class AdmissionTests(unittest.TestCase):
                     if job.get('needs')=='admission':
                         self.assertIn("needs.admission.outputs.allow == 'true'",job['if'])
 
-    def test_enabled_rc_trigger_is_admitted(self):
-        self.assertEqual(decision('RC: build'), (True, 'RC: trigger admitted'))
+    def test_enabled_rc_title_is_admitted(self):
+        self.assertEqual(decision(RC_TITLE), (True, 'RC: PR title admitted'))
+
+    def test_workflows_use_only_pr_title_for_rc_admission(self):
+        root=Path(__file__).resolve().parents[2]
+        admission=yaml.safe_load((root/'.github/workflows/admission.yml').read_text())
+        condition=admission['jobs']['admit']['if']
+        self.assertIn("vars.TOOLGATE_CI_ENABLED == 'true'",condition)
+        self.assertIn("startsWith(github.event.pull_request.title, 'RC:')",condition)
+        self.assertNotIn('head_commit.message',condition)
+        self.assertNotIn('inputs.comment',condition)
+        self.assertIn("github.ref == 'refs/heads/main'",condition)
+        self.assertIn("github.base_ref == 'main'",condition)
+        self.assertIn("github.event.workflow_run.head_branch == 'main'",condition)
+        self.assertNotIn('(!inputs.main_only ||',condition)
+        for name in ('admission','foundation','client','control','gateway','quickstart',
+                     'development-release','release-foundation'):
+            document=yaml.safe_load((root/f'.github/workflows/{name}.yml').read_text())
+            with self.subTest(workflow=name):
+                self.assertEqual(document['permissions']['pull-requests'],'read')
+                events=document.get('on',document.get(True,{}))
+                for event in ('workflow_dispatch','workflow_call'):
+                    self.assertNotIn('comment',(events.get(event) or {}).get('inputs',{}))
+
+    def test_development_release_only_accepts_main_runs(self):
+        root=Path(__file__).resolve().parents[2]
+        document=yaml.safe_load((root/'.github/workflows/development-release.yml').read_text())
+        events=document.get('on',document.get(True,{}))
+        self.assertEqual(events['workflow_run']['branches'],['main'])
+        self.assertTrue(document['jobs']['admission']['with']['main_only'])
+        self.assertIn("github.ref == 'refs/heads/main'",document['jobs']['publish']['if'])
 
     def test_pr_workflows_observe_title_edits(self):
         root=Path(__file__).resolve().parents[2]
@@ -89,12 +128,17 @@ class AdmissionTests(unittest.TestCase):
         release=yaml.safe_load((root/'.github/workflows/release-foundation.yml').read_text())
         events=release.get('on',release.get(True,{}))
         self.assertEqual(events['push'],{'tags':['v*']})
-        self.assertNotIn('main_only',release['jobs']['admission']['with'])
+        self.assertNotIn('main_only',release['jobs']['admission'].get('with',{}))
 
     def test_pr_entrypoint_requires_exact_enabled_variable_without_api_credentials(self):
         for enabled in ('true','false','True','',None):
             with self.subTest(enabled=enabled):
-                self.assertEqual(self.run_pr_admission(enabled),'allow='+str(enabled=='true').lower()+'\n')
+                self.assertEqual(self.run_admission(enabled),'allow='+str(enabled=='true').lower()+'\n')
+
+    def test_disabled_push_does_not_query_github(self):
+        with patch('tools.ci.admission.merged_pr_title') as lookup:
+            self.assertEqual(self.run_admission('false',{'after':MERGE_SHA},'push'),'allow=false\n')
+        lookup.assert_not_called()
 
     def test_manual_development_release_has_no_test_or_ci_dependencies(self):
         root=Path(__file__).resolve().parents[2]
@@ -115,14 +159,28 @@ class AdmissionTests(unittest.TestCase):
         for message in ('fix: build', 'rc: build', ' RC: build', '', None):
             self.assertFalse(decision(message)[0])
 
-    def test_push_uses_head_commit_not_an_older_commit(self):
-        event={'head_commit':{'message':'fix: current'},'commits':[{'message':'RC: previous'}]}
-        self.assertEqual(trigger_message(event,'push'),'fix: current')
+    def test_default_merge_message_is_admitted_by_actual_pr_heading(self):
+        event={'after':MERGE_SHA,'head_commit':{'message':'Merge pull request #64 from olo-labs/sdk/m0-java-mrtr'}}
+        with patch('tools.ci.admission.merged_pr_title',return_value=RC_TITLE) as lookup:
+            self.assertEqual(self.run_admission('true',event,'push'),'allow=true\n')
+        lookup.assert_called_once_with(REPOSITORY,MERGE_SHA)
+
+    def test_commit_message_and_manual_comment_cannot_admit_non_rc_pr(self):
+        for event_name,event in (
+                ('push',{'after':MERGE_SHA,'head_commit':{'message':'RC: commit'}}),
+                ('workflow_dispatch',{'inputs':{'comment':'RC: manual'}})):
+            with self.subTest(event=event_name), patch('tools.ci.admission.merged_pr_title',return_value='fix: PR'):
+                self.assertEqual(self.run_admission('true',event,event_name),'allow=false\n')
+
+    def test_manual_dispatch_uses_the_selected_commits_pr_title(self):
+        with patch('tools.ci.admission.merged_pr_title',return_value=RC_TITLE) as lookup:
+            self.assertEqual(self.run_admission('true',{},'workflow_dispatch'),'allow=true\n')
+        lookup.assert_called_once_with(REPOSITORY,MERGE_SHA)
 
     def test_pr_requires_only_rc_title_regardless_of_head_commit(self):
         for head in ({'sha':'a'*40, 'message':'fix: head'}, {}, None):
             with self.subTest(head=head):
-                event={'pull_request':{'title':'RC: test','head':head}}
+                event={'pull_request':{'title':'RC: test','base':{'ref':'main'},'head':head}}
                 message=trigger_message(event,'pull_request')
                 self.assertEqual(message,'RC: test')
                 self.assertTrue(decision(message)[0])
@@ -130,20 +188,90 @@ class AdmissionTests(unittest.TestCase):
     def test_non_rc_pr_title_cannot_be_admitted_by_an_rc_commit(self):
         for title in ('fix: test','rc: test',' RC: test','',None,42):
             with self.subTest(title=title):
-                event={'pull_request':{'title':title,'head':{'message':'RC: head'}},'head_commit':{'message':'RC: head'}}
+                event={'pull_request':{'title':title,'base':{'ref':'main'},'head':{'message':'RC: head'}},'head_commit':{'message':'RC: head'}}
                 self.assertFalse(decision(trigger_message(event,'pull_request'))[0])
         self.assertFalse(decision(trigger_message({'pull_request':{}},'pull_request'))[0])
 
     def test_pr_title_edit_uses_current_title(self):
-        event={'action':'edited','changes':{'title':{'from':'fix: test'}},'pull_request':{'title':'RC: test'}}
+        event={'action':'edited','changes':{'title':{'from':'fix: test'}},'pull_request':{'title':'RC: test','base':{'ref':'main'}}}
         self.assertTrue(decision(trigger_message(event,'pull_request'))[0])
         event['changes']['title']['from']='RC: test'
         event['pull_request']['title']='fix: test'
         self.assertFalse(decision(trigger_message(event,'pull_request'))[0])
 
-    def test_manual_and_release_events_cannot_bypass_prefix(self):
-        self.assertEqual(trigger_message({'inputs':{'comment':'RC: manual'}},'workflow_dispatch'),'RC: manual')
-        event={'workflow_run':{'event':'push','conclusion':'success','head_commit':{'message':'RC: release'}}}
-        self.assertEqual(trigger_message(event,'workflow_run'),'RC: release')
-        event['workflow_run']['conclusion']='cancelled'
-        self.assertEqual(trigger_message(event,'workflow_run'),'')
+    def test_release_uses_upstream_sha_and_merged_pr_title(self):
+        event={'workflow_run':{'event':'push','conclusion':'success','head_sha':MERGE_SHA,'head_branch':'main',
+                              'head_repository':{'full_name':REPOSITORY}}}
+        with patch.dict(os.environ,{'GITHUB_SHA':'a'*40,'GITHUB_REPOSITORY':REPOSITORY}), \
+             patch('tools.ci.admission.merged_pr_title',return_value=RC_TITLE) as lookup:
+            self.assertEqual(trigger_message(event,'workflow_run'),RC_TITLE)
+        lookup.assert_called_once_with(REPOSITORY,MERGE_SHA)
+
+    def test_failed_or_foreign_upstream_run_cannot_publish(self):
+        for changes in ({'conclusion':'failure'},{'conclusion':'cancelled'},
+                        {'conclusion':'skipped'},{'event':'pull_request'},
+                        {'head_branch':'feature/rc'},{'head_branch':'master'},
+                        {'head_repository':{'full_name':'another/repository'}}):
+            event={'workflow_run':{'event':'push','conclusion':'success','head_sha':MERGE_SHA,'head_branch':'main',
+                                  'head_repository':{'full_name':REPOSITORY},**changes}}
+            with self.subTest(changes=changes), patch.dict(os.environ,{'GITHUB_REPOSITORY':REPOSITORY}), \
+                 patch('tools.ci.admission.merged_pr_title') as lookup:
+                self.assertEqual(trigger_message(event,'workflow_run'),'')
+                lookup.assert_not_called()
+
+    def test_rc_prs_targeting_other_branches_are_rejected(self):
+        for branch in ('master','develop','feature/rc',''):
+            event={'pull_request':{'title':RC_TITLE,'base':{'ref':branch}}}
+            with self.subTest(branch=branch), patch('tools.ci.admission.merged_pr_title') as lookup:
+                self.assertEqual(self.run_admission('true',event),'allow=false\n')
+                lookup.assert_not_called()
+
+    def pr_fixture(self, **changes):
+        return {'title':RC_TITLE,'merged_at':'2026-10-11T18:16:27Z',
+                'merge_commit_sha':MERGE_SHA,
+                'base':{'ref':'main','repo':{'full_name':REPOSITORY}},**changes}
+
+    def mock_pr_response(self, pages):
+        return [io.BytesIO(json.dumps(page).encode('utf-8')) for page in pages]
+
+    def test_merge_squash_and_rebase_commits_resolve_their_actual_pr(self):
+        for sha in (MERGE_SHA,'a'*40,'b'*40):
+            pr=self.pr_fixture(merge_commit_sha=sha)
+            with self.subTest(sha=sha), patch.dict(os.environ,{'GH_TOKEN':'test-token'}), \
+                 patch('tools.ci.admission.urlopen',side_effect=self.mock_pr_response([[pr]])) as fetch:
+                self.assertEqual(merged_pr_title(REPOSITORY,sha),RC_TITLE)
+                request=fetch.call_args.args[0]
+                self.assertIn(f'/commits/{sha}/pulls?',request.full_url)
+                self.assertEqual(request.get_header('Authorization'),'Bearer test-token')
+
+    def test_open_unrelated_and_foreign_prs_cannot_admit_a_push(self):
+        excluded=[self.pr_fixture(merged_at=None),
+                  self.pr_fixture(merge_commit_sha='a'*40),
+                  self.pr_fixture(base={'ref':'other','repo':{'full_name':REPOSITORY}}),
+                  self.pr_fixture(base={'ref':'main','repo':{'full_name':'another/repository'}})]
+        with patch('tools.ci.admission.urlopen',side_effect=self.mock_pr_response([excluded])):
+            self.assertEqual(merged_pr_title(REPOSITORY,MERGE_SHA),'')
+
+    def test_direct_rc_commit_without_a_merged_pr_is_rejected(self):
+        with patch('tools.ci.admission.urlopen',side_effect=self.mock_pr_response([[]])):
+            self.assertFalse(decision(merged_pr_title(REPOSITORY,MERGE_SHA))[0])
+
+    def test_associated_pr_lookup_follows_pagination(self):
+        pages=[[self.pr_fixture(merged_at=None)]*100,[self.pr_fixture()]]
+        with patch('tools.ci.admission.urlopen',side_effect=self.mock_pr_response(pages)) as fetch:
+            self.assertEqual(merged_pr_title(REPOSITORY,MERGE_SHA),RC_TITLE)
+        self.assertEqual(fetch.call_count,2)
+        self.assertIn('page=2',fetch.call_args.args[0].full_url)
+
+    def test_invalid_repository_or_sha_cannot_query_github(self):
+        with patch('tools.ci.admission.urlopen') as fetch:
+            for repository,sha in (('',MERGE_SHA),(REPOSITORY,'bad'),
+                                   ('../elsewhere',MERGE_SHA),(REPOSITORY,None)):
+                self.assertEqual(merged_pr_title(repository,sha),'')
+        fetch.assert_not_called()
+
+    def test_github_lookup_failure_cannot_admit_a_push(self):
+        error=HTTPError('https://api.github.com/',403,'Forbidden',{},None)
+        with patch('tools.ci.admission.urlopen',side_effect=error), \
+             self.assertRaises(HTTPError):
+            self.run_admission('true',{'after':MERGE_SHA},'push')
