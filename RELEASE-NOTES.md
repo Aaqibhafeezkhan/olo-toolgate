@@ -13,6 +13,17 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java standalone runtime serves the MCP Tasks extension (M0 part 4, adapter A2).
+  Async tools run as tasks for requests that declare `io.modelcontextprotocol/tasks`:
+  `tools/call` returns a `CreateTaskResult`, and `tasks/get`, `tasks/update` and
+  `tasks/cancel` follow SEP-2663. `requestInput()` maps to `input_required`,
+  `progress()` to the status message, cancellation has a 5 s grace, `cancelIfAbandoned`
+  cancels after 3 missed polls, and tasks are owner-bound and purged after their TTL.
+  Tasks live in a memory store behind the `TaskStore` port. A `-32021` error now carries
+  `data.requiredCapabilities` as a client capabilities object, as the 2026-07-28 schema
+  requires, and the stdio era lock is specified as `-32022`, matching case
+  `legacy/stdio-era-lock`.
+
 - The Java Tool SDK runs tools standalone (`tool-sdk/java-sdk`, M0 part 3).
   `toolgate-protocol` serves MCP 2026-07-28 over stdio (per-request `_meta`, the stdio
   era lock, `server/discover`, `tools/list`, `tools/call`), and

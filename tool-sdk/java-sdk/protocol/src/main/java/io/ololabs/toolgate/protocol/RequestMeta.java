@@ -12,8 +12,9 @@ import java.util.Set;
  * @param clientCapabilities the declared client capabilities
  * @param extensions the extension ids declared in {@code clientCapabilities.extensions}
  * @param transport {@code stdio} or {@code http}
+ * @param owner who owns the tasks this request creates: the verified identity, or the connection when there is none
  */
-public record RequestMeta(String protocolVersion, JsonNode clientCapabilities, Set<String> extensions, String transport) {
+public record RequestMeta(String protocolVersion, JsonNode clientCapabilities, Set<String> extensions, String transport, String owner) {
     public static final String TASKS = "io.modelcontextprotocol/tasks";
 
     public boolean declares(String extension) {

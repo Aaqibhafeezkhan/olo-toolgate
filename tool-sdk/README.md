@@ -4,7 +4,7 @@
 
 `tool-sdk/` holds the ToolGate Tool SDK: one authoring contract for Java, Python, TypeScript and .NET tools that run as plain MCP servers (standalone mode) or under ToolGate governance (governed mode).
 
-**Status:** milestone M0 ([implementation plan](../docs/sdk-plan/implementation-plan.md)). The normative specification (gate D0) and the conformance cases (gate D3) are here, with the `toolgate` CLI packager and the Java authoring API and descriptor processor. The Java runtime and build plugins, and the other language SDKs, follow in later M0 parts.
+**Status:** milestone M0 ([implementation plan](../docs/sdk-plan/implementation-plan.md)). The normative specification (gate D0) and the conformance cases (gate D3) are here, with the `toolgate` CLI packager and the Java authoring API, descriptor processor and standalone runtime. The Java build plugins and governed runtime, and the other language SDKs, follow in later M0 parts.
 
 ## Layout
 
