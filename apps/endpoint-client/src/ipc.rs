@@ -40,6 +40,7 @@ async fn write<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) -> Result<()
 fn code(failure: Failure) -> ErrorCode {
     match failure {
         Failure::Unauthorized | Failure::Revoked => ErrorCode::Forbidden,
+        Failure::EnrollmentRequired => ErrorCode::NotFound,
         Failure::Validation => ErrorCode::Validation,
         Failure::Conflict => ErrorCode::Conflict,
         Failure::Expired => ErrorCode::Timeout,
@@ -244,7 +245,7 @@ async fn handle<S: AsyncWrite + Unpin>(
         }
     };
     let command = match request.operation {
-        ClientIpcOperation::Enroll => Some(activity.begin("Enroll device")),
+        ClientIpcOperation::Enroll => Some(activity.begin("Request device approval")),
         ClientIpcOperation::CheckIn => Some(activity.begin("Check in")),
         _ => None,
     };
@@ -256,7 +257,7 @@ async fn handle<S: AsyncWrite + Unpin>(
             Ok(())
         }
         ClientIpcOperation::Enroll => state
-            .enroll()
+            .request_approval()
             .await
             .map(|challenge| response.challenge = Some(challenge)),
         ClientIpcOperation::CheckIn => state

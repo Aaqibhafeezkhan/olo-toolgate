@@ -698,6 +698,15 @@ export interface EndpointCheckInAck {
   readonly task?: RemoteToolTask;
   readonly serverName?: string;
 }
+export type EndpointConnectionAction = "ENROLL" | "CHECK_IN" | "WAIT";
+/** Server-authoritative response to a device presence ping; presence never grants tool access. */
+export interface EndpointConnectionDirective {
+  readonly deviceId: string;
+  readonly state: EndpointState;
+  readonly action: EndpointConnectionAction;
+  readonly reportSequence: number;
+  readonly nextIntervalMs: number;
+}
 /** Endpoint identity foundation wire model. */
 export interface EndpointDeviceRecord {
   readonly deviceId: string;
@@ -797,6 +806,11 @@ export interface EndpointManagedDevice {
 /** All directory devices plus pending requests within the existing directory and enrollment quotas. */
 export interface EndpointManagedDevicePage {
   readonly items: ReadonlyArray<EndpointManagedDevice>;
+}
+/** Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling. */
+export interface EndpointPresencePing {
+  readonly announcement: EndpointEnrollmentStart;
+  readonly utcOffset: string;
 }
 /** Endpoint identity foundation wire model. */
 export interface EndpointRevokeRequest {

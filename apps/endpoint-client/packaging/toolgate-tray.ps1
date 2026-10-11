@@ -111,7 +111,7 @@ $trayStatus.add_Click({
     $script:statusWindow.Activate()
 })
 $trayConsole = $trayMenu.Items.Add('Open ToolGate console')
-$trayEnroll = $trayMenu.Items.Add('Enroll this device')
+$trayEnroll = $trayMenu.Items.Add('Request device approval')
 $trayEnroll.add_Click({
     Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'RemoteSigned', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $PSScriptRoot 'toolgate-enroll.ps1')`"") -WindowStyle Hidden
 })

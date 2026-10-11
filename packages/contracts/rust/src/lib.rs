@@ -1076,6 +1076,26 @@ pub struct EndpointCheckInAck {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
 }
+/// Canonical EndpointConnectionAction wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EndpointConnectionAction {
+    #[serde(rename = "ENROLL")]
+    Enroll,
+    #[serde(rename = "CHECK_IN")]
+    CheckIn,
+    #[serde(rename = "WAIT")]
+    Wait,
+}
+/// Server-authoritative response to a device presence ping; presence never grants tool access.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointConnectionDirective {
+    pub device_id: String,
+    pub state: EndpointState,
+    pub action: EndpointConnectionAction,
+    pub report_sequence: u64,
+    pub next_interval_ms: u64,
+}
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1219,6 +1239,13 @@ pub struct EndpointManagedDevice {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointManagedDevicePage {
     pub items: Vec<EndpointManagedDevice>,
+}
+/// Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointPresencePing {
+    pub announcement: EndpointEnrollmentStart,
+    pub utc_offset: String,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

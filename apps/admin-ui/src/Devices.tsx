@@ -42,11 +42,16 @@ export function Devices({client}:{client:ControlClient}){
       setNow(Date.now());
       try{const page=await client.managedDevices(controller.signal);if(!controller.signal.aborted){setItems(page.items);setListError(undefined);}}
       catch(failure){if(!controller.signal.aborted)setListError(failure);}
-      if(!controller.signal.aborted)timer=setTimeout(()=>void poll(),2000);
+      if(!controller.signal.aborted)timer=setTimeout(()=>void poll(),1000);
     }
     void poll();return()=>{controller.abort();clearTimeout(timer);};
   },[client,refresh]);
   const reload=()=>setRefresh(value=>value+1);
+  useEffect(()=>{
+    const update=()=>setRefresh(value=>value+1);
+    window.addEventListener('toolgate:approval-change',update);window.addEventListener('focus',update);
+    return()=>{window.removeEventListener('toolgate:approval-change',update);window.removeEventListener('focus',update);};
+  },[]);
   const recordActions=useRecordActions(client,'devices',reload);
   async function mutate(action:()=>Promise<unknown>,message:string){
     if(guard.current)return;guard.current=true;setBusy(true);setError(undefined);setNotice('');
@@ -73,7 +78,7 @@ export function Devices({client}:{client:ControlClient}){
     },'Device approved.');
   }
   return <><div className="page-heading"><div><p className="eyebrow">Device access</p><h1>Clients</h1></div><div className="actions"><button onClick={reload} disabled={busy}>Refresh</button><button onClick={()=>{setCreating(true);setEditing(undefined);setSelected(undefined);}} disabled={busy}>Add client</button></div></div>
-    <p>All registered devices and requests waiting for approval. Enablement and approval are separate: both are required for client access. This list refreshes every two seconds.</p>
+    <p>All registered devices and requests waiting for approval. Enablement and approval are separate: both are required for client access. Changes are saved immediately; this list checks for new requests every second.</p>
     {Boolean(error)&&!selected&&<Failure error={error}/>}{Boolean(listError)&&<Failure error={listError}/>}{notice&&<p role="status">{notice}</p>}
     {!items&&!listError&&<p role="status">Loading clients…</p>}
     {items?.length===0&&<p>No devices or pending requests.</p>}
@@ -83,12 +88,13 @@ export function Devices({client}:{client:ControlClient}){
         return <tr key={row.deviceId} title={details(row,now)}><th scope="row"><span>{directory?directory.name:`${row.enrollment?.platform??'New'} client`}</span> <DeviceDetails deviceId={row.deviceId} text={details(row,now)}/>{row.systemExecutor&&<small>Internal Quickstart device</small>}</th><td>{row.systemName??endpoint?.systemName??'Not reported'}</td><td><code>{row.ipAddress??endpoint?.ipAddress??'Not reported'}</code></td><td>{row.registeredUser?<>{row.registeredUser.name}<small>{row.registeredUser.id}{!row.registeredUser.enabled?' · Disabled user':''}</small></>:directory?.ownerUserId??endpoint?.userId??'Awaiting registration'}</td><td><code>{row.deviceId}</code></td>
           <td><span className={`client-connection ${!listError&&(state==='Connected'||state==='Available')?'online':'offline'}`}><span className="connection-dot" aria-hidden="true"/>{listError?'Status unavailable':state}</span></td>
           <td data-sort-value={directory?.enabled?'Enabled':directory?'Disabled':'Awaiting enrollment'}>{directory?<StatusToggle enabled={directory.enabled} label={row.deviceId} disabled={busy||recordActions.busy} onClick={()=>void mutate(()=>client.setDeviceEnabled(row.deviceId,{expectedRevision:directory.revision,enabled:!directory.enabled},crypto.randomUUID()),directory.enabled?'Device disabled.':'Device enabled.')}/>:'Awaiting enrollment'}</td>
-          <td>{row.systemExecutor?'Built-in executor':isApproved?'Approved':endpoint?.state==='REVOKED'?'Revoked':endpoint&&endpoint.connectionApproved!==false&&endpoint.connectionExpiresAtUnixMs!==undefined&&endpoint.connectionExpiresAtUnixMs<=now?'Approval expired':row.enrollment||endpoint?'Needs approval':'Needs enrollment'}</td>
+          <td>{row.systemExecutor?'Built-in executor':isApproved?'Approved':endpoint?.state==='REVOKED'?'Revoked':row.enrollment||endpoint?'Approval required':'Needs enrollment'}</td>
           <td data-sort-value={isApproved?(endpoint?.connectionExpiresAtUnixMs??Number.MAX_SAFE_INTEGER):0}>{row.systemExecutor?'Server managed':isApproved?(endpoint?.connectionExpiresAtUnixMs===undefined?'Unlimited':new Date(endpoint.connectionExpiresAtUnixMs).toLocaleString()):'—'}</td>
           <td><div className="actions">{directory&&<><ActionButton icon="edit" label={'Edit '+row.deviceId} disabled={busy||recordActions.busy} onClick={()=>{setEditing(row);setCreating(false);setSelected(undefined);}}/><ActionButton icon="groups" label={'Groups for '+row.deviceId} disabled={busy||recordActions.busy} onClick={()=>setMembership(row.deviceId)}/></>}
-            {!row.systemExecutor&&(endpoint||row.enrollment)&&<ActionButton icon={isApproved?'deny':'approve'} label={(isApproved?'Deapprove':'Approve')+' '+row.deviceId} disabled={busy||recordActions.busy||endpoint?.state==='REVOKED'} onClick={()=>isApproved?void mutate(()=>client.setDeviceApproval(row.deviceId,{expectedApprovalRevision:endpoint?.approvalRevision??1,approved:false},crypto.randomUUID()),'Device deapproved.'):choose(row)}/>}
+            {!row.systemExecutor&&endpoint?.state==='REVOKED'&&<ActionButton icon="approve" label={'Request approval again '+row.deviceId} title="Start a fresh review; access stays blocked until approval" disabled={busy||recordActions.busy} onClick={()=>void mutate(()=>client.requestDeviceApproval(row.deviceId,{expectedRevision:endpoint.revision},crypto.randomUUID()),'Approval requested. Waiting for the client to submit a fresh enrollment.')}/>}
+            {!row.systemExecutor&&(endpoint||row.enrollment)&&endpoint?.state!=='REVOKED'&&<ActionButton icon={isApproved?'deny':'approve'} label={(isApproved?'Deapprove':'Approve')+' '+row.deviceId} disabled={busy||recordActions.busy||Boolean(endpoint&&endpoint.state!=='ACTIVE')} onClick={()=>isApproved?void mutate(()=>client.setDeviceApproval(row.deviceId,{expectedApprovalRevision:endpoint?.approvalRevision??1,approved:false},crypto.randomUUID()),'Device deapproved.'):choose(row)}/>}
             {isApproved&&<ActionButton icon="edit" label={'Change approval '+row.deviceId} disabled={busy||recordActions.busy} onClick={()=>choose(row)}/>}
-            {directory&&<ActionButton icon="delete" label={'Delete '+row.deviceId} title={row.systemExecutor?'Internal executors are managed by Quickstart':'Delete device; a new enrollment and device key will be required'} disabled={busy||recordActions.busy||row.systemExecutor} onClick={()=>recordActions.requestDelete([directory])}/>}</div></td></tr>;
+            {directory&&<ActionButton icon="delete" label={'Delete '+row.deviceId} title={row.systemExecutor?'Internal executors are managed by Quickstart':'Delete device; a live client will request approval again'} disabled={busy||recordActions.busy||row.systemExecutor} onClick={()=>recordActions.requestDelete([directory])}/>}</div></td></tr>;
       })}</tbody></Table></div>}
     {items?.some(row=>row.systemExecutor)&&<p className="hint">Quickstart’s internal devices are created automatically for the fixed executor, HotFolder, and REST call forwarding. They use server-managed identity and appear green while available and enabled. Installed clients require separate approval.</p>}
     {selected&&<EditorDialog title={`Approve ${selected.deviceId}`} close={()=>setSelected(undefined)} busy={busy} closeLabel="Close approval"><section className="guidance">{Boolean(error)&&<Failure error={error}/>}<p>Owner: {selected.endpointDevice?.userId??selected.directoryDevice?.ownerUserId??'Your signed-in user'}</p><p>Key fingerprint: <code>{selected.endpointDevice?.keyFingerprint??selected.enrollment?.keyFingerprint}</code></p>

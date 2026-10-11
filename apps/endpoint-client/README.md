@@ -1,6 +1,6 @@
 # Endpoint Client and HotFolder
 
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding. Current clients retain their key during HTTP 423 suspension and recover an expired certificate only for their exact still-approved identity.
+The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding. Clients keep sending signed-key presence pings in every state and follow Control's enrollment, check-in or wait directive. Deleted live devices request fresh approval with their existing ID and key. Expired approvals remain listed as Approval required; protected access resumes only after reapproval.
 
 See [Device registry and tool-call controls](../../docs/control-plane/device-registry.md).
 
@@ -45,7 +45,13 @@ discovery document, generates a P-256 key locally and submits a signed PKCS#10
 request. Control verifies possession, binds the key to the approved user/device,
 and signs a client-only certificate for at most 24 hours. Heartbeats renew it
 when less than 12 hours remain. The active device and owner are checked on every
-check-in. Administrative revocation is durable and prevents retries and renewal.
+check-in. Administrative revocation blocks protected access and renewal. Revoked
+clients ping at each local X:00:00 hour boundary, including after a failed ping,
+so an admin state change is discovered at the next scheduled ping without a push.
+Use `olo-toolgate-client request-approval` (or **Request device approval** in the
+Windows tray) to request a fresh admin review immediately. The admin console also
+offers **Request approval again**; both flows retain the device ID and key and
+require fresh approval before protected access resumes.
 
 `health` and `check-in` are bounded IPC commands. Unix sockets use kernel peer
 UIDs; Windows pipes use OS impersonation SIDs and reject remote clients. The CLI

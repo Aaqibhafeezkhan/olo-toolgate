@@ -38,3 +38,4 @@ Use `000-template.md`.
 - [020: Deployment binding and configuration precedence](020-deployment-binding.md)
 - [021: Client check-in settings and the Configuration menu](021-client-checkin-configuration-menu.md)
 - [022: Super Administrator review exception](022-super-administrator-review-exception.md)
+- [023: Server-directed device presence and reenrollment](023-server-directed-device-presence.md)
