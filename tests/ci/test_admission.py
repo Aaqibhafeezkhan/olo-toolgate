@@ -251,6 +251,19 @@ class AdmissionTests(unittest.TestCase):
         with patch('tools.ci.admission.urlopen',side_effect=self.mock_pr_response([excluded])):
             self.assertEqual(merged_pr_title(REPOSITORY,MERGE_SHA),'')
 
+    def test_github_token_fallback_preserves_gh_token_precedence(self):
+        for environment, expected in (
+                ({'GITHUB_TOKEN':'github-token'}, 'Bearer github-token'),
+                ({'GITHUB_TOKEN':' github-token '}, 'Bearer github-token'),
+                ({'GH_TOKEN':'gh-token','GITHUB_TOKEN':'github-token'}, 'Bearer gh-token'),
+                ({'GH_TOKEN':' ','GITHUB_TOKEN':'github-token'}, 'Bearer github-token'),
+                ({}, None),
+                ({'GITHUB_TOKEN':' '}, None)):
+            with self.subTest(environment=environment), patch.dict(os.environ,environment,clear=True), \
+                 patch('tools.ci.admission.urlopen',side_effect=self.mock_pr_response([[]])) as fetch:
+                self.assertEqual(merged_pr_title(REPOSITORY,MERGE_SHA),'')
+                self.assertEqual(fetch.call_args.args[0].get_header('Authorization'),expected)
+
     def test_direct_rc_commit_without_a_merged_pr_is_rejected(self):
         with patch('tools.ci.admission.urlopen',side_effect=self.mock_pr_response([[]])):
             self.assertFalse(decision(merged_pr_title(REPOSITORY,MERGE_SHA))[0])
