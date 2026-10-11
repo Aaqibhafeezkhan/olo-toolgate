@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import {useEffect,useRef,useState,type FormEvent} from 'react';
+import {useRef,useState,type FormEvent} from 'react';
 import type {DirectoryKind,DirectoryRecords} from './operations.generated';
 import type {EnterpriseScope,GroupSelection,EnterpriseManagementRule} from '@olo-labs/toolgate-contracts';
 import {ControlClient} from './api';
@@ -9,6 +9,7 @@ import {ScopePicker} from './ScopePicker';
 import {EnterpriseScopeEditor,GroupSelector,emptyScope} from './EnterpriseScopeEditor';
 import {GroupMembershipEditor} from './AccessMapping';
 import {ManagementRulesEditor} from './ManagementRulesEditor';
+import {EditorDialog} from './EditorDialog';
 
 type Kind=Exclude<DirectoryKind,'users'>;
 export const entityTitles:Record<Kind,string>={teams:'team',roles:'role',tools:'tool',policies:'policy',agents:'agent',devices:'device',deviceGroups:'device group',agentGroups:'agent group',toolGroups:'tool group',grants:'grant',delegations:'delegation',agentDelegations:'agent delegation',bindings:'execution binding',extractors:'resource extractor',workloadBindings:'workload binding',identityBindings:'identity binding',deviceEvidence:'device evidence'};
@@ -37,8 +38,7 @@ export function DirectoryEditor({client,kind,record,close,saved}:{client:Control
   const [current,setCurrent]=useState(record);const [id,setId]=useState(record?.id??''),[name,setName]=useState(record?.name??''),[enabled,setEnabled]=useState(record?.enabled??false);
   const [config,setConfig]=useState(JSON.stringify(record?extra(record):defaults[kind],null,2));
   const [error,setError]=useState<unknown>(),[busy,setBusy]=useState(false),[confirm,setConfirm]=useState(false);
-  const heading=useRef<HTMLHeadingElement>(null),pending=useRef<{body:string;key:string}>(undefined);
-  useEffect(()=>{heading.current?.focus();},[]);
+  const pending=useRef<{body:string;key:string}>(undefined);
   let draft:Record<string,unknown>|undefined;try{const value:unknown=JSON.parse(config);if(formShape(defaults[kind],value))draft=value as Record<string,unknown>;}catch{/* Advanced editing can contain an incomplete draft. */}
   const update=(field:string,value:unknown)=>{if(draft)setConfig(JSON.stringify({...draft,[field]:value},null,2));};
   const picker=(field:string,target:DirectoryKind,label:string,multiple=false)=><ScopePicker key={field} client={client} kind={target} label={label} single={!multiple} value={multiple?(draft?.[field] as readonly string[]??[]):draft?.[field]?[String(draft[field])]:[]} onChange={ids=>update(field,multiple?ids:ids[0]??'')} disabled={busy||!draft}/>;
@@ -51,7 +51,7 @@ export function DirectoryEditor({client,kind,record,close,saved}:{client:Control
   async function reload(){if(!current)return;setBusy(true);setError(undefined);try{const value=await client.record(kind,current.id);setCurrent(value);setName(value.name);setEnabled(value.enabled);setConfig(JSON.stringify(extra(value),null,2));pending.current=undefined;}catch(failure){setError(failure);}finally{setBusy(false);}}
   async function remove(){if(!current||busy)return;setBusy(true);setError(undefined);try{await client.deleteRecord(kind,current,mutationKey(`delete:${current.id}:${current.revision}`));saved();}catch(failure){setError(failure);}finally{setBusy(false);}}
   const title=entityTitles[kind];const protectedDefault=['team-default','default-agents','default-tools','default-devices'].includes(id);
-  return <section className="detail" aria-label={`${title} editor`}><div className="page-heading"><h2 ref={heading} tabIndex={-1}>{current?`Edit ${title}`:`Add ${title}`}</h2><button disabled={busy} onClick={close}>Close editor</button></div>
+  return <EditorDialog title={current?`Edit ${title}`:`Add ${title}`} close={close} busy={busy}><section aria-label={`${title} editor`}>
     {error!==undefined&&<Failure error={error}/>}
     <form className="user-form" onSubmit={save}>
       <label>Identifier<input required maxLength={128} disabled={busy||!!current} value={id} onChange={e=>setId(e.target.value)}/></label>
@@ -80,5 +80,5 @@ export function DirectoryEditor({client,kind,record,close,saved}:{client:Control
     </form>
     {current&&(kind==='agents'||kind==='tools'||kind==='devices')&&<GroupMembershipEditor client={client} entity={kind} id={current.id} saved={saved}/>}
     {current&&!protectedDefault&&<div className="delete-area">{confirm?<><p>Delete this record? References, required memberships and recovery access must remain valid. Its identifier cannot be reused.</p><button className="danger" disabled={busy} onClick={()=>void remove()}>Confirm delete</button><button disabled={busy} onClick={()=>setConfirm(false)}>Cancel delete</button></>:<button className="danger" disabled={busy} onClick={()=>setConfirm(true)}>Delete {title}</button>}</div>}
-  </section>;
+  </section></EditorDialog>;
 }

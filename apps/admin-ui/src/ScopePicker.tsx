@@ -14,11 +14,11 @@ export function ScopePicker({client,kind,label,value,onChange,disabled=false,sin
     client.all(kind,abort.signal).then(items=>{if(!abort.signal.aborted)setRows(items);}).catch(failure=>{if(!abort.signal.aborted)setError(failure);});
     if(dialog.current?.showModal)dialog.current.showModal();else dialog.current?.setAttribute('open','');return()=>abort.abort();
   },[open,client,kind,attempt]);
-  const close=()=>{setOpen(false);trigger.current?.focus();};
+  const close=()=>{if(dialog.current?.open&&dialog.current.close)dialog.current.close();setOpen(false);trigger.current?.focus({preventScroll:true});};
   const options=rows?[...rows,...draft.filter(id=>!rows.some(row=>row.id===id)).map(id=>({id,name:'Unavailable selection',enabled:false,revision:1}))]:[];
   return <div className="scope-field"><span>{label}</span><p className="hint">{value.length?value.join(', '):'None selected'}</p>
     <button ref={trigger} type="button" disabled={disabled} onClick={()=>{setDraft([...value]);setSearch('');setOpen(true);}}>Choose {label.toLowerCase()}</button>
-    {open&&<dialog ref={dialog} aria-labelledby={title} onCancel={event=>{event.preventDefault();close();}} className="scope-dialog"><h2 id={title}>{label}</h2>
+    {open&&<dialog ref={dialog} aria-labelledby={title} onCancel={event=>{event.preventDefault();event.stopPropagation();close();}} className="scope-dialog"><h2 id={title}>{label}</h2>
       <label>Search<input autoFocus value={search} onChange={event=>setSearch(event.target.value)}/></label>
       {error!==undefined?<Failure error={error} retry={()=>setAttempt(attempt+1)}/>:!rows?<p role="status">Loading options…</p>:<fieldset className="scope-options"><legend>{single?'Choose one':'Choose any that apply'}</legend>
         {options.filter(row=>`${row.name} ${row.id}`.toLowerCase().includes(search.toLowerCase())).map(row=><label className="scope-option" key={row.id}><input type={single?'radio':'checkbox'} name={single?title:undefined} checked={draft.includes(row.id)} disabled={!row.enabled&&!draft.includes(row.id)} onChange={event=>setDraft(single?[row.id]:event.target.checked?[...draft,row.id]:draft.filter(id=>id!==row.id))}/><span>{row.name}<small>{row.id}{!row.enabled?' · Disabled or unavailable':''}</small></span></label>)}

@@ -44,6 +44,14 @@ action icons have accessible names and tooltips. Sorting and selection affect
 only the displayed server page. Failed and pending bulk changes are reported
 per record; configuration drafts never appear as already applied changes.
 
+The main panel fills the available workspace width on every screen, with standard
+padding around panels and forms. Record names are plain text: use the **Edit**
+icon to open an editor. **Add** actions, client approval/group actions and tool
+draft editors also open a modal inside the console. Its header keeps **Close**
+visible while the body scrolls independently. Close or Escape returns focus to
+the opening control; a group picker closes before its parent editor on Escape.
+Closing is disabled while the editor saves a request.
+
 An active Super Admin Management Role on an enabled Team supplies all tenant
 management actions. Super Admin directory changes apply immediately and are
 audited; they may also manage and approve any existing configuration request,
