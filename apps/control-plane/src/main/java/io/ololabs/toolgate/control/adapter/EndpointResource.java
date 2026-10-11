@@ -34,6 +34,8 @@ public class EndpointResource {
     private String ipAddress(){var address=routing.request().remoteAddress().hostAddress();return address==null?null:address.split("%",2)[0];}
     private Response response(Store.Reply reply,String operation){metrics.counter("toolgate_control_endpoint_operations_total","operation",operation).increment();return Response.status(reply.status()).header("Cache-Control","no-store").header("ETag","\""+reply.revision()+"\"").entity(reply.body()).build();}
     @POST @Path("enrollments") @Consumes("application/json") public Response start(String document){tls();return response(service.start(body(document),correlation.id()),"START");}
+    @POST @Path("ping") @Consumes("application/json") public Response ping(String document){tls();return response(service.ping(body(document)),"PING");}
+    @POST @Path("enrollments/request-approval") @Consumes("application/json") public Response requestApproval(String document){tls();return response(service.requestApproval(body(document),correlation.id()),"REQUEST_APPROVAL");}
     @GET @Path("enrollments") @io.quarkus.security.Authenticated public Response pending(){return response(service.pending(actor(),user()),"LIST");}
     @POST @Path("enrollments/poll") @Consumes("application/json") public Response poll(String document){tls();return response(service.poll(body(document),correlation.id()),"POLL");}
     @GET @Path("enrollments/review") @io.quarkus.security.Authenticated public Response review(@QueryParam("code")String code){return response(service.review(actor(),user(),code),"REVIEW");}
@@ -44,4 +46,5 @@ public class EndpointResource {
     @POST @Path("devices/{id}/approval") @Consumes("application/json") @io.quarkus.security.Authenticated public Response approval(@PathParam("id")String id,@HeaderParam("Idempotency-Key")String key,String document){return response(service.approval(actor(),user(),id,body(document),key,correlation.id()),"APPROVAL");}
     @POST @Path("devices/{id}/enabled") @Consumes("application/json") @io.quarkus.security.Authenticated public Response enabled(@PathParam("id")String id,@HeaderParam("Idempotency-Key")String key,String document){return response(service.enabled(actor(),user(),id,body(document),key,correlation.id()),"ENABLED");}
     @POST @Path("devices/{id}/revoke") @Consumes("application/json") @io.quarkus.security.Authenticated public Response revoke(@PathParam("id")String id,@HeaderParam("Idempotency-Key")String key,String document){return response(service.revoke(actor(),id,body(document),key,correlation.id()),"REVOKE");}
+    @POST @Path("devices/{id}/request-approval") @Consumes("application/json") @io.quarkus.security.Authenticated public Response requestApproval(@PathParam("id")String id,@HeaderParam("Idempotency-Key")String key,String document){return response(service.requestApproval(actor(),user(),id,body(document),key,correlation.id()),"REQUEST_APPROVAL");}
 }

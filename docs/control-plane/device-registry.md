@@ -25,6 +25,14 @@ installation, health indicator or deployment assignment never grants tool access
    button. Names can be edited through the directory editor.
 
 Pending devices show **Awaiting registration** until an owner is established.
+Admin mutations are committed immediately and refresh the Clients list on success.
+The list checks the server every second for incoming requests and changes made in
+other sessions, and also refreshes when the window regains focus.
+The protected client sends a signed-key presence ping in every state, including
+before enrollment, while disabled or deapproved, and after approval expires.
+Control returns the current state and an action (`ENROLL`, `CHECK_IN`, or `WAIT`).
+An unknown device follows `ENROLL` and automatically appears as a pending request.
+Presence alone does not authorize a connection or a tool call.
 Installed clients show connected/offline state from authenticated check-ins;
 the console uses a two-minute freshness window and does not treat approval alone
 as a connection. The current client polls at the configured check-in interval (500 ms on Quickstart); older clients
@@ -46,7 +54,9 @@ the composition host/container name and address.
 | Approve | Authorize the existing enrolled key until a chosen deadline or for unlimited time. Reapproval preserves the owner and directory enablement. |
 | Deapprove | Temporarily remove connection approval while retaining the key, owner and reported state. |
 | Enable / Disable | Independently control directory access. Enabling does not approve an enrolled key; approving does not reenable a disabled record. |
-| Permanent API revocation | Retire the key permanently. Reapproval and certificate recovery cannot reactivate it. |
+| API revocation | Block protected access and certificate recovery. Ordinary reapproval cannot reactivate the key; an explicit new request and fresh administrator review are required. |
+| Request approval again | Reopen a revoked device for fresh enrollment. The admin action changes server state only; the disconnected client discovers it on its next hourly presence ping. The client can also explicitly request approval locally. |
+| Delete | Remove the directory device and its approval. A live client keeps pinging and requests fresh approval using the same ID and key. Previous enrollment codes and device group membership are removed. |
 
 Installed-device access requires an active key, an enabled matching registered
 owner, an enabled directory device and current connection approval. Pending
@@ -60,11 +70,30 @@ not create a permanent certificate or bypass filters. Certificates remain valid
 for at most 24 hours and renew. Finite approvals cap certificates and tool leases
 at the deadline, rounded down to X.509 second precision.
 
+An expired approval remains in **Clients** as **Approval required**, with an
+Approve action. Its presence pings continue while Control returns `WAIT`; admin
+reapproval allows it to resume check-ins or recover an expired certificate.
+
 Temporary disablement, deapproval or approval expiry returns HTTP **423** on
 authenticated client access. The client retains its protected identity and retries
 with bounded backoff. Unauthorized or permanently revoked identities continue to
-receive authentication rejection. Job sockets recheck authorization on messages
+receive authentication rejection for protected access. Their presence pings still
+reach Control and receive its current state. Deleted devices receive HTTP **410**
+on protected access and request fresh approval. Job sockets recheck authorization on messages
 and periodically; disabling a device is not permission to finish a new effect.
+
+Revoked clients ping once per hour, aligned to **X:00:00 in the client's local
+time**. Each presence request includes the current OS UTC offset; Control returns
+the delay to the next local hour. The client recalculates that boundary when
+scheduling the next ping, including after a failed ping. An admin reopening review
+does not push to the disconnected device or shorten its waiting period.
+
+Use **Request approval again** on a revoked row in Clients, or run
+`olo-toolgate-client request-approval` on the device (Windows tray: **Request
+device approval**). A local explicit request contacts Control immediately. Both
+routes retain the ID and key, invalidate previous enrollment codes and require a
+new admin review even when automatic initial approval is enabled. Directory
+enablement remains independent.
 
 After an extended outage, the current client can use a verified CSR for the exact
 already approved device/key to recover its public certificate. The server rechecks
@@ -121,6 +150,9 @@ an operation. Their runtime credentials still expire and rotate privately.
 
 | API | Request or result |
 |---|---|
+| `POST /api/control/v1/endpoint/ping` | Key-proved announcement and local UTC offset (`EndpointPresencePing`); returns current state, next action, report sequence and next ping interval. Direct HTTPS; no current client certificate required. |
+| `POST /api/control/v1/endpoint/enrollments/request-approval` | Explicit signed-key request after revocation; returns a fresh pending challenge without granting access. |
+| `POST /api/control/v1/endpoint/devices/{id}/request-approval` | Admin reopens a revoked device with `expectedRevision` and an idempotency key; a live client must submit a fresh request and receive approval. |
 | `GET /api/control/v1/endpoint/enrollments` | At most 32 unexpired pending reviews; enroller role and enabled same-tenant user. |
 | `POST /api/control/v1/endpoint/enrollments/decision` | Reviewed user code, fingerprint, APPROVE/DENY and optional connection duration. |
 | `GET /api/control/v1/endpoint/devices` | Bounded combined snapshot of directory devices, endpoint approvals, pending reviews, registered users and server-device metadata; admin role. |

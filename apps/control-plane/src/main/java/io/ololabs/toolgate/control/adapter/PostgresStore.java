@@ -95,6 +95,10 @@ public class PostgresStore implements Store {
             try (var s=statement("DELETE FROM control_enrollments WHERE tenant_id=? AND expires_at<=?",now)) {s.executeUpdate();}
             catch (SQLException e) { throw Failure.unavailable(); }
         }
+        public void deleteEnrollments(String deviceId) {
+            try(var s=statement("DELETE FROM control_enrollments WHERE tenant_id=? AND document::jsonb->>'deviceId'=?",deviceId)){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
         private EndpointRecord endpointRows(java.sql.PreparedStatement statement) throws SQLException {
             try (statement;var rows=statement.executeQuery()) {return rows.next()?new EndpointRecord(rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5),rows.getString(6)):null;}
         }
@@ -204,6 +208,19 @@ public class PostgresStore implements Store {
                 }
                 if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenants WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}
                 for (var id : before.entries().keySet()) if (!after.entries().containsKey(id)) {
+                    if(id.kind()==Kind.DEVICE){
+                        var row=endpoint(id.value());
+                        if(row!=null){
+                            var device=codec.model(row.document(),io.ololabs.toolgate.contracts.EndpointDeviceRecord.class);
+                            // Deletion removes approval, but only explicit revocation retires the key.
+                            if(device.state()!=io.ololabs.toolgate.contracts.EndpointState.REVOKED){
+                                var reset=new io.ololabs.toolgate.contracts.EndpointDeviceRecord(device.deviceId(),device.tenantId(),device.userId(),device.keyFingerprint(),io.ololabs.toolgate.contracts.EndpointState.UNENROLLED,device.revision()+1,0L,device.reportSequence(),null,null,false,(device.approvalRevision()==null?1:device.approvalRevision())+1,null,null);
+                                saveEndpoint(new EndpointRecord(row.id(),row.fingerprint(),codec.json(reset),row.csr(),row.reportDigest(),row.acknowledgment()));
+                            }
+                            // Outstanding enrollment codes cannot restore the deleted approval.
+                            deleteEnrollments(id.value());
+                        }
+                    }
                     try (var statement = statement("DELETE FROM control_records WHERE tenant_id=? AND kind=? AND record_id=?", id.kind().name(), id.value())) { statement.executeUpdate(); }
                 }
                 for (var entry : after.entries().values()) if (!entry.equals(before.entries().get(entry.id()))) {

@@ -6,6 +6,7 @@ use olo_toolgate_contracts::*;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 pub type Call<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
 pub trait ControlPort: Send + Sync {
+    fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective>;
     fn effect_outcome(
         &self,
         _identity: DeviceIdentity,
@@ -77,6 +78,12 @@ pub trait ControlPort: Send + Sync {
     }
     fn discovery(&self) -> Call<'_, SignedClientDiscovery>;
     fn start(&self, request: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge>;
+    fn request_approval(
+        &self,
+        _request: EndpointEnrollmentStart,
+    ) -> Call<'_, EndpointEnrollmentChallenge> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn poll(&self, request: EndpointEnrollmentPoll) -> Call<'_, EndpointEnrollmentResult>;
     fn check_in(
         &self,
@@ -207,6 +214,7 @@ impl HttpsControl {
             200 => {}
             401 | 403 => return Err(Failure::Revoked),
             409 => return Err(Failure::Conflict),
+            410 => return Err(Failure::EnrollmentRequired),
             _ => return Err(Failure::Unavailable),
         }
         if response.content_length().is_some_and(|n| n > 131072)
@@ -245,6 +253,31 @@ impl HttpsControl {
     }
 }
 impl ControlPort for HttpsControl {
+    fn request_approval(
+        &self,
+        request: EndpointEnrollmentStart,
+    ) -> Call<'_, EndpointEnrollmentChallenge> {
+        Box::pin(async move {
+            self.request(
+                &self.client,
+                "/api/control/v1/endpoint/enrollments/request-approval",
+                Some(self.contracts.encode("EndpointEnrollmentStart", &request)?),
+                "EndpointEnrollmentChallenge",
+            )
+            .await
+        })
+    }
+    fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
+        Box::pin(async move {
+            self.request(
+                &self.client,
+                "/api/control/v1/endpoint/ping",
+                Some(self.contracts.encode("EndpointPresencePing", &request)?),
+                "EndpointConnectionDirective",
+            )
+            .await
+        })
+    }
     fn effect_outcome(
         &self,
         identity: DeviceIdentity,

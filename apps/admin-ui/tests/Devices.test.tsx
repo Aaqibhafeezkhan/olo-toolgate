@@ -11,6 +11,22 @@ const pending:EndpointManagedDevice={deviceId:'device-2',systemExecutor:false,en
 const system:EndpointManagedDevice={deviceId:'local-builtins',systemExecutor:true,systemExecutorKind:'BUILTINS',systemAvailable:true,directoryDevice:{id:'local-builtins',name:'Quickstart fixed executor',ownerUserId:'local-tools',enabled:true,revision:1},registeredUser:{id:'local-tools',name:'Local tool requester',enabled:true,revision:1}};
 function setup(items:EndpointManagedDevice[],mutationStatus=200){const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>new Response(JSON.stringify(String(path).endsWith('/groups')?{entityType:'DEVICE',entityId:String(path).split('/').at(-2),groupIds:['default-devices'],revision:1}:options?.method==='POST'?{}:{items}),{status:options?.method==='POST'?mutationStatus:200}));render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);return transport;}
 describe('Device management',()=>{
+  it('shows incoming enrollment requests without a manual refresh',async()=>{
+    let incoming=false;const transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify({items:incoming?[active,pending]:[active]}),{status:200}));
+    render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);await screen.findByText('Trading workstation');
+    expect(screen.queryByRole('button',{name:'Approve device-2'})).toBeNull();
+    incoming=true;
+    await waitFor(()=>expect(screen.getByRole('button',{name:'Approve device-2'})).toBeTruthy(),{timeout:2500});
+  });
+  it('reopens a revoked device for fresh approval without approving it',async()=>{
+    const transport=setup([{...active,endpointDevice:{...active.endpointDevice!,state:'REVOKED',connectionApproved:false}}]);
+    const retry=await screen.findByRole('button',{name:'Request approval again device-1'});
+    expect(screen.queryByRole('button',{name:'Approve device-1'})).toBeNull();fireEvent.click(retry);
+    await screen.findByText('Approval requested. Waiting for the client to submit a fresh enrollment.');
+    const calls=transport.mock.calls.filter(call=>call[1]?.method==='POST');expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe('/api/control/v1/endpoint/devices/device-1/request-approval');
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({expectedRevision:10});expect(new Headers(calls[0][1]?.headers).has('Idempotency-Key')).toBe(true);
+  });
   it('shows group-loading failures inside the approval popup and keeps approval disabled',async()=>{
     const transport=vi.fn<typeof fetch>().mockImplementation(async path=>new Response(JSON.stringify(String(path).endsWith('/groups')?{}:{items:[active]}),{status:String(path).endsWith('/groups')?503:200}));
     render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);fireEvent.click(await screen.findByRole('button',{name:'Change approval device-1'}));
@@ -32,6 +48,12 @@ describe('Device management',()=>{
     fireEvent.keyDown(screen.getByRole('button',{name:'Details for device-1'}),{key:'Escape'});expect(screen.queryByRole('tooltip')).toBeNull();
   });
   it('does not show unavailable server executors green',async()=>{setup([{...system,systemAvailable:false}]);expect((await screen.findByText('Unavailable')).className).toContain('offline');});
+  it('keeps expired approvals listed as approval required with an approve action',async()=>{
+    setup([{...active,endpointDevice:{...active.endpointDevice!,connectionExpiresAtUnixMs:Date.now()-1000}}]);
+    expect(await screen.findByText('Approval required')).toBeTruthy();
+    expect(screen.getByText('Trading workstation')).toBeTruthy();
+    expect(screen.getByRole('button',{name:'Approve device-1'})).toBeTruthy();
+  });
   it('shows a disabled registered user as blocked immediately',async()=>{setup([{...active,registeredUser:{...active.registeredUser!,enabled:false}}]);expect((await screen.findByText('User disabled')).className).toContain('offline');});
   it('approves a pending device explicitly for unlimited time without a deadline',async()=>{
     const transport=setup([pending]);fireEvent.click(await screen.findByRole('button',{name:'Approve device-2'}));

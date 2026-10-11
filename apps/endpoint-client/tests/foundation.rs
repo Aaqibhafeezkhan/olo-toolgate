@@ -175,6 +175,9 @@ fn composition_directory_gates_decode_closed_canonical_records() {
     );
 }
 impl ControlPort for Offline {
+    fn ping(&self, _: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
+        Box::pin(async { Err(Failure::Unavailable) })
+    }
     fn discovery(&self) -> Call<'_, SignedClientDiscovery> {
         Box::pin(async { Err(Failure::Unavailable) })
     }
@@ -357,7 +360,7 @@ async fn offline_enrollment_never_becomes_ready_and_key_is_retained() {
     assert_eq!(service.enroll().await.unwrap_err(), Failure::Unavailable);
     assert!(!service.health().ready);
     assert_eq!(service.health().state, EndpointState::Unenrolled);
-    service.tick().await.unwrap();
+    assert_eq!(service.tick().await, Err(Failure::Unavailable));
     assert!(!service.health().ready);
     drop(service);
     assert!(!self::service(&directory).health().ready);
