@@ -27,5 +27,4 @@ jobs:
         name: Check pause window and exact RC prefix
         env:
           CI_ENABLED: ${{ vars.TOOLGATE_CI_ENABLED }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: python tools/ci/admission.py

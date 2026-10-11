@@ -8,6 +8,7 @@ on:
         type: string
         default: ''
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
     tags: ['v*']
