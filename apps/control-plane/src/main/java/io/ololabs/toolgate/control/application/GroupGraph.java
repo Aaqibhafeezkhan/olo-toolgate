@@ -33,7 +33,7 @@ public final class GroupGraph {
     public static Directory.Entry withMembers(Directory.Entry entry,Codec codec,List<String> members) {
         Object value=switch(entry.id().kind()) {
             case TEAM->{var g=codec.model(entry.document(),ControlTeam.class); yield new ControlTeam(g.id(),g.name(),g.enabled(),g.revision()+1,members,g.roleIds());}
-            case AGENT_GROUP->{var g=codec.model(entry.document(),ControlAgentGroup.class); yield new ControlAgentGroup(g.id(),g.name(),g.enabled(),g.revision()+1,members,g.roleIds());}
+            case AGENT_GROUP->{var g=codec.model(entry.document(),ControlAgentGroup.class); yield new ControlAgentGroup(g.id(),g.name(),g.slug(),g.enabled(),g.revision()+1,members,g.roleIds());}
             case TOOL_GROUP->{var g=codec.model(entry.document(),ControlToolGroup.class); yield new ControlToolGroup(g.id(),g.name(),g.enabled(),g.revision()+1,members);}
             case DEVICE_GROUP->{var g=codec.model(entry.document(),ControlDeviceGroup.class); yield new ControlDeviceGroup(g.id(),g.name(),g.enabled(),g.revision()+1,members);}
             default->throw Failure.validation();
@@ -45,7 +45,7 @@ public final class GroupGraph {
             var id=kind.id(DEFAULTS.get(kind)); if(entries.containsKey(id))continue;
             Object value=switch(kind) {
                 case TEAM->new ControlTeam(id.value(),"Default team",true,1L,List.of(),List.of());
-                case AGENT_GROUP->new ControlAgentGroup(id.value(),"Default agent group",true,1L,List.of(),List.of());
+                case AGENT_GROUP->new ControlAgentGroup(id.value(),"Default agent group",null,true,1L,List.of(),List.of());
                 case TOOL_GROUP->new ControlToolGroup(id.value(),"Default tool group",true,1L,List.of());
                 case DEVICE_GROUP->new ControlDeviceGroup(id.value(),"Default device group",true,1L,List.of());
                 default->throw Failure.validation();
@@ -76,6 +76,12 @@ public final class GroupGraph {
     public static void validate(Directory directory,Codec codec) {
         for(var kind:DEFAULTS.keySet()) {
             var group=directory.entries().get(kind.id(DEFAULTS.get(kind))); if(group==null||!group.enabled())throw new IllegalArgumentException("Protected default group is required");
+        }
+        // Slugs address the scoped MCP routes, so one slug names at most one agent and at most one agent group.
+        var slugs=new java.util.HashSet<String>();
+        for(var e:directory.entries().values()) {
+            var slug=e.id().kind()==Kind.AGENT?codec.model(e.document(),ControlAgent.class).slug():e.id().kind()==Kind.AGENT_GROUP?codec.model(e.document(),ControlAgentGroup.class).slug():null;
+            if(slug!=null&&!slugs.add(e.id().kind()+"\n"+slug))throw new IllegalArgumentException("Slug is already used");
         }
         for(var e:directory.entries().values()) {
             var kind=e.id().kind();

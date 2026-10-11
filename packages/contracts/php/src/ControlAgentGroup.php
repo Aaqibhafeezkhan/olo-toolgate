@@ -13,12 +13,13 @@ final readonly class ControlAgentGroup implements \JsonSerializable {
         public bool $enabled,
         public int $revision,
         public array $agentIds,
-        public array $roleIds
+        public array $roleIds,
+        public ?string $slug = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'agentIds', 'roleIds']) || array_diff(['id', 'name', 'enabled', 'revision', 'agentIds', 'roleIds'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'name', 'slug', 'enabled', 'revision', 'agentIds', 'roleIds']) || array_diff(['id', 'name', 'enabled', 'revision', 'agentIds', 'roleIds'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -27,7 +28,8 @@ final readonly class ControlAgentGroup implements \JsonSerializable {
             $data['enabled'],
             $data['revision'],
             array_map(static fn ($item) => $item, $data['agentIds']),
-            array_map(static fn ($item) => $item, $data['roleIds'])
+            array_map(static fn ($item) => $item, $data['roleIds']),
+            array_key_exists('slug', $data) ? $data['slug'] : null
         );
     }
 

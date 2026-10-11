@@ -83,7 +83,7 @@ class EnterpriseScenarioTest {
         assertEquals(Decision.BLOCK,delegated().decision());
     }
     @Test void downstreamAgentCannotExceedAnyUpstreamCeilingOrReuseIdentity(){
-        f.add(Kind.AGENT,new ControlAgent("downstream","Downstream",true,1L,"bob"));f.add(Kind.AGENT_GROUP,new ControlAgentGroup("downstream-group","Downstream",true,1L,List.of("downstream"),List.of()));
+        f.add(Kind.AGENT,new ControlAgent("downstream","Downstream",null,true,1L,"bob"));f.add(Kind.AGENT_GROUP,new ControlAgentGroup("downstream-group","Downstream",null,true,1L,List.of("downstream"),List.of()));
         f.workload("child-workload","downstream",EnterpriseRequestMode.DELEGATED,"alice","workload");
         f.grant("child-capability","downstream-group",EnterpriseSourceType.AGENT_GROUP,EnterpriseGrantPurpose.CAPABILITY,f.scope("tools-a","devices-a"));
         f.add(Kind.AGENT_DELEGATION,new ControlAgentDelegation("edge","Edge",true,1L,"group-a","downstream-group",f.scope("tools-a","devices-a"),1L));

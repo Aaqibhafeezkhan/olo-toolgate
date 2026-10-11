@@ -12,12 +12,13 @@ final readonly class ControlAgent implements \JsonSerializable {
         public string $name,
         public bool $enabled,
         public int $revision,
-        public string $ownerUserId
+        public string $ownerUserId,
+        public ?string $slug = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'ownerUserId']) || array_diff(['id', 'name', 'enabled', 'revision', 'ownerUserId'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'name', 'slug', 'enabled', 'revision', 'ownerUserId']) || array_diff(['id', 'name', 'enabled', 'revision', 'ownerUserId'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +26,8 @@ final readonly class ControlAgent implements \JsonSerializable {
             $data['name'],
             $data['enabled'],
             $data['revision'],
-            $data['ownerUserId']
+            $data['ownerUserId'],
+            array_key_exists('slug', $data) ? $data['slug'] : null
         );
     }
 

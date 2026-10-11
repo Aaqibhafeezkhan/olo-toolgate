@@ -7,6 +7,7 @@ package io.ololabs.toolgate.contracts;
  *
  * @param id canonical id value
  * @param name canonical name value
+ * @param slug canonical slug value
  * @param enabled canonical enabled value
  * @param revision canonical revision value
  * @param agentIds canonical agentIds value
@@ -16,6 +17,7 @@ package io.ololabs.toolgate.contracts;
 public record ControlAgentGroup(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "id", required = true) String id,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "name", required = true) String name,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "slug", required = false) String slug,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "enabled", required = true) Boolean enabled,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "revision", required = true) Long revision,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agentIds", required = true) java.util.List<String> agentIds,
@@ -25,6 +27,7 @@ public record ControlAgentGroup(
      *
      * @param id canonical id value
      * @param name canonical name value
+     * @param slug canonical slug value
      * @param enabled canonical enabled value
      * @param revision canonical revision value
      * @param agentIds canonical agentIds value

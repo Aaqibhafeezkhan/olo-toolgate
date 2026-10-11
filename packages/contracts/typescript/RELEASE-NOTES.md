@@ -13,6 +13,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Agents and agent groups have an optional route slug (`slug`, lowercase letters,
+  numbers and hyphens), unique among agents and among agent groups. It names them in the
+  scoped MCP routes planned for M2 (`/mcp/agent/{slug}`, `/mcp/agent-group/{slug}`), and
+  the console edits it as **Route slug**.
+
 - The Gateway's request context no longer names a device (ADR 015 amendment). Control
   places each call on one online device of the execution binding's device group: the
   caller's own device first, otherwise the member with the fewest queued calls, so a

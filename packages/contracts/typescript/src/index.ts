@@ -305,6 +305,7 @@ export interface ControlAccessGrantPage {
 export interface ControlAgent {
   readonly id: string;
   readonly name: string;
+  readonly slug?: string;
   readonly enabled: boolean;
   readonly revision: number;
   readonly ownerUserId: string;
@@ -329,6 +330,7 @@ export interface ControlAgentDelegationPage {
 export interface ControlAgentGroup {
   readonly id: string;
   readonly name: string;
+  readonly slug?: string;
   readonly enabled: boolean;
   readonly revision: number;
   readonly agentIds: ReadonlyArray<string>;
