@@ -64,27 +64,31 @@ final class SourceAnalysis {
 
     private final Trees trees;
     private final List<Route> routes;
-    private final Map<ExecutableElement, Facts> handlers;
-    private boolean failed;
+    private final Map<String, Facts> handlers;
 
-    SourceAnalysis(ProcessingEnvironment env, Collection<Route> routes, Map<ExecutableElement, Facts> handlers) {
+    /** {@code handlers} is keyed by {@link #key}, because javac makes new elements after annotation processing. */
+    SourceAnalysis(ProcessingEnvironment env, Collection<Route> routes, Map<String, Facts> handlers) {
         this.trees = Trees.instance(env);
         this.routes = new ArrayList<>(routes);
         this.handlers = handlers;
+    }
+
+    /** A handler's identity across compiler phases: its class, name and erased parameter types. */
+    static String key(ExecutableElement method) {
+        StringBuilder k = new StringBuilder(((TypeElement) method.getEnclosingElement()).getQualifiedName()).append('#')
+                .append(method.getSimpleName()).append('(');
+        for (javax.lang.model.element.VariableElement p : method.getParameters()) k.append(p.asType().toString().replaceAll("<.*>", "")).append(',');
+        return k.append(')').toString();
     }
 
     static String withoutPatterns(String template) {
         return VARIABLE.matcher(template).replaceAll(m -> Matcher.quoteReplacement("{" + m.group(1) + "}"));
     }
 
-    /** Analyses every type in {@code roots}; returns false when it reported an error. */
-    boolean run(Collection<? extends Element> roots) {
-        for (Element root : roots) {
-            if (!(root instanceof TypeElement)) continue;
-            TreePath path = trees.getPath(root);
-            if (path != null) new Scanner(path.getCompilationUnit()).scan(path, null);
-        }
-        return !failed;
+    /** Analyses one attributed top-level type; errors go to the compiler's diagnostics. */
+    void analyse(TypeElement type) {
+        TreePath path = trees.getPath(type);
+        if (path != null) new Scanner(path.getCompilationUnit()).scan(path, null);
     }
 
     private final class Scanner extends TreePathScanner<Void, Void> {
@@ -111,7 +115,7 @@ final class SourceAnalysis {
         public Void visitMethod(MethodTree tree, Void unused) {
             Facts outer = facts;
             Element method = trees.getElement(getCurrentPath());
-            facts = method instanceof ExecutableElement e ? handlers.get(e) : null;
+            facts = method instanceof ExecutableElement e && e.getEnclosingElement() instanceof TypeElement ? handlers.get(key(e)) : null;
             try {
                 return super.visitMethod(tree, unused);
             } finally {
@@ -227,7 +231,6 @@ final class SourceAnalysis {
         }
 
         private void error(Tree at, String message) {
-            failed = true;
             trees.printMessage(Diagnostic.Kind.ERROR, "toolgate: " + message, at, unit);
         }
     }

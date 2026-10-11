@@ -108,6 +108,17 @@ class AnalysisTest {
     }
 
     @Test
+    void codeTheAnalyserDoesNotCheckCompilesUntouched() {
+        ok(handler("", """
+                java.util.zip.ZipFile zip = null;
+                    if (zip != null) java.util.Collections.list(zip.entries()).forEach(e -> e.getName());
+                    java.util.List<? extends CharSequence> xs = java.util.List.of("a");
+                    xs.stream().map(x -> x.length()).forEach(n -> {});
+                    Runnable r = () -> context.http().get("api", "/items").send(String.class);
+                """));
+    }
+
+    @Test
     void typedAccessorsReadEachDeclaredValueWithItsGetter() throws Exception {
         Compilation.Result r = ok(tools(ROUTES + """
                 @Global(name = "Limit", type = ValueType.INT)

@@ -30,6 +30,7 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -40,7 +41,9 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import com.sun.source.util.Trees;
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TaskEvent;
+import com.sun.source.util.TaskListener;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
@@ -175,12 +178,16 @@ public final class DescriptorProcessor extends AbstractProcessor {
             write(descriptors, handlers);
         }
 
-        /** The route analyser and literal value-name checks over the handlers' source (http.md §3, java.md). */
+        /**
+         * The route analyser and literal value-name checks over the handlers' source (http.md §3, java.md). They run
+         * once javac has attributed each class, so they see the same types the compiler does; their errors fail the
+         * compilation like any other.
+         */
         private void analyse() {
-            Trees trees;
+            JavacTask task;
             try {
-                trees = Trees.instance(processingEnv);
-            } catch (IllegalArgumentException e) {
+                task = JavacTask.instance(processingEnv);
+            } catch (IllegalArgumentException | ClassCastException e) {
                 processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                         "toolgate: this compiler has no javac Tree API, so convenience calls and value names are not analysed", packageType);
                 return;
@@ -190,14 +197,25 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 declared.add(new SourceAnalysis.Route(r.value.id(), r.value.method().name(), r.value.destination(),
                         SourceAnalysis.withoutPatterns(r.value.path())));
             }
-            if (!new SourceAnalysis(processingEnv, declared, facts).run(round.getRootElements())) failed = true;
+            SourceAnalysis analysis = new SourceAnalysis(processingEnv, declared, facts);
+            Set<String> roots = new HashSet<>();
+            for (Element root : round.getRootElements()) if (root instanceof TypeElement t) roots.add(t.getQualifiedName().toString());
+            task.addTaskListener(new TaskListener() {
+                @Override
+                public void finished(TaskEvent e) {
+                    if (e.getKind() == TaskEvent.Kind.ANALYZE && e.getTypeElement() != null
+                            && roots.contains(e.getTypeElement().getQualifiedName().toString())) {
+                        analysis.analyse(e.getTypeElement());
+                    }
+                }
+            });
         }
 
         /** One {@code <HandlerClass>Vars} per class that holds tools, over the union of its tools' declarations. */
         private void accessors(Map<String, ExecutableElement> handlers) {
             Map<TypeElement, List<SourceAnalysis.Facts>> byClass = new LinkedHashMap<>();
             for (ExecutableElement h : handlers.values()) {
-                byClass.computeIfAbsent((TypeElement) h.getEnclosingElement(), k -> new ArrayList<>()).add(facts.get(h));
+                byClass.computeIfAbsent((TypeElement) h.getEnclosingElement(), k -> new ArrayList<>()).add(facts.get(SourceAnalysis.key(h)));
             }
             for (Map.Entry<TypeElement, List<SourceAnalysis.Facts>> c : byClass.entrySet()) {
                 guard(() -> {
@@ -567,7 +585,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
             for (Map.Entry<String, Object> p : properties.entrySet()) {
                 if (p.getValue() instanceof Map<?, ?> schema) inputTypes.put(p.getKey(), valueType(schema));
             }
-            facts.put(method, new SourceAnalysis.Facts(name, routeIds, inputTypes,
+            facts.put(SourceAnalysis.key(method), new SourceAnalysis.Facts(name, routeIds, inputTypes,
                     vars.globals.stream().collect(Collectors.toMap(Global::name, g -> g.type().name(), (a, b) -> a, TreeMap::new)),
                     vars.secrets.stream().collect(Collectors.toMap(Secret::name, x -> x.type().name(), (a, b) -> a, TreeMap::new)),
                     vars.claims.stream().collect(Collectors.toMap(JwtClaim::name, x -> x.type().name(), (a, b) -> a, TreeMap::new))));
@@ -578,7 +596,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
         }
 
         private final Map<String, List<String>> parametersByTool = new HashMap<>();
-        private final Map<ExecutableElement, SourceAnalysis.Facts> facts = new HashMap<>();
+        private final Map<String, SourceAnalysis.Facts> facts = new HashMap<>();
         private final Map<String, Map<String, Object>> dataSchemasByTool = new HashMap<>();
         private final Map<String, List<Object>> examplesByTool = new HashMap<>();
 
