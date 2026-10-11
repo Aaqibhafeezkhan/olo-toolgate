@@ -13,6 +13,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Java standalone runtime can keep tasks in SQLite (M0 part 10). With
+  `TOOLGATE_TASK_STORE=sqlite` tasks and their results live in the state file at
+  `TOOLGATE_STATE_DB` and survive a restart; a task the stopped process had not finished ends
+  `failed` with `OUTCOME_UNKNOWN`. `memory` stays the default. A call whose task cannot be
+  stored gets the retryable `TASK_STORE_UNAVAILABLE` and nothing runs. The `TaskStore` port
+  lists `active()` tasks instead of `all()`.
+
 - The Java standalone runtime reserves business keys (M0 part 9). Tools that require a key, or
   declare `businessKeyArgument`, run only after the key (from that argument or the
   `Idempotency-Key` header) is reserved in a local SQLite store at `TOOLGATE_STATE_DB`. Repeats
