@@ -21,11 +21,9 @@ The project follows semantic versioning once stable versioning begins.
   inside the 30 s sync deadline. The v2 invocation task migrations (Flyway V18,
   Quickstart V11) now ship in the product.
 
-- The Gateway's `/mcp` route serves session-era MCP clients on `2025-11-25` and
-  `2025-06-18` through a legacy adapter (ADR 018): `initialize`, notifications, `ping`,
-  `tools/list` and `tools/call` run on the stateless core, and the returned
-  `Mcp-Session-Id` is never stored or used for identity or scope. `server/discover`
-  lists all three versions, and `ping` is no longer answered on the 2026-07-28 path.
+- The Gateway's `/mcp` route serves only MCP 2026-07-28 (ADR 018 amendment). `ping` is
+  no longer answered, and session-era requests (`initialize`, or an older
+  `MCP-Protocol-Version` without a `_meta` version) get -32022 listing `2026-07-28`.
 
 - A fresh Windows install enrolls with the gateway it was downloaded from. Uninstall
   parks the focused gateway's enrollment in its profile, and setup parks an enrollment

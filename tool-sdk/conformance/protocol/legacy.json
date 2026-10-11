@@ -2,103 +2,69 @@
   "$schema": "../case.schema.json",
   "suite": "protocol",
   "area": "legacy",
-  "title": "Legacy MCP adapter",
+  "title": "Legacy MCP versions",
   "sources": [
     "plan.md §10.2",
-    "ADR 018"
+    "ADR 018 (amended in M1)"
   ],
   "cases": [
     {
       "id": "legacy/2025-11-25-flow",
-      "title": "The 2025-11-25 flow works through the adapter",
+      "title": "The 2025-11-25 flow works in a standalone SDK runtime",
       "requirements": [
         "plan.md §10.2"
       ],
       "level": "component",
       "targets": [
-        "gateway",
         "java",
         "python",
         "typescript",
         "dotnet"
       ],
       "perTarget": true,
-      "when": "A 2025-11-25 client runs initialize, notifications/initialized, ping, tools/list, tools/call, the GET SSE stream and receives list_changed",
+      "when": "A 2025-11-25 client talks to a standalone SDK runtime and runs initialize, notifications/initialized, ping, tools/list, tools/call, the GET SSE stream and receives list_changed",
       "then": [
-        "Each works on the stateless core"
+        "Each works through the official SDK; the Gateway is not involved"
       ],
       "status": "authored"
     },
     {
       "id": "legacy/2025-06-18-flow",
-      "title": "The 2025-06-18 flow works through the adapter",
+      "title": "The 2025-06-18 flow works in a standalone SDK runtime",
       "requirements": [
         "plan.md §10.2"
       ],
       "level": "component",
       "targets": [
-        "gateway",
         "java",
         "python",
         "typescript",
         "dotnet"
       ],
       "perTarget": true,
-      "when": "A 2025-06-18 client runs initialize, notifications/initialized, ping, tools/list, tools/call, the GET SSE stream and receives list_changed",
+      "when": "A 2025-06-18 client talks to a standalone SDK runtime and runs initialize, notifications/initialized, ping, tools/list, tools/call, the GET SSE stream and receives list_changed",
       "then": [
-        "Each works on the stateless core"
+        "Each works through the official SDK; the Gateway is not involved"
       ],
       "status": "authored"
     },
     {
       "id": "legacy/other-versions",
-      "title": "Other versions are refused",
+      "title": "The Gateway refuses every session-era version",
       "requirements": [
-        "plan.md §10.2"
+        "ADR 018 amendment"
       ],
       "level": "component",
       "targets": [
         "gateway"
       ],
-      "when": "initialize with 2025-03-26",
+      "when": "initialize with 2025-11-25, 2025-06-18 or 2025-03-26, or tools/list with an older MCP-Protocol-Version and no _meta version, or GET /mcp",
       "then": [
-        "UnsupportedProtocolVersion"
+        "UnsupportedProtocolVersion -32022 listing only 2026-07-28",
+        "GET returns 405"
       ],
       "status": "passing",
-      "evidence": "apps/gateway/tests/core.rs legacy_adapter_refuses_other_versions_and_never_pins_identity"
-    },
-    {
-      "id": "legacy/reauth-every-request",
-      "title": "The adapter re-authenticates every request",
-      "requirements": [
-        "plan.md §10.2"
-      ],
-      "level": "component",
-      "targets": [
-        "gateway"
-      ],
-      "when": "A session is initialized, then the token is revoked, then the same Mcp-Session-Id calls a tool",
-      "then": [
-        "401; identity is never pinned to the session"
-      ],
-      "status": "passing",
-      "evidence": "apps/gateway/tests/core.rs legacy_adapter_refuses_other_versions_and_never_pins_identity"
-    },
-    {
-      "id": "legacy/scope-not-pinned",
-      "title": "Scope is never pinned to a session",
-      "requirements": [
-        "plan.md §10.2"
-      ],
-      "level": "component",
-      "targets": [
-        "gateway"
-      ],
-      "when": "The caller loses the tool grant mid-session",
-      "then": [
-        "The next call is refused"
-      ],
-      "status": "authored"
+      "evidence": "apps/gateway/tests/core.rs session_era_clients_are_refused_with_the_supported_version"
     },
     {
       "id": "legacy/version-header",
@@ -116,23 +82,6 @@
       ],
       "status": "passing",
       "evidence": "apps/gateway/tests/core.rs modern_core_drops_ping_and_discovers_every_supported_version"
-    },
-    {
-      "id": "legacy/approval-link",
-      "title": "A legacy client gets an approval link for ASK and nothing runs",
-      "requirements": [
-        "plan.md §12.5"
-      ],
-      "level": "component",
-      "targets": [
-        "gateway"
-      ],
-      "when": "A legacy client calls an ASK tool",
-      "then": [
-        "An error with an approval link",
-        "Nothing executes"
-      ],
-      "status": "authored"
     },
     {
       "id": "legacy/stdio-era-lock",
