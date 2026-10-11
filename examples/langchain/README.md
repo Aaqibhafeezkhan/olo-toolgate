@@ -47,17 +47,22 @@ current group grants, policy, device approval and installed package evidence.
 - For Windows targeting, an installed client enrolled and approved on this
   example's Gateway, on the machine running Docker.
 
-The default image is `ololab/olo-toolgate-quickstart:dev`, the latest development
-build. Both the Quickstart and Linux client are taken from that image; the native
-archive checksum and architecture are verified before extraction. No Rust compilation
-is required. `deploy.bat` re-pulls the image and rebuilds the Linux device from it on
-every run (except with `-SkipBuild`), so a moved `dev` tag is picked up. To pin a
-reproducible release, set `TOOLGATE_QUICKSTART_IMAGE` in `.env` to a `dev-<commit>` tag.
-An image without its Linux client archive fails the build.
+The defaults are `ololab/olo-toolgate-quickstart:dev` and
+`ololab/olo-toolgate-device:dev`, published together by the development release
+jobs. The device image contains the matching verified native client and the
+optional LangChain fixture entrypoint. No Rust compilation or device image build
+is required. `deploy.bat` re-pulls both images on every run (except with
+`-SkipBuild`), so moved `dev` tags are picked up. It recreates
+the device container so the installed executable follows that build, while its
+named volumes retain the enrollment, key and HotFolder files. To pin a
+reproducible release, set both `TOOLGATE_QUICKSTART_IMAGE` and `TOOLGATE_DEVICE_IMAGE`
+in `.env` to the same `dev-<commit>` tag. The LangChain smoke test runs on the
+published device image, using its actual installed client and native effects.
 
 An existing `.env` is preserved, so one copied from an older `.env.example` may still
 pin an old `dev-<commit>` tag and therefore an old client. Set
-`TOOLGATE_QUICKSTART_IMAGE=ololab/olo-toolgate-quickstart:dev` there to follow `dev`.
+`TOOLGATE_QUICKSTART_IMAGE=ololab/olo-toolgate-quickstart:dev` and
+`TOOLGATE_DEVICE_IMAGE=ololab/olo-toolgate-device:dev` there to follow `dev`.
 
 ## Windows: start everything and run the example
 
@@ -123,8 +128,8 @@ uses the existing local images without rebuilding. Omit `-SkipBuild` after code 
 The scripts work from another directory too. `deploy.bat` calls `deploy.ps1`, which:
 
 1. Loads `.env` (copies `.env.example` if absent) and checks the required settings.
-2. Pulls the Quickstart image and rebuilds the Linux client wrapper and LangChain
-   runner images from freshly pulled bases.
+2. Pulls the published Quickstart and device images and builds the LangChain
+   runner image from freshly pulled bases.
 3. Starts Quickstart and the Linux device, waiting for readiness.
 4. Logs in through the normal admin and two independent reviewer APIs. On a fresh
    isolated stack it uses the one-time installation passwords, changes them to
@@ -134,7 +139,11 @@ The scripts work from another directory too. `deploy.bat` calls `deploy.ps1`, wh
    `ReadAndWriteDeviceGroup`, preserving their other memberships. Selects an
    available group member (Windows only with `-Win`, Linux only with `-Target linux`),
    registers its real tool profiles/package digest, and maps tools/agent to the
-   standard ReadAndWrite groups through independent reviews.
+   standard ReadAndWrite groups through the Control configuration API. A separate
+   example binding and device/agent groups limit each deployment to its selected
+   prepared device; its four tools keep their required single Tool Group allocation.
+   Other device group members cannot redirect that deployment's calls. Super Admin
+   changes apply directly; scoped administrator changes complete independent review.
 6. Issues a 24-hour opaque agent credential for the selected device, restarts only this
    example's Quickstart to load it, and waits for the device to check in again.
 7. Runs the agent's own tool discovery with that credential. If the device does not
@@ -145,8 +154,9 @@ The scripts work from another directory too. `deploy.bat` calls `deploy.ps1`, wh
 stopped stack without rebuilding it, and runs the selected LangChain task.
 
 The bootstrap/reviewer automation is an **explicit local evaluation fixture**.
-The configuration still uses distinct requester/reviewer identities and the real
-review transitions. It is not a substitute for separate human reviewers in an
+Scoped configuration uses distinct requester/reviewer identities and the real
+review transitions. Super Admin changes use the server's audited direct path.
+It is not a substitute for separate human reviewers in an
 organization. No private signing keys are read, default groups gain no rights,
 and direct entity permissions are not introduced.
 

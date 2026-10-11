@@ -1,0 +1,9 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+services:
+  device:
+    networks: [gateway-network]
+networks:
+  gateway-network:
+    external: true
+    name: ${TOOLGATE_DEVICE_NETWORK:?Set the existing gateway Docker network}

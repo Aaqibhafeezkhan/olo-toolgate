@@ -87,7 +87,7 @@ class Configuration:
         elif user in saved: self.login(key,user,saved[user])
         else: raise ValueError('Local fixture password was already changed; supply its credential explicitly')
 
-    def api(self, path, body=None, method=None, user='admin', revision=None):
+    def api(self, path, body=None, method=None, user='admin', revision=None, with_status=False):
         headers = {'Authorization': 'Bearer '+self.tokens[user],
                    'Content-Type': 'application/json', 'X-Request-ID': secrets.token_hex(16)}
         if body is not None or method=='DELETE': headers['Idempotency-Key'] = secrets.token_hex(16)
@@ -97,7 +97,9 @@ class Configuration:
             method=method or ('POST' if body is not None else 'GET'))
         try:
             with self.opener.open(request, timeout=30) as response:
-                return json.loads(response.read(1048576))
+                data = response.read(1048576)
+                document = json.loads(data) if data else None
+                return (response.status, document) if with_status else document
         except urllib.error.HTTPError as error:
             raise ValueError(f'Debug configuration API rejected {method or "GET"} {path}: HTTP {error.code}') from None
 
@@ -108,9 +110,15 @@ class Configuration:
             document = {**document, 'revision': existing['revision']}
             if document == existing: return
             path += '/'+document['id']
-        change = self.api(path, document, 'PUT' if existing else 'POST', revision=existing['revision'] if existing else None)
-        self.apply_change(change)
-        print('Reviewed '+collection+': '+document['id'], flush=True)
+        self.mutate(path, document, 'PUT' if existing else 'POST', revision=existing['revision'] if existing else None)
+        print('Configured '+collection+': '+document['id'], flush=True)
+
+    def mutate(self, path, body=None, method=None, revision=None):
+        status, document = self.api(path, body, method, revision=revision, with_status=True)
+        if status == 202:
+            self.apply_change(document)
+        elif status not in (200, 201, 204):
+            raise ValueError('Unexpected configuration mutation response: HTTP '+str(status))
 
     def all(self, collection):
         result=[];cursor='';seen=set()
@@ -141,9 +149,9 @@ class Configuration:
     def memberships(self, collection, id, groups):
         current=self.api('/api/control/v1/'+collection+'/'+id+'/groups')
         if sorted(current['groupIds'])==sorted(groups):return
-        self.apply_change(self.api('/api/control/v1/'+collection+'/'+id+'/groups',
-            {**current,'groupIds':groups},'PUT',revision=current['revision']))
-        print('Reviewed group allocation: '+id+' -> '+', '.join(groups),flush=True)
+        self.mutate('/api/control/v1/'+collection+'/'+id+'/groups',
+            {**current,'groupIds':groups},'PUT',revision=current['revision'])
+        print('Configured group allocation: '+id+' -> '+', '.join(groups),flush=True)
 
     def presets(self):
         snapshot=self.api('/api/control/v1/config/export');records=load_configuration()['records'];changed=False
@@ -151,12 +159,12 @@ class Configuration:
             existing={x['id'] for x in snapshot[collection]}
             additions=[v for v in values if v['id'] not in existing]
             snapshot[collection].extend(additions);changed|=bool(additions)
-        if changed:self.apply_change(self.api('/api/control/v1/config/import',
-            dict(snapshot=snapshot,mode='MERGE',dryRun=False),revision=snapshot['revision']))
+        if changed:self.mutate('/api/control/v1/config/import',
+            dict(snapshot=snapshot,mode='MERGE',dryRun=False),revision=snapshot['revision'])
 
     def delete(self, collection, id):
         old=next((x for x in self.all(collection) if x['id']==id),None)
-        if old:self.apply_change(self.api('/api/control/v1/'+collection+'/'+id,method='DELETE',revision=old['revision']))
+        if old:self.mutate('/api/control/v1/'+collection+'/'+id,method='DELETE',revision=old['revision'])
 
     def test_users(self):
         for user, tier in (('test-readonly','ReadOnly'),('test-readwrite','ReadAndWrite'),('test-admin','Admin')):

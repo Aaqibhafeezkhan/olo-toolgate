@@ -30,10 +30,41 @@ class InitialConfigurationTests(unittest.TestCase):
     def test_membership_allocation_uses_reviewed_api_and_expected_revision(self):
         config=object.__new__(module.Configuration)
         current=dict(entityType='AGENT',entityId='agent',groupIds=['default-agents'],revision=9)
-        with patch.object(config,'api',side_effect=[current,dict(id='draft')]) as api,patch.object(config,'apply_change') as review:
+        with patch.object(config,'api',side_effect=[current,(202,dict(id='draft'))]) as api,patch.object(config,'apply_change') as review:
             config.memberships('agents','agent',['ReadAndWriteAgentGroup'])
             self.assertEqual(api.call_args_list[1].args,('/api/control/v1/agents/agent/groups',{**current,'groupIds':['ReadAndWriteAgentGroup']},'PUT'))
             self.assertEqual(api.call_args_list[1].kwargs['revision'],9);review.assert_called_once_with(dict(id='draft'))
+
+    def test_direct_super_admin_mutations_do_not_submit_an_entity_as_a_change(self):
+        config=object.__new__(module.Configuration)
+        for status,document in [(200,dict(id='client.read_log_entry')), (201,dict(id='agent')), (204,None)]:
+            with self.subTest(status=status), patch.object(config,'api',return_value=(status,document)),patch.object(config,'apply_change') as review:
+                config.mutate('/api/control/v1/tools',dict(id='client.read_log_entry'))
+                review.assert_not_called()
+
+    def test_scoped_administrator_still_completes_independent_review(self):
+        config=object.__new__(module.Configuration)
+        config.tokens={'admin':'requester','reviewer-1':'independent-reviewer'}
+        draft=dict(id='config-example',revision=1,state='DRAFT',requiredReviews=1)
+        with patch.object(config,'api',side_effect=[(202,draft),
+                {**draft,'revision':2,'state':'PENDING'}, {**draft,'revision':3,'state':'APPROVED'},
+                {**draft,'revision':4,'state':'APPLIED'}]) as api:
+            config.mutate('/api/control/v1/tools',dict(id='tool'))
+        self.assertEqual([call.args[1]['action'] for call in api.call_args_list[1:]],['SUBMIT','APPROVE','APPLY'])
+        self.assertEqual(api.call_args_list[2].kwargs['user'],'reviewer-1')
+
+    def test_empty_direct_delete_response_is_accepted(self):
+        config=object.__new__(module.Configuration)
+        config.tokens={'admin':'session'}
+        response=unittest.mock.MagicMock(status=204)
+        response.__enter__.return_value=response
+        response.read.return_value=b''
+        config.opener=unittest.mock.Mock()
+        config.opener.open.return_value=response
+        config.origin='http://127.0.0.1:18090'
+        with patch.object(config,'apply_change') as review:
+            config.mutate('/api/control/v1/tools/tool',method='DELETE',revision=1)
+            review.assert_not_called()
 
     def test_configured_membership_does_not_create_another_change(self):
         config=object.__new__(module.Configuration)

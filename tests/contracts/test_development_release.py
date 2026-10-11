@@ -6,9 +6,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from tools.release import development
+from tools.release import manual_development
 
 
 class DevelopmentReleaseTests(unittest.TestCase):
+    def test_device_is_published_by_both_existing_release_paths(self):
+        self.assertEqual(development.IMAGES['device'],('olo-toolgate-device:module11','olo-toolgate-device'))
+        self.assertEqual(manual_development.IMAGES['device'],'olo-toolgate-device')
+
     def test_archive_requires_matching_checksum(self):
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory)

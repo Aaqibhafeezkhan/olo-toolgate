@@ -1,0 +1,11 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+services:
+  device:
+    environment:
+      TOOLGATE_GATEWAY_CA_FILE: /run/olo-toolgate/gateway-ca.crt
+    volumes:
+      - type: bind
+        source: ${TOOLGATE_GATEWAY_CA_SOURCE:?Set the absolute public CA file path}
+        target: /run/olo-toolgate/gateway-ca.crt
+        read_only: true
