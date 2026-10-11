@@ -128,6 +128,9 @@ class BuildSupportTest {
         IllegalStateException missing = assertThrows(IllegalStateException.class,
                 () -> Packer.pack(Path.of("staging"), Path.of("out.tgpkg"), Map.of("PATH", "")));
         assertTrue(missing.getMessage().contains("toolgate CLI was not found"), missing.getMessage());
+        IllegalStateException absent = assertThrows(IllegalStateException.class,
+                () -> Packer.pack(Path.of("staging"), Files.createTempDirectory("x").resolve("out.tgpkg"), Map.of("TOOLGATE_CLI", "/nonexistent/toolgate")));
+        assertTrue(absent.getMessage().contains("cannot run the toolgate CLI"), absent.getMessage());
         String cli = System.getProperty("toolgate.cli", "");
         assumeTrue(!cli.isEmpty() && Files.isExecutable(Path.of(cli)), "the toolgate CLI is built (set TOOLGATE_CLI)");
         Path staging = Staging.stage(appJar(), List.of(library("a.jar")), "1.0.0", Files.createTempDirectory("toolgate-pack"));

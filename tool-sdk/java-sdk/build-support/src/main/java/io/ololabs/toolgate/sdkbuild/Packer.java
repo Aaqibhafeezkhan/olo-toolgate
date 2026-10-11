@@ -25,7 +25,12 @@ public final class Packer {
             throw new IllegalStateException("the toolgate CLI was not found; install it or set TOOLGATE_CLI. The package is staged at " + staging);
         }
         Files.createDirectories(file.toAbsolutePath().getParent());
-        Process p = new ProcessBuilder(List.of(cli, "pack", staging.toString(), "-o", file.toString())).redirectErrorStream(true).start();
+        Process p;
+        try {
+            p = new ProcessBuilder(List.of(cli, "pack", staging.toString(), "-o", file.toString())).redirectErrorStream(true).start();
+        } catch (IOException e) {
+            throw new IllegalStateException("cannot run the toolgate CLI at " + cli + ": " + e.getMessage() + ". The package is staged at " + staging);
+        }
         String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         if (p.waitFor() != 0) throw new IllegalStateException("toolgate pack failed:\n" + output);
         return output;

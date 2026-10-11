@@ -16,7 +16,7 @@ out="$root/build/java-sdk-e2e"
 m2="$root/build/java-sdk-e2e-m2"
 
 (cd "$root" && ./gradlew -q --configure-on-demand publishJavaSdkLocally && cargo build -q -p toolgate-cli)
-export TOOLGATE_CLI="$root/target/debug/toolgate"
+export TOOLGATE_CLI="${CARGO_TARGET_DIR:-$root/target}/debug/toolgate"
 rm -rf "$out" "$m2/io/ololabs"
 mkdir -p "$out"
 
