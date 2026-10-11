@@ -9,14 +9,15 @@ import java.util.*;
 
 /** Enrollment and check-in use cases; all authoritative mutable state is transactional. */
 public final class EndpointService {
-    private static final String CONTRACT_VERSION=contractVersion();
-    private static String contractVersion() {
-        try(var input=ContractSet.class.getResourceAsStream("/META-INF/toolgate-contracts.version")) {
-            if(input==null)throw new IllegalStateException("Shared contract version required");
+    // Client executables carry the product version; the contract library has its own version.
+    private static final String MINIMUM_CLIENT_VERSION=productVersion();
+    private static String productVersion() {
+        try(var input=EndpointService.class.getResourceAsStream("/META-INF/toolgate-product.version")) {
+            if(input==null)throw new IllegalStateException("Product version required");
             String version=new String(input.readNBytes(129),java.nio.charset.StandardCharsets.US_ASCII).trim();
-            if(version.length()>128 || !version.matches("[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?"))throw new IllegalStateException("Shared contract version required");
+            if(version.length()>128 || !version.matches("[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?"))throw new IllegalStateException("Product version required");
             return version;
-        }catch(java.io.IOException failure){throw new IllegalStateException("Shared contract version required");}
+        }catch(java.io.IOException failure){throw new IllegalStateException("Product version required");}
     }
     private final Store store;
     private final Codec codec;
@@ -78,7 +79,7 @@ public final class EndpointService {
     private static String random(int bytes){byte[] value=new byte[bytes];new java.security.SecureRandom().nextBytes(value);return HexFormat.of().formatHex(value);}
     private String verification(){return control+"/console/#enroll";}
     public Store.Reply discovery(){available();long now=clock.millis();
-        var manifest=new ClientDiscovery(1L,server,organization,tenant.value(),control,gateway,verification(),CONTRACT_VERSION,now,now+300000,issuer.issuerCertificate());
+        var manifest=new ClientDiscovery(1L,server,organization,tenant.value(),control,gateway,verification(),MINIMUM_CLIENT_VERSION,now,now+300000,issuer.issuerCertificate());
         return reply(issuer.discovery(codec.json(manifest)),0);
     }
     public Store.Reply start(String body,String requestId) {

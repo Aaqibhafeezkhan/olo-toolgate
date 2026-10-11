@@ -35,6 +35,7 @@ dependencies {
 tasks.test {
     systemProperty("toolgate.published", usePublishedContracts.get())
     systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
+    systemProperty("toolgate.productVersion", rootProject.file("VERSION").readText().trim())
     // A fresh PostgreSQL boundary is supplied for each verification invocation.
     outputs.upToDateWhen { false }
 }
@@ -88,6 +89,10 @@ val verifyAdminUi = tasks.register<VerifyConsoleArtifact>("verifyAdminUi") {
 
 tasks.processResources {
     dependsOn(verifyAdminUi)
+    from(rootProject.file("VERSION")) {
+        into("META-INF")
+        rename { "toolgate-product.version" }
+    }
     from(consoleDirectory) { into("META-INF/resources/console"); exclude(".vite/**") }
     from(initialConfigurationDirectory) { into("initial-configuration"); include("*.json") }
     from(rootProject.file("packages/contracts/openapi/control-v1.yaml")) {
