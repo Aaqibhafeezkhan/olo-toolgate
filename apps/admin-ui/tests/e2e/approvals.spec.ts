@@ -55,7 +55,7 @@ test('real ASK queue, once/temporary/deny decisions, stale revision and accessib
   await page.setViewportSize({width:390,height:844}); await accessible(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({path:'../../build/ui/approvals-mobile.png',fullPage:true});
-  expect(await page.evaluate(() => ({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie}))).toEqual({local:0,session:0,cookies:''});
+  expect(await page.evaluate(() => ({local:Object.keys(localStorage).filter(key=>!key.startsWith('toolgate.')).length,session:sessionStorage.length,cookies:document.cookie}))).toEqual({local:0,session:0,cookies:''});
   await page.reload(); await expect(page.getByLabel('Access token')).toBeVisible(); expect(errors).toEqual([]);
 });
 

@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { App } from '../src/App';
 import axe from 'axe-core';
 
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); window.location.hash = ''; });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); window.location.hash = ''; localStorage.clear(); });
 function response(items: unknown[] = []) { return new Response(JSON.stringify({items})); }
 async function connect() { fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}}); fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'})); await screen.findByRole('navigation'); }
 
@@ -28,7 +28,7 @@ describe('Management shell states', () => {
     window.location.hash='#configuration?id='+id;fireEvent(window,new HashChangeEvent('hashchange'));
     expect(window.location.hash).toBe('#config-reviews?id='+id);
     expect(await screen.findByRole('heading',{name:'Configuration reviews'})).toBeTruthy();
-    for(const route of ['config-server','config-device','config-backup'])expect(document.querySelector(`nav a[href="#${route}"]`)?.closest('details')?.querySelector('summary')?.textContent).toBe('Configuration');
+    for(const route of ['config-server','config-device','config-backup'])expect(document.querySelector(`nav a[href="#${route}"]`)?.closest('details')?.querySelector('summary')?.textContent).toBe('Administration');
   });
 
   it('keeps navigation controls in landmarks and main outside nested landmarks', async () => {
@@ -46,11 +46,11 @@ describe('Management shell states', () => {
     localStorage.clear();
   });
 
-  it('defaults to Audit expanded and supports bounded keyboard resizing and collapse', async () => {
+  it('defaults to all groups collapsed and supports bounded keyboard resizing and collapse', async () => {
     localStorage.clear();
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
-    expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].map(group=>group.open)).toEqual([true,false,false,false,false,false]);
+    expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].map(group=>group.open)).toEqual([false,false,false,false,false,false]);
     const resize = screen.getByRole('separator',{name:'Resize navigation'});
     expect(screen.getByRole('region',{name:'Navigation controls'}).contains(resize)).toBe(true);
     fireEvent.keyDown(resize,{key:'End'}); expect(resize.getAttribute('aria-valuenow')).toBe('420');
@@ -84,7 +84,7 @@ describe('Management shell states', () => {
     fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}}); fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
     expect(screen.getByRole('status').textContent).toContain('Verifying'); expect((screen.getByLabelText('Access token') as HTMLInputElement).value).toBe('');
     resolve(response()); await screen.findByRole('navigation');
-    expect(localStorage.length).toBe(0); expect(sessionStorage.length).toBe(0); expect(window.location.href).not.toContain('test-only-secret');
+    expect(JSON.stringify(localStorage)).not.toContain('test-only-secret'); expect(sessionStorage.length).toBe(0); expect(window.location.href).not.toContain('test-only-secret');
     fireEvent.click(screen.getByRole('button',{name:'Disconnect'})); expect(screen.getByLabelText('Access token')).toBeTruthy();
   });
   it('shows authentication failure and permission errors without raw response text', async () => {
@@ -100,7 +100,7 @@ describe('Management shell states', () => {
     expect(screen.getByRole('link',{name:'Devices'}).getAttribute('aria-current')).toBe('page');
   });
   it('renders directory loading/error/retry states', async () => {
-    window.location.hash = '#teams'; const directory = vi.fn().mockResolvedValueOnce(response()).mockResolvedValueOnce(new Response('{}',{status:503})).mockResolvedValue(response()); const fetcher = vi.fn().mockImplementation((url:string) => url.startsWith('/api/public/') ? Promise.resolve(new Response('{}',{status:503})) : directory()); vi.stubGlobal('fetch',fetcher);
+    window.location.hash = '#teams'; const directory = vi.fn().mockResolvedValueOnce(new Response('{}',{status:503})).mockResolvedValue(response()); const fetcher = vi.fn().mockImplementation((url:string) => url.startsWith('/api/public/') ? Promise.resolve(new Response('{}',{status:503})) : url.startsWith('/api/control/v1/teams?') ? directory() : Promise.resolve(response())); vi.stubGlobal('fetch',fetcher);
     render(<App />); await connect(); expect((await screen.findByRole('alert')).textContent).toContain('could not complete');
     fireEvent.click(screen.getByRole('button',{name:'Try again'})); await screen.findByRole('heading',{name:'No teams on this page'});
   });

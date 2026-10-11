@@ -7,7 +7,7 @@ React/TypeScript/Vite assets ship in the Control image and use generated operati
 metadata from the canonical API. UI and versioned API share one administrative origin.
 See [device registry and tool-call controls](device-registry.md) for the current
 enrollment, approval and execution flow.
-The **Configuration** menu has Server, Device and Backup/Restore pages; each page saves
+The **Administration** menu is last in the sidebar and has Server, Device, Backup/Restore and About pages; each page saves
 only its own settings group. See [Configuration menu](configuration-menu.md).
 
 ## Authentication

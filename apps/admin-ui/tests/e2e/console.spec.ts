@@ -53,7 +53,7 @@ test('embedded signed-token console, real CRUD, revisions, accessibility and no 
   await page.getByLabel('User IDs, separated by commas').fill('browser-owner'); await page.getByRole('button',{name:'Save team'}).click();
   await expect(page.getByRole('heading',{name:'Edit team',exact:true})).toHaveCount(0);
   await navigate(page,'Users'); await page.getByRole('button',{name:'Saved user',exact:true}).click(); await page.getByRole('button',{name:'Delete user',exact:true}).click(); await page.getByRole('button',{name:'Confirm delete'}).click(); await expect(page.getByRole('button',{name:'Saved user',exact:true})).toHaveCount(0);
-  const storage = await page.evaluate(() => ({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie})); expect(storage).toEqual({local:0,session:0,cookies:''});
+  const storage = await page.evaluate(() => ({local:Object.keys(localStorage).filter(key=>!key.startsWith('toolgate.')).length,session:sessionStorage.length,cookies:document.cookie})); expect(storage).toEqual({local:0,session:0,cookies:''});
   expect(new URL(page.url()).origin).toBe(origin); expect(page.url().includes(credentials.admin)).toBe(false);
   await page.setViewportSize({width:390,height:844}); await navigate(page,'Overview'); await expect(page.locator('.stat')).toHaveCount(7); await accessible(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -76,7 +76,7 @@ test('real reader denial, session expiration, wrong signature and empty director
 
 test('Super Admin manages roles, team inheritance and audit through grouped navigation',async({page,request})=>{
   await login(page,'super');await expect(page.getByRole('navigation')).toBeVisible();
-  await expect(page.locator('nav details')).toHaveCount(4);
+  await expect(page.locator('nav details')).toHaveCount(6);
   await navigate(page,'Roles');await page.getByRole('button',{name:'Add role',exact:true}).click();
   await page.getByLabel('Identifier',{exact:true}).fill('browser-cloud-role');await page.getByLabel('Display name').fill('Browser cloud role');
   await page.getByLabel('IT Cloud Admin',{exact:true}).check();await page.getByLabel('Approval reviewer',{exact:true}).check();

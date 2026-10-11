@@ -61,7 +61,14 @@ final class EndpointTest {
     private EndpointEnrollmentResult poll(Setup s,EndpointEnrollmentChallenge challenge){return codec.model(s.service.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class);}
     private java.security.cert.X509Certificate certificate(DeviceIdentity identity)throws Exception{return (java.security.cert.X509Certificate)java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(identity.certificatePem().getBytes(java.nio.charset.StandardCharsets.US_ASCII)));}
     @Test void queuedBuildAndDeploymentCannotOutliveTheirCreatorsGroupAuthority()throws Exception{
-        var s=setup();var challenge=start(s,"queue-device");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");var peer=certificate(poll(s,challenge).identity());
+        var s=setup();
+        // This proof exercises a restricted role; an installation owner intentionally retains all management operations.
+        s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var role=codec.model(entries.get(Ids.Kind.ROLE.id("test-recovery-role")).document(),ControlRole.class);
+            TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole(role.id(),role.name(),role.enabled(),role.revision()+1,UserRole.ADMINISTRATOR,role.roleType(),role.managementRules()));
+            TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("test-owner-role","Installation owner",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()));
+            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("test-owner-team","Installation owners",true,1L,List.of("other"),List.of("test-owner-role")));
+            tx.save(before,new Directory(before.revision()+1,entries));return null;});
+        var challenge=start(s,"queue-device");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");var peer=certificate(poll(s,challenge).identity());
         var releaseFixture=new FleetTest();var crypto=releaseFixture.crypto();
         var fleet=new FleetService(s.store,codec,crypto,s.service,s.clock,true,"endpoint","server");
         var builder=new BuilderService(s.store,codec,crypto,fleet,s.service,s.clock,true,"endpoint","server");

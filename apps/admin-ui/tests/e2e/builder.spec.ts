@@ -23,5 +23,5 @@ test('author, scan, test on client, seal and prepare publication',async({page})=
  await expect(page.getByLabel('Code editor')).toBeDisabled();
  const publication=page.waitForEvent('download');await page.getByRole('button',{name:'Prepare publication'}).click();expect((await publication).suggestedFilename()).toBe('browser-tool-publication.json');
  await page.getByRole('button',{name:'Clone to new version'}).click();await expect(page.getByLabel('Version',{exact:true})).toHaveValue('');await expect(page.getByLabel('Code editor')).toBeEnabled();
- expect(await page.evaluate(()=>localStorage.length)).toBe(0);expect(await page.locator('body').innerText()).not.toContain(credentials.admin);
+ expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>!key.startsWith('toolgate.')).length)).toBe(0);expect(await page.locator('body').innerText()).not.toContain(credentials.admin);
 });

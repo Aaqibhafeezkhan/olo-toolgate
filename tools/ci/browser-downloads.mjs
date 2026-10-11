@@ -62,6 +62,6 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
 try {
-  await run(['--workspace','@olo-labs/toolgate-admin-ui','run','e2e','--','downloads.spec.ts'],
-    {...process.env,UI_TEST_ORIGIN:`http://127.0.0.1:${server.address().port}`,UI_TEST_DOWNLOADS_EXPECTED:'true'});
+  await run(['--workspace','@olo-labs/toolgate-admin-ui','run','e2e','--','downloads.spec.ts','experience.spec.ts'],
+    {...process.env,UI_TEST_ORIGIN:`http://127.0.0.1:${server.address().port}`,UI_TEST_DOWNLOADS_EXPECTED:'true',UI_TEST_EXPERIENCE:'true'});
 } finally {await new Promise(done=>server.close(done));}

@@ -1,5 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {Table,ActionButton} from './Table';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { EndpointEnrollmentReview, EnrollmentChoice } from '@olo-labs/toolgate-contracts';
 import { ControlClient } from './api';
@@ -61,7 +62,7 @@ export function Enrollment({ client }: { client: ControlClient }) {
     try {
       setReview(await client.decideEnrollment({userCode:review.userCode,keyFingerprint:review.keyFingerprint,choice,
         ...(choice==='APPROVE'?durationBody(duration):{})},crypto.randomUUID()));
-      setConfirmed(false);setRefresh(value=>value+1);
+      setConfirmed(false);setRefresh(value=>value+1);window.dispatchEvent(new Event('toolgate:approval-change'));
     }catch (failure) {setError(failure);clearReview();setRefresh(value=>value+1);} finally {setBusy(false);}
   }
   const validUntil=validDuration(duration,now);
@@ -74,9 +75,9 @@ export function Enrollment({ client }: { client: ControlClient }) {
       {Boolean(listError)&&<Failure error={listError}/>}
       {pending===undefined&&!listError&&<p role="status">Loading device requests…</p>}
       {pending?.length===0&&!listError&&<p role="status">No devices are waiting for approval.</p>}
-      {Boolean(pending?.length)&&<div className="table-wrap"><table><thead><tr><th scope="col">Device</th><th scope="col">Platform</th><th scope="col">Code</th><th scope="col">Request expires</th><th scope="col">Action</th></tr></thead>
+      {Boolean(pending?.length)&&<div className="table-wrap"><Table><thead><tr><th scope="col">Device</th><th scope="col">Platform</th><th scope="col">Code</th><th scope="col">Request expires</th><th scope="col">Action</th></tr></thead>
         <tbody>{pending?.map(device=><tr key={device.enrollmentId}><th scope="row">{device.deviceId}</th><td>{device.platform}</td><td><code>{device.userCode}</code></td>
-          <td>{new Date(device.expiresAtUnixMs).toLocaleString()}</td><td><button onClick={()=>void load(device.userCode)} disabled={busy||Boolean(listError)||device.expiresAtUnixMs<=now} aria-label={`Review ${device.deviceId}`}>Review</button></td></tr>)}</tbody></table></div>}
+          <td data-sort-value={device.expiresAtUnixMs}>{new Date(device.expiresAtUnixMs).toLocaleString()}</td><td><ActionButton icon="view" label={'Review '+device.deviceId} onClick={()=>void load(device.userCode)} disabled={busy||Boolean(listError)||device.expiresAtUnixMs<=now}/></td></tr>)}</tbody></Table></div>}
     </section>
     {liveness&&<p role="status">{liveness}</p>}
     {Boolean(error) && <Failure error={error} />}

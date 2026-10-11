@@ -26,7 +26,7 @@ class EnterpriseMigrationTest {
             s.executeUpdate("INSERT INTO control_tenants(tenant_id,revision) VALUES('upgrade',1)");
             try(var insert=c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES('upgrade','USER','kept',1,?::jsonb)")){insert.setString(1,old);insert.executeUpdate();}
         }
-        var latest=Flyway.configure().dataSource(url,"control_migrator",password).load();assertEquals(5,latest.migrate().migrationsExecuted);latest.validate();
+        var latest=Flyway.configure().dataSource(url,"control_migrator",password).load();int pending=latest.info().pending().length;assertTrue(pending>0);assertEquals(pending,latest.migrate().migrationsExecuted);latest.validate();
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         var codec=new ContractCodec();var store=new PostgresStore(source,codec);
         store.transaction(new Ids.TenantId("upgrade"),false,tx->{var d=tx.load();codec.validatePolicies(d);assertTrue(d.entries().get(Kind.USER.id("kept")).enabled());assertFalse(d.entries().get(Kind.USER.id("kept")).document().contains("access"));assertEquals(java.util.List.of("team-default"),GroupGraph.memberships(d,codec,Kind.USER,"kept",false));return null;});

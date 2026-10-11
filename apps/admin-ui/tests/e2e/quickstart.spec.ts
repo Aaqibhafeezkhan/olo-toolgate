@@ -47,7 +47,7 @@ test('real Quickstart password, non-HA status, protected compute and vault names
   await expect(page.getByRole('region',{name:'Tool result'})).toContainText('14');
   await expect(page.getByText('Stored references: demo/token')).toBeVisible();
   const result=await new AxeBuilder({page}).analyze();expect(result.violations).toEqual([]);
-  expect(await page.evaluate(()=>localStorage.length+sessionStorage.length)).toBe(0);
+  expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>!key.startsWith('toolgate.')).length+sessionStorage.length)).toBe(0);
   await page.getByRole('button',{name:'Disconnect'}).click();await expect(page.getByLabel('Password',{exact:true})).toHaveValue('');
 });
 

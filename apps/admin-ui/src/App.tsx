@@ -23,16 +23,20 @@ import { ThemePicker } from './Theme';
 import { Audit } from './Audit';
 import { DirectoryEditor, entityTitles } from './DirectoryEditor';
 import {AgentToolMapping,PublishAccess,GroupMembershipEditor} from './AccessMapping';
+import {Table,ActionButton,StatusToggle} from './Table';
+import {protectedRecord,useRecordActions} from './RecordActions';
+import {ApprovalBell} from './ApprovalBell';
+import {sessionPresentation} from './SessionPresentation';
 import oloLogo from './assets/olo.png';
 
 declare const __APP_VERSION__: string;
 declare const __APP_BUILD__: string;
 const directorySections = [['users','Users'],['teams','Teams'],['roles','Typed roles'],['tools','Tools'],['policies','Policies'],['devices','Devices'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['delegations','Human delegations'],['agentDelegations','Agent delegations'],['bindings','Execution bindings'],['extractors','Resource extractors'],['workloadBindings','Workload identities'],['identityBindings','Human identities'],['deviceEvidence','Device evidence']] as const;
 const sections = [['overview','Overview'],...directorySections,['audit','Audit log'],['approvals','Approvals'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['fleet','Packages'],['builder','Tool builder'],['enroll','Enroll device'],['local','Built-in tools and vault'],['requests','Client tool requests'],['mapping','Agent Group tool mapping'],['about','About']] as const;
-const navigationGroups=[{label:'Audit',routes:['audit','approvals','config-reviews','outcomes','simulation']},{label:'Configuration',routes:['config-server','config-device','config-backup']},{label:'Tools',routes:['tools','toolGroups','grants','bindings','policies','extractors','builder','local','requests']},{label:'Devices',routes:['devices','deviceGroups','deviceEvidence','enroll','fleet']},{label:'Users',routes:['users','teams','roles','identityBindings','delegations']},{label:'Agents',routes:['agents','agentGroups','mapping','workloadBindings','agentDelegations']}] as const;
+const navigationGroups=[{label:'Audit',routes:['audit','approvals','config-reviews','outcomes','simulation']},{label:'Tools',routes:['tools','toolGroups','grants','bindings','policies','extractors','builder','local','requests']},{label:'Devices',routes:['devices','deviceGroups','deviceEvidence','enroll','fleet']},{label:'Users',routes:['users','teams','roles','identityBindings','delegations']},{label:'Agents',routes:['agents','agentGroups','mapping','workloadBindings','agentDelegations']},{label:'Administration',routes:['config-server','config-device','config-backup','about']}] as const;
 type Route = typeof sections[number][0];
 type RecordValue = DirectoryRecords[DirectoryKind];
-/** Old #configuration links open Configuration > Server; links that name a review still open it in the queue. */
+/** Old #configuration links open Administration > Server; links naming a review open its queue. */
 function redirectLegacyHash() {
   const [path, query] = window.location.hash.split('?');
   if (path !== '#configuration') return;
@@ -45,7 +49,9 @@ const safeOrigin = () => window.location.protocol === 'https:' || ['localhost', 
 /** Authenticated shell; identities/roles are verified only by Control. */
 export function App() {
   const quickstart = document.querySelector('meta[name=toolgate-mode]')?.getAttribute('content') === 'quickstart';
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(['Audit']);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [presentation,setPresentation]=useState<ReturnType<typeof sessionPresentation>>();
+  const [superAdmin,setSuperAdmin]=useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('toolgate.sidebar.collapsed') === 'true'; } catch { return false; }
   });
@@ -69,8 +75,13 @@ export function App() {
   const [error, setError] = useState<unknown>(); const [route, setRoute] = useState<Route>(routeFromHash);
   const active = useRef<ControlClient | undefined>(undefined);
   useEffect(() => { const update = () => setRoute(routeFromHash()); window.addEventListener('hashchange', update); return () => { window.removeEventListener('hashchange', update); active.current?.dispose(); }; }, []);
+  useEffect(()=>{
+    if(!client||!presentation)return;
+    const save=()=>{const hash=window.location.hash;const known=sections.some(([value])=>hash.split('?')[0]===`#${value}`);try{localStorage.setItem(presentation.storageKey,JSON.stringify({hash:known&&hash.length<=256?hash:'#overview',groups:expandedGroups}));}catch{/* Browser preferences are optional. */}};
+    save();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);
+  },[client,presentation,route,expandedGroups]);
   function disconnect() {
-    active.current?.dispose(); active.current = undefined; setClient(undefined); setCredential(''); setConnecting(false);
+    active.current?.dispose(); active.current = undefined; setClient(undefined); window.history.replaceState(null,'',window.location.pathname+window.location.search); setRoute('overview'); setCredential(''); setConnecting(false);
     if (quickstart) void fetch('/api/quickstart/v1/logout', {method:'POST',credentials:'same-origin',cache:'no-store',redirect:'error',keepalive:true}).catch(() => {});
   }
   useEffect(() => {
@@ -120,17 +131,27 @@ export function App() {
     const candidate = new ControlClient(accessToken, () => { if (active.current === candidate) { disconnect(); setError(new ApiError(401, 'UNAUTHORIZED')); } });
     active.current = candidate; setCredential('');
     try {
-      try { await candidate.adminSession(); setAdministrator(true); }
+      let isAdministrator=true,isSuper=false;
+      try { const session=await candidate.adminSession(); isSuper=session.role==='SUPER_ADMIN'; }
       catch (failure) {
         if (!(failure instanceof ApiError) || failure.status !== 403) throw failure;
-        setAdministrator(false);
+        isAdministrator=false;
         await candidate.approvals();
-        if (active.current === candidate) { window.location.hash = '#approvals'; setRoute('approvals'); }
       }
-      if (active.current === candidate) setClient(candidate);
+      if (active.current === candidate) {
+        const display=sessionPresentation(accessToken);let hash=window.location.hash,groups:string[]=[];
+        try{const saved=JSON.parse(localStorage.getItem(display.storageKey)??'null');if(!hash&&typeof saved?.hash==='string'&&saved.hash.length<=256&&sections.some(([value])=>saved.hash.split('?')[0]===`#${value}`))hash=saved.hash;if(Array.isArray(saved?.groups))groups=saved.groups.filter((value:unknown)=>navigationGroups.some(group=>group.label===value));}catch{/* Ignore invalid or unavailable browser preferences. */}
+        if(!hash||!isAdministrator&&!['#overview','#approvals','#about'].includes(hash.split('?')[0]))hash='#overview';
+        window.history.replaceState(null,'',hash);setRoute(routeFromHash());setExpandedGroups(groups);setPresentation(display);setAdministrator(isAdministrator);setSuperAdmin(isSuper);setClient(candidate);
+        if(display.userId)void candidate.user(display.userId).then(user=>{if(active.current===candidate)setPresentation({...display,name:user.name});}).catch(()=>{});
+      }
     }
     catch (failure) { if (active.current === candidate) { candidate.dispose(); active.current = undefined; setError(failure); } }
     finally { if (!active.current || active.current === candidate) setConnecting(false); }
+  }
+  function navigationGroup(group:{label:string;routes:readonly Route[]}) {
+    return sidebarCollapsed?<button className="rail-menu" key={group.label} title={group.label} aria-label={group.label} onClick={()=>{setExpandedGroups([group.label]);toggleSidebar();}}><MenuIcon name={group.label}/></button>:
+      <details className="nav-group" key={group.label} open={expandedGroups.includes(group.label)} onToggle={event=>{const opened=event.currentTarget.open;setExpandedGroups(previous=>opened===previous.includes(group.label)?previous:opened?[...previous,group.label]:previous.filter(label=>label!==group.label));}}><summary><MenuIcon name={group.label}/>{group.label}</summary><div className="nav-submenu">{group.routes.filter(value=>quickstart||value!=='local').map(value=><a key={value} href={`#${value}`} aria-current={route===value?'page':undefined}><MenuIcon name={value}/>{sections.find(([key])=>key===value)![1]}</a>)}</div></details>;
   }
   return <><a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     {!client ? <main id="main" tabIndex={-1} className="connect-page"><header className="login-header"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /> <span>ToolGate</span></div>
@@ -149,10 +170,10 @@ export function App() {
     : <div className="app-frame"><header className="topbar app-topbar"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /><span>ToolGate</span></div><span className="portal-label">{administrator?'Admin Portal':'Approval workspace'}</span><div className="topbar-actions"><span className="tag">{quickstart ? 'Quickstart · Non-HA' : 'Organization workspace'}</span><ThemePicker /></div></header>
       <div className={`shell${sidebarCollapsed ? ' navigation-collapsed' : ''}`}><aside id="sidebar" className={`sidebar${sidebarCollapsed ? ' sidebar-collapsed' : ''}`} style={{width:sidebarCollapsed ? 64 : sidebarWidth}}>
       {!sidebarCollapsed && <p className="sidebar-caption">{administrator?'Workspace':'Approval workspace'}</p>}
-      <nav aria-label="Main navigation">{administrator?<><a href="#overview" title="Overview" aria-label={sidebarCollapsed?'Overview':undefined} aria-current={route==='overview'?'page':undefined}><MenuIcon name="overview"/>{!sidebarCollapsed&&'Overview'}</a>{navigationGroups.map(group=>sidebarCollapsed?
-        <button className="rail-menu" key={group.label} title={group.label} aria-label={group.label} onClick={()=>{ setExpandedGroups([group.label]); toggleSidebar(); }}><MenuIcon name={group.label}/></button>:
-        <details className="nav-group" key={group.label} open={expandedGroups.includes(group.label)} onToggle={event=>{const opened=event.currentTarget.open;setExpandedGroups(previous=>opened===previous.includes(group.label)?previous:opened?[...previous,group.label]:previous.filter(label=>label!==group.label));}}><summary><MenuIcon name={group.label}/>{group.label}</summary><div className="nav-submenu">{group.routes.filter(value=>quickstart||value!=='local').map(value=><a key={value} href={`#${value}`} aria-current={route===value?'page':undefined}><MenuIcon name={value}/>{sections.find(([key])=>key===value)![1]}</a>)}</div></details>)}</>:<a href="#approvals" title="Approvals" aria-label={sidebarCollapsed?'Approvals':undefined} aria-current="page"><MenuIcon name="approvals"/>{!sidebarCollapsed&&'Approvals'}</a>}<a href="#about" title="About" aria-label={sidebarCollapsed?'About':undefined} aria-current={route==='about'?'page':undefined}><MenuIcon name="about"/>{!sidebarCollapsed&&'About'}</a></nav>
-      <div className="sidebar-bottom">{!sidebarCollapsed&&<><span className="connection">Connected to Control</span><small>v{__APP_VERSION__}</small></>}<button title="Disconnect" aria-label="Disconnect" onClick={disconnect}>{sidebarCollapsed?<MenuIcon name="disconnect"/>:'Disconnect'}</button></div></aside>
+      <nav aria-label="Main navigation"><div className="navigation-scroll"><a href="#overview" title="Overview" aria-label={sidebarCollapsed?'Overview':undefined} aria-current={route==='overview'?'page':undefined}><MenuIcon name="overview"/>{!sidebarCollapsed&&'Overview'}</a>
+        {administrator?navigationGroups.slice(0,-1).map(navigationGroup):<a href="#approvals" title="Approvals" aria-label={sidebarCollapsed?'Approvals':undefined} aria-current={route==='approvals'?'page':undefined}><MenuIcon name="approvals"/>{!sidebarCollapsed&&'Approvals'}</a>}
+      </div>{navigationGroup(administrator?navigationGroups[navigationGroups.length-1]:{label:'Administration',routes:['about']})}</nav>
+      <div className="sidebar-bottom"><div className="sidebar-user">{!sidebarCollapsed&&<span className="signed-in-user" title={presentation?.name}>{presentation?.name}</span>}<ApprovalBell client={client} administrator={administrator} superAdmin={superAdmin} userId={presentation?.userId}/></div>{!sidebarCollapsed&&<><span className="connection">Connected to Control</span><small>v{__APP_VERSION__}</small></>}<button title="Disconnect" aria-label="Disconnect" onClick={disconnect}>{sidebarCollapsed?<MenuIcon name="disconnect"/>:'Disconnect'}</button></div></aside>
       <div className="navigation-controls" role="region" aria-label="Navigation controls"><button className="sidebar-toggle" style={{left:sidebarCollapsed?18:sidebarWidth-38}} aria-label={sidebarCollapsed?'Expand navigation':'Collapse navigation'} aria-controls="sidebar" aria-expanded={!sidebarCollapsed} onClick={toggleSidebar}>{sidebarCollapsed?'>':'<'}</button>
       {!sidebarCollapsed && <div className="sidebar-resizer" role="separator" aria-label="Resize navigation" aria-orientation="vertical" aria-valuemin={190} aria-valuemax={420} aria-valuenow={sidebarWidth} tabIndex={0}
         onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); }}
@@ -161,7 +182,7 @@ export function App() {
         onKeyDown={event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); resizeSidebar(event.key==='Home'?190:event.key==='End'?420:sidebarWidth+(event.key==='ArrowLeft'?-20:20)); } }} />}</div>
 
       <div className="workspace">
-        <main id="main" tabIndex={-1} className={administrator&&route==='requests'?'request-canvas':undefined}>{route==='about'?<About/>:!administrator?<Approvals client={client}/>:route==='outcomes'?<EffectOutcomes client={client}/>:route==='simulation'?<AccessSimulation client={client}/>:route==='config-reviews'?<ConfigurationRequests client={client}/>:route==='config-server'?<ServerConfiguration client={client}/>:route==='config-device'?<DeviceConfiguration client={client}/>:route==='config-backup'?<><div className="page-heading"><h1>Backup/Restore</h1></div><ConfigurationTransfer client={client}/><SettingsTransfer client={client}/></>:route==='mapping'?<AgentToolMapping client={client}/>:route==='devices'?<Devices client={client}/>:route==='requests'?<RemoteRequests client={client}/>:route === 'local' ? quickstart ? <QuickstartTools client={client} /> : <p>Local tools are available in Quickstart.</p> : route === 'overview' ? <Dashboard client={client} /> : route === 'audit' ? <Audit client={client}/> : route === 'approvals' ? <Approvals client={client} /> : route === 'fleet' ? <Fleet client={client} /> : route === 'builder' ? <Builder client={client} /> : route === 'enroll' ? <><Enrollment client={client} /><ClientDownloads /></> : <Directory key={route} client={client} kind={route} />}</main>
+        <main id="main" tabIndex={-1} className={administrator&&route==='requests'?'request-canvas':undefined}>{route==='about'?<About/>:!administrator?route==='overview'?<><p className="eyebrow">Workspace overview</p><h1>Your workspace, at a glance</h1><p>Open your approval queue to review pending requests.</p><a href="#approvals">Open approvals</a></>:<Approvals client={client}/>:route==='outcomes'?<EffectOutcomes client={client}/>:route==='simulation'?<AccessSimulation client={client}/>:route==='config-reviews'?<ConfigurationRequests client={client} superAdmin={superAdmin}/>:route==='config-server'?<ServerConfiguration client={client}/>:route==='config-device'?<DeviceConfiguration client={client}/>:route==='config-backup'?<><div className="page-heading"><h1>Backup/Restore</h1></div><ConfigurationTransfer client={client}/><SettingsTransfer client={client}/></>:route==='mapping'?<AgentToolMapping client={client}/>:route==='devices'?<Devices client={client}/>:route==='requests'?<RemoteRequests client={client}/>:route === 'local' ? quickstart ? <QuickstartTools client={client} /> : <p>Local tools are available in Quickstart.</p> : route === 'overview' ? <Dashboard client={client} /> : route === 'audit' ? <Audit client={client}/> : route === 'approvals' ? <Approvals client={client} /> : route === 'fleet' ? <Fleet client={client} /> : route === 'builder' ? <Builder client={client} /> : route === 'enroll' ? <><Enrollment client={client} /><ClientDownloads /></> : <Directory key={route} client={client} kind={route} />}</main>
         <footer>Control verifies permissions. Gateway checks current policy for every runtime authorization.</footer></div></div></div>}
   </>;
 }
@@ -191,7 +212,7 @@ const iconPaths: Record<string,string> = {
   mapping:'M4 4h6v6H4z M14 14h6v6h-6z M10 7h7v7',
   deviceGroups:'M3 4h7v6H3z M14 4h7v6h-7z M8 15h8v6H8z M6 10v2h12v-2 M12 12v3',
   disconnect:'M10 3H3v18h7 M9 12h13 M17 7l5 5-5 5',
-  Configuration:'M4 6h10 M18 6h2 M4 12h4 M12 12h8 M4 18h12 M20 18h0 M16 4v4 M10 10v4 M18 16v4',
+  Administration:'M4 6h10 M18 6h2 M4 12h4 M12 12h8 M4 18h12 M20 18h0 M16 4v4 M10 10v4 M18 16v4',
   'config-reviews':'M4 4h12v16H4z M7 8h6 M7 12h6 M15 15l5 5 M17 17a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
   'config-server':'M4 4h16v6H4z M4 14h16v6H4z M8 7h1 M8 17h1',
   'config-device':'M7 2h10v20H7z M10 18h4 M10 6h4',
@@ -228,6 +249,7 @@ function Directory({ client, kind }: { client: ControlClient; kind: DirectoryKin
   const [cursor,setCursor] = useState<string>(); const [history,setHistory] = useState<(string|undefined)[]>([]);
   const [error,setError] = useState<unknown>(); const [attempt,setAttempt] = useState(0);
   const [selected,setSelected] = useState<RecordValue>(); const [creating,setCreating] = useState(false);
+  const actions=useRecordActions(client,kind,()=>setAttempt(value=>value+1));
   useEffect(() => {
     const abort = new AbortController(); setPage(undefined); setError(undefined); setSelected(undefined); setCreating(false);
     let pending=false;
@@ -246,9 +268,10 @@ function Directory({ client, kind }: { client: ControlClient; kind: DirectoryKin
     {kind==='devices'&&<p className="hint">Green means an active client checked in within the last two minutes. Red means the client is offline or unavailable; the status label explains why. The client list and connection status refresh every two seconds.</p>}
     {error ? <Failure error={error} retry={refresh} /> : !page ? <p role="status">Loading {label.toLowerCase()}…</p> : <>
       {page.items.length === 0 ? <section className="empty"><h2>No {label.toLowerCase()} on this page</h2><p>{kind === 'users' ? 'Add a directory user to get started.' : 'Records will appear here when they are added to Control.'}</p></section> :
-        <div className="table-wrap"><table><caption className="sr-only">{label} directory</caption><thead><tr><th scope="col">Name</th><th scope="col">Identifier</th>{kind==='devices'&&<th scope="col">Connection</th>}<th scope="col">Directory status</th><th scope="col">Revision</th></tr></thead><tbody>{page.items.map(record => <tr key={record.id}><th scope="row"><button className="record-link" onClick={() => { setSelected(record); setCreating(false); }}>{record.name}</button></th><td><code>{record.id}</code></td>{kind==='devices'&&<td><ClientConnection client={client} id={record.id} enabled={record.enabled} ownerUserId={'ownerUserId' in record?record.ownerUserId:''}/></td>}<td><span className={`status ${record.enabled ? 'enabled' : ''}`}>{record.enabled ? 'Enabled' : 'Disabled'}</span></td><td>{record.revision}</td></tr>)}</tbody></table></div>}
+        <div className="table-wrap"><Table disabled={actions.busy} bulkActions={keys=>{const records=page.items.filter(record=>keys.includes(record.id)),mutable=records.filter(record=>!protectedRecord(kind,record.id));return <><button disabled={actions.busy||!records.some(record=>!record.enabled)} onClick={()=>void actions.run(records,'enable')}>Enable selected</button><button disabled={actions.busy||!mutable.some(record=>record.enabled)} onClick={()=>void actions.run(mutable,'disable')}>Disable selected</button><button className="danger" disabled={actions.busy||!mutable.length} onClick={()=>actions.requestDelete(mutable)}>Delete selected</button></>;}}><caption className="sr-only">{label} directory</caption><thead><tr><th scope="col">Name</th><th scope="col">Identifier</th>{kind==='devices'&&<th scope="col">Connection</th>}<th scope="col">Directory status</th><th scope="col">Revision</th><th scope="col">Actions</th></tr></thead><tbody>{page.items.map(record => <tr key={record.id}><th scope="row"><button className="record-link" onClick={() => { setSelected(record); setCreating(false); }}>{record.name}</button></th><td><code>{record.id}</code></td>{kind==='devices'&&<td><ClientConnection client={client} id={record.id} enabled={record.enabled} ownerUserId={'ownerUserId' in record?record.ownerUserId:''}/></td>}<td data-sort-value={record.enabled?'Enabled':'Disabled'}><StatusToggle enabled={record.enabled} label={record.id} disabled={actions.busy||protectedRecord(kind,record.id)} onClick={()=>void actions.run([record],record.enabled?'disable':'enable')}/></td><td data-sort-value={record.revision}>{record.revision}</td><td><div className="actions"><ActionButton icon="edit" label={`Edit ${record.id}`} disabled={actions.busy} onClick={()=>{setSelected(record);setCreating(false);}}/><ActionButton icon="delete" label={`Delete ${record.id}`} title={protectedRecord(kind,record.id)?'Required default groups cannot be deleted':`Delete ${record.id}; fresh onboarding will be required`} disabled={actions.busy||protectedRecord(kind,record.id)} onClick={()=>actions.requestDelete([record])}/></div></td></tr>)}</tbody></Table></div>}
       <div className="pagination"><span>{page.items.length} records on this page</span><div className="actions"><button disabled={!history.length} onClick={() => { setCursor(history.at(-1)); setHistory(history.slice(0,-1)); }}>Previous page</button><button disabled={!page.nextCursor} onClick={() => { setHistory([...history,cursor]); setCursor(page.nextCursor); }}>Next page</button></div></div>
     </>}
+    {actions.feedback}
     {['teams','agentGroups','toolGroups','deviceGroups'].includes(kind)&&<StandardPresets client={client}/>}
     {kind==='deviceGroups'&&<><p className="hint">Device groups contain devices. Complete group grants and Tool Group execution bindings determine access. Disabled groups grant no access.</p><PublishAccess client={client}/></>}
     {(creating || selected) && (kind === 'users' ? <UserEditor key={selected?.id ?? 'new'} client={client} user={selected as ControlUser | undefined} close={() => { setCreating(false); setSelected(undefined); }} saved={refresh} /> : <DirectoryEditor key={selected?.id??'new'} client={client} kind={kind} record={selected as DirectoryRecords[Exclude<DirectoryKind,'users'>] | undefined} close={()=>{setCreating(false);setSelected(undefined);}} saved={refresh}/>)}

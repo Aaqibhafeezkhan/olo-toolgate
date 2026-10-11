@@ -19,7 +19,7 @@ describe('Complete configuration transfer',()=>{
     fireEvent.change(screen.getByLabelText('Configuration JSON files'),{target:{files:[file]}});
     fireEvent.click(screen.getByRole('button',{name:'Preview import'}));await screen.findByText('Proposed changes: 1');
     const submit=screen.getByRole('button',{name:'Create import for independent review'});expect((submit as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(submit);await screen.findByRole('link',{name:'Review configuration draft'});
+    fireEvent.click(screen.getByRole('checkbox',{name:/I reviewed all/}));fireEvent.click(submit);await screen.findByRole('link',{name:'Review configuration draft'});
     expect(transport.mock.calls.map(call=>JSON.parse(String(call[1]?.body)))).toEqual([{snapshot,mode:'REPLACE',dryRun:true},{snapshot,mode:'REPLACE',dryRun:false}]);
     expect(new Headers(transport.mock.calls[1][1]?.headers).get('If-Match')).toBe('"4"');
   });

@@ -24,6 +24,6 @@ test('real fleet status, accessible assignment and revision-bound canary advance
   await advance.click();await expect(advance).toHaveCount(0);
   await page.getByLabel('Signed release JSON').fill('{}');await page.getByRole('button',{name:'Publish release',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('server rejected');
-  expect(errors).toEqual([]);expect(await page.evaluate(()=>localStorage.length)).toBe(0);
+  expect(errors).toEqual([]);expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>!key.startsWith('toolgate.')).length)).toBe(0);
   expect(await page.locator('body').innerText()).not.toContain(credentials.admin);
 });

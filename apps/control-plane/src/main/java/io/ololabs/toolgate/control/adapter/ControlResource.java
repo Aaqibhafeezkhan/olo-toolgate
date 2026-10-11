@@ -89,7 +89,7 @@ public class ControlResource {
     public Response create(@PathParam("kind") String kind, @HeaderParam("Idempotency-Key") String key, String document) {
         // Canonical validation happens before extracting the identity used in the application use case.
         var entry = codec.entry(Kind.path(kind), document);
-        return response(changes.create(actor(),command(Kind.path(kind),entry.id().value(),"CREATE",document,0),key,correlation.id()), "CREATE", kind);
+        return response(changes.mutate(actor(),command(Kind.path(kind),entry.id().value(),"CREATE",document,0),key,correlation.id()), "CREATE", kind);
     }
     @GET @Path("{entity:users|agents|tools|devices}/{id}/groups")
     public Response memberships(@PathParam("entity") String entity,@PathParam("id") String id) { return response(service.memberships(actor(),Kind.path(entity),id),"READ","memberships"); }
@@ -97,19 +97,19 @@ public class ControlResource {
     public Response effectiveAccess(@PathParam("entity")String entity,@PathParam("id")String id){return response(new io.ololabs.toolgate.control.application.EffectiveAccess(store,codec).get(actor(),Kind.path(entity),id),"READ","effective-access");}
     @PUT @Path("{entity:users|agents|tools|devices}/{id}/groups") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response memberships(@PathParam("entity") String entity,@PathParam("id") String id,@HeaderParam("If-Match") String etag,@HeaderParam("Idempotency-Key") String key,String document) {
-        return response(changes.create(actor(),command(Kind.path(entity),id,"MEMBERSHIPS",document,expected(etag)),key,correlation.id()),"UPDATE","memberships");
+        return response(changes.mutate(actor(),command(Kind.path(entity),id,"MEMBERSHIPS",document,expected(etag)),key,correlation.id()),"UPDATE","memberships");
     }
     @GET @Path("openapi")
     public String openapi() { actor(); return codec.openapi(); }
     @PUT @Path(COLLECTION + "/{id:.+}") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response update(@PathParam("kind") String kind, @PathParam("id") String id, @HeaderParam("If-Match") String etag,
                            @HeaderParam("Idempotency-Key") String key, String document) {
-        return response(changes.create(actor(),command(Kind.path(kind),id,"UPDATE",document,expected(etag)),key,correlation.id()), "UPDATE", kind);
+        return response(changes.mutate(actor(),command(Kind.path(kind),id,"UPDATE",document,expected(etag)),key,correlation.id()), "UPDATE", kind);
     }
     @DELETE @Path(COLLECTION + "/{id:.+}") @io.quarkus.security.Authenticated
     public Response delete(@PathParam("kind") String kind, @PathParam("id") String id, @HeaderParam("If-Match") String etag,
                            @HeaderParam("Idempotency-Key") String key) {
-        return response(changes.create(actor(),command(Kind.path(kind),id,"DELETE","",expected(etag)),key,correlation.id()), "DELETE", kind);
+        return response(changes.mutate(actor(),command(Kind.path(kind),id,"DELETE","",expected(etag)),key,correlation.id()), "DELETE", kind);
     }
     @GET @Path("config/export") @Produces({"application/json", "application/yaml"})
     public Response export(@HeaderParam("Accept") @DefaultValue("application/json") String accept) {
@@ -121,7 +121,7 @@ public class ControlResource {
     public Response importConfig(@HeaderParam("Content-Type") String type, @HeaderParam("If-Match") String etag,
                                  @HeaderParam("Idempotency-Key") String key, String document) {
         var identity=actor();boolean yaml=type!=null&&type.split(";",2)[0].trim().equals("application/yaml");var input=codec.input(document,yaml,identity.tenant());if(input.dryRun())return response(service.importConfig(identity,document,yaml,expected(etag),key,correlation.id()),"PREVIEW","config");
-        var json=codec.json(java.util.Map.of("snapshot",codec.value(codec.snapshot(identity.tenant(),input.directory(),false)),"mode",input.replace()?"REPLACE":"MERGE","dryRun",false));return response(changes.create(identity,command(Kind.USER,"configuration-import","IMPORT",json,expected(etag)),key,correlation.id()),"PROPOSE","config");
+        var json=codec.json(java.util.Map.of("snapshot",codec.value(codec.snapshot(identity.tenant(),input.directory(),false)),"mode",input.replace()?"REPLACE":"MERGE","dryRun",false));return response(changes.mutate(identity,command(Kind.USER,"configuration-import","IMPORT",json,expected(etag)),key,correlation.id()),"PROPOSE","config");
     }
     private io.ololabs.toolgate.contracts.EnterpriseConfigurationCommand command(Kind kind,String id,String op,String document,long revision){return new io.ololabs.toolgate.contracts.EnterpriseConfigurationCommand(io.ololabs.toolgate.contracts.EnterpriseConfigurationOperation.valueOf(op),io.ololabs.toolgate.contracts.ControlEntityKind.valueOf(kind.name()),id,document,revision);}
     @GET @Path("configuration-changes") public Response configurationChanges(@QueryParam("after")String after){return response(changes.page(actor(),after),"READ","configuration-change");}

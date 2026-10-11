@@ -1,5 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {Table} from './Table';
 import {useRef,useState} from 'react';
 import type {ControlSnapshot} from '@olo-labs/toolgate-contracts';
 import {ControlClient} from './api';
@@ -64,7 +65,7 @@ export function ConfigurationTransfer({client}:{client:ControlClient}){
     <label>Configuration JSON files<input type="file" accept=".json,application/json" multiple disabled={busy} onChange={event=>{invalidate();setFiles(Array.from(event.target.files??[]));}}/></label>
     <label>Import mode<select value={mode} disabled={busy} onChange={event=>{invalidate();setMode(event.target.value as 'MERGE'|'REPLACE');}}><option value="REPLACE">Replace complete configuration</option><option value="MERGE">Merge configuration records</option></select></label>
     <button disabled={busy||!files.length} onClick={()=>void previewImport()}>Preview import</button>
-    {preview&&<><p>Proposed changes: {preview.changes.length}</p><div className="table-wrap"><table><thead><tr><th>Kind</th><th>Identifier</th><th>Change</th></tr></thead><tbody>{preview.changes.map(change=><tr key={change.kind+':'+change.id}><td>{change.kind}</td><td>{change.id}</td><td>{change.operation}</td></tr>)}</tbody></table></div>
+    {preview&&<><p>Proposed changes: {preview.changes.length}</p><div className="table-wrap"><Table><thead><tr><th>Kind</th><th>Identifier</th><th>Change</th></tr></thead><tbody>{preview.changes.map(change=><tr key={change.kind+':'+change.id}><td>{change.kind}</td><td>{change.id}</td><td>{change.operation}</td></tr>)}</tbody></Table></div>
       <label><input type="checkbox" disabled={busy} checked={confirmed} onChange={event=>setConfirmed(event.target.checked)}/> I reviewed all additions, updates, removals, and group mappings.</label>
       <button disabled={busy||!confirmed||!preview.changes.length} onClick={()=>void work(async()=>{await client.importConfiguration(preview.snapshot,mode,crypto.randomUUID());})}>Create import for independent review</button></>}
     {notice&&<p role="status">{notice}</p>}{error!==undefined&&<Failure error={error}/>}</section>;
