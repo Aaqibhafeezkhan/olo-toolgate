@@ -47,6 +47,8 @@ def base_files():
 
 def info(name, compress=zipfile.ZIP_STORED):
     zi = zipfile.ZipInfo(name, date_time=EPOCH)
+    # ZipInfo normalizes host separators; preserve intentionally unsafe fixture paths.
+    zi.filename = name
     zi.compress_type = compress
     zi.create_system = 3
     zi.external_attr = 0o100644 << 16
