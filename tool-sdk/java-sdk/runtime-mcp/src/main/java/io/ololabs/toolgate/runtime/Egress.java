@@ -61,6 +61,8 @@ final class Egress {
     private final Map<String, TcpTarget> tcpTargets = new LinkedHashMap<>();
     final Map<String, Token> tokens = new ConcurrentHashMap<>();
     final Config.Mode mode;
+    /** In test mode, what answers route calls instead of the network. */
+    TestExchanges exchanges;
 
     private Egress(Config.Mode mode) {
         this.mode = mode;
@@ -79,8 +81,11 @@ final class Egress {
             String variable = "TOOLGATE_DESTINATION_" + setting.toUpperCase(Locale.ROOT);
             String value = config.destination(setting);
             if (value == null) {
-                diagnostics.println("toolgate: WARNING destination " + id + " has no host; set " + variable + " or destinations." + setting
-                        + " in toolgate.dev.json");
+                // Test mode answers route calls from recorded exchanges, so no host is needed.
+                if (config.mode != Config.Mode.TEST) {
+                    diagnostics.println("toolgate: WARNING destination " + id + " has no host; set " + variable + " or destinations." + setting
+                            + " in toolgate.dev.json");
+                }
                 egress.targets.put(id, new Target(id, null, null, "destination " + id + " has no host; set " + variable));
                 continue;
             }

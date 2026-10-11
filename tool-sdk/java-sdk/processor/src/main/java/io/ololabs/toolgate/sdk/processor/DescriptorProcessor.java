@@ -547,12 +547,21 @@ public final class DescriptorProcessor extends AbstractProcessor {
 
             Example[] examples = method.getAnnotationsByType(Example.class);
             if (examples.length > 8) throw new Problem(method, "tool " + name + " declares " + examples.length + " examples; at most 8 are allowed");
+            List<Object> exampleEntries = new ArrayList<>();
             for (Example e : examples) {
                 if (e.arguments().isBlank()) throw new Problem(method, "an example needs arguments");
                 if (!e.expectedOutput().isEmpty() && !e.expectedError().isEmpty()) {
                     throw new Problem(method, "an example expects either an output or an error");
                 }
+                // Examples are not part of the descriptor; the index carries them for check and ToolHarness.
+                Map<String, Object> entry = new TreeMap<>();
+                entry.put("arguments", e.arguments());
+                if (!e.expectedOutput().isEmpty()) entry.put("expectedOutput", e.expectedOutput());
+                if (!e.expectedError().isEmpty()) entry.put("expectedError", e.expectedError());
+                if (!e.exchanges().isEmpty()) entry.put("exchanges", e.exchanges());
+                exampleEntries.add(entry);
             }
+            examplesByTool.put(name, exampleEntries);
             parametersByTool.put(name, parameters);
             Map<String, String> inputTypes = new TreeMap<>();
             for (Map.Entry<String, Object> p : properties.entrySet()) {
@@ -571,6 +580,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
         private final Map<String, List<String>> parametersByTool = new HashMap<>();
         private final Map<ExecutableElement, SourceAnalysis.Facts> facts = new HashMap<>();
         private final Map<String, Map<String, Object>> dataSchemasByTool = new HashMap<>();
+        private final Map<String, List<Object>> examplesByTool = new HashMap<>();
 
         private void inputs(ExecutableElement method, ToolVariables grouped, Schemas schemas, Map<String, Object> properties,
                 List<String> required, List<String> parameters) {
@@ -796,6 +806,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
                     entry.put("handlerMethod", h.getSimpleName().toString());
                     entry.put("parameters", parametersByTool.get(e.getKey()));
                     if (!dataSchemasByTool.get(e.getKey()).isEmpty()) entry.put("errorDataSchemas", dataSchemasByTool.get(e.getKey()));
+                    if (!examplesByTool.get(e.getKey()).isEmpty()) entry.put("examples", examplesByTool.get(e.getKey()));
                     index.add(entry);
                 }
                 Map<String, Object> manifest = new LinkedHashMap<>();
