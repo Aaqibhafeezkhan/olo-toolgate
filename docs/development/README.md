@@ -18,6 +18,7 @@ and get a useful development environment without manually assembling six stacks.
 
 Read:
 
+- [Run CI locally from the workflow definitions](local-ci.md)
 - `local-development.md`
 - `coding-standards.md`
 - `schema-workflow.md`

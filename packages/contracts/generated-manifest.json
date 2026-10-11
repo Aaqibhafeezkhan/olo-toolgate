@@ -32,7 +32,7 @@
     "packages/contracts/schemas/v2/service-profile.schema.json": "a15e484ce533f75e315721feae1e726ccbc7a4540e6676076b0d9eb9dcd5be0c",
     "packages/contracts/schemas/v2/settings.schema.json": "2b1942edf346021a68df917b540f5bc6b64e20bc5176cbf521cab15e55bcffa6"
   },
-  "generatorSha256": "392222d0149ddc44efe4f8d8ba592f98eddc7eab8bf5335db48541d37d0a56c5",
+  "generatorSha256": "553402728bfa4d41c4e45f7f003bc83d50fe9d5566fc85278a86263e0677a701",
   "outputs": [
     "packages/contracts/java/LICENSE",
     "packages/contracts/java/NOTICE.md",
