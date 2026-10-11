@@ -478,10 +478,14 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 }
             }
             parametersByTool.put(name, parameters);
+            Map<String, Object> dataSchemas = new TreeMap<>();
+            for (ErrorDecl e : t.errors) if (!e.dataSchema().isEmpty()) dataSchemas.put(e.code(), e.dataSchema());
+            dataSchemasByTool.put(name, dataSchemas);
             return d;
         }
 
         private final Map<String, List<String>> parametersByTool = new HashMap<>();
+        private final Map<String, Map<String, Object>> dataSchemasByTool = new HashMap<>();
 
         private void inputs(ExecutableElement method, ToolVariables grouped, Schemas schemas, Map<String, Object> properties,
                 List<String> required, List<String> parameters) {
@@ -706,6 +710,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
                     entry.put("handlerClass", ((TypeElement) h.getEnclosingElement()).getQualifiedName().toString());
                     entry.put("handlerMethod", h.getSimpleName().toString());
                     entry.put("parameters", parametersByTool.get(e.getKey()));
+                    if (!dataSchemasByTool.get(e.getKey()).isEmpty()) entry.put("errorDataSchemas", dataSchemasByTool.get(e.getKey()));
                     index.add(entry);
                 }
                 Map<String, Object> manifest = new LinkedHashMap<>();

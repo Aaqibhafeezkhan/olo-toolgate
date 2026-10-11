@@ -13,7 +13,7 @@
 | [`spec/`](spec/README.md) | Normative authoring contract, descriptor rules, runtime modes, composition, protocol layer, official SDK compatibility record | D0 |
 | [`conformance/`](conformance/README.md) | Conformance cases for every suite in plan.md §21, with their fixtures | D3 |
 | [`cli/`](cli/README.md) | The `toolgate` CLI: canonical descriptors and digests, `.tgpkg` pack, validate and verify | M0 |
-| [`java-sdk/`](java-sdk/README.md) | Java authoring API (`toolgate-sdk-api`) and the annotation processor that emits descriptors (`toolgate-sdk-processor`) | M0 |
+| [`java-sdk/`](java-sdk/README.md) | Java authoring API (`toolgate-sdk-api`), the annotation processor that emits descriptors (`toolgate-sdk-processor`), and the standalone MCP runtime over stdio (`toolgate-sdk-runtime-mcp`) | M0 |
 | `python-sdk/`, `typescript-sdk/`, `dotnet-sdk/`, `examples/`, `docs/` | Implementation (added in later M0 parts) | M0 |
 
 ## Related Docs

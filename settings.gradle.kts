@@ -19,3 +19,9 @@ project(":sdk-java-api").projectDir = file("tool-sdk/java-sdk/api")
 
 include(":sdk-java-processor")
 project(":sdk-java-processor").projectDir = file("tool-sdk/java-sdk/processor")
+
+include(":sdk-java-protocol")
+project(":sdk-java-protocol").projectDir = file("tool-sdk/java-sdk/protocol")
+
+include(":sdk-java-runtime-mcp")
+project(":sdk-java-runtime-mcp").projectDir = file("tool-sdk/java-sdk/runtime-mcp")
