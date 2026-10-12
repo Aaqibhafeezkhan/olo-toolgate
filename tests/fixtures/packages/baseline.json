@@ -46,12 +46,12 @@
       "status" : 400
     },
     "tests/fixtures/packages/cases/descriptor-nfc-key-collision.tgpkg" : {
-      "result" : "error",
-      "exception" : "IllegalArgumentException"
+      "result" : "reject",
+      "status" : 400
     },
     "tests/fixtures/packages/cases/descriptor-number-overflow.tgpkg" : {
-      "result" : "error",
-      "exception" : "IllegalArgumentException"
+      "result" : "reject",
+      "status" : 400
     },
     "tests/fixtures/packages/cases/descriptor-over-max-bytes.tgpkg" : {
       "result" : "reject",
