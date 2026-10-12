@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Example tools for the Java Tool SDK
 
-Ten small, working tool packages for everyday operations and enterprise work, built with the ToolGate Java Tool SDK. Read them to see how a real tool is put together, run them as they are, or copy one as the start of your own.
+Eleven small, working tool packages for everyday operations and enterprise work, built with the ToolGate Java Tool SDK. Read them to see how a real tool is put together, run them as they are, or copy one as the start of your own.
 
 Every example is a complete package: one `@ToolPackage`, its tools, unit tests with `ToolHarness`, `@Example` self-tests, and a `.tgpkg` whose `artifacts/tool.jar` is one self-contained fat jar. Each runs as a plain MCP server (standalone) or under ToolGate (governed) without changes. New to the SDK? Start with the [Tool SDK guide](../../TOOL-SDK-GUIDE.md).
 
@@ -17,6 +17,9 @@ Every example is a complete package: one `@ToolPackage`, its tools, unit tests w
 | [csv-query](csv-query/README.md) | `csv.query`, `csv.files` | Filter, sort, group and total CSV exports | Structured inputs (lists) and tabular output |
 | [webhook-notify](webhook-notify/README.md) | `notify.send` | Sends an alert to a JSON webhook, at most once per reference | Route auth with a secret, business keys, `Idempotency-Key` |
 | [file-cleanup](file-cleanup/README.md) | `cleanup.old-files` | Lists, and when asked deletes, files older than N days | A destructive tool done carefully: off until configured, dry run by default, caps |
+| [db-query](db-query/README.md) | `db.tables`, `db.row`, `db.query` | Lists tables and runs read-only, parameterised queries on a database (an embedded H2 file) | Read-only enforced by connection, account and statement checks; a third-party driver in the fat jar |
+
+For fixed, fictional data in business scenarios (loan approval, a clinic, a server crash, support, HR, fraud, insurance claims), see the [mocked tool examples](../mocked-tools/README.md).
 
 ## Safe by default
 

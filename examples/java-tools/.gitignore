@@ -3,3 +3,6 @@ toolgate.dev.json
 .toolgate/
 build/
 .gradle/
+# H2 database files the db-query example creates.
+*.mv.db
+*.trace.db

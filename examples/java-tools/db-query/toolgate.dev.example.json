@@ -1,0 +1,14 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {
+    "DatabaseFile": "data/demo",
+    "DbUser": "reader"
+  },
+  "secrets": {
+    "DbPassword": "change-me"
+  },
+  "claims": {
+    "sub": "dev-1"
+  }
+}

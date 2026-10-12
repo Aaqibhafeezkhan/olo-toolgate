@@ -36,4 +36,5 @@ include(
     "csv-query",
     "webhook-notify",
     "file-cleanup",
+    "db-query",
 )

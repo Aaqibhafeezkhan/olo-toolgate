@@ -1,0 +1,10 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {},
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1",
+    "employee_id": "E-101"
+  }
+}
