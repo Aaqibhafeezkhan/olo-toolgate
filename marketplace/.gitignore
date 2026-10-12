@@ -1,0 +1,12 @@
+# Marketplace-local ignores (does not rely on the repository root .gitignore).
+/drupal/vendor/
+/drupal/web/core/
+/drupal/web/modules/contrib/
+/drupal/web/themes/contrib/
+/drupal/web/sites/*/files/
+/helper/build/
+/helper/.gradle/
+/deploy/.env
+/deploy/secrets/
+*.tgpkg
+!/seed/**/*.json
