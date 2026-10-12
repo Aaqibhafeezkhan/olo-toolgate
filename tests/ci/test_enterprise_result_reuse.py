@@ -14,6 +14,7 @@ class EnterpriseResultReuseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             folders = ('packages/contracts/java/build/test-results/test',
+                       'backend-libs/package-archive/build/test-results/test',
                        'apps/control-plane/build/test-results/test',
                        'apps/control-plane/build/test-results/enterpriseTest')
             for folder in folders:
