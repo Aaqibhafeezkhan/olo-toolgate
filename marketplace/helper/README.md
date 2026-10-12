@@ -13,11 +13,16 @@ Validates and signs `.tgpkg` packages for the OLO Orgs Marketplace. Drupal is it
 ## How it validates
 
 1. Reads the bytes by `fileRef` from object storage, at most `MARKETPLACE_MAX_PACKAGE_MB`.
-2. Writes them to a private temporary file and runs the unchanged ToolGate CLI, `toolgate validate <file>`. It only ever passes a regular file it wrote itself. Given a directory, the CLI would compile and run the project's tests.
-3. Reads the manifest from the archive, without extracting anything to disk, and enforces `MARKETPLACE_MAX_EXPANDED_MB`.
-4. Applies the Marketplace's own rules: SDK packages with Java server tools only, a publisher prefix in the id, a well-formed compatibility block, and the SemVer check against the previous version.
+2. Validates them in memory with ToolGate's `backend-libs/package-archive`, the same code Control runs on upload (design §6, "Validators"). This is the authoritative validator. The helper compiles its sources from `TOOLGATE_DIR`, so it still needs no repository.
+3. Runs the unchanged ToolGate CLI, `toolgate validate <file>`, as a reject-only extra check. It only ever passes a regular file it wrote itself to a private temporary directory; given a directory, the CLI would compile and run the project's tests. Where both accept, the digests must match. The CLI also checks the manifest against `PackageManifest` v2, so it rejects a few packages Control's rules accept; `CliValidator.REJECT_ONLY` lists them and `DifferentialTest` keeps that list exact:
+   - an unknown manifest field;
+   - `schemaVersion` written as the string `"2"`;
+   - a `version` that is not SemVer;
+   - a manifest that is not UTF-8.
+4. Enforces `MARKETPLACE_MAX_EXPANDED_MB` on the extracted files.
+5. Applies the Marketplace's own rules: SDK packages with Java server tools only, a publisher prefix in the id, a well-formed compatibility block, and the SemVer check against the previous version.
 
-Nothing in a package is ever executed. Each validation stages one package in `/tmp`, so size that tmpfs for `MARKETPLACE_HELPER_THREADS` × `MARKETPLACE_MAX_PACKAGE_MB` (Compose and Helm in PR 2 do). Control's `PackageArchive` becomes the authoritative validator in PR 3 (design §6, "Validators"). Until then, Control's own revalidation on import is the backstop.
+Nothing in a package is ever executed. Each validation stages one package in `/tmp` for the CLI, so size that tmpfs for `MARKETPLACE_HELPER_THREADS` × `MARKETPLACE_MAX_PACKAGE_MB` (Compose and Helm do).
 
 ## Dependencies
 

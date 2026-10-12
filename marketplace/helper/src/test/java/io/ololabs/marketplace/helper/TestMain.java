@@ -21,6 +21,7 @@ public final class TestMain {
             SignerTest.class,
             FileStoreTest.class,
             ValidationTest.class,
+            DifferentialTest.class,
             ServerTest.class,
             SeedTest.class);
 

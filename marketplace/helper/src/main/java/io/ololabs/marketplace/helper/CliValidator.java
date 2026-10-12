@@ -26,8 +26,22 @@ import java.util.stream.Stream;
  * <p>The CLI compiles and runs a project's tests when given a directory, so this class only ever passes a single
  * regular file it created, in a private temporary directory, and checks that again just before running it. Nothing in
  * the package is executed: the CLI only reads the archive.
+ *
+ * <p>Since PR 3 the authoritative validator is ToolGate's backend-libs/package-archive, the same code as Control's
+ * upload. The CLI stays as a reject-only extra check: a package the library rejects is never passed on, and a package
+ * the CLI rejects is refused even when the library accepts it. {@link #REJECT_ONLY} lists where that happens.
  */
 public final class CliValidator {
+    /**
+     * Fixtures in {@code tests/fixtures/packages/cases} that Control's rules accept and the CLI rejects, with the CLI's
+     * reason. DifferentialTest fails when this list and the two validators disagree.
+     */
+    static final java.util.Map<String, String> REJECT_ONLY = java.util.Map.of(
+            "schema-unknown-field", "the manifest does not match PackageManifest v2 (additional property)",
+            "schema-version-string", "schemaVersion \"2\" is not an integer in PackageManifest v2",
+            "version-not-semver", "version does not match the SemVer pattern of PackageManifest v2",
+            "manifest-invalid-utf8", "toolgate-package.json is not UTF-8 (Control reads it with U+FFFD replacements)");
+
     private static final Pattern DIGEST = Pattern.compile("^(packageDigest|descriptorSetDigest) (sha256:[0-9a-f]{64})$", Pattern.MULTILINE);
     private static final int MAX_OUTPUT = 64 * 1024;
 
