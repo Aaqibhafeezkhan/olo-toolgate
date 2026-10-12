@@ -115,3 +115,13 @@ reserved its sole writer. Quickstart reads now use read-only WAL snapshots;
 mutations retain IMMEDIATE serialization and commit without acquiring a second
 writer reservation. Regression tests cover overlapping readers/writers, snapshot
 isolation and rejection of writes in a read transaction.
+
+In [run 38260283094](https://github.com/olo-labs/olo-toolgate/actions/runs/38260283094/job/114856032566),
+Quickstart passed its browser and PostgreSQL checks before the production Control
+smoke rejected the release's standard preset grants. The smoke now checks the
+release-selected preset records, empty standard groups and disabled runtime
+actors. It retains one installation Super Admin, then scopes the maker/checker
+identities before testing independent review. The production image passed the
+two-replica PostgreSQL smoke, including concurrent idempotency, restart, custody
+and graceful shutdown. All 199 CI helper tests passed; six guard the updated
+preset and review fixture expectations.
