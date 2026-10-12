@@ -1013,6 +1013,37 @@ pub struct DesiredState {
     pub revision: u64,
     pub assignments: Vec<DeploymentAssignment>,
 }
+/// Operator-collected Docker deployment details for display only; never enrollment, permission or trusted network evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeviceDeploymentMetadata {
+    pub execution_kind: DeviceExecutionKind,
+    pub container_id: String,
+    pub container_name: String,
+    pub system_name: String,
+    pub network_id: String,
+    pub network_name: String,
+    pub ip_address: String,
+}
+/// Public deployment details attached only to an already visible enrolled device.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeviceDeploymentRecord {
+    pub device_id: String,
+    pub deployment: DeviceDeploymentMetadata,
+}
+/// Canonical DeviceExecutionKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeviceExecutionKind {
+    #[serde(rename = "QUICKSTART_CLIENT")]
+    QuickstartClient,
+    #[serde(rename = "ENDPOINT_CLIENT")]
+    EndpointClient,
+    #[serde(rename = "TOOL_HOST_DIRECT")]
+    ToolHostDirect,
+    #[serde(rename = "TOOL_HOST_PULL")]
+    ToolHostPull,
+}
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1233,6 +1264,14 @@ pub struct EndpointManagedDevice {
     pub system_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip_address: Option<String>,
+}
+/// Opt-in administrative deployment view. Default device responses retain their existing closed schema.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointManagedDeviceDeploymentPage {
+    pub items: Vec<EndpointManagedDevice>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deployments: Option<Vec<DeviceDeploymentRecord>>,
 }
 /// All directory devices plus pending requests within the existing directory and enrollment quotas.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

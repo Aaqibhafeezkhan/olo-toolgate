@@ -10,27 +10,59 @@
       "description": "Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling.",
       "additionalProperties": false,
       "properties": {
-        "announcement": {"$ref": "#/$defs/EndpointEnrollmentStart"},
-        "utcOffset": {"type": "string", "pattern": "^[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00)$"}
+        "announcement": {
+          "$ref": "#/$defs/EndpointEnrollmentStart"
+        },
+        "utcOffset": {
+          "type": "string",
+          "pattern": "^[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00)$"
+        }
       },
-      "required": ["announcement", "utcOffset"]
+      "required": [
+        "announcement",
+        "utcOffset"
+      ]
     },
     "EndpointConnectionAction": {
       "type": "string",
-      "enum": ["ENROLL", "CHECK_IN", "WAIT"]
+      "enum": [
+        "ENROLL",
+        "CHECK_IN",
+        "WAIT"
+      ]
     },
     "EndpointConnectionDirective": {
       "type": "object",
       "description": "Server-authoritative response to a device presence ping; presence never grants tool access.",
       "additionalProperties": false,
       "properties": {
-        "deviceId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "state": {"$ref": "#/$defs/EndpointState"},
-        "action": {"$ref": "#/$defs/EndpointConnectionAction"},
-        "reportSequence": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
-        "nextIntervalMs": {"type": "integer", "minimum": 500, "maximum": 3600000}
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "#/$defs/EndpointState"
+        },
+        "action": {
+          "$ref": "#/$defs/EndpointConnectionAction"
+        },
+        "reportSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextIntervalMs": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 3600000
+        }
       },
-      "required": ["deviceId", "state", "action", "reportSequence", "nextIntervalMs"]
+      "required": [
+        "deviceId",
+        "state",
+        "action",
+        "reportSequence",
+        "nextIntervalMs"
+      ]
     },
     "ClientPlatform": {
       "type": "string",
@@ -1358,6 +1390,107 @@
         "serverUrl",
         "focused",
         "health"
+      ]
+    },
+    "DeviceDeploymentMetadata": {
+      "type": "object",
+      "description": "Operator-collected Docker deployment details for display only; never enrollment, permission or trusted network evidence.",
+      "additionalProperties": false,
+      "properties": {
+        "executionKind": {
+          "$ref": "endpoint.schema.json#/$defs/DeviceExecutionKind"
+        },
+        "containerId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "containerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+        },
+        "systemName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[a-zA-Z0-9._-]+$"
+        },
+        "networkId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "networkName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+        },
+        "ipAddress": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 45,
+          "pattern": "^[0-9a-fA-F:.]+$"
+        }
+      },
+      "required": [
+        "executionKind",
+        "containerId",
+        "containerName",
+        "systemName",
+        "networkId",
+        "networkName",
+        "ipAddress"
+      ]
+    },
+    "DeviceExecutionKind": {
+      "type": "string",
+      "enum": [
+        "QUICKSTART_CLIENT",
+        "ENDPOINT_CLIENT",
+        "TOOL_HOST_DIRECT",
+        "TOOL_HOST_PULL"
+      ]
+    },
+    "DeviceDeploymentRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "deployment": {
+          "$ref": "endpoint.schema.json#/$defs/DeviceDeploymentMetadata"
+        }
+      },
+      "required": [
+        "deviceId",
+        "deployment"
+      ],
+      "description": "Public deployment details attached only to an already visible enrolled device."
+    },
+    "EndpointManagedDeviceDeploymentPage": {
+      "type": "object",
+      "description": "Opt-in administrative deployment view. Default device responses retain their existing closed schema.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 544,
+          "items": {
+            "$ref": "endpoint.schema.json#/$defs/EndpointManagedDevice"
+          }
+        },
+        "deployments": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "endpoint.schema.json#/$defs/DeviceDeploymentRecord"
+          }
+        }
+      },
+      "required": [
+        "items"
       ]
     }
   }

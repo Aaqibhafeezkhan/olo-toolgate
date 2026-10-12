@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {Devices} from '../src/Devices';
 import {ControlClient} from '../src/api';
 import type {EndpointManagedDevice} from '@olo-labs/toolgate-contracts';
@@ -11,6 +11,19 @@ const pending:EndpointManagedDevice={deviceId:'device-2',systemExecutor:false,en
 const system:EndpointManagedDevice={deviceId:'local-builtins',systemExecutor:true,systemExecutorKind:'BUILTINS',systemAvailable:true,directoryDevice:{id:'local-builtins',name:'Quickstart fixed executor',ownerUserId:'local-tools',enabled:true,revision:1},registeredUser:{id:'local-tools',name:'Local tool requester',enabled:true,revision:1}};
 function setup(items:EndpointManagedDevice[],mutationStatus=200){const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>new Response(JSON.stringify(String(path).endsWith('/groups')?{entityType:'DEVICE',entityId:String(path).split('/').at(-2),groupIds:['default-devices'],revision:1}:options?.method==='POST'?{}:{items}),{status:options?.method==='POST'?mutationStatus:200}));render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);return transport;}
 describe('Device management',()=>{
+  it('shows shared deployment hosts, distinct execution roles and actual network details',async()=>{
+    const deployment={executionKind:'QUICKSTART_CLIENT' as const,containerId:'a'.repeat(64),containerName:'toolgate-langchain-quickstart-1',systemName:'quickstart-container',networkId:'b'.repeat(64),networkName:'toolgate-langchain_default',ipAddress:'172.18.0.2'};
+    const local={...active,deviceId:'tool-host-local',directoryDevice:{...active.directoryDevice!,id:'tool-host-local',name:'Local host'},systemName:undefined,ipAddress:'::1'};
+    const transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify({items:[{...active,systemName:'quickstart-container',ipAddress:'127.0.0.1'},local],deployments:[{deviceId:active.deviceId,deployment},{deviceId:local.deviceId,deployment:{...deployment,executionKind:'TOOL_HOST_DIRECT'}}]}),{status:200}));
+    render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);
+    await screen.findByText('Tool Host · direct dispatch');
+    expect(screen.getByText(/Docker deployment: 1 containers/)).toBeTruthy();
+    expect(screen.getAllByText('toolgate-langchain-quickstart-1')).toHaveLength(2);
+    const row=screen.getByRole('row',{name:/Local host/});
+    expect(within(row).getByText('172.18.0.2')).toBeTruthy();expect(within(row).getByText('Observed: ::1')).toBeTruthy();
+    expect(within(row).getByText('b'.repeat(12)).getAttribute('title')).toBe('b'.repeat(64));
+    expect(transport.mock.calls.some(call=>call[0]==='/api/control/v1/endpoint/devices?deployment=true')).toBe(true);
+  });
   it('shows incoming enrollment requests without a manual refresh',async()=>{
     let incoming=false;const transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify({items:incoming?[active,pending]:[active]}),{status:200}));
     render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);await screen.findByText('Trading workstation');

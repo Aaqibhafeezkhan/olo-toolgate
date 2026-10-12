@@ -47,6 +47,28 @@ metadata and never identity or authorization inputs. Missing metadata shows
 An observed IP may be a NAT/proxy address. Quickstart server-managed rows show
 the composition host/container name and address.
 
+### Docker deployment and execution identities
+
+The LangChain composition has two Docker containers and four enrolled execution
+identities. Quickstart contains its native built-in endpoint, the direct-dispatch
+Tool Host and a pull-mode Tool Host. `tool-host-remote` is the pull-mode example
+inside Quickstart; its name does not imply another physical machine. The separate
+`langchain-linux-device` container runs the managed endpoint client.
+
+Clients shows their execution roles, shared container names/IDs, deployment IPs
+and Docker network names/IDs. The full IDs are available in device details. Rows
+can share the same container while retaining separate enrolled keys, permissions
+and routing identities. Deployment IPs are shown alongside differing observed
+transport addresses; loopback addresses remain accurate for intra-container calls.
+
+The host helper collects these public facts from `docker inspect` during deployment
+and before example execution. `python manage.py sync-deployment` refreshes them
+without changing approval, enrollment or credentials. The optional
+`?deployment=true` view preserves the default closed device response and only
+attaches records for devices already visible to the authenticated administrator.
+Missing, malformed or previous-container metadata is omitted. Docker metadata is
+display information and never trusted network evidence for authorization.
+
 ## Approval and enablement
 
 | Control | Meaning |

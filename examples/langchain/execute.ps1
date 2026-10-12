@@ -30,6 +30,7 @@ try {
     . (Join-Path $PSScriptRoot '../../debug/python.ps1')
     $Python = Find-DebugPython
     Invoke-ExampleCommand $Python @('manage.py','verify-deployment','--target',$Target)
+    Invoke-ExampleCommand $Python @('manage.py','sync-deployment')
     $agentArguments = @('compose','run','--rm','-T','agent','--target',$Target,'--use-case',$UseCase)
     if ($Smoke) { $agentArguments += '--smoke' }
     Invoke-ExampleCommand 'docker' $agentArguments

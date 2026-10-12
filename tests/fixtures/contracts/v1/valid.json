@@ -3448,5 +3448,51 @@
       "type": "number"
     }
   },
-  "UserRole": "BASIC"
+  "UserRole": "BASIC",
+  "DeviceDeploymentMetadata": {
+    "executionKind": "QUICKSTART_CLIENT",
+    "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "containerName": "toolgate-langchain-quickstart-1",
+    "systemName": "abc123",
+    "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "networkName": "toolgate-langchain_default",
+    "ipAddress": "172.18.0.2"
+  },
+  "DeviceExecutionKind": "QUICKSTART_CLIENT",
+  "DeviceDeploymentRecord": {
+    "deviceId": "device-test",
+    "deployment": {
+      "executionKind": "QUICKSTART_CLIENT",
+      "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "containerName": "toolgate-langchain-quickstart-1",
+      "systemName": "abc123",
+      "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "networkName": "toolgate-langchain_default",
+      "ipAddress": "172.18.0.2"
+    }
+  },
+  "EndpointManagedDeviceDeploymentPage": {
+    "items": [
+      {
+        "deviceId": "device-1",
+        "systemExecutor": false,
+        "systemName": "test-machine",
+        "ipAddress": "2001:db8::1"
+      }
+    ],
+    "deployments": [
+      {
+        "deviceId": "device-test",
+        "deployment": {
+          "executionKind": "QUICKSTART_CLIENT",
+          "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "containerName": "toolgate-langchain-quickstart-1",
+          "systemName": "abc123",
+          "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "networkName": "toolgate-langchain_default",
+          "ipAddress": "172.18.0.2"
+        }
+      }
+    ]
+  }
 }

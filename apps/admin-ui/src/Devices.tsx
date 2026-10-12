@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import {Table,ActionButton,StatusToggle} from './Table';
 import {useEffect,useRef,useState,type FormEvent} from 'react';
-import type {EndpointManagedDevice} from '@olo-labs/toolgate-contracts';
+import type {EndpointManagedDevice,DeviceDeploymentMetadata} from '@olo-labs/toolgate-contracts';
 import {ControlClient} from './api';
 import {Failure} from './Failure';
 import {ApprovalDuration,defaultDuration,durationBody,localDateTime,validDuration} from './ApprovalDuration';
@@ -13,8 +13,8 @@ import {DeviceMembership,PublishAccess} from './AccessMapping';
 import {ScopePicker} from './ScopePicker';
 import {useRecordActions} from './RecordActions';
 
-function approved(row:EndpointManagedDevice,now:number){const device=row.endpointDevice;return Boolean(device&&device.state==='ACTIVE'&&device.connectionApproved!==false&&(device.connectionExpiresAtUnixMs===undefined||device.connectionExpiresAtUnixMs>now));}
-function connection(row:EndpointManagedDevice,now:number){
+function approved(row:DeviceView,now:number){const device=row.endpointDevice;return Boolean(device&&device.state==='ACTIVE'&&device.connectionApproved!==false&&(device.connectionExpiresAtUnixMs===undefined||device.connectionExpiresAtUnixMs>now));}
+function connection(row:DeviceView,now:number){
   if(row.registeredUser?.enabled===false)return 'User disabled';
   if(row.systemExecutor)return row.directoryDevice?.enabled===false?'Disabled':row.systemAvailable===true?'Available':row.systemAvailable===false?'Unavailable':'Availability unknown';
   if(row.directoryDevice?.enabled===false)return 'Disabled';
@@ -22,14 +22,18 @@ function connection(row:EndpointManagedDevice,now:number){
   const device=row.endpointDevice!;const age=now-device.lastSeenUnixMs;
   return device.reportSequence>0&&device.lastSeenUnixMs>0&&age>=-5000&&age<120000?'Connected':'Offline';
 }
-function purpose(row:EndpointManagedDevice){return row.systemExecutorKind==='HOTFOLDER'?'Runs file tools inside the server’s configured HotFolder. Disabling this device blocks HotFolder operations.':row.systemExecutorKind==='REST_FORWARDING'?'The existing ToolGate gateway forwards tool calls to approved clients. Disabling this device blocks that forwarding.':row.systemExecutor?'Quickstart’s internal fixed executor runs compute and server tools. Disabling it blocks all server built-in operations, including HotFolder.':'An installed client with a protected device key. Both approval and enablement are required for access.';}
-function details(row:EndpointManagedDevice,now:number){return `${purpose(row)}\nDevice: ${row.directoryDevice?.name??`${row.enrollment?.platform??'New'} client`} (${row.deviceId})\nSystem name: ${row.systemName??row.endpointDevice?.systemName??'Not reported'}\nIP address: ${row.ipAddress??row.endpointDevice?.ipAddress??'Not reported'}\nRegistered user: ${row.registeredUser?.name??row.directoryDevice?.ownerUserId??'Awaiting registration'}${row.registeredUser?` (${row.registeredUser.id})`:''}\nConnection: ${connection(row,now)}\n${row.systemExecutor?'Identity and approval: server managed':`Key fingerprint: ${row.endpointDevice?.keyFingerprint??row.enrollment?.keyFingerprint??'No enrolled key'}\nApproval: ${approved(row,now)?'Approved':'Needs approval'}\nLast check-in: ${row.endpointDevice?.lastSeenUnixMs?new Date(row.endpointDevice.lastSeenUnixMs).toLocaleString():'No check-in yet'}`}`;}
+function purpose(row:DeviceView){return row.systemExecutorKind==='HOTFOLDER'?'Runs file tools inside the server’s configured HotFolder. Disabling this device blocks HotFolder operations.':row.systemExecutorKind==='REST_FORWARDING'?'The existing ToolGate gateway forwards tool calls to approved clients. Disabling this device blocks that forwarding.':row.systemExecutor?'Quickstart’s internal fixed executor runs compute and server tools. Disabling it blocks all server built-in operations, including HotFolder.':'An installed client with a protected device key. Both approval and enablement are required for access.';}
+function baseDetails(row:DeviceView,now:number){return `${purpose(row)}\nDevice: ${row.directoryDevice?.name??`${row.enrollment?.platform??'New'} client`} (${row.deviceId})\nSystem name: ${row.systemName??row.endpointDevice?.systemName??row.deployment?.systemName??'Not reported'}\nIP address: ${row.ipAddress??row.endpointDevice?.ipAddress??'Not reported'}\nRegistered user: ${row.registeredUser?.name??row.directoryDevice?.ownerUserId??'Awaiting registration'}${row.registeredUser?` (${row.registeredUser.id})`:''}\nConnection: ${connection(row,now)}\n${row.systemExecutor?'Identity and approval: server managed':`Key fingerprint: ${row.endpointDevice?.keyFingerprint??row.enrollment?.keyFingerprint??'No enrolled key'}\nApproval: ${approved(row,now)?'Approved':'Needs approval'}\nLast check-in: ${row.endpointDevice?.lastSeenUnixMs?new Date(row.endpointDevice.lastSeenUnixMs).toLocaleString():'No check-in yet'}`}`;}
+
+type DeviceView=EndpointManagedDevice & {readonly deployment?:DeviceDeploymentMetadata};
+const deploymentKinds={QUICKSTART_CLIENT:'Quickstart built-in endpoint',ENDPOINT_CLIENT:'Endpoint client',TOOL_HOST_DIRECT:'Tool Host · direct dispatch',TOOL_HOST_PULL:'Tool Host · pull mode'} as const;
+function details(row:DeviceView,now:number){const d=row.deployment;return baseDetails(row,now)+(d?`\nExecution service: ${deploymentKinds[d.executionKind]}\nDeployment container: ${d.containerName}\nContainer ID: ${d.containerId}\nDeployment network: ${d.networkName}\nNetwork ID: ${d.networkId}\nDeployment IP: ${d.ipAddress}\nDeployment details are display information, not permission evidence.`:'');}
 
 /** Single bounded snapshot includes enrolled keys, directory-only devices and pending requests. */
 export function Devices({client}:{client:ControlClient}){
-  const [items,setItems]=useState<readonly EndpointManagedDevice[]>();const [error,setError]=useState<unknown>();const [listError,setListError]=useState<unknown>();
+  const [items,setItems]=useState<readonly DeviceView[]>();const [error,setError]=useState<unknown>();const [listError,setListError]=useState<unknown>();
   const [now,setNow]=useState(Date.now());const [refresh,setRefresh]=useState(0);const [busy,setBusy]=useState(false);
-  const [selected,setSelected]=useState<EndpointManagedDevice>();const [creating,setCreating]=useState(false);const [editing,setEditing]=useState<EndpointManagedDevice>();
+  const [selected,setSelected]=useState<DeviceView>();const [creating,setCreating]=useState(false);const [editing,setEditing]=useState<DeviceView>();
   const [duration,setDuration]=useState(defaultDuration);const [confirmed,setConfirmed]=useState(false);const [notice,setNotice]=useState('');
   const [membership,setMembership]=useState<string>();
   const [approvalGroups,setApprovalGroups]=useState<string[]>(['default-devices']);
@@ -40,7 +44,7 @@ export function Devices({client}:{client:ControlClient}){
     const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;
     async function poll(){
       setNow(Date.now());
-      try{const page=await client.managedDevices(controller.signal);if(!controller.signal.aborted){setItems(page.items);setListError(undefined);}}
+      try{const page=await client.managedDeviceDeployments(controller.signal);const deployments=new Map(page.deployments?.map(value=>[value.deviceId,value.deployment]));if(!controller.signal.aborted){setItems(page.items.map(row=>({...row,deployment:deployments.get(row.deviceId)})));setListError(undefined);}}
       catch(failure){if(!controller.signal.aborted)setListError(failure);}
       if(!controller.signal.aborted)timer=setTimeout(()=>void poll(),1000);
     }
@@ -59,7 +63,7 @@ export function Devices({client}:{client:ControlClient}){
     catch(failure){if(alive.current){setError(failure);setSelected(undefined);setConfirmed(false);reload();}}
     finally{guard.current=false;if(alive.current)setBusy(false);}
   }
-  function choose(row:EndpointManagedDevice){
+  function choose(row:DeviceView){
     const choice=++approvalChoice.current;setApprovalGroupsReady(!row.directoryDevice);
     setApprovalGroups(['default-devices']);
     if(row.directoryDevice)void client.memberships('devices',row.deviceId).then(value=>{if(alive.current&&choice===approvalChoice.current){setApprovalGroups([...value.groupIds]);setApprovalGroupsReady(true);}}).catch(failure=>{if(alive.current&&choice===approvalChoice.current)setError(failure);});
@@ -82,10 +86,11 @@ export function Devices({client}:{client:ControlClient}){
     {Boolean(error)&&!selected&&<Failure error={error}/>}{Boolean(listError)&&<Failure error={listError}/>}{notice&&<p role="status">{notice}</p>}
     {!items&&!listError&&<p role="status">Loading clients…</p>}
     {items?.length===0&&<p>No devices or pending requests.</p>}
-    {Boolean(items?.length)&&<div className="table-wrap"><Table disabled={busy||recordActions.busy} bulkActions={keys=>{const records=items!.filter(row=>keys.includes(row.deviceId)&&!row.systemExecutor&&row.directoryDevice).map(row=>row.directoryDevice!);return <><button disabled={busy||recordActions.busy||!records.some(row=>!row.enabled)} onClick={()=>void recordActions.run(records,'enable')}>Enable selected</button><button disabled={busy||recordActions.busy||!records.some(row=>row.enabled)} onClick={()=>void recordActions.run(records,'disable')}>Disable selected</button><button className="danger" disabled={busy||recordActions.busy||!records.length} onClick={()=>recordActions.requestDelete(records)}>Delete selected</button></>;}}><caption className="sr-only">Clients and device approvals</caption><thead><tr><th scope="col">Device name</th><th scope="col">System name</th><th scope="col">IP address</th><th scope="col">Registered user</th><th scope="col">Identifier</th><th scope="col">Connection</th><th scope="col">Directory status</th><th scope="col">Approval</th><th scope="col">Allowed until</th><th scope="col">Actions</th></tr></thead>
+    {items?.some(row=>row.deployment)&&<p className="hint">Docker deployment: {new Set(items.flatMap(row=>row.deployment?[row.deployment.containerId]:[])).size} containers. Rows identify enrolled execution services; several services can share one container. Network details are display information.</p>}
+    {Boolean(items?.length)&&<div className="table-wrap"><Table disabled={busy||recordActions.busy} bulkActions={keys=>{const records=items!.filter(row=>keys.includes(row.deviceId)&&!row.systemExecutor&&row.directoryDevice).map(row=>row.directoryDevice!);return <><button disabled={busy||recordActions.busy||!records.some(row=>!row.enabled)} onClick={()=>void recordActions.run(records,'enable')}>Enable selected</button><button disabled={busy||recordActions.busy||!records.some(row=>row.enabled)} onClick={()=>void recordActions.run(records,'disable')}>Disable selected</button><button className="danger" disabled={busy||recordActions.busy||!records.length} onClick={()=>recordActions.requestDelete(records)}>Delete selected</button></>;}}><caption className="sr-only">Clients and device approvals</caption><thead><tr><th scope="col">Device name</th><th scope="col">System name</th><th scope="col">IP address</th><th scope="col">Deployment container</th><th scope="col">Docker network</th><th scope="col">Registered user</th><th scope="col">Identifier</th><th scope="col">Connection</th><th scope="col">Directory status</th><th scope="col">Approval</th><th scope="col">Allowed until</th><th scope="col">Actions</th></tr></thead>
       <tbody>{items?.map(row=>{
         const directory=row.directoryDevice,endpoint=row.endpointDevice;const isApproved=approved(row,now);const state=connection(row,now);
-        return <tr key={row.deviceId} title={details(row,now)}><th scope="row"><span>{directory?directory.name:`${row.enrollment?.platform??'New'} client`}</span> <DeviceDetails deviceId={row.deviceId} text={details(row,now)}/>{row.systemExecutor&&<small>Internal Quickstart device</small>}</th><td>{row.systemName??endpoint?.systemName??'Not reported'}</td><td><code>{row.ipAddress??endpoint?.ipAddress??'Not reported'}</code></td><td>{row.registeredUser?<>{row.registeredUser.name}<small>{row.registeredUser.id}{!row.registeredUser.enabled?' · Disabled user':''}</small></>:directory?.ownerUserId??endpoint?.userId??'Awaiting registration'}</td><td><code>{row.deviceId}</code></td>
+        return <tr key={row.deviceId} title={details(row,now)}><th scope="row"><span>{directory?directory.name:`${row.enrollment?.platform??'New'} client`}</span> <DeviceDetails deviceId={row.deviceId} text={details(row,now)}/>{row.systemExecutor&&<small>Internal Quickstart device</small>}{row.deployment&&<small>{deploymentKinds[row.deployment.executionKind]}</small>}</th><td>{row.systemName??endpoint?.systemName??row.deployment?.systemName??'Not reported'}</td><td><code>{row.deployment?.ipAddress??row.ipAddress??endpoint?.ipAddress??'Not reported'}</code>{row.deployment&&(row.ipAddress??endpoint?.ipAddress)&&row.deployment.ipAddress!==(row.ipAddress??endpoint?.ipAddress)&&<small>Observed: {row.ipAddress??endpoint?.ipAddress}</small>}</td><td>{row.deployment?<>{row.deployment.containerName}<small><code>{row.deployment.containerId.slice(0,12)}</code></small></>:'—'}</td><td>{row.deployment?<>{row.deployment.networkName}<small><code title={row.deployment.networkId}>{row.deployment.networkId.slice(0,12)}</code></small></>:'—'}</td><td>{row.registeredUser?<>{row.registeredUser.name}<small>{row.registeredUser.id}{!row.registeredUser.enabled?' · Disabled user':''}</small></>:directory?.ownerUserId??endpoint?.userId??'Awaiting registration'}</td><td><code>{row.deviceId}</code></td>
           <td><span className={`client-connection ${!listError&&(state==='Connected'||state==='Available')?'online':'offline'}`}><span className="connection-dot" aria-hidden="true"/>{listError?'Status unavailable':state}</span></td>
           <td data-sort-value={directory?.enabled?'Enabled':directory?'Disabled':'Awaiting enrollment'}>{directory?<StatusToggle enabled={directory.enabled} label={row.deviceId} disabled={busy||recordActions.busy} onClick={()=>void mutate(()=>client.setDeviceEnabled(row.deviceId,{expectedRevision:directory.revision,enabled:!directory.enabled},crypto.randomUUID()),directory.enabled?'Device disabled.':'Device enabled.')}/>:'Awaiting enrollment'}</td>
           <td>{row.systemExecutor?'Built-in executor':isApproved?'Approved':endpoint?.state==='REVOKED'?'Revoked':row.enrollment||endpoint?'Approval required':'Needs enrollment'}</td>

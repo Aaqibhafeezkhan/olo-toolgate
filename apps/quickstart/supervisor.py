@@ -598,6 +598,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 device['systemName']=socket.gethostname()
                                 try: device['ipAddress']=socket.gethostbyname(socket.gethostname())
                                 except OSError: pass
+                        if urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('deployment')==['true']:
+                            page=deployment_details(page)
                         body=json.dumps(page).encode()
                     if path in ('/console/','/console/index.html') and response.status==200 and b'toolgate-mode' not in body:
                         body = body.replace(b'<head>', b'<head><meta name="toolgate-mode" content="quickstart">', 1)
@@ -611,6 +613,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
     do_POST = dispatch
     do_PUT = dispatch
     do_DELETE = dispatch
+
+
+def deployment_details(page):
+    """Attach bounded composition-owned display metadata without changing identity or observed peers."""
+    path=DATA/'run/deployment-metadata.json'
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size>65536:return page
+        document=strict(path.read_bytes())
+        if set(document)!={'gatewaySystemName','devices'} or document['gatewaySystemName']!=socket.gethostname():return page
+        records=document['devices']
+        if not isinstance(records,dict) or len(records)>64:return page
+        required={'executionKind','containerId','containerName','systemName','networkId','networkName','ipAddress'}
+        for value in records.values():
+            if not isinstance(value,dict) or set(value)!=required or not all(isinstance(v,str) for v in value.values()):return page
+            if value['executionKind'] not in ('QUICKSTART_CLIENT','ENDPOINT_CLIENT','TOOL_HOST_DIRECT','TOOL_HOST_PULL'):return page
+            if any(not re.fullmatch('[a-f0-9]{64}',value[k]) for k in ('containerId','networkId')):return page
+            if any(not re.fullmatch('[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}',value[k]) for k in ('containerName','networkName')):return page
+            if not re.fullmatch('[a-zA-Z0-9._-]{1,255}',value['systemName']):return page
+            if not re.fullmatch('[0-9a-fA-F:.]{2,45}',value['ipAddress']):return page
+            ipaddress.ip_address(value['ipAddress'])
+        page['deployments']=[dict(deviceId=row['deviceId'],deployment=records[row['deviceId']])
+                             for row in page['items'] if row['deviceId'] in records]
+    except (OSError,ValueError,KeyError,TypeError):pass  # Optional display evidence cannot break device administration.
+    return page
 
 
 def backup(destination):

@@ -654,6 +654,22 @@ export interface DesiredState {
   readonly revision: number;
   readonly assignments: ReadonlyArray<DeploymentAssignment>;
 }
+/** Operator-collected Docker deployment details for display only; never enrollment, permission or trusted network evidence. */
+export interface DeviceDeploymentMetadata {
+  readonly executionKind: DeviceExecutionKind;
+  readonly containerId: string;
+  readonly containerName: string;
+  readonly systemName: string;
+  readonly networkId: string;
+  readonly networkName: string;
+  readonly ipAddress: string;
+}
+/** Public deployment details attached only to an already visible enrolled device. */
+export interface DeviceDeploymentRecord {
+  readonly deviceId: string;
+  readonly deployment: DeviceDeploymentMetadata;
+}
+export type DeviceExecutionKind = "QUICKSTART_CLIENT" | "ENDPOINT_CLIENT" | "TOOL_HOST_DIRECT" | "TOOL_HOST_PULL";
 /** Endpoint identity foundation wire model. */
 export interface DeviceIdentity {
   readonly deviceId: string;
@@ -802,6 +818,11 @@ export interface EndpointManagedDevice {
   readonly systemAvailable?: boolean;
   readonly systemName?: string;
   readonly ipAddress?: string;
+}
+/** Opt-in administrative deployment view. Default device responses retain their existing closed schema. */
+export interface EndpointManagedDeviceDeploymentPage {
+  readonly items: ReadonlyArray<EndpointManagedDevice>;
+  readonly deployments?: ReadonlyArray<DeviceDeploymentRecord>;
 }
 /** All directory devices plus pending requests within the existing directory and enrollment quotas. */
 export interface EndpointManagedDevicePage {

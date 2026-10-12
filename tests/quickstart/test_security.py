@@ -30,6 +30,21 @@ class SecurityTests(unittest.TestCase):
             binding={'id':'installed-admin','name':'Reviewed test identity','enabled':True,'revision':1,'userId':'admin','issuer':quickstart.ISSUER,'subject':'admin','sessionEpoch':1,'firstSeenUnixMs':1,'lastAttemptUnixMs':1,'attemptCount':1,'registrationReason':'REVIEWED_INSTALLATION','sessionsValidAfterUnixMs':0}
             db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING','installed-admin',1,json.dumps(binding)))
     def tearDown(self):self.temp.cleanup()
+    def test_deployment_metadata_preserves_enrollment_and_observed_addresses(self):
+        (quickstart.DATA/'run').mkdir()
+        record=dict(executionKind='TOOL_HOST_DIRECT',containerId='a'*64,containerName='quickstart-1',
+                    systemName=quickstart.socket.gethostname(),networkId='b'*64,networkName='example_default',ipAddress='172.18.0.2')
+        document=dict(gatewaySystemName=quickstart.socket.gethostname(),devices={'tool-host-local':record,'invisible-device':record})
+        path=quickstart.DATA/'run/deployment-metadata.json';path.write_text(json.dumps(document))
+        original=dict(deviceId='tool-host-local',systemExecutor=False,ipAddress='::1')
+        page=quickstart.deployment_details(dict(items=[dict(original)]))
+        self.assertEqual(page['items'],[original])
+        self.assertEqual(page['deployments'],[dict(deviceId='tool-host-local',deployment=record)])
+        document['gatewaySystemName']='previous-container';path.write_text(json.dumps(document))
+        self.assertNotIn('deployments',quickstart.deployment_details(dict(items=[dict(original)])))
+        document['gatewaySystemName']=quickstart.socket.gethostname();record['runtimeToken']='never-export'
+        path.write_text(json.dumps(document))
+        self.assertNotIn('deployments',quickstart.deployment_details(dict(items=[dict(original)])))
     def test_client_runtime_hashes_are_explicit_scoped_and_expire(self):
         value={'tokenSha256':'a'*64,'context':{'tenantId':quickstart.TENANT,'mode':'SERVICE','credentialSha256':'a'*64},'expiresAtUnixMs':int(quickstart.time.time()*1000)+60000}
         path=quickstart.DATA/'client-runtime-credentials.json'
