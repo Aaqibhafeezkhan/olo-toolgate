@@ -117,6 +117,66 @@ class DeviceSelectionTests(unittest.TestCase):
         self.assertEqual(api.call_count, 4)
         sleep.assert_called_once_with(2)
 
+    def test_new_linux_approval_waits_for_first_check_in_before_registration_and_selection(self):
+        self.config.rows[0]['endpointDevice']['lastSeenUnixMs'] = 0
+        original_api = self.config.api
+        events = []
+
+        def api(path, body=None):
+            if path.startswith('/api/control/v1/endpoint/enrollments/review?'):
+                return dict(deviceId=LINUX, keyFingerprint='test-fingerprint')
+            if path == '/api/control/v1/endpoint/enrollments/decision':
+                self.assertEqual(body['choice'], 'APPROVE')
+                events.append('approved')
+                return {}
+            if path == '/api/control/v1/endpoint/devices/' + LINUX:
+                return self.config.rows[0]['endpointDevice']
+            if path == '/api/control/v1/devices/' + LINUX:
+                return self.config.rows[0]['directoryDevice']
+            return original_api(path)
+
+        def check_in(seconds):
+            self.assertEqual(seconds, 2)
+            events.append('checked-in')
+            self.config.rows[0]['endpointDevice']['lastSeenUnixMs'] = NOW
+
+        def profiles(*args):
+            self.assertEqual(events, ['approved', 'checked-in'])
+            return json.dumps(self.records[0]['profiles'])
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(manage, 'STATE', Path(temporary)), \
+                patch.object(self.config, 'api', side_effect=api), \
+                patch.object(manage, 'linux_status', return_value=dict(deviceId=LINUX, state='PENDING', userCode='test-code', keyFingerprint='test-fingerprint')), \
+                patch.object(manage, 'docker', side_effect=profiles), \
+                patch.object(manage.time, 'sleep', side_effect=check_in):
+            records = manage.register_devices(self.config, SimpleNamespace(approve_linux_device=True, profiles=None, device_id=None, target='linux'))
+        self.assertEqual(manage.select_device(self.config, records, 'linux')['deviceId'], LINUX)
+        self.assertEqual(self.config.allocations, [('devices', LINUX, sorted(['existing-team-device-group', manage.DEVICE_GROUP]))])
+
+    def test_new_linux_approval_cannot_prepare_a_device_that_never_checks_in(self):
+        self.config.rows[0]['endpointDevice']['lastSeenUnixMs'] = 0
+        original_api = self.config.api
+
+        def api(path, body=None):
+            if path.startswith('/api/control/v1/endpoint/enrollments/review?'):
+                return dict(deviceId=LINUX, keyFingerprint='test-fingerprint')
+            if path == '/api/control/v1/endpoint/enrollments/decision':
+                return {}
+            if path == '/api/control/v1/endpoint/devices/' + LINUX:
+                return self.config.rows[0]['endpointDevice']
+            if path == '/api/control/v1/devices/' + LINUX:
+                return self.config.rows[0]['directoryDevice']
+            return original_api(path)
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(manage, 'STATE', Path(temporary)), \
+                patch.object(self.config, 'api', side_effect=api), \
+                patch.object(manage, 'linux_status', return_value=dict(deviceId=LINUX, state='PENDING', userCode='test-code', keyFingerprint='test-fingerprint')), \
+                patch.object(manage, 'docker') as docker, patch.object(manage.time, 'monotonic', side_effect=[0, 91]):
+            with self.assertRaisesRegex(ValueError, 'Approve and enable'):
+                manage.register_devices(self.config, SimpleNamespace(approve_linux_device=True, profiles=None, device_id=None, target='linux'))
+        docker.assert_not_called()
+        self.assertEqual(self.config.allocations, [])
+
     def test_register_both_devices_preserving_existing_groups(self):
         with tempfile.TemporaryDirectory() as temporary:
             state = Path(temporary)

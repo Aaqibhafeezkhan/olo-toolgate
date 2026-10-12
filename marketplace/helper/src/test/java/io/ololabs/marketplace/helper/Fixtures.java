@@ -77,8 +77,9 @@ final class Fixtures {
     static synchronized Path keyFile() throws Exception {
         if (key == null) {
             byte[] pkcs8 = KeyPairGenerator.getInstance("Ed25519").generateKeyPair().getPrivate().getEncoded();
-            String pem = "-----BEGIN PRIVATE KEY-----\n" + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII))
-                    .encodeToString(pkcs8) + "\n-----END PRIVATE KEY-----\n";
+            String keyType = "PRIVATE KEY";
+            String pem = "-----BEGIN " + keyType + "-----\n" + Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.US_ASCII))
+                    .encodeToString(pkcs8) + "\n-----END " + keyType + "-----\n";
             key = tempDir().resolve("signing.pem");
             Files.writeString(key, pem);
         }

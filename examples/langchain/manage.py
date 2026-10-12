@@ -253,6 +253,10 @@ def register_devices(config, args):
         config.api('/api/control/v1/endpoint/enrollments/decision',
             dict(userCode=status['userCode'], keyFingerprint=status['keyFingerprint'], choice='APPROVE',
                  unlimitedConnection=False, connectionExpiresAtUnixMs=int(time.time()*1000)+86400000))
+        # Approval creates an ACTIVE record with no check-in yet. Wait for the
+        # client to obtain its certificate and report before selecting it.
+        print('Waiting for the approved Linux device to check in (up to 90 seconds).', flush=True)
+        wait_device(config, device)
     profiles = json.loads(docker('linux-device',
         ['/usr/local/lib/olo-toolgate/olo-toolgate-client', 'authorization-profiles']))
     directory = STATE / 'devices'

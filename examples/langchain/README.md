@@ -135,7 +135,9 @@ The scripts work from another directory too. `deploy.bat` calls `deploy.ps1`, wh
    isolated stack it uses the one-time installation passwords, changes them to
    unique values, and saves them privately in `.state/console-passwords.json`.
 5. Checks the Compose Linux device's actual enrollment code/fingerprint and approves
-   it for 24 hours. Adds Linux and the registered, approved Windows devices to
+   it for 24 hours. Waits up to 90 seconds for its first authenticated check-in;
+   enrollment approval alone does not make a device available for selection.
+   Adds Linux and the registered, approved Windows devices to
    `ReadAndWriteDeviceGroup`, preserving their other memberships. Selects an
    available group member (Windows only with `-Win`, Linux only with `-Target linux`),
    registers its real tool profiles/package digest, and maps tools/agent to the
