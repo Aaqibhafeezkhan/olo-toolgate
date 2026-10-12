@@ -50,7 +50,7 @@ These exist on `main` once the docs PR merges. Use them as they are; don't recre
 - `marketplace/README.md`, `LICENSE`, `.gitignore`, `.editorconfig`, `TOOLGATE_SRC` (`..`);
 - `marketplace/docs/api.md` (the contract);
 - `marketplace/drupal/modules.yml` (the module list, §6.3);
-- `marketplace/drupal/web/themes/custom/olo_orgs/images/logo.png` and `favicon.svg` (the OLO branding, copied from the console assets);
+- `marketplace/drupal/web/themes/custom/olo_orgs/images/logo.png` (dark mark), `logo-light.png` (white mark for dark headers) and `favicon.svg`. The OLO branding comes from the console assets; both PNGs have **transparent backgrounds** and are trimmed;
 - `marketplace/seed/expected-packages.json` (§3.2 step 2; `examples.logs` is in `knownMissing`);
 - `marketplace/deploy/.env.example`.
 
@@ -340,7 +340,7 @@ Nothing is downloaded or installed at runtime.
 - Base: the official `drupal` image for the current Drupal 11 release on PHP 8.3, with Apache, **pinned by digest**. One container serves HTTP on port 8080, as non-root, with a read-only root filesystem; `/tmp` is the only writable path.
 - Site name **OLO Orgs**, set in `config/sync/system.site.yml`.
 - **Branding:**
-  - the OLO logo and favicon are already committed at `marketplace/drupal/web/themes/custom/olo_orgs/images/logo.png` and `favicon.svg`, copied once from the console assets, so the split doesn't break them;
+  - the OLO logo (transparent PNG: `images/logo.png` on light backgrounds, `images/logo-light.png` on dark) and `favicon.svg` are already committed in `marketplace/drupal/web/themes/custom/olo_orgs/`, copied once from the console assets, so the split doesn't break them;
   - use them as the site logo and favicon;
   - the colour palette matches the ToolGate console.
 - `settings.php` reads **everything** from the environment:
