@@ -8,6 +8,7 @@
     "examples.downloads",
     "examples.endpoints",
     "examples.health",
+    "examples.logs",
     "examples.notify",
     "examples.processes",
     "examples.scripts",
@@ -19,11 +20,5 @@
     "examples.loans",
     "examples.support"
   ],
-  "knownMissing": [
-    {
-      "id": "examples.logs",
-      "folder": "examples/java-tools/log-insights",
-      "reason": "Java source missing on main (only README and build files were committed). The id is inferred from its logs.* tool names and must be confirmed when the source is restored in PR 3."
-    }
-  ]
+  "knownMissing": []
 }
