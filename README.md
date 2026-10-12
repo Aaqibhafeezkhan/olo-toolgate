@@ -336,6 +336,7 @@ Read the architecture: [`docs/architecture/overview.md`](docs/architecture/overv
 apps/
 ├── gateway/               # Rust
 ├── control-plane/         # Java
+├── tool-host/             # Rust
 ├── admin-ui/              # React / TypeScript
 ├── endpoint-client/       # Rust
 ├── marketplace-api/       # Java

@@ -13,6 +13,21 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- The Tool Host runs server tools from verified packages (M0 part 13). `apps/tool-host`
+  admits a Gateway dispatch only with an RS256 invocation permit Control signed for that host
+  (issuer, audience, admission window, single-use `jti`, arguments digest), finds the package,
+  service profile and globals in its content store by the digests the permit pins, claims the
+  permit at Control's `permits/consume`, and answers `ADMITTED` with the fencing token or a
+  definitive `REFUSED` reason. It then runs the tool's runtime with a clean environment over
+  tool protocol v2 and reports the outcome to `effects/report`; a crash or timeout is
+  `OUTCOME_UNKNOWN` for ledger tools. Route calls go through a per-invocation broker on a Unix
+  socket with a capability: only the permit's routes as the service profile approves them,
+  checked path variables, allowlisted query names and headers, connect-time address checks,
+  TLS by system roots, CA bundle or SPKI pin, and `API_KEY` or `BASIC` credentials added by
+  the broker from Control. The Java runtime gains governed mode (`TOOLGATE_PROTOCOL=2`), and
+  `apps/tool-host/e2e/run.sh` runs the `toolgate init` starter's package through the host.
+  Control's Tool Host endpoints and Gateway dispatch follow.
+
 - The `toolgate` CLI creates and drives tool projects (M0 part 12). `toolgate init <name>`
   writes the Java starter for Gradle (the default) or Maven (`--build maven`): a tool reading a
   global through its typed accessor, a tool calling a declared route with a recorded exchange,

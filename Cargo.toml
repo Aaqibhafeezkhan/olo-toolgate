@@ -6,6 +6,7 @@ members = [
   "packages/contracts/rust",
   "apps/gateway",
   "apps/endpoint-client",
+  "apps/tool-host",
   "tool-sdk/cli",
 ]
 

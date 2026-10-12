@@ -1,0 +1,444 @@
+// Copyright 2026 OLO Labs
+// SPDX-License-Identifier: Apache-2.0
+//! Gateway dispatch (plan.md §11.3). `POST /v1/dispatch` takes a `Dispatch` and answers NDJSON:
+//! one `AdmissionResponse` line, definitive, and after `ADMITTED` one `ResultMessage` line. The
+//! tool starts only after the admission line is written. `GET /v1/health` reports readiness.
+
+use crate::broker::{self, Invocation};
+use crate::config::{Config, CEILING};
+use crate::control::{Control, ControlError};
+use crate::permit::{PermitError, Verifier};
+use crate::runner::{self, Launch, Ran};
+use crate::store::{Prepared, Store, StoreError};
+use crate::{digest, now_ms, random_hex};
+use axum::body::{Body, Bytes};
+use axum::extract::State;
+use axum::http::{header, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::Router;
+use olo_toolgate_contracts::v2::{
+    AdmissionKind, AdmissionResponse, Dispatch, InvocationOutcome, InvocationPermitClaims,
+    InvocationResultReport, Permission, PermitConsumption, RefusalReason, ResultFrame,
+    ResultMessage, ResultType, SecretHandle, ToolErrorBody, ToolInput,
+};
+use serde_json::Value;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
+
+pub struct Host {
+    config: Config,
+    verifier: Verifier,
+    store: Store,
+    control: Arc<Control>,
+    slots: Arc<Semaphore>,
+}
+
+impl Host {
+    pub fn new(config: Config) -> Result<Arc<Host>, String> {
+        config.validate()?;
+        let mut keys = HashMap::new();
+        for key in &config.permit_keys {
+            let pem = std::fs::read(&key.public_key_path)
+                .map_err(|e| format!("{}: {e}", key.public_key_path.display()))?;
+            let der = crate::permit::rsa_public_key(&pem)
+                .map_err(|e| format!("{}: {e}", key.public_key_path.display()))?;
+            keys.insert(key.kid.clone(), der);
+        }
+        std::fs::create_dir_all(config.work_dir.join("i"))
+            .map_err(|e| format!("{}: {e}", config.work_dir.display()))?;
+        Ok(Arc::new(Host {
+            verifier: Verifier::new(
+                keys,
+                &config.permit_issuer,
+                &config.host_id,
+                config.limits.max_permit_window_ms,
+            ),
+            store: Store::new(config.store_dir.clone(), config.work_dir.clone()),
+            control: Arc::new(Control::new(&config.control)?),
+            slots: Arc::new(Semaphore::new(config.limits.max_concurrent)),
+            config,
+        }))
+    }
+}
+
+pub fn router(host: Arc<Host>) -> Router {
+    let limit = host.config.limits.max_input_bytes + 64 * 1024;
+    Router::new()
+        .route("/v1/dispatch", post(dispatch))
+        .route("/v1/health", get(health))
+        .layer(axum::extract::DefaultBodyLimit::max(limit))
+        .with_state(host)
+}
+
+async fn health(State(host): State<Arc<Host>>) -> Response {
+    let body = serde_json::json!({
+        "ready": true,
+        "hostId": host.config.host_id,
+        "available": host.slots.available_permits(),
+    });
+    ([(header::CACHE_CONTROL, "no-store")], axum::Json(body)).into_response()
+}
+
+fn line<T: serde::Serialize>(value: &T) -> Bytes {
+    let mut bytes = serde_json::to_vec(value).expect("contract types serialize");
+    bytes.push(b'\n');
+    Bytes::from(bytes)
+}
+
+fn ndjson(body: Body) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "application/x-ndjson"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        body,
+    )
+        .into_response()
+}
+
+fn refusal(invocation_id: &str, reason: RefusalReason) -> Response {
+    tracing::info!(target: "toolgate::audit", invocation_id, reason = ?reason, "dispatch refused");
+    let id = if valid_identifier(invocation_id) {
+        invocation_id
+    } else {
+        "unknown"
+    };
+    ndjson(Body::from(line(&AdmissionResponse {
+        kind: AdmissionKind::Refused,
+        invocation_id: id.into(),
+        fencing_token: None,
+        reason: Some(reason),
+    })))
+}
+
+fn valid_identifier(id: &str) -> bool {
+    let bytes = id.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= 128
+        && bytes[0].is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || b"._:/-".contains(b))
+}
+
+/// The invocation id a refused permit claims, unverified, only to label the refusal.
+fn claimed_id(jws: &str) -> String {
+    use base64::Engine;
+    jws.split('.')
+        .nth(1)
+        .and_then(|p| {
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(p)
+                .ok()
+        })
+        .and_then(|p| serde_json::from_slice::<Value>(&p).ok())
+        .and_then(|v| {
+            v.get("invocationId")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_default()
+}
+
+async fn dispatch(State(host): State<Arc<Host>>, body: Bytes) -> Response {
+    let Ok(dispatch) = serde_json::from_slice::<Dispatch>(&body) else {
+        return (StatusCode::BAD_REQUEST, "the body is not a Dispatch").into_response();
+    };
+    let jws = &dispatch.permit.jws;
+    let claims = match host.verifier.verify(jws, now_ms()) {
+        Ok(claims) => claims,
+        Err(PermitError::Expired) => {
+            return refusal(&claimed_id(jws), RefusalReason::PermitExpired)
+        }
+        Err(PermitError::Invalid(why)) => {
+            tracing::info!(target: "toolgate::audit", why, "permit invalid");
+            return refusal(&claimed_id(jws), RefusalReason::PermitInvalid);
+        }
+    };
+    let id = claims.invocation_id.clone();
+    let arguments = Value::Object(dispatch.arguments.clone().into_iter().collect());
+    if digest::jcs(&arguments).ok().as_deref() != Some(claims.arguments_digest.as_str()) {
+        tracing::info!(target: "toolgate::audit", invocation_id = %id, "arguments differ from the permit's argumentsDigest");
+        return refusal(&id, RefusalReason::PermitInvalid);
+    }
+    let prepared = match host.store.prepare(&claims.target) {
+        Ok(prepared) => prepared,
+        Err(StoreError::NotPresent(why)) => {
+            tracing::info!(target: "toolgate::audit", invocation_id = %id, why, "content not present");
+            return refusal(&id, RefusalReason::DigestNotPresent);
+        }
+        Err(StoreError::Unavailable(why)) => {
+            tracing::warn!(invocation_id = %id, why, "content store unavailable");
+            return refusal(&id, RefusalReason::StoreUnavailable);
+        }
+        Err(StoreError::Unsupported(why)) => {
+            tracing::info!(target: "toolgate::audit", invocation_id = %id, why, "runtime unsupported");
+            return refusal(&id, RefusalReason::UnsupportedTier);
+        }
+    };
+    let input_cap = prepared
+        .tool
+        .limits
+        .as_ref()
+        .and_then(|l| l.max_input_bytes)
+        .map_or(host.config.limits.max_input_bytes, |m| {
+            (m as usize).min(host.config.limits.max_input_bytes)
+        });
+    if serde_json::to_vec(&arguments).map_or(usize::MAX, |b| b.len()) > input_cap {
+        return refusal(&id, RefusalReason::PermitInvalid);
+    }
+    let Ok(slot) = host.slots.clone().try_acquire_owned() else {
+        return refusal(&id, RefusalReason::Busy);
+    };
+    let consumed = host
+        .control
+        .consume(&PermitConsumption {
+            invocation_id: id.clone(),
+            permit: dispatch.permit.clone(),
+            arguments_digest: claims.arguments_digest.clone(),
+            tool_descriptor_digest: claims.target.tool_descriptor_digest.clone(),
+            package_digest: claims.target.package_digest.clone(),
+            artifact_digest: claims.target.artifact_digest.clone(),
+        })
+        .await;
+    let consumed = match consumed {
+        Ok(c) if c.invocation_id == id && valid_identifier(&c.fencing_token) => c,
+        Ok(_) => return refusal(&id, RefusalReason::StoreUnavailable),
+        Err(ControlError::Refused(status)) => {
+            tracing::info!(target: "toolgate::audit", invocation_id = %id, status, "Control refused the permit");
+            return refusal(&id, RefusalReason::PermitInvalid);
+        }
+        Err(ControlError::Unavailable(why)) => {
+            tracing::warn!(invocation_id = %id, why, "Control unavailable for permit consumption");
+            return refusal(&id, RefusalReason::StoreUnavailable);
+        }
+    };
+    tracing::info!(target: "toolgate::audit", invocation_id = %id, tool_id = %claims.target.tool_id, attempt = claims.attempt, "dispatch admitted");
+
+    let (tx, rx) = mpsc::channel::<Bytes>(2);
+    let admitted = line(&AdmissionResponse {
+        kind: AdmissionKind::Admitted,
+        invocation_id: id.clone(),
+        fencing_token: Some(consumed.fencing_token.clone()),
+        reason: None,
+    });
+    let _ = tx.send(admitted).await;
+    tokio::spawn(execute(
+        host,
+        claims,
+        prepared,
+        dispatch,
+        consumed.fencing_token,
+        slot,
+        tx,
+    ));
+    let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|b| (Ok::<_, std::io::Error>(b), rx))
+    });
+    ndjson(Body::from_stream(stream))
+}
+
+fn error_frame(code: &str, message: &str, retryable: bool) -> ResultFrame {
+    let mut text = BTreeMap::new();
+    text.insert("type".to_string(), Value::String("text".into()));
+    text.insert("text".to_string(), Value::String(message.into()));
+    ResultFrame {
+        kind: "RESULT".into(),
+        result_type: ResultType::Complete,
+        content: vec![text],
+        structured_content: None,
+        is_error: true,
+        error: Some(ToolErrorBody {
+            code: code.into(),
+            message: message.into(),
+            retryable,
+            data: None,
+        }),
+    }
+}
+
+/// Runs an admitted invocation, reports its outcome to Control, then sends the result line.
+async fn execute(
+    host: Arc<Host>,
+    claims: InvocationPermitClaims,
+    prepared: Prepared,
+    dispatch: Dispatch,
+    fencing_token: String,
+    slot: OwnedSemaphorePermit,
+    tx: mpsc::Sender<Bytes>,
+) {
+    let id = claims.invocation_id.clone();
+    let limits = &host.config.limits;
+    let deadline = claims
+        .deadline_unix_ms
+        .min(now_ms() + limits.sync_deadline_ms.min(CEILING.sync_deadline_ms));
+    let sandbox = host.config.work_dir.join("i").join(random_hex(8));
+    let socket = sandbox.join("broker.sock");
+    let capability = random_hex(32);
+    let descriptor = &prepared.tool.descriptor;
+    let in_sandbox = descriptor
+        .permissions
+        .contains(&Permission::CredentialsInSandbox);
+    let mut handles = HashMap::new();
+    let mut secret_handles = Vec::new();
+    if in_sandbox {
+        for secret in &descriptor.variables.secrets {
+            let handle = random_hex(16);
+            handles.insert(handle.clone(), secret.name.clone());
+            secret_handles.push(SecretHandle {
+                name: secret.name.clone(),
+                handle,
+            });
+        }
+    }
+    let invocation = Arc::new(Invocation::new(
+        id.clone(),
+        fencing_token.clone(),
+        capability.clone(),
+        deadline,
+        prepared.routes.clone(),
+        prepared.profile.destinations.clone(),
+        prepared.profile.private_ranges.clone(),
+        descriptor.http_auth.clone(),
+        descriptor.variables.secrets.clone(),
+        handles,
+        host.config.development_loopback_http,
+        host.control.clone(),
+    ));
+
+    let (outcome, result, not_started) = match std::fs::create_dir_all(&sandbox)
+        .and_then(|()| tokio::net::UnixListener::bind(&socket))
+    {
+        Err(e) => {
+            tracing::warn!(invocation_id = %id, error = %e, "cannot prepare the sandbox");
+            let frame = error_frame(
+                "TOOL_HOST_UNAVAILABLE",
+                "The Tool Host could not prepare the invocation",
+                true,
+            );
+            (
+                InvocationOutcome::Failed,
+                frame,
+                Some(RefusalReason::StoreUnavailable),
+            )
+        }
+        Ok(listener) => {
+            let (stop, stopped) = tokio::sync::oneshot::channel();
+            let broker = tokio::spawn(broker::serve(listener, invocation.clone(), stopped));
+            let input = ToolInput {
+                protocol_version: 2,
+                invocation_id: id.clone(),
+                task_id: claims.task_id.clone(),
+                tool_id: claims.target.tool_id.clone(),
+                entry_point: prepared.tool.entry_point.clone().unwrap_or_default(),
+                arguments: dispatch.arguments.clone(),
+                globals: prepared.globals.clone(),
+                claims: claims.identity.claims.clone().unwrap_or_default(),
+                secret_handles,
+                deadline_unix_ms: deadline,
+                idempotency_key: None,
+                catalog_revision: claims.catalog_revision.clone(),
+                traceparent: None,
+                fencing_token: Some(fencing_token.clone()),
+            };
+            let memory = prepared
+                .tool
+                .limits
+                .as_ref()
+                .and_then(|l| l.memory_bytes)
+                .map_or(limits.memory_bytes, |m| m.min(limits.memory_bytes));
+            let output = prepared
+                .tool
+                .limits
+                .as_ref()
+                .and_then(|l| l.max_output_bytes)
+                .map_or(limits.max_output_bytes, |m| {
+                    (m as usize).min(limits.max_output_bytes)
+                });
+            let launch = Launch {
+                runtime_id: &prepared.runtime.runtime_id,
+                package_dir: &prepared.package_dir,
+                entry_point: &input.entry_point,
+                sandbox_dir: &sandbox,
+                broker_socket: &socket,
+                capability: &capability,
+                java_path: &host.config.runtimes.java_path,
+                memory_bytes: memory,
+                max_output_bytes: output,
+            };
+            let ran = runner::run(&launch, &input, deadline).await;
+            invocation.closed.store(true, Ordering::SeqCst);
+            let _ = stop.send(());
+            let _ = broker.await;
+            let unknown = claims.requires_execution_ledger;
+            match ran {
+                Ran::Frame(frame) if frame.is_error => (InvocationOutcome::Failed, frame, None),
+                Ran::Frame(frame) => (InvocationOutcome::Completed, frame, None),
+                Ran::TimedOut if unknown => (
+                    InvocationOutcome::OutcomeUnknown,
+                    error_frame(
+                        "OUTCOME_UNKNOWN",
+                        "The tool did not finish before its deadline; its effect may have happened",
+                        false,
+                    ),
+                    None,
+                ),
+                Ran::TimedOut => (
+                    InvocationOutcome::Failed,
+                    error_frame(
+                        "DEADLINE_EXCEEDED",
+                        "The tool did not finish before its deadline",
+                        true,
+                    ),
+                    None,
+                ),
+                Ran::Crashed(why) => {
+                    tracing::warn!(invocation_id = %id, why, "tool process failed");
+                    if unknown {
+                        let message =
+                            "The tool stopped without a result; its effect may have happened";
+                        (
+                            InvocationOutcome::OutcomeUnknown,
+                            error_frame("OUTCOME_UNKNOWN", message, false),
+                            None,
+                        )
+                    } else {
+                        (
+                            InvocationOutcome::Failed,
+                            error_frame(
+                                "INTERNAL_ERROR",
+                                "The tool stopped without a result",
+                                false,
+                            ),
+                            None,
+                        )
+                    }
+                }
+            }
+        }
+    };
+    let _ = std::fs::remove_dir_all(&sandbox);
+    drop(slot);
+    tracing::info!(target: "toolgate::audit", invocation_id = %id, outcome = ?outcome, "invocation finished");
+    let report = InvocationResultReport {
+        invocation_id: id.clone(),
+        fencing_token: fencing_token.clone(),
+        outcome: outcome.clone(),
+        result: Some(result.clone()),
+        not_started,
+    };
+    if let Err(e) = host.control.report(&report).await {
+        tracing::warn!(invocation_id = %id, error = ?e, "Control did not take the result report");
+    }
+    let _ = tx
+        .send(line(&ResultMessage {
+            invocation_id: id,
+            fencing_token: Some(fencing_token),
+            outcome,
+            result: Some(result),
+        }))
+        .await;
+}

@@ -15,11 +15,23 @@ import java.util.Map;
 /** Standalone configuration: {@code TOOLGATE_MODE}, environment values and {@code toolgate.dev.json} (runtime-modes.md §4, §5). */
 final class Config {
     enum Mode {
-        PRODUCTION, DEVELOPMENT, TEST;
+        PRODUCTION, DEVELOPMENT, TEST,
+        /** One invocation under a Tool Host, over tool protocol v2 (Governed): values and claims come from the host. */
+        GOVERNED;
 
         /** Whether claims come from fixtures: {@code toolgate.dev.json} in development, the harness in test. */
         boolean fixtures() {
-            return this != PRODUCTION;
+            return this == DEVELOPMENT || this == TEST;
+        }
+
+        /** Whether claims come from this configuration rather than a verified credential on the request. */
+        boolean configuredClaims() {
+            return fixtures() || this == GOVERNED;
+        }
+
+        /** Whether route calls go to a transport in place of the network: recorded exchanges in test, the broker governed. */
+        boolean transported() {
+            return this == TEST || this == GOVERNED;
         }
     }
 
@@ -64,6 +76,18 @@ final class Config {
         return new Config(Mode.TEST, Map.of(), fixtures);
     }
 
+    /**
+     * The configuration of governed mode: {@code values} holds the {@code globals} and {@code claims} the Tool Host sent
+     * in the tool input, and {@code secrets} redeems a declared secret through the host, or returns null.
+     */
+    static Config governed(JsonNode values, java.util.function.Function<String, JsonNode> secrets) {
+        Config config = new Config(Mode.GOVERNED, Map.of(), values);
+        config.secrets = secrets;
+        return config;
+    }
+
+    private java.util.function.Function<String, JsonNode> secrets;
+
     /** A global from {@code TOOLGATE_GLOBAL_<NAME>} (as text, typed later) or the dev file; null when neither sets it. */
     JsonNode global(String name, ObjectMapper json) {
         String fromEnv = env.get("TOOLGATE_GLOBAL_" + name.toUpperCase(Locale.ROOT));
@@ -73,6 +97,7 @@ final class Config {
 
     /** A secret from {@code TOOLGATE_SECRET_<NAME>} or the dev file; null when neither sets it. */
     JsonNode secret(String name, ObjectMapper json) {
+        if (secrets != null) return secrets.apply(name);
         String fromEnv = env.get("TOOLGATE_SECRET_" + name.toUpperCase(Locale.ROOT));
         if (fromEnv != null) return json.getNodeFactory().textNode(fromEnv);
         return devJson == null ? null : devJson.path("secrets").get(name);
@@ -86,8 +111,8 @@ final class Config {
         return v == null || !v.isTextual() ? null : v.asText();
     }
 
-    /** Fixture claims, only in development and test mode. */
+    /** Fixture claims in development and test mode, and the host's claims in governed mode. */
     JsonNode claims() {
-        return mode.fixtures() && devJson != null && devJson.path("claims").isObject() ? devJson.get("claims") : null;
+        return mode.configuredClaims() && devJson != null && devJson.path("claims").isObject() ? devJson.get("claims") : null;
     }
 }

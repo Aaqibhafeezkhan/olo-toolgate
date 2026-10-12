@@ -9,6 +9,7 @@ COPY packages/contracts/rust packages/contracts/rust
 COPY packages/contracts/tools packages/contracts/tools
 COPY apps/gateway apps/gateway
 COPY apps/endpoint-client apps/endpoint-client
+COPY apps/tool-host apps/tool-host
 COPY tool-sdk/cli tool-sdk/cli
 COPY tools/gateway/collect-notices.sh /src/collect-notices.sh
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \

@@ -344,6 +344,8 @@ final class RouteClient implements HttpClient {
             if (route.hasNonNull("auth")) request.put("auth", route.get("auth").asText());
             else request.putNull("auth");
             if (body != null) {
+                // The Tool Host's broker checks the content type against the route and sends it upstream.
+                if (contentType != null) request.put("contentType", contentType);
                 boolean json = contentType != null && (contentType.equals("application/json") || contentType.endsWith("+json"));
                 if (json) {
                     try {
@@ -361,6 +363,8 @@ final class RouteClient implements HttpClient {
             if (reply == null) {
                 throw refused("Test mode: no recorded exchange answers " + method + " on route " + routeId + " with variables " + vars);
             }
+            // The Tool Host's broker refuses a call it will not send, with its reason (plan.md §11.8).
+            if (reply.hasNonNull("refused")) throw refused(reply.get("refused").asText());
             String failure = reply.path("failure").asText("");
             switch (failure) {
                 case "" -> { }
