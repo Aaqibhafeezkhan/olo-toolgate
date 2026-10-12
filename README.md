@@ -228,6 +228,14 @@ system.info
 web.search        # after user configures a provider
 ```
 
+## Build your own tools
+
+Write a tool once with the Tool SDK and run it as a plain MCP server or under ToolGate
+governance, from the same package. [TOOL-SDK-GUIDE.md](TOOL-SDK-GUIDE.md) walks through it end
+to end: create a project with `toolgate init`, declare what the tool needs, test it, pack it,
+and deploy it to a Tool Host. The same guide ships in the SDK's API jar and prints with
+`toolgate guide`.
+
 ## A different kind of Marketplace
 
 Community members can publish:

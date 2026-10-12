@@ -17,6 +17,7 @@ Project commands (run in a tool project, or name its directory):
                                                   Build and serve the tools as an MCP server (stdio by default)
   toolgate check [<dir>]                          Compile, run the tests and every example
   toolgate pack [<dir>] [-o <file.tgpkg>]         Build the package and validate it
+  toolgate guide                                  Print the guide to building tools with the SDK
 
 Package commands:
   toolgate pack <staging-dir> [-o <file.tgpkg>]   Build a package from a staging directory
@@ -154,6 +155,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
     match (command, rest) {
         ("--version" | "version", []) => println!("toolgate {}", env!("CARGO_PKG_VERSION")),
         ("--help" | "help", []) => println!("{USAGE}"),
+        ("guide", []) => print!("{}", toolgate_cli::GUIDE),
         ("init", rest) => {
             let p = Parsed::new(
                 rest,
