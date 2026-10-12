@@ -104,6 +104,68 @@ fn input(text: &str, mode: &str) -> LocalToolInput {
         arguments: serde_json::from_value(json!({"text":text,"mode":mode})).unwrap(),
     }
 }
+#[cfg(unix)]
+#[tokio::test]
+async fn cold_engine_startup_preserves_limits_and_capabilities() {
+    use olo_toolgate_client::execution::engine::DockerEngine;
+    use std::os::unix::fs::PermissionsExt;
+    struct Directory(PathBuf);
+    impl Drop for Directory {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+    #[cfg(target_os = "macos")]
+    let base = PathBuf::from("/private/tmp");
+    #[cfg(not(target_os = "macos"))]
+    let base = std::env::temp_dir();
+    let directory = Directory(base.join(format!(
+        "toolgate-engine-{}",
+        olo_toolgate_client::identity::nonce().unwrap()
+    )));
+    let _custody = olo_toolgate_client::storage::ProtectedStore::open(directory.0.clone()).unwrap();
+    let binary = directory.0.join("docker-fixture");
+    let capabilities = r#"{"OSType":"linux","MemoryLimit":true,"SwapLimit":true,"PidsLimit":true,"CpuCfsQuota":true,"SecurityOptions":["name=seccomp,profile=builtin"]}"#;
+    // A healthy engine's first metadata query must survive a cold startup over 3s.
+    std::fs::write(
+        &binary,
+        format!("#!/bin/sh\n/bin/sleep 4\n/bin/printf '%s\\n' '{capabilities}'\n"),
+    )
+    .unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let engine = DockerEngine::new(
+        binary.clone(),
+        "unix:///var/run/docker.sock".into(),
+        directory.0.join("state"),
+    )
+    .unwrap();
+    engine.check().await.unwrap();
+    // Startup headroom must never turn a missing mandatory limit into readiness.
+    let unsupported = capabilities.replace("\"SwapLimit\":true", "\"SwapLimit\":false");
+    std::fs::write(
+        &binary,
+        format!("#!/bin/sh\n/bin/printf '%s\\n' '{unsupported}'\n"),
+    )
+    .unwrap();
+    assert_eq!(engine.check().await.unwrap_err(), Failure::Unsupported);
+    // Container creation is setup: a 4s cold create must not spend the 1s tool budget.
+    std::fs::write(
+        &binary,
+        "#!/bin/sh\ncase \"$5\" in\ncreate) /bin/sleep 4 ;;\nstart) /bin/printf 'ready\\n' ;;\nrm) exit 0 ;;\n*) exit 1 ;;\nesac\n",
+    )
+    .unwrap();
+    let limits = LocalRuntimeLimits {
+        timeout_ms: 1000,
+        memory_mi_b: 128,
+        max_input_bytes: 4096,
+        max_output_bytes: 4096,
+    };
+    let output = engine
+        .run("sha256:fixture", &["/fixture".into()], b"", &limits)
+        .await
+        .unwrap();
+    assert_eq!(output.stdout, b"ready\n");
+}
 #[test]
 fn fixed_adapter_vectors_never_interpolate_input() {
     for kind in [
@@ -219,6 +281,9 @@ fn protocol_binding_and_malformed_outputs_reject() {
 #[tokio::test]
 #[ignore = "requires tools/client/runtime_check.py real Docker fixture provisioning"]
 async fn real_managed_runtime_security_boundary() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
     let images: BTreeMap<String, serde_json::Value> = serde_json::from_str(
         &std::env::var("TOOLGATE_RUNTIME_TEST_IMAGES").expect("real image evidence required"),
     )
@@ -297,9 +362,10 @@ async fn real_managed_runtime_security_boundary() {
         }
         let mut manager = Manager::new(settings.clone(), policy.clone()).unwrap();
         assert!(!manager.health().ready);
+        let health = manager.prepare().await.unwrap();
         assert!(
-            manager.prepare().await.unwrap().ready,
-            "runtime {kind:?} version/sandbox self-test failed"
+            health.ready,
+            "runtime {kind:?} version/sandbox self-test failed: {health:?}"
         );
         let payload = "'; $(touch /escape) & | > < --eval \"\\ unicode-π";
         let output = manager

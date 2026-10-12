@@ -14,6 +14,11 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
+// Docker info/inspect can include cold CLI plugin discovery on native runners.
+// Keep metadata bounded separately from the tool's execution and output limits.
+const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
+pub(super) const CONTAINER_CREATE_TIMEOUT: Duration = Duration::from_secs(10);
+
 #[derive(Clone)]
 pub struct DockerEngine {
     pub(crate) binary: PathBuf,
@@ -196,9 +201,12 @@ impl DockerEngine {
             Ok(Captured { stdout, stderr })
         })
         .await
-        .map_err(|_| Failure::Expired)?;
-        if result.is_err() {
+        .unwrap_or(Err(Failure::Expired));
+        if let Err(failure) = result {
             let _ = child.kill().await;
+            // The command's name and failure class are safe; arguments and arbitrary
+            // engine/tool output can contain private data and stay redacted.
+            tracing::warn!(event="runtime_engine_command",operation=args.first().map(String::as_str).unwrap_or("unknown"),error=?failure);
         }
         result
     }
@@ -208,7 +216,7 @@ impl DockerEngine {
             .capture(
                 &strings(&["info", "--format", "{{json .}}"]),
                 b"",
-                Duration::from_secs(3),
+                METADATA_TIMEOUT,
                 65536,
             )
             .await?;
@@ -232,7 +240,7 @@ impl DockerEngine {
             .capture(
                 &strings(&["image", "inspect", image, "--format", "{{json .}}"]),
                 b"",
-                Duration::from_secs(3),
+                METADATA_TIMEOUT,
                 65536,
             )
             .await
@@ -386,7 +394,7 @@ impl DockerEngine {
         ]);
         args.extend_from_slice(&command[1..]);
         let result = async {
-            self.capture(&args, b"", Duration::from_secs(3), 4096)
+            self.capture(&args, b"", CONTAINER_CREATE_TIMEOUT, 4096)
                 .await?;
             self.capture(
                 &strings(&["start", "--attach", "--interactive", &name]),

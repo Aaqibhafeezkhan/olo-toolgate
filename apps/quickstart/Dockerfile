@@ -4,7 +4,7 @@
 ARG CONTROL_IMAGE=olo-toolgate-control:module11
 FROM rust:1.94.1-alpine@sha256:77237dd363a0b127bb5ef532c2d64c0deb380b738e43a9c4bdac73398d6d0a08 AS rust-build
 WORKDIR /src
-COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION ./
+COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
 COPY packages/contracts/tools packages/contracts/tools
 COPY apps/gateway apps/gateway

@@ -395,7 +395,8 @@ impl Manager {
             })
             .await?;
         let deadline = permit_deadline.unwrap_or(valid_until).min(valid_until);
-        if crate::now().saturating_add(tool.limits.timeout_ms + 3500) >= deadline {
+        let startup_ms = engine::CONTAINER_CREATE_TIMEOUT.as_millis() as u64 + 500;
+        if crate::now().saturating_add(tool.limits.timeout_ms + startup_ms) >= deadline {
             return Err(Failure::Expired);
         }
         let command = adapters::invocation_arguments(&runtime.kind, &tool)?;

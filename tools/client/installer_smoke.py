@@ -17,6 +17,17 @@ from package import ROOT
 def run(arguments):return subprocess.run(arguments,check=True,capture_output=True,text=True)
 
 
+def windows_install(installer, server=None):
+    with tempfile.TemporaryDirectory(prefix='toolgate-installer-log-') as temporary:
+        log=Path(temporary)/'setup.log'
+        arguments=[str(installer),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG='+str(log)]
+        if server is not None:arguments.append('/SERVER='+server)
+        try:return run(arguments)
+        except subprocess.CalledProcessError:
+            if log.is_file():print(log.read_text(encoding='utf-8-sig',errors='replace'),flush=True)
+            raise
+
+
 def check(target):
     if os.environ.get('GITHUB_ACTIONS')!='true':raise RuntimeError('Disposable native CI only')
     system=platform.system();suffix={'Windows':'setup.exe','Darwin':'dmg','Linux':'run'}[system]
@@ -29,8 +40,9 @@ def check(target):
         if system=='Windows':
             run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
                  '-STA','-File',str(ROOT/'tools/client/tray_status_test.ps1')])
-            # A fresh install keeps the HTTPS default without Chrome or a console lookup.
-            run([str(installer),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'])
+            # Disposable runners have no local gateway/CA for the localhost default.
+            # Use the same remote HTTPS fixture as the other native service proofs.
+            windows_install(installer,'https://control.example.invalid')
             installed=True
         elif system=='Linux':
             run(['/bin/sh',str(installer),'--verify'])
@@ -61,7 +73,7 @@ def check(target):
         if system=='Windows':
             import winreg
             config=Path(r'C:\ProgramData\OLO\ToolGate\client.json')
-            if json.loads(config.read_text())['serverUrl']!='https://localhost:18450':raise ValueError('Installer HTTPS default was not stored')
+            if json.loads(config.read_text())['serverUrl']!='https://control.example.invalid':raise ValueError('Installer HTTPS gateway was not stored')
             state=config.parent/'state'
             device_key_digest=hashlib.sha256((state/'device-key').read_bytes()).hexdigest()
             # Configured anonymous web downloads still work without a URL argument.
@@ -69,8 +81,8 @@ def check(target):
             with tempfile.TemporaryDirectory(prefix='toolgate-configured-') as temporary:
                 configured=Path(temporary)/f'olo-toolgate-client-{target}--{hint}.setup.exe'
                 shutil.copyfile(installer,configured)
-                run([str(configured),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'])
-            run([str(installer),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'])
+                windows_install(configured)
+            windows_install(installer)
             if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Repair changed the device key')
             run([str(binary),'configure','--server','https://second.example.invalid'])
             if json.loads(config.read_text())['serverUrl']!='https://second.example.invalid':raise ValueError('Gateway switch was not stored')

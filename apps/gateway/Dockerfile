@@ -4,7 +4,7 @@ FROM rust:1.94.1-alpine@sha256:77237dd363a0b127bb5ef532c2d64c0deb380b738e43a9c4b
 WORKDIR /src
 ARG VERSION
 ARG TARGETARCH
-COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION ./
+COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
 COPY apps/gateway/Cargo.toml apps/gateway/Cargo.toml
 COPY apps/gateway/src apps/gateway/src
