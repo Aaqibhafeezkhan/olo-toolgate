@@ -1,190 +1,286 @@
 # Implementation prompt: ToolGate Marketplace v1
 
-Give this whole file to the implementing agent. The normative design is [design.md](design.md) (version 1.1). This prompt adds three things: **where the code lives**, **how it stays separable**, and **seeding the example packages at bring-up**. Where this prompt and design.md differ, this prompt wins.
+Give this whole file to the implementing agent.
+
+**Normative design:** [design.md](design.md) **version 1.2, frozen at commit `18776bbe04df26eacc2c5026e1f4defb6389da3c`** on `olo-labs/olo-toolgate` (`marketplace/docs/design.md`). Read that exact revision (`git show 18776bbe:marketplace/docs/design.md`). A later edit to design.md doesn't apply unless this line is updated to its commit. The single wire contract between the three PRs is `marketplace/docs/api.md`, written and frozen in PR 1 from that design revision.
+
+This prompt adds four things to the design:
+- where the code lives;
+- how it stays separable;
+- how builds resolve ToolGate;
+- seeding the example packages at bring-up.
+
+Where this prompt and the design differ, this prompt wins.
 
 ---
 
 ## Task
 
-Build ToolGate Marketplace v1 as specified in `design.md` 1.1, in the repository `olo-labs/olo-toolgate`, delivered as the three PRs in §0. The work has three parts:
+Build ToolGate Marketplace v1 as specified in design 1.2, in `olo-labs/olo-toolgate`, delivered as the **three PRs in §0**. The work has three parts:
 1. the Marketplace itself (Drupal, helper, seed, deployment) in **one isolated folder**;
 2. the small ToolGate-side changes in their normal places;
 3. seeding every example package as published at container bring-up.
 
 Before writing code, read:
-- `design.md` 1.1 and `design-review.md`;
+- design 1.2 and `design-review.md`;
 - `tool-sdk/cli/src/main.rs` and `package.rs`;
 - Control's `PackageArchive.java`, `ServerPackages.java`, `PackageResource.java`, `BodyLimit.java` and `ConsoleAssets.java`;
-- the v2 `package` and `descriptor` schemas under `packages/contracts/schemas/v2/`;
+- the v2 `package`, `descriptor` and `protocol` schemas under `packages/contracts/schemas/v2/`;
 - `examples/README.md` and `examples/run-java-examples.sh`.
 
-Confirm every interface you rely on. If something differs from the design, adapt to the code and say so in the PR.
+Confirm every interface you rely on. If something differs from the design, adapt to the code and record it in the PR body.
 
 ## 0. Delivery: exactly three pull requests
 
-The work ships as **three PRs, in this order**. Each PR stands on its own: it builds, its tests pass, and it leaves `main` working. Sections 1 to 4 below are the detail each PR refers to.
+The work ships as **three PRs, in this order**. Each PR stands on its own: it builds, its tests pass, and it leaves `main` working. No fourth PR: anything found late goes into the PR it belongs to. Every PR body records what differed from the design and the test evidence.
 
 ### PR 1: Helper (validation, signing, example packages)
 
-Branch `marketplace/pr1-helper`. Contains:
-- the `marketplace/` skeleton:
-  - `README.md`, `TOOLGATE_SRC` (`..`), `LICENSE`, `.gitignore`, `.editorconfig`;
-  - `scripts/isolation-check.sh` and `scripts/gen-signing-key.sh`;
-  - `ci/run.sh`, `.github/workflows/marketplace.yml`;
-  - the thin root workflow shim (§1);
-- `marketplace/docs/api.md`: the Marketplace public HTTP API and the release-record format from design.md §6.1 and §7, frozen here so PR 2 implements it and PR 3 consumes it;
-- `backend-libs/package-archive`: Control's `PackageArchive` extracted into a library, with Control switched to it and no behaviour change (§1.2 rule 3);
-- `marketplace/helper/`: Java service with `POST /inspect` (validate, extract listing, typed `requiredSettings` and the `compatibility` block, compute the API diff and enforce the SemVer bump against the previous version Drupal passes in, sign) and `GET /keys`. See design.md §6.2. Runs as non-root with bounded resources, an internal port only, and never executes package code;
-- `marketplace/seed/`: the seed image that builds every example package and writes `seed-manifest.json` (§3.2 step 1);
-- the `log-insights` source restored and the `.gitignore` rule narrowed (§3.2 step 6).
+Branch `marketplace/pr1-helper`. Work **in this order**, one commit or more per step, each step green before the next:
+
+1. **Regression baseline before moving any code.** Add a fixture set under `tests/fixtures/packages/`: valid packages, plus each malformed case from design §12 and Control-only rule cases such as a Java tool without exactly one jar. Add a Control test that records today's accept/reject decision and `packageDigest`/`descriptorSetDigest` for every fixture, and run it on the unchanged code.
+2. **Extract** Control's `PackageArchive` (and only what it needs) into `backend-libs/package-archive` and switch Control to it. The step 1 test must give identical results, and Control's existing CI stays green.
+3. **Differential validator test.** Run the library and `toolgate validate <file>` over the same fixtures. Record every case where they disagree. The library is authoritative (design §6, "Validators"). The CLI goes into the helper only as a reject-only extra check, and only for the cases where it rejects something the library accepts. If there are none, leave it out and say so in the PR.
+4. **`marketplace/` skeleton:**
+   - `README.md`, `LICENSE`, `.gitignore`, `.editorconfig`;
+   - `TOOLGATE_SRC` and the path resolution in §1.4;
+   - `scripts/isolation-check.sh` (§1.3), `scripts/init-signing-key.sh` (design §6.1);
+   - `ci/run.sh`, `.github/workflows/marketplace.yml`, plus the root workflow shim.
+   Add one line to each `apps/marketplace-*` scaffold README pointing at `marketplace/` (documentation, allowed by §1.2).
+5. **`marketplace/docs/api.md`.** The public HTTP API, the helper's internal API (`/inspect`, `/sign`, token) and the release-record format, written from design 1.2 and frozen here. PR 2 implements it and PR 3 consumes it.
+6. **`marketplace/helper/`**, a Java service that never executes package code. It runs as non-root with bounded resources, listens on an internal port only, and needs `MARKETPLACE_HELPER_TOKEN` on every request.
+   - `POST /inspect`: validate; extract the listing, typed `requiredSettings`, the `compatibility` block (design §6.2 A); compute the API diff and SemVer check against the previous version Drupal passes in (§6.2 B). **Never signs.**
+   - `POST /sign`: `{fileRef, packageDigest, authorizedPublisherSlug}`; re-validate, match the digest, match the id prefix to the slug, refuse reserved prefixes, then sign with `marketplace` = `MARKETPLACE_ID` (design §6, §6.1).
+   - `GET /keys`.
+   - It refuses to start without a signing key, and the key is never generated automatically.
+7. **`marketplace/seed/`**: the seed image and `expected-packages.json` (§3.2 steps 1 and 2).
+8. **`log-insights`**: recover the source, see §3.2 step 7.
 
 **Done when:**
-- the helper's tests pass: valid package, each malformed case from design.md §12, a directory never reaching `toolgate validate`, a Control-only rule (one jar per Java tool), a signature that verifies with the published key, and a tampered record that fails;
-- a test runs the helper over **every** package the seed image produces and every one validates and signs (18 today);
-- Control's existing CI is green after the extraction;
-- `isolation-check.sh` passes.
+- the regression baseline and differential test results are in the PR body;
+- the helper's tests pass:
+  - each malformed fixture is rejected;
+  - a directory never reaches `toolgate validate`;
+  - `/inspect` returns no signature;
+  - `/sign` without the token, with a mismatched slug, a reserved prefix or a changed digest is refused;
+  - a signature verifies with the published key, and a tampered record fails;
+- a test runs `/inspect` and `/sign` over **every** package the seed image produces and compares the result with `expected-packages.json` (§3.2);
+- `isolation-check.sh` passes in both layouts (§1.4).
 
 ### PR 2: Drupal (website, public API, seeding, deployment)
 
 Branch `marketplace/pr2-drupal`. Needs PR 1 merged. Contains:
-- `marketplace/drupal/`: Composer project and module `toolgate_marketplace`. It covers accounts, publisher profiles with prefix/slug ownership and reserved names, upload calling the helper, the signed `VALIDATED` draft, listing save, `AVAILABLE`/`DELISTED`, admin takedown, the public pages, and the public API and keys file exactly as `docs/api.md`;
-- the `compatibility` block and `apiChange` stored per version, shown on the website and returned by the API (design.md §6.2);
-- `drush toolgate-marketplace:seed` and the entrypoint that runs it (§3.2 steps 2 to 5);
-- `marketplace/deploy/`: `compose.yaml` (drupal, db, helper, seed, proxy), `.env.example` with `MARKETPLACE_BASE_URL=https://olo-labs.duckdns.org`, and a `Caddyfile`;
+- `marketplace/drupal/`: Composer project and module `toolgate_marketplace`, covering:
+  - accounts, and publisher profiles with an **immutable slug** chosen at creation (no UI or API path changes it) and reserved names;
+  - upload: `/inspect`, then the ownership and uniqueness checks from the **session's** publisher, then `/sign` (design §5.2);
+  - the signed `VALIDATED` draft, listing save, `AVAILABLE`/`DELISTED`, admin takedown;
+  - the public pages, and the public API and keys file exactly as `docs/api.md`;
+  - downloads: `max-age=300, must-revalidate`, delisted downloads `410 Gone` and a proxy cache purge on delist;
+  - the `compatibility` block and `apiChange` per version (design §6.2);
+  - an "About signing" page with the key fingerprint;
+- `drush toolgate-marketplace:seed` and the entrypoint that runs it (§3.2 steps 3 to 6);
+- `marketplace/deploy/`: `compose.yaml` (drupal, db, helper, seed, proxy, and a one-shot `init-key` profile), `.env.example` with `MARKETPLACE_BASE_URL=https://olo-labs.duckdns.org` and `MARKETPLACE_ID=olo-labs-marketplace`, a `Caddyfile`, and `scripts/compose.sh` (§1.4);
 - `scripts/split-simulation.sh` (§1.3).
 
 **Done when:**
-- a clean `docker compose up -d` shows all example packages AVAILABLE and signed, and a restart changes nothing (§3.3);
-- the Drupal tests from design.md §12 pass (ownership, XSS/Markdown, private drafts not downloadable, no private fields in the API);
+- after `scripts/compose.sh --profile init-key run --rm init-key` (once) and `scripts/compose.sh up -d` on a clean machine, every package in `expected-packages.json` is AVAILABLE and signed, and a restart changes nothing (§3.3);
+- the Drupal tests from design §12 pass, including:
+  - ownership from the session only;
+  - the slug can't be changed;
+  - XSS/Markdown;
+  - private drafts not downloadable;
+  - `410` after delist;
+  - no private fields in the API;
 - the split simulation builds and runs the stack from a standalone copy.
 
 ### PR 3: ToolGate admin (Control import and console)
 
-Branch `marketplace/pr3-toolgate-admin`. Needs PR 2 merged (its compose stack is the end-to-end test target). Only ToolGate-side code (§2); **nothing under `marketplace/` except** a new end-to-end job in `marketplace/ci/run.sh`, if needed. Contains:
-- the Control settings `TOOLGATE_CONTROL_MARKETPLACE_ENABLED`, `_BASE_URL` and `_KEYS` (environment-owned), plus Helm and Quickstart wiring;
-- Control endpoints for catalog, detail, the media proxy and import. The import follows design.md §8: same origin only, no unsafe redirects, size and time caps, signature check against pinned keys, `archiveSha256` and `packageDigest` checks, then the existing upload under Super Admin, audited with its source;
-- compatibility checks (design.md §6.2 A) in Control's **existing** upload and deploy path, so they cover manual uploads too: contracts major, descriptor generation, protocol overlap at upload; `minimumToolHostVersion` and runtime against target Tool Hosts at deploy. The console marks each Marketplace version compatible or not, with the reason, and offers Install for the newest compatible version;
+Branch `marketplace/pr3-toolgate-admin`. Needs PR 2 merged; its stack is the end-to-end test target. Only ToolGate-side code (§2). Inside `marketplace/` it may only add an end-to-end job to `marketplace/ci/run.sh`. Contains:
+- Control settings `TOOLGATE_CONTROL_MARKETPLACE_ENABLED`, `_ID`, `_BASE_URL` and `_KEYS` (environment-owned), with Helm and Quickstart wiring. Control logs and shows each pinned key's fingerprint and never fetches a key to trust it;
+- Control endpoints for catalog, detail, the media proxy and import. Import runs **every** step of design §8.3, "Import verification":
+  - not delisted;
+  - a known `schema`;
+  - a key pinned for this marketplace id, and a valid signature;
+  - `marketplace`, `packageId`, `version` and `publisherSlug` matching the request, the detail record and the validated manifest;
+  - `archiveSha256`, `packageDigest` and `descriptorSetDigest` matching what Control computes;
+  - then the existing upload under Super Admin, audited with marketplace id, package id, version, publisher slug and `keyId`;
+- compatibility checks (design §6.2 A) in Control's **existing** upload and deploy path, so they cover manual uploads too. The console marks each Marketplace version compatible or not, with the reason, and offers Install for the newest compatible version;
 - OpenAPI in `control-v1.yaml` and regenerated bindings;
-- the console's Marketplace view on the Server packages page: catalog, detail, publisher panel, images via the proxy with the CSP unchanged, Install, and the confirmation text from design.md §8.1.
+- the console's Marketplace view on the Server packages page: catalog, detail, publisher panel, images via the proxy with the CSP unchanged, Install, and the confirmation text from design §8.1.
 
 **Done when:**
-- unit tests cover forged signature, unknown key, digest mismatch, a non-allowlisted origin or redirect, an oversize package, a delisted version, an unknown release `schema`, and each incompatibility in design.md §6.2 A;
+- unit tests cover a negative case for **each** import verification step, plus a non-allowlisted origin or redirect, an oversize package, and each incompatibility in design §6.2 A;
 - an end-to-end test against the PR 2 stack imports `examples.notify` and `examples.health` into Quickstart, deploys them, enables and grants them, and calls them through `/mcp`;
 - `control.yml`, `quickstart.yml`, `preflight.yml` and the admin-ui tests are green.
 
-Every PR body records what differed from the design and the test evidence. No fourth PR: anything found late goes into the PR it belongs to.
-
 ## 1. Isolation: the Marketplace must be liftable into its own repository
 
-The plan is to move the Marketplace into a new repository soon. `olo-toolgate` will then be added to that new repository as a git submodule. Build it so that move is a `git mv` plus one path change, with no code edits.
+The Marketplace will soon move into a new repository, with `olo-toolgate` added to it as a git submodule at `toolgate/`. Build it so that move is a `git mv` plus a one-line change to `TOOLGATE_SRC`, with no code edits.
 
 ### 1.1 Layout
-
-All Marketplace code goes under a single top-level folder, `marketplace/`:
 
 ```text
 marketplace/
   README.md                 # what it is, how to run it, how it will be split out
-  TOOLGATE_SRC              # one line: path to the ToolGate source tree. Here: ".."  After the split: "toolgate"
+  TOOLGATE_SRC              # one line, relative to marketplace/: ".." here, "toolgate" after the split
   drupal/                   # Composer project, custom module toolgate_marketplace, theme, config/sync
   helper/                   # Java validation + signing service, its own Gradle build and wrapper
-  seed/                     # seed image: builds and collects the example packages; seed manifest
+  seed/                     # seed image, expected-packages.json
   deploy/
-    compose.yaml            # drupal, db, helper, seed, proxy
+    compose.yaml            # drupal, db, helper, seed, proxy, init-key profile
     .env.example
     Caddyfile
-  scripts/                  # gen-signing-key.sh, isolation-check.sh, split-simulation.sh
+  scripts/                  # toolgate-dir.sh, compose.sh, init-signing-key.sh, isolation-check.sh, split-simulation.sh
   ci/run.sh                 # everything CI runs for the Marketplace
-  docs/                     # design.md, api.md, deployment.md (copied from the project's plan files)
+  docs/                     # design, prompt and plans (already committed); api.md (PR 1), deployment.md (PR 2)
   .github/workflows/marketplace.yml   # the real workflow; it becomes active after the split
 ```
 
-- Do **not** put new Marketplace code in `apps/marketplace-drupal` or `apps/marketplace-worker`. Leave those scaffolds untouched; they belong to the longer-term modules 12 to 15. Add one line to each scaffold's README pointing at `marketplace/`.
+- Do **not** put new Marketplace code in `apps/marketplace-drupal` or `apps/marketplace-worker`. Leave those scaffolds as they are, apart from the one README line from PR 1 step 4.
 - Do not register anything under `marketplace/` in the root `settings.gradle.kts`, `Cargo.toml`, `package.json` or `Makefile`.
 
-### 1.2 Rules
+### 1.2 What is forbidden and what is allowed
 
-1. **Nothing outside `marketplace/` refers to anything inside it**, with one exception: a thin root workflow `.github/workflows/marketplace.yml`. It is path-filtered to `marketplace/**`, and its only step runs `marketplace/ci/run.sh`.
-2. **Everything inside `marketplace/` reaches ToolGate code only through `TOOLGATE_SRC`.** That covers Docker build contexts, Gradle composite builds and scripts. Never write `../apps/...` or `../../` anywhere. Compose reads it as `${TOOLGATE_SRC}` from `.env`, and scripts read the `TOOLGATE_SRC` file.
-3. **The helper depends on ToolGate as a library, never by copying code.** Extract Control's package validation (`PackageArchive` and what it needs) into a small library inside ToolGate, `backend-libs/package-archive`. Control and the helper both use it, so their checks can never drift apart. The helper's own `settings.gradle.kts` pulls it in with `includeBuild(<TOOLGATE_SRC>)` and substitutes the module.
-4. Drupal's PHP talks to the helper only over HTTP. It may use the generated PHP contract bindings from `<TOOLGATE_SRC>/packages/contracts/php` through a Composer path repository built from `TOOLGATE_SRC`.
-5. `marketplace/` has its own `LICENSE` (Apache-2.0, as the repo), `.gitignore`, `.editorconfig` and `README.md`. It must not rely on root-level dotfiles.
+The rule is about **dependencies**, not mentions.
+
+**Forbidden in both directions**, except through the resolved ToolGate path (§1.4):
+- **ToolGate → `marketplace/`:**
+  - any build, source or package dependency: Gradle `include`/`includeBuild`, Cargo, npm or Composer workspace or path entries, source imports, Docker build contexts or `COPY` sources, script `source`/exec paths, test fixtures read from `marketplace/`;
+  - any generated binding or schema that ToolGate code consumes from there.
+- **`marketplace/` → ToolGate:** any path to ToolGate files that doesn't go through the resolved ToolGate path: a literal `../`, `../../`, `apps/...`, and so on.
+
+**Allowed:**
+- documentation links and prose in either direction, such as the scaffold README lines and links from `docs/`;
+- ToolGate (PR 3) integrating with the Marketplace **over its public HTTP API** as specified in `api.md`. That is a network contract, not a file dependency;
+- the root workflow shim `.github/workflows/marketplace.yml`, path-filtered to `marketplace/**`, whose only step runs `marketplace/ci/run.sh`.
+
+Other rules:
+- **The helper depends on ToolGate as a library, never by copying code:** `backend-libs/package-archive`, pulled in with a Gradle composite build of the resolved ToolGate path.
+- Drupal reaches the helper only over HTTP. It may use the generated PHP bindings from `<TOOLGATE_DIR>/packages/contracts/php` through a Composer path repository resolved from the same path.
+- `marketplace/` has its own `LICENSE` (Apache-2.0), `.gitignore`, `.editorconfig` and `README.md`. It doesn't rely on root dotfiles.
 
 ### 1.3 Proving it
 
-- `scripts/isolation-check.sh` fails if a file outside `marketplace/` (other than the root workflow shim) mentions `marketplace/`, or if a file inside uses a `../` path that doesn't come from `TOOLGATE_SRC`.
+- `scripts/isolation-check.sh` parses build and package files rather than grepping prose:
+  - root and ToolGate Gradle settings and build files, `Cargo.toml`, `package.json` workspaces, Composer files, Dockerfiles and compose files, and shell scripts' `source`/exec and `cd` targets;
+  - it fails on any forbidden dependency from §1.2;
+  - Markdown, comments and HTTP URLs are ignored;
+  - it has its own small test cases: a forbidden `includeBuild` and a forbidden `COPY ../apps` must fail; a README link and an HTTP base URL must pass.
 - `scripts/split-simulation.sh` does a trial split:
-  1. copies `marketplace/` alone into a temporary directory;
-  2. clones this commit of `olo-toolgate` into `<tmp>/toolgate`, standing in for the submodule;
+  1. copies `marketplace/` alone into an empty temporary directory;
+  2. adds this commit of `olo-toolgate` there as a real git submodule at `toolgate/`;
   3. writes `toolgate` into `TOOLGATE_SRC`;
-  4. runs `docker compose build` and the helper's tests.
-- `ci/run.sh` runs both scripts.
+  4. runs `isolation-check.sh`, the helper's tests, `scripts/compose.sh build` and a smoke bring-up.
+- `ci/run.sh` runs the isolation check and the helper tests in the in-repo layout, and then the split simulation.
+
+### 1.4 One resolved ToolGate location, pinned
+
+- `marketplace/TOOLGATE_SRC` holds one path **relative to the `marketplace/` directory**: `..` in this repo, `toolgate` after the split.
+- `scripts/toolgate-dir.sh` is the **only** resolver. It reads that file, resolves it to an absolute, symlink-free path, checks that it is a ToolGate checkout (it must contain `VERSION`, `packages/contracts/VERSION` and `backend-libs/package-archive`), and prints it as `TOOLGATE_DIR`.
+  - Every consumer uses `TOOLGATE_DIR` and nothing else.
+  - **Scripts** source the resolver.
+  - **Gradle:** `helper/settings.gradle.kts` runs the resolver, or reads `TOOLGATE_DIR` from the environment that `ci/run.sh` and `compose.sh` set, and calls `includeBuild(TOOLGATE_DIR)`.
+  - **Docker Compose** is only ever run through `scripts/compose.sh`. It exports the absolute `TOOLGATE_DIR` and `MARKETPLACE_DIR`, then runs `docker compose -f "$MARKETPLACE_DIR/deploy/compose.yaml" --project-directory "$MARKETPLACE_DIR/deploy" "$@"`. Build contexts in `compose.yaml` are `${TOOLGATE_DIR}` (seed, helper) and `${MARKETPLACE_DIR}/drupal`.
+  - With absolute paths, nothing depends on Compose resolving relative paths against the compose file's directory. `compose.yaml` has no relative path that leaves `deploy/`.
+- **Pinned revision:**
+  - In this repo the ToolGate revision is the same commit as the Marketplace code.
+  - After the split it is the submodule commit recorded by git; `TOOLGATE_SRC` never names a branch.
+  - Images built by `compose.sh` get the label `io.ololabs.toolgate.revision=<git -C $TOOLGATE_DIR rev-parse HEAD>`, and the helper reports it at `GET /keys` and in its startup log.
+  - The split simulation uses exactly the commit under test.
+- Both layouts are built in CI (§1.3), so a path that works in only one of them fails the PR.
 
 ## 2. ToolGate-side changes (normal places in this repo)
 
-These stay in ToolGate after the split. They depend only on the Marketplace's public HTTP API, never on files under `marketplace/`.
+These stay in ToolGate after the split. Their only link to the Marketplace is its public HTTP API.
 
 | Change | Where |
 |---|---|
-| Extract `PackageArchive` into a library used by Control | `backend-libs/package-archive`, Control imports it; no behaviour change, existing Control tests stay green |
-| Settings `TOOLGATE_CONTROL_MARKETPLACE_ENABLED`, `_BASE_URL`, `_KEYS`, environment-owned | Control configuration, Helm values and schema, Quickstart compose |
-| Catalog, detail and media proxy plus import endpoint (fetch, verify signature, check digests, existing upload, audit with source) | Control adapter and application layer; OpenAPI in `packages/contracts/openapi/control-v1.yaml`; regenerate bindings |
-| Marketplace view and Install on the Server packages page | `apps/admin-ui/src/` |
+| Extract `PackageArchive` into a library used by Control, with the regression baseline first | `backend-libs/package-archive`, `tests/fixtures/packages/` (PR 1) |
+| Settings `TOOLGATE_CONTROL_MARKETPLACE_ENABLED`, `_ID`, `_BASE_URL`, `_KEYS`, environment-owned | Control configuration, Helm values and schema, Quickstart compose (PR 3) |
+| Catalog, detail, media proxy and import with the full verification list | Control adapter and application layer; OpenAPI in `packages/contracts/openapi/control-v1.yaml`; regenerated bindings (PR 3) |
+| Compatibility checks in the existing upload and deploy path | Control (PR 3) |
+| Marketplace view and Install on the Server packages page | `apps/admin-ui/src/` (PR 3) |
 
 ## 3. Seed every example package at bring-up
 
 ### 3.1 What
 
-On the first `docker compose up`, every Java example package in `<TOOLGATE_SRC>/examples/java-tools/*` and `<TOOLGATE_SRC>/examples/mocked-tools/*` appears on the Marketplace as **AVAILABLE**. That's the 18 packages from PR #89. Each is published by the reserved publisher `examples`, owned by a system account "OLO Labs". Each goes through the **same validate-and-sign path** as a user upload: no shortcut and no unsigned rows.
+On the first bring-up, every Java example package under `<TOOLGATE_DIR>/examples/java-tools/*` and `<TOOLGATE_DIR>/examples/mocked-tools/*` appears on the Marketplace as **AVAILABLE**.
+- Each is published by the reserved publisher `examples`, owned by a system account "OLO Labs".
+- Each goes through the **same `/inspect` → ownership check → `/sign` path** as a user upload. There is no shortcut and there are no unsigned rows.
+- The set of packages is **discovered**, not hard-coded, and checked against an explicit expected list.
 
 ### 3.2 How
 
-1. **Seed image** (`marketplace/seed/Dockerfile`). This is a multi-stage build with `${TOOLGATE_SRC}` as its context, done once at `docker compose build`, not at every start.
-   - Builder stage: a JDK 17 and Rust toolchain. It runs the same steps as `examples/run-java-examples.sh`:
-     - `./gradlew publishJavaSdkLocally`;
-     - `cargo build -p toolgate-cli`;
-     - in `examples/java-tools` and `examples/mocked-tools`, `./gradlew -PtoolgateSdkRepo=<root>/build/sdk-repo toolgatePackage`;
-     - `toolgate verify` on each result.
-   - Final stage (small): only `/seed/packages/*.tgpkg` plus `/seed/seed-manifest.json`. The manifest has one entry per package: file name, source folder, `README.md` text and category.
-   - Category mapping: `java-tools` → "Operations"; `mocked-tools` → "Demo (mocked data)".
-2. **`seed` compose service.** A one-shot container that copies `/seed` into a named volume and exits 0. Drupal `depends_on` it with `service_completed_successfully`.
-3. **Drupal seed command** `drush toolgate-marketplace:seed /seed`. The Drupal entrypoint runs it after site install and config import when `MARKETPLACE_SEED_EXAMPLES=true`, which is the default; production can turn it off. For each package it:
-   - ensures the system account and the `examples` publisher exist. Profile: display name "ToolGate Examples", organization "OLO Labs", website link to `https://github.com/olo-labs/olo-toolgate/tree/main/examples`;
-   - sends the file through the normal helper call (validate + sign);
+1. **Seed image** (`marketplace/seed/Dockerfile`), with build context `${TOOLGATE_DIR}`. It's built once by `compose.sh build`, not at every start.
+   - Builder stage: JDK 17 and Rust. It runs the same steps as `examples/run-java-examples.sh`: `./gradlew publishJavaSdkLocally`, `cargo build -p toolgate-cli`, then in both example builds `./gradlew -PtoolgateSdkRepo=<root>/build/sdk-repo toolgatePackage`, then `toolgate verify` on each result.
+   - **Discovery:** every subfolder of the two example builds that has a `build.gradle.kts` is an expected package source. The image writes `/seed/seed-manifest.json` with one entry per discovered folder: folder, package file or `null` if the build produced none, package id and version from the manifest, README text, and category (`java-tools` → "Operations", `mocked-tools` → "Demo (mocked data)").
+   - Final stage: only `/seed`.
+2. **`marketplace/seed/expected-packages.json`** (committed). The explicit list of package ids that must be published, 18 today, one per example folder.
+   - Adding an example means adding its id.
+   - Removing an id needs a reason in the commit message, and for `examples.logs` (log-insights) Rahul's approval.
+   - PR 1's test fails if discovery and this list differ in either direction, or if any listed id fails `/inspect` or `/sign`.
+3. **`seed` compose service.** One-shot: it copies `/seed` into a named volume and exits 0. Drupal `depends_on` it with `service_completed_successfully`.
+4. **Drupal seed command** `drush toolgate-marketplace:seed /seed`. The entrypoint runs it after site install and config import when `MARKETPLACE_SEED_EXAMPLES=true` (the default; production can turn it off). For each manifest entry it:
+   - ensures the system account and the `examples` publisher exist. Profile: display name "ToolGate Examples", organization "OLO Labs", website `https://github.com/olo-labs/olo-toolgate/tree/main/examples`;
+   - runs the normal upload path: `/inspect`, ownership and uniqueness for the `examples` publisher, `/sign`;
    - fills the listing:
-     - title: the manifest's name;
-     - summary: the first paragraph of the README;
+     - title: the manifest name;
+     - summary: the README's first paragraph;
      - description: the README as sanitized Markdown;
-     - category: from the manifest;
+     - category: as above;
      - tags: the tool-name prefixes plus `example`, and `mocked` for mocked-tools;
      - license: `Apache-2.0`;
      - repository URL: the example's GitHub folder;
    - marks the version AVAILABLE.
-4. **Idempotent.** On every later start:
-   - an existing id and version with the same `packageDigest` is skipped;
-   - the same id and version with a **different** digest is reported as an error and left as it is, because published versions are immutable;
-   - a newer version of an example is published as a new version.
-5. **Failures don't block bring-up.** A package that fails validation is logged with its reason, and the others continue. The command prints a summary (`seeded / skipped / failed`) and writes it to a status page that only admins can see. It exits non-zero only if the helper is unreachable.
-6. **Known gap.** `examples/java-tools/log-insights` has no Java source on main; most likely the root `.gitignore` rule `logs/` swallowed it. Fix that in this work: narrow the ignore rule and restore the source. If you can't restore it, the seed must report it as failed, never silently produce 17.
+5. **Idempotent.**
+   - The same id, version and `packageDigest` is skipped.
+   - The same id and version with a **different** digest is an error and the row is left as it is.
+   - A newer version is published as a new version.
+6. **Degraded, never silent.**
+   - At runtime, a package that fails is logged with its reason and the others continue.
+   - The command compares the published set with `expected-packages.json` and writes a seed status: `complete` or `degraded`, with the missing ids and reasons.
+   - A `degraded` status is shown:
+     - as a banner on the admin dashboard;
+     - on an admin-only seed status page;
+     - as `"seed": "degraded"` in the internal health endpoint the proxy and CI read.
+   - The command exits non-zero when the helper is unreachable. With `MARKETPLACE_SEED_STRICT=true`, which CI and release builds set, it also exits non-zero on `degraded`.
+7. **`log-insights`: recover, never re-create.**
+   - Known fact: commit `4164c0d` added only its README, build files and `toolgate.dev.example.json`.
+   - Confirm the cause before changing anything. Run `git check-ignore -v` on the expected source path, and check whether the root `.gitignore` rule `logs/` matches it.
+   - Restore the source **only** from a confirmed original: the checkout PR #89 was built from (the author's local `olo-toolgate` checkout or that session's workspace), with tests that pass and tools matching the PR #89 description (`logs.search`, `logs.levels`, `logs.errors`, `logs.tail`). Then narrow the ignore rule so it can't recur, and add a CI check that every example folder with a `build.gradle.kts` has sources under `src/main`.
+   - **Never write a replacement implementation.** If the original can't be found, stop and report it in the PR. `examples.logs` stays in `expected-packages.json`, so the release gate stays red until Rahul decides.
 
 ### 3.3 Acceptance for seeding
 
-- After `docker compose up -d` on a clean machine, the public catalog API reports every example package as AVAILABLE, each with a verifiable `.release.json`, and the homepage shows them under the two categories. The count must equal the number of example folders with a `build.gradle.kts` in the two builds (18 today).
-- Restarting the stack changes nothing (same rows, same digests, no duplicates).
-- A ToolGate Quickstart pointed at the Marketplace can import `examples.notify` and `examples.health`, verify their signatures, deploy them and call them through `/mcp`.
+- On a clean machine, `init-key` once and then `compose.sh up -d`: the seed status is `complete`, the public catalog lists exactly the ids in `expected-packages.json` as AVAILABLE, each with a `.release.json` that verifies with the published key, and the homepage shows them under the two categories.
+- Restarting the stack changes nothing: same rows, same digests, no duplicates, and the key unchanged.
+- A ToolGate Quickstart configured with `TOOLGATE_CONTROL_MARKETPLACE_ID`, `_BASE_URL` and the pinned key (fingerprint checked) imports `examples.notify` and `examples.health`, deploys them and calls them through `/mcp`.
+- **Release gate:** `ci/run.sh` with `MARKETPLACE_SEED_STRICT=true` fails when any expected package is missing.
 
 ## 4. Everything else
 
-Implement the rest of `design.md` 1.1 as written:
-- publisher profiles, upload, the signed `VALIDATED` draft, listing save, `AVAILABLE`/`DELISTED`;
-- the public API and keys file;
-- security baseline, error handling and tests;
+Implement the rest of design 1.2 as written:
+- publisher profiles with an immutable slug;
+- upload, `/inspect` and `/sign`, the signed `VALIDATED` draft, listing save, `AVAILABLE`/`DELISTED`;
+- the public API, caching and `410` rules, the keys file and fingerprint;
+- compatibility;
+- the security baseline, error handling and tests;
 - the phased order in §13.
 
-Generate the signing key with `scripts/gen-signing-key.sh` into a Docker secret, never into Git. The base URL is `MARKETPLACE_BASE_URL=https://olo-labs.duckdns.org` and must work unchanged when it is switched to the production domain.
+Key handling follows design §6.1:
+- the key is created only by the explicit `init-key` step, which refuses to overwrite;
+- it is stored in a secret volume mounted only into the helper, outside Drupal's volumes and backups, and never in Git;
+- it has a separate documented backup procedure.
+
+`MARKETPLACE_BASE_URL` (`https://olo-labs.duckdns.org` today) can change without touching signatures, because releases sign `MARKETPLACE_ID`.
 
 ## 5. Deliverable
 
 - Exactly three PRs as in §0.
-- The PR body states every interface that differed from the design, what `split-simulation.sh` printed, and the seed summary from a clean bring-up.
-- `ci/run.sh`, the isolation check, the split simulation, Control's and the console's existing CI, and the new tests all pass before the PR is marked ready.
+- Each PR body states:
+  - every interface that differed from design 1.2;
+  - the regression-baseline and differential-validator results (PR 1);
+  - what `split-simulation.sh` printed (PR 2);
+  - the seed status from a clean bring-up (PR 2).
+- `ci/run.sh` (both layouts), the isolation check, Control's and the console's existing CI, and the new tests all pass before a PR is marked ready.
