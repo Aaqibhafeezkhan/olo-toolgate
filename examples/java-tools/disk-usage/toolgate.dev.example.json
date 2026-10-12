@@ -1,0 +1,11 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {
+    "AllowedRoots": "/var,/opt/app"
+  },
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}

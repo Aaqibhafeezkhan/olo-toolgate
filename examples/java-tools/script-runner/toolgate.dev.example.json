@@ -1,0 +1,12 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {
+    "ScriptsDir": "C:\\ops\\scripts",
+    "AllowedScripts": "nightly-report.bat,restart-service.ps1"
+  },
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}

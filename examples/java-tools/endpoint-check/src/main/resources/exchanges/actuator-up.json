@@ -1,0 +1,6 @@
+[
+  {
+    "request": { "route": "health.two", "variables": { "a": "actuator", "b": "health" } },
+    "response": { "status": 200, "body": { "status": "UP", "components": { "db": { "status": "UP" } } } }
+  }
+]
