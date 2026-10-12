@@ -14,7 +14,9 @@ use axum::{
     Json,
 };
 use base64::Engine;
-use olo_toolgate_contracts::v2::RequestContext;
+use olo_toolgate_contracts::v2::{
+    Dispatch, InvocationOutcome, PermitReservationRequest, RequestContext,
+};
 use olo_toolgate_contracts::{
     AuthorizationRequest, EnterpriseInvocationState, ErrorCode, RemoteToolState,
     RemoteToolSubmission,
@@ -320,6 +322,38 @@ async fn tools_call(
     if expires <= now.saturating_add(2000) {
         return Err(error(ErrorCode::Timeout, request_id));
     }
+    let device = outcome.invocation.evaluation.context.device_id.clone();
+    if outcome.invocation.state == EnterpriseInvocationState::Queued {
+        if let Some(url) = s.tool_hosts.url(&device) {
+            let reservation = PermitReservationRequest {
+                invocation_id: outcome.invocation.id.clone(),
+                audience: device.clone(),
+                attempt: 1,
+                arguments: Some(request.arguments.clone()),
+            };
+            match relay.permit(&reservation).await {
+                // Control placed the call on a Tool Host it does not run there: relay it.
+                Err(ErrorCode::Conflict) => {}
+                Err(code) => {
+                    return Err(rpc_error(
+                        status(&code),
+                        id.clone(),
+                        -32000,
+                        "Tool permit refused",
+                        json!({"code":code}),
+                    ))
+                }
+                Ok(permit) => {
+                    let dispatch = Dispatch {
+                        permit,
+                        arguments: request.arguments.clone(),
+                    };
+                    return host_result(s, url, &dispatch, &outcome.invocation.id, expires, id)
+                        .await;
+                }
+            }
+        }
+    }
     let submission = RemoteToolSubmission {
         context: context.clone(),
         invocation_id: outcome.invocation.id,
@@ -381,6 +415,55 @@ async fn tools_call(
                 json!({"code":code}),
             )
         })?;
+    }
+}
+
+/// Runs a permitted call on its Tool Host and turns the host's result into an MCP tool result.
+async fn host_result(
+    s: &AppState,
+    url: &str,
+    dispatch: &Dispatch,
+    invocation_id: &str,
+    deadline: u64,
+    id: &Value,
+) -> Result<Value, Response> {
+    use crate::toolhost::Dispatched;
+    let failed = |message: &'static str, data: Value| {
+        rpc_error(StatusCode::OK, id.clone(), -32000, message, data)
+    };
+    match s
+        .tool_hosts
+        .dispatch(url, dispatch, invocation_id, deadline)
+        .await
+    {
+        Err(code) => Err(rpc_error(
+            status(&code),
+            id.clone(),
+            -32000,
+            "Tool Host unavailable",
+            json!({"code":code,"requestId":invocation_id}),
+        )),
+        Ok(Dispatched::Refused(reason)) => Err(failed(
+            "Tool Host refused the call",
+            json!({"code":ErrorCode::DependencyUnavailable,"reason":reason,"requestId":invocation_id}),
+        )),
+        Ok(Dispatched::Finished(message)) => match (message.outcome, message.result) {
+            (InvocationOutcome::Completed, Some(frame)) => {
+                let mut result = json!({"content":frame.content,"isError":frame.is_error});
+                if let Some(structured) = frame.structured_content {
+                    result["structuredContent"] = json!(structured);
+                }
+                if let Some(error) = frame.error {
+                    result["_meta"] = json!({"io.ololabs.toolgate/error":error});
+                }
+                Ok(result)
+            }
+            (outcome, frame) => Err(failed(
+                "Tool execution failed",
+                json!({"code":ErrorCode::DependencyUnavailable,"outcome":outcome,
+                    "error":frame.and_then(|f| f.error),"requestId":invocation_id}),
+            )),
+        },
     }
 }
 

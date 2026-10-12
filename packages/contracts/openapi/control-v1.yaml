@@ -7694,6 +7694,215 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseOperationalStatus
+  /api/control/v1/packages/uploads:
+    post:
+      operationId: uploadServerPackage
+      description: Super Admin only. Uploads a .tgpkg built by `toolgate pack`. Control applies the packager's archive
+        rules, CHECKSUMS, artifact and descriptor digests, stores the exact bytes and answers the verified version.
+        Uploading the same bytes again answers 200 with the stored version.
+      requestBody:
+        required: true
+        content:
+          application/vnd.ololabs.toolgate.package+zip:
+            schema:
+              type: string
+              contentMediaType: application/vnd.ololabs.toolgate.package+zip
+      responses:
+        '201':
+          description: Stored and verified
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '200':
+          description: Already stored
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '413':
+          description: Package too large
+        '415':
+          description: Not a package
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages:
+    get:
+      operationId: listServerPackageVersions
+      description: Administrators with read access to every tool. The newest uploaded package versions.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersionPage
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages/deployments:
+    get:
+      operationId: listServerPackageDeployments
+      description: Administrators with read access to every tool. The version each package id runs on Tool Hosts.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageDeploymentPage
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+    post:
+      operationId: deployServerPackage
+      description: Super Admin only. Makes a stored version the one Tool Hosts run for its package id, with the values of
+        its declared globals and destination host settings. Control writes the service profile, the globals document, a
+        disabled directory entry per new tool in the default Tool Group (an existing tool keeps its state and group) and the
+        tool's resource extractor. Each tool still needs a reviewed enable, a binding that allows the package digest and a
+        grant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/package.schema.json#/$defs/PackageDeploymentRequest
+      responses:
+        '200':
+          description: Deployed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageDeployment
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or not deployed
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/registrations:
+    post:
+      operationId: registerToolHost
+      security:
+      - deviceCertificate: []
+      description: An enrolled device registers as a Tool Host; hostId must equal its device id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostRegistration
+      responses:
+        '200':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/assignments:
+    get:
+      operationId: getToolHostAssignments
+      security:
+      - deviceCertificate: []
+      description: The tools a registered Tool Host runs and the deployments whose content it fetches by digest.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/ToolHostAssignments
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/packages/{digest}:
+    get:
+      operationId: getToolHostPackage
+      security:
+      - deviceCertificate: []
+      description: The exact bytes of a deployed package, for a registered Tool Host.
+      parameters:
+      - name: digest
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+      responses:
+        '200':
+          description: Package bytes
+          content:
+            application/vnd.ololabs.toolgate.package+zip:
+              schema:
+                type: string
+                contentMediaType: application/vnd.ololabs.toolgate.package+zip
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or not deployed
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/documents/{digest}:
+    get:
+      operationId: getToolHostDocument
+      security:
+      - deviceCertificate: []
+      description: A service profile or globals document a deployment pins, whose canonical digest is the path digest.
+      parameters:
+      - name: digest
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or not deployed
+        '503':
+          description: Dependency unavailable
 components:
   securitySchemes:
     adminAccessToken:

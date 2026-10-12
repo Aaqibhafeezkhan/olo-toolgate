@@ -1339,6 +1339,7 @@ dependencies = [
  "futures-util",
  "olo-toolgate-contracts",
  "rand 0.8.8",
+ "rcgen",
  "regex",
  "reqwest",
  "ring",

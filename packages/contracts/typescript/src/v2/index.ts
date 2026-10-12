@@ -409,6 +409,27 @@ export interface PackageCompatibility {
   readonly minimumToolHostVersion?: string;
   readonly minimumClientVersion?: string;
 }
+/** The package version Tool Hosts run for one package id, with the service profile and globals Control built for it. */
+export interface PackageDeployment {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest: string;
+  readonly revision: number;
+  readonly serviceProfileDigest: string;
+  readonly serviceProfileRevision: number;
+  readonly globalsDigest: string;
+  readonly toolIds: ReadonlyArray<string>;
+  readonly deployedAtUnixMs: number;
+}
+/** Current deployments, one per package id. */
+export interface PackageDeploymentPage {
+  readonly items: ReadonlyArray<PackageDeployment>;
+}
+/** Deploys an uploaded server package to the Tool Hosts with values for its declared globals. A destination's host is the global its hostSetting names. */
+export interface PackageDeploymentRequest {
+  readonly packageDigest: string;
+  readonly globals: Record<string, unknown>;
+}
 /** Enable exactly the reviewed digest with this binding. */
 export interface PackageEnableRequest {
   readonly packageDigest: string;
@@ -509,11 +530,12 @@ export interface PermitIdentity {
   readonly authorizationEpoch: number;
   readonly claims?: Record<string, unknown>;
 }
-/** v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4). */
+/** v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4). For a Tool Host the body carries the call's arguments: Control checks them against the invocation and pins their RFC 8785 digest in the permit. */
 export interface PermitReservationRequest {
   readonly invocationId: string;
   readonly audience: string;
   readonly attempt: number;
+  readonly arguments?: Record<string, unknown>;
 }
 /** Exact code and configuration the attempt may run. */
 export interface PermitTarget {
@@ -779,6 +801,22 @@ export interface ToolErrorBody {
   readonly message: string;
   readonly retryable: boolean;
   readonly data?: Record<string, unknown>;
+}
+/** One deployed tool a Tool Host runs. The host reports it in its check-in as a local tool, so Control places calls for it there. */
+export interface ToolHostAssignment {
+  readonly toolId: string;
+  readonly action: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly inputSchema: Record<string, unknown>;
+  readonly toolDigest: string;
+  readonly packageDigest: string;
+}
+/** What a registered Tool Host runs: its tools, and the deployments whose package, service profile and globals it fetches by digest. */
+export interface ToolHostAssignments {
+  readonly hostId: string;
+  readonly tools: ReadonlyArray<ToolHostAssignment>;
+  readonly deployments: ReadonlyArray<PackageDeployment>;
 }
 /** Tool Host registration with its workload identity (mTLS). */
 export interface ToolHostRegistration {

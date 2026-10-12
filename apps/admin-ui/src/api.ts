@@ -4,7 +4,7 @@ import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRoll
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
 import type { BuilderDraft, BuilderDraftPage, BuilderDraftRequest, BuilderTestPage, BuilderTestRequest, BuilderTestRecord, BuilderDefinition } from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage } from '@olo-labs/toolgate-contracts';
-import type {ControlServerSettings,ControlServerSettingsPatch} from '@olo-labs/toolgate-contracts/v2';
+import type {ControlServerSettings,ControlServerSettingsPatch,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
 
 /** Human-safe messages never render server text, exception bodies or credentials. */
@@ -70,19 +70,19 @@ export class ControlClient {
   }
   dispose(): void { this.token = ''; this.lifetime.abort(); }
 
-  private async send<T>(operation: Operation, options: { id?: string; query?: URLSearchParams; body?: unknown; revision?: number; key?: string; signal?: AbortSignal; contentType?: string } = {}): Promise<T> {
+  private async send<T>(operation: Operation, options: { id?: string; query?: URLSearchParams; body?: unknown; raw?: Blob; revision?: number; key?: string; signal?: AbortSignal; contentType?: string; timeoutMs?: number } = {}): Promise<T> {
     if (this.lifetime.signal.aborted) throw new DOMException('Session ended', 'AbortError');
-    const timeout = AbortSignal.timeout(15000);
+    const timeout = AbortSignal.timeout(options.timeoutMs ?? 15000);
     const signal = AbortSignal.any([this.lifetime.signal, timeout, ...(options.signal ? [options.signal] : [])]);
     const path = operation.path.replace('{id}', encodeURIComponent(options.id ?? ''));
     const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${this.token}` });
-    if (options.body !== undefined) headers.set('Content-Type', options.contentType ?? 'application/json');
+    if (options.body !== undefined || options.raw) headers.set('Content-Type', options.contentType ?? 'application/json');
     if (options.key) headers.set('Idempotency-Key', options.key);
     if (options.revision !== undefined) headers.set('If-Match', `"${options.revision}"`);
     let response: Response;
     try {
       response = await this.transport(path + (options.query ? `?${options.query}` : ''), {
-        method: operation.method, headers, body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        method: operation.method, headers, body: options.raw ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
         signal, credentials: 'omit', cache: 'no-store', redirect: 'error',
       });
       if (response.status === 401) { this.dispose(); this.onUnauthorized(); }
@@ -102,6 +102,11 @@ export class ControlClient {
     }
   }
 
+  serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}
+  serverDeployments(signal?:AbortSignal):Promise<PackageDeploymentPage>{return this.send(operations.listServerPackageDeployments,{signal});}
+  /** The exact .tgpkg bytes; Control verifies them before storing anything. */
+  uploadServerPackage(file:Blob):Promise<PackageVersion>{return this.send(operations.uploadServerPackage,{raw:file,contentType:'application/vnd.ololabs.toolgate.package+zip',timeoutMs:120000});}
+  deployServerPackage(body:PackageDeploymentRequest):Promise<PackageDeployment>{return this.send(operations.deployServerPackage,{body});}
   configurationChanges(after?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationPage>{const query=new URLSearchParams();if(after)query.set('after',after);return this.send(operations.listConfigurationChanges,{query,signal});}
   configurationChange(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.getConfigurationChange,{id,signal});}
   transitionConfiguration(id:string,body:import('@olo-labs/toolgate-contracts').EnterpriseConfigurationTransition,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.transitionConfigurationChange,{id,body,key});}

@@ -71,9 +71,15 @@ public class ContractCodec implements Codec {
      *  (`../v2/...`, such as the request context) pull in those definitions too. Every adopted name must be new or
      *  identical to its v1 definition apart from descriptions, since both share one flat namespace. */
     static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json");
+    /** Single v2 definitions Control serves from files whose other names collide with v1 (package, protocol). */
+    static final java.util.List<java.util.Map.Entry<String, String>> V2_NAMES = java.util.List.of(
+        java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
+        java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"),
+        java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
-        for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json")) {
+        for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",
+                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));
@@ -81,8 +87,10 @@ public class ContractCodec implements Codec {
         }
         var pending = new java.util.ArrayDeque<java.util.Map.Entry<String, String>>();
         for (var file : V2_FILES) v2.get(file).fieldNames().forEachRemaining(name -> pending.add(java.util.Map.entry(file, name)));
+        pending.addAll(V2_NAMES);
         for (var ref : crossVersion) { int split = ref.indexOf("#/$defs/"); pending.add(java.util.Map.entry(ref.substring("../v2/".length(), split), ref.substring(split + 8))); }
-        var adopted = new java.util.HashSet<String>();
+        var requested = new java.util.HashSet<String>(); pending.forEach(entry -> requested.add(entry.getValue()));
+        var adopted = new java.util.HashSet<String>(); var added = new java.util.ArrayList<String>(); var renamed = new java.util.HashSet<String>();
         while (!pending.isEmpty()) {
             var next = pending.poll(); var name = next.getValue();
             if (!adopted.add(name)) continue;
@@ -93,9 +101,19 @@ public class ContractCodec implements Codec {
                 pending.add(java.util.Map.entry(split <= 0 ? next.getKey() : ref.substring(0, split), ref.substring(split + 8)));
             });
             var local = localReferences(definition.deepCopy());
-            if (definitions.has(name) && !withoutDescriptions(definitions.get(name)).equals(withoutDescriptions(local))) throw new IllegalStateException("v2 definition " + name + " conflicts with v1");
+            if (definitions.has(name) && !withoutDescriptions(definitions.get(name)).equals(withoutDescriptions(local))) {
+                // A dependency that differs from its v1 namesake (v2 SemanticVersion allows build metadata) is kept apart.
+                if (requested.contains(name)) throw new IllegalStateException("v2 definition " + name + " conflicts with v1");
+                renamed.add(name); definitions.set("V2" + name, local); added.add("V2" + name); continue;
+            }
+            if (!definitions.has(name)) added.add(name);
             definitions.set(name, local);
         }
+        for (var name : added) renamedReferences(definitions.get(name), renamed);
+    }
+    private static void renamedReferences(JsonNode node, java.util.Set<String> renamed) {
+        if (node.isObject() && node.has("$ref")) { var name = node.get("$ref").asText().substring("#/$defs/".length()); if (renamed.contains(name)) ((ObjectNode) node).put("$ref", "#/$defs/V2" + name); }
+        node.elements().forEachRemaining(child -> renamedReferences(child, renamed));
     }
     private static JsonNode withoutDescriptions(JsonNode node) {
         var copy = node.deepCopy();

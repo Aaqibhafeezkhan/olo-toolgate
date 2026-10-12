@@ -135,6 +135,29 @@ public class PostgresStore implements Store {
                 if(s.executeUpdate()!=1)throw Failure.conflict();
             } catch(SQLException failure){throw Failure.unavailable();}
         }
+        public io.ololabs.toolgate.control.application.PackageStore packages() {
+            return new io.ololabs.toolgate.control.application.PackageStore() {
+                private String text(String sql,Object... parameters){try(var s=statement(sql,parameters);var rows=s.executeQuery()){return rows.next()?rows.getString(1):null;}catch(SQLException failure){throw Failure.unavailable();}}
+                private java.util.List<String> texts(String sql,Object... parameters){try(var s=statement(sql,parameters);var rows=s.executeQuery()){var values=new java.util.ArrayList<String>();while(rows.next())values.add(rows.getString(1));return java.util.List.copyOf(values);}catch(SQLException failure){throw Failure.unavailable();}}
+                private void write(String sql,Object... parameters){try(var s=statement(sql,parameters)){if(s.executeUpdate()!=1)throw Failure.conflict();}catch(SQLException failure){throw Failure.unavailable();}}
+                private java.util.List<Version> query(String suffix,Object... parameters){
+                    try(var s=statement("SELECT package_digest,package_id,version,uploaded_at,document FROM control_server_packages WHERE tenant_id=? "+suffix,parameters);var rows=s.executeQuery()){
+                        var values=new java.util.ArrayList<Version>();while(rows.next())values.add(new Version(rows.getString(1),rows.getString(2),rows.getString(3),rows.getLong(4),rows.getString(5)));return java.util.List.copyOf(values);
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public Version version(String digest){var rows=query("AND package_digest=?",digest);return rows.isEmpty()?null:rows.getFirst();}
+                public java.util.List<Version> versions(int limit){return query("ORDER BY uploaded_at DESC,package_digest LIMIT ?",limit);}
+                public byte[] content(String digest){try(var s=statement("SELECT content FROM control_server_packages WHERE tenant_id=? AND package_digest=?",digest);var rows=s.executeQuery()){return rows.next()?rows.getBytes(1):null;}catch(SQLException failure){throw Failure.unavailable();}}
+                public void saveVersion(Version v,byte[] content){write("INSERT INTO control_server_packages (tenant_id,package_digest,package_id,version,uploaded_at,document,content) VALUES (?,?,?,?,?,?,?)",v.digest(),v.packageId(),v.version(),v.uploadedAt(),v.document(),content);}
+                public String document(String digest){return text("SELECT document FROM control_server_documents WHERE tenant_id=? AND digest=?",digest);}
+                public void saveDocument(String digest,String document){if(document(digest)==null)write("INSERT INTO control_server_documents (tenant_id,digest,document) VALUES (?,?,?)",digest,document);}
+                public String deployment(String packageId){return text("SELECT document FROM control_server_deployments WHERE tenant_id=? AND package_id=?",packageId);}
+                public java.util.List<String> deployments(){return texts("SELECT document FROM control_server_deployments WHERE tenant_id=? ORDER BY package_id LIMIT 256");}
+                public void saveDeployment(String packageId,String document){write("INSERT INTO control_server_deployments (tenant_id,package_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,package_id) DO UPDATE SET document=excluded.document",packageId,document);}
+                public String toolHost(String deviceId){return text("SELECT document FROM control_tool_hosts WHERE tenant_id=? AND device_id=?",deviceId);}
+                public void saveToolHost(String deviceId,String document){write("INSERT INTO control_tool_hosts (tenant_id,device_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,device_id) DO UPDATE SET document=excluded.document",deviceId,document);}
+            };
+        }
         public McpStore mcp() {
             return new McpStore() {
                 private Row row(java.sql.ResultSet rows)throws SQLException{return new Row(rows.getString(1),rows.getString(2),rows.getString(3),rows.getLong(4),rows.getString(5),rows.getString(6),rows.getString(7));}

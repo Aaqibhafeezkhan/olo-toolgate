@@ -262,7 +262,7 @@
     },
     "PermitReservationRequest": {
       "type": "object",
-      "description": "v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4).",
+      "description": "v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4). For a Tool Host the body carries the call's arguments: Control checks them against the invocation and pins their RFC 8785 digest in the permit.",
       "additionalProperties": false,
       "properties": {
         "invocationId": {
@@ -275,6 +275,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 16
+        },
+        "arguments": {
+          "type": "object",
+          "description": "The call's arguments, required when the audience is a Tool Host.",
+          "maxProperties": 256
         }
       },
       "required": [

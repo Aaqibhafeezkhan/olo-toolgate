@@ -14,6 +14,7 @@ public interface Store {
         default FleetStore fleet() { throw Failure.unavailable(); }
         default BuilderStore builder() { throw Failure.unavailable(); }
         default McpStore mcp() { throw Failure.unavailable(); }
+        default PackageStore packages() { throw Failure.unavailable(); }
         Directory load();
         /** Immutable setup identity, separate from editable roles and identity bindings. */
         default String bootstrapAdminUserId() { return null; }

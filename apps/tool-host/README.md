@@ -1,6 +1,6 @@
 # Tool Host
 
-**Status:** Admission, the content store, the broker and the Java launcher are built (M0 part 13). Gateway dispatch, the Control endpoints for Tool Hosts and package upload come next; sandbox isolation (network namespace, container) comes after.
+**Status:** Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Sandbox isolation (network namespace, container) comes next.
 **Primary stack:** Rust
 
 ## Responsibility
@@ -41,8 +41,9 @@ One JSON file, refused at startup if anything is wrong.
 | `permitIssuer` | The `iss` a permit must carry. |
 | `storeDir` | The content store (below). |
 | `workDir` | Unpacked packages and one directory per running invocation. Keep the path short: it holds the broker's Unix sockets. |
-| `control` | `{url, clientCertificatePath?, clientKeyPath?, caCertificatePath?, developmentLoopbackHttp?}`. `url` is https, or http to loopback with `developmentLoopbackHttp`. The certificate and key are the host's workload identity. |
-| `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). |
+| `control` | `{url, clientCertificatePath?, clientKeyPath?, caCertificatePath?, developmentLoopbackHttp?}`. `url` is https, or http to loopback with `developmentLoopbackHttp`. The certificate and key are the host's workload identity; leave them out with `enrollment`. |
+| `enrollment` | `{identityDir, poolId?}`: enroll with Control as a device and fetch assignments (below). `identityDir` holds the device key, its certificate and the check-in sequence. |
+| `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). A bare name is looked up on the host's `PATH` at startup, because tool processes start with an empty environment. |
 | `limits` | `maxConcurrent`, `maxInputBytes`, `maxOutputBytes`, `syncDeadlineMs`, `memoryBytes`, `maxPermitWindowMs`. Each may only be lowered below the platform ceiling (plan.md §13.5). |
 | `developmentLoopbackHttp` | Lets the broker send plain http to loopback destinations. For development and tests only. |
 
@@ -102,9 +103,21 @@ It answers `{status, headers, bodyBase64}`, `{failure}` (`CONNECTION_REFUSED`, `
 
 Every decision is logged on the `toolgate::audit` target with the invocation, route, destination, method, status, bytes, duration, upstream request id and refusal reason. Bodies and credentials are never logged.
 
+## Enrollment
+
+With `enrollment` set, the host is a device of Control, so it sits in Control's device groups and placement sends it calls like any other device. With device id `hostId` it:
+
+1. Creates a P-256 key in `identityDir` and starts an enrollment (`POST /api/control/v1/endpoint/enrollments`) with a CSR, then polls until an administrator approves it in the console's enrollment list. Its log shows the user code.
+2. Presents the issued certificate on every later call. Control renews it on check-in; an expired one is recovered by enrolling the same key again, which needs no new approval.
+3. Registers as a Tool Host (`POST /api/control/v1/tool-hosts/registrations`).
+4. Fetches its assignments (`GET /api/control/v1/tool-hosts/assignments`) and puts each deployment's package (`GET .../tool-hosts/packages/{digest}`), service profile and globals (`GET .../tool-hosts/documents/{digest}`) into the content store, checking each against its digest.
+5. Checks in (`POST /api/control/v1/endpoint/check-in`) reporting the assigned tools whose content it holds, so Control places a call only on a host that can run it.
+
+Steps 3 to 5 repeat at the interval Control's check-in answers. If Control has deleted the device, the host starts a new enrollment.
+
 ## Control
 
-The host calls three endpoints under `/api/control/v1/access`, presenting its workload certificate:
+For each invocation the host calls three endpoints under `/api/control/v1/access`, presenting its workload certificate:
 
 | Call | Body | Answer |
 |---|---|---|
@@ -112,11 +125,11 @@ The host calls three endpoints under `/api/control/v1/access`, presenting its wo
 | `POST /secrets/deliver` | `{invocationId, name}`, with the fencing token in `Toolgate-Fencing-Token` | `{value}` |
 | `POST /effects/report` | `InvocationResultReport`, with the fencing token in `Toolgate-Fencing-Token` | any 2xx |
 
-Control's support for Tool Host certificates on these endpoints arrives with Gateway dispatch.
+Control takes these only from a registered Tool Host whose device id is the permit's audience.
 
 ## Not yet
 
-- Gateway dispatch, Tool Host registration, kill pushes and the mTLS dispatch listener.
+- Kill pushes and the mTLS dispatch listener for Gateways on other machines.
 - A result outbox: a report Control does not take is logged, not retried.
 - Sandbox isolation beyond a clean environment and its own directory: the network namespace, firewall and container tiers of plan.md §11.5 and §11.6.
 - Tunnel destinations, TCP, OAuth 2.0, token exchange and connection auth, streaming routes.

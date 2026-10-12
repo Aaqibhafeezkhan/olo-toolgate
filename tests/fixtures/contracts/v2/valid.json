@@ -538,6 +538,42 @@
     "contractsVersion": "1.0.0",
     "minimumToolHostVersion": "1.0.0"
   },
+  "PackageDeployment": {
+    "packageId": "acme.orders",
+    "version": "1.4.0",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "revision": 1,
+    "serviceProfileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "serviceProfileRevision": 1,
+    "globalsDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "toolIds": [
+      "acme.orders/orders.lookup"
+    ],
+    "deployedAtUnixMs": 1791000000000
+  },
+  "PackageDeploymentPage": {
+    "items": [
+      {
+        "packageId": "acme.orders",
+        "version": "1.4.0",
+        "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "revision": 1,
+        "serviceProfileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "serviceProfileRevision": 1,
+        "globalsDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "toolIds": [
+          "acme.orders/orders.lookup"
+        ],
+        "deployedAtUnixMs": 1791000000000
+      }
+    ]
+  },
+  "PackageDeploymentRequest": {
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "globals": {
+      "OrdersApiHost": "orders.example.com"
+    }
+  },
   "PackageEnableRequest": {
     "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "binding": {
@@ -1620,6 +1656,48 @@
     "code": "ORDER_NOT_FOUND",
     "message": "No such order",
     "retryable": false
+  },
+  "ToolHostAssignment": {
+    "toolId": "acme.orders/orders.lookup",
+    "action": "invoke",
+    "description": "Looks up one order.",
+    "enabled": true,
+    "inputSchema": {
+      "type": "object"
+    },
+    "toolDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "ToolHostAssignments": {
+    "hostId": "host-1",
+    "tools": [
+      {
+        "toolId": "acme.orders/orders.lookup",
+        "action": "invoke",
+        "description": "Looks up one order.",
+        "enabled": true,
+        "inputSchema": {
+          "type": "object"
+        },
+        "toolDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "deployments": [
+      {
+        "packageId": "acme.orders",
+        "version": "1.4.0",
+        "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "revision": 1,
+        "serviceProfileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "serviceProfileRevision": 1,
+        "globalsDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "toolIds": [
+          "acme.orders/orders.lookup"
+        ],
+        "deployedAtUnixMs": 1791000000000
+      }
+    ]
   },
   "ToolHostRegistration": {
     "hostId": "toolhost-eu-1-a",

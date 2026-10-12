@@ -14,9 +14,9 @@ COPY tool-sdk/cli tool-sdk/cli
 COPY tools/gateway/collect-notices.sh /src/collect-notices.sh
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-quickstart-musl,target=/src/target,sharing=locked \
-    find apps/gateway/src apps/endpoint-client/src packages/contracts/rust/src -type f -exec touch {} + && \
-    cargo build --release --locked -p olo-toolgate-gateway --bin olo-toolgate-gateway -p olo-toolgate-client --bin quickstart-tools && \
-    cp target/release/olo-toolgate-gateway target/release/quickstart-tools /usr/local/bin/ && \
+    find apps/gateway/src apps/endpoint-client/src apps/tool-host/src tool-sdk/cli/src packages/contracts/rust/src -type f -exec touch {} + && \
+    cargo build --release --locked -p olo-toolgate-gateway --bin olo-toolgate-gateway -p olo-toolgate-client --bin quickstart-tools -p olo-toolgate-tool-host --bin olo-toolgate-tool-host && \
+    cp target/release/olo-toolgate-gateway target/release/quickstart-tools target/release/olo-toolgate-tool-host /usr/local/bin/ && \
     sh /src/collect-notices.sh /licenses
 
 FROM ${CONTROL_IMAGE}
@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 python3
 RUN /opt/quickstart-python/bin/python -c "import glob,platform,zipfile; p=glob.glob('/app/lib/main/org.xerial.sqlite-jdbc-*.jar')[0]; z=zipfile.ZipFile(p); a={'x86_64':'x86_64','aarch64':'aarch64'}[platform.machine()]; open('/usr/local/lib/toolgate/libsqlitejdbc.so','wb').write(z.read('org/sqlite/native/Linux/'+a+'/libsqlitejdbc.so'))"
 COPY tools/quickstart/python_notices.py /opt/quickstart-python-notices.py
 RUN /opt/quickstart-python/bin/python /opt/quickstart-python-notices.py
-COPY --from=rust-build /usr/local/bin/olo-toolgate-gateway /usr/local/bin/quickstart-tools /usr/local/bin/
+COPY --from=rust-build /usr/local/bin/olo-toolgate-gateway /usr/local/bin/quickstart-tools /usr/local/bin/olo-toolgate-tool-host /usr/local/bin/
 COPY --from=rust-build /licenses /usr/share/licenses/olo-toolgate/quickstart-rust/
 COPY tools/enterprise/restore.py /opt/quickstart/enterprise_restore.py
 COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py VERSION /opt/quickstart/
@@ -38,7 +38,7 @@ COPY docs/getting-started/one-minute-quickstart.md docs/deployment/quickstart.md
 ARG VERSION
 ARG REVISION
 LABEL org.opencontainers.image.title="OLO ToolGate Quickstart" \
-      org.opencontainers.image.description="Single-node non-HA evaluation: Gateway, Control and console" \
+      org.opencontainers.image.description="Single-node non-HA evaluation: Gateway, Control, Tool Host and console" \
       org.opencontainers.image.source="https://github.com/olo-labs/olo-toolgate" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version=$VERSION \

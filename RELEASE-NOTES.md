@@ -13,6 +13,22 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Java server tools run end to end through `/mcp` (M0 part 14). Control takes a `.tgpkg` at
+  `POST /api/control/v1/packages/uploads` (Super Admin), applies the packager's archive rules,
+  CHECKSUMS and descriptor digests, and stores the exact bytes; `POST .../packages/deployments`
+  makes a version the one Tool Hosts run, with values for its globals and destination host
+  settings, writing the service profile, the globals document, a disabled directory entry per
+  new tool and its resource extractor. The Tool Host enrolls as a device (CSR, administrator
+  approval, renewal on check-in), registers, fetches its assignments and their content by
+  digest, and checks in with the tools it can run, so Control's placement sends it calls like
+  any device. The Gateway gains `toolHosts`: a call placed on one gets a permit from Control's
+  v2 reserve and is dispatched to the host; Control takes the host's v2 consume and result
+  report. The console gains a Server packages page, the quickstart image runs a Tool Host, and
+  `tools/quickstart/check.py` uploads and deploys the `toolgate init` starter and calls its
+  Java tool through the Gateway, then revokes its grants and checks it disappears. Deploying
+  adds new tools to the default Tool Group, a bare `runtimes.javaPath` is resolved on the host's
+  `PATH` at startup, and the quickstart proxy accepts configuration snapshots up to 2 MiB.
+
 - The Tool Host runs server tools from verified packages (M0 part 13). `apps/tool-host`
   admits a Gateway dispatch only with an RS256 invocation permit Control signed for that host
   (issuer, audience, admission window, single-use `jti`, arguments digest), finds the package,

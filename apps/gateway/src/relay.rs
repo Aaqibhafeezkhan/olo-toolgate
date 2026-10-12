@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Optional bounded Control relay. No agent bearer credential crosses this service boundary.
 use crate::validation::{strict_json, Contracts};
-use olo_toolgate_contracts::v2::RequestContext;
+use olo_toolgate_contracts::v2::{
+    PermitReservationRequest, RequestContext, SignedInvocationPermit,
+};
 use olo_toolgate_contracts::*;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -68,6 +70,14 @@ pub trait RelayPort: Send + Sync {
         &'a self,
         request: &'a EnterpriseReservationRequest,
     ) -> PortFuture<'a, Result<EnterpriseReservation, ErrorCode>>;
+    /// One permit for a call Control placed on a Tool Host. Conflict means it was placed
+    /// elsewhere, and the call goes through the relay.
+    fn permit<'a>(
+        &'a self,
+        _request: &'a PermitReservationRequest,
+    ) -> PortFuture<'a, Result<SignedInvocationPermit, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::Conflict) })
+    }
     fn ready(&self, now: u64) -> bool;
     fn health(&self) -> PortFuture<'_, Result<(), ErrorCode>>;
     fn catalog<'a>(
@@ -240,6 +250,16 @@ impl RelayPort for HttpRelay {
             "/api/control/v1/access/invocations/reserve",
             request,
             "EnterpriseReservation",
+        ))
+    }
+    fn permit<'a>(
+        &'a self,
+        request: &'a PermitReservationRequest,
+    ) -> PortFuture<'a, Result<SignedInvocationPermit, ErrorCode>> {
+        Box::pin(self.post(
+            "/api/control/v1/access/invocations/reserve",
+            request,
+            "SignedInvocationPermit",
         ))
     }
     fn ready(&self, now: u64) -> bool {

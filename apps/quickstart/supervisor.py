@@ -161,6 +161,10 @@ class LocalIdentity:
             return jwt(GROUPS, user, generation=record['generation'])
 
 
+# The Tool Host's device id: Control places server-tool calls on it, and the Gateway dispatches them there.
+TOOL_HOST='tool-host-local'
+
+
 def key(name):
     path = DATA/'keys'/f'{name}.pem'
     if not path.exists():
@@ -310,8 +314,15 @@ def configure():
                         'maxConnections':256,'requestsPerSecond':1000,'requestTimeoutMs':20000,
                         'connectionTimeoutMs':35000,'shutdownTimeoutMs':35000,'auditQueueCapacity':256},
               'control':{'url':'http://127.0.0.1:8082','tokenPath':'/data/run/machine-token',
-                         'developmentLoopbackHttp':True}}
+                         'developmentLoopbackHttp':True},
+              'toolHosts':[{'hostId':TOOL_HOST,'url':'http://127.0.0.1:8095'}]}
     atomic(DATA/'run/gateway.json',json.dumps(config))
+    # The Tool Host enrolls as a device like any client; an administrator approves it before it runs packages.
+    atomic(DATA/'run/tool-host.json',json.dumps(dict(hostId=TOOL_HOST,listen='127.0.0.1:8095',
+           permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
+           storeDir=str(DATA/'tool-host/store'),workDir=str(DATA/'tool-host/work'),
+           control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           enrollment=dict(identityDir=str(DATA/'state/tool-host')),runtimes=dict(javaPath='java'))))
     control_origin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443')
     gateway_origin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL',control_origin)
     tools=dict(hotfolder=dict(root='/data/hotfolder',maxFileBytes=65536,maxEntries=256,extensions=['txt','md','json','csv']),
@@ -491,7 +502,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if origin is not None and origin != 'http://'+host: raise PermissionError()
             if self.headers.get('Transfer-Encoding') or len(self.path)>2048 or '\\' in self.path or '..' in urllib.parse.unquote(self.path): raise ValueError()
             length = int(self.headers.get('Content-Length','0'))
-            if not 0<=length<=65536: raise ValueError()
+            # Packages and whole configuration snapshots are the large bodies; Control verifies and bounds them itself
+            # (a snapshot is at most 1 MiB of records, and deployed tools carry their descriptors).
+            target_path = urllib.parse.urlsplit(self.path).path if self.command=='POST' else ''
+            limit = 64*1024*1024 if target_path=='/api/control/v1/packages/uploads' else 2*1024*1024 if target_path in ('/api/control/v1/config/import','/api/control/v1/access/shadow') else 65536
+            if not 0<=length<=limit: raise ValueError()
             raw = self.rfile.read(length)
             if len(raw)!=length: raise ValueError()
             path = urllib.parse.urlsplit(self.path).path
@@ -640,6 +655,8 @@ def main():
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env))
             child_env['TOOLGATE_CLIENT_CONFIG']='/data/run/native.json'
             children.append(subprocess.Popen(['/usr/local/bin/quickstart-tools'],env=child_env))
+            host_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host.json')
+            children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=host_env))
             server = BoundedServer(('0.0.0.0',8080),Handler,ready_state)
             threading.Thread(target=server.serve_forever,daemon=True).start()
             renewed = time.monotonic(); boot = renewed
@@ -657,6 +674,7 @@ def main():
                     configure()
                     children[1] = subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env)
                     children[2] = subprocess.Popen(['/usr/local/bin/quickstart-tools'],env=child_env)
+                    children[3] = subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=host_env)
                     boot=now
         finally:
             ready_state.clear()
