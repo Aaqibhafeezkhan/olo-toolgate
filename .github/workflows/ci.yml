@@ -46,4 +46,5 @@ jobs:
       actions: read
       contents: write
       packages: write
+      pull-requests: read
     secrets: inherit
