@@ -17,6 +17,8 @@ An entry starts at a line with a timestamp (ISO 8601 such as `2026-10-12T09:00:0
 - Reads only files under `LogDir` (up to 3 levels deep) whose names match `LogFiles`. A named file must resolve inside the directory; links are not followed.
 - Each call reads at most `MaxScanMegabytes` of text and says when it stopped early. Files last modified before the window are skipped.
 - Results are capped (`limit`), and long lines are cut at 2000 characters.
+- A scan considers at most 1000 matching files; level buckets and error groups are also capped at 1000. Reaching a scan, text or aggregation bound sets `truncated`.
+- When a file exceeds the scan budget, `logs.tail` returns the last lines of the scanned prefix with `truncated: true`.
 
 ## Settings
 

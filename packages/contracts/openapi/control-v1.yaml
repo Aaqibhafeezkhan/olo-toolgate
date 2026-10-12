@@ -454,14 +454,26 @@ paths:
     get:
       operationId: listEndpointDevices
       description: Administrator lists all directory devices and unexpired pending
-        requests in their tenant, including internal Quickstart executors.
+        requests in their tenant, including internal Quickstart executors. Quickstart
+        supports an explicit deployment=true view using EndpointManagedDeviceDeploymentPage,
+        which adds optional public deployment records without changing the default response.
+      parameters:
+      - name: deployment
+        in: query
+        required: false
+        description: Opt in to public Docker display metadata on Quickstart. Standalone Control returns its normal device page.
+        schema:
+          type: boolean
+          default: false
       responses:
         '200':
           description: Success; no-store
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointManagedDevicePage
+                anyOf:
+                - $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointManagedDevicePage
+                - $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointManagedDeviceDeploymentPage
         '401':
           description: Direct TLS/identity required
         '403':

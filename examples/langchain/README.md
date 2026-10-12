@@ -156,6 +156,13 @@ Gateway and verifies the selected Linux device identity before running the task.
 Changed trust or device identity requires deployment again; execution never
 automatically adopts a new CA or replaces the agent credential.
 
+Deployment and execution also refresh the console's public Docker metadata.
+Clients identifies the built-in endpoint and direct/pull Tool Hosts as three
+execution services sharing the Quickstart container, plus the separate Linux
+endpoint container. Container IDs, deployment IPs and the actual Docker network
+ID come from `docker inspect`; enrolled device IDs retain their key-bound identity.
+Run `python manage.py sync-deployment` to refresh only this display information.
+
 The bootstrap/reviewer automation is an **explicit local evaluation fixture**.
 Scoped configuration uses distinct requester/reviewer identities and the real
 review transitions. Super Admin changes use the server's audited direct path.

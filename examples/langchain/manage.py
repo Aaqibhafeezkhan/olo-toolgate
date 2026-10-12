@@ -111,6 +111,39 @@ def gateway_url():
     return 'https://localhost:' + os.environ.get('TOOLGATE_TLS_PORT', '18451')
 
 
+def sync_deployment_metadata():
+    """Collect only public Docker facts; runtime device keys and peer addresses stay authoritative."""
+    result=subprocess.run(COMPOSE+['ps','-q','quickstart','linux-device'],capture_output=True,text=True,check=True,timeout=30,cwd=HERE)
+    ids=result.stdout.split()
+    if len(ids)!=2 or any(not re.fullmatch('[a-f0-9]{64}',value) for value in ids):
+        raise ValueError('Both example containers must be running to inspect their deployment')
+    result=subprocess.run(['docker','inspect',*ids],capture_output=True,text=True,check=True,timeout=30,cwd=HERE)
+    containers={item['Config']['Labels']['com.docker.compose.service']:item for item in json.loads(result.stdout)}
+    quickstart,endpoint=containers['quickstart'],containers['linux-device']
+    networks=set(quickstart['NetworkSettings']['Networks'])&set(endpoint['NetworkSettings']['Networks'])
+    if not networks:raise ValueError('Example containers have no shared deployment network')
+    network='toolgate-langchain_default' if 'toolgate-langchain_default' in networks else sorted(networks)[0]
+    def details(container,kind):
+        address=container['NetworkSettings']['Networks'][network]
+        return dict(executionKind=kind,containerId=container['Id'],containerName=container['Name'].lstrip('/'),
+                    systemName=container['Config']['Hostname'],networkId=address['NetworkID'],networkName=network,
+                    ipAddress=address['IPAddress'] or address['GlobalIPv6Address'])
+    local=json.loads(docker('quickstart',['/opt/quickstart-python/bin/python','-c',
+        "import json;from pathlib import Path;p=Path('/data/run');r={};"
+        "r.update({k:json.loads((p/n).read_text())[f] for k,n,f in "
+        "[('QUICKSTART_CLIENT','native.json','tools'),('TOOL_HOST_DIRECT','tool-host.json','hostId'),"
+        "('TOOL_HOST_PULL','tool-host-remote.json','hostId')] if (p/n).exists()});"
+        "r['QUICKSTART_CLIENT']=r['QUICKSTART_CLIENT']['deviceId'] if 'QUICKSTART_CLIENT' in r else None;print(json.dumps(r))"]))
+    records={device:details(quickstart,kind) for kind,device in local.items() if device}
+    records[linux_status()['deviceId']]=details(endpoint,'ENDPOINT_CLIENT')
+    document=dict(gatewaySystemName=quickstart['Config']['Hostname'],devices=records)
+    docker('quickstart',['/opt/quickstart-python/bin/python','-c',
+        "import sys,json;sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
+        "s.atomic(s.DATA/'run/deployment-metadata.json',json.dumps(json.load(sys.stdin)))"],json.dumps(document))
+    print('Recorded deployment: '+network+' ('+details(quickstart,'QUICKSTART_CLIENT')['networkId']+')')
+    return document
+
+
 def verify_deployment(target):
     """Reject stale local setup without adopting new trust or changing credentials."""
     remedy = 'Run deploy.bat' + (' -Win' if target == 'windows' else
@@ -395,6 +428,7 @@ def provision(args):
     print('Waiting for a fresh device check-in after the Gateway restart (up to 6 minutes for client retry backoff).', flush=True)
     wait_device(config, device, seen_after=reconnect_after, timeout=360)
     verify_discovery(selection, directory, args.target)
+    sync_deployment_metadata()
     print(f'Configured {selection["platform"]}: {device} in {DEVICE_GROUP}. Configuration applied through the Control API. Credentials expire in 24 hours.')
     print('Private runner credentials: ' + str(directory))
 
@@ -413,6 +447,7 @@ def main():
     sub.add_parser('status')
     verify = sub.add_parser('verify-deployment', help='Check saved trust and target before running the agent')
     verify.add_argument('--target', choices=['any', 'linux', 'windows'], default='any')
+    sub.add_parser('sync-deployment', help='Refresh public container and network details from Docker')
     args = parser.parse_args()
     STATE.mkdir(mode=0o700, exist_ok=True)
     if args.command == 'setup':
@@ -420,6 +455,8 @@ def main():
     elif args.command == 'verify-deployment':
         verify_deployment(args.target)
         print('Saved deployment matches the current Gateway trust and selected device.')
+    elif args.command == 'sync-deployment':
+        sync_deployment_metadata()
     else:
         print(json.dumps(linux_status(), indent=2))
 

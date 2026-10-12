@@ -180,6 +180,39 @@ class ExtractorConflictTests(unittest.TestCase):
             manage.check_extractors(config, self.selection())
 
 
+class DeploymentMetadataTests(unittest.TestCase):
+    def container(self,service,identity,ip):
+        return dict(Id=identity,Name='/toolgate-langchain-'+service+'-1',
+                    Config=dict(Hostname=service,Labels={'com.docker.compose.service':service},Env=['SECRET=must-not-export']),
+                    NetworkSettings=dict(Networks={'toolgate-langchain_default':dict(NetworkID='c'*64,IPAddress=ip,GlobalIPv6Address='')}))
+
+    def test_four_execution_identities_share_two_containers_and_one_actual_network(self):
+        containers=[self.container('quickstart','a'*64,'172.18.0.2'),self.container('linux-device','b'*64,'172.18.0.3')]
+        identities=dict(QUICKSTART_CLIENT='native-device',TOOL_HOST_DIRECT='tool-host-local',TOOL_HOST_PULL='tool-host-remote')
+        replies=[SimpleNamespace(stdout='a'*64+'\n'+'b'*64+'\n'),SimpleNamespace(stdout=json.dumps(containers))]
+        with patch.object(manage.subprocess,'run',side_effect=replies), \
+                patch.object(manage,'docker',side_effect=[json.dumps(identities),'']) as docker, \
+                patch.object(manage,'linux_status',return_value=dict(deviceId=LINUX)),contextlib.redirect_stdout(io.StringIO()):
+            document=manage.sync_deployment_metadata()
+        rows=document['devices']
+        self.assertEqual(set(rows),{'native-device','tool-host-local','tool-host-remote',LINUX})
+        self.assertEqual({row['containerId'] for row in rows.values()},{'a'*64,'b'*64})
+        self.assertEqual({row['networkId'] for row in rows.values()},{'c'*64})
+        self.assertEqual(rows['tool-host-local']['executionKind'],'TOOL_HOST_DIRECT')
+        self.assertEqual(rows['tool-host-remote']['executionKind'],'TOOL_HOST_PULL')
+        self.assertEqual(rows[LINUX]['ipAddress'],'172.18.0.3')
+        self.assertNotIn('SECRET',json.dumps(document))
+        self.assertEqual(json.loads(docker.call_args.args[2]),document)
+
+    def test_missing_shared_network_stops_before_export(self):
+        containers=[self.container('quickstart','a'*64,'172.18.0.2'),self.container('linux-device','b'*64,'172.18.0.3')]
+        containers[1]['NetworkSettings']['Networks']={}
+        with patch.object(manage.subprocess,'run',side_effect=[SimpleNamespace(stdout='a'*64+'\n'+'b'*64),SimpleNamespace(stdout=json.dumps(containers))]), \
+                patch.object(manage,'docker') as docker,self.assertRaisesRegex(ValueError,'shared deployment network'):
+            manage.sync_deployment_metadata()
+        docker.assert_not_called()
+
+
 class DeploymentTrustTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

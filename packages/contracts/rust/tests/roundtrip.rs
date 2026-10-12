@@ -19,6 +19,10 @@ fn shared_fixture_round_trips() {
         };
     }
     check!(
+        DeviceDeploymentMetadata,
+        DeviceDeploymentRecord,
+        DeviceExecutionKind,
+        EndpointManagedDeviceDeploymentPage,
         AdminSession,
         ArtifactDescriptor,
         AuthorizationRequest,

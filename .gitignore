@@ -41,6 +41,8 @@ quarantine/
 hotfolder/
 HotFolder/
 logs/
+# Java source packages named logs are code, not local log output.
+!**/src/**/logs/
 tmp/
 temp/
 coverage/

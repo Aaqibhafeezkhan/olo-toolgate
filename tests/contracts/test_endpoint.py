@@ -11,6 +11,18 @@ from test_foundation import schemas_at, validators
 ROOT = Path(__file__).resolve().parents[2]
 
 class EndpointContractsTests(unittest.TestCase):
+    def test_deployment_view_is_explicit_and_does_not_extend_default_closed_device_page(self):
+        models=validators(schemas_at(ROOT/'packages/contracts/schemas/v1'))
+        fixtures=json.loads((ROOT/'tests/fixtures/contracts/v1/valid.json').read_text())
+        original=dict(items=[fixtures['EndpointManagedDevice']])
+        models['EndpointManagedDevicePage'].validate(original)
+        models['EndpointManagedDeviceDeploymentPage'].validate(original)
+        enriched={**original,'deployments':[fixtures['DeviceDeploymentRecord']]}
+        models['EndpointManagedDeviceDeploymentPage'].validate(enriched)
+        with self.assertRaises(ValidationError):models['EndpointManagedDevicePage'].validate(enriched)
+        for field,value in [('containerId','short-id'),('networkId','b'*65),('executionKind','ADMINISTRATOR'),('ipAddress','not-an-ip')]:
+            sample=copy.deepcopy(fixtures['DeviceDeploymentMetadata']);sample[field]=value
+            with self.subTest(field=field),self.assertRaises(ValidationError):models['DeviceDeploymentMetadata'].validate(sample)
     def test_response_inspection_excludes_private_lease_and_metadata_is_bounded(self):
         models=validators(schemas_at(ROOT/'packages/contracts/schemas/v1'))
         fixtures=json.loads((ROOT/'tests/fixtures/contracts/v1/valid.json').read_text())
