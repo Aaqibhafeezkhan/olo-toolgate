@@ -106,8 +106,8 @@ class LocalCiTests(unittest.TestCase):
             with self.subTest(workflow=name):
                 self.assertEqual(set(self.workflows[name]['on']), {'workflow_call'})
                 self.assertNotIn('pull_request', self.workflows[name]['on'])
-        self.assertEqual(self.workflows['release-foundation']['on']['push']['tags'], ['v*'])
-        self.assertEqual(self.workflows['ci']['on']['push'], {'branches': ['main']})
+        self.assertNotIn('release-foundation', self.workflows)
+        self.assertEqual(self.workflows['ci']['on']['push'], {'branches': ['main'], 'tags': ['v*']})
         self.assertEqual(set(self.workflows['development-release']['on']), {'workflow_call'})
         self.assertEqual(set(self.workflows['manual-development-release']['on']), {'workflow_dispatch'})
 

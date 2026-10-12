@@ -63,11 +63,19 @@ class PolicyContractsTests(unittest.TestCase):
             file=ROOT/relative
             for target in re.findall(r'\]\(([^)]+)\)',file.read_text()):
                 if not target.startswith(('http:','https:','#')):self.assertTrue((file.parent/target.split('#')[0]).exists(),target)
-        for name in ('control','gateway','release-foundation'):
+        for name in ('control','gateway'):
             workflow=yaml.safe_load((ROOT/f'.github/workflows/{name}.yml').read_text())
             self.assertEqual('./.github/workflows/policy.yml',workflow['jobs']['policy-compatibility']['uses'])
-            release=workflow['jobs']['release' if name=='release-foundation' else 'publish']
-            self.assertIn('policy-compatibility',release['needs'])
+            self.assertIn('policy-compatibility',workflow['jobs']['container-and-replicas']['needs'])
+        pipeline=yaml.safe_load((ROOT/'.github/workflows/ci.yml').read_text())
+        self.assertEqual({'foundation','clients','images'},set(pipeline['jobs']['release']['needs']))
+        # Canonical policy/custody checks remain in the shared foundation owner;
+        # production delegated effects and restore proof remain in images.
+        foundation=(ROOT/'tools/check.py').read_text()
+        images=(ROOT/'.github/workflows/images.yml').read_text()
+        self.assertIn('tools/enterprise/check.py',foundation)
+        for gate in ('tools/gateway/container.py','tools/enterprise/restore_check.py'):
+            self.assertIn(gate,images)
 
 
 if __name__=='__main__':unittest.main()

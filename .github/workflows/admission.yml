@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       main_only:
-        description: Require main and exclude the separate tag release path
+        description: Require main and exclude version tags for compatibility callers
         type: boolean
         default: false
     outputs:

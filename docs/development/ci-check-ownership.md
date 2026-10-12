@@ -1,12 +1,12 @@
 # CI check ownership
 
-`ci.yml` has one main push/dispatch entry point. Admission and preflight run once;
+`ci.yml` has one main/version-tag push/dispatch entry point. Admission and preflight run once;
 foundation and the six native platform jobs then run in parallel. Images wait
 for both, and release waits for all required evidence from the same run and SHA.
 
 | Check | Main owner |
 | --- | --- |
-| RC title, main branch and CI-enabled admission | admission |
+| RC title, allowed main/version-tag ref and CI-enabled admission | admission |
 | Release/version metadata, generated contract bindings | preflight |
 | CI regressions, extension protocol/package regressions, staged secret proof | preflight |
 | UI generation, source headers, canonical contract fixtures | foundation |
@@ -26,7 +26,9 @@ for both, and release waits for all required evidence from the same run and SHA.
 | Production Gateway delegated effects, headers/container proof and benchmark | images |
 | Linux device enrollment/tools/health/container proof and LangChain native smoke | images |
 | Every production image vulnerability scan, SBOM, archive and checksum | images |
-| Exact run/SHA prerequisite verification, Maven/image/prerelease publication | release |
+| Raw contract/Java/Helm release assets, source release SBOM and asset checksums | foundation |
+| Exact run/SHA/tag prerequisite verification, Maven/image/development or versioned publication | release |
+| Versioned Helm OCI, all four GHCR image attestations, native/source/image asset provenance | release |
 
 Foundation builds the UI once, including Chromium download/experience checks.
 Gradle and CI's explicit `--prebuilt-ui` Docker stage consume that artifact.
@@ -35,7 +37,8 @@ image is reused for production Control and Gateway validation.
 
 The same test on another OS/architecture, with published contracts, another
 database mode or another production binary is a distinct context and remains.
-Tag release and explicit manual build-only publication keep their existing paths.
+Version tags use the same complete graph, with no repeated check inside a run.
+Explicit manual build-only publication keeps its existing behavior.
 Legacy component workflows remain callable but are absent from the main call
 graph, so their old job bodies do not repeat main checks.
 
@@ -77,3 +80,12 @@ foundation. Focused workflow/admission/local-inventory tests verify the new layo
 The same run also failed Linux x64 managed runtime validation at the Dotnet
 version/sandbox self-test. That distinct native failure is outside this workflow
 layout fix; its isolation gate remains required.
+
+The latest reviewed [run 38189496877](https://github.com/olo-labs/olo-toolgate/actions/runs/38189496877),
+commit `522ff8c820f8e748af9148db9fab08e3aed07705`, passed admission/preflight.
+Foundation built/tested successfully before its source vulnerability scan rejected
+six HIGH findings: active SDK Plexus Utils 3.6.0 and Jackson 3.1.4 in the frozen
+2026-10-10 compatibility record. Linux x64 still failed the Dotnet version/sandbox
+self-test. Both Windows jobs passed unit tests then failed the initial silent
+installer with exit 7; the logs lack an installer diagnostic log, so its cause
+is not established. These distinct gates remain required and block publication.

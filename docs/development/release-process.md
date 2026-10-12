@@ -1,67 +1,84 @@
 # Release Process
 
-Module 07's Control workflow calls the six-target native client workflow before
-embedding the verified public bundle. Native jobs run unit/security checks and
-real system-service installation smoke. Control verifies anonymous browser
-downloads and enrolled TLS/Gateway tools alongside image/cluster gates.
-The protected tagged publish job uploads immutable native archives, checksums
-and manifest to GitHub Releases and attests the bundle. Assets are never
-overwritten. Native signing hooks require external OS/KMS identities;
-development binaries are unsigned and macOS notarization is not configured.
-See [the native operations guide](../client/hotfolder.md).
+**ToolGate CI and release** (`ci.yml`) owns automatic main and version-tag
+publication. Admission and preflight run once, then shared foundation checks and
+six native platform jobs run in parallel. Production image checks consume their
+verified artifacts; the common publisher requires every prerequisite from that
+exact run and commit. See [check ownership](ci-check-ownership.md) and
+[RC admission](ci-admission.md).
 
-## Purpose
+## Publication channels
 
-Build/test/sign three customer containers, native clients, SBOM/provenance/checksums, compatibility matrix and separate Marketplace platform artifacts.
+Main publishes four tested images to Docker Hub, versioned development Maven
+contracts and an immutable GitHub prerelease. A matching `v<VERSION>` tag publishes
+the same tested image archives to versioned GHCR coordinates, the checked Helm
+chart to OCI, Java contracts to Maven, and native/source/image assets to GitHub
+Releases. Source and image SBOMs, compatibility metadata, licenses, upgrade notes,
+checksums and provenance remain included. Each tag has its own full validation
+context; identical checks run once within that context.
 
-Module 02 adds `.github/workflows/control.yml`: build, real PostgreSQL/API tests,
-Helm render, non-root/read-only container smoke, HIGH/CRITICAL image scan,
-CycloneDX SBOM and isolated Kind install/upgrade/rollback. The protected
-`control-release` environment publishes the exact saved and scanned image to
-`ghcr.io/olo-labs/olo-toolgate-control:<VERSION>` and attaches provenance. Matching
-version tags are required. Remote publication and GitHub jobs were not invoked by
-local module development. Existing foundation release gates publish contracts,
-chart and raw/checksummed assets. Configure signing before claiming signed images.
+Both channels use the existing `development-release` environment. Gateway and
+Foundation previously had distinct publication capabilities; those capabilities
+are merged here. Their obsolete publishing jobs and the standalone foundation
+release workflow are retired. After those callers are merged, their empty
+`gateway-release` and `foundation-release` environment records can be removed.
+Configure reviewers and branch/tag restrictions on the common environment as needed.
 
-See [Control deployment](../control-plane/upgrades.md) and
-[compatibility](../architecture/compatibility.md). Runtime JARs retain upstream
-notices and the image includes dependency versions and Temurin legal notices.
+Tag/version drift or a tag resolving to a different commit prevents publication.
+Maven JARs, source/Javadoc classifiers, POM and Gradle module metadata are uploaded
+from checked foundation artifacts through an isolated publication project, with
+no Java rebuild or test replay. The exact release-tag lookup rejects an existing
+GitHub release and fails closed on authentication or network errors. Provenance
+for all four image digests and release assets must succeed before the GitHub
+release is created. Registry writes across Maven, GHCR and OCI are not atomic;
+inspect partial publication before retrying a failed run.
 
-Module 03 embeds the console in the same Control image. CI adds locked npm build,
-component/transport coverage, canonical operation drift, browser/axe E2E against
-real Control/PostgreSQL, a reproducible versioned UI tar/checksums and production
-npm SBOM. Runtime MIT notices are included in the served artifact. Image scanning
-does not discover minified-library metadata, so the verified production
-npm graph is merged into the image SBOM before checksumming and attestation. No separate UI
-image/chart registry is introduced. Console and API upgrade/rollback together;
-see [console operations](../control-plane/admin-ui.md).
+## Credentials and Maven Central
 
-Module 04 adds the reusable signed-policy compatibility workflow as a required
-dependency of both image publishers and the foundation Maven/chart/assets release.
-It builds both production images and exercises genuine JWS publication, verified
-Gateway updates, rollback, key overlap, Control outage, expiry and restart recovery.
-The release matrix includes bundle format/algorithm and Flyway V3. Image scans and
-CycloneDX SBOMs include ring, rustls and reqwest. Runtime bundle signing keys remain
-external application inputs; they are unrelated to CI provenance or image signing.
-See [bundle operations](../control-plane/policy-bundles.md).
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are required for automatic development
+images. An optional `DOCKERHUB_NAMESPACE` variable selects an organization.
+GitHub Packages and GHCR use the workflow's built-in `GITHUB_TOKEN`; existing
+package access controls must grant the repository permission to publish.
 
-Module 05 extends the mandatory reusable compatibility gate with genuine ASK,
-human decision, signature/binding, atomic consumption, outage and revocation E2E.
-It builds production images once, then also executes prior signed-bundle E2E and
-approval Helm install/upgrade/rotation negatives. Existing protected Maven/GHCR/OCI
-publication, scans, SBOMs and provenance remain required. No remote credentials are
-introduced for local checks; `make approval-e2e` produces local evidence.
+Maven defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`. A custom
+HTTPS Maven repository uses the `MAVEN_REPOSITORY_URL` variable and
+`MAVEN_USERNAME`/`MAVEN_PASSWORD` secrets. Existing repository settings work too;
+they do not need to be duplicated in the environment.
 
-## Module 08 runtime dependencies
+The current group ID is `io.ololabs.toolgate`. To retain it on Maven Central,
+register `io.ololabs` and prove ownership of `ololabs.io` with Sonatype's DNS TXT
+verification. If that domain is unavailable, choose a verified namespace before
+changing public Maven coordinates. See [Sonatype namespace registration](https://central.sonatype.org/register/namespace/).
 
-Native client archives include managed runtime documentation and the fixed seccomp
-profile. Interpreter/tool image layers remain separate approved OCI dependencies;
-record their exact digest, runtime version, license inventory, SBOM, vulnerability
-scan and provenance before deployment. First-use pull requires an explicitly
-approved pinned image and local system-accessible engine. No engine installer or
-registry secret is embedded. Native Linux CI executes real adapter/sandbox tests.
-Batch/CMD has no secure backend yet; native cross-platform gates must run before
-claiming module completion.
+Central Portal is not a standard Maven PUT repository. Its release flow requires
+Portal upload, GPG signatures and Central-compliant POM metadata; that integration
+is not implemented by the current publisher. Do not use a Central Portal URL as
+the custom repository URL expecting credentials alone to enable publication.
+The common publisher rejects that target before artifact collection or credential
+transmission, with an explicit configuration error.
+See [Sonatype publishing requirements](https://central.sonatype.org/publish/publish-portal-maven/).
 
-See [development releases](development-releases.md) for automated main publishing
-and the release note/license locations in archives, libraries and containers.
+## Retained validation contexts
+
+Foundation retains canonical contracts, every binding, Java/SDK tests, both
+database modes, policy/custody suites, UI/browser/accessibility, dependency/license/
+secret scans, Maven artifact consumption and Helm schema/negative variants.
+The image owner retains production Control/Gateway security and replicas,
+quarantine restore, anonymous native downloads, Quickstart in SQLite/PostgreSQL,
+Device/LangChain smoke, HIGH/CRITICAL image scans and CycloneDX SBOMs. Tests on
+another OS/architecture, database or production binary are distinct contexts.
+
+Native clients retain unit/security checks and real system-service/installer
+smoke on all six target contexts. Development installers remain unsigned and
+macOS notarization is not configured. Build provenance does not claim OS signing.
+See [native operations](../client/hotfolder.md), [Control upgrades](../control-plane/upgrades.md)
+and [compatibility](../architecture/compatibility.md).
+
+Managed interpreter images remain separate approved OCI dependencies. Record
+their exact digest, runtime version, license inventory, SBOM, vulnerability scan
+and provenance before deployment. First-use pull requires an approved pinned image
+and system-accessible engine; no engine installer or registry secret is embedded.
+
+The explicitly dispatched [manual development release](development-releases.md#one-manual-trigger-build-and-publish-only)
+retains its previously requested build-only exception. It has no automatic
+push/tag/schedule trigger and does not claim CI validation or signing.

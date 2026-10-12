@@ -1,12 +1,8 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: quickstart
-on:
-  workflow_call:
-    inputs:
-      publish:
-        type: boolean
-        default: false
+'on':
+  workflow_call: null
 permissions:
   contents: read
   pull-requests: read
@@ -112,77 +108,3 @@ jobs:
           name: device-evidence
           path: build/device/
           if-no-files-found: error
-  publish:
-    if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.publish)
-    needs: image
-    runs-on: ubuntu-24.04
-    environment: quickstart-release
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: quickstart-evidence
-          path: build/quickstart
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: device-evidence
-          path: build/device
-      - name: Publish the exact scanned image
-        id: push
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REGISTRY_ACTOR: ${{ github.actor }}
-          RELEASE_REF: ${{ github.ref }}
-        run: |
-          version="$(cat VERSION)"
-          test "$RELEASE_REF" = "refs/tags/v${version}"
-          (cd build/quickstart && sha256sum --check SHA256SUMS)
-          docker load -i build/quickstart/image.tar
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$REGISTRY_ACTOR" --password-stdin
-          image="ghcr.io/olo-labs/olo-toolgate-quickstart:${version}"
-          docker tag olo-toolgate-quickstart:module11 "$image"
-          docker push "$image"
-          digest="$(docker inspect "$image" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
-          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-          (cd build/device && sha256sum --check SHA256SUMS)
-          docker load -i build/device/image.tar
-          device="ghcr.io/olo-labs/olo-toolgate-device:${version}"
-          docker tag olo-toolgate-device:module11 "$device"
-          docker push "$device"
-          device_digest="$(docker inspect "$device" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
-          printf 'device_digest=%s\n' "$device_digest" >> "$GITHUB_OUTPUT"
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-name: ghcr.io/olo-labs/olo-toolgate-quickstart
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-name: ghcr.io/olo-labs/olo-toolgate-device
-          subject-digest: ${{ steps.push.outputs.device_digest }}
-          push-to-registry: true
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: build/quickstart/quickstart-sbom.cdx.json
-      - name: Publish immutable Quickstart release evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
-        run: |
-          version="$(cat VERSION)"
-          prefix="olo-toolgate-quickstart-${version}"
-          cp build/quickstart/quickstart-sbom.cdx.json "build/quickstart/${prefix}-sbom.cdx.json"
-          cp docs/deployment/quickstart.md "build/quickstart/${prefix}-operations.md"
-          printf '%s@%s\n' "ghcr.io/olo-labs/olo-toolgate-quickstart" "$IMAGE_DIGEST" > "build/quickstart/${prefix}-image.txt"
-          (cd build/quickstart && sha256sum "${prefix}-sbom.cdx.json" "${prefix}-operations.md" "${prefix}-image.txt" > "${prefix}-SHA256SUMS")
-          if ! gh release view "v${version}"; then
-            prerelease=""
-            case "$version" in *-*) prerelease="--prerelease" ;; esac
-            gh release create "v${version}" --verify-tag $prerelease --title "OLO ToolGate ${version}" --generate-notes --notes-file RELEASE-NOTES.md
-          fi
-          gh release upload "v${version}" "build/quickstart/${prefix}-sbom.cdx.json" "build/quickstart/${prefix}-operations.md" "build/quickstart/${prefix}-image.txt" "build/quickstart/${prefix}-SHA256SUMS"

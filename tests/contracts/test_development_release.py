@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Development publishing must reject unverified artifacts and failed CI."""
 import tempfile
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -38,7 +39,8 @@ class DevelopmentReleaseTests(unittest.TestCase):
 
     def test_failed_gate_prevents_artifact_download(self):
         sha='a'*40
-        with patch.object(development,'coordinates',return_value=('olo-labs/olo-toolgate',sha,'olo')), \
+        with patch.dict(os.environ,{'GITHUB_REF':'refs/heads/main'}), \
+             patch.object(development,'coordinates',return_value=('olo-labs/olo-toolgate',sha,'olo')), \
              patch.object(development,'run') as run, \
              patch.object(development,'api',return_value={'workflow_runs':[
                  {'head_sha':sha,'id':1,'status':'completed','conclusion':'failure'}]}):
