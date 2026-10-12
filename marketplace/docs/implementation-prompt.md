@@ -2,7 +2,7 @@
 
 Give this whole file to the implementing agent.
 
-**Normative design:** [design.md](design.md) **version 1.2, frozen at commit `18776bbe04df26eacc2c5026e1f4defb6389da3c`** on `olo-labs/olo-toolgate` (`marketplace/docs/design.md`). Read that exact revision (`git show 18776bbe:marketplace/docs/design.md`). A later edit to design.md doesn't apply unless this line is updated to its commit. The single wire contract between the three PRs is `marketplace/docs/api.md`, written and frozen in PR 1 from that design revision.
+**Normative design:** [design.md](design.md) **version 1.2, frozen at commit `18776bbe04df26eacc2c5026e1f4defb6389da3c`** on `olo-labs/olo-toolgate` (`marketplace/docs/design.md`). Read that exact revision (`git show 18776bbe:marketplace/docs/design.md`). A later edit to design.md doesn't apply unless this line is updated to its commit. The single wire contract between the three PRs is `marketplace/docs/api.md`, **already committed** with the docs. PR 1 implements it; any change to it needs a reason in the PR that makes it.
 
 This prompt adds these to the design:
 - where the code lives;
@@ -44,16 +44,24 @@ The work ships as **three PRs, in this order**. Each PR stands on its own: it bu
 - **No checks required to merge PR 1 and PR 2.** They don't wait on or depend on the existing CI checks. The Marketplace's own `ci/run.sh` is available to run, but it isn't a merge gate for these two PRs.
 - PR 3 changes existing code and goes through the full existing checks.
 
+### Already committed (non-code assets, with the docs PR)
+
+These exist on `main` once the docs PR merges. Use them as they are; don't recreate them.
+- `marketplace/README.md`, `LICENSE`, `.gitignore`, `.editorconfig`, `TOOLGATE_SRC` (`..`);
+- `marketplace/docs/api.md` (the contract);
+- `marketplace/drupal/modules.yml` (the module list, §6.3);
+- `marketplace/drupal/web/themes/custom/olo_orgs/images/logo.png` and `favicon.svg` (the OLO branding, copied from the console assets);
+- `marketplace/seed/expected-packages.json` (§3.2 step 2; `examples.logs` is in `knownMissing`);
+- `marketplace/deploy/.env.example`.
+
 ### PR 1: Helper (container, validation, signing, example packages)
 
 Branch `marketplace/pr1-helper`. New files only. Contains:
-- **`marketplace/` skeleton:**
-  - `README.md`, `LICENSE`, `.gitignore`, `.editorconfig`;
-  - `TOOLGATE_SRC` and the path resolution in §1.4;
+- **`marketplace/` scripts** (the README, licence and `TOOLGATE_SRC` already exist):
+  - the path resolution in §1.4;
   - `scripts/isolation-check.sh` (§1.3), `scripts/init-signing-key.sh` (design §6.1);
   - `ci/run.sh`;
   - `ci/publish-images.sh` (§7), which publishes the helper image in this PR.
-- **`marketplace/docs/api.md`.** The public HTTP API, the helper's internal API (`/inspect`, `/sign`, token) and the release-record format, written from design 1.2 and frozen here. PR 2 implements it and PR 3 consumes it.
 - **`marketplace/helper/`**, a stateless Java service and the **helper container**:
   - `Dockerfile` with build context `${TOOLGATE_DIR}`. A builder stage compiles the existing, unchanged `toolgate` CLI (`cargo build -p toolgate-cli --release`) and the helper.
   - The final image is a distroless or slim JRE, non-root, with a read-only root filesystem.
@@ -65,7 +73,7 @@ Branch `marketplace/pr1-helper`. New files only. Contains:
   - `GET /keys`, `GET /health`.
   - It refuses to start without a signing key, and the key is never generated automatically.
   - **Validator in PR 1:** the unchanged Rust CLI, `toolgate validate` on a single regular file, never a directory. The helper also implements the identity, prefix and digest checks itself. Control's `PackageArchive` becomes the authoritative validator in PR 3, through the shared library (design §6, "Validators"). Until then, Control's own revalidation on import is the backstop.
-- **`marketplace/seed/`**: the seed build stage and `expected-packages.json` (§3.2 steps 1 and 2). Packages are built from the unchanged examples in `${TOOLGATE_DIR}`.
+- **`marketplace/seed/`**: the seed build stage (§3.2 step 1), checked against the committed `expected-packages.json`. Packages are built from the unchanged examples in `${TOOLGATE_DIR}`.
 - **Publishing:** the helper image is added to the two existing release workflows (§7).
 
 **Done when:**
@@ -244,7 +252,7 @@ On the first bring-up, every Java example package under `<TOOLGATE_DIR>/examples
    - Builder stage: JDK 17 and Rust. It runs the same steps as `examples/run-java-examples.sh`: `./gradlew publishJavaSdkLocally`, `cargo build -p toolgate-cli`, then in both example builds `./gradlew -PtoolgateSdkRepo=<root>/build/sdk-repo toolgatePackage`, then `toolgate verify` on each result.
    - **Discovery:** every subfolder of the two example builds that has a `build.gradle.kts` is an expected package source. The image writes `/seed/seed-manifest.json` with one entry per discovered folder: folder, package file or `null` if the build produced none, package id and version from the manifest, README text, and category (`java-tools` → "Operations", `mocked-tools` → "Demo (mocked data)").
    - Output: only `/seed` (packages plus `seed-manifest.json`).
-2. **`marketplace/seed/expected-packages.json`** (committed). The explicit list of package ids that must be published, 18 today, one per example folder.
+2. **`marketplace/seed/expected-packages.json`** (already committed). The explicit list of package ids that must be published: 17 required plus `examples.logs` in `knownMissing`, one per example folder.
    - Adding an example means adding its id.
    - Removing an id needs a reason in the commit message, and for `examples.logs` (log-insights) Rahul's approval.
    - `expected-packages.json` also has a `knownMissing` list with a reason per id. Today that is `examples.logs` ("log-insights source missing on main; restored in PR 3").
@@ -332,7 +340,7 @@ Nothing is downloaded or installed at runtime.
 - Base: the official `drupal` image for the current Drupal 11 release on PHP 8.3, with Apache, **pinned by digest**. One container serves HTTP on port 8080, as non-root, with a read-only root filesystem; `/tmp` is the only writable path.
 - Site name **OLO Orgs**, set in `config/sync/system.site.yml`.
 - **Branding:**
-  - copy `apps/admin-ui/src/assets/olo.png` and `olo-favicon.svg` into `marketplace/drupal/web/themes/custom/olo_orgs/` as new files. These are copies made once, not a build-time link to ToolGate, so the split doesn't break them;
+  - the OLO logo and favicon are already committed at `marketplace/drupal/web/themes/custom/olo_orgs/images/logo.png` and `favicon.svg`, copied once from the console assets, so the split doesn't break them;
   - use them as the site logo and favicon;
   - the colour palette matches the ToolGate console.
 - `settings.php` reads **everything** from the environment:

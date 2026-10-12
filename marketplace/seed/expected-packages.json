@@ -1,0 +1,29 @@
+{
+  "description": "Example packages that must be AVAILABLE after bring-up. One id per example folder with a build.gradle.kts under examples/java-tools and examples/mocked-tools. Removing an id needs a reason in the commit message.",
+  "required": [
+    "examples.cleanup",
+    "examples.csv",
+    "examples.db",
+    "examples.disk",
+    "examples.downloads",
+    "examples.endpoints",
+    "examples.health",
+    "examples.notify",
+    "examples.processes",
+    "examples.scripts",
+    "examples.care",
+    "examples.claims",
+    "examples.fraud",
+    "examples.hr",
+    "examples.incidents",
+    "examples.loans",
+    "examples.support"
+  ],
+  "knownMissing": [
+    {
+      "id": "examples.logs",
+      "folder": "examples/java-tools/log-insights",
+      "reason": "Java source missing on main (only README and build files were committed). The id is inferred from its logs.* tool names and must be confirmed when the source is restored in PR 3."
+    }
+  ]
+}

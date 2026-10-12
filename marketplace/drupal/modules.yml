@@ -1,0 +1,53 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+#
+# The single list of contributed Drupal modules and themes in the OLO Orgs site image.
+# Add a module by adding an entry; the image build installs it with Composer and enables it through config.
+# Each entry: package (Composer), version (constraint), enable (machine names), type (module|theme, default module), why.
+# Check each entry for a stable Drupal 11 release before pinning; drop any without one and say so in the PR.
+modules:
+  # Front and admin themes
+  - { package: drupal/bootstrap5, version: "^4", type: theme, enable: [bootstrap5], why: "base theme for the olo_orgs subtheme" }
+  - { package: drupal/gin, version: "^4", type: theme, enable: [gin], why: "admin theme" }
+  - { package: drupal/gin_toolbar, version: "^2", enable: [gin_toolbar], why: "admin toolbar for Gin" }
+  - { package: drupal/admin_toolbar, version: "^3", enable: [admin_toolbar, admin_toolbar_tools], why: "admin navigation" }
+  # Stateless infrastructure
+  - { package: drupal/s3fs, version: "^3", enable: [s3fs], why: "public and private files in S3-compatible storage" }
+  - { package: drupal/redis, version: "^1", enable: [redis], why: "shared cache, locks and flood across replicas" }
+  - { package: drupal/config_readonly, version: "^1", enable: [config_readonly], why: "config comes only from config/sync" }
+  - { package: drupal/health_check, version: "^3", enable: [health_check], why: "probe endpoint" }
+  # Catalog and search
+  - { package: drupal/search_api, version: "^1", enable: [search_api, search_api_db], why: "tool search" }
+  - { package: drupal/facets, version: "^2", enable: [facets], why: "category, runtime, tag and publisher filters" }
+  - { package: drupal/better_exposed_filters, version: "^7", enable: [better_exposed_filters], why: "AJAX filters and sort" }
+  - { package: drupal/pathauto, version: "^1", enable: [pathauto], why: "/tools/{id} and /publishers/{slug} paths" }
+  - { package: drupal/token, version: "^1", enable: [token], why: "required by pathauto and metatag" }
+  - { package: drupal/field_group, version: "^3", enable: [field_group], why: "tabs on the tool page" }
+  # Content rendering
+  - { package: drupal/markdown_easy, version: "^2", enable: [markdown_easy], why: "safe Markdown for README and descriptions" }
+  - { package: drupal/svg_image, version: "^3", enable: [svg_image], why: "SVG logos" }
+  # SEO and sharing
+  - { package: drupal/metatag, version: "^2", enable: [metatag, metatag_open_graph], why: "page metadata and Open Graph" }
+  - { package: drupal/simple_sitemap, version: "^4", enable: [simple_sitemap], why: "sitemap of tools and publishers" }
+  - { package: drupal/redirect, version: "^1", enable: [redirect], why: "redirects for changed paths" }
+  # Abuse and security
+  - { package: drupal/honeypot, version: "^2", enable: [honeypot], why: "spam protection on forms" }
+  - { package: drupal/flood_control, version: "^3", enable: [flood_control], why: "manage login and form flood limits" }
+  - { package: drupal/seckit, version: "^2", enable: [seckit], why: "security headers" }
+  - { package: drupal/password_policy, version: "^4", enable: [password_policy, password_policy_length], why: "password rules" }
+  # Mail
+  - { package: drupal/symfony_mailer_lite, version: "^2", enable: [symfony_mailer_lite], why: "account and notification mail over SMTP" }
+
+# Core modules enabled in addition (no Composer package needed).
+core:
+  - views
+  - media
+  - media_library
+  - image
+  - contact
+  - path
+  - block_content
+  - responsive_image
+  - big_pipe
+  - dynamic_page_cache
+  - page_cache
