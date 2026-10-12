@@ -31,8 +31,9 @@ POLICY = {
     'admission.admit': 'admission',
     'preflight.metadata': 'replay',
     'foundation.check': 'replay',
-    'gateway.container-and-replicas': 'replay',
-    'policy.enterprise-access': 'replay',
+    'images.verify': 'artifacts',
+    'gateway.container-and-replicas': 'legacy',
+    'policy.enterprise-access': 'legacy',
     'client.native': 'native',
     'client.public-bundle': 'artifacts',
     'control.container-and-replicas': 'artifacts',
@@ -46,6 +47,7 @@ POLICY = {
     'manual-development-release.publish': 'publication',
 }
 REASONS = {
+    'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',
     'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',
     'native': 'Requires all six native VMs and system service/installer support.',
     'artifacts': 'Requires genuine artifacts from the complete six-platform native matrix.',
@@ -141,7 +143,19 @@ def inventory(workflows):
     return rows
 
 
+def replay_body(key, document, job):
+    body = copy.deepcopy(job)
+    # A standalone preflight replay includes the browser gate. Main delegates
+    # it to foundation; resolve only this reviewed boolean with its safe default.
+    for step in body.get('steps', []):
+        if (key == 'preflight.metadata' and step.get('if') == '${{ !inputs.shared_checks }}'
+                and document['on']['workflow_call']['inputs']['shared_checks'].get('default') is False):
+            del step['if']
+    return body
+
+
 def validate_replay(key, document, job):
+    job = replay_body(key, document, job)
     if job.get('runs-on') != 'ubuntu-24.04' or 'strategy' in job:
         raise ValueError(f'{key}: local replay supports Ubuntu 24.04 amd64 job bodies only')
     allowed = {'name', 'needs', 'runs-on', 'steps', 'timeout-minutes', 'env', 'defaults'}
@@ -166,7 +180,7 @@ def replay_document(key, workflows):
     document = workflows[workflow]
     job = document['jobs'][name]
     validate_replay(key, document, job)
-    body = copy.deepcopy(job)
+    body = replay_body(key, document, job)
     body.pop('needs', None)
     body['steps'].insert(0, copy.deepcopy(DOCKER_SETUP))
     return {'name': 'Local ' + key, 'on': {'workflow_dispatch': {}},

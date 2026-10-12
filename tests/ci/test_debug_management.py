@@ -68,15 +68,17 @@ function npm {}
 function Start-Process { param([string]$FilePath) }
 $options = @{}
 if ($env:TEST_DEBUG_VALIDATE -eq '1') { $options.ValidateOnly = $true }
+if ($env:TEST_DEBUG_FOCUSED -eq '1') { $options.FocusedCheck = $true }
 & $env:TEST_DEBUG_SCRIPT $env:TEST_DEBUG_OPERATION @options
 exit $LASTEXITCODE
 ''', encoding='utf-8')
 
-    def manage(self, operation='restart', validate=False):
+    def manage(self, operation='restart', validate=False, focused=False):
         log = self.root/'calls.jsonl'
         env = dict(os.environ, TEST_DEBUG_SCRIPT=str(self.root/'debug/manage.ps1'),
                    TEST_DEBUG_PYTHON=sys.executable, TEST_DEBUG_CALLS=str(log),
-                   TEST_DEBUG_OPERATION=operation, TEST_DEBUG_VALIDATE='1' if validate else '0')
+                   TEST_DEBUG_OPERATION=operation, TEST_DEBUG_VALIDATE='1' if validate else '0',
+                   TEST_DEBUG_FOCUSED='1' if focused else '0')
         result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass',
                                  '-File', str(self.harness)], cwd=self.root/'debug',
                                 env=env, capture_output=True, text=True, timeout=30)
@@ -104,6 +106,16 @@ exit $LASTEXITCODE
                     ['tools/ci/preflight.py']])
                 self.assertLess(repair + 2, arguments.index(['ci', '--ignore-scripts']))
                 self.assertTrue(any(call[0] == 'docker' and 'up' in call[1] for call in calls))
+
+    def test_focused_start_builds_and_starts_without_unrelated_suites(self):
+        result, calls = self.manage('start', focused=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        arguments = [call[1] for call in calls]
+        tests = [args for args in arguments if 'unittest' in args]
+        self.assertEqual(tests, [['-m', 'unittest', 'discover', '-s', 'tests/ci', '-p', 'test_debug_management.py', '-v']])
+        self.assertFalse(any('browser-downloads.mjs' in ' '.join(args) or 'test' in args for args in arguments))
+        self.assertTrue(any(args[0] == 'tools/quickstart/check.py' and '--build-only' in args for args in arguments))
+        self.assertTrue(any(call[0] == 'docker' and 'up' in call[1] for call in calls))
 
     def test_generation_failure_stops_before_dependency_install_or_container_replacement(self):
         schema = self.root/'packages/contracts/schemas/v1/invalid.schema.json'

@@ -63,7 +63,7 @@ def check(target):
             config=Path(r'C:\ProgramData\OLO\ToolGate\client.json')
             if json.loads(config.read_text())['serverUrl']!='https://localhost:18450':raise ValueError('Installer HTTPS default was not stored')
             state=config.parent/'state'
-            key=hashlib.sha256((state/'device-key').read_bytes()).hexdigest()
+            device_key_digest=hashlib.sha256((state/'device-key').read_bytes()).hexdigest()
             # Configured anonymous web downloads still work without a URL argument.
             hint='https://control.example.invalid'.encode().hex()
             with tempfile.TemporaryDirectory(prefix='toolgate-configured-') as temporary:
@@ -71,10 +71,10 @@ def check(target):
                 shutil.copyfile(installer,configured)
                 run([str(configured),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'])
             run([str(installer),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'])
-            if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=key:raise ValueError('Repair changed the device key')
+            if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Repair changed the device key')
             run([str(binary),'configure','--server','https://second.example.invalid'])
             if json.loads(config.read_text())['serverUrl']!='https://second.example.invalid':raise ValueError('Gateway switch was not stored')
-            if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=key:raise ValueError('Gateway switch changed the device key')
+            if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Gateway switch changed the device key')
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,r'Software\Microsoft\Windows\CurrentVersion\Run',0,winreg.KEY_READ|winreg.KEY_WOW64_64KEY) as tray_key:
                 if 'toolgate-tray.ps1' not in winreg.QueryValueEx(tray_key,'OloToolGateTray')[0]:raise ValueError('Tray startup is missing')
             powershell=str(Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe')
@@ -99,8 +99,23 @@ def check(target):
     finally:
         if installed:
             if system=='Windows':
-                uninstaller=Path(os.environ['ProgramFiles'])/'OLO/ToolGateSetup/unins000.exe'
+                # Reinstall may create unins001.exe; use Windows' active registration.
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'Software\Microsoft\Windows\CurrentVersion\Uninstall\OLO.ToolGate.Client_is1', 0, winreg.KEY_READ|winreg.KEY_WOW64_64KEY) as registration:
+                    uninstaller=Path(winreg.QueryValueEx(registration,'UninstallString')[0].strip('"'))
+                expected=Path(os.environ['ProgramFiles'])/'OLO/ToolGateSetup'
+                if uninstaller.parent!=expected or not uninstaller.is_file():raise ValueError('Registered client uninstaller is missing')
                 run([str(uninstaller),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'])
+                query=subprocess.run(['sc.exe','query','OloToolGateClient'],capture_output=True,text=True)
+                if query.returncode!=1060:raise ValueError('Uninstall left a service registration')
+                if config.exists() or (Path(os.environ['ProgramFiles'])/'OLO/ToolGate/olo-toolgate-client.exe').exists():raise ValueError('Uninstall left the client configuration or service executable')
+                if {path.name for path in state.iterdir()}!={'device-key'} or hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Uninstall did not remove every enrollment while retaining the device key')
+                if int(run([powershell,'-NoProfile','-NonInteractive','-Command',tray_query]).stdout.strip())!=0:raise ValueError('Uninstall left the tray running')
+                for registry_path, value in [(r'Software\Microsoft\Windows\CurrentVersion\Run','OloToolGateTray'),(r'Software\Google\Chrome\NativeMessagingHosts\io.ololabs.toolgate.connect',None)]:
+                    try:
+                        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,registry_path,0,winreg.KEY_READ|winreg.KEY_WOW64_64KEY) as entry:
+                            winreg.QueryValueEx(entry,value)
+                    except FileNotFoundError:continue
+                    raise ValueError('Uninstall left tray startup or Chrome bridge registration')
             else:run(['sudo','-n',str(binary),'uninstall','--purge'])
 
 

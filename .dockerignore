@@ -9,6 +9,9 @@ target
 **/build
 **/node_modules
 **/dist
+# Same-run CI may select the explicitly verified prebuilt console stage.
+!apps/admin-ui/dist
+!apps/admin-ui/dist/**
 **/coverage
 **/test-results
 **/__pycache__

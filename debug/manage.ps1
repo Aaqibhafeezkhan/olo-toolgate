@@ -3,6 +3,7 @@
 param(
     [ValidateSet('start', 'stop', 'restart')][string]$Operation = 'start',
     [switch]$FullCheck,
+    [switch]$FocusedCheck,
     [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -17,6 +18,7 @@ try {
     Invoke-Checked docker @('info', '--format', '{{.OSType}}')
     Invoke-Checked docker ($compose + @('config', '--quiet'))
     if ($ValidateOnly) { return }
+    if ($FocusedCheck -and $FullCheck) { throw 'Choose -FocusedCheck or -FullCheck, not both.' }
     if ($Operation -eq 'stop') {
         Invoke-Checked docker ($compose + @('stop'))
         return
@@ -39,22 +41,28 @@ try {
     Invoke-Checked $python @('tools/ci/preflight.py')
     Invoke-Checked $python @('-m', 'pip', 'install', '-r', 'tools/requirements.txt')
     Invoke-Checked npm @('ci', '--ignore-scripts')
-    Invoke-Checked npx @('--no-install', 'playwright', 'install', 'chromium')
-    Invoke-Checked $python @('-m', 'unittest', 'discover', '-s', 'tests/ci', '-v')
     Invoke-Checked $python @('tools/quality.py')
-    Invoke-Checked $python @('-m', 'unittest', 'discover', '-s', 'tests/contracts', '-v')
     Invoke-Checked npm @('run', 'ui:check')
-    Invoke-Checked npm @('--workspace', '@olo-labs/toolgate-admin-ui', 'test')
-    Invoke-Checked node @('--test', 'apps/browser-extension/tests/protocol.mjs', 'apps/browser-extension/tests/worker.mjs')
-    Invoke-Checked node @('tools/ci/browser-downloads.mjs')
-    Invoke-Checked node @('tools/ci/linux-browser-downloads.mjs')
+    if ($FocusedCheck) {
+        Invoke-Checked $python @('-m', 'unittest', 'discover', '-s', 'tests/ci', '-p', 'test_debug_management.py', '-v')
+    } else {
+        Invoke-Checked npx @('--no-install', 'playwright', 'install', 'chromium')
+        Invoke-Checked $python @('-m', 'unittest', 'discover', '-s', 'tests/ci', '-v')
+        Invoke-Checked $python @('-m', 'unittest', 'discover', '-s', 'tests/contracts', '-v')
+        Invoke-Checked npm @('--workspace', '@olo-labs/toolgate-admin-ui', 'test')
+        Invoke-Checked node @('--test', 'apps/browser-extension/tests/protocol.mjs', 'apps/browser-extension/tests/worker.mjs')
+        Invoke-Checked node @('tools/ci/browser-downloads.mjs')
+        Invoke-Checked node @('tools/ci/linux-browser-downloads.mjs')
+    }
     if ($FullCheck) {
         Invoke-Checked $python @('tools/check.py')
         Invoke-Checked $python @('tools/check.py', '--scans')
     }
     # Smoke-test the candidate before replacing the persistent debug container.
     & "$PSScriptRoot/client-assets.ps1" -Python $python
-    Invoke-Checked $python @('tools/quickstart/check.py', '--build', '--image', 'olo-toolgate-quickstart:debug', '--client-assets', 'deploy/client-assets/release')
+    $candidateArguments = @('tools/quickstart/check.py', '--build', '--image', 'olo-toolgate-quickstart:debug', '--client-assets', 'deploy/client-assets/release')
+    if ($FocusedCheck) { $candidateArguments += '--build-only' }
+    Invoke-Checked $python $candidateArguments
     Invoke-Checked docker ($compose + @('up', '-d', '--wait', '--wait-timeout', '150', '--force-recreate', '--pull', 'never'))
     Write-Host 'ToolGate debug console: http://127.0.0.1:18090/console/'
     Write-Host 'Bootstrap credentials: docker compose -p toolgate-debug -f debug/compose.yaml logs quickstart'

@@ -15,7 +15,7 @@ async function run(args,env=process.env) {
     child.on('error',reject);child.on('exit',code=>code===0?done():reject(Error(`Browser gate failed: ${code}`)));
   });
 }
-await run(['run','ui:build']);
+if (!process.argv.includes('--skip-build')) await run(['run','ui:build']);
 const version=JSON.parse(await readFile('package.json','utf8')).version;
 const archives=[],installers=[],assets=new Map();
 for(const [platform,os,suffix] of [['WINDOWS','pc-windows-msvc','setup.exe'],['MACOS','apple-darwin','dmg'],['LINUX','unknown-linux-gnu','run']]) {

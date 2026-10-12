@@ -14,14 +14,13 @@ no date-based pause or automatic re-enable schedule.
 To enable CI, open GitHub Settings → Secrets and variables → Actions →
 Variables and set `TOOLGATE_CI_ENABLED=true`. To pause again, set it to `false`.
 
-The five CI workflows (`foundation`, `endpoint-client`, `control`, `gateway`
-and `quickstart`) run automatically only for pushes to `main`. Pull requests do
-not trigger these workflows, even when their target is `main` and their title
-starts with `RC:`. Their manual dispatches and reusable calls also require
-`main` through shared admission. Development publishing also requires
-an originating `main` run. The `main_only` input disables the separate tag release
-path; branch runs always require `main`.
-Other branch pushes, pull requests and tag pushes do not trigger these five.
+**ToolGate CI and release** (`ci.yml`) is the single main push/dispatch workflow.
+It admits the commit once, runs preflight, then foundation and six native platform
+jobs in parallel. The image stage consumes their artifacts, and the release stage
+requires all three stages to succeed. Each identical check has one owner; see
+[the ownership map](ci-check-ownership.md). Pull requests and other branch pushes
+do not trigger this workflow. The `main_only` input disables the separate tag
+release path; branch runs always require `main`.
 The separate `release-foundation` workflow retains its `v*` tag trigger.
 Tag publishing in `control`, `gateway` and `quickstart` is unavailable while
 these five workflows are restricted to `main`; their publish jobs require a
@@ -39,11 +38,13 @@ workflow entry; its admission and build jobs do not run.
   Ordinary issue/PR comments do not trigger a run.
 - Manual dispatch: admission resolves the merged PR for the selected commit and
   checks its title. No comment input is required or used as an override.
-- Development release: admission resolves the merged PR for the successful
-  originating push's exact SHA and checks its title. Failed/cancelled/skipped
-  upstream runs and runs from other repositories cannot publish.
-- Reusable workflows stay behind the caller's admission dependency. Calling
-  the client workflow directly also runs its admission check.
+- Development release: same-run publication verifies the exact SHA, main branch,
+  workflow and successful prerequisite jobs, including all six native targets.
+  Failed/cancelled/skipped or missing gates cannot publish.
+- Reusable workflows stay behind the caller's admission dependency. Foundation,
+  endpoint client and development release have no independent automatic trigger.
+  Legacy component workflow bodies remain callable for compatibility and are
+  outside the main call graph.
 
 With CI disabled, admission and all dependent jobs are skipped without allocating
 a runner. Branches other than `main` are rejected before runner allocation.

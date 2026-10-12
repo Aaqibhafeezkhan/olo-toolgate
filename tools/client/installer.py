@@ -91,6 +91,7 @@ def build(target,output):
                 embed_chrome(directory_payload,build_number)
                 (directory_payload/'packaging').mkdir(exist_ok=True)
                 shutil.copyfile(ROOT/'apps/endpoint-client/packaging/toolgate-tray.ps1',directory_payload/'packaging/toolgate-tray.ps1')
+                shutil.copyfile(ROOT/'apps/endpoint-client/packaging/toolgate-uninstall.ps1',directory_payload/'packaging/toolgate-uninstall.ps1')
                 shutil.copyfile(ROOT/'apps/endpoint-client/packaging/toolgate-status.ps1',directory_payload/'packaging/toolgate-status.ps1')
                 shutil.copyfile(ROOT/'apps/endpoint-client/packaging/toolgate-packets.ps1',directory_payload/'packaging/toolgate-packets.ps1')
                 shutil.copyfile(ROOT/'apps/endpoint-client/packaging/toolgate-enroll.ps1',directory_payload/'packaging/toolgate-enroll.ps1')

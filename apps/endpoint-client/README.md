@@ -99,7 +99,8 @@ second polling limit. Existing Control readiness/metrics and HA remain in use.
 
 Uninstall stops/removes the OS service and retains identity by default.
 `uninstall --purge` explicitly deletes only the fixed protected identity/state files.
-HotFolder documents are preserved, including when they reside inside the state directory.
+Documents outside the fixed state directory are preserved. A complete installer
+purge removes local data inside that directory and retains only the device key.
 Revoke the identity in Control before retiring a machine. A failed partial
 installation requires administrator recovery of the fixed service/config paths;
 partial installation repair may require administrator action. Current clients
@@ -128,3 +129,15 @@ engine. A successful test grants no ordinary tool invocation permission. See
 [the builder guide](../../docs/client/tool-builder.md).
 
 For interactive system installation see [unsigned installers](../../docs/client/installers.md).
+
+Windows tray and maintenance uninstall resolve the registered Inno uninstaller,
+including `unins001.exe` after reinstall. Cleanup starts after confirmation;
+cancelling preserves the tray and service. Removal waits for the service to stop
+and disappear from SCM before deleting the fixed runtime/config files. Retrying
+after partial cleanup tolerates already absent files/services. Installer uninstall
+purges all gateway enrollments and local data while preserving the device key.
+Failures appear in the installer/tray instead of silently doing nothing.
+
+The protected service and user-session tray have separate lifetimes. A connected
+device in the console reflects service check-ins. Closing the tray does not
+disconnect the service; the Run registration starts the tray at the next sign-in.

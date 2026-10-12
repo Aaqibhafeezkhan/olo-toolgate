@@ -1,26 +1,12 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: development-release
-on:
-  workflow_run:
-    workflows: [control]
-    types: [completed]
-    branches: [main]
-  workflow_dispatch:
 permissions:
   contents: read
   pull-requests: read
-concurrency:
-  group: development-release
-  cancel-in-progress: false
 jobs:
-  admission:
-    uses: ./.github/workflows/admission.yml
-    with:
-      main_only: true
   publish:
-    needs: admission
-    if: needs.admission.outputs.allow == 'true' && (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' || github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: development-release
@@ -29,52 +15,55 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.12'
-      - name: Verify CI and collect the exact tested release artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: python tools/release/development.py prepare
-      - name: Publish versioned Maven contracts
-        env:
-          MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-          DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
-            export MAVEN_USERNAME="${MAVEN_USERNAME:-$GITHUB_ACTOR}"
-            export MAVEN_PASSWORD="${MAVEN_PASSWORD:-$GH_TOKEN}"
-          else
-            if [ -z "$MAVEN_USERNAME" ] || [ -z "$MAVEN_PASSWORD" ]; then
-              echo 'Custom Maven repository requires MAVEN_USERNAME and MAVEN_PASSWORD secrets'
-              exit 1
-            fi
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: Verify CI and collect the exact tested release artifacts
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_SHA: ${{ github.sha }}
+        DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      run: |
+        python tools/release/development.py prepare --run-id "$GITHUB_RUN_ID"
+    - name: Publish versioned Maven contracts
+      env:
+        MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
+        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
+          export MAVEN_USERNAME="${MAVEN_USERNAME:-$GITHUB_ACTOR}"
+          export MAVEN_PASSWORD="${MAVEN_PASSWORD:-$GH_TOKEN}"
+        else
+          if [ -z "$MAVEN_USERNAME" ] || [ -z "$MAVEN_PASSWORD" ]; then
+            echo 'Custom Maven repository requires MAVEN_USERNAME and MAVEN_PASSWORD secrets'
+            exit 1
           fi
-          python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
-          python tools/contracts/generate.py
-          ./gradlew --no-daemon :contracts-java:test :contracts-java:publishMavenJavaPublicationToRemoteRepository
-          cp packages/contracts/java/build/libs/*.jar build/development/assets/
-          cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/development/assets/toolgate-contracts-$(cat build/development/MAVEN_VERSION).pom"
-      - name: Publish tested images and GitHub prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: python tools/release/development.py publish
+        fi
+        python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
+        python tools/contracts/generate.py
+        ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
+        cp packages/contracts/java/build/libs/*.jar build/development/assets/
+        cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/development/assets/toolgate-contracts-$(cat build/development/MAVEN_VERSION).pom"
+    - name: Publish tested images and GitHub prerelease
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_SHA: ${{ github.sha }}
+        DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      run: python tools/release/development.py publish
+'on':
+  workflow_call: null

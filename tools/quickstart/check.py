@@ -458,7 +458,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         for container in reversed(containers):subprocess.run(['docker','rm','-f',container],capture_output=True)
         subprocess.run(['docker','volume','rm',volume],capture_output=True)
 
-def build_images(image='olo-toolgate-quickstart:enterprise-validation',client_assets=None):
+def build_images(image='olo-toolgate-quickstart:enterprise-validation',client_assets=None,prebuilt_ui=False):
     assets=[]
     if client_assets:
         path=Path(client_assets).resolve();relative=path.relative_to(ROOT).as_posix()
@@ -466,12 +466,15 @@ def build_images(image='olo-toolgate-quickstart:enterprise-validation',client_as
         assets=['--build-arg','CLIENT_ASSETS_DIR='+relative,'--build-arg','CLIENT_DOWNLOADS_DIRECTORY=/opt/toolgate/client-downloads']
     version=(ROOT/'VERSION').read_text().strip()
     revision=run(['git','rev-parse','HEAD'],capture_output=True,text=True).stdout.strip()
+    if prebuilt_ui: assets += ['--build-arg','ADMIN_UI_SOURCE=console-prebuilt']
     run(['docker','build','-f','apps/control-plane/Dockerfile','--build-arg','VERSION='+version,'--build-arg','REVISION='+revision,'--build-arg','QUARKUS_PROFILE=quickstart',*assets,'-t','olo-toolgate-control:enterprise-validation','.'])
     run(['docker','build','-f','apps/quickstart/Dockerfile','--build-arg','CONTROL_IMAGE=olo-toolgate-control:enterprise-validation','--build-arg','VERSION='+version,'--build-arg','REVISION='+revision,*assets,'-t',image,'.'])
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--image',default='olo-toolgate-quickstart:enterprise-validation');parser.add_argument('--build',action='store_true');parser.add_argument('--no-browser',action='store_true');parser.add_argument('--postgresql',action='store_true');parser.add_argument('--gateway-image');parser.add_argument('--client-assets',type=Path);args=parser.parse_args()
-    if args.build:build_images(args.image,args.client_assets)
+    parser=argparse.ArgumentParser();parser.add_argument('--image',default='olo-toolgate-quickstart:enterprise-validation');parser.add_argument('--build',action='store_true');parser.add_argument('--build-only',action='store_true');parser.add_argument('--no-browser',action='store_true');parser.add_argument('--postgresql',action='store_true');parser.add_argument('--gateway-image');parser.add_argument('--client-assets',type=Path);parser.add_argument('--prebuilt-ui',action='store_true');args=parser.parse_args()
+    if args.build_only and not args.build:parser.error('--build-only requires --build')
+    if args.build:build_images(args.image,args.client_assets,args.prebuilt_ui)
+    if args.build_only:return
     if args.postgresql:
         network='toolgate-enterprise-pg-'+secrets.token_hex(6)
         with database() as db,tempfile.TemporaryDirectory(prefix='toolgate-db-custody-') as temp:

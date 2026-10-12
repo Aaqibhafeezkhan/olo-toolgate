@@ -3,6 +3,11 @@
 name: metadata-preflight
 on:
   workflow_call:
+    inputs:
+      shared_checks:
+        type: boolean
+        default: false
+        description: Foundation owns the production UI build and browser download gate
 permissions:
   contents: read
 jobs:
@@ -30,6 +35,7 @@ jobs:
       - name: Scan staged source and prove public-key allowances remain narrow
         run: node tools/ci/secret-scan.mjs
       - name: Catch browser download contract regressions before native builds
+        if: ${{ !inputs.shared_checks }}
         run: |
           npm ci --ignore-scripts
           npm --workspace @olo-labs/toolgate-admin-ui exec -- playwright install --with-deps chromium

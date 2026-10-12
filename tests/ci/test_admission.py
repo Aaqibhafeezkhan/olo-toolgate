@@ -80,7 +80,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotIn('github.base_ref',condition)
         self.assertIn("github.event.workflow_run.head_branch == 'main'",condition)
         self.assertNotIn('(!inputs.main_only ||',condition)
-        for name in ('admission','foundation','client','control','gateway','quickstart',
+        for name in ('admission','ci','foundation','client','control','gateway','quickstart',
                      'development-release','release-foundation'):
             document=yaml.safe_load((root/f'.github/workflows/{name}.yml').read_text())
             with self.subTest(workflow=name):
@@ -93,9 +93,11 @@ class AdmissionTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/development-release.yml').read_text())
         events=document.get('on',document.get(True,{}))
-        self.assertEqual(events['workflow_run']['branches'],['main'])
-        self.assertTrue(document['jobs']['admission']['with']['main_only'])
+        self.assertEqual(set(events),{'workflow_call'})
         self.assertIn("github.ref == 'refs/heads/main'",document['jobs']['publish']['if'])
+        pipeline=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
+        self.assertTrue(pipeline['jobs']['admission']['with']['main_only'])
+        self.assertEqual(set(pipeline['jobs']['release']['needs']),{'foundation','clients','images'})
 
     def test_no_workflow_is_triggered_by_pull_requests(self):
         root=Path(__file__).resolve().parents[2]
@@ -106,18 +108,18 @@ class AdmissionTests(unittest.TestCase):
                 self.assertNotIn('pull_request',events)
                 self.assertNotIn('pull_request_target',events)
 
-    def test_five_ci_workflows_only_trigger_for_main_pushes(self):
+    def test_unified_ci_is_the_only_main_push_entrypoint(self):
         root=Path(__file__).resolve().parents[2]
         for name in ('foundation','client','control','gateway','quickstart'):
             document=yaml.safe_load((root/f'.github/workflows/{name}.yml').read_text())
             events=document.get('on',document.get(True,{}))
             with self.subTest(workflow=name):
-                expected={'push','workflow_dispatch'}
-                if name=='client':expected.add('workflow_call')
-                self.assertEqual(set(events),expected)
-                self.assertEqual(events['push'],{'branches':['main']})
-                self.assertTrue(document['jobs']['admission']['with']['main_only'])
-                self.assertEqual(document['jobs']['admission']['if'],"github.ref == 'refs/heads/main'")
+                self.assertEqual(set(events),{'workflow_call'})
+        document=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
+        events=document.get('on',document.get(True,{}))
+        self.assertEqual(set(events),{'push','workflow_dispatch'})
+        self.assertEqual(events['push'],{'branches':['main']})
+        self.assertTrue(document['jobs']['admission']['with']['main_only'])
 
     def test_main_only_admission_is_opt_in_for_separate_release_workflows(self):
         root=Path(__file__).resolve().parents[2]

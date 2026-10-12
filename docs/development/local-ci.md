@@ -35,7 +35,7 @@ python tools/ci/local.py audit
 python tools/ci/local.py run --job preflight.metadata
 
 # Replay selected full job bodies.
-python tools/ci/local.py run --job foundation.check --job gateway.container-and-replicas
+python tools/ci/local.py run --job foundation.check
 
 # Attempt all supported bodies and report every remaining gap.
 python tools/ci/local.py run
@@ -121,3 +121,11 @@ dependencies can differ or fail. The report always sets
 `allGitHubTriggersVerified` to `false`. Use hosted CI on the final commit, with
 the actual native matrix and release environments, to close these gaps. See
 [RC admission](ci-admission.md) for the automatic CI enablement and PR title rules.
+
+The unified main workflow delegates production UI/browser checks to foundation.
+A standalone preflight replay includes its browser check using the reviewed
+`shared_checks=false` default. Main reuses foundation UI/test evidence for its
+image stage. `images.verify` requires same-run hosted artifacts and is reported
+as unverified locally. Legacy component bodies are compatibility-only and are
+not selected for replay; [the ownership map](ci-check-ownership.md) lists their
+current main-stage owners.
