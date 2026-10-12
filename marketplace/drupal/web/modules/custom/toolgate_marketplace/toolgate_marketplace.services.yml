@@ -1,0 +1,21 @@
+services:
+  _defaults:
+    autowire: true
+  logger.channel.toolgate_marketplace:
+    parent: logger.channel_base
+    arguments: ['toolgate_marketplace']
+  Drupal\toolgate_marketplace\MarketplaceSettings:
+    arguments: [null]
+  Drupal\toolgate_marketplace\FileRefResolver: ~
+  Drupal\toolgate_marketplace\HelperClient: ~
+  Drupal\toolgate_marketplace\Catalog: ~
+  Drupal\toolgate_marketplace\KeySet:
+    arguments:
+      $cache: '@cache.default'
+  Drupal\toolgate_marketplace\PublishService:
+    arguments:
+      $logger: '@logger.channel.toolgate_marketplace'
+  Drupal\toolgate_marketplace\SeedRunner:
+    arguments:
+      $logger: '@logger.channel.toolgate_marketplace'
+  Drupal\toolgate_marketplace\Health: ~

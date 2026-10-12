@@ -1,0 +1,22 @@
+uuid: b5abbe7b-f4ce-4437-a851-5966b6f7d9a3
+langcode: en
+status: true
+dependencies:
+  theme:
+    - olo_orgs
+_core:
+  default_config_hash: T0wbI6qVdThbbIqXDZFg_1VZ3_ittXBdEoUH7d7ux_E
+id: olo_orgs_local_tasks
+theme: olo_orgs
+region: content
+weight: -20
+provider: null
+plugin: local_tasks_block
+settings:
+  id: local_tasks_block
+  label: Tabs
+  label_display: '0'
+  provider: core
+  primary: true
+  secondary: true
+visibility: {  }

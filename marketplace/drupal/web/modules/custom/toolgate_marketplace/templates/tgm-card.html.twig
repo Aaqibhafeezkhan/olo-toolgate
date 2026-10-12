@@ -1,0 +1,22 @@
+{#
+/**
+ * @file
+ * A tool card. All values are escaped by Twig; none is trusted.
+ */
+#}
+{% set publisher = item.publisher %}
+<article class="tgm-card">
+  <div class="tgm-card__icon" aria-hidden="true">{{ item.title|first|upper }}</div>
+  <div class="tgm-card__body">
+    <h3 class="tgm-card__title"><a href="{{ url }}">{{ item.title }}</a></h3>
+    <p class="tgm-card__summary">{{ item.summary }}</p>
+    <p class="tgm-card__meta">
+      {% if avatar %}<img class="tgm-avatar tgm-avatar--sm" src="{{ avatar }}" alt="" width="20" height="20">{% endif %}
+      <span>{{ publisher.displayName }}</span>
+      <span class="tgm-dot" aria-hidden="true">·</span>
+      <span>{{ item.runtime|capitalize }}</span>
+      {% if item.signed %}<span class="tgm-badge tgm-badge--signed">{{ 'Signed'|t }}</span>{% endif %}
+    </p>
+    {% if compat %}<p class="tgm-card__compat">{{ compat }}</p>{% endif %}
+  </div>
+</article>

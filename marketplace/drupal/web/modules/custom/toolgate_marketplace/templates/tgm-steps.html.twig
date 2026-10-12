@@ -1,0 +1,5 @@
+<ol class="tgm-steps" aria-label="{{ 'Publishing steps'|t }}">
+  {% for n, label in {1: 'Upload'|t, 2: 'Checks'|t, 3: 'Describe'|t, 4: 'Publish'|t} %}
+    <li class="tgm-steps__step{% if n == current %} is-current{% elseif n < current %} is-done{% endif %}"{% if n == current %} aria-current="step"{% endif %}><span class="tgm-steps__n">{{ n }}</span> {{ label }}</li>
+  {% endfor %}
+</ol>

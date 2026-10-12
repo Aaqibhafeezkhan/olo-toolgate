@@ -1,9 +1,20 @@
 # Marketplace-local ignores (does not rely on the repository root .gitignore).
 /drupal/vendor/
-/drupal/web/core/
-/drupal/web/modules/contrib/
-/drupal/web/themes/contrib/
-/drupal/web/sites/*/files/
+/drupal/drush/Commands/contrib/
+# Composer and the core scaffold write the rest of web/; only our own code is tracked.
+/drupal/web/*
+!/drupal/web/modules/
+/drupal/web/modules/*
+!/drupal/web/modules/custom/
+!/drupal/web/themes/
+/drupal/web/themes/*
+!/drupal/web/themes/custom/
+!/drupal/web/sites/
+/drupal/web/sites/*
+!/drupal/web/sites/default/
+/drupal/web/sites/default/*
+!/drupal/web/sites/default/settings.php
+!/drupal/web/sites/default/services.yml
 /helper/build/
 /helper/.gradle/
 /deploy/.env

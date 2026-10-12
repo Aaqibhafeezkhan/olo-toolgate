@@ -1,0 +1,111 @@
+{% set d = detail %}
+<article class="tgm-tool">
+  {% if d.delisted %}
+    <div class="messages messages--warning" role="status">{{ 'This version was delisted. It can no longer be downloaded or installed.'|t }}</div>
+  {% endif %}
+  <header class="tgm-tool__header">
+    <div class="tgm-tool__heading">
+      <p class="tgm-tool__id"><code>{{ d.packageId }}</code></p>
+      <p class="tgm-tool__summary">{{ d.summary }}</p>
+      <p class="tgm-tool__by">
+        {% if avatar %}<img class="tgm-avatar tgm-avatar--sm" src="{{ avatar }}" alt="" width="24" height="24">{% endif %}
+        {{ 'By'|t }} <a href="{{ d.publisher.profileUrl }}">{{ d.publisher.displayName }}</a>
+        {% if d.signed %}<span class="tgm-badge tgm-badge--signed">{{ 'Signed'|t }}</span>{% endif %}
+      </p>
+      {% if compat %}<p class="tgm-tool__compat">{{ compat }}</p>{% endif %}
+    </div>
+    <div class="tgm-tool__actions">
+      <label for="tgm-version-picker">{{ 'Version'|t }}</label>
+      <select id="tgm-version-picker" data-tgm-version-picker>
+        {% for v in versions %}
+          <option value="{{ v.url }}"{% if v.current %} selected{% endif %}>{{ v.version }}{% if v.delisted %} ({{ 'delisted'|t }}){% endif %}</option>
+        {% endfor %}
+      </select>
+      {% if d.downloadUrl %}<a class="button button--primary" href="{{ d.downloadUrl }}">{{ 'Download'|t }}</a>{% endif %}
+      {% for link in owner_links %}<a class="button" href="{{ link.url }}">{{ link.title }}</a>{% endfor %}
+    </div>
+  </header>
+  {% if not d.delisted %}
+  <section class="tgm-use" aria-labelledby="tgm-use-title">
+    <h2 id="tgm-use-title">{{ 'Use in ToolGate'|t }}</h2>
+    <p>{{ 'In the ToolGate console, open Server packages, then Marketplace, and install this package. These values identify exactly what you install:'|t }}</p>
+    <pre class="tgm-use__box" data-tgm-copy-source><code>{{ use_box }}</code></pre>
+    <button type="button" class="button" data-tgm-copy>{{ 'Copy'|t }}</button>
+    <span class="tgm-copy-status" role="status" data-tgm-copy-status></span>
+  </section>
+  {% endif %}
+  <nav class="tgm-tabs" aria-label="{{ 'Sections'|t }}">
+    <a href="#overview">{{ 'Overview'|t }}</a>
+    <a href="#tools">{{ 'Tools'|t }} <span class="tgm-count">{{ d.tools|length }}</span></a>
+    <a href="#settings">{{ 'Settings it needs'|t }} <span class="tgm-count">{{ d.requiredSettings|length }}</span></a>
+    <a href="#versions">{{ 'Versions'|t }}</a>
+    <a href="#publisher">{{ 'Publisher'|t }}</a>
+  </nav>
+  <section id="overview" class="tgm-panel">
+    <h2>{{ 'Overview'|t }}</h2>
+    <div class="tgm-markdown">{{ description }}</div>
+    <ul class="tgm-links">
+      {% if d.repositoryUrl %}<li><a href="{{ d.repositoryUrl }}" rel="nofollow noopener noreferrer ugc">{{ 'Source repository'|t }}</a></li>{% endif %}
+      {% if d.documentationUrl %}<li><a href="{{ d.documentationUrl }}" rel="nofollow noopener noreferrer ugc">{{ 'Documentation'|t }}</a></li>{% endif %}
+      {% if d.license %}<li>{{ 'License'|t }}: {{ d.license }}</li>{% endif %}
+    </ul>
+    {% if d.screenshots %}
+      <div class="tgm-shots">
+        {% for id in d.screenshots %}<img src="{{ path('toolgate_marketplace.api.media', {media_id: id}) }}" alt="{{ 'Screenshot of @title'|t({'@title': d.title}) }}" loading="lazy">{% endfor %}
+      </div>
+    {% endif %}
+  </section>
+  <section id="tools" class="tgm-panel">
+    <h2>{{ 'Tools'|t }}</h2>
+    <dl class="tgm-defs">
+      {% for tool in d.tools %}
+        <dt><code>{{ tool.name }}</code> <span class="tgm-effect tgm-effect--{{ tool.effect|lower }}">{{ tool.effect|replace({'_': ' '})|lower|capitalize }}</span></dt>
+        <dd><strong>{{ tool.title }}</strong> {{ tool.description }}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+  <section id="settings" class="tgm-panel">
+    <h2>{{ 'Settings it needs'|t }}</h2>
+    {% if d.requiredSettings %}
+      <table class="tgm-table">
+        <thead><tr><th>{{ 'Name'|t }}</th><th>{{ 'Kind'|t }}</th><th>{{ 'Type'|t }}</th><th>{{ 'Default'|t }}</th><th>{{ 'Description'|t }}</th></tr></thead>
+        <tbody>
+          {% for s in d.requiredSettings %}
+            <tr><td><code>{{ s.name }}</code></td><td>{{ s.kind }}</td><td>{{ s.type }}</td><td>{% if s.default is not null %}<code>{{ s.default }}</code>{% endif %}</td><td>{{ s.description }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>{{ 'No settings.'|t }}</p>
+    {% endif %}
+  </section>
+  <section id="versions" class="tgm-panel">
+    <h2>{{ 'Versions'|t }}</h2>
+    <table class="tgm-table">
+      <thead><tr><th>{{ 'Version'|t }}</th><th>{{ 'API change'|t }}</th><th>{{ 'Compatibility'|t }}</th><th>{{ 'Published'|t }}</th></tr></thead>
+      <tbody>
+        {% for v in versions %}
+          <tr{% if v.current %} aria-current="true"{% endif %}>
+            <td><a href="{{ v.url }}">{{ v.version }}</a>{% if v.delisted %} <span class="tgm-chip tgm-chip--delisted">{{ 'Delisted'|t }}</span>{% endif %}</td>
+            <td>{{ v.apiChange }}</td>
+            <td>{{ v.compat }}</td>
+            <td>{% if v.publishedAt %}{{ v.publishedAt|format_date('short') }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section id="publisher" class="tgm-panel">
+    <h2>{{ 'Publisher'|t }}</h2>
+    <p><a href="{{ d.publisher.profileUrl }}">{{ d.publisher.displayName }}</a>{% if d.publisher.organization %}, {{ d.publisher.organization }}{% endif %}</p>
+    <p class="tgm-note">{{ 'Publisher details are supplied by the publisher. Validation checks package format, not code safety.'|t }}</p>
+  </section>
+  <aside class="tgm-signature" aria-labelledby="tgm-signature-title">
+    <h2 id="tgm-signature-title">{{ 'Signature'|t }}</h2>
+    <dl class="tgm-facts">
+      <dt>{{ 'Package digest'|t }}</dt><dd><code>{{ d.packageDigest }}</code></dd>
+      {% if key %}<dt>{{ 'Key'|t }}</dt><dd><code>{{ key.keyId }}</code></dd><dt>{{ 'Fingerprint'|t }}</dt><dd><code>{{ key.fingerprint }}</code></dd>{% endif %}
+    </dl>
+    {% if d.releaseUrl %}<p><a href="{{ d.releaseUrl }}">{{ 'Signed release record'|t }}</a> · <a href="{{ path('toolgate_marketplace.about_signing') }}">{{ 'About signing'|t }}</a></p>{% endif %}
+  </aside>
+</article>

@@ -1,0 +1,10 @@
+toolgate_marketplace.admin:
+  title: Marketplace
+  description: 'Versions, takedowns and the example seed status.'
+  route_name: toolgate_marketplace.admin
+  parent: system.admin
+  weight: -5
+toolgate_marketplace.admin_seed:
+  title: 'Example seed status'
+  route_name: toolgate_marketplace.admin_seed
+  parent: toolgate_marketplace.admin

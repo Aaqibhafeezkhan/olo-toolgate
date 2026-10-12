@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+#
+# The deploy job (prompt §6.2): run once per release, never by web replicas.
+#   empty database -> drush site:install --existing-config
+#   otherwise      -> drush deploy (updates, config import, deploy hooks)
+# then, with MARKETPLACE_SEED_EXAMPLES=true (the default), the example seed.
+set -euo pipefail
+cd /opt/drupal
+export MARKETPLACE_CONFIG_READONLY=false
+
+for attempt in $(seq 1 60); do
+  if drush sql:query 'SELECT 1' >/dev/null 2>&1; then
+    break
+  fi
+  [ "$attempt" = 60 ] && { echo "deploy: database unreachable" >&2; exit 1; }
+  sleep 2
+done
+
+if drush php:eval "echo \\Drupal\\Core\\Database\\Database::getConnection()->schema()->tableExists('key_value') ? 'installed' : 'empty';" 2>/dev/null | grep -q installed; then
+  echo "deploy: existing site, running drush deploy"
+  drush deploy -y
+else
+  echo "deploy: empty database, installing from config/sync"
+  password_file="${MARKETPLACE_ADMIN_PASSWORD_FILE:-/run/secrets/marketplace_admin_password}"
+  if [ ! -s "$password_file" ]; then
+    echo "deploy: $password_file is required for the first install" >&2
+    exit 1
+  fi
+  drush site:install --existing-config -y \
+    --account-name="${MARKETPLACE_ADMIN_USER:-admin}" \
+    --account-mail="${MARKETPLACE_ADMIN_MAIL:-${MARKETPLACE_MAIL_FROM:-admin@localhost}}" \
+    --account-pass="$(cat "$password_file")"
+fi
+
+if [ "${MARKETPLACE_SEED_EXAMPLES:-true}" = "true" ]; then
+  drush toolgate-marketplace:seed /opt/olo/seed
+fi
+drush toolgate-marketplace:seed-status

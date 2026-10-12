@@ -1,0 +1,35 @@
+<section class="tgm-checks">
+  {% if valid %}
+    <div class="messages messages--status" role="status">{{ 'All checks passed and the package is signed. It stays private until you publish it.'|t }}</div>
+  {% else %}
+    <div class="messages messages--error" role="alert">{{ 'This package was not accepted. Nothing was published.'|t }}</div>
+    <ul class="tgm-errors">
+      {% for e in errors %}<li><code>{{ e.code }}</code> {{ e.message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  {% if version.packageId %}
+  <dl class="tgm-facts">
+    <dt>{{ 'Package id'|t }}</dt><dd><code>{{ version.packageId }}</code></dd>
+    <dt>{{ 'Version'|t }}</dt><dd><code>{{ version.version }}</code></dd>
+    <dt>{{ 'Runtime'|t }}</dt><dd>{{ version.runtime }}</dd>
+    <dt>{{ 'Size'|t }}</dt><dd>{{ version.size }}</dd>
+    {% if version.packageDigest %}<dt>{{ 'Package digest'|t }}</dt><dd><code>{{ version.packageDigest }}</code></dd>{% endif %}
+    {% if version.apiChange %}<dt>{{ 'API change'|t }}</dt><dd>{{ version.apiChange }}</dd>{% endif %}
+    {% if compat %}<dt>{{ 'Compatibility'|t }}</dt><dd>{{ compat }}</dd>{% endif %}
+  </dl>
+  {% endif %}
+  {% if api_changes %}<h2>{{ 'API changes since the previous version'|t }}</h2><ul>{% for c in api_changes %}<li>{{ c }}</li>{% endfor %}</ul>{% endif %}
+  {% if warnings %}<h2>{{ 'Warnings'|t }}</h2><ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+  {% if tools %}
+    <h2>{{ 'Tools'|t }}</h2>
+    <ul>{% for t in tools %}<li><code>{{ t.name }}</code> {{ t.title }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if settings %}
+    <h2>{{ 'Settings it needs'|t }}</h2>
+    <ul>{% for s in settings %}<li><code>{{ s.name }}</code> ({{ s.kind }})</li>{% endfor %}</ul>
+  {% endif %}
+  <p class="tgm-actions">
+    <a class="button button--primary" href="{{ next_url }}">{% if valid %}{{ 'Continue: describe your tool'|t }}{% else %}{{ 'Upload again'|t }}{% endif %}</a>
+    <a class="button" href="{{ discard_url }}">{{ 'Discard'|t }}</a>
+  </p>
+</section>

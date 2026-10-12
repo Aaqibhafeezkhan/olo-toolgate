@@ -1,0 +1,22 @@
+<article class="tgm-static">
+  <p>{{ 'Every package on OLO Orgs is checked and then signed with an Ed25519 key that only the internal package checker holds. The signature covers the package id, version, package digest, descriptor digest, archive hash and the publisher slug, plus the marketplace id below.'|t }}</p>
+  <p>{{ 'ToolGate verifies the signature with a key you pin in its configuration before it imports anything, so a change to this website or its storage cannot make ToolGate install altered bytes.'|t }}</p>
+  <p><strong>{{ 'Signing is not a code review.'|t }}</strong> {{ 'It says where a package came from, not that it is safe. Review a tool before you deploy it.'|t }}</p>
+  <h2>{{ 'Marketplace id'|t }}</h2>
+  <p><code>{{ marketplace }}</code></p>
+  <h2>{{ 'Keys'|t }}</h2>
+  {% if keys %}
+    <table class="tgm-table">
+      <thead><tr><th>{{ 'Key id'|t }}</th><th>{{ 'Status'|t }}</th><th>{{ 'Fingerprint'|t }}</th><th>{{ 'Public key'|t }}</th></tr></thead>
+      <tbody>
+        {% for k in keys %}<tr><td><code>{{ k.keyId }}</code></td><td>{{ k.status }}</td><td><code>{{ k.fingerprint }}</code></td><td><code>{{ k.publicKey }}</code></td></tr>{% endfor %}
+      </tbody>
+    </table>
+    <p>{{ 'Set this in ToolGate Control, and check the fingerprint against this page from more than one network:'|t }}</p>
+    {% for k in keys %}{% if k.status == 'current' %}<pre><code>TOOLGATE_CONTROL_MARKETPLACE_ID={{ marketplace }}
+TOOLGATE_CONTROL_MARKETPLACE_KEYS={{ k.keyId }}:{{ k.publicKey }}</code></pre>{% endif %}{% endfor %}
+  {% else %}
+    <p>{{ 'The key set is not available right now.'|t }}</p>
+  {% endif %}
+  <p><a href="{{ keys_url }}">{{ 'Key set as JSON'|t }}</a></p>
+</article>
