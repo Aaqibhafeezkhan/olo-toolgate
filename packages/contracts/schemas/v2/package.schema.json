@@ -653,6 +653,159 @@
         "binding",
         "acknowledgedSecurityDelta"
       ]
+    },
+    "PackageDeploymentRequest": {
+      "type": "object",
+      "description": "Deploys an uploaded server package to the Tool Hosts with values for its declared globals. A destination's host is the global its hostSetting names.",
+      "additionalProperties": false,
+      "properties": {
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "globals": {
+          "type": "object",
+          "description": "Global name to value. Undeclared names are refused; a missing global takes its default.",
+          "maxProperties": 256
+        }
+      },
+      "required": [
+        "packageDigest",
+        "globals"
+      ]
+    },
+    "PackageDeployment": {
+      "type": "object",
+      "description": "The package version Tool Hosts run for one package id, with the service profile and globals Control built for it.",
+      "additionalProperties": false,
+      "properties": {
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "serviceProfileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "serviceProfileRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "globalsDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "toolIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/ToolId"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "deployedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "packageId",
+        "version",
+        "packageDigest",
+        "revision",
+        "serviceProfileDigest",
+        "serviceProfileRevision",
+        "globalsDigest",
+        "toolIds",
+        "deployedAtUnixMs"
+      ]
+    },
+    "PackageDeploymentPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/PackageDeployment"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "Current deployments, one per package id."
+    },
+    "ToolHostAssignment": {
+      "type": "object",
+      "description": "One deployed tool a Tool Host runs. The host reports it in its check-in as a local tool, so Control places calls for it there.",
+      "additionalProperties": false,
+      "properties": {
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "action": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "inputSchema": {
+          "type": "object"
+        },
+        "toolDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "toolId",
+        "action",
+        "description",
+        "enabled",
+        "inputSchema",
+        "toolDigest",
+        "packageDigest"
+      ]
+    },
+    "ToolHostAssignments": {
+      "type": "object",
+      "description": "What a registered Tool Host runs: its tools, and the deployments whose package, service profile and globals it fetches by digest.",
+      "additionalProperties": false,
+      "properties": {
+        "hostId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/ToolHostAssignment"
+          },
+          "maxItems": 256
+        },
+        "deployments": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/PackageDeployment"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "hostId",
+        "tools",
+        "deployments"
+      ]
     }
   }
 }

@@ -82,14 +82,24 @@ public final class EnterpriseOperations {
         return authoritative(actor.tenant(),actor.id(),request.invocationId(),DirectoryService.digest(document),tx->{var reservation=reserveInSession(actor.tenant(),tx,request,actor.id());return reply(reservation,reservation.invocation().revision());});
     }
     EnterpriseReservation reserveInSession(Ids.TenantId tenant,Store.Session tx,EnterpriseReservationRequest request,String actorId){
-        long now=now(tx);var i=invocation(tx,request.invocationId());if(!java.util.Objects.equals(i.revision(),request.expectedRevision()))throw Failure.conflict();fresh(tenant,tx,i,now);
+        var lease=lease(tenant,tx,request.invocationId(),request.expectedRevision(),actorId);var i=lease.invocation();var e=i.evaluation();
+        var claims=new EnterprisePermitClaims(issuer,audience,lease.nonce(),i.id(),i.requestDigest(),lease.evaluationDigest(),i.authorizationEpoch(),tx.load().revision(),lease.issuedAt(),lease.expiresAt(),e.toolDigest(),e.packageDigest(),e.context().bindingId(),e.context().deviceId(),lease.approvalIds());
+        return new EnterpriseReservation(i,signer.sign(claims));
+    }
+    /** One single-use nonce for a fresh attempt, at most 10 s; the invocation moves to RESERVED. Signing is the caller's. */
+    record Lease(EnterpriseInvocation invocation,String nonce,String evaluationDigest,long issuedAt,long expiresAt,List<String> approvalIds) {}
+    Lease lease(Ids.TenantId tenant,Store.Session tx,String invocationId,long expectedRevision,String actorId){
+        long now=now(tx);var i=invocation(tx,invocationId);if(i.revision()!=expectedRevision)throw Failure.conflict();fresh(tenant,tx,i,now);
             if(i.state()==EnterpriseInvocationState.RESERVED){var old=tx.enterprise().nonce(i.reservedNonce());if(old==null||old.consumedAt()!=null||old.expiresAt()>now)throw Failure.conflict();}
             else if(i.state()!=EnterpriseInvocationState.QUEUED)throw Failure.conflict();
             var decision=decide(tenant,tx,i.evaluation(),now,true);String nonce=UUID.randomUUID().toString();long expires=Math.min(i.expiresAtUnixMs(),Math.min(now+10000,decision.validUntilUnixMs()));
             String evalDigest=DirectoryService.digest(codec.json(i.evaluation()));var e=i.evaluation();var approval=tx.enterprise().approval(approvalId(i.id()));var ids=approval==null?List.<String>of():List.of(approval.id());
-            var claims=new EnterprisePermitClaims(issuer,audience,nonce,i.id(),i.requestDigest(),evalDigest,i.authorizationEpoch(),tx.load().revision(),now,expires,e.toolDigest(),e.packageDigest(),e.context().bindingId(),e.context().deviceId(),ids);
-            var permit=signer.sign(claims);var next=changed(i,EnterpriseInvocationState.RESERVED,nonce,i.completedResources(),null);tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nonce,i.id(),evalDigest,i.authorizationEpoch(),expires,null));tx.enterprise().saveInvocation(next,now,i.revision());tx.audit(actorId,"PERMIT_RESERVE","invocation:"+next.id(),next.revision(),e.context().requestId(),next.requestDigest());return new EnterpriseReservation(next,permit);
+            var next=changed(i,EnterpriseInvocationState.RESERVED,nonce,i.completedResources(),null);tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nonce,i.id(),evalDigest,i.authorizationEpoch(),expires,null));tx.enterprise().saveInvocation(next,now,i.revision());tx.audit(actorId,"PERMIT_RESERVE","invocation:"+next.id(),next.revision(),e.context().requestId(),next.requestDigest());
+            return new Lease(next,nonce,evalDigest,now,expires,ids);
     }
+    String issuer(){return issuer;}
+    EffectSigner signer(){return signer;}
+    EnterpriseInvocation invocationIn(Store.Session tx,String id){return invocation(tx,id);}
     void requireFresh(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation invocation){fresh(tenant,tx,invocation,now(tx));}
     EnterpriseInvocation secretAuthority(Ids.TenantId tenant,Store.Session tx,String device,String invocationId,String name){var i=invocation(tx,invocationId);if(i.state()!=EnterpriseInvocationState.EXECUTING||!device.equals(i.evaluation().context().deviceId())||i.evaluation().resources().stream().noneMatch(r->r.kind()==ResourceKind.CUSTOM&&r.locator().equals("secret://"+name)))throw ManagementAccess.denied();fresh(tenant,tx,i,now(tx));return i;}
     void checkpoint(Ids.TenantId tenant,Store.Session tx,String deviceId,EnterpriseInvocation invocation,AuthorizationRequest request){
@@ -114,6 +124,33 @@ public final class EnterpriseOperations {
                 ||lease==null||!lease.invocationId().equals(i.id())||!lease.evaluationDigest().equals(claims.evaluationDigest())||!java.util.Objects.equals(lease.authorizationEpoch(),i.authorizationEpoch())||!java.util.Objects.equals(lease.expiresAt(),claims.expiresAtUnixMs()))throw ManagementAccess.denied();
             fresh(tenant,tx,i,now);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
             tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest());return reply(next,next.revision());});
+    }
+    /** v2 consumption by a Tool Host (plan.md §11.3): the host's certificate names the device the permit is addressed to.
+     *  The fencing token is the permit's nonce; reports and secret deliveries carry it back. */
+    public Store.Reply consumeInvocation(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String document){var request=codec.model(document,io.ololabs.toolgate.contracts.v2.PermitConsumption.class);var claims=signer.verifyInvocation(request.permit());var target=claims.target();
+        return authoritative(tenant,"device-effect",request.invocationId(),DirectoryService.digest(document),tx->{long now=now(tx);String authenticatedDevice=certificate.apply(tx);var i=invocation(tx,request.invocationId());var e=i.evaluation();var lease=tx.enterprise().nonce(claims.nonce());
+            if(!issuer.equals(claims.iss())||!authenticatedDevice.equals(claims.aud())||!authenticatedDevice.equals(e.context().deviceId())||tx.packages().toolHost(authenticatedDevice)==null
+                ||!claims.invocationId().equals(i.id())||!request.argumentsDigest().equals(claims.argumentsDigest())||!request.toolDescriptorDigest().equals(target.toolDescriptorDigest())
+                ||!request.packageDigest().equals(target.packageDigest())||!request.artifactDigest().equals(target.artifactDigest())||!target.packageDigest().equals("sha256:"+e.packageDigest())||!target.toolId().equals(e.toolId())
+                ||claims.iat()>now||claims.exp()<=now||claims.exp()-claims.iat()>10000||!java.util.Objects.equals(claims.identity().authorizationEpoch(),i.authorizationEpoch())
+                ||i.state()!=EnterpriseInvocationState.RESERVED||!claims.nonce().equals(i.reservedNonce())
+                ||lease==null||lease.consumedAt()!=null||!lease.invocationId().equals(i.id())||!java.util.Objects.equals(lease.authorizationEpoch(),i.authorizationEpoch())||!java.util.Objects.equals(lease.expiresAt(),claims.exp()))throw ManagementAccess.denied();
+            fresh(tenant,tx,i,now);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
+            tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest());
+            return reply(new io.ololabs.toolgate.contracts.v2.PermitConsumed(i.id(),claims.nonce(),i.expiresAtUnixMs()),next.revision());});
+    }
+    /** v2 result from a Tool Host: COMPLETED completed every resource and FAILED none (the host reports a lost run of a
+     *  tool that needs the execution ledger as OUTCOME_UNKNOWN); anything else may have had effects. */
+    public Store.Reply reportInvocation(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String document,String fencingToken){var report=codec.model(document,io.ololabs.toolgate.contracts.v2.InvocationResultReport.class);
+        if(!report.fencingToken().equals(fencingToken))throw ManagementAccess.denied();
+        return authoritative(tenant,"device-effect",report.invocationId(),DirectoryService.digest(document),tx->{String device=certificate.apply(tx);var i=invocation(tx,report.invocationId());
+            if(!report.fencingToken().equals(i.reservedNonce())||tx.packages().toolHost(device)==null)throw ManagementAccess.denied();
+            var result=report.result()==null?null:(com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(report.result()));
+            var state=switch(report.outcome()){case COMPLETED->EnterpriseInvocationState.SUCCEEDED;case FAILED->EnterpriseInvocationState.FAILED;default->EnterpriseInvocationState.OUTCOME_UNKNOWN;};
+            if(state==EnterpriseInvocationState.SUCCEEDED&&result==null)throw Failure.validation();
+            var effect=new EnterpriseEffectReport(i.id(),i.state()==EnterpriseInvocationState.EXECUTING?i.revision():i.revision()-1,state,state==EnterpriseInvocationState.SUCCEEDED?i.evaluation().resources():List.of(),
+                state==EnterpriseInvocationState.SUCCEEDED?Canonical.digest(result).substring(7):null);
+            var next=reportInSession(tenant,tx,device,effect);return reply(next,next.revision());});
     }
     private void reviewer(Store.Session tx,String user,EnterpriseInvocation i,String obligation,long now){
         var d=tx.load();var e=i.evaluation();if(new ManagementAccess(codec).superAdministrator(d,user)){var policyEntry=d.entries().get(Kind.POLICY.id(obligation));if(policyEntry==null||!policyEntry.enabled()||codec.model(policyEntry.document(),ControlPolicy.class).decision()!=Decision.ASK)throw ManagementAccess.denied();return;}if(user.equals(e.context().userId()))throw ManagementAccess.denied();

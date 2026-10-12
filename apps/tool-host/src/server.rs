@@ -37,6 +37,11 @@ pub struct Host {
 }
 
 impl Host {
+    /// The Control client dispatch uses; enrollment swaps its certificate in place.
+    pub fn control(&self) -> Arc<Control> {
+        self.control.clone()
+    }
+
     pub fn new(config: Config) -> Result<Arc<Host>, String> {
         config.validate()?;
         let mut keys = HashMap::new();

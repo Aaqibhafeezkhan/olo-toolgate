@@ -42,12 +42,17 @@ public final class McpService {
     /** chosen is the device a person picked in the console; Gateway callers are placed by Control. */
     Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body,String chosen){gateway(actor,gateway);var c=codec.model(body,RequestContext.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);if(!tenant.value().equals(c.tenantId()))throw forbidden();
-            if(chosen!=null&&!placement().member(tx,c.bindingId(),chosen))throw forbidden();var placed=chosen!=null?chosen:placement().place(tx,c,now);
-            if(placed==null||tx.endpoint(placed)==null)return reply(new LocalToolCatalog(List.of()));
-            var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now))return reply(new LocalToolCatalog(List.of()));var usage=new HashMap<String,Long>();var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));var tools=new ArrayList<BuiltinToolInfo>();
-            for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
-                var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
-                if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest()))tools.add(t);
+            if(chosen!=null&&!placement().member(tx,c.bindingId(),chosen))throw forbidden();
+            // A Gateway caller sees the tools of every device a call could be placed on: a group may mix client devices and
+            // Tool Hosts, and placement sends each call to a member that reports the tool.
+            var devices=chosen!=null?List.of(chosen):placement().candidates(tx,c,now);var usage=new HashMap<String,Long>();var tools=new ArrayList<BuiltinToolInfo>();var listed=new HashSet<String>();
+            for(var placed:devices){
+                if(tx.endpoint(placed)==null)continue;
+                var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now))continue;var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));
+                for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
+                    var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
+                    if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest())&&listed.add(t.toolId()+"\n"+t.action()))tools.add(t);
+                }
             }return reply(new LocalToolCatalog(tools));});}
     public Store.Reply submit(DirectoryService.Actor actor,boolean gateway,String body,String requestId){gateway(actor,gateway);var submission=codec.model(body,RemoteToolSubmission.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);var i=invocation(tx,submission.invocationId());if(!i.id().equals(submission.context().requestId()))throw forbidden();

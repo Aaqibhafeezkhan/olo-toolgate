@@ -1,7 +1,9 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The host's three calls to Control (plan.md §11.3, §12.8), under its workload certificate:
-//! claim the permit's nonce, fetch a secret for a running invocation, and report the outcome.
+//! The host's calls to Control under its workload certificate. Per invocation (plan.md §11.3,
+//! §12.8): claim the permit's nonce, fetch a secret for a running invocation, and report the
+//! outcome. As an enrolled device (`device`): enroll, check in, register and fetch content. The
+//! certificate is either configured or the one enrollment issued, swapped in as it renews.
 
 use crate::config::ControlConfig;
 use olo_toolgate_contracts::v2::{InvocationResultReport, PermitConsumed, PermitConsumption};
@@ -21,41 +23,61 @@ pub enum ControlError {
     Unavailable(String),
 }
 
+impl std::fmt::Display for ControlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ControlError::Refused(status) => write!(f, "Control refused with {status}"),
+            ControlError::Unavailable(why) => f.write_str(why),
+        }
+    }
+}
+
 pub struct Control {
     url: String,
-    client: reqwest::Client,
+    roots: Option<Vec<reqwest::Certificate>>,
+    client: std::sync::RwLock<reqwest::Client>,
 }
 
 impl Control {
     pub fn new(config: &ControlConfig) -> Result<Control, String> {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let mut builder = reqwest::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .tls_sslkeylogfile(false)
-            .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(3));
-        if let Some(ca) = &config.ca_certificate_path {
-            let pem = std::fs::read(ca).map_err(|e| format!("{}: {e}", ca.display()))?;
-            let certs = reqwest::Certificate::from_pem_bundle(&pem)
-                .map_err(|e| format!("{}: {e}", ca.display()))?;
-            builder = builder.tls_certs_only(certs);
-        }
+        let roots = match &config.ca_certificate_path {
+            Some(ca) => {
+                let pem = std::fs::read(ca).map_err(|e| format!("{}: {e}", ca.display()))?;
+                Some(
+                    reqwest::Certificate::from_pem_bundle(&pem)
+                        .map_err(|e| format!("{}: {e}", ca.display()))?,
+                )
+            }
+            None => None,
+        };
+        let mut identity = None;
         if let (Some(cert), Some(key)) = (&config.client_certificate_path, &config.client_key_path)
         {
             let mut pem = std::fs::read(cert).map_err(|e| format!("{}: {e}", cert.display()))?;
             pem.extend(std::fs::read(key).map_err(|e| format!("{}: {e}", key.display()))?);
-            builder = builder.identity(
-                reqwest::Identity::from_pem(&pem)
-                    .map_err(|e| format!("control client identity: {e}"))?,
-            );
+            identity = Some(pem);
         }
+        let client = build(roots.as_ref(), identity.as_deref())?;
         Ok(Control {
             url: config.url.trim_end_matches('/').to_string(),
-            client: builder
-                .build()
-                .map_err(|e| format!("control client: {e}"))?,
+            roots,
+            client: std::sync::RwLock::new(client),
         })
+    }
+
+    /// Presents this certificate chain and key (PEM) on every later call.
+    pub fn use_identity(&self, pem: &[u8]) -> Result<(), String> {
+        let client = build(self.roots.as_ref(), Some(pem))?;
+        *self.client.write().unwrap_or_else(|e| e.into_inner()) = client;
+        Ok(())
+    }
+
+    fn client(&self) -> reqwest::Client {
+        self.client
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Moves the invocation to EXECUTING by consuming the permit's nonce; the reply's fencing
@@ -96,17 +118,57 @@ impl Control {
         body: &B,
         fencing_token: Option<&str>,
     ) -> Result<R, ControlError> {
+        let headers: Vec<(&str, &str)> = fencing_token
+            .map(|token| vec![(FENCING_HEADER, token)])
+            .unwrap_or_default();
+        self.post_json(&format!("{BASE}{path}"), body, &headers)
+            .await
+    }
+
+    /// POSTs JSON to a Control path and reads a JSON reply; an empty reply reads as `{}`.
+    pub async fn post_json<B: serde::Serialize, R: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+        headers: &[(&str, &str)],
+    ) -> Result<R, ControlError> {
         let body =
             serde_json::to_vec(body).map_err(|e| ControlError::Unavailable(e.to_string()))?;
-        let mut request = self
-            .client
-            .post(format!("{}{BASE}{path}", self.url))
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(body);
-        if let Some(token) = fencing_token {
-            request = request.header(FENCING_HEADER, token);
+        json(&self.send(path, Some(body), headers, MAX_REPLY).await?)
+    }
+
+    pub async fn get_json<R: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+    ) -> Result<R, ControlError> {
+        json(&self.send(path, None, &[], MAX_REPLY).await?)
+    }
+
+    /// The exact bytes Control answers, at most `max`.
+    pub async fn get_bytes(&self, path: &str, max: usize) -> Result<Vec<u8>, ControlError> {
+        self.send(path, None, &[], max).await
+    }
+
+    async fn send(
+        &self,
+        path: &str,
+        body: Option<Vec<u8>>,
+        headers: &[(&str, &str)],
+        max: usize,
+    ) -> Result<Vec<u8>, ControlError> {
+        let url = format!("{}{path}", self.url);
+        let client = self.client();
+        let mut request = match body {
+            Some(body) => client
+                .post(url)
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(body),
+            None => client.get(url),
+        };
+        for (name, value) in headers {
+            request = request.header(*name, *value);
         }
-        let response = request
+        let mut response = request
             .send()
             .await
             .map_err(|e| ControlError::Unavailable(e.without_url().to_string()))?;
@@ -119,22 +181,50 @@ impl Control {
                 "Control answered {status}"
             )));
         }
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| ControlError::Unavailable(e.without_url().to_string()))?;
-        if bytes.len() > MAX_REPLY {
-            return Err(ControlError::Unavailable(
-                "Control's reply is too large".into(),
-            ));
+        let too_large = || ControlError::Unavailable("Control's reply is too large".into());
+        if response.content_length().is_some_and(|n| n > max as u64) {
+            return Err(too_large());
         }
-        let bytes = if bytes.is_empty() {
-            &b"{}"[..]
-        } else {
-            &bytes[..]
-        };
-        serde_json::from_slice(bytes).map_err(|e| {
-            ControlError::Unavailable(format!("Control's reply is not the expected JSON: {e}"))
-        })
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| ControlError::Unavailable(e.without_url().to_string()))?
+        {
+            if bytes.len() + chunk.len() > max {
+                return Err(too_large());
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(bytes)
     }
+}
+
+fn json<R: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<R, ControlError> {
+    let bytes = if bytes.is_empty() { &b"{}"[..] } else { bytes };
+    serde_json::from_slice(bytes).map_err(|e| {
+        ControlError::Unavailable(format!("Control's reply is not the expected JSON: {e}"))
+    })
+}
+
+fn build(
+    roots: Option<&Vec<reqwest::Certificate>>,
+    identity: Option<&[u8]>,
+) -> Result<reqwest::Client, String> {
+    let mut builder = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .tls_sslkeylogfile(false)
+        .timeout(Duration::from_secs(10))
+        .connect_timeout(Duration::from_secs(3));
+    if let Some(roots) = roots {
+        builder = builder.tls_certs_only(roots.iter().cloned());
+    }
+    if let Some(pem) = identity {
+        builder = builder.identity(
+            reqwest::Identity::from_pem(pem)
+                .map_err(|e| format!("control client identity: {e}"))?,
+        );
+    }
+    builder.build().map_err(|e| format!("control client: {e}"))
 }

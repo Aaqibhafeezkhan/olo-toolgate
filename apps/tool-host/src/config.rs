@@ -22,6 +22,10 @@ pub struct Config {
     /// Extracted packages and per-invocation sandboxes.
     pub work_dir: PathBuf,
     pub control: ControlConfig,
+    /// Enroll with Control as a device and fetch assignments (README.md, "Enrollment"). Without it
+    /// the host presents the configured certificate and runs what is already in the store.
+    #[serde(default)]
+    pub enrollment: Option<Enrollment>,
     /// Language runtimes by `runtimeId`; `jvm` needs `javaPath`.
     #[serde(default)]
     pub runtimes: Runtimes,
@@ -56,6 +60,20 @@ pub struct ControlConfig {
     /// Allows `http://` to a loopback Control, for local development and tests only.
     #[serde(default)]
     pub development_loopback_http: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Enrollment {
+    /// Holds this host's device key, its certificate and its check-in sequence.
+    pub identity_dir: PathBuf,
+    /// The pool this host registers in.
+    #[serde(default = "default_pool")]
+    pub pool_id: String,
+}
+
+fn default_pool() -> String {
+    "default".into()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -144,6 +162,11 @@ impl Config {
             if !(self.control.development_loopback_http && loopback) {
                 return Err(format!("control.url {url} must be https, or a loopback http URL with developmentLoopbackHttp"));
             }
+        }
+        if self.enrollment.is_some() && self.control.client_certificate_path.is_some() {
+            return Err(
+                "enrollment issues this host's certificate; leave control.clientCertificatePath unset".into(),
+            );
         }
         if self.control.client_certificate_path.is_some() != self.control.client_key_path.is_some()
         {

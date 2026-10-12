@@ -811,6 +811,33 @@ pub struct PackageCompatibility {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimum_client_version: Option<String>,
 }
+/// The package version Tool Hosts run for one package id, with the service profile and globals Control built for it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackageDeployment {
+    pub package_id: String,
+    pub version: String,
+    pub package_digest: String,
+    pub revision: u64,
+    pub service_profile_digest: String,
+    pub service_profile_revision: u64,
+    pub globals_digest: String,
+    pub tool_ids: Vec<String>,
+    pub deployed_at_unix_ms: u64,
+}
+/// Current deployments, one per package id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackageDeploymentPage {
+    pub items: Vec<PackageDeployment>,
+}
+/// Deploys an uploaded server package to the Tool Hosts with values for its declared globals. A destination's host is the global its hostSetting names.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackageDeploymentRequest {
+    pub package_digest: String,
+    pub globals: std::collections::BTreeMap<String, serde_json::Value>,
+}
 /// Enable exactly the reviewed digest with this binding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -999,13 +1026,15 @@ pub struct PermitIdentity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
-/// v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4).
+/// v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4). For a Tool Host the body carries the call's arguments: Control checks them against the invocation and pins their RFC 8785 digest in the permit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PermitReservationRequest {
     pub invocation_id: String,
     pub audience: String,
     pub attempt: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Exact code and configuration the attempt may run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1523,6 +1552,26 @@ pub struct ToolErrorBody {
     pub retryable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// One deployed tool a Tool Host runs. The host reports it in its check-in as a local tool, so Control places calls for it there.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolHostAssignment {
+    pub tool_id: String,
+    pub action: String,
+    pub description: String,
+    pub enabled: bool,
+    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    pub tool_digest: String,
+    pub package_digest: String,
+}
+/// What a registered Tool Host runs: its tools, and the deployments whose package, service profile and globals it fetches by digest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolHostAssignments {
+    pub host_id: String,
+    pub tools: Vec<ToolHostAssignment>,
+    pub deployments: Vec<PackageDeployment>,
 }
 /// Tool Host registration with its workload identity (mTLS).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

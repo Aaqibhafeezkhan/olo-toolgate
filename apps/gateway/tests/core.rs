@@ -5,7 +5,7 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
-use olo_toolgate_contracts::v2::{RequestContext, RequestMode};
+use olo_toolgate_contracts::v2::{self, RequestContext, RequestMode};
 use olo_toolgate_contracts::*;
 use olo_toolgate_gateway::{
     application::Gateway,
@@ -55,6 +55,7 @@ struct Authority {
     reservations: AtomicUsize,
     invocation: Mutex<Option<EnterpriseInvocation>>,
     submission: Mutex<Option<RemoteToolSubmission>>,
+    permit: Mutex<Option<v2::PermitReservationRequest>>,
 }
 impl Authority {
     fn progress(&self, state: RemoteToolState) -> RemoteToolResponse {
@@ -88,6 +89,17 @@ impl Authority {
     }
 }
 impl RelayPort for Authority {
+    fn permit<'a>(
+        &'a self,
+        r: &'a v2::PermitReservationRequest,
+    ) -> PortFuture<'a, Result<v2::SignedInvocationPermit, ErrorCode>> {
+        Box::pin(async move {
+            *self.permit.lock().unwrap() = Some(r.clone());
+            Ok(v2::SignedInvocationPermit {
+                jws: "e30.e30.c2ln".into(),
+            })
+        })
+    }
     fn ready(&self, _: u64) -> bool {
         !self.failure
     }
@@ -192,6 +204,9 @@ impl RelayPort for Authority {
     }
 }
 fn state(a: Arc<Authority>) -> Arc<AppState> {
+    state_with(a, config())
+}
+fn state_with(a: Arc<Authority>, config: Config) -> Arc<AppState> {
     let contracts = Contracts::new().unwrap();
     let auth = Authenticator::new(vec![credential()], &contracts, unix_ms().unwrap()).unwrap();
     Arc::new(AppState::new(
@@ -200,7 +215,7 @@ fn state(a: Arc<Authority>) -> Arc<AppState> {
             authority: a,
         },
         auth,
-        config(),
+        config,
     ))
 }
 fn req(path: &str, body: Value) -> Request<Body> {
@@ -612,4 +627,62 @@ async fn session_era_clients_are_refused_with_the_supported_version() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+}
+
+/// A call Control placed on a configured Tool Host goes there with a permit, never the relay.
+#[tokio::test]
+async fn tool_host_calls_dispatch_with_a_permit_and_return_the_host_result() {
+    let seen = Arc::new(Mutex::new(None::<Value>));
+    let host = axum::Router::new().route(
+        "/v1/dispatch",
+        axum::routing::post({
+            let seen = seen.clone();
+            move |body: axum::body::Bytes| async move {
+                *seen.lock().unwrap() = Some(serde_json::from_slice::<Value>(&body).unwrap());
+                String::new()
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let a = Arc::new(Authority::default());
+    // The host answers for the invocation the Authority created, which the test learns after the call starts.
+    let invocations = a.clone();
+    let host = host.layer(axum::middleware::map_response(
+        move |_: axum::response::Response| {
+            let invocations = invocations.clone();
+            async move {
+                let id = invocations.invocation.lock().unwrap().as_ref().unwrap().id.clone();
+                let body = format!(
+                    "{}\n{}\n",
+                    json!({"kind":"ADMITTED","invocationId":id,"fencingToken":"f"}),
+                    json!({"invocationId":id,"fencingToken":"f","outcome":"COMPLETED","result":{"kind":"RESULT","resultType":"complete","content":[{"type":"text","text":"hi"}],"structuredContent":{"greeting":"hi"},"isError":false}})
+                );
+                axum::response::Response::new(axum::body::Body::from(body))
+            }
+        },
+    ));
+    tokio::spawn(async move { axum::serve(listener, host).await.unwrap() });
+    let mut config = config();
+    config.tool_hosts = serde_json::from_value(
+        json!([{"hostId":"placed-device","url":format!("http://127.0.0.1:{port}")}]),
+    )
+    .unwrap();
+    let (code, body) = call(
+        runtime_router(state_with(a.clone(), config)),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    assert_eq!(body["result"]["content"][0]["text"], "hi");
+    let permit = a.permit.lock().unwrap().clone().unwrap();
+    assert_eq!(permit.audience, "placed-device");
+    assert_eq!(
+        serde_json::to_value(&permit.arguments).unwrap(),
+        payload()["arguments"]
+    );
+    let dispatched = seen.lock().unwrap().clone().unwrap();
+    assert_eq!(dispatched["permit"]["jws"], "e30.e30.c2ln");
+    assert!(a.submission.lock().unwrap().is_none());
 }

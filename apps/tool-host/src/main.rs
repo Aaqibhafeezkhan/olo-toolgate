@@ -30,6 +30,17 @@ async fn main() -> ExitCode {
             return ExitCode::from(78);
         }
     };
+    if config.enrollment.is_some() {
+        match tool_host::device::Device::open(&config, host.control()) {
+            Ok(device) => {
+                tokio::spawn(device.run());
+            }
+            Err(e) => {
+                eprintln!("enrollment refused: {e}");
+                return ExitCode::from(78);
+            }
+        }
+    }
     let listener = match tokio::net::TcpListener::bind(config.listen).await {
         Ok(listener) => listener,
         Err(e) => {

@@ -20,6 +20,9 @@ public class EnterpriseOperationResource {
     @Inject io.quarkus.security.identity.SecurityIdentity security;
     @Inject VaultResource vault;
     @Inject DirectoryService directory;
+    @Inject ServerPackages packages;@Inject Correlation correlation;
+    /** v2 bodies extend these endpoints for Tool Hosts; a v2 body is recognised by a field only it has. */
+    private boolean v2(String document,String field){return ((com.fasterxml.jackson.databind.JsonNode)codec.value(body(document))).has(field);}
     @POST @Path("simulate") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response simulate(String document){return reply(directory.simulate(actors.management(),body(document)));}
     @POST @Path("shadow") @Consumes("application/json") @io.quarkus.security.Authenticated
@@ -44,7 +47,7 @@ public class EnterpriseOperationResource {
     @POST @Path("invocations") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response submit(String document){return reply(operations.submit(gateway(),body(document)));}
     @POST @Path("invocations/reserve") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
-    public Response reserve(String document){return reply(operations.reserve(gateway(),body(document)));}
+    public Response reserve(String document){return reply(v2(document,"audience")?packages.permit(gateway(),document,correlation.id()):operations.reserve(gateway(),body(document)));}
     @GET @Path("invocations") @io.quarkus.security.Authenticated
     public Response invocations(@QueryParam("after")String after,@QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.page(actors.human(),after,limit));}
     @POST @Path("invocations/{id}/reconciliation") @Consumes("application/json") @io.quarkus.security.Authenticated
@@ -58,9 +61,11 @@ public class EnterpriseOperationResource {
     @POST @Path("invocations/{id}/cancel") @io.quarkus.security.Authenticated
     public Response cancel(@PathParam("id")String id,@HeaderParam("If-Match")String etag){if(etag==null||!etag.matches("\"[1-9][0-9]{0,15}\""))throw Failure.validation();long revision=Long.parseLong(etag.substring(1,etag.length()-1));if(revision>9007199254740991L)throw Failure.validation();return reply(operations.cancel(actors.human(),id,revision));}
     @POST @Path("permits/consume") @Consumes("application/json") @PermitAll
-    public Response consume(String document){var certificate=peer();return reply(operations.consume(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document)));}
+    public Response consume(String document){var certificate=peer();java.util.function.Function<Store.Session,String> device=tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId();
+        return reply(v2(document,"toolDescriptorDigest")?operations.consumeInvocation(tenant(),device,document):operations.consume(tenant(),device,body(document)));}
     @POST @Path("effects/report") @Consumes("application/json") @PermitAll
-    public Response report(String document){var certificate=peer();return reply(operations.report(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document)));}
+    public Response report(@HeaderParam("Toolgate-Fencing-Token")String fencingToken,String document){var certificate=peer();java.util.function.Function<Store.Session,String> device=tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId();
+        return reply(v2(document,"fencingToken")?operations.reportInvocation(tenant(),device,document,fencingToken==null?"":fencingToken):operations.report(tenant(),device,body(document)));}
     @GET @Path("invocations/{id}/device-outcome") @PermitAll
     public Response deviceOutcome(@PathParam("id")String id){var certificate=peer();return reply(operations.deviceOutcome(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id));}
     @POST @Path("secrets/deliver") @Consumes("application/json") @PermitAll

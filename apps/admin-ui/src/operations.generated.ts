@@ -191,6 +191,14 @@ export const operations = {
   shadowEnterpriseAccess: { method: 'POST', path: '/api/control/v1/access/shadow' },
   deliverRuntimeSecret: { method: 'POST', path: '/api/control/v1/access/secrets/deliver' },
   enterpriseOperationalStatus: { method: 'GET', path: '/api/control/v1/access/operations' },
+  uploadServerPackage: { method: 'POST', path: '/api/control/v1/packages/uploads' },
+  listServerPackageVersions: { method: 'GET', path: '/api/control/v1/packages' },
+  listServerPackageDeployments: { method: 'GET', path: '/api/control/v1/packages/deployments' },
+  deployServerPackage: { method: 'POST', path: '/api/control/v1/packages/deployments' },
+  registerToolHost: { method: 'POST', path: '/api/control/v1/tool-hosts/registrations' },
+  getToolHostAssignments: { method: 'GET', path: '/api/control/v1/tool-hosts/assignments' },
+  getToolHostPackage: { method: 'GET', path: '/api/control/v1/tool-hosts/packages/{digest}' },
+  getToolHostDocument: { method: 'GET', path: '/api/control/v1/tool-hosts/documents/{digest}' },
 } as const;
 export interface DirectoryRecords {
   agentDelegations: ControlAgentDelegation;

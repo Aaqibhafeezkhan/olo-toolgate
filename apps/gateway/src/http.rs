@@ -41,6 +41,7 @@ pub struct AppState {
     pub metrics: Metrics,
     pub draining: AtomicBool,
     pub admission: Semaphore,
+    pub tool_hosts: crate::toolhost::ToolHosts,
     rate: RateLimit,
     sequence: AtomicU64,
     instance: String,
@@ -70,6 +71,7 @@ impl AppState {
         Self {
             admission: Semaphore::new(config.limits.max_concurrent_requests),
             rate: RateLimit::new(config.limits.requests_per_second),
+            tool_hosts: crate::toolhost::ToolHosts::new(&config.tool_hosts),
             gateway,
             auth,
             config,

@@ -68,8 +68,24 @@ def tls(url, context, token=None, body=None, method='GET'):
     except urllib.error.HTTPError as response:return response.code,json.loads(response.read())
 
 
+TOOL_HOST='tool-host-local'
+
+
+def starter_package():
+    """The Java starter as a tool author builds it: `toolgate init`, then `toolgate pack`."""
+    run(['./gradlew','-q','--configure-on-demand','publishJavaSdkLocally'])
+    run(['cargo','build','-q','-p','toolgate-cli'])
+    toolgate=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target'))/'debug'/'toolgate'
+    out=ROOT/'build/quickstart-starter'
+    subprocess.run(['rm','-rf',str(out)],check=True)
+    run([str(toolgate),'init','orders','--dir',str(out),'--id','acme.orders','--publisher','Acme','--sdk-repo',str(ROOT/'build/sdk-repo')],capture_output=True)
+    subprocess.run([str(toolgate),'pack'],cwd=out,check=True,capture_output=True)
+    return (out/'build/toolgate/orders-0.1.0.tgpkg').read_bytes()
+
+
 def smoke(image, browser, database_options=None, gateway_image=None):
     """Fresh group-only installation through real JWT, TLS, device and reviewed HTTP APIs."""
+    package=starter_package()
     name='toolgate-enterprise-test-'+secrets.token_hex(6)
     volume=name+'-data'; containers=[]; report={'image':image,'storage':'PostgreSQL' if database_options else 'SQLite','gates':[]}
     output=ROOT/'build/quickstart';output.mkdir(parents=True,exist_ok=True)
@@ -162,7 +178,8 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         # The actual native executable owns this CSR/key and advertises actual installed binary profiles.
         deadline=time.monotonic()+45
         while True:
-            pending=ok(api('/api/control/v1/endpoint/enrollments',admin))['items']
+            # The Tool Host enrolls too; it is approved with its own gate below.
+            pending=[e for e in ok(api('/api/control/v1/endpoint/enrollments',admin))['items'] if e['deviceId']!=TOOL_HOST]
             if pending:break
             assert time.monotonic()<deadline,'Native executor did not begin enrollment'
             time.sleep(.5)
@@ -280,6 +297,49 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         assert ok(mcp('tools/list'))['result']['tools']==[]
         assert mcp('tools/call',{'name':'calculator.evaluate','arguments':{'expression':'7*2'}},service_key)[0]==403
         mark('real authenticated Gateway SERVICE/group capability/native effect/exact retry/live revocation')
+        # A Java server tool, end to end: the Tool Host enrolls as a device, Control verifies and deploys the starter
+        # package, and a Gateway call is placed on the host, permitted by Control and run from that exact package.
+        def approve(device_id):
+            deadline=time.monotonic()+45
+            while True:
+                pending=[e for e in ok(api('/api/control/v1/endpoint/enrollments',admin))['items'] if e['deviceId']==device_id]
+                if pending:break
+                assert time.monotonic()<deadline,device_id+' did not begin enrollment'
+                time.sleep(.5)
+            review=ok(api('/api/control/v1/endpoint/enrollments/review?code='+pending[0]['userCode'],admin))
+            ok(api('/api/control/v1/endpoint/enrollments/decision',admin,
+                {'userCode':review['userCode'],'keyFingerprint':review['keyFingerprint'],'choice':'APPROVE'},'POST'))
+        approve(TOOL_HOST)
+        owner=tokens['reviewer-2']  # Package upload and deployment are the installation owner's (Super Admin).
+        status,raw,_=request(origin+'/api/control/v1/packages/uploads',owner,package,'POST',
+            {'Content-Type':'application/vnd.ololabs.toolgate.package+zip','Idempotency-Key':secrets.token_hex(16)})
+        assert status==201,(status,raw)
+        uploaded=json.loads(raw);digest=uploaded['packageDigest']
+        assert ok(api('/api/control/v1/packages',admin))['items'][0]['packageDigest']==digest
+        deployment=ok(api('/api/control/v1/packages/deployments',owner,
+            {'packageDigest':digest,'globals':{'Greeting':'Hi','ItemsApiHost':'items.invalid'}},'POST'))
+        assert set(deployment['toolIds'])=={'acme.orders/greet','acme.orders/items.get'},deployment
+        greet=ok(api('/api/control/v1/tools/acme.orders/greet',admin))
+        assert greet['enabled'] is False
+        reviewed('/api/control/v1/tools/acme.orders/greet',{**greet,'enabled':True},'PUT',greet['revision'])
+        assert 'acme.orders/greet' in ok(api('/api/control/v1/tool-groups/default-tools',admin))['toolIds']
+        binding=ok(api('/api/control/v1/bindings/binding-default',admin))
+        reviewed('/api/control/v1/bindings/binding-default',{**binding,'actions':sorted({*binding['actions'],'invoke'}),
+            'allowedPackageDigests':sorted({*binding['allowedPackageDigests'],digest.removeprefix('sha256:')})},'PUT',binding['revision'])
+        orders=dict(scope,actions=['invoke'],resources=[dict(kind='CUSTOM',locator='tool://acme.orders/greet',match='EXACT')])
+        for purpose in ('CAPABILITY','SERVICE'):
+            reviewed('/api/control/v1/grants',dict(id='orders-'+purpose.lower(),name='Reviewed starter '+purpose,
+                enabled=True,revision=1,sourceType='AGENT_GROUP',sourceId='default-agents',purpose=purpose,scope=orders))
+        deadline=time.monotonic()+60
+        while True:
+            listed={t['name'] for t in ok(mcp('tools/list'))['result']['tools']}
+            if 'acme.orders/greet' in listed:break
+            assert time.monotonic()<deadline,('The Tool Host never reported the starter tools',listed,exec_text('ls','-R','/data/tool-host'))
+            time.sleep(1)
+        assert ok(api('/api/control/v1/endpoint/devices/'+TOOL_HOST,admin))['lastSeenUnixMs']>0
+        hosted=ok(mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}}))
+        assert hosted['result']['structuredContent']=={'text':'Hi, Ada'} and hosted['result']['isError'] is False,hosted
+        mark('Tool Host enrollment/verified package upload/deployment/Gateway permit/Java tool run from the exact package')
         if gateway_image:
             identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='admin')
             reviewed('/api/control/v1/workload-bindings',dict(id='workload-delegated',name='Verified human delegation',

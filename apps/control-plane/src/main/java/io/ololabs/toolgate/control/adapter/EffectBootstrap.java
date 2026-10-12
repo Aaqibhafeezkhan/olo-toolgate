@@ -39,4 +39,5 @@ public class EffectBootstrap {
         }catch(java.io.IOException|GeneralSecurityException|IllegalArgumentException|java.util.NoSuchElementException failure){throw new IllegalStateException("Dedicated external RSA effect key required",failure);}
     }
     @Produces @ApplicationScoped EnterpriseOperations operations(PostgresStore store){if(validated==null)validated=signer();return new EnterpriseOperations(store,codec,validated,java.time.Clock.systemUTC(),config.getOptionalValue("toolgate.control.effect.issuer",String.class).orElse("control"),config.getOptionalValue("toolgate.control.effect.audience",String.class).orElse("toolgate-client"),config.getValue("toolgate.control.approval.pending-ttl-ms",Long.class),config.getValue("toolgate.control.approval.max-active",Integer.class));}
+    @Produces @ApplicationScoped ServerPackages packages(PostgresStore store,EnterpriseOperations operations){return new ServerPackages(store,codec,operations,java.time.Clock.systemUTC());}
 }
