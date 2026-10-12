@@ -23,6 +23,16 @@ scripts/init-signing-key.sh deploy/secrets/marketplace_signing_key   # refuses t
 
 It prints the `keyId`, public key and fingerprint that each ToolGate's `TOOLGATE_CONTROL_MARKETPLACE_KEYS` needs. The public keys are also served at `/.well-known/toolgate-marketplace-keys.json`.
 
+## Three ways to run it
+
+| Setup | What runs | Build | Run |
+|---|---|---|---|
+| Full stack | Caddy, 2+ stateless Drupal replicas, deploy job, cron, 2 helpers, PostgreSQL, Redis, MinIO | `scripts/build-images.sh` (needs `drupal/composer.lock`) or `scripts/compose.sh up -d --build` | `scripts/compose.sh up -d` |
+| Local stack | The same without MinIO and contrib modules; files on volumes shared by the replicas | `scripts/build-images.sh --core-only` | `scripts/compose.sh --local up -d` |
+| Two containers | Drupal (SQLite, files, secrets on one volume) and the helper | `scripts/build-images.sh --core-only --standalone` | `cd standalone && docker compose up -d` ([standalone/README.md](../standalone/README.md)) |
+
+`--core-only` builds the site without contributed modules (core, drush and the marketplace module), for machines that can't reach drupal.org yet. `--seed-on-host` builds the examples with the local toolgate CLI and JDK, and `--ca FILE` passes a CA bundle to builds behind a TLS-intercepting proxy.
+
 ## Compose (one host)
 
 ```bash

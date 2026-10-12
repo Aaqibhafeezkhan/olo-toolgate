@@ -22,8 +22,11 @@ COPY apps/gateway apps/gateway
 COPY apps/endpoint-client apps/endpoint-client
 COPY apps/tool-host apps/tool-host
 COPY tool-sdk/cli tool-sdk/cli
-RUN --mount=type=cache,id=marketplace-cargo-registry,target=/usr/local/cargo/registry \
+# An optional build secret "ca" adds a CA bundle for builds behind a TLS-intercepting proxy (scripts/build-images.sh).
+RUN --mount=type=secret,id=ca,required=false,target=/run/secrets/ca \
+    --mount=type=cache,id=marketplace-cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=marketplace-cli-target,target=/src/target,sharing=locked \
+    if [ -s /run/secrets/ca ]; then export SSL_CERT_FILE=/run/secrets/ca CARGO_HTTP_CAINFO=/run/secrets/ca; fi && \
     cargo build --release --locked -p toolgate-cli --bin toolgate && \
     install -m 0555 target/release/toolgate /toolgate
 

@@ -140,7 +140,7 @@ if ($dsn = $env('MARKETPLACE_SMTP_DSN')) {
     'options' => [],
   ];
 }
-$config['system.site']['mail'] = $env('MARKETPLACE_MAIL_FROM', 'noreply@localhost');
+$config['system.site']['mail'] = $env('MARKETPLACE_MAIL_FROM', 'noreply@example.com');
 $config['system.site']['name'] = $env('MARKETPLACE_SITE_NAME', 'OLO Orgs');
 $contact = $env('MARKETPLACE_CONTACT_EMAIL', $config['system.site']['mail']);
 $config['contact.form.report_abuse']['recipients'] = [$contact];

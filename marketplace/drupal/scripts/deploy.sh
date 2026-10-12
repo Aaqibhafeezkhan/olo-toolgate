@@ -30,7 +30,7 @@ else
   fi
   drush site:install --existing-config -y \
     --account-name="${MARKETPLACE_ADMIN_USER:-admin}" \
-    --account-mail="${MARKETPLACE_ADMIN_MAIL:-${MARKETPLACE_MAIL_FROM:-admin@localhost}}" \
+    --account-mail="${MARKETPLACE_ADMIN_MAIL:-${MARKETPLACE_MAIL_FROM:-admin@example.com}}" \
     --account-pass="$(cat "$password_file")"
 fi
 

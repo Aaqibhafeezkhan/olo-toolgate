@@ -21,14 +21,20 @@ ARG COMPOSER_IMAGE=composer:2.10.3@sha256:af98f42dfff7c68ba8d53c2164fd9fde1087b7
 FROM ${COMPOSER_IMAGE} AS composer
 
 FROM ${DRUPAL_IMAGE} AS runtime
-# The redis extension for the shared cache; built here, never at runtime.
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends $PHPIZE_DEPS; \
-    pecl install redis-6.3.0; \
-    docker-php-ext-enable redis; \
-    apt-get purge -y --auto-remove $PHPIZE_DEPS; \
-    rm -rf /var/lib/apt/lists/* /tmp/pear
+# The redis extension for the shared cache; built here, never at runtime. REDIS_EXTENSION=false skips it for the
+# core-only local build (scripts/build-images.sh --core-only), which has no redis module either. An optional build
+# secret "ca" adds a CA bundle for builds behind a TLS-intercepting proxy.
+ARG REDIS_EXTENSION=true
+RUN --mount=type=secret,id=ca,required=false,target=/run/secrets/ca set -eux; \
+    if [ "$REDIS_EXTENSION" = true ]; then \
+      if [ -s /run/secrets/ca ]; then export SSL_CERT_FILE=/run/secrets/ca; fi; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends $PHPIZE_DEPS; \
+      pecl install redis-6.3.0; \
+      docker-php-ext-enable redis; \
+      apt-get purge -y --auto-remove $PHPIZE_DEPS; \
+      rm -rf /var/lib/apt/lists/* /tmp/pear; \
+    fi
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-olo-orgs.ini
 COPY docker/apache.conf /etc/apache2/conf-enabled/zz-olo-orgs.conf
 RUN set -eux; \
@@ -40,7 +46,9 @@ FROM runtime AS build
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 WORKDIR /opt/drupal
 COPY composer.json composer.lock ./
-RUN --mount=type=cache,id=olo-orgs-composer,target=/root/.composer/cache \
+RUN --mount=type=secret,id=ca,required=false,target=/run/secrets/ca \
+    --mount=type=cache,id=olo-orgs-composer,target=/root/.composer/cache \
+    if [ -s /run/secrets/ca ]; then export SSL_CERT_FILE=/run/secrets/ca; fi && \
     COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --no-interaction --no-progress --optimize-autoloader
 COPY modules.yml ./
 COPY scripts ./scripts
