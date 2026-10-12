@@ -10,15 +10,16 @@
 # scripts use, and GitHub Packages (ghcr.io/<owner>) when GH_TOKEN and GITHUB_REPOSITORY_OWNER are set.
 # Tags: dev-<sha12>, <VERSION>-<sha12> and dev. Writes <name>_image and <name>_digest to $GITHUB_OUTPUT.
 #
-# PR 1 publishes the helper; PR 2 adds the Drupal image to IMAGES below, so the workflows don't change again.
+# The Drupal image copies the example packages built by the seed stage, so that stage is built once first.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=../scripts/toolgate-dir.sh
 source "$here/../scripts/toolgate-dir.sh"
 
-# name|image|Dockerfile (relative to MARKETPLACE_DIR)
+# name|image|Dockerfile (relative to MARKETPLACE_DIR)|build context
 IMAGES=(
-  "helper|olo-toolgate-marketplace-helper|helper/Dockerfile"
+  "helper|olo-toolgate-marketplace-helper|helper/Dockerfile|$TOOLGATE_DIR"
+  "drupal|olo-orgs-marketplace-drupal|drupal/Dockerfile|$MARKETPLACE_DIR/drupal"
 )
 
 sha="${RELEASE_SHA:-$TOOLGATE_REVISION}"
@@ -38,8 +39,18 @@ fi
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+docker buildx build --file "$MARKETPLACE_DIR/seed/Dockerfile.stage" --target seed \
+  --build-context marketplace="$MARKETPLACE_DIR" \
+  --build-arg TOOLGATE_REVISION="$sha" \
+  --output type=local,dest="$work/seed-out" "$TOOLGATE_DIR"
+
 for entry in "${IMAGES[@]}"; do
-  IFS='|' read -r name image dockerfile <<<"$entry"
+  IFS='|' read -r name image dockerfile context <<<"$entry"
+  if [ "$name" = drupal ] && [ ! -f "$MARKETPLACE_DIR/drupal/composer.lock" ]; then
+    # The site image is built only from a committed lock file (prompt §6.3); until it exists, publish the rest.
+    echo "::warning::publish-images: marketplace/drupal/composer.lock is not committed; skipping the Drupal image"
+    continue
+  fi
   tags=()
   for repository in "docker.io/$namespace/$image" ${ghcr:+"$ghcr/$image"}; do
     for tag in "dev-$short" "$version-$short" dev; do
@@ -49,10 +60,11 @@ for entry in "${IMAGES[@]}"; do
   docker buildx build --push --provenance=false \
     --file "$MARKETPLACE_DIR/$dockerfile" \
     --build-context marketplace="$MARKETPLACE_DIR" \
+    --build-context seed="$work/seed-out" \
     --build-arg TOOLGATE_REVISION="$sha" \
     --label "io.ololabs.toolgate.revision=$sha" \
     --metadata-file "$work/$name.json" \
-    "${tags[@]}" "$TOOLGATE_DIR"
+    "${tags[@]}" "$context"
   digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["containerimage.digest"])' "$work/$name.json")"
   echo "publish-images: docker.io/$namespace/$image@$digest (dev-$short, $version-$short, dev)${ghcr:+ and $ghcr/$image}"
   if [ -n "${GITHUB_OUTPUT:-}" ]; then

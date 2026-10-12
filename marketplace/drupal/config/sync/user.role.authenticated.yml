@@ -1,0 +1,20 @@
+uuid: 1b806b50-1207-4788-8ac7-b8371254b300
+langcode: en
+status: true
+dependencies:
+  module:
+    - contact
+    - media
+    - system
+    - toolgate_marketplace
+_core:
+  default_config_hash: dJ0L2DNSj5q6XVZAGsuVDpJTh5UeYkIPwKrUOOpr8YI
+id: authenticated
+label: 'Authenticated user'
+weight: 1
+is_admin: false
+permissions:
+  - 'access content'
+  - 'access site-wide contact form'
+  - 'publish toolgate packages'
+  - 'view media'

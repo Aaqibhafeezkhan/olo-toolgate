@@ -1,0 +1,66 @@
+{{/* Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 */}}
+{{/*
+  The deploy Job (install from config/sync or drush deploy, then the seed) runs once per release: after the first
+  install, when the helper exists to sign the seed, and before each upgrade rolls the web pods. Web pods never run it.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "olo-orgs.fullname" . }}-deploy-{{ .Release.Revision }}
+  labels:
+    {{- include "olo-orgs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: deploy
+  annotations:
+    helm.sh/hook: post-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.drupal.deployJob.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.drupal.deployJob.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "olo-orgs.selector" . | nindent 8 }}
+        app.kubernetes.io/component: deploy
+        olo-orgs.ololabs.io/helper-client: "true"
+    spec:
+      restartPolicy: Never
+      {{- include "olo-orgs.drupalPod" . | nindent 6 }}
+      containers:
+        - name: deploy
+          {{- include "olo-orgs.drupalContainer" . | nindent 10 }}
+          command: ["/opt/drupal/scripts/deploy.sh"]
+          resources:
+            {{- toYaml .Values.drupal.resources | nindent 12 }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "olo-orgs.fullname" . }}-cron
+  labels:
+    {{- include "olo-orgs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cron
+spec:
+  schedule: {{ .Values.drupal.cron.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            {{- include "olo-orgs.selector" . | nindent 12 }}
+            app.kubernetes.io/component: cron
+            olo-orgs.ololabs.io/helper-client: "true"
+        spec:
+          restartPolicy: Never
+          {{- include "olo-orgs.drupalPod" . | nindent 10 }}
+          containers:
+            - name: cron
+              {{- include "olo-orgs.drupalContainer" . | nindent 14 }}
+              command: ["/opt/drupal/scripts/cron.sh"]
+              resources:
+                {{- toYaml .Values.drupal.resources | nindent 16 }}

@@ -1,0 +1,55 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+#
+# The local stack: deploy/compose.yaml without object storage, for the core-only images from
+# `scripts/build-images.sh --core-only` (no s3fs or redis modules). Every Drupal replica still serves every request:
+# files live on named volumes all replicas mount, sessions and cache in PostgreSQL, and the helper reads uploads as
+# file: references from the shared private volume. Run it with `scripts/compose.sh --local …`.
+x-local-drupal: &local
+  image: olo-orgs-marketplace-drupal:local
+  environment:
+    MARKETPLACE_S3_ENDPOINT: ""
+    MARKETPLACE_PRIVATE_PATH: /var/olo/private
+    MARKETPLACE_HELPER_FILE_ROOT: /var/olo/private
+  volumes:
+    - files-public:/opt/drupal/web/sites/default/files
+    - files-private:/var/olo/private
+services:
+  files-init:
+    image: redis:8.8.3-alpine@sha256:0b2b77d3ea5078274795e3177cdbdada8b96316684a38911d528534ed679b5ec
+    entrypoint: ["sh", "-c", "chown 33:33 /pub /priv && chmod 0775 /pub /priv"]
+    volumes:
+      - files-public:/pub
+      - files-private:/priv
+    network_mode: none
+    restart: "no"
+  drupal:
+    <<: *local
+    build: !reset null
+    depends_on: !override
+      deploy: { condition: service_completed_successfully }
+  deploy:
+    <<: *local
+    depends_on: !override
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      helper: { condition: service_healthy }
+      files-init: { condition: service_completed_successfully }
+  cron:
+    <<: *local
+    depends_on: !override
+      deploy: { condition: service_completed_successfully }
+  # No object storage in this mode.
+  minio: { profiles: [s3] }
+  minio-init: { profiles: [s3] }
+  helper:
+    build: !reset null
+    depends_on: !override
+      files-init: { condition: service_completed_successfully }
+    environment:
+      MARKETPLACE_HELPER_FILE_ROOT: /var/olo/private
+    volumes:
+      - files-private:/var/olo/private:ro
+volumes:
+  files-public:
+  files-private:

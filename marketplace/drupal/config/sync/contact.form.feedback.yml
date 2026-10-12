@@ -1,0 +1,12 @@
+uuid: a0c95be1-6099-4287-9741-f3f585840019
+langcode: en
+status: true
+dependencies: {  }
+id: feedback
+label: Contact
+recipients:
+  - abuse@olo-labs.duckdns.org
+reply: ''
+weight: 0
+message: 'Thanks. We read every report.'
+redirect: /home

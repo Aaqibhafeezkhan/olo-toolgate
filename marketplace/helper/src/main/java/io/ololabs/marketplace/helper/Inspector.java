@@ -212,7 +212,7 @@ public final class Inspector {
         result.put("apiChanges", new ArrayList<Object>(diff.changes()));
         int actual = now.bumpFrom(before);
         if (actual == 0) {
-            errors.add(error("SEMVER", "version " + now + " must be greater than the previous version " + previous.get("version")));
+            errors.add(error("SEMVER", "version " + manifest.get("version") + " must be greater than the previous version " + previous.get("version")));
         } else if (actual < required) {
             errors.add(error("SEMVER", "the API change needs at least a " + SemVer.bumpName(required) + " version bump after "
                     + previous.get("version") + ": " + String.join("; ", diff.changes())));

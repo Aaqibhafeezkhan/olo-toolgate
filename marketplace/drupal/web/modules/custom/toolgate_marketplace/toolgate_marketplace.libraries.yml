@@ -1,0 +1,10 @@
+browse:
+  js:
+    js/browse.js: {}
+  dependencies:
+    - core/once
+tool:
+  js:
+    js/tool.js: {}
+  dependencies:
+    - core/once

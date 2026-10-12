@@ -1,0 +1,47 @@
+{#
+/**
+ * @file
+ * OLO Orgs page: header with logo and navigation, content, footer.
+ */
+#}
+<a href="#main-content" class="visually-hidden focusable skip-link">{{ 'Skip to main content'|t }}</a>
+<div class="olo-page">
+  <header class="olo-header" role="banner">
+    <div class="olo-header__inner">
+      <a class="olo-brand" href="{{ path('<front>') }}" rel="home">
+        <picture>
+          <source srcset="{{ logo_light_url }}" media="(prefers-color-scheme: dark)">
+          <img src="{{ logo_url }}" alt="" width="40" height="30">
+        </picture>
+        <span class="olo-brand__name">{{ 'OLO Orgs'|t }}</span>
+      </a>
+      <nav class="olo-nav" aria-label="{{ 'Main'|t }}">
+        <ul>
+          {% for link in nav %}<li><a href="{{ link.url }}">{{ link.title }}</a></li>{% endfor %}
+        </ul>
+      </nav>
+      <div class="olo-header__actions">
+        <a class="button button--primary" href="{{ publish_url }}">{{ 'Publish a tool'|t }}</a>
+        <nav aria-label="{{ 'Account'|t }}">
+          <ul class="olo-account">
+            {% for link in account_links %}<li><a href="{{ link.url }}">{{ link.title }}</a></li>{% endfor %}
+          </ul>
+        </nav>
+      </div>
+    </div>
+    {{ page.header }}
+  </header>
+  <main id="main-content" class="olo-main" role="main" tabindex="-1">
+    {{ page.highlighted }}
+    {{ page.content }}
+  </main>
+  <footer class="olo-footer" role="contentinfo">
+    <nav aria-label="{{ 'Footer'|t }}">
+      <ul>
+        {% for link in footer_links %}<li><a href="{{ link.url }}">{{ link.title }}</a></li>{% endfor %}
+      </ul>
+    </nav>
+    <p class="olo-footer__note">{{ 'Signing shows where a package came from. It is not a code review.'|t }}</p>
+    {{ page.footer }}
+  </footer>
+</div>

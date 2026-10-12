@@ -39,7 +39,7 @@ The helper refuses to start without a token of at least 16 characters, a readabl
 | Variable | Default | Meaning |
 |---|---|---|
 | `MARKETPLACE_ID` | required | Signed into every release record as `marketplace` |
-| `MARKETPLACE_HELPER_TOKEN` | required | Bearer token Drupal sends |
+| `MARKETPLACE_HELPER_TOKEN` | required | Bearer token Drupal sends; or `MARKETPLACE_HELPER_TOKEN_FILE`, a file holding it (the S3 keys take `_FILE` too) |
 | `MARKETPLACE_SIGNING_KEY_FILE` | `/run/secrets/marketplace_signing_key` | PKCS#8 PEM Ed25519 key from `init-signing-key.sh` |
 | `MARKETPLACE_SIGNING_KEY_ID` | required | `keyId` of that key |
 | `MARKETPLACE_RETIRED_KEYS` | empty | `keyId:base64PublicKey,…` still listed after a rotation |

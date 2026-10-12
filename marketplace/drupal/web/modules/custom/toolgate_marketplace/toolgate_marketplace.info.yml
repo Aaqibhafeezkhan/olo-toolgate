@@ -1,0 +1,11 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: ToolGate Marketplace
+type: module
+description: 'Publisher profiles, signed ToolGate packages, the public catalog and API v1, and example seeding for OLO Orgs.'
+package: OLO Orgs
+core_version_requirement: ^11
+dependencies:
+  - drupal:file
+  - drupal:image
+  - drupal:user

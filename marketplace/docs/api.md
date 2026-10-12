@@ -38,6 +38,11 @@ Base: `${MARKETPLACE_BASE_URL}/api/toolgate/v1`. Only `AVAILABLE` versions appea
   "compatibility": Compatibility, "publisher": PublisherSummary, "iconMediaId": "m_…|null",
   "detailsUrl": "…/tools/examples.notify/0.1.0" }
 
+// PackageVersions (newest first; latestVersion is null when every version is delisted)
+{ "packageId": "examples.notify", "latestVersion": "0.1.0|null", "publisher": PublisherSummary,
+  "versions": [{ "version": "0.1.0", "apiChange": "none|compatible|breaking", "compatibility": Compatibility,
+                 "publishedAt": "…", "delisted": false, "detailsUrl": "…/tools/examples.notify/0.1.0" }] }
+
 // VersionDetail = CatalogItem plus
 { "description": "<sanitized Markdown source>", "repositoryUrl": "https://…|null", "documentationUrl": "https://…|null",
   "license": "Apache-2.0", "screenshots": ["m_…"], "tools": [Tool], "requiredSettings": [Setting],

@@ -1,0 +1,6 @@
+favicon:
+  use_default: 'false'
+  path: themes/custom/olo_orgs/favicon.svg
+  mimetype: image/svg+xml
+logo:
+  use_default: 'true'
