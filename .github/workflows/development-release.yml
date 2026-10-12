@@ -10,9 +10,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: development-release
-    env:
-      MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
-      DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
     permissions:
       actions: read
       contents: write
@@ -31,8 +28,6 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
-    - name: Validate standard Maven publication target
-      run: python tools/release/development.py validate-maven
     - name: Install Helm for tagged publication
       if: startsWith(github.ref, 'refs/tags/')
       run: |
@@ -50,30 +45,14 @@ jobs:
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       run: |
         python tools/release/development.py prepare --run-id "$GITHUB_RUN_ID"
-    - name: Publish versioned Maven contracts
-      env:
-        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-        GH_TOKEN: ${{ github.token }}
+    - name: Assemble development Maven release assets
+      if: github.ref == 'refs/heads/main'
       run: |
-        if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
-          export MAVEN_USERNAME="${MAVEN_USERNAME:-$GITHUB_ACTOR}"
-          export MAVEN_PASSWORD="${MAVEN_PASSWORD:-$GH_TOKEN}"
-        else
-          if [ -z "$MAVEN_USERNAME" ] || [ -z "$MAVEN_PASSWORD" ]; then
-            echo 'Custom Maven repository requires MAVEN_USERNAME and MAVEN_PASSWORD secrets'
-            exit 1
-          fi
-        fi
-        if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-          python tools/release/development.py publish-maven
-        else
-          python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
-          python tools/contracts/generate.py
-          ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
-          cp packages/contracts/java/build/libs/*.jar build/development/assets/
-          cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/development/assets/toolgate-contracts-$(cat build/development/MAVEN_VERSION).pom"
-        fi
+        python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
+        python tools/contracts/generate.py
+        ./gradlew --no-daemon :contracts-java:assemble :contracts-java:generatePomFileForMavenJavaPublication
+        cp packages/contracts/java/build/libs/*.jar build/development/assets/
+        cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/development/assets/toolgate-contracts-$(cat build/development/MAVEN_VERSION).pom"
     - name: Publish tested images and development prerelease
       id: push
       env:
@@ -122,5 +101,28 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         RELEASE_SHA: ${{ github.sha }}
       run: python tools/release/development.py finalize
+    - name: Publish versioned Maven contracts last
+      env:
+        MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
+        DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
+        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python tools/release/development.py validate-maven
+        if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
+          export MAVEN_USERNAME="${MAVEN_USERNAME:-$GITHUB_ACTOR}"
+          export MAVEN_PASSWORD="${MAVEN_PASSWORD:-$GH_TOKEN}"
+        else
+          if [ -z "$MAVEN_USERNAME" ] || [ -z "$MAVEN_PASSWORD" ]; then
+            echo 'Custom Maven repository requires MAVEN_USERNAME and MAVEN_PASSWORD secrets'
+            exit 1
+          fi
+        fi
+        if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          python tools/release/development.py publish-maven
+        else
+          ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
+        fi
 'on':
   workflow_call: null

@@ -99,22 +99,10 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit
           python tools/release/manual_development.py build
-      - name: Publish Java and TypeScript libraries
+      - name: Publish TypeScript library
         env:
-          MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-          DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
-          GH_TOKEN: ${{ github.token }}
           NODE_AUTH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
-            export MAVEN_USERNAME="${MAVEN_USERNAME:-$GITHUB_ACTOR}"
-            export MAVEN_PASSWORD="${MAVEN_PASSWORD:-$GH_TOKEN}"
-          fi
-          library_version="$(python -c 'import json; print(json.load(open("build/manual-development/assets/development-release.json"))["libraryVersion"])')"
-          ./gradlew --no-daemon "-PcontractsPublicationVersion=$library_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test
-          npm publish build/manual-development/assets/olo-labs-toolgate-contracts-*.tgz --registry https://npm.pkg.github.com --tag dev --ignore-scripts
+        run: npm publish build/manual-development/assets/olo-labs-toolgate-contracts-*.tgz --registry https://npm.pkg.github.com --tag dev --ignore-scripts
       - name: Publish development images, Helm chart and GitHub packages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -123,3 +111,21 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: python tools/release/manual_development.py publish
+      - name: Publish Java library to Maven last
+        env:
+          MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+          DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/release/development.py validate-maven
+          if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
+            export MAVEN_USERNAME="${MAVEN_USERNAME:-$GITHUB_ACTOR}"
+            export MAVEN_PASSWORD="${MAVEN_PASSWORD:-$GH_TOKEN}"
+          elif [ -z "$MAVEN_USERNAME" ] || [ -z "$MAVEN_PASSWORD" ]; then
+            echo 'Custom Maven repository requires MAVEN_USERNAME and MAVEN_PASSWORD secrets'
+            exit 1
+          fi
+          library_version="$(python -c 'import json; print(json.load(open("build/manual-development/assets/development-release.json"))["libraryVersion"])')"
+          ./gradlew --no-daemon "-PcontractsPublicationVersion=$library_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test

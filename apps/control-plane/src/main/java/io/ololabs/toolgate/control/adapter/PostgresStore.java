@@ -33,8 +33,14 @@ public class PostgresStore implements Store {
     public java.util.List<TenantId> tenants(){try(var connection=dataSource.getConnection();var s=connection.prepareStatement("SELECT tenant_id FROM control_tenants ORDER BY tenant_id LIMIT 10000");var rows=s.executeQuery()){var ids=new java.util.ArrayList<TenantId>();while(rows.next())ids.add(new TenantId(rows.getString(1)));return java.util.List.copyOf(ids);}catch(SQLException failure){throw Failure.unavailable();}}
     public <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work) {
         try (var connection = dataSource.getConnection()) {
-            connection.setAutoCommit(false);
             boolean local = SqliteState.local(connection);
+            if (local && !write) {
+                // WAL readers use a stable snapshot without reserving the single writer.
+                connection.unwrap(org.sqlite.SQLiteConnection.class).getConnectionConfig()
+                    .setTransactionMode(org.sqlite.SQLiteConfig.TransactionMode.DEFERRED);
+                try (var statement = connection.createStatement()) { statement.execute("PRAGMA query_only = ON"); }
+            }
+            connection.setAutoCommit(false);
             if (!local) {
                 connection.setTransactionIsolation(write ? Connection.TRANSACTION_READ_COMMITTED : Connection.TRANSACTION_REPEATABLE_READ);
                 connection.setReadOnly(!write);
@@ -46,7 +52,11 @@ public class PostgresStore implements Store {
                 if (write && !local) try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
                     statement.setString(1, tenant.value()); statement.execute();
                 }
-                var result = work.apply(new JdbcSession(connection, tenant.value())); connection.commit(); return result;
+                var result = work.apply(new JdbcSession(connection, tenant.value()));
+                // SQLite commit() starts another transaction immediately; closing this
+                // connection needs no second writer reservation after a successful commit.
+                if (local) connection.setAutoCommit(true); else connection.commit();
+                return result;
             } catch (RuntimeException | SQLException e) {
                 connection.rollback();
                 if (e instanceof RuntimeException failure) throw failure;

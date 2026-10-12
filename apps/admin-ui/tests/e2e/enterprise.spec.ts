@@ -1,9 +1,11 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import {test,expect} from '@playwright/test';
+import {test,expect as baseExpect} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import {mkdirSync} from 'node:fs';
 
+// Match ControlClient's request deadline for this real-container acceptance test.
+const expect=baseExpect.configure({timeout:15000});
 test.skip(!process.env.TOOLGATE_ENTERPRISE_ORIGIN,'Requires the isolated enterprise Quickstart gate');
 test('real group administration, inherited provenance and review impact are accessible',async({page,browser})=>{
   test.setTimeout(360000);
@@ -12,8 +14,18 @@ test('real group administration, inherited provenance and review impact are acce
   const origin=process.env.TOOLGATE_ENTERPRISE_ORIGIN!;
   await page.goto(origin+'/console/');
   await page.getByLabel('Password',{exact:true}).fill(process.env.TOOLGATE_ENTERPRISE_PASSWORD!);
-  await page.getByRole('button',{name:'Connect to workspace',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
+  async function connect(workspace:typeof page){
+    // Password verification and the subsequent Control session are separate requests.
+    // Playwright's page timeout does not change its default 5s assertion timeout.
+    const [login]=await Promise.all([
+      workspace.waitForResponse(response=>new URL(response.url()).pathname==='/api/quickstart/v1/login'
+        &&response.request().method()==='POST',{timeout:15000}),
+      workspace.getByRole('button',{name:'Connect to workspace',exact:true}).click()
+    ]);
+    expect(login.status()).toBe(200);
+    await expect(workspace.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
+  }
+  await connect(page);
   for(const [route,title] of [['users','Users'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['bindings','Execution bindings'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
     await page.goto(origin+'/console/#'+route);
     await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
@@ -37,8 +49,7 @@ test('real group administration, inherited provenance and review impact are acce
       await reviewer.goto(origin+'/console/');
       await reviewer.getByLabel('Local account').selectOption('reviewer-'+(index+1));
       await reviewer.getByLabel('Password',{exact:true}).fill(process.env['TOOLGATE_ENTERPRISE_REVIEWER_'+(index+1)]!);
-      await reviewer.getByRole('button',{name:'Connect to workspace',exact:true}).click();
-      await expect(reviewer.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
+      await connect(reviewer);
     }
     async function applyDraft(){
       const link=page.getByRole('link',{name:'Review configuration draft'});
@@ -70,7 +81,14 @@ test('real group administration, inherited provenance and review impact are acce
         await reviewer.getByRole('button',{name:'Approve exact configuration'}).click();
         await expect(reviewer.getByLabel(confirmation)).not.toBeChecked();
       }
-      await page.getByRole('button',{name:'Refresh changes'}).click();
+      const changeId=new URLSearchParams(href.split('?')[1]).get('id');
+      expect(changeId).toBeTruthy();
+      const [refreshed]=await Promise.all([
+        page.waitForResponse(response=>new URL(response.url()).pathname==='/api/control/v1/configuration-changes/'+changeId
+          &&response.request().method()==='GET',{timeout:30000}),
+        page.getByRole('button',{name:'Refresh changes'}).click()
+      ]);
+      expect(refreshed.status()).toBe(200);
       await expect(page.getByRole('button',{name:'Apply reviewed change'})).toBeVisible();
       await page.getByLabel(confirmation).check();
       await page.getByRole('button',{name:'Apply reviewed change'}).click();
