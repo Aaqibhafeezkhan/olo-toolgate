@@ -119,13 +119,14 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--image',default='olo-toolgate-control:module05');p.add_argument('--helper-image',default='olo-toolgate-quickstart:enterprise-validation');p.add_argument('--no-build',action='store_true');p.add_argument('--client-assets',type=Path);args=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--image',default='olo-toolgate-control:module05');p.add_argument('--helper-image',default='olo-toolgate-quickstart:enterprise-validation');p.add_argument('--no-build',action='store_true');p.add_argument('--client-assets',type=Path);p.add_argument('--prebuilt-ui',action='store_true');args=p.parse_args()
     if not args.no_build:
         assets=[]
         if args.client_assets:
             relative=args.client_assets.resolve().relative_to(ROOT).as_posix()
             if not (args.client_assets/'manifest.json').is_file():raise ValueError('Verified public bundle required')
             assets=['--build-arg','CLIENT_ASSETS_DIR='+relative,'--build-arg','CLIENT_DOWNLOADS_DIRECTORY=/opt/toolgate/client-downloads']
+        if args.prebuilt_ui: assets += ['--build-arg','ADMIN_UI_SOURCE=console-prebuilt']
         run(['docker','build','-f','apps/control-plane/Dockerfile','--build-arg','VERSION='+(ROOT/'VERSION').read_text().strip(),
             '--build-arg','REVISION='+run(['git','rev-parse','HEAD'],capture_output=True,text=True).stdout.strip(),*assets,'-t',args.image,'.'])
     smoke(args.image,args.helper_image)

@@ -2,12 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 name: quickstart
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       publish:
-        description: Publish the tested image from the matching version tag
         type: boolean
         default: false
 permissions:

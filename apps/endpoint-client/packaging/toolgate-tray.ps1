@@ -183,10 +183,15 @@ $trayPackets.add_Click({
     } catch { $script:trayDetail = 'Packet viewer was cancelled or could not start.' }
 })
 $trayUninstall = $trayMenu.Items.Add('Uninstall ToolGate...')
+. (Join-Path $PSScriptRoot 'toolgate-uninstall.ps1')
 $trayUninstall.add_Click({
-    $trayUninstaller = Join-Path $trayRoot 'unins000.exe'
-    try { Start-Process -FilePath $trayUninstaller -Verb RunAs }
-    catch { $script:trayDetail = 'Uninstall was cancelled or could not start.' }
+    try {
+        $trayUninstaller = Get-ToolGateUninstaller $trayRoot
+        Start-Process -FilePath $trayUninstaller -Verb RunAs
+    } catch {
+        $script:trayDetail = 'Uninstall was cancelled or could not start.'
+        [void][System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'ToolGate uninstall', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    }
 })
 function Get-ToolGateClientOutput {
     param([string]$Arguments, [string]$Pattern)

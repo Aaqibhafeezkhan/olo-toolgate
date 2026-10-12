@@ -1,0 +1,49 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: ToolGate CI and release
+'on':
+  push:
+    branches:
+    - main
+  workflow_dispatch: null
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: toolgate-ci-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  admission:
+    uses: ./.github/workflows/admission.yml
+    with:
+      main_only: true
+  preflight:
+    needs: admission
+    if: needs.admission.outputs.allow == 'true'
+    uses: ./.github/workflows/preflight.yml
+    with:
+      shared_checks: true
+  foundation:
+    needs: preflight
+    uses: ./.github/workflows/foundation.yml
+  clients:
+    needs: preflight
+    uses: ./.github/workflows/client.yml
+    with:
+      shared_checks: true
+  images:
+    needs:
+    - foundation
+    - clients
+    uses: ./.github/workflows/images.yml
+  release:
+    needs:
+    - foundation
+    - clients
+    - images
+    uses: ./.github/workflows/development-release.yml
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+    secrets: inherit

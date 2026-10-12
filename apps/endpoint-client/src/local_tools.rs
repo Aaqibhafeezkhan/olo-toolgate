@@ -183,6 +183,12 @@ mod tests {
         }))
         .unwrap();
         config.ca_certificate_path = Some(root.join("gateway-ca.pem"));
+        #[cfg(windows)]
+        {
+            config.ipc_endpoint = crate::install::ipc_endpoint();
+            config.authorized_peers = vec![crate::platform::windows::current_sid().unwrap()];
+        }
+        config.validate().unwrap();
         config
     }
 

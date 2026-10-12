@@ -13,9 +13,9 @@ from check import run
 from gateway.check import monitor_validator
 
 
-def checks():
+def checks(lint=True):
     chart = 'deploy/helm/olo-toolgate'
-    run(['helm','lint','--strict',chart])
+    if lint: run(['helm','lint','--strict',chart])
     base = ['--set','control.enabled=true','--set','control.publicKeySecret=control-identity',
             '--set','control.database.credentialsSecret=control-db','--set','control.database.caSecret=control-db-ca','--set','control.effect.signingSecret=effect-custody']
     variants = {'base':[], 'ha':['--set','control.autoscaling.enabled=true'],

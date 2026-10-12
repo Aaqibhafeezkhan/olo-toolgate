@@ -1,6 +1,7 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 """Publish main development artifacts only after all CI gates pass for the same SHA."""
+import argparse
 import hashlib
 import json
 import os
@@ -61,11 +62,32 @@ def coordinates():
     return repo,sha,namespace
 
 
-def prepare():
+def unified_run(repo, sha, run_id):
+    if not re.fullmatch(r'[0-9]+', str(run_id)):raise ValueError('Invalid unified CI run ID')
+    workflow=api(f'repos/{repo}/actions/runs/{run_id}')
+    if (workflow.get('head_sha')!=sha or workflow.get('head_branch')!='main'
+            or workflow.get('path')!='.github/workflows/ci.yml'
+            or workflow.get('event') not in ('push','workflow_dispatch')):
+        raise ValueError('The unified CI run must match this main-branch checkout')
+    jobs=api(f'repos/{repo}/actions/runs/{run_id}/jobs?filter=latest&per_page=100')['jobs']
+    required={'admission / admit','preflight / metadata','foundation / check','clients / public-bundle','images / verify'}
+    found={job['name'] for job in jobs if job.get('status')=='completed' and job.get('conclusion')=='success'}
+    if not required<=found:raise ValueError('Every unified CI gate must complete successfully before release')
+    targets={'x86_64-unknown-linux-gnu','aarch64-unknown-linux-gnu','x86_64-pc-windows-msvc','aarch64-pc-windows-msvc','x86_64-apple-darwin','aarch64-apple-darwin'}
+    native=[job for job in jobs if job['name'].startswith('clients / native (')]
+    if len(native)!=6 or any(job.get('status')!='completed' or job.get('conclusion')!='success' for job in native):
+        raise ValueError('All six native platform gates must succeed before release')
+    if any(not any(target in job['name'] for job in native) for target in targets):
+        raise ValueError('A required native platform is missing')
+    return dict.fromkeys(WORKFLOWS,int(run_id))
+
+
+def prepare(run_id=None):
     repo,sha,_=coordinates()
     if run('git','rev-parse','HEAD',capture=True).stdout.strip()!=sha:raise ValueError('Checkout SHA mismatch')
+    selected=unified_run(repo,sha,run_id) if run_id is not None else {}
     deadline=time.monotonic()+1800
-    while True:
+    while run_id is None:
         selected={}
         for name,workflow in WORKFLOWS.items():
             response=api(f'repos/{repo}/actions/workflows/{workflow}/runs?branch=main&event=push&per_page=100')
@@ -141,4 +163,8 @@ def publish():
 
 
 if __name__=='__main__':
-    {'prepare':prepare,'publish':publish}[sys.argv[1]]()
+    parser=argparse.ArgumentParser();parser.add_argument('operation',choices=('prepare','publish'));parser.add_argument('--run-id',type=int);args=parser.parse_args()
+    if args.operation=='prepare':prepare(args.run_id)
+    else:
+        if args.run_id is not None:parser.error('--run-id applies only to prepare')
+        publish()

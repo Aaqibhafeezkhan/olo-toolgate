@@ -1,119 +1,129 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: endpoint-client
-on:
-  workflow_call:
-  push:
-    branches: [main]
-  workflow_dispatch:
 permissions:
   contents: read
   pull-requests: read
 jobs:
-  admission:
-    if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/admission.yml
-    with:
-      main_only: true
-  preflight:
-    needs: admission
-    if: needs.admission.outputs.allow == 'true'
-    uses: ./.github/workflows/preflight.yml
   native:
-    needs: preflight
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu, binary: olo-toolgate-client}
-          - {runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binary: olo-toolgate-client}
-          - {runner: windows-2025, target: x86_64-pc-windows-msvc, binary: olo-toolgate-client.exe}
-          - {runner: windows-11-arm, target: aarch64-pc-windows-msvc, binary: olo-toolgate-client.exe}
-          - {runner: macos-15-intel, target: x86_64-apple-darwin, binary: olo-toolgate-client}
-          - {runner: macos-15, target: aarch64-apple-darwin, binary: olo-toolgate-client}
+        - runner: ubuntu-24.04
+          target: x86_64-unknown-linux-gnu
+          binary: olo-toolgate-client
+        - runner: ubuntu-24.04-arm
+          target: aarch64-unknown-linux-gnu
+          binary: olo-toolgate-client
+        - runner: windows-2025
+          target: x86_64-pc-windows-msvc
+          binary: olo-toolgate-client.exe
+        - runner: windows-11-arm
+          target: aarch64-pc-windows-msvc
+          binary: olo-toolgate-client.exe
+        - runner: macos-15-intel
+          target: x86_64-apple-darwin
+          binary: olo-toolgate-client
+        - runner: macos-15
+          target: aarch64-apple-darwin
+          binary: olo-toolgate-client
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.12'
-      - name: Verify native target and source
-        shell: bash
-        env:
-          NATIVE_TARGET: ${{ matrix.target }}
-        run: |
-          rustup show
-          test "$(rustc -vV | sed -n 's/^host: //p')" = "$NATIVE_TARGET"
-          cargo fmt --all --check
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: Verify native target and source
+      shell: bash
+      env:
+        NATIVE_TARGET: ${{ matrix.target }}
+        SHARED_CHECKS: ${{ inputs.shared_checks }}
+      run: |
+        rustup show
+        test "$(rustc -vV | sed -n 's/^host: //p')" = "$NATIVE_TARGET"
+        # Linux x64 workspace tests/lint belong to foundation; other targets retain native checks.
+        if [ "$SHARED_CHECKS" != true ]; then cargo fmt --all --check; fi
+        if [ "$SHARED_CHECKS" != true ] || [ "$NATIVE_TARGET" != x86_64-unknown-linux-gnu ]; then
           cargo clippy -p olo-toolgate-client --all-targets --locked -- -D warnings
           cargo test -p olo-toolgate-client --locked
-          cargo build -p olo-toolgate-client --release --locked
-      - name: Prove real managed interpreter provisioning and execution isolation
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: |
-          python -m pip install -r tools/requirements.txt
-          cargo build -p olo-toolgate-client --example runtime_fixture --release --locked
-          python tools/client/runtime_check.py --native-fixture target/release/examples/runtime_fixture
-      - name: Prove system service lifetime after installer and CLI exit
-        shell: bash
-        env:
-          NATIVE_BINARY: ${{ matrix.binary }}
-        run: python tools/client/service_smoke.py --binary "target/release/$NATIVE_BINARY"
-      - name: Assemble native release package
-        shell: bash
-        env:
-          NATIVE_TARGET: ${{ matrix.target }}
-          NATIVE_BINARY: ${{ matrix.binary }}
-        run: python tools/client/package.py --target "$NATIVE_TARGET" --binary "target/release/$NATIVE_BINARY"
-      - name: Install pinned Windows installer compiler
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: ./tools/client/installer-compiler.ps1
-      - name: Build unsigned interactive installer
-        shell: bash
-        env:
-          NATIVE_TARGET: ${{ matrix.target }}
-          TOOLGATE_CHROME_STORE_URL: ${{ vars.TOOLGATE_CHROME_STORE_URL }}
-        run: python tools/client/installer.py --target "$NATIVE_TARGET"
-      - name: Prove packaged installer starts the system service
-        shell: bash
-        env:
-          NATIVE_TARGET: ${{ matrix.target }}
-        run: python tools/client/installer_smoke.py --target "$NATIVE_TARGET"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: endpoint-client-${{ matrix.target }}
-          path: build/client/release/
-          if-no-files-found: error
+        fi
+        cargo build -p olo-toolgate-client --release --locked
+    - name: Prove real managed interpreter provisioning and execution isolation
+      if: matrix.target == 'x86_64-unknown-linux-gnu'
+      run: |
+        python -m pip install -r tools/requirements.txt
+        cargo build -p olo-toolgate-client --example runtime_fixture --release --locked
+        python tools/client/runtime_check.py --native-fixture target/release/examples/runtime_fixture
+    - name: Prove system service lifetime after installer and CLI exit
+      shell: bash
+      env:
+        NATIVE_BINARY: ${{ matrix.binary }}
+      run: python tools/client/service_smoke.py --binary "target/release/$NATIVE_BINARY"
+    - name: Assemble native release package
+      shell: bash
+      env:
+        NATIVE_TARGET: ${{ matrix.target }}
+        NATIVE_BINARY: ${{ matrix.binary }}
+      run: python tools/client/package.py --target "$NATIVE_TARGET" --binary "target/release/$NATIVE_BINARY"
+    - name: Install pinned Windows installer compiler
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: ./tools/client/installer-compiler.ps1
+    - name: Build unsigned interactive installer
+      shell: bash
+      env:
+        NATIVE_TARGET: ${{ matrix.target }}
+        TOOLGATE_CHROME_STORE_URL: ${{ vars.TOOLGATE_CHROME_STORE_URL }}
+      run: python tools/client/installer.py --target "$NATIVE_TARGET"
+    - name: Prove packaged installer starts the system service
+      shell: bash
+      env:
+        NATIVE_TARGET: ${{ matrix.target }}
+      run: python tools/client/installer_smoke.py --target "$NATIVE_TARGET"
+    - name: Verify registered Windows uninstall selection
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: ./tools/client/uninstall_test.ps1
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: endpoint-client-${{ matrix.target }}
+        path: build/client/release/
+        if-no-files-found: error
   public-bundle:
     needs: native
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.12'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: endpoint-client-*
-          path: build/client/release
-          merge-multiple: true
-      - name: Verify real native packages and build the anonymous download manifest
-        run: python tools/client/manifest.py
-      - name: Test and package the versioned Chrome Connect extension
-        env:
-          TOOLGATE_CHROME_STORE_URL: ${{ vars.TOOLGATE_CHROME_STORE_URL }}
-        run: |
-          node --test apps/browser-extension/tests/*.mjs
-          python -m unittest discover -s tools/client -p test_extension.py
-          python tools/client/extension.py
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: public-client-bundle
-          path: deploy/client-assets/release/
-          if-no-files-found: error
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        pattern: endpoint-client-*
+        path: build/client/release
+        merge-multiple: true
+    - name: Verify real native packages and build the anonymous download manifest
+      run: python tools/client/manifest.py
+    - name: Package the already-tested Chrome Connect extension
+      env:
+        TOOLGATE_CHROME_STORE_URL: ${{ vars.TOOLGATE_CHROME_STORE_URL }}
+      run: |
+        python tools/client/extension.py
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: public-client-bundle
+        path: deploy/client-assets/release/
+        if-no-files-found: error
+'on':
+  workflow_call:
+    inputs:
+      shared_checks:
+        type: boolean
+        default: false
+        description: Foundation owns shared format and Linux x64 workspace test/lint gates

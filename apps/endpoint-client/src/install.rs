@@ -947,6 +947,7 @@ pub fn uninstall(purge: bool) -> Result<()> {
 }
 /// `park` moves the active gateway's enrollment into its profile, so a later install for
 /// another gateway keeps it connected in the background instead of inheriting it.
+#[cfg(not(windows))]
 fn remove(purge: bool, park: bool) -> Result<()> {
     admin()?;
     let config = Config::load(&config_path())?;
@@ -969,24 +970,6 @@ fn remove(purge: bool, park: bool) -> Result<()> {
         std::fs::remove_file("/Library/LaunchDaemons/io.ololabs.toolgate.client.plist")
             .map_err(|_| Failure::Unavailable)?;
     }
-    #[cfg(windows)]
-    {
-        stop_windows_service()?;
-        command(
-            r"C:\Windows\System32\sc.exe",
-            &["delete", "OloToolGateClient"],
-        )?;
-        if park && !purge {
-            let mut moves = Vec::new();
-            if let Err(failure) = archive_profile(&config, &mut moves) {
-                // The next fresh install parks what is left behind instead.
-                for (source, destination) in moves.iter().rev() {
-                    let _ = std::fs::rename(destination, source);
-                }
-                tracing::warn!(event="park_gateway",error=?failure);
-            }
-        }
-    }
     #[cfg(not(windows))]
     let _ = park;
     if purge {
@@ -1007,6 +990,96 @@ fn remove(purge: bool, park: bool) -> Result<()> {
     std::fs::remove_file(config_path()).map_err(|_| Failure::Unavailable)?;
     std::fs::remove_file(binary_path()).map_err(|_| Failure::Unavailable)?;
     Ok(())
+}
+
+#[cfg(windows)]
+fn remove(purge: bool, park: bool) -> Result<()> {
+    admin()?;
+    // Removal uses only fixed installation paths, even after a partial uninstall
+    // removed the configuration or service. Never follow a custom state path.
+    remove_windows_service()?;
+    if park && !purge {
+        if let Ok(config) = Config::load(&config_path()) {
+            let mut moves = Vec::new();
+            if let Err(failure) = archive_profile(&config, &mut moves) {
+                for (source, destination) in moves.iter().rev() {
+                    let _ = std::fs::rename(destination, source);
+                }
+                tracing::warn!(event="park_gateway",error=?failure);
+            }
+        }
+    }
+    if purge {
+        purge_device(
+            Path::new(r"C:\ProgramData\OLO\ToolGate\state"),
+            config_path().parent().ok_or(Failure::Validation)?,
+        )?;
+    }
+    remove_file_if_present(&config_path())?;
+    remove_file_if_present(&binary_path())
+}
+
+#[cfg(any(windows, test))]
+fn remove_file_if_present(path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err(Failure::Unavailable),
+    }
+}
+
+#[cfg(windows)]
+fn remove_windows_service() -> Result<()> {
+    use windows_service::{
+        service::{ServiceAccess, ServiceState},
+        service_manager::{ServiceManager, ServiceManagerAccess},
+        Error,
+    };
+    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
+        .map_err(|_| Failure::Unavailable)?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    match manager.open_service(
+        "OloToolGateClient",
+        ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::DELETE,
+    ) {
+        Ok(service) => {
+            let state = service
+                .query_status()
+                .map_err(|_| Failure::Unavailable)?
+                .current_state;
+            if state != ServiceState::Stopped && state != ServiceState::StopPending {
+                service.stop().map_err(|_| Failure::Unavailable)?;
+            }
+            while service
+                .query_status()
+                .map_err(|_| Failure::Unavailable)?
+                .current_state
+                != ServiceState::Stopped
+            {
+                if std::time::Instant::now() >= deadline {
+                    return Err(Failure::Unavailable);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            service.delete().map_err(|_| Failure::Unavailable)?;
+        }
+        Err(Error::Winapi(error)) if error.raw_os_error() == Some(1060) => return Ok(()),
+        Err(Error::Winapi(error)) if error.raw_os_error() == Some(1072) => {}
+        Err(_) => return Err(Failure::Unavailable),
+    }
+    // Close our handle before waiting for SCM to finish deleting the registration.
+    loop {
+        match manager.open_service("OloToolGateClient", ServiceAccess::QUERY_STATUS) {
+            Err(Error::Winapi(error)) if error.raw_os_error() == Some(1060) => return Ok(()),
+            Ok(_) => {}
+            Err(Error::Winapi(error)) if error.raw_os_error() == Some(1072) => {}
+            Err(_) => return Err(Failure::Unavailable),
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(Failure::Unavailable);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
 
 /// Complete uninstall: every enrollment (focused and parked), logs, local tool settings and
@@ -1038,6 +1111,12 @@ fn purge_device(state: &Path, config_directory: &Path) -> Result<()> {
             }
             .map_err(|_| Failure::Unavailable)?;
         }
+    }
+    if !config_directory
+        .try_exists()
+        .map_err(|_| Failure::Unavailable)?
+    {
+        return Ok(());
     }
     for entry in std::fs::read_dir(config_directory).map_err(|_| Failure::Unavailable)? {
         let path = entry.map_err(|_| Failure::Unavailable)?.path();
@@ -1357,6 +1436,11 @@ mod tests {
         // The configuration and binary are removed by uninstall itself.
         assert!(root.join("client.json").exists());
         assert!(outside.join("keep").exists());
+        // Retry finishes safely after the first pass already removed files.
+        purge_device(&state, &root).unwrap();
+        remove_file_if_present(&root.join("client.json")).unwrap();
+        remove_file_if_present(&root.join("client.json")).unwrap();
+        assert!(state.join("device-key").exists());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

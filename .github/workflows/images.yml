@@ -1,0 +1,119 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: Tested production images
+'on':
+  workflow_call: null
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '22'
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: public-client-bundle
+        path: deploy/client-assets/release
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: foundation-evidence
+        path: .
+    - name: Prepare runtime tooling
+      run: |
+        python -m pip install -r tools/requirements.txt
+        npm ci --ignore-scripts
+        npx --no-install playwright install --with-deps chromium
+        rustup show
+    - name: Build and test the actual composed image
+      run: |
+        python tools/quickstart/check.py --build --image olo-toolgate-quickstart:module11 --client-assets deploy/client-assets/release --prebuilt-ui
+        docker run --rm -e PYTHONPATH=/opt/quickstart --entrypoint /opt/quickstart-python/bin/python -v "$PWD:/work:ro" -w /work olo-toolgate-quickstart:module11 -m unittest discover -s tests/quickstart -v
+        python tools/quickstart/check.py --image olo-toolgate-quickstart:module11 --postgresql --no-browser
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-quickstart:module11
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/quickstart:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/quickstart-sbom.cdx.json olo-toolgate-quickstart:module11
+        python tools/ui/merge_sbom.py --image-sbom build/quickstart/quickstart-sbom.cdx.json
+        docker save olo-toolgate-quickstart:module11 -o build/quickstart/image.tar
+        cp CHANGELOG.md docs/deployment/quickstart.md build/quickstart/
+        (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json > SHA256SUMS)
+    - name: Reuse the tested Quickstart helper and verify production Control
+      run: |
+        docker tag olo-toolgate-quickstart:module11 olo-toolgate-quickstart:enterprise-validation
+        python tools/control/container.py --client-assets deploy/client-assets/release --prebuilt-ui
+        docker tag olo-toolgate-control:module05 olo-toolgate-control:enterprise-production
+        python tools/enterprise/restore_check.py
+        python tools/client/downloads.py --image olo-toolgate-control:module05
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-control:module05
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/control:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/control-sbom.cdx.json olo-toolgate-control:module05
+        python tools/ui/merge_sbom.py
+        cp -r build/enterprise build/control/enterprise-evidence
+        cp -r build/quickstart build/control/quickstart-evidence
+        docker save olo-toolgate-control:module05 -o build/control/image.tar
+        cp -r build/ui build/control/ui-evidence
+        cp CHANGELOG.md docs/control-plane/upgrades.md build/control/
+        (cd build/control && sha256sum image.tar control-sbom.cdx.json > SHA256SUMS)
+    - name: Verify production Gateway using the tested helper
+      run: |
+        docker build -f apps/gateway/Dockerfile --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$GITHUB_SHA" -t olo-toolgate-gateway:module05 .
+        python tools/gateway/container.py --no-build
+        python tools/gateway/benchmark.py
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-gateway:module05
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/gateway:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/gateway-sbom.cdx.json olo-toolgate-gateway:module05
+        docker save olo-toolgate-gateway:module05 -o build/gateway/image.tar
+        cp CHANGELOG.md docs/gateway/upgrades.md build/gateway/
+        (cd build/gateway && sha256sum image.tar gateway-sbom.cdx.json > SHA256SUMS)
+    - name: Build and verify the matching Linux device image
+      run: |
+        docker build -f apps/device/Dockerfile --build-arg QUICKSTART_IMAGE=olo-toolgate-quickstart:module11 --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$GITHUB_SHA" -t olo-toolgate-device:module11 .
+        python tools/device/check.py
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-device:module11
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/device-sbom.cdx.json olo-toolgate-device:module11
+        docker save olo-toolgate-device:module11 -o build/device/image.tar
+        cp docs/deployment/device.md build/device/
+        (cd build/device && sha256sum image.tar device-sbom.cdx.json > SHA256SUMS)
+    - name: LangChain native smoke on the device image being published
+      env:
+        TOOLGATE_QUICKSTART_IMAGE: olo-toolgate-quickstart:module11
+        TOOLGATE_DEVICE_IMAGE: olo-toolgate-device:module11
+        TOOLGATE_HTTP_PORT: '18091'
+        TOOLGATE_TLS_PORT: '18451'
+      working-directory: examples/langchain
+      run: |
+        trap 'docker compose down -v' EXIT
+        LOCAL_UID="$(id -u)"
+        LOCAL_GID="$(id -g)"
+        export LOCAL_UID LOCAL_GID
+        docker compose build agent
+        docker compose up -d --wait --wait-timeout 180 quickstart linux-device
+        python manage.py setup --bootstrap-local --approve-linux-device --target linux
+        docker compose run --rm -T agent --target linux --smoke
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: quickstart-evidence
+        path: build/quickstart/
+        if-no-files-found: error
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: device-evidence
+        path: build/device/
+        if-no-files-found: error
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: control-evidence
+        path: build/control/
+        if-no-files-found: error
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: gateway-evidence
+        path: build/gateway/
+        if-no-files-found: error

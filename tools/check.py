@@ -56,7 +56,7 @@ def python(*args):
     return run([sys.executable,*args])
 
 
-def publication_proof():
+def publication_proof(prebuilt_ui=False):
     local = ROOT/'.dev/maven-local-proof'
     local.mkdir(parents=True, exist_ok=True)
     version = (ROOT/'packages/contracts/VERSION').read_text().strip()
@@ -78,6 +78,7 @@ def publication_proof():
         if 'io/ololabs/toolgate/contracts/EnterpriseDecision.class' not in jar.namelist(): raise SystemExit('Published generated models missing')
         if 'META-INF/LICENSE' not in jar.namelist(): raise SystemExit('Published license missing')
     tasks = [f':{service}:build' for service in ('control-plane','marketplace-api','marketplace-worker')]
+    if prebuilt_ui: tasks.insert(0, '-PprebuiltAdminUi=true')
     updates = ['--write-locks'] if os.environ.get('TOOLGATE_UPDATE_LOCKS') == '1' else []
     run(['gradle','-PusePublishedContracts=true',f'-PcontractsRepository={local.as_posix()}','--rerun-tasks',*updates,*tasks])
     (ROOT/'.dev').mkdir(parents=True, exist_ok=True)
@@ -92,7 +93,7 @@ def helm_checks():
     from gateway.check import helm_checks as gateway_helm_checks
     gateway_helm_checks()
     from control.helm import checks as control_helm_checks
-    control_helm_checks()
+    control_helm_checks(lint=False)
     from enterprise.helm import checks as enterprise_helm_checks
     enterprise_helm_checks()
     from client.helm import checks as endpoint_helm_checks
@@ -101,7 +102,7 @@ def helm_checks():
     fleet_helm_checks()
 
 
-def scans():
+def scans(staged_scan=True):
     workflows = [p.relative_to(ROOT).as_posix() for p in sorted((ROOT/'.github/workflows').glob('*.yml'))]
     run(['docker','run','--rm','-v',f'{ROOT.as_posix()}:/work:ro','-w','/work','rhysd/actionlint:1.7.7',*workflows])
     run(['npm','audit','--audit-level=high'])
@@ -113,7 +114,7 @@ def scans():
     # This read-only scan hook is runnable locally and is mandatory in CI.
     from source_scan import secret_scan
     secret_scan()
-    run(['node', 'tools/ci/secret-scan.mjs'])
+    if staged_scan: run(['node', 'tools/ci/secret-scan.mjs'])
     from policy.secret_scan import checks as secret_scan_checks
     secret_scan_checks()
     from source_scan import scan
@@ -126,8 +127,9 @@ def main():
     parser.add_argument('--contracts-only', action='store_true')
     parser.add_argument('--publication-only', action='store_true')
     parser.add_argument('--gateway-only', action='store_true')
+    parser.add_argument('--ci-common', action='store_true', help='Shared CI gates; preflight owns metadata/CI regressions and the image stage owns runtime smoke')
     args = parser.parse_args()
-    if args.scans: scans(); return
+    if args.scans: scans(staged_scan=not args.ci_common); return
     if args.publication_only:
         from control.check import database
         with database() as db:
@@ -141,19 +143,31 @@ def main():
         return
     if args.gateway_only:
         run(['cargo','test','-p','olo-toolgate-gateway','--locked']); return
-    python('tools/ci/preflight.py')
-    python('-m','unittest','discover','-s','tests/ci','-v')
+    if not args.ci_common:
+        python('tools/ci/preflight.py')
+        python('-m','unittest','discover','-s','tests/ci','-v')
     python('tools/ui/generate.py','--check')
     python('tools/quality.py')
     python('-m','unittest','discover','-s','tests/contracts','-v')
+    if args.ci_common:
+        run(['npm','ci','--ignore-scripts'])
+        run(['npm','run','contracts:check'])
+        run(['npm','run','contracts:build'])
+        run(['npm','--workspace','@olo-labs/toolgate-contracts','test'])
+        run(['npm','--workspace','@olo-labs/toolgate-admin-ui','run','check'])
+        run(['npm','--workspace','@olo-labs/toolgate-admin-ui','test'])
+        run(['npm','--workspace','@olo-labs/toolgate-admin-ui','exec','--','vite','build'])
+        run(['node','tools/ui/build.mjs','--metadata-only'])
+        run(['npm','--workspace','@olo-labs/toolgate-admin-ui','exec','--','playwright','install','--with-deps','chromium'])
+        run(['node','tools/ci/browser-downloads.mjs','--skip-build'])
     from control.check import database
     with database() as db:
         old = {name:os.environ.get(name) for name in ('CONTROL_TEST_URL','CONTROL_TEST_PASSWORD')}
         os.environ.update({name:db[name] for name in old})
         try:
-            run(['gradle','projects','javaCheck','build'])
-            publication_proof()
-            run(['gradle',':control-plane:enterpriseTest'])
+            run(['gradle',*(['-PprebuiltAdminUi=true'] if args.ci_common else []),'projects','javaCheck','build'])
+            publication_proof(prebuilt_ui=args.ci_common)
+            if not args.ci_common: run(['gradle',':control-plane:enterpriseTest'])
             python('tools/enterprise/custody.py')
         finally:
             for name,value in old.items():
@@ -165,13 +179,16 @@ def main():
     # The Java SDK's Gradle and Maven plugins on a sample project, end to end through toolgate pack.
     if os.name != 'nt' and not DOCKER and shutil.which('mvn') and shutil.which('cargo'): run(['bash','tool-sdk/java-sdk/e2e/run.sh'])
     else: print('Skipping the Java SDK plugin end-to-end run: it needs bash, mvn and a local cargo')
-    run(['npm','ci','--ignore-scripts'])
-    run(['npm','run','contracts:check'])
-    run(['npm','run','contracts:build'])
-    run(['npm','--workspace','@olo-labs/toolgate-contracts','test'])
-    run(['npm','run','ui:check'])
-    run(['npm','--workspace','@olo-labs/toolgate-admin-ui','test'])
-    if not args.contracts_only: python('tools/quickstart/check.py','--build')
+    if not args.ci_common:
+        run(['npm','ci','--ignore-scripts'])
+        run(['npm','run','contracts:check'])
+        run(['npm','run','contracts:build'])
+        run(['npm','--workspace','@olo-labs/toolgate-contracts','test'])
+        run(['npm','run','ui:check'])
+        run(['npm','--workspace','@olo-labs/toolgate-admin-ui','test'])
+    if not args.contracts_only and not args.ci_common: python('tools/quickstart/check.py','--build')
+    if args.ci_common:
+        python('tools/enterprise/check.py','--evidence-only')
     python('tools/ui/package.py')
     run(['php','packages/contracts/php/tests/roundtrip.php'])
     run(['php','packages/contracts/php/tests/roundtrip_v2.php'])

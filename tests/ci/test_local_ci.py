@@ -50,6 +50,7 @@ class LocalCiTests(unittest.TestCase):
 
     def test_yaml_changes_flow_into_replay_without_mutating_source(self):
         source = self.workflows['foundation']['jobs']['check']
+        source['needs'] = 'preflight-fixture'
         source['steps'][1]['with']['java-version'] = '25'
         source['steps'].append({'name': 'New gate', 'run': 'python tools/new_gate.py'})
         body = local.replay_document('foundation.check', self.workflows)['jobs']['replay']
@@ -64,18 +65,29 @@ class LocalCiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'no local coverage policy'):
             local.inventory(self.workflows)
 
+    def test_preflight_replay_includes_delegated_browser_gate_and_rejects_other_conditions(self):
+        source = self.workflows['preflight']['jobs']['metadata']
+        body = local.replay_document('preflight.metadata', self.workflows)['jobs']['replay']
+        browser = [s for s in body['steps'] if 'browser-downloads.mjs' in s.get('run','')]
+        self.assertEqual(len(browser), 1)
+        self.assertNotIn('if', browser[0])
+        self.assertTrue(any('if' in s for s in source['steps']))
+        source['steps'][0]['if'] = 'github.event_name == "push"'
+        with self.assertRaisesRegex(ValueError, 'conditional steps'):
+            local.inventory(self.workflows)
+
     def test_unknown_dependency_is_rejected(self):
         self.workflows['foundation']['jobs']['check']['needs'] = 'missing'
         with self.assertRaisesRegex(ValueError, 'unknown dependency'):
             local.inventory(self.workflows)
 
     def test_dependency_cycle_is_rejected(self):
-        self.workflows['foundation']['jobs']['admission']['needs'] = 'check'
+        self.workflows['ci']['jobs']['admission']['needs'] = 'foundation'
         with self.assertRaisesRegex(ValueError, 'cycle'):
             local.inventory(self.workflows)
 
     def test_missing_reusable_workflow_is_rejected(self):
-        self.workflows['foundation']['jobs']['preflight']['uses'] = './.github/workflows/missing.yml'
+        self.workflows['ci']['jobs']['preflight']['uses'] = './.github/workflows/missing.yml'
         with self.assertRaisesRegex(ValueError, 'unsupported reusable workflow'):
             local.inventory(self.workflows)
 
@@ -92,10 +104,11 @@ class LocalCiTests(unittest.TestCase):
     def test_real_triggers_including_release_and_development_are_loaded(self):
         for name in ('foundation', 'client', 'control', 'gateway', 'quickstart'):
             with self.subTest(workflow=name):
-                self.assertEqual(self.workflows[name]['on']['push'], {'branches': ['main']})
+                self.assertEqual(set(self.workflows[name]['on']), {'workflow_call'})
                 self.assertNotIn('pull_request', self.workflows[name]['on'])
         self.assertEqual(self.workflows['release-foundation']['on']['push']['tags'], ['v*'])
-        self.assertEqual(self.workflows['development-release']['on']['workflow_run']['workflows'], ['control'])
+        self.assertEqual(self.workflows['ci']['on']['push'], {'branches': ['main']})
+        self.assertEqual(set(self.workflows['development-release']['on']), {'workflow_call'})
         self.assertEqual(set(self.workflows['manual-development-release']['on']), {'workflow_dispatch'})
 
     def test_loader_accepts_yaml_extension_and_all_on_forms(self):

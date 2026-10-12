@@ -55,10 +55,13 @@ rerunning it. This workflow has no automatic push/tag/schedule trigger.
 
 ## Existing CI-backed development releases
 
-The development-release workflow runs after Control CI completes successfully on
-main. It waits up to 30 minutes for Control, Gateway, Quickstart, Foundation and
-Endpoint Client CI to pass for the same commit. Failed, cancelled or missing gates
-prevent publication. Manual dispatch on main follows the same gates.
+The release stage of **ToolGate CI and release** publishes after foundation,
+all six native platform jobs, public client packaging and production image checks
+succeed. It verifies and downloads artifacts from that exact workflow run and
+commit. Failed, skipped, cancelled or missing prerequisites prevent publication.
+Dispatch `ci.yml` on main to repeat this complete flow. The publisher does not
+wait for its own unfinished job. Legacy five-run preparation remains available
+only for compatibility callers.
 
 Automatic CI and development release admission require `TOOLGATE_CI_ENABLED=true`
 and a PR title starting with `RC:`. Push and release events resolve the merged PR
@@ -98,7 +101,8 @@ No installer/runtime signing is claimed by this workflow.
 The Maven library is `io.ololabs.toolgate:toolgate-contracts`. Each publishing run
 uses `<core-version>-dev.<publishing-run-id>.g<12-character-commit>`, avoiding reuse
 of the checked-in development coordinate. Source version changes occur only in the
-CI checkout. Java contract tests run before remote publication.
+CI checkout. Java contract tests run in foundation before remote publication;
+publication does not run the same suite again.
 
 Maven defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`, authenticated
 with the CI GITHUB_TOKEN. Consumers need GitHub Packages read access. To use another

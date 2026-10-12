@@ -8,6 +8,10 @@ Double-click `start.bat` to test the working tree, build Control and Quickstart
 with the production Dockerfiles, smoke-test the new image, then start the console
 at http://127.0.0.1:18090/console/. `restart.bat` repeats the checks and build
 before replacing the container. `stop.bat` stops this stack and preserves data.
+For a focused startup use `start.bat -FocusedCheck` (or `restart.bat -FocusedCheck`).
+This checks debug management, builds the real production images and waits for
+the persistent stack to become healthy without running unrelated suites.
+`-FocusedCheck` and `-FullCheck` are mutually exclusive.
 Scripts work from any current directory and never commit or push.
 Start and restart synchronize version metadata and regenerate contract bindings
 before running the read-only preflight, dependency installation and build checks.
@@ -58,6 +62,9 @@ and internet access for dependencies and base images. A Python environment is
 created under `.dev/debug/venv`. Set `GITHUB_TOKEN` in the launching process's
 environment to authenticate the GitHub release lookup and use the token's higher
 API rate limit. The token is optional; without it the lookup uses public access.
+If the public lookup is unavailable, already cached release inputs can be reused
+only after canonical version/platform/checksum validation. An explicitly supplied
+invalid token still fails; it never falls back to unauthenticated access.
 After adding or changing a Windows environment variable, open a new terminal
 before running `start.bat` or `restart.bat` so the scripts inherit it. The token
 is sent only in the release API request header and is never printed or passed to

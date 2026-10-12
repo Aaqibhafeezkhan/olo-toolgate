@@ -124,7 +124,7 @@ pub fn profile_name(server: &str) -> String {
 mod tests {
     use super::*;
     fn config(state: &Path, server: &str) -> Config {
-        Config {
+        let config = Config {
             deployment: None,
             execution: None,
             tools: None,
@@ -135,7 +135,15 @@ mod tests {
             ca_certificate_path: None,
             request_timeout_seconds: 10,
             local_console_url: None,
-        }
+        };
+        #[cfg(windows)]
+        let config = Config {
+            ipc_endpoint: crate::install::ipc_endpoint(),
+            authorized_peers: vec![crate::platform::windows::current_sid().unwrap()],
+            ..config
+        };
+        config.validate().unwrap();
+        config
     }
     #[test]
     fn parked_profiles_become_background_connections() {

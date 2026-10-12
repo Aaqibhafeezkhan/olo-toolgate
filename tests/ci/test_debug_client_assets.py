@@ -23,7 +23,7 @@ POWERSHELL = shutil.which('powershell.exe') or shutil.which('pwsh')
 
 @unittest.skipUnless(POWERSHELL, 'PowerShell is required for the debug release lookup')
 class DebugReleaseLookupTest(unittest.TestCase):
-    def lookup(self, token=None, rejected=False):
+    def lookup(self, token=None, rejected=False, cached=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root/'debug').mkdir()
@@ -32,6 +32,10 @@ class DebugReleaseLookupTest(unittest.TestCase):
             compiler = root/'.dev/debug/toolgate-inno-6.7.1/ISCC.exe'
             compiler.parent.mkdir(parents=True)
             compiler.touch()
+            if cached:
+                cache = root/'.dev/debug/client-assets'
+                cache.mkdir()
+                (cache/'olo-toolgate-client-fixture-x86_64-unknown-linux-gnu.run').touch()
             harness = root/'harness.ps1'
             harness.write_text('''
 $ErrorActionPreference = 'Stop'
@@ -94,6 +98,17 @@ function fixture-python {
         self.assertEqual([call['kind'] for call in calls], ['api'])
         self.assertIn('401 Unauthorized', result.stderr)
         self.assertNotIn('fixture-token', result.stdout + result.stderr)
+
+    def test_unavailable_public_api_revalidates_cached_inputs(self):
+        result, calls = self.lookup(rejected=True, cached=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([call['kind'] for call in calls], ['api', 'build'])
+        self.assertIn('canonical checksum and platform validation remain required', result.stdout)
+
+    def test_cached_inputs_do_not_hide_an_invalid_supplied_token(self):
+        result, calls = self.lookup('fixture-token', rejected=True, cached=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual([call['kind'] for call in calls], ['api'])
 
 
 def binary(target):
