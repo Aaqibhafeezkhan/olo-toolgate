@@ -1,0 +1,234 @@
+{
+  "artifacts": [
+    {
+      "artifactId": "tool",
+      "mediaType": "application/java-archive",
+      "path": "artifacts/tool.jar",
+      "runtimeId": "jvm"
+    }
+  ],
+  "compatibility": {
+    "contractsVersion": "1.0.0"
+  },
+  "composition": [],
+  "connections": [],
+  "credentialReferences": [],
+  "id": "acme.notify",
+  "kind": "SDK",
+  "limits": {
+    "maxDescriptorBytes": 1048576,
+    "maxTools": 64
+  },
+  "publisher": "Acme",
+  "runtimes": [
+    {
+      "language": "java",
+      "runtimeId": "jvm",
+      "version": "17"
+    }
+  ],
+  "schemaVersion": 2,
+  "sdk": {
+    "descriptorGeneration": 1,
+    "language": "JAVA",
+    "protocol": {
+      "max": 2,
+      "min": 2
+    },
+    "version": "0.10.0-dev"
+  },
+  "tools": [
+    {
+      "artifactIds": [
+        "tool"
+      ],
+      "descriptor": {
+        "businessKey": {
+          "argument": "reference",
+          "idempotencyHeader": "Idempotency-Key",
+          "idempotencyScope": "BUSINESS_KEY",
+          "namespace": "AGENT",
+          "required": false
+        },
+        "description": "Posts a notification (title, text, severity) to an allowlisted webhook channel. Sending again with the same reference returns the first result instead of sending twice.",
+        "descriptorGeneration": 1,
+        "destinations": [
+          {
+            "hostSetting": "WebhookHost",
+            "id": "webhook",
+            "port": 443,
+            "spkiPins": []
+          }
+        ],
+        "effect": {
+          "destructive": false,
+          "openWorld": true,
+          "safety": "NON_IDEMPOTENT"
+        },
+        "errors": [
+          {
+            "code": "CHANNEL_NOT_ALLOWED",
+            "description": "The channel is not in AllowedChannels.",
+            "retryable": false
+          }
+        ],
+        "execution": {
+          "async": false,
+          "cancelIfAbandoned": false,
+          "maxDurationMs": 30000,
+          "stateless": false
+        },
+        "httpAuth": [
+          {
+            "header": "X-Api-Key",
+            "id": "webhook-key",
+            "scopes": [],
+            "secret": "WebhookApiKey",
+            "type": "API_KEY"
+          }
+        ],
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "channel": {
+              "description": "Channel to post to, such as ops-alerts",
+              "maxLength": 64,
+              "type": "string"
+            },
+            "reference": {
+              "description": "Your unique id for this notification, such as an incident or job id. A repeat with the same reference is not sent again.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "severity": {
+              "default": "info",
+              "description": "How urgent it is",
+              "enum": [
+                "info",
+                "warning",
+                "critical"
+              ],
+              "type": "string"
+            },
+            "text": {
+              "description": "Message body",
+              "maxLength": 4000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": {
+              "description": "Short headline",
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "channel",
+            "reference",
+            "text",
+            "title"
+          ],
+          "type": "object"
+        },
+        "kind": "SERVER",
+        "mcpName": "notify.send",
+        "outputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "channel": {
+              "description": "Channel posted to",
+              "type": "string"
+            },
+            "httpStatus": {
+              "description": "HTTP status the receiver answered",
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            "receiptId": {
+              "description": "Id the receiver gave the message, when it returned one",
+              "type": "string"
+            },
+            "reference": {
+              "description": "The caller's reference, used to send at most once",
+              "type": "string"
+            },
+            "sentAt": {
+              "description": "When it was sent, ISO 8601",
+              "type": "string"
+            }
+          },
+          "required": [
+            "channel",
+            "httpStatus",
+            "receiptId",
+            "reference",
+            "sentAt"
+          ],
+          "type": "object"
+        },
+        "permissions": [
+          "HTTP_ROUTE"
+        ],
+        "routes": [
+          {
+            "auth": "webhook-key",
+            "destination": "webhook",
+            "headers": [
+              "Idempotency-Key"
+            ],
+            "id": "hook.post",
+            "maxRequestBytes": 16384,
+            "maxResponseBytes": 65536,
+            "method": "POST",
+            "path": "/hooks/{channel:[A-Za-z0-9_-]{1,64}}",
+            "query": [],
+            "requestContentTypes": [
+              "application/json"
+            ],
+            "streaming": "NONE",
+            "timeoutMs": 10000
+          }
+        ],
+        "tcp": [],
+        "title": "Send a notification",
+        "toolId": "acme.notify/send",
+        "toolsets": [],
+        "useWhen": "Use it to raise an alert or tell a team about something the user asked to share.",
+        "variables": {
+          "claims": [],
+          "globals": [
+            {
+              "default": "ops-alerts",
+              "description": "Comma-separated channels callers may post to.",
+              "name": "AllowedChannels",
+              "required": true,
+              "sensitive": false,
+              "type": "STRING"
+            },
+            {
+              "default": "toolgate",
+              "description": "Sender name included in every message, such as the environment or team.",
+              "name": "Source",
+              "required": true,
+              "sensitive": false,
+              "type": "STRING"
+            }
+          ],
+          "secrets": [
+            {
+              "name": "WebhookApiKey",
+              "scope": "GROUP",
+              "type": "STRING"
+            }
+          ]
+        }
+      },
+      "entryPoint": "io.ololabs.toolgate.runtime.Main",
+      "runtimeId": "jvm"
+    }
+  ],
+  "version": "0.1.0"
+}

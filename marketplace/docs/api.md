@@ -97,7 +97,7 @@ Reachable only on the internal network. Every request carries `Authorization: Be
 
 | Method and path | Body | Returns |
 |---|---|---|
-| `POST /inspect` | `{ "fileRef": "s3://…", "previousVersion": VersionDetail-subset or null }` | `InspectResult`. **Never contains a signature.** |
+| `POST /inspect` | `{ "fileRef": "s3://…", "previousVersion": { "version": "0.1.0", "fileRef": "s3://…" } or null }` | `InspectResult`. **Never contains a signature.** |
 | `POST /sign` | `{ "fileRef": "s3://…", "packageDigest": "sha256:…", "authorizedPublisherSlug": "examples" }` | `ReleaseRecord` |
 | `GET /keys` | none | `KeySet` plus `toolgateRevision` |
 | `GET /health` | none | `{ "status": "ok" }`, with no token required |
@@ -109,15 +109,22 @@ Reachable only on the internal network. Every request carries `Authorization: Be
   "packageDigest": "sha256:…", "descriptorSetDigest": "sha256:…", "archiveSha256": "…",
   "listing": { "title": "…", "summary": "…", "description": "…", "license": "…|null", "categories": [], "tags": [] },
   "tools": [Tool], "requiredSettings": [Setting], "compatibility": Compatibility,
-  "apiChange": "none|compatible|breaking", "requiredBump": "major|minor|patch|null" }
+  "apiChange": "none|compatible|breaking", "requiredBump": "major|minor|patch|null",
+  "apiChanges": ["breaking: send input property tag is now required", "…"],   // only with previousVersion
+  "warnings": ["…"] }                                                          // only when there are any
 ```
 
-`/sign` refuses, with `403` and a code, in each of these cases:
-- the token is wrong;
-- the bytes no longer validate;
-- the computed `packageDigest` differs from the one sent;
-- the manifest id prefix differs from `authorizedPublisherSlug`;
-- the prefix is reserved (`olo`, `ololabs`, `toolgate`, or `examples` for anyone but the system publisher).
+- `fileRef` is `s3://<MARKETPLACE_S3_BUCKET>/<key>`, read with the helper's own object-storage credentials, so any replica serves any request. Another bucket is refused. `file:<relative path>` exists only when `MARKETPLACE_HELPER_FILE_ROOT` is set (tests and the seed check).
+- `previousVersion` is the previous `AVAILABLE` version of the same package: its version and its stored file. The helper diffs the two (design §6.2 B). Before 1.0 a breaking change needs a minor bump and an addition a patch (`docs/development/foundation-upgrades.md`); from 1.0, major and minor. A smaller bump gives `valid: false` with a `SEMVER` error that lists `apiChanges`.
+- An invalid package is `200` with `valid: false` and its errors. `4xx` means the request itself was refused: `400 INVALID_REQUEST`, `401 UNAUTHORIZED`, `404 NOT_FOUND` for the `fileRef`, `503 UNAVAILABLE` when all validation slots are busy.
+- Error codes in `errors`: `ARCHIVE`, `ARCHIVE_PATH`, `CHECKSUM`, `SIZE`, `MANIFEST`, `DESCRIPTOR`, `RUNTIME`, `SEMVER`, `TIMEOUT`.
+
+`/sign` refuses in each of these cases:
+- the token is missing or wrong: `401 UNAUTHORIZED`;
+- the bytes no longer validate: `403 INVALID_PACKAGE`;
+- the computed `packageDigest` differs from the one sent: `403 DIGEST_MISMATCH`;
+- the manifest id prefix differs from `authorizedPublisherSlug`: `403 PREFIX_MISMATCH`;
+- the prefix is reserved (`olo`, `ololabs`, `toolgate`, or `examples` for anyone but the system publisher `examples`): `403 RESERVED_PREFIX`. The lists are `MARKETPLACE_RESERVED_PREFIXES` and `MARKETPLACE_SYSTEM_PUBLISHERS`.
 
 Drupal must have checked, from the logged-in user's session, that the user owns `authorizedPublisherSlug` (design.md §5.2).
 
