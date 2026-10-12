@@ -136,13 +136,15 @@ keep identical imports in either mode. Java JARs also include canonical schemas.
 Remote Maven repositories are configured only when `CI=true` and
 `MAVEN_REPOSITORY_URL` is set. `MAVEN_USERNAME` and `MAVEN_PASSWORD` are protected
 CI environment secrets, never Gradle properties or checked-in files. Publication
-uses HTTPS and must be configured through the `foundation-release` GitHub
-environment with maintainers' required reviewers and registry permissions.
+uses HTTPS and is configured through the common `development-release` GitHub
+environment or repository settings. Maintainers configure reviewers and registry
+permissions on that environment; no reviewers are currently configured.
 
-`release-foundation.yml` supports a dry-run dispatch and matching `v<version>`
-tags. It executes the full gates, packages Java/raw contracts/Helm, produces a
-CycloneDX dependency SBOM and SHA-256 asset list, creates GitHub provenance
-attestations, and publishes only for a tag or explicit publish dispatch.
+`ci.yml` handles main and matching `v<VERSION>` tags. It runs each shared gate once,
+packages Java/raw contracts/Helm and source SBOM/checksums in foundation, then
+publishes the exact verified artifacts after all six native and image gates pass.
+Tag publication includes Maven, Helm OCI, GHCR and GitHub provenance; main retains
+its development channel. See [release process](release-process.md).
 Manual publication requires the matching tag already to exist. Configure the
 protected environment before using publication. Rust/npm/Composer package
 publication remains registry opt-in; their identities and source packages exist.

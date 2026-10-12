@@ -4,6 +4,7 @@
 from contextlib import contextmanager
 import copy
 import importlib
+import os
 from pathlib import Path
 import sys
 import unittest
@@ -26,6 +27,8 @@ def workflow(name):
 
 class SameRunReleaseTests(unittest.TestCase):
     def setUp(self):
+        self.environment=patch.dict(os.environ,{'GITHUB_REF':'refs/heads/main'})
+        self.environment.start();self.addCleanup(self.environment.stop)
         self.sha = 'a' * 40
         self.run = dict(head_sha=self.sha, head_branch='main',
                         path='.github/workflows/ci.yml', event='push', status='in_progress')
@@ -107,7 +110,7 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         native = workflow('client.yml')['jobs']['native']
         self.assertEqual({row['target'] for row in native['strategy']['matrix']['include']}, set(TARGETS))
         self.assertFalse(native['strategy']['fail-fast'])
-        # Independent tagged callers retain their full native checks by default.
+        # Compatibility callers retain their full native checks by default.
         self.assertFalse(workflow('client.yml')['on']['workflow_call']['inputs']['shared_checks']['default'])
 
     def test_helpers_execute_shared_checks_once_and_reuse_ui(self):

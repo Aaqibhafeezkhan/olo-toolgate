@@ -81,7 +81,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertIn("github.event.workflow_run.head_branch == 'main'",condition)
         self.assertNotIn('(!inputs.main_only ||',condition)
         for name in ('admission','ci','foundation','client','control','gateway','quickstart',
-                     'development-release','release-foundation'):
+                     'development-release'):
             document=yaml.safe_load((root/f'.github/workflows/{name}.yml').read_text())
             with self.subTest(workflow=name):
                 self.assertEqual(document['permissions']['pull-requests'],'read')
@@ -89,14 +89,15 @@ class AdmissionTests(unittest.TestCase):
                 for event in ('workflow_dispatch','workflow_call'):
                     self.assertNotIn('comment',(events.get(event) or {}).get('inputs',{}))
 
-    def test_development_release_only_accepts_main_runs(self):
+    def test_common_release_accepts_main_or_version_tag_runs(self):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/development-release.yml').read_text())
         events=document.get('on',document.get(True,{}))
         self.assertEqual(set(events),{'workflow_call'})
         self.assertIn("github.ref == 'refs/heads/main'",document['jobs']['publish']['if'])
+        self.assertIn("startsWith(github.ref, 'refs/tags/v')",document['jobs']['publish']['if'])
         pipeline=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
-        self.assertTrue(pipeline['jobs']['admission']['with']['main_only'])
+        self.assertNotIn('main_only',pipeline['jobs']['admission'].get('with',{}))
         self.assertEqual(set(pipeline['jobs']['release']['needs']),{'foundation','clients','images'})
 
     def test_no_workflow_is_triggered_by_pull_requests(self):
@@ -118,18 +119,18 @@ class AdmissionTests(unittest.TestCase):
         document=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         events=document.get('on',document.get(True,{}))
         self.assertEqual(set(events),{'push','workflow_dispatch'})
-        self.assertEqual(events['push'],{'branches':['main']})
-        self.assertTrue(document['jobs']['admission']['with']['main_only'])
+        self.assertEqual(events['push'],{'branches':['main'],'tags':['v*']})
+        self.assertNotIn('main_only',document['jobs']['admission'].get('with',{}))
 
-    def test_main_only_admission_is_opt_in_for_separate_release_workflows(self):
+    def test_main_only_admission_is_opt_in_for_compatibility_callers(self):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/admission.yml').read_text())
         events=document.get('on',document.get(True,{}))
         self.assertEqual(events['workflow_call']['inputs']['main_only']['type'],'boolean')
         self.assertIs(events['workflow_call']['inputs']['main_only']['default'],False)
-        release=yaml.safe_load((root/'.github/workflows/release-foundation.yml').read_text())
+        release=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         events=release.get('on',release.get(True,{}))
-        self.assertEqual(events['push'],{'tags':['v*']})
+        self.assertEqual(events['push'],{'branches':['main'],'tags':['v*']})
         self.assertNotIn('main_only',release['jobs']['admission'].get('with',{}))
 
     def test_main_entrypoint_requires_exact_enabled_variable(self):
@@ -195,9 +196,9 @@ class AdmissionTests(unittest.TestCase):
                     self.assertEqual(self.run_admission('true',event_name=event_name,ref=ref),'allow=false\n')
                     lookup.assert_not_called()
 
-    def test_tag_release_lookup_retains_the_separate_tag_path(self):
+    def test_tag_release_lookup_uses_the_checked_commit_not_annotated_tag_object(self):
         with patch('tools.ci.admission.merged_pr_title',return_value=RC_TITLE) as lookup:
-            self.assertEqual(self.run_admission('true',ref='refs/tags/v1.0.0'),'allow=true\n')
+            self.assertEqual(self.run_admission('true',payload={'after':'b'*40},ref='refs/tags/v1.0.0'),'allow=true\n')
         lookup.assert_called_once_with(REPOSITORY,MERGE_SHA)
 
     def test_release_uses_upstream_sha_and_merged_pr_title(self):

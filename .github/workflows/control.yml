@@ -1,12 +1,8 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: control
-on:
-  workflow_call:
-    inputs:
-      publish:
-        type: boolean
-        default: false
+'on':
+  workflow_call: null
 permissions:
   contents: read
   pull-requests: read
@@ -30,7 +26,7 @@ jobs:
     needs: preflight
     uses: ./.github/workflows/policy.yml
   container-and-replicas:
-    needs: clients
+    needs: [clients, policy-compatibility]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -96,55 +92,3 @@ jobs:
           name: control-evidence
           path: build/control/
           if-no-files-found: error
-  publish:
-    if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.publish)
-    needs: [container-and-replicas, policy-compatibility]
-    runs-on: ubuntu-24.04
-    environment: control-release
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: control-evidence
-          path: build/control
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: public-client-bundle
-          path: deploy/client-assets/release
-      - name: Publish verified native client assets to the protected tagged release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python tools/client/release.py
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: deploy/client-assets/release/*
-      - name: Publish the exact scanned image
-        id: push
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REGISTRY_ACTOR: ${{ github.actor }}
-          RELEASE_REF: ${{ github.ref }}
-        run: |
-          version="$(cat VERSION)"
-          test "$RELEASE_REF" = "refs/tags/v${version}"
-          (cd build/control && sha256sum --check SHA256SUMS)
-          docker load -i build/control/image.tar
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$REGISTRY_ACTOR" --password-stdin
-          image="ghcr.io/olo-labs/olo-toolgate-control:${version}"
-          docker tag olo-toolgate-control:module05 "$image"
-          docker push "$image"
-          digest="$(docker inspect "$image" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
-          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-name: ghcr.io/olo-labs/olo-toolgate-control
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: build/control/control-sbom.cdx.json

@@ -1,0 +1,247 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+"""Versioned publication boundaries, with no registry writes or full build replay."""
+from contextlib import redirect_stderr
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import yaml
+from tools.ci import preflight
+from tools.release import development as shared, tagged
+
+ROOT=Path(__file__).resolve().parents[2]
+SHA='a'*40
+REPO='olo-labs/olo-toolgate'
+
+
+class TaggedReleaseTests(unittest.TestCase):
+    def setUp(self):
+        temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
+        self.root=Path(temporary.name);self.output=self.root/'build/development'
+        for path in ('VERSION','packages/contracts/VERSION'):
+            target=self.root/path;target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_text('1.2.3\n',encoding='utf-8')
+        self.foundation=self.output/'foundation/build/release';self.foundation.mkdir(parents=True)
+        self.assets=self.output/'assets';self.assets.mkdir()
+        names=['LICENSE','NOTICE.md','RELEASE-NOTES.md','CHANGELOG.md','compatibility.json',
+               'foundation-upgrades.md','gateway-upgrades.md','control-upgrades.md',
+               'sbom.cdx.json','olo-toolgate-1.2.3.tgz','olo-toolgate-contracts-1.2.3.tar.gz']
+        names += [f'toolgate-contracts-1.2.3{c}.jar' for c in ('','-sources','-javadoc')]
+        for name in names:(self.foundation/name).write_bytes(('checked '+name).encode())
+        (self.foundation/'toolgate-contracts-1.2.3.pom').write_text(
+            '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
+            '<groupId>io.ololabs.toolgate</groupId><artifactId>toolgate-contracts</artifactId>'
+            '<version>1.2.3</version><dependencies><dependency><groupId>example</groupId>'
+            '<artifactId>serializer</artifactId><version>1.0</version></dependency></dependencies></project>',encoding='utf-8')
+        (self.foundation/'toolgate-contracts-1.2.3.module').write_text(json.dumps({
+            'component':{'group':'io.ololabs.toolgate','module':'toolgate-contracts','version':'1.2.3'}}),encoding='utf-8')
+        self.foundation_checksums()
+        for attribute,value in [('ROOT',self.root),('OUTPUT',self.output)]:
+            mock=patch.object(shared,attribute,value);mock.start();self.addCleanup(mock.stop)
+        environment=patch.dict(os.environ,{'GITHUB_REF':'refs/tags/v1.2.3',
+            'GITHUB_REPOSITORY':REPO,'RELEASE_SHA':SHA,'GH_TOKEN':'fixture-token',
+            'GITHUB_ACTOR':'actor','MAVEN_REPOSITORY_URL':'https://maven.example.invalid',
+            'GITHUB_OUTPUT':str(self.root/'outputs.txt')},clear=True)
+        environment.start();self.addCleanup(environment.stop)
+        tagged.prepare_assets(dict.fromkeys(shared.WORKFLOWS,123))
+        for component in shared.IMAGES:
+            folder=self.output/component;folder.mkdir()
+            (folder/'image.tar').write_bytes(('tested '+component).encode())
+            (folder/'SHA256SUMS').write_text(shared.digest(folder/'image.tar')+'  image.tar\n',encoding='utf-8')
+
+    def foundation_checksums(self):
+        (self.foundation/'SHA256SUMS').write_text(''.join(f'{shared.digest(p)}  {p.name}\n'
+            for p in sorted(self.foundation.iterdir()) if p.name!='SHA256SUMS'),encoding='utf-8')
+
+    def test_tag_requires_exact_checked_version_and_not_a_branch(self):
+        self.assertEqual(shared.coordinates(),(REPO,SHA,'olo-labs'))
+        for ref in ('refs/tags/v1.2.4','refs/tags/v../1.2.3','refs/heads/main'):
+            with self.subTest(ref=ref),patch.dict(os.environ,{'GITHUB_REF':ref}):
+                with self.assertRaises(ValueError):tagged.version_tag()
+        (self.root/'VERSION').write_text('not-semver\n',encoding='utf-8')
+        with self.assertRaises(ValueError):tagged.version_tag()
+
+    def test_lightweight_and_annotated_tags_must_resolve_to_checked_commit(self):
+        for targets in ([{'type':'commit','sha':SHA}],
+                        [{'type':'tag','sha':'b'*40},{'type':'commit','sha':SHA}]):
+            with patch.object(shared,'api',side_effect=[{'object':t} for t in targets]):
+                tagged.verify_tag_commit(REPO,SHA)
+        for targets in ([{'type':'commit','sha':'c'*40}], [{'type':'tree','sha':SHA}],
+                        [{'type':'tag','sha':'b'*40},{'type':'tag','sha':'b'*40}]):
+            with patch.object(shared,'api',side_effect=[{'object':t} for t in targets]):
+                with self.assertRaises(ValueError):tagged.verify_tag_commit(REPO,SHA)
+
+    def test_unpublished_lookup_allows_only_an_explicit_404(self):
+        with patch.object(shared,'run',side_effect=subprocess.CalledProcessError(1,['gh'],stderr='gh: Not Found (HTTP 404)')):
+            tagged.ensure_unpublished(REPO)
+        for error in (subprocess.CalledProcessError(1,['gh'],stderr='HTTP 401'),
+                      subprocess.CalledProcessError(1,['gh'],stderr='connection failed')):
+            with patch.object(shared,'run',side_effect=error):
+                with self.assertRaises(subprocess.CalledProcessError):tagged.ensure_unpublished(REPO)
+        with patch.object(shared,'run'):
+            with self.assertRaisesRegex(ValueError,'already exists'):tagged.ensure_unpublished(REPO)
+
+    def test_all_foundation_outputs_and_checksums_are_required(self):
+        for name in ('sbom.cdx.json','toolgate-contracts-1.2.3.module','olo-toolgate-1.2.3.tgz'):
+            path=self.foundation/name;original=path.read_bytes();path.unlink();self.foundation_checksums()
+            with self.subTest(name=name),self.assertRaisesRegex(ValueError,'missing required'):tagged.verified_foundation(self.foundation)
+            path.write_bytes(original)
+        self.foundation_checksums()
+        (self.foundation/'toolgate-contracts-1.2.3.jar').write_bytes(b'tampered')
+        with self.assertRaisesRegex(ValueError,'checksum'):tagged.verified_foundation(self.foundation)
+
+    def test_unlisted_duplicate_and_unsafe_checksum_entries_are_rejected(self):
+        checksums=self.foundation/'SHA256SUMS';original=checksums.read_text()
+        for body in (original+original.splitlines()[0]+'\n',original+'a'*64+'  ../outside\n',original.split('\n',1)[1]):
+            checksums.write_text(body,encoding='utf-8')
+            with self.assertRaises(ValueError):tagged.verified_foundation(self.foundation)
+        checksums.write_text(original,encoding='utf-8')
+        (self.foundation/'unlisted.txt').write_text('not checked',encoding='utf-8')
+        with self.assertRaisesRegex(ValueError,'must be checksummed'):tagged.verified_foundation(self.foundation)
+
+    def test_prepared_assets_copy_all_checked_bytes_and_version(self):
+        metadata=tagged.verified_assets()
+        self.assertEqual(metadata['commit'],SHA)
+        self.assertEqual(metadata['ciRuns'],dict.fromkeys(shared.WORKFLOWS,123))
+        self.assertEqual((self.output/'MAVEN_VERSION').read_text(),'1.2.3\n')
+        for name in tagged.verified_foundation(self.foundation):
+            self.assertEqual((self.assets/name).read_bytes(),(self.foundation/name).read_bytes())
+
+    def test_maven_rejects_asset_tampering_before_any_remote_command(self):
+        (self.assets/'toolgate-contracts-1.2.3.jar').write_bytes(b'tampered')
+        with patch.object(shared,'run') as run:
+            with self.assertRaises(ValueError):tagged.publish_maven()
+        run.assert_not_called()
+
+    def test_maven_rejects_a_checksums_valid_but_wrong_coordinate(self):
+        for name in ('toolgate-contracts-1.2.3.pom','toolgate-contracts-1.2.3.module'):
+            path=self.foundation/name;original=path.read_bytes()
+            path.write_bytes(original.replace(b'io.ololabs.toolgate',b'wrong.group'))
+            self.foundation_checksums();(self.assets/name).write_bytes(path.read_bytes());tagged.checksum_assets()
+            with self.subTest(name=name),patch.object(shared,'run') as run:
+                with self.assertRaisesRegex(ValueError,'identity mismatch'):tagged.publish_maven()
+            run.assert_not_called();path.write_bytes(original)
+            self.foundation_checksums();(self.assets/name).write_bytes(original);tagged.checksum_assets()
+
+    def test_maven_publication_only_uploads_verified_files_without_building_java(self):
+        with patch.object(shared,'run') as run:tagged.publish_maven()
+        command=run.call_args.args
+        self.assertEqual(command[-1],'publishVerifiedPublicationToRemoteRepository')
+        script=(self.output/'maven-publication/build.gradle.kts').read_text()
+        self.assertNotIn('java-library',script)
+        self.assertIn('destination.writeBytes',script)
+        self.assertIn('"module"',script)
+        self.assertIn('MAVEN_PASSWORD',script)
+        self.assertNotIn('fixture-token',script)
+
+    def publication_commands(self):
+        commands=[]
+        def run(*args,**kwargs):
+            commands.append((args,kwargs))
+            if args[:2]==('docker','inspect'):
+                image=args[2].rsplit(':',1)[0]
+                return subprocess.CompletedProcess(args,0,stdout=image+'@sha256:'+'d'*64+'\n')
+            return subprocess.CompletedProcess(args,0,stdout='')
+        with patch.object(shared,'run',side_effect=run),patch.object(tagged,'verify_tag_commit'),patch.object(tagged,'ensure_unpublished'):
+            tagged.publish()
+        return commands
+
+    def test_four_checked_images_and_helm_publish_before_release_finalization(self):
+        commands=self.publication_commands();arguments=[args for args,_ in commands]
+        self.assertEqual(len([a for a in arguments if a[:2]==('docker','load')]),4)
+        self.assertEqual({a[2] for a in arguments if a[:2]==('docker','push')},
+            {f'ghcr.io/olo-labs/{name}:1.2.3' for _,name in shared.IMAGES.values()})
+        self.assertIn(('helm','push',str(self.assets/'olo-toolgate-1.2.3.tgz'),'oci://ghcr.io/olo-labs/charts'),arguments)
+        self.assertFalse(any(a[:3]==('gh','release','create') for a in arguments))
+        self.assertEqual(len((self.root/'outputs.txt').read_text().splitlines()),8)
+        for args,kwargs in commands:
+            if '--password-stdin' in args:self.assertEqual(kwargs['input'],'fixture-token')
+        with patch.object(shared,'run') as run,patch.object(tagged,'verify_tag_commit'),patch.object(tagged,'ensure_unpublished'):
+            tagged.finalize()
+        self.assertEqual(run.call_args.args[:4],('gh','release','create','v1.2.3'))
+        self.assertIn('--verify-tag',run.call_args.args)
+        self.assertNotIn('--clobber',run.call_args.args)
+
+    def test_publication_fails_closed_and_logs_out_after_invalid_image_digest(self):
+        commands=[]
+        def run(*args,**kwargs):
+            commands.append(args)
+            return subprocess.CompletedProcess(args,0,stdout='malformed-digest')
+        with patch.object(shared,'run',side_effect=run),patch.object(tagged,'verify_tag_commit'),patch.object(tagged,'ensure_unpublished'):
+            with self.assertRaisesRegex(ValueError,'image digest'):tagged.publish()
+        self.assertEqual(commands[-1],('docker','logout','ghcr.io'))
+        self.assertFalse(any(a[:2]==('helm','push') for a in commands))
+
+    def test_finalize_requires_all_image_digests_and_untampered_assets(self):
+        with self.assertRaisesRegex(ValueError,'missing published'),patch.object(tagged,'verify_tag_commit'):
+            tagged.finalize()
+        self.publication_commands()
+        (self.assets/'olo-toolgate-1.2.3.tgz').write_bytes(b'tampered')
+        with patch.object(shared,'run') as run,patch.object(tagged,'verify_tag_commit'):
+            with self.assertRaises(ValueError):tagged.finalize()
+        run.assert_not_called()
+
+    def test_same_run_tag_gate_cannot_be_substituted_by_main_or_failed_native(self):
+        targets=('x86_64-unknown-linux-gnu','aarch64-unknown-linux-gnu','x86_64-pc-windows-msvc',
+                 'aarch64-pc-windows-msvc','x86_64-apple-darwin','aarch64-apple-darwin')
+        run=dict(head_sha=SHA,head_branch='v1.2.3',path='.github/workflows/ci.yml',event='push')
+        jobs=[dict(name=name,status='completed',conclusion='success') for name in
+              ['admission / admit','preflight / metadata','foundation / check','clients / public-bundle','images / verify']+
+              [f'clients / native ({target})' for target in targets]]
+        def api(path):return {'jobs':jobs} if '/jobs?' in path else run
+        with patch.object(shared,'api',side_effect=api),patch.object(tagged,'verify_tag_commit'),patch.object(tagged,'ensure_unpublished'):
+            self.assertEqual(shared.unified_run(REPO,SHA,123),dict.fromkeys(shared.WORKFLOWS,123))
+            run['head_branch']='main'
+            with self.assertRaises(ValueError):shared.unified_run(REPO,SHA,123)
+            run['head_branch']='v1.2.3';jobs[-1]['conclusion']='failure'
+            with self.assertRaises(ValueError):shared.unified_run(REPO,SHA,123)
+
+    def test_wrong_tag_stops_preflight_before_builds_or_downloads(self):
+        with patch.object(preflight,'ROOT',self.root),patch.dict(os.environ,{'GITHUB_REF':'refs/tags/v1.2.4'}), \
+                patch.object(preflight.subprocess,'run') as run,redirect_stderr(io.StringIO()):
+            self.assertEqual(preflight.main(),1)
+        run.assert_not_called()
+
+    def test_tag_prepare_cannot_use_the_legacy_multiple_run_fallback(self):
+        with patch.object(shared,'run',return_value=subprocess.CompletedProcess(['git'],0,stdout=SHA+'\n')) as run:
+            with self.assertRaisesRegex(ValueError,'single verified CI run'):shared.prepare()
+        run.assert_called_once_with('git','rev-parse','HEAD',capture=True)
+
+
+class UnifiedPublicationWorkflowTests(unittest.TestCase):
+    def test_portal_or_invalid_maven_urls_fail_before_remote_publication(self):
+        for url in ('https://maven.pkg.github.com/olo-labs/olo-toolgate','https://maven.example.invalid/releases'):
+            with patch.dict(os.environ,{'MAVEN_REPOSITORY_URL':url}):shared.validate_maven_repository()
+        for url in ('https://central.sonatype.com/api/v1/publisher/upload','https://s01.oss.sonatype.org',
+                    'http://maven.example.invalid','https://user:password@maven.example.invalid','https://maven.example.invalid?token=fixture',''):
+            with self.subTest(url=url),patch.dict(os.environ,{'MAVEN_REPOSITORY_URL':url}),patch.object(shared,'run') as run:
+                with self.assertRaises(ValueError):shared.validate_maven_repository()
+            run.assert_not_called()
+
+    def test_one_tag_entry_and_one_environment_preserve_all_attestations(self):
+        workflows={p.stem:yaml.safe_load(p.read_text()) for p in (ROOT/'.github/workflows').glob('*.yml')}
+        automatic=[name for name,doc in workflows.items() if 'push' in doc.get('on',{})]
+        self.assertEqual(automatic,['ci'])
+        self.assertNotIn('release-foundation',workflows)
+        for name in ('control','gateway','quickstart'):
+            self.assertNotIn('publish',workflows[name]['jobs'])
+        job=workflows['development-release']['jobs']['publish']
+        self.assertEqual(job['environment'],'development-release')
+        steps=job['steps'];attest=[s for s in steps if s.get('uses','').startswith('actions/attest-build-provenance@')]
+        self.assertEqual(len(attest),5)
+        self.assertEqual({a['with'].get('subject-name') for a in attest if a['with'].get('push-to-registry')},
+            {'${{ steps.push.outputs.'+c+'_image }}' for c in shared.IMAGES})
+        self.assertEqual(steps[-1]['run'],'python tools/release/development.py finalize')
+        scripts=[s.get('run') for s in steps]
+        self.assertLess(scripts.index('python tools/release/development.py validate-maven'),
+            scripts.index('python tools/release/development.py prepare --run-id "$GITHUB_RUN_ID"\n'))
+        self.assertTrue(all("refs/tags/" in a['if'] for a in attest))
+
+
+if __name__=='__main__':unittest.main()

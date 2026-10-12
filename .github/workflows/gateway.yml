@@ -1,12 +1,8 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: gateway
-on:
-  workflow_call:
-    inputs:
-      publish:
-        type: boolean
-        default: false
+'on':
+  workflow_call: null
 permissions:
   contents: read
   pull-requests: read
@@ -27,7 +23,7 @@ jobs:
     needs: preflight
     uses: ./.github/workflows/policy.yml
   container-and-replicas:
-    needs: preflight
+    needs: [preflight, policy-compatibility]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -73,44 +69,3 @@ jobs:
           name: gateway-evidence
           path: build/gateway/
           if-no-files-found: error
-  publish:
-    if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.publish)
-    needs: [container-and-replicas, policy-compatibility]
-    runs-on: ubuntu-24.04
-    environment: gateway-release
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: gateway-evidence
-          path: build/gateway
-      - name: Publish the exact scanned image
-        id: push
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REGISTRY_ACTOR: ${{ github.actor }}
-          RELEASE_REF: ${{ github.ref }}
-        run: |
-          version="$(cat VERSION)"
-          test "$RELEASE_REF" = "refs/tags/v${version}"
-          (cd build/gateway && sha256sum --check SHA256SUMS)
-          docker load -i build/gateway/image.tar
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$REGISTRY_ACTOR" --password-stdin
-          image="ghcr.io/olo-labs/olo-toolgate-gateway:${version}"
-          docker tag olo-toolgate-gateway:module05 "$image"
-          docker push "$image"
-          digest="$(docker inspect "$image" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
-          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-name: ghcr.io/olo-labs/olo-toolgate-gateway
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: build/gateway/gateway-sbom.cdx.json

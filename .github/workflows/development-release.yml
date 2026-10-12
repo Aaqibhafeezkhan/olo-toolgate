@@ -1,19 +1,24 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-name: development-release
+name: Verified publication
 permissions:
   contents: read
   pull-requests: read
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: development-release
+    env:
+      MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
+      DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
     permissions:
       actions: read
       contents: write
       packages: write
+      id-token: write
+      attestations: write
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
@@ -26,6 +31,16 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Validate standard Maven publication target
+      run: python tools/release/development.py validate-maven
+    - name: Install Helm for tagged publication
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
+        curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
+        sha256sum --check helm.sha256
+        tar -xzf helm-v3.17.3-linux-amd64.tar.gz
+        sudo install linux-amd64/helm /usr/local/bin/helm
     - name: Verify CI and collect the exact tested release artifacts
       env:
         GH_TOKEN: ${{ github.token }}
@@ -37,10 +52,8 @@ jobs:
         python tools/release/development.py prepare --run-id "$GITHUB_RUN_ID"
     - name: Publish versioned Maven contracts
       env:
-        MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
         MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
         MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-        DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
         GH_TOKEN: ${{ github.token }}
       run: |
         if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
@@ -52,12 +65,17 @@ jobs:
             exit 1
           fi
         fi
-        python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
-        python tools/contracts/generate.py
-        ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
-        cp packages/contracts/java/build/libs/*.jar build/development/assets/
-        cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/development/assets/toolgate-contracts-$(cat build/development/MAVEN_VERSION).pom"
-    - name: Publish tested images and GitHub prerelease
+        if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          python tools/release/development.py publish-maven
+        else
+          python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
+          python tools/contracts/generate.py
+          ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
+          cp packages/contracts/java/build/libs/*.jar build/development/assets/
+          cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/development/assets/toolgate-contracts-$(cat build/development/MAVEN_VERSION).pom"
+        fi
+    - name: Publish tested images and development prerelease
+      id: push
       env:
         GH_TOKEN: ${{ github.token }}
         RELEASE_SHA: ${{ github.sha }}
@@ -65,5 +83,44 @@ jobs:
         DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       run: python tools/release/development.py publish
+    - name: Attest Control image
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-name: ${{ steps.push.outputs.control_image }}
+        subject-digest: ${{ steps.push.outputs.control_digest }}
+        push-to-registry: true
+    - name: Attest Gateway image
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-name: ${{ steps.push.outputs.gateway_image }}
+        subject-digest: ${{ steps.push.outputs.gateway_digest }}
+        push-to-registry: true
+    - name: Attest Quickstart image
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-name: ${{ steps.push.outputs.quickstart_image }}
+        subject-digest: ${{ steps.push.outputs.quickstart_digest }}
+        push-to-registry: true
+    - name: Attest Device image
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-name: ${{ steps.push.outputs.device_image }}
+        subject-digest: ${{ steps.push.outputs.device_digest }}
+        push-to-registry: true
+    - name: Attest versioned release assets and SBOMs
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-path: build/development/assets/*
+    - name: Create immutable tagged GitHub release after provenance
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_SHA: ${{ github.sha }}
+      run: python tools/release/development.py finalize
 'on':
   workflow_call: null

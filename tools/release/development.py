@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Publish main development artifacts only after all CI gates pass for the same SHA."""
+"""Publish development or tagged artifacts after the exact run's CI gates pass."""
 import argparse
 import hashlib
 import json
@@ -11,9 +11,11 @@ import shutil
 import subprocess
 import sys
 import time
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT/'build/development'
+sys.path.insert(0,str(ROOT))
 sys.path.insert(0,str(ROOT/'tools/client'))
 from publication import public_asset
 WORKFLOWS = {'control':'control.yml', 'gateway':'gateway.yml', 'quickstart':'quickstart.yml',
@@ -31,6 +33,14 @@ def run(*arguments, capture=False, input=None):
 
 def api(path):
     return json.loads(run('gh','api',path,capture=True).stdout)
+
+
+def validate_maven_repository():
+    target=urlsplit(os.environ.get('MAVEN_REPOSITORY_URL',''))
+    if target.scheme!='https' or not target.hostname or target.username or target.password or target.query or target.fragment:
+        raise ValueError('Maven publication requires an HTTPS repository URL without embedded credentials')
+    if target.hostname.lower() in ('central.sonatype.com','oss.sonatype.org','s01.oss.sonatype.org'):
+        raise ValueError('Use a standard Maven repository such as GitHub Packages. Sonatype Central requires a separate Portal/GPG integration.')
 
 
 def digest(path):
@@ -55,6 +65,11 @@ def verify_checksums(folder):
 def coordinates():
     sha=os.environ['RELEASE_SHA']; repo=os.environ['GITHUB_REPOSITORY']
     if not re.fullmatch(r'[0-9a-f]{40}',sha):raise ValueError('Invalid release SHA')
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',repo):raise ValueError('Invalid release repository')
+    if os.environ.get('GITHUB_REF','').startswith('refs/tags/'):
+        from tools.release.tagged import version_tag
+        version_tag()
+        return repo,sha,repo.split('/')[0].lower()
     namespace=os.environ.get('DOCKERHUB_NAMESPACE') or os.environ.get('DOCKERHUB_USERNAME','')
     if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*',namespace):raise ValueError('Set Docker Hub namespace/username')
     if not os.environ.get('DOCKERHUB_TOKEN'):raise ValueError('Set DOCKERHUB_TOKEN in development-release secrets')
@@ -65,10 +80,18 @@ def coordinates():
 def unified_run(repo, sha, run_id):
     if not re.fullmatch(r'[0-9]+', str(run_id)):raise ValueError('Invalid unified CI run ID')
     workflow=api(f'repos/{repo}/actions/runs/{run_id}')
-    if (workflow.get('head_sha')!=sha or workflow.get('head_branch')!='main'
+    ref=os.environ.get('GITHUB_REF','refs/heads/main')
+    branch='main'
+    if ref.startswith('refs/tags/'):
+        from tools.release.tagged import version_tag,verify_tag_commit,ensure_unpublished
+        branch=version_tag()
+        verify_tag_commit(repo,sha)
+        ensure_unpublished(repo)
+    elif ref!='refs/heads/main':raise ValueError('Only main or an exact version tag can publish')
+    if (workflow.get('head_sha')!=sha or workflow.get('head_branch')!=branch
             or workflow.get('path')!='.github/workflows/ci.yml'
             or workflow.get('event') not in ('push','workflow_dispatch')):
-        raise ValueError('The unified CI run must match this main-branch checkout')
+        raise ValueError('The unified CI run must match this branch/tag and checkout')
     jobs=api(f'repos/{repo}/actions/runs/{run_id}/jobs?filter=latest&per_page=100')['jobs']
     required={'admission / admit','preflight / metadata','foundation / check','clients / public-bundle','images / verify'}
     found={job['name'] for job in jobs if job.get('status')=='completed' and job.get('conclusion')=='success'}
@@ -85,6 +108,8 @@ def unified_run(repo, sha, run_id):
 def prepare(run_id=None):
     repo,sha,_=coordinates()
     if run('git','rev-parse','HEAD',capture=True).stdout.strip()!=sha:raise ValueError('Checkout SHA mismatch')
+    tagged=os.environ.get('GITHUB_REF','').startswith('refs/tags/')
+    if tagged and run_id is None:raise ValueError('Tagged publication requires a single verified CI run')
     selected=unified_run(repo,sha,run_id) if run_id is not None else {}
     deadline=time.monotonic()+1800
     while run_id is None:
@@ -121,6 +146,10 @@ def prepare(run_id=None):
     if len(contracts)!=1:raise ValueError('Exactly one validated raw contract bundle is required')
     for path in contracts:
         shutil.copyfile(path,assets/path.name)
+    if tagged:
+        from tools.release.tagged import prepare_assets
+        prepare_assets(selected)
+        return
     base=(ROOT/'packages/contracts/VERSION').read_text().strip().split('-')[0]
     version=f"{base}-dev.{os.environ['GITHUB_RUN_ID']}.g{sha[:12]}"
     (OUTPUT/'MAVEN_VERSION').write_text(version+'\n')
@@ -130,6 +159,10 @@ def prepare(run_id=None):
 
 
 def publish():
+    if os.environ.get('GITHUB_REF','').startswith('refs/tags/'):
+        from tools.release.tagged import publish
+        publish()
+        return
     repo,sha,namespace=coordinates();assets=OUTPUT/'assets'
     metadata=json.loads((assets/'development-release.json').read_text())
     if metadata['commit']!=sha:raise ValueError('Prepared SHA mismatch')
@@ -163,8 +196,13 @@ def publish():
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('operation',choices=('prepare','publish'));parser.add_argument('--run-id',type=int);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('operation',choices=('prepare','publish','publish-maven','finalize','validate-maven'));parser.add_argument('--run-id',type=int);args=parser.parse_args()
     if args.operation=='prepare':prepare(args.run_id)
     else:
         if args.run_id is not None:parser.error('--run-id applies only to prepare')
-        publish()
+        if args.operation=='publish':publish()
+        elif args.operation=='validate-maven':validate_maven_repository()
+        else:
+            from tools.release import tagged
+            if args.operation=='publish-maven':tagged.publish_maven()
+            else:tagged.finalize()

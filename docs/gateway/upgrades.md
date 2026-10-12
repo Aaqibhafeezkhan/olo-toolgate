@@ -29,8 +29,8 @@ authorization probes. No DB migration exists. Keep the old immutable image and
 matching valid credential Secret; expired old inputs reject startup. Kind smoke
 tests emergency-deny upgrade and restoration of the prior snapshot.
 
-The gateway workflow scans/tests before protected gateway-release publication,
-requires the matching version tag and emits SBOM/provenance evidence. Foundation
-release retains Maven/raw contracts/Helm/GitHub assets with gateway compatibility
-metadata and upgrade notes. Administrators configure environment protections and
-registry permissions. Local verification publishes nothing.
+The common `ci.yml` workflow scans/tests before versioned GHCR publication,
+requires the matching version tag and emits SBOM/provenance evidence. The same
+publisher retains Maven/raw contracts/Helm/GitHub assets, gateway compatibility
+metadata and upgrade notes. Administrators configure the `development-release`
+environment protections and registry permissions. Local verification publishes nothing.

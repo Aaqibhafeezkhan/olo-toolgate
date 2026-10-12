@@ -55,7 +55,9 @@ def trigger_message(event, event_name):
             return ''
     repository = os.environ.get('GITHUB_REPOSITORY', '')
     if event_name == 'push':
-        sha = event.get('after', '')
+        # Annotated tag pushes may carry the tag object's SHA in "after".
+        # GITHUB_SHA identifies the checked-out commit for the workflow event.
+        sha = os.environ.get('GITHUB_SHA', '') if os.environ.get('GITHUB_REF', '').startswith('refs/tags/') else event.get('after', '')
     elif event_name == 'workflow_dispatch':
         sha = os.environ.get('GITHUB_SHA', '')
     elif event_name == 'workflow_run':

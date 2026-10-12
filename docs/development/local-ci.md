@@ -89,15 +89,13 @@ staging requirements and executable overrides.
 
 ## Triggers and limits
 
-`plan` reads declarations rather than assuming branch names. The five CI
-workflows (`foundation`, `endpoint-client`, `control`, `gateway`, `quickstart`)
-run automatically only on `main` pushes. Their manual and reusable runs are
-also restricted to `main` by shared admission. Pull requests, tag pushes and
-other branch pushes do not trigger these five workflows. The separate
-`release-foundation` workflow retains `v*` tag pushes. Development publication
-follows a completed `control` run on `main`, with further success,
-source-repository and admission checks; both development-release workflows
-also support manual dispatch.
+`plan` reads declarations rather than assuming branch names. `ci.yml` is the
+only automatic entry point for main pushes and `v*` version tags, with optional
+manual dispatch. Its admission, preflight, shared validation, six-platform matrix,
+image checks and release all belong to one run. Component bodies remain reusable
+compatibility callers and have no independent push trigger. The separate foundation
+tag workflow and obsolete component publishers are retired. Explicit manual
+build-only development publication keeps its operator-only dispatch exception.
 
 Replay deliberately runs the **job body**, independently of admission and
 upstream dependencies, using a synthetic dispatch workflow. Real GitHub job

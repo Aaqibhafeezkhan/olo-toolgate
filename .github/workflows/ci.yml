@@ -5,6 +5,8 @@ name: ToolGate CI and release
   push:
     branches:
     - main
+    tags:
+    - v*
   workflow_dispatch: null
 permissions:
   contents: read
@@ -15,8 +17,6 @@ concurrency:
 jobs:
   admission:
     uses: ./.github/workflows/admission.yml
-    with:
-      main_only: true
   preflight:
     needs: admission
     if: needs.admission.outputs.allow == 'true'
@@ -47,4 +47,6 @@ jobs:
       contents: write
       packages: write
       pull-requests: read
+      id-token: write
+      attestations: write
     secrets: inherit

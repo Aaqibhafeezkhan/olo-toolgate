@@ -108,7 +108,8 @@ Maven defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`, authenti
 with the CI GITHUB_TOKEN. Consumers need GitHub Packages read access. To use another
 repository, set `MAVEN_REPOSITORY_URL`, `MAVEN_USERNAME` and `MAVEN_PASSWORD`. For a
 custom repository use both Maven secrets; the workflow does not implement Maven
-Central staging or signing. Existing tag-based GA publication remains separate.
+Central Portal upload or GPG signing. Versioned publication uses the same `ci.yml`
+workflow and environment; see [release process](release-process.md).
 
 Publishing requires GitHub Actions write access for repository contents/packages.
 Existing package access controls must allow this repository's GITHUB_TOKEN. Keep
