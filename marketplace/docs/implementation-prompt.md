@@ -34,7 +34,7 @@ Branch `marketplace/pr1-helper`. Contains:
   - the thin root workflow shim (§1);
 - `marketplace/docs/api.md`: the Marketplace public HTTP API and the release-record format from design.md §6.1 and §7, frozen here so PR 2 implements it and PR 3 consumes it;
 - `backend-libs/package-archive`: Control's `PackageArchive` extracted into a library, with Control switched to it and no behaviour change (§1.2 rule 3);
-- `marketplace/helper/`: Java service with `POST /inspect` (validate, extract listing and typed `requiredSettings`, sign) and `GET /keys`. Runs as non-root with bounded resources, an internal port only, and never executes package code;
+- `marketplace/helper/`: Java service with `POST /inspect` (validate, extract listing, typed `requiredSettings` and the `compatibility` block, compute the API diff and enforce the SemVer bump against the previous version Drupal passes in, sign) and `GET /keys`. See design.md §6.2. Runs as non-root with bounded resources, an internal port only, and never executes package code;
 - `marketplace/seed/`: the seed image that builds every example package and writes `seed-manifest.json` (§3.2 step 1);
 - the `log-insights` source restored and the `.gitignore` rule narrowed (§3.2 step 6).
 
@@ -48,6 +48,7 @@ Branch `marketplace/pr1-helper`. Contains:
 
 Branch `marketplace/pr2-drupal`. Needs PR 1 merged. Contains:
 - `marketplace/drupal/`: Composer project and module `toolgate_marketplace`. It covers accounts, publisher profiles with prefix/slug ownership and reserved names, upload calling the helper, the signed `VALIDATED` draft, listing save, `AVAILABLE`/`DELISTED`, admin takedown, the public pages, and the public API and keys file exactly as `docs/api.md`;
+- the `compatibility` block and `apiChange` stored per version, shown on the website and returned by the API (design.md §6.2);
 - `drush toolgate-marketplace:seed` and the entrypoint that runs it (§3.2 steps 2 to 5);
 - `marketplace/deploy/`: `compose.yaml` (drupal, db, helper, seed, proxy), `.env.example` with `MARKETPLACE_BASE_URL=https://olo-labs.duckdns.org`, and a `Caddyfile`;
 - `scripts/split-simulation.sh` (§1.3).
@@ -62,11 +63,12 @@ Branch `marketplace/pr2-drupal`. Needs PR 1 merged. Contains:
 Branch `marketplace/pr3-toolgate-admin`. Needs PR 2 merged (its compose stack is the end-to-end test target). Only ToolGate-side code (§2); **nothing under `marketplace/` except** a new end-to-end job in `marketplace/ci/run.sh`, if needed. Contains:
 - the Control settings `TOOLGATE_CONTROL_MARKETPLACE_ENABLED`, `_BASE_URL` and `_KEYS` (environment-owned), plus Helm and Quickstart wiring;
 - Control endpoints for catalog, detail, the media proxy and import. The import follows design.md §8: same origin only, no unsafe redirects, size and time caps, signature check against pinned keys, `archiveSha256` and `packageDigest` checks, then the existing upload under Super Admin, audited with its source;
+- compatibility checks (design.md §6.2 A) in Control's **existing** upload and deploy path, so they cover manual uploads too: contracts major, descriptor generation, protocol overlap at upload; `minimumToolHostVersion` and runtime against target Tool Hosts at deploy. The console marks each Marketplace version compatible or not, with the reason, and offers Install for the newest compatible version;
 - OpenAPI in `control-v1.yaml` and regenerated bindings;
 - the console's Marketplace view on the Server packages page: catalog, detail, publisher panel, images via the proxy with the CSP unchanged, Install, and the confirmation text from design.md §8.1.
 
 **Done when:**
-- unit tests cover forged signature, unknown key, digest mismatch, a non-allowlisted origin or redirect, an oversize package and a delisted version;
+- unit tests cover forged signature, unknown key, digest mismatch, a non-allowlisted origin or redirect, an oversize package, a delisted version, an unknown release `schema`, and each incompatibility in design.md §6.2 A;
 - an end-to-end test against the PR 2 stack imports `examples.notify` and `examples.health` into Quickstart, deploys them, enables and grants them, and calls them through `/mcp`;
 - `control.yml`, `quickstart.yml`, `preflight.yml` and the admin-ui tests are green.
 
@@ -93,7 +95,7 @@ marketplace/
     Caddyfile
   scripts/                  # gen-signing-key.sh, isolation-check.sh, split-simulation.sh
   ci/run.sh                 # everything CI runs for the Marketplace
-  docs/                     # design.md, implementation-prompt.md and plans (already committed); api.md and deployment.md added by PR 1 and PR 2
+  docs/                     # design.md, api.md, deployment.md (copied from the project's plan files)
   .github/workflows/marketplace.yml   # the real workflow; it becomes active after the split
 ```
 
@@ -110,7 +112,7 @@ marketplace/
 
 ### 1.3 Proving it
 
-- `scripts/isolation-check.sh` fails if a file outside `marketplace/` (other than the root workflow shim) mentions `marketplace/`, or if a file inside uses a `../` path that doesn't come from `TOOLGATE_SRC`. Prose under `marketplace/docs/` is excluded from both checks.
+- `scripts/isolation-check.sh` fails if a file outside `marketplace/` (other than the root workflow shim) mentions `marketplace/`, or if a file inside uses a `../` path that doesn't come from `TOOLGATE_SRC`.
 - `scripts/split-simulation.sh` does a trial split:
   1. copies `marketplace/` alone into a temporary directory;
   2. clones this commit of `olo-toolgate` into `<tmp>/toolgate`, standing in for the submodule;

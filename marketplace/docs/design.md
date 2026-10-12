@@ -226,6 +226,42 @@ When validation passes, the helper signs a release record and returns it with th
 - What the signature means: "this Marketplace validated these exact bytes for this publisher slug". It is **not** a safety review and grants no authority in ToolGate.
 - Rotation in v1 is manual: add the new key to the keys file and to each ToolGate's pinned keys, then switch the helper. Old releases stay valid under their `keyId`.
 
+### 6.2 Version compatibility
+
+There are three separate questions, each answered from data that already exists.
+
+**A. Can this ToolGate run this package?** The manifest already declares it (`packages/contracts/schemas/v2/package.schema.json`):
+
+| Manifest field | Meaning | Compared with |
+|---|---|---|
+| `compatibility.contractsVersion` (required) | Contract set the package was built against | Control's contract set (`packages/contracts/VERSION`, 1.0.0 today): same major required |
+| `compatibility.minimumToolHostVersion` | Oldest Tool Host that can run it | `version` each Tool Host reports at registration (`ToolHostRegistration`) |
+| `compatibility.minimumClientVersion` | Oldest endpoint client, for client tools (not in v1) | Client version |
+| `sdk.protocol` | Tool protocol range the runtime speaks | Tool Host `protocol` range: must overlap |
+| `sdk.descriptorGeneration` | Descriptor format generation | Generations Control accepts |
+| `runtimes[].language` + `version` | For example Java 17 | Runtimes the target Tool Hosts provide |
+
+- The **helper** extracts these into a `compatibility` block on every version's listing and detail response. It rejects an upload only if a field is missing or malformed, never because of a particular ToolGate.
+- The **website** shows them on each version ("Needs Tool Host 0.10 or later, Java 17, contracts 1.x").
+- **Control decides** compatibility for itself, because only it knows its own versions and its Tool Hosts. The Marketplace never filters for a ToolGate.
+  - In the console, each version is marked compatible or not, with the reason. **Install** is offered for the newest compatible version, not simply the newest version.
+  - At import, Control rejects a contracts major it doesn't support, a descriptor generation it doesn't accept, or a protocol range with no overlap.
+  - At deploy, it refuses Tool Hosts below `minimumToolHostVersion` or without the runtime. If no host qualifies, the deploy fails with the reason.
+  - These checks go into Control's existing upload and deploy path, not only the Marketplace import. Today Control does not check them (the schema says "checked at enable", but no code reads `compatibility`), so manual uploads are covered too.
+
+**B. Is a new package version compatible with the previous one?** Semantic versioning, checked by the helper against the previous `AVAILABLE` version of the same package (tool-sdk plan §8.3):
+- Removing a tool, adding a required input, removing an input or output field, or narrowing an input type needs a **major** bump.
+- Adding a tool or an optional input needs at least a **minor** bump.
+- Anything else can be a patch.
+- A bump smaller than the diff requires is rejected, with the diff shown.
+- The detail response carries `apiChange: none|compatible|breaking`, so an admin updating in ToolGate sees what a new version changes before importing it.
+
+**C. Is the Marketplace API compatible with this ToolGate?**
+- The API version is in the path (`/api/toolgate/v1/`) and the release record carries `schema: toolgate.marketplace.release/1`.
+- Within v1, changes are additive only: new fields, never renamed or removed ones. Control ignores fields it doesn't know.
+- A breaking change ships as `/api/toolgate/v2/`, with v1 kept for at least two ToolGate minor releases.
+- Control rejects a release record whose `schema` it doesn't know, rather than guessing.
+
 ## 7. Public catalog and publisher API
 
 All read endpoints expose only `AVAILABLE` packages, except that the detail endpoint also answers for `DELISTED` versions with `delisted: true` and no download. Catalog items are **per package**, showing the latest available version. All response objects include stable IDs, version and public URL fields. Use pagination even if the first release has only a few packages; a simple `page`/`limit` convention is sufficient.
@@ -298,6 +334,14 @@ All read endpoints expose only `AVAILABLE` packages, except that the detail endp
   ],
   "packageDigest": "sha256:<64 lowercase hex>",
   "archiveSha256": "<64 lowercase hex>",
+  "compatibility": {
+    "contractsVersion": "1.0.0",
+    "minimumToolHostVersion": "0.10.0",
+    "protocol": {"min": 2, "max": 2},
+    "descriptorGeneration": 1,
+    "runtimes": [{"language": "java", "version": "17"}]
+  },
+  "apiChange": "none",
   "delisted": false,
   "releaseUrl": "https://olo-labs.duckdns.org/api/toolgate/v1/tools/acme.notify/0.1.0/release",
   "publisher": {
