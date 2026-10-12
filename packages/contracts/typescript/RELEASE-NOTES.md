@@ -13,6 +13,22 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Server tools run on any Tool Host, local or remote, and move by switching the device (M0
+  part 15). A deployment may name its Tool Hosts (`hostIds` on `PackageDeploymentRequest` and
+  `PackageDeployment`; none means every host); Control's placement sends a call only to a host
+  the deployment names, so deploying the same version to another host moves its tools. An
+  enrolled Tool Host also fetches its calls from Control (pull mode) over its device
+  certificate: `POST /api/control/v1/tool-hosts/dispatches/next`, then `.../{id}/admission`
+  and `.../{id}/result`, so a laptop behind NAT runs tools without an inbound route. When the
+  Gateway has no route to the placed host it queues the signed `Dispatch` at
+  `POST /api/control/v1/access/dispatches` and reads `ToolHostDispatchStatus` from
+  `GET .../access/dispatches/{id}` until the result arrives; the permit is still verified and
+  consumed once, on the host. New contract models `ToolHostDispatchState` and
+  `ToolHostDispatchStatus`; Postgres migration V21 and SQLite V14 add the dispatch queue. The
+  console's deploy form takes the Tool Hosts and the versions table shows where each runs. The
+  quickstart image runs a second, pull-only Tool Host, and `tools/quickstart/check.py` calls the
+  starter tool on the first host, redeploys it to the second and calls it again there.
+
 - Java server tools run end to end through `/mcp` (M0 part 14). Control takes a `.tgpkg` at
   `POST /api/control/v1/packages/uploads` (Super Admin), applies the packager's archive rules,
   CHECKSUMS and descriptor digests, and stores the exact bytes; `POST .../packages/deployments`
@@ -25,7 +41,9 @@ The project follows semantic versioning once stable versioning begins.
   v2 reserve and is dispatched to the host; Control takes the host's v2 consume and result
   report. The console gains a Server packages page, the quickstart image runs a Tool Host, and
   `tools/quickstart/check.py` uploads and deploys the `toolgate init` starter and calls its
-  Java tool through the Gateway.
+  Java tool through the Gateway, then revokes its grants and checks it disappears. Deploying
+  adds new tools to the default Tool Group, a bare `runtimes.javaPath` is resolved on the host's
+  `PATH` at startup, and the quickstart proxy accepts configuration snapshots up to 2 MiB.
 
 - The Tool Host runs server tools from verified packages (M0 part 13). `apps/tool-host`
   admits a Gateway dispatch only with an RS256 invocation permit Control signed for that host

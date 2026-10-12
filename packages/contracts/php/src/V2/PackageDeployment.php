@@ -16,12 +16,13 @@ final readonly class PackageDeployment implements \JsonSerializable {
         public int $serviceProfileRevision,
         public string $globalsDigest,
         public array $toolIds,
-        public int $deployedAtUnixMs
+        public int $deployedAtUnixMs,
+        public ?array $hostIds = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['packageId', 'version', 'packageDigest', 'revision', 'serviceProfileDigest', 'serviceProfileRevision', 'globalsDigest', 'toolIds', 'deployedAtUnixMs']) || array_diff(['packageId', 'version', 'packageDigest', 'revision', 'serviceProfileDigest', 'serviceProfileRevision', 'globalsDigest', 'toolIds', 'deployedAtUnixMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['packageId', 'version', 'packageDigest', 'revision', 'serviceProfileDigest', 'serviceProfileRevision', 'globalsDigest', 'toolIds', 'deployedAtUnixMs', 'hostIds']) || array_diff(['packageId', 'version', 'packageDigest', 'revision', 'serviceProfileDigest', 'serviceProfileRevision', 'globalsDigest', 'toolIds', 'deployedAtUnixMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -33,7 +34,8 @@ final readonly class PackageDeployment implements \JsonSerializable {
             $data['serviceProfileRevision'],
             $data['globalsDigest'],
             array_map(static fn ($item) => $item, $data['toolIds']),
-            $data['deployedAtUnixMs']
+            $data['deployedAtUnixMs'],
+            array_key_exists('hostIds', $data) ? array_map(static fn ($item) => $item, $data['hostIds']) : null
         );
     }
 

@@ -133,4 +133,50 @@ final class ServerPackagesTest {
         var again = node(packages.deploy(actor, "{\"packageDigest\":\"" + digest + "\",\"globals\":{\"ItemsApiHost\":\"items2.example.com\"}}", "request-7").body());
         assertEquals(2, again.get("revision").asLong());
     }
+
+    @Test void aDeploymentRunsOnTheHostsItNamesAndHostsFetchRelayedCalls() throws Exception {
+        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("targets.sqlite")), codec);
+        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        String digest = node(packages.upload(actor, zip(files()), "request-1").body()).get("packageDigest").asText();
+        var hosts = new HashMap<String, EndpointDeviceRecord>();
+        for (var id : List.of("host-1", "host-2")) {
+            var device = new EndpointDeviceRecord(id, "tenant", "root", "f".repeat(64), EndpointState.ACTIVE, 1L, 0L, 0L, null, null, true, 1L, null, null);
+            packages.register(tenant, tx -> device, "{\"hostId\":\"" + id + "\",\"poolId\":\"pool\",\"version\":\"0.10.0\",\"protocol\":{\"min\":2,\"max\":2},\"launcherVersion\":\"0.10.0\",\"tiers\":[\"HOST_NATIVE\"]}", "register-" + id);
+            hosts.put(id, device);
+        }
+        String body = "{\"packageDigest\":\"" + digest + "\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"},\"hostIds\":[%s]}";
+        // Only registered Tool Hosts can be named.
+        assertEquals(400, assertThrows(Failure.class, () -> packages.deploy(actor, body.formatted("\"nowhere\""), "request-2")).status());
+
+        // Deployed to host-1: only host-1 is assigned the tool and may fetch its package.
+        var deployed = node(packages.deploy(actor, body.formatted("\"host-1\""), "request-3").body());
+        assertEquals("host-1", deployed.get("hostIds").get(0).asText());
+        assertEquals(1, node(packages.assignments(tenant, tx -> hosts.get("host-1")).body()).get("tools").size());
+        assertEquals(0, node(packages.assignments(tenant, tx -> hosts.get("host-2")).body()).get("tools").size());
+        assertEquals(404, assertThrows(Failure.class, () -> packages.content(tenant, tx -> hosts.get("host-2"), digest)).status());
+
+        // Switching the device is a redeploy that names the other host.
+        packages.deploy(actor, body.formatted("\"host-2\""), "request-4");
+        assertEquals(0, node(packages.assignments(tenant, tx -> hosts.get("host-1")).body()).get("tools").size());
+        assertEquals(1, node(packages.assignments(tenant, tx -> hosts.get("host-2")).body()).get("tools").size());
+        assertEquals(404, assertThrows(Failure.class, () -> packages.content(tenant, tx -> hosts.get("host-1"), digest)).status());
+        assertTrue(ServerPackages.targets(node("{}"), "any-host"));
+
+        // A relayed call waits for its host, which claims it, admits it and sends its result.
+        var dispatch = "{\"permit\":{\"jws\":\"a.b.c\"},\"arguments\":{\"id\":\"1\"}}";
+        var record = "{\"dispatch\":" + dispatch + ",\"status\":{\"invocationId\":\"inv-1\",\"hostId\":\"host-2\",\"state\":\"QUEUED\"}}";
+        store.transaction(tenant, true, tx -> { tx.packages().saveRelayed(new PackageStore.Relayed("inv-1", "host-2", "QUEUED", System.currentTimeMillis() + 60000, record)); return null; });
+        assertEquals(204, packages.next(tenant, tx -> hosts.get("host-1")).status());
+        var next = packages.next(tenant, tx -> hosts.get("host-2"));
+        assertEquals(node(dispatch), node(next.body()));
+        assertEquals(204, packages.next(tenant, tx -> hosts.get("host-2")).status());
+        assertEquals(404, assertThrows(Failure.class, () -> packages.admission(tenant, tx -> hosts.get("host-1"), "inv-1", "{\"kind\":\"ADMITTED\",\"invocationId\":\"inv-1\",\"fencingToken\":\"f-1\"}")).status());
+        assertEquals(409, assertThrows(Failure.class, () -> packages.result(tenant, tx -> hosts.get("host-2"), "inv-1", "{\"invocationId\":\"inv-1\",\"outcome\":\"COMPLETED\"}")).status());
+        assertEquals("ADMITTED", node(packages.admission(tenant, tx -> hosts.get("host-2"), "inv-1", "{\"kind\":\"ADMITTED\",\"invocationId\":\"inv-1\",\"fencingToken\":\"f-1\"}").body()).get("state").asText());
+        var finished = node(packages.result(tenant, tx -> hosts.get("host-2"), "inv-1", "{\"invocationId\":\"inv-1\",\"fencingToken\":\"f-1\",\"outcome\":\"COMPLETED\"}").body());
+        assertEquals("FINISHED", finished.get("state").asText());
+        assertEquals("COMPLETED", finished.get("result").get("outcome").asText());
+        assertEquals(400, assertThrows(Failure.class, () -> packages.result(tenant, tx -> hosts.get("host-2"), "inv-2", "{\"invocationId\":\"inv-1\",\"outcome\":\"COMPLETED\"}")).status());
+    }
 }

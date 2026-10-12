@@ -56,8 +56,28 @@ struct Authority {
     invocation: Mutex<Option<EnterpriseInvocation>>,
     submission: Mutex<Option<RemoteToolSubmission>>,
     permit: Mutex<Option<v2::PermitReservationRequest>>,
+    /// Control placed the call on a Tool Host, so it signs a permit; otherwise the device is not
+    /// a Tool Host and the reservation is a conflict.
+    tool_host: bool,
+    /// Pull mode: the dispatch handed to Control, and how many status polls it took.
+    relayed: Mutex<Option<v2::Dispatch>>,
+    polls: AtomicUsize,
 }
 impl Authority {
+    /// The host claims the call on the second poll and finishes it on the third.
+    fn relay_status(&self) -> v2::ToolHostDispatchStatus {
+        let id = self.invocation.lock().unwrap().as_ref().unwrap().id.clone();
+        let polls = self.polls.fetch_add(1, Ordering::SeqCst);
+        let state = ["QUEUED", "ADMITTED", "FINISHED"][polls.min(2)];
+        let mut status = json!({"invocationId":id,"hostId":"placed-device","state":state});
+        if polls >= 1 {
+            status["admission"] = json!({"kind":"ADMITTED","invocationId":id,"fencingToken":"f"});
+        }
+        if polls >= 2 {
+            status["result"] = json!({"invocationId":id,"fencingToken":"f","outcome":"COMPLETED","result":{"kind":"RESULT","resultType":"complete","content":[{"type":"text","text":"hi"}],"structuredContent":{"greeting":"hi"},"isError":false}});
+        }
+        serde_json::from_value(status).unwrap()
+    }
     fn progress(&self, state: RemoteToolState) -> RemoteToolResponse {
         let guard = self.submission.lock().unwrap();
         let s = guard.as_ref().unwrap();
@@ -94,11 +114,29 @@ impl RelayPort for Authority {
         r: &'a v2::PermitReservationRequest,
     ) -> PortFuture<'a, Result<v2::SignedInvocationPermit, ErrorCode>> {
         Box::pin(async move {
+            if !self.tool_host {
+                return Err(ErrorCode::Conflict);
+            }
             *self.permit.lock().unwrap() = Some(r.clone());
             Ok(v2::SignedInvocationPermit {
                 jws: "e30.e30.c2ln".into(),
             })
         })
+    }
+    fn relay_dispatch<'a>(
+        &'a self,
+        dispatch: &'a v2::Dispatch,
+    ) -> PortFuture<'a, Result<v2::ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(async move {
+            *self.relayed.lock().unwrap() = Some(dispatch.clone());
+            Ok(self.relay_status())
+        })
+    }
+    fn dispatch_status<'a>(
+        &'a self,
+        _: &'a str,
+    ) -> PortFuture<'a, Result<v2::ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(async move { Ok(self.relay_status()) })
     }
     fn ready(&self, _: u64) -> bool {
         !self.failure
@@ -645,7 +683,10 @@ async fn tool_host_calls_dispatch_with_a_permit_and_return_the_host_result() {
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let a = Arc::new(Authority::default());
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
     // The host answers for the invocation the Authority created, which the test learns after the call starts.
     let invocations = a.clone();
     let host = host.layer(axum::middleware::map_response(
@@ -684,5 +725,30 @@ async fn tool_host_calls_dispatch_with_a_permit_and_return_the_host_result() {
     );
     let dispatched = seen.lock().unwrap().clone().unwrap();
     assert_eq!(dispatched["permit"]["jws"], "e30.e30.c2ln");
+    assert!(a.submission.lock().unwrap().is_none());
+}
+
+/// A Tool Host the Gateway has no route to fetches its calls from Control: the Gateway hands the
+/// permitted dispatch to Control and waits for the host's result there.
+#[tokio::test]
+async fn a_tool_host_without_a_route_gets_its_calls_through_control() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let (code, body) = call(
+        runtime_router(state(a.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    let relayed = a.relayed.lock().unwrap().clone().unwrap();
+    assert_eq!(relayed.permit.jws, "e30.e30.c2ln");
+    assert_eq!(
+        serde_json::to_value(&relayed.arguments).unwrap(),
+        payload()["arguments"]
+    );
+    assert_eq!(a.polls.load(Ordering::SeqCst), 3);
     assert!(a.submission.lock().unwrap().is_none());
 }

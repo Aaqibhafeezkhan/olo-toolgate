@@ -572,7 +572,10 @@
     "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "globals": {
       "OrdersApiHost": "orders.example.com"
-    }
+    },
+    "hostIds": [
+      "tool-host-local"
+    ]
   },
   "PackageEnableRequest": {
     "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -1698,6 +1701,36 @@
         "deployedAtUnixMs": 1791000000000
       }
     ]
+  },
+  "ToolHostDispatchState": "FINISHED",
+  "ToolHostDispatchStatus": {
+    "invocationId": "inv-5",
+    "hostId": "tool-host-local",
+    "state": "FINISHED",
+    "admission": {
+      "kind": "ADMITTED",
+      "invocationId": "inv-5",
+      "fencingToken": "nonce-77"
+    },
+    "result": {
+      "invocationId": "inv-5",
+      "fencingToken": "nonce-77",
+      "outcome": "COMPLETED",
+      "result": {
+        "kind": "RESULT",
+        "resultType": "complete",
+        "content": [
+          {
+            "type": "text",
+            "text": "OPEN"
+          }
+        ],
+        "structuredContent": {
+          "status": "OPEN"
+        },
+        "isError": false
+      }
+    }
   },
   "ToolHostRegistration": {
     "hostId": "toolhost-eu-1-a",

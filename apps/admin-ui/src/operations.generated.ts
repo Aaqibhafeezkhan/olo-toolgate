@@ -170,6 +170,8 @@ export const operations = {
   getEnterpriseInvocation: { method: 'GET', path: '/api/control/v1/access/invocations/{id}' },
   cancelEnterpriseInvocation: { method: 'POST', path: '/api/control/v1/access/invocations/{id}/cancel' },
   consumeEnterprisePermit: { method: 'POST', path: '/api/control/v1/access/permits/consume' },
+  relayToolHostDispatch: { method: 'POST', path: '/api/control/v1/access/dispatches' },
+  getToolHostDispatchStatus: { method: 'GET', path: '/api/control/v1/access/dispatches/{id}' },
   getDeviceEnterpriseOutcome: { method: 'GET', path: '/api/control/v1/access/invocations/{id}/device-outcome' },
   reportEnterpriseEffect: { method: 'POST', path: '/api/control/v1/access/effects/report' },
   listConfigurationChanges: { method: 'GET', path: '/api/control/v1/configuration-changes' },
@@ -199,6 +201,9 @@ export const operations = {
   getToolHostAssignments: { method: 'GET', path: '/api/control/v1/tool-hosts/assignments' },
   getToolHostPackage: { method: 'GET', path: '/api/control/v1/tool-hosts/packages/{digest}' },
   getToolHostDocument: { method: 'GET', path: '/api/control/v1/tool-hosts/documents/{digest}' },
+  nextToolHostDispatch: { method: 'POST', path: '/api/control/v1/tool-hosts/dispatches/next' },
+  postToolHostAdmission: { method: 'POST', path: '/api/control/v1/tool-hosts/dispatches/{id}/admission' },
+  postToolHostResult: { method: 'POST', path: '/api/control/v1/tool-hosts/dispatches/{id}/result' },
 } as const;
 export interface DirectoryRecords {
   agentDelegations: ControlAgentDelegation;

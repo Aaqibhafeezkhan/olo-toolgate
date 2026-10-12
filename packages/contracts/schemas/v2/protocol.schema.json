@@ -364,6 +364,45 @@
         "outcome"
       ]
     },
+    "ToolHostDispatchState": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "CLAIMED",
+        "ADMITTED",
+        "REFUSED",
+        "FINISHED",
+        "EXPIRED"
+      ],
+      "description": "Where a dispatch relayed through Control stands."
+    },
+    "ToolHostDispatchStatus": {
+      "type": "object",
+      "description": "A dispatch the Gateway handed to Control for a Tool Host that fetches its calls (pull mode), with the host's admission and result once it has sent them.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "hostId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "protocol.schema.json#/$defs/ToolHostDispatchState"
+        },
+        "admission": {
+          "$ref": "protocol.schema.json#/$defs/AdmissionResponse"
+        },
+        "result": {
+          "$ref": "protocol.schema.json#/$defs/ResultMessage"
+        }
+      },
+      "required": [
+        "invocationId",
+        "hostId",
+        "state"
+      ]
+    },
     "ToolHostRegistration": {
       "type": "object",
       "description": "Tool Host registration with its workload identity (mTLS).",

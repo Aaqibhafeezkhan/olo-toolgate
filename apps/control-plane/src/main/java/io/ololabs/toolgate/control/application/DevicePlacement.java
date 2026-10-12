@@ -23,8 +23,17 @@ public final class DevicePlacement {
     /** As above, preferring devices that report this exact tool installed, so a mixed group does not place a call on a
      *  member that cannot run it. When none report it, the relay's own installation check decides. */
     public String place(Store.Session tx,RequestContext context,long now,AuthorizationRequest request,String toolDigest,String packageDigest){
+        var deployment=deployment(tx,packageDigest);
         return place(tx,context,now,id->{var saved=tx.endpointConfiguration(id);if(saved==null||saved.localTools()==null)return false;
+            // A Tool Host still reporting a tool its deployment moved elsewhere no longer gets its calls.
+            if(deployment!=null&&tx.packages().toolHost(id)!=null&&!ServerPackages.targets(deployment,id))return false;
             return codec.model(saved.localTools(),LocalToolCatalog.class).tools().stream().anyMatch(t->t.enabled()&&t.toolId().equals(request.toolId())&&t.action().equals(request.action())&&t.toolDigest().equals(toolDigest)&&t.packageDigest().equals(packageDigest));});
+    }
+    /** The server package deployment running this package, when the tool is a server tool. */
+    private com.fasterxml.jackson.databind.JsonNode deployment(Store.Session tx,String packageDigest){
+        if(packageDigest==null)return null;
+        for(var raw:tx.packages().deployments()){var d=(com.fasterxml.jackson.databind.JsonNode)codec.value(raw);if(d.path("packageDigest").asText().equals("sha256:"+packageDigest))return d;}
+        return null;
     }
     /** Every device a call for this context could be placed on, before load balancing. A catalog lists their tools. */
     public List<String> candidates(Store.Session tx,RequestContext context,long now){return candidates(tx,context,now,null);}

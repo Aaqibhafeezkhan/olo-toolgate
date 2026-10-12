@@ -324,33 +324,42 @@ async fn tools_call(
     }
     let device = outcome.invocation.evaluation.context.device_id.clone();
     if outcome.invocation.state == EnterpriseInvocationState::Queued {
-        if let Some(url) = s.tool_hosts.url(&device) {
-            let reservation = PermitReservationRequest {
-                invocation_id: outcome.invocation.id.clone(),
-                audience: device.clone(),
-                attempt: 1,
-                arguments: Some(request.arguments.clone()),
-            };
-            match relay.permit(&reservation).await {
-                // Control placed the call on a Tool Host it does not run there: relay it.
-                Err(ErrorCode::Conflict) => {}
-                Err(code) => {
-                    return Err(rpc_error(
-                        status(&code),
-                        id.clone(),
-                        -32000,
-                        "Tool permit refused",
-                        json!({"code":code}),
-                    ))
-                }
-                Ok(permit) => {
-                    let dispatch = Dispatch {
-                        permit,
-                        arguments: request.arguments.clone(),
-                    };
-                    return host_result(s, url, &dispatch, &outcome.invocation.id, expires, id)
-                        .await;
-                }
+        // A call Control placed on a Tool Host gets a permit for that host. The host runs it
+        // whether the Gateway reaches it directly (a configured route) or the host fetches its
+        // calls from Control, so moving a tool between hosts never changes this path.
+        let reservation = PermitReservationRequest {
+            invocation_id: outcome.invocation.id.clone(),
+            audience: device.clone(),
+            attempt: 1,
+            arguments: Some(request.arguments.clone()),
+        };
+        match relay.permit(&reservation).await {
+            // Placed on a device that is not a Tool Host: relay it as a local tool call.
+            Err(ErrorCode::Conflict) => {}
+            Err(code) => {
+                return Err(rpc_error(
+                    status(&code),
+                    id.clone(),
+                    -32000,
+                    "Tool permit refused",
+                    json!({"code":code}),
+                ))
+            }
+            Ok(permit) => {
+                let dispatch = Dispatch {
+                    permit,
+                    arguments: request.arguments.clone(),
+                };
+                let invocation_id = &outcome.invocation.id;
+                let dispatched = match s.tool_hosts.url(&device) {
+                    Some(url) => {
+                        s.tool_hosts
+                            .dispatch(url, &dispatch, invocation_id, expires)
+                            .await
+                    }
+                    None => relayed(relay.as_ref(), &dispatch, invocation_id, expires).await,
+                };
+                return host_result(dispatched, invocation_id, id);
             }
         }
     }
@@ -418,24 +427,61 @@ async fn tools_call(
     }
 }
 
-/// Runs a permitted call on its Tool Host and turns the host's result into an MCP tool result.
-async fn host_result(
-    s: &AppState,
-    url: &str,
+/// Pull mode: hands the dispatch to Control, where the Tool Host fetches it, and waits for the
+/// host's admission and result until `deadline` (Unix ms).
+async fn relayed(
+    relay: &dyn crate::relay::RelayPort,
     dispatch: &Dispatch,
     invocation_id: &str,
     deadline: u64,
+) -> Result<crate::toolhost::Dispatched, ErrorCode> {
+    use crate::toolhost::Dispatched;
+    use olo_toolgate_contracts::v2::{AdmissionKind, ToolHostDispatchState};
+    let mut state = relay.relay_dispatch(dispatch).await?;
+    loop {
+        if state.invocation_id != invocation_id {
+            return Err(ErrorCode::Validation);
+        }
+        match state.state {
+            ToolHostDispatchState::Finished => {
+                let result = state.result.ok_or(ErrorCode::Validation)?;
+                if result.invocation_id != invocation_id {
+                    return Err(ErrorCode::Validation);
+                }
+                return Ok(Dispatched::Finished(Box::new(result)));
+            }
+            ToolHostDispatchState::Refused => {
+                let admission = state.admission.ok_or(ErrorCode::Validation)?;
+                if admission.kind != AdmissionKind::Refused {
+                    return Err(ErrorCode::Validation);
+                }
+                return Ok(Dispatched::Refused(
+                    admission.reason.ok_or(ErrorCode::Validation)?,
+                ));
+            }
+            ToolHostDispatchState::Expired => return Err(ErrorCode::Timeout),
+            _ => {}
+        }
+        if unix_ms().is_none_or(|now| now >= deadline) {
+            return Err(ErrorCode::Timeout);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        state = relay.dispatch_status(invocation_id).await?;
+    }
+}
+
+/// Turns a Tool Host's answer, direct or relayed through Control, into an MCP tool result.
+#[allow(clippy::result_large_err)] // An axum Response, built once per call.
+fn host_result(
+    dispatched: Result<crate::toolhost::Dispatched, ErrorCode>,
+    invocation_id: &str,
     id: &Value,
 ) -> Result<Value, Response> {
     use crate::toolhost::Dispatched;
     let failed = |message: &'static str, data: Value| {
         rpc_error(StatusCode::OK, id.clone(), -32000, message, data)
     };
-    match s
-        .tool_hosts
-        .dispatch(url, dispatch, invocation_id, deadline)
-        .await
-    {
+    match dispatched {
         Err(code) => Err(rpc_error(
             status(&code),
             id.clone(),

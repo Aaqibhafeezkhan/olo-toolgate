@@ -41,6 +41,7 @@ impl Contracts {
             ("SignedInvocationPermit", "v2/permit"),
             ("AdmissionResponse", "v2/protocol"),
             ("ResultMessage", "v2/protocol"),
+            ("ToolHostDispatchStatus", "v2/protocol"),
         ] {
             let options = jsonschema::options().with_registry(&registry);
             let schema = json!({"$schema":"https://json-schema.org/draft/2020-12/schema", "$ref":format!("https://schemas.ololabs.io/toolgate/{file}.schema.json#/$defs/{name}")});

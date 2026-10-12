@@ -7,20 +7,24 @@ package io.ololabs.toolgate.contracts.v2;
  *
  * @param packageDigest canonical packageDigest value
  * @param globals canonical globals value
+ * @param hostIds canonical hostIds value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record PackageDeploymentRequest(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "packageDigest", required = true) String packageDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "globals", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> globals
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "globals", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> globals,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "hostIds", required = false) java.util.List<String> hostIds
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
      * @param packageDigest canonical packageDigest value
      * @param globals canonical globals value
+     * @param hostIds canonical hostIds value
      */
     public PackageDeploymentRequest {
         java.util.Objects.requireNonNull(packageDigest, "packageDigest");
         java.util.Objects.requireNonNull(globals, "globals");
         globals = globals == null ? null : java.util.Map.copyOf(globals);
+        hostIds = hostIds == null ? null : java.util.List.copyOf(hostIds);
     }
 }

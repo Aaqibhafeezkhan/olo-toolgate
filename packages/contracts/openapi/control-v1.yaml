@@ -7264,6 +7264,56 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterprisePermitConsumption
+  /api/control/v1/access/dispatches:
+    post:
+      operationId: relayToolHostDispatch
+      description: Relay Gateway only. Queues a signed Dispatch for a Tool Host that fetches its calls from Control, for
+        example one on a laptop the Gateway cannot reach. The permit's audience must be the invocation's target Tool Host.
+        Relaying the same dispatch again answers its current status.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/Dispatch
+      responses:
+        '200':
+          description: Queued, or the current status of the same dispatch
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '400':
+          description: Invalid bounded input
+        '403':
+          description: Access denied
+        '409':
+          description: Another dispatch for this invocation, or the target is not a Tool Host
+  /api/control/v1/access/dispatches/{id}:
+    get:
+      operationId: getToolHostDispatchStatus
+      description: Relay Gateway only. Where a relayed dispatch stands, with the host's admission and result once posted.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
   /api/control/v1/access/invocations/{id}/device-outcome:
     get:
       operationId: getDeviceEnterpriseOutcome
@@ -7771,7 +7821,8 @@ paths:
       description: Super Admin only. Makes a stored version the one Tool Hosts run for its package id, with the values of
         its declared globals and destination host settings. Control writes the service profile, the globals document, a
         disabled directory entry per new tool in the default Tool Group (an existing tool keeps its state and group) and the
-        tool's resource extractor. Each tool still needs a reviewed enable, a binding that allows the package digest and a
+        tool's resource extractor. hostIds names the Tool Hosts that run it (none means every Tool Host); deploying the
+        same version with other hostIds moves its tools. Each tool still needs a reviewed enable, a binding that allows the package digest and a
         grant.
       requestBody:
         required: true
@@ -7903,6 +7954,97 @@ paths:
           description: Not found, or not deployed
         '503':
           description: Dependency unavailable
+  /api/control/v1/tool-hosts/dispatches/next:
+    post:
+      operationId: nextToolHostDispatch
+      security:
+      - deviceCertificate: []
+      description: The oldest queued call relayed for this Tool Host, which Control marks claimed. 204 when none is queued.
+      responses:
+        '200':
+          description: The claimed dispatch
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/Dispatch
+        '204':
+          description: Nothing queued
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/dispatches/{id}/admission:
+    post:
+      operationId: postToolHostAdmission
+      security:
+      - deviceCertificate: []
+      description: The Tool Host admits or refuses a dispatch it claimed.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/AdmissionResponse
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found
+        '409':
+          description: Not claimed by this host
+  /api/control/v1/tool-hosts/dispatches/{id}/result:
+    post:
+      operationId: postToolHostResult
+      security:
+      - deviceCertificate: []
+      description: The Tool Host's result for a dispatch it admitted.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/ResultMessage
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found
+        '409':
+          description: Not admitted by this host
 components:
   securitySchemes:
     adminAccessToken:

@@ -14,6 +14,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param globalsDigest canonical globalsDigest value
  * @param toolIds canonical toolIds value
  * @param deployedAtUnixMs canonical deployedAtUnixMs value
+ * @param hostIds canonical hostIds value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record PackageDeployment(
@@ -25,7 +26,8 @@ public record PackageDeployment(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "serviceProfileRevision", required = true) Long serviceProfileRevision,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "globalsDigest", required = true) String globalsDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolIds", required = true) java.util.List<String> toolIds,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "deployedAtUnixMs", required = true) Long deployedAtUnixMs
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "deployedAtUnixMs", required = true) Long deployedAtUnixMs,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "hostIds", required = false) java.util.List<String> hostIds
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -38,6 +40,7 @@ public record PackageDeployment(
      * @param globalsDigest canonical globalsDigest value
      * @param toolIds canonical toolIds value
      * @param deployedAtUnixMs canonical deployedAtUnixMs value
+     * @param hostIds canonical hostIds value
      */
     public PackageDeployment {
         java.util.Objects.requireNonNull(packageId, "packageId");
@@ -50,5 +53,6 @@ public record PackageDeployment(
         java.util.Objects.requireNonNull(toolIds, "toolIds");
         toolIds = toolIds == null ? null : java.util.List.copyOf(toolIds);
         java.util.Objects.requireNonNull(deployedAtUnixMs, "deployedAtUnixMs");
+        hostIds = hostIds == null ? null : java.util.List.copyOf(hostIds);
     }
 }

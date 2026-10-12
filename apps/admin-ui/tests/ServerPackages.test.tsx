@@ -33,6 +33,22 @@ it('uploads the exact bytes and deploys with the declared values',async()=>{
  expect(JSON.parse((screen.getByLabelText(/Global and host setting values/) as HTMLTextAreaElement).value)).toEqual({Greeting:'Hello',ItemsApiHost:''});
  fireEvent.change(screen.getByLabelText(/Global and host setting values/),{target:{value:'{"Greeting":"Hi","ItemsApiHost":"items.example.com"}'}});
  fireEvent.click(screen.getByRole('button',{name:'Deploy'}));
- await waitFor(()=>expect(fetcher.mock.calls.some(([url,init])=>url.endsWith('/packages/deployments')&&init?.method==='POST'&&JSON.parse(String(init.body)).globals.ItemsApiHost==='items.example.com')).toBe(true));
- await screen.findByText(/Deployed acme.orders 0.1.0 as revision 1/);
+ await waitFor(()=>expect(fetcher.mock.calls.some(([url,init])=>url.endsWith('/packages/deployments')&&init?.method==='POST'&&JSON.parse(String(init.body)).globals.ItemsApiHost==='items.example.com'&&!('hostIds' in JSON.parse(String(init.body))))).toBe(true));
+ await screen.findByText(/Deployed acme.orders 0.1.0 as revision 1 on every Tool Host/);
+});
+it('moves a deployment by naming another Tool Host',async()=>{
+ const deployment={packageId:'acme.orders',version:'0.1.0',packageDigest:digest,revision:1,serviceProfileDigest:digest,serviceProfileRevision:1,globalsDigest:digest,toolIds:['acme.orders/greet'],hostIds:['tool-host-local'],deployedAtUnixMs:1};
+ const fetcher=vi.fn(async(url:string,init?:RequestInit)=>{
+  if(init?.method==='POST')return json({...deployment,revision:2,hostIds:JSON.parse(String(init.body)).hostIds});
+  return json({items:url.endsWith('/deployments')?[deployment]:[version]});
+ });
+ vi.stubGlobal('fetch',fetcher);render(<ServerPackages client={new ControlClient('token',vi.fn())}/>);
+ await screen.findByText('Revision 1 on tool-host-local');
+ fireEvent.change(screen.getByLabelText('Version'),{target:{value:digest}});
+ expect((screen.getByLabelText(/Tool Hosts/) as HTMLInputElement).value).toBe('tool-host-local');
+ fireEvent.change(screen.getByLabelText(/Tool Hosts/),{target:{value:' laptop-1 , '}});
+ fireEvent.click(screen.getByRole('button',{name:'Deploy'}));
+ await screen.findByText(/as revision 2 on laptop-1\./);
+ const post=fetcher.mock.calls.find(([,init])=>init?.method==='POST')!;
+ expect(JSON.parse(String(post[1]?.body)).hostIds).toEqual(['laptop-1']);
 });

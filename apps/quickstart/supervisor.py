@@ -163,6 +163,9 @@ class LocalIdentity:
 
 # The Tool Host's device id: Control places server-tool calls on it, and the Gateway dispatches them there.
 TOOL_HOST='tool-host-local'
+# A second Tool Host the Gateway has no route to, like one on a laptop: it fetches its calls from Control. A deployment
+# that names it runs there, so moving a tool between machines is a redeploy.
+REMOTE_TOOL_HOST='tool-host-remote'
 
 
 def key(name):
@@ -323,6 +326,11 @@ def configure():
            storeDir=str(DATA/'tool-host/store'),workDir=str(DATA/'tool-host/work'),
            control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host')),runtimes=dict(javaPath='java'))))
+    atomic(DATA/'run/tool-host-remote.json',json.dumps(dict(hostId=REMOTE_TOOL_HOST,listen='127.0.0.1:8096',
+           permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
+           storeDir=str(DATA/'tool-host-remote/store'),workDir=str(DATA/'tool-host-remote/work'),
+           control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           enrollment=dict(identityDir=str(DATA/'state/tool-host-remote')),runtimes=dict(javaPath='java'))))
     control_origin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443')
     gateway_origin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL',control_origin)
     tools=dict(hotfolder=dict(root='/data/hotfolder',maxFileBytes=65536,maxEntries=256,extensions=['txt','md','json','csv']),
@@ -657,6 +665,8 @@ def main():
             children.append(subprocess.Popen(['/usr/local/bin/quickstart-tools'],env=child_env))
             host_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=host_env))
+            remote_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host-remote.json')
+            children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=remote_env))
             server = BoundedServer(('0.0.0.0',8080),Handler,ready_state)
             threading.Thread(target=server.serve_forever,daemon=True).start()
             renewed = time.monotonic(); boot = renewed
@@ -675,6 +685,7 @@ def main():
                     children[1] = subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env)
                     children[2] = subprocess.Popen(['/usr/local/bin/quickstart-tools'],env=child_env)
                     children[3] = subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=host_env)
+                    children[4] = subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=remote_env)
                     boot=now
         finally:
             ready_state.clear()

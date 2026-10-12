@@ -93,6 +93,8 @@ public final class ServerPackages {
                 for (var route : descriptor.path("routes")) same(routes, route.get("id").asText(), route);
             }
             for (var name : request.globals().keySet()) if (!declared.containsKey(name) && !hosts.contains(name)) throw Failure.validation();
+            var targets = new TreeSet<String>(request.hostIds() == null ? List.of() : request.hostIds());
+            for (var target : targets) if (tx.packages().toolHost(target) == null) throw Failure.validation();
             var globals = JSON.objectNode();
             declared.forEach((name, declaration) -> {
                 var value = request.globals().containsKey(name) ? request.globals().get(name) : declaration.get("default");
@@ -149,11 +151,22 @@ public final class ServerPackages {
                 .put("serviceProfileDigest", profileDigest).put("serviceProfileRevision", revision).put("globalsDigest", globalsDigest);
             var ids = deployment.putArray("toolIds"); toolIds.forEach(ids::add);
             deployment.put("deployedAtUnixMs", clock.millis());
+            if (!targets.isEmpty()) { var hostIds = deployment.putArray("hostIds"); targets.forEach(hostIds::add); }
             tx.packages().saveDeployment(packageId, codec.json(deployment));
             tx.audit(actor.id(), "PACKAGE_DEPLOY", "package:" + packageId, revision, requestId, hex(version.digest()));
             return reply(200, deployment);
         });
     }
+
+    /** A deployment runs on the Tool Hosts it names, or on every Tool Host when it names none. Moving a tool to another
+     *  device is a redeploy that names another host. */
+    public static boolean targets(JsonNode deployment, String hostId) {
+        var hostIds = deployment.path("hostIds");
+        if (!hostIds.isArray() || hostIds.isEmpty()) return true;
+        for (var id : hostIds) if (id.asText().equals(hostId)) return true;
+        return false;
+    }
+    private List<JsonNode> deploymentsFor(Store.Session tx, String hostId) { return tx.packages().deployments().stream().map(this::node).filter(d -> targets(d, hostId)).toList(); }
 
     /** One declaration per name across a package's tools; two tools may share it only verbatim. */
     private static void same(Map<String, JsonNode> seen, String key, JsonNode value) { var previous = seen.putIfAbsent(key, value); if (previous != null && !previous.equals(value)) throw Failure.validation(); }
@@ -209,8 +222,8 @@ public final class ServerPackages {
             var d = host(tx, device); var directory = tx.load(); var evaluator = new EnterpriseEvaluator(codec);
             var result = JSON.objectNode().put("hostId", d.deviceId());
             ArrayNode tools = result.putArray("tools"), deployments = result.putArray("deployments");
-            for (var raw : tx.packages().deployments()) {
-                var deployment = node(raw); String digest = deployment.get("packageDigest").asText();
+            for (var deployment : deploymentsFor(tx, d.deviceId())) {
+                String digest = deployment.get("packageDigest").asText();
                 deployments.add(deployment);
                 for (var toolId : deployment.path("toolIds")) {
                     var entry = directory.entries().get(Kind.TOOL.id(toolId.asText()));
@@ -230,8 +243,8 @@ public final class ServerPackages {
     public byte[] content(Ids.TenantId tenant, Function<Store.Session, EndpointDeviceRecord> device, String digest) {
         hex(digest);
         return store.transaction(tenant, false, tx -> {
-            host(tx, device);
-            if (tx.packages().deployments().stream().noneMatch(d -> node(d).get("packageDigest").asText().equals(digest))) throw notFound();
+            var d = host(tx, device);
+            if (deploymentsFor(tx, d.deviceId()).stream().noneMatch(deployment -> deployment.get("packageDigest").asText().equals(digest))) throw notFound();
             var bytes = tx.packages().content(digest); if (bytes == null) throw notFound(); return bytes;
         });
     }
@@ -240,8 +253,8 @@ public final class ServerPackages {
     public Store.Reply document(Ids.TenantId tenant, Function<Store.Session, EndpointDeviceRecord> device, String digest) {
         hex(digest);
         return store.transaction(tenant, false, tx -> {
-            host(tx, device);
-            if (tx.packages().deployments().stream().map(this::node).noneMatch(d -> d.get("serviceProfileDigest").asText().equals(digest) || d.get("globalsDigest").asText().equals(digest))) throw notFound();
+            var h = host(tx, device);
+            if (deploymentsFor(tx, h.deviceId()).stream().noneMatch(d -> d.get("serviceProfileDigest").asText().equals(digest) || d.get("globalsDigest").asText().equals(digest))) throw notFound();
             var document = tx.packages().document(digest); if (document == null) throw notFound();
             return new Store.Reply(200, document, 0);
         });
@@ -261,7 +274,7 @@ public final class ServerPackages {
             int slash = e.toolId().indexOf('/'); var raw = slash < 0 ? null : tx.packages().deployment(e.toolId().substring(0, slash));
             if (raw == null) throw Failure.conflict();
             var deployment = node(raw);
-            if (!deployment.get("packageDigest").asText().equals("sha256:" + e.packageDigest())) throw Failure.conflict();
+            if (!deployment.get("packageDigest").asText().equals("sha256:" + e.packageDigest()) || !targets(deployment, device)) throw Failure.conflict();
             var version = tx.packages().version(deployment.get("packageDigest").asText()); var manifest = node(version.document()).get("manifest");
             JsonNode tool = null;
             for (var t : manifest.path("tools")) if (t.path("descriptor").path("toolId").asText().equals(e.toolId())) tool = t;
@@ -298,6 +311,100 @@ public final class ServerPackages {
             claims.put("deadlineUnixMs", i.expiresAtUnixMs());
             var signed = operations.signer().signInvocation(codec.model(codec.json(claims), io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class));
             return reply(200, signed);
+        });
+    }
+
+    // Pull mode: a Tool Host that the Gateway cannot reach (a laptop behind NAT, another network) fetches its calls from
+    // Control over its own connection. The Gateway hands Control the permitted dispatch and polls for the host's answer;
+    // the host claims it, answers the admission and sends the result. Nothing else about the call changes.
+
+    private static final Set<String> OPEN = Set.of("QUEUED", "CLAIMED", "ADMITTED");
+
+    /** The permit's claims, read without verifying it: Control signed it, and the host verifies it before running. */
+    private JsonNode claims(JsonNode dispatch) {
+        var parts = dispatch.path("permit").path("jws").asText().split("\\.");
+        if (parts.length != 3) throw Failure.validation();
+        try { return node(new String(Base64.getUrlDecoder().decode(parts[1]), java.nio.charset.StandardCharsets.UTF_8)); }
+        catch (IllegalArgumentException invalid) { throw Failure.validation(); }
+    }
+    private ObjectNode status(PackageStore.Relayed relayed) { return (ObjectNode) node(relayed.document()).get("status"); }
+    private PackageStore.Relayed updated(PackageStore.Relayed relayed, String state, java.util.function.Consumer<ObjectNode> change) {
+        var document = (ObjectNode) node(relayed.document()); var status = (ObjectNode) document.get("status");
+        status.put("state", state); change.accept(status);
+        return new PackageStore.Relayed(relayed.invocationId(), relayed.hostId(), state, relayed.expiresAt(), codec.json(document));
+    }
+    private PackageStore.Relayed current(PackageStore.Relayed relayed) {
+        return relayed != null && OPEN.contains(relayed.state()) && relayed.expiresAt() <= clock.millis() ? updated(relayed, "EXPIRED", s -> {}) : relayed;
+    }
+
+    /** The Gateway hands Control a dispatch for a call placed on a Tool Host; the host fetches it. */
+    public Store.Reply relay(DirectoryService.Actor actor, String body) {
+        if (actor.admin() || actor.userId() != null) throw ManagementAccess.denied();
+        var dispatch = codec.model(body, io.ololabs.toolgate.contracts.v2.Dispatch.class); var claims = claims(node(body));
+        String invocationId = claims.path("invocationId").asText(), audience = claims.path("aud").asText();
+        return store.transaction(actor.tenant(), true, tx -> {
+            var i = operations.invocationIn(tx, invocationId); String device = i.evaluation().context().deviceId();
+            if (!audience.equals(device) || tx.packages().toolHost(device) == null) throw Failure.conflict();
+            String document = codec.json(dispatch); var existing = tx.packages().relayed(invocationId);
+            if (existing != null) {
+                if (!node(existing.document()).get("dispatch").equals(node(document))) throw Failure.conflict();
+                return reply(200, status(current(existing)));
+            }
+            var record = JSON.objectNode(); record.set("dispatch", node(document));
+            record.putObject("status").put("invocationId", invocationId).put("hostId", device).put("state", "QUEUED");
+            // The host must claim the call while its permit is valid.
+            long expires = Math.min(i.expiresAtUnixMs(), claims.path("exp").asLong(i.expiresAtUnixMs()));
+            var relayed = new PackageStore.Relayed(invocationId, device, "QUEUED", expires, codec.json(record));
+            tx.packages().saveRelayed(relayed);
+            return reply(200, status(relayed));
+        });
+    }
+
+    /** Where a relayed dispatch stands, for the Gateway that handed it over. */
+    public Store.Reply relayed(DirectoryService.Actor actor, String invocationId) {
+        if (actor.admin() || actor.userId() != null) throw ManagementAccess.denied();
+        return store.transaction(actor.tenant(), false, tx -> {
+            var relayed = current(tx.packages().relayed(invocationId)); if (relayed == null) throw notFound();
+            return reply(200, status(relayed));
+        });
+    }
+
+    /** The oldest call waiting for this Tool Host, which it now owns; 204 when there is none. */
+    public Store.Reply next(Ids.TenantId tenant, Function<Store.Session, EndpointDeviceRecord> device) {
+        return store.transaction(tenant, true, tx -> {
+            var d = host(tx, device); var relayed = tx.packages().nextRelayed(d.deviceId(), clock.millis());
+            if (relayed == null) return new Store.Reply(204, "", 0);
+            tx.packages().saveRelayed(updated(relayed, "CLAIMED", s -> {}));
+            return reply(200, node(relayed.document()).get("dispatch"));
+        });
+    }
+
+    /** The host's admission for a call it claimed: ADMITTED, or REFUSED with the reason, as over a direct dispatch. */
+    public Store.Reply admission(Ids.TenantId tenant, Function<Store.Session, EndpointDeviceRecord> device, String invocationId, String body) {
+        var admission = codec.model(body, io.ololabs.toolgate.contracts.v2.AdmissionResponse.class);
+        if (!admission.invocationId().equals(invocationId)) throw Failure.validation();
+        return store.transaction(tenant, true, tx -> {
+            var d = host(tx, device); var relayed = current(tx.packages().relayed(invocationId));
+            if (relayed == null || !relayed.hostId().equals(d.deviceId())) throw notFound();
+            if (!relayed.state().equals("CLAIMED")) throw Failure.conflict();
+            String state = admission.kind() == io.ololabs.toolgate.contracts.v2.AdmissionKind.ADMITTED ? "ADMITTED" : "REFUSED";
+            var next = updated(relayed, state, s -> s.set("admission", node(codec.json(admission))));
+            tx.packages().saveRelayed(next);
+            return reply(200, status(next));
+        });
+    }
+
+    /** The host's result for a call it admitted. */
+    public Store.Reply result(Ids.TenantId tenant, Function<Store.Session, EndpointDeviceRecord> device, String invocationId, String body) {
+        var result = codec.model(body, io.ololabs.toolgate.contracts.v2.ResultMessage.class);
+        if (!result.invocationId().equals(invocationId)) throw Failure.validation();
+        return store.transaction(tenant, true, tx -> {
+            var d = host(tx, device); var relayed = tx.packages().relayed(invocationId);
+            if (relayed == null || !relayed.hostId().equals(d.deviceId())) throw notFound();
+            if (!relayed.state().equals("ADMITTED")) throw Failure.conflict();
+            var next = updated(relayed, "FINISHED", s -> s.set("result", node(codec.json(result))));
+            tx.packages().saveRelayed(next);
+            return reply(200, status(next));
         });
     }
 }

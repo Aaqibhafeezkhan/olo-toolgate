@@ -420,6 +420,7 @@ export interface PackageDeployment {
   readonly globalsDigest: string;
   readonly toolIds: ReadonlyArray<string>;
   readonly deployedAtUnixMs: number;
+  readonly hostIds?: ReadonlyArray<string>;
 }
 /** Current deployments, one per package id. */
 export interface PackageDeploymentPage {
@@ -429,6 +430,7 @@ export interface PackageDeploymentPage {
 export interface PackageDeploymentRequest {
   readonly packageDigest: string;
   readonly globals: Record<string, unknown>;
+  readonly hostIds?: ReadonlyArray<string>;
 }
 /** Enable exactly the reviewed digest with this binding. */
 export interface PackageEnableRequest {
@@ -817,6 +819,15 @@ export interface ToolHostAssignments {
   readonly hostId: string;
   readonly tools: ReadonlyArray<ToolHostAssignment>;
   readonly deployments: ReadonlyArray<PackageDeployment>;
+}
+export type ToolHostDispatchState = "QUEUED" | "CLAIMED" | "ADMITTED" | "REFUSED" | "FINISHED" | "EXPIRED";
+/** A dispatch the Gateway handed to Control for a Tool Host that fetches its calls (pull mode), with the host's admission and result once it has sent them. */
+export interface ToolHostDispatchStatus {
+  readonly invocationId: string;
+  readonly hostId: string;
+  readonly state: ToolHostDispatchState;
+  readonly admission?: AdmissionResponse;
+  readonly result?: ResultMessage;
 }
 /** Tool Host registration with its workload identity (mTLS). */
 export interface ToolHostRegistration {

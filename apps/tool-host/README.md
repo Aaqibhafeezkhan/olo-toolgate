@@ -115,6 +115,20 @@ With `enrollment` set, the host is a device of Control, so it sits in Control's 
 
 Steps 3 to 5 repeat at the interval Control's check-in answers. If Control has deleted the device, the host starts a new enrollment.
 
+## Local or remote: pull mode
+
+An enrolled host also fetches its calls from Control, so it runs tools wherever it is: a server next to the Gateway, or a laptop behind NAT that the Gateway cannot reach. Every 250 ms it calls, presenting its device certificate:
+
+| Call | Body | Answer |
+|---|---|---|
+| `POST /api/control/v1/tool-hosts/dispatches/next` | none | the oldest queued `Dispatch` for this host, now claimed, or 204 |
+| `POST /api/control/v1/tool-hosts/dispatches/{id}/admission` | `AdmissionResponse` | `ToolHostDispatchStatus` |
+| `POST /api/control/v1/tool-hosts/dispatches/{id}/result` | `ResultMessage` | `ToolHostDispatchStatus` |
+
+Admission and execution are the same as for `POST /v1/dispatch`: the permit is verified here, and consumed at Control, exactly once. The Gateway uses its direct route to a host when it has one, and otherwise queues the signed `Dispatch` at Control (`POST /api/control/v1/access/dispatches`) and reads its status until the result arrives.
+
+Which host runs a tool is the deployment's choice. A deployment with `hostIds` runs only on those hosts; without them it runs on every Tool Host. To move a tool from one machine to another, deploy the same version again naming the other host. Placement stops sending calls to the old host at once and sends them to the new one as soon as it holds the content; the old host drops the deployment from its assignments at its next check-in.
+
 ## Control
 
 For each invocation the host calls three endpoints under `/api/control/v1/access`, presenting its workload certificate:
@@ -129,7 +143,7 @@ Control takes these only from a registered Tool Host whose device id is the perm
 
 ## Not yet
 
-- Kill pushes and the mTLS dispatch listener for Gateways on other machines.
+- Kill pushes, and the mTLS dispatch listener for Gateways on other machines (pull mode covers hosts the Gateway cannot reach).
 - A result outbox: a report Control does not take is logged, not retried.
 - Sandbox isolation beyond a clean environment and its own directory: the network namespace, firewall and container tiers of plan.md §11.5 and §11.6.
 - Tunnel destinations, TCP, OAuth 2.0, token exchange and connection auth, streaming routes.

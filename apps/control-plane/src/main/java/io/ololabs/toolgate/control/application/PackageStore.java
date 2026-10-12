@@ -21,4 +21,11 @@ public interface PackageStore {
     /** document is the ToolHostRegistration of the device. */
     String toolHost(String deviceId);
     void saveToolHost(String deviceId,String document);
+    /** A dispatch the Gateway handed to Control for a Tool Host that fetches its calls. document holds the Dispatch and
+     *  its ToolHostDispatchStatus as {dispatch, status}. */
+    record Relayed(String invocationId,String hostId,String state,long expiresAt,String document) {}
+    Relayed relayed(String invocationId);
+    /** The oldest queued, unexpired dispatch for this host. */
+    Relayed nextRelayed(String hostId,long now);
+    void saveRelayed(Relayed relayed);
 }

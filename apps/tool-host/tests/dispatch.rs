@@ -98,6 +98,10 @@ struct Seen {
     reports: Vec<Value>,
     consumed: Vec<Value>,
     upstream: Vec<Value>,
+    /// Pull mode: dispatches Control holds for the host, and what the host answered.
+    queued: Vec<Value>,
+    admissions: Vec<Value>,
+    results: Vec<Value>,
 }
 
 type Shared = Arc<Mutex<Seen>>;
@@ -131,8 +135,41 @@ async fn control(seen: Shared) -> u16 {
         }
         Json(json!({"value": API_KEY})).into_response()
     }
+    async fn next(State(seen): State<Shared>) -> axum::response::Response {
+        match seen.lock().unwrap().queued.pop() {
+            Some(dispatch) => Json(dispatch).into_response(),
+            None => StatusCode::NO_CONTENT.into_response(),
+        }
+    }
+    async fn admission(
+        State(seen): State<Shared>,
+        AxumPath(id): AxumPath<String>,
+        Json(body): Json<Value>,
+    ) -> impl IntoResponse {
+        assert_eq!(body["invocationId"], id);
+        seen.lock().unwrap().admissions.push(body);
+        Json(json!({}))
+    }
+    async fn result(
+        State(seen): State<Shared>,
+        AxumPath(id): AxumPath<String>,
+        Json(body): Json<Value>,
+    ) -> impl IntoResponse {
+        assert_eq!(body["invocationId"], id);
+        seen.lock().unwrap().results.push(body);
+        Json(json!({}))
+    }
     serve(
         Router::new()
+            .route("/api/control/v1/tool-hosts/dispatches/next", post(next))
+            .route(
+                "/api/control/v1/tool-hosts/dispatches/{id}/admission",
+                post(admission),
+            )
+            .route(
+                "/api/control/v1/tool-hosts/dispatches/{id}/result",
+                post(result),
+            )
             .route("/api/control/v1/access/permits/consume", post(consume))
             .route("/api/control/v1/access/effects/report", post(report))
             .route("/api/control/v1/access/secrets/deliver", post(secret))
@@ -174,6 +211,7 @@ async fn upstream(seen: Shared) -> u16 {
 
 struct Rig {
     url: String,
+    host: Arc<tool_host::server::Host>,
     seen: Shared,
     target: Value,
     dir: PathBuf,
@@ -257,7 +295,7 @@ async fn rig() -> Option<Rig> {
     }))
     .unwrap();
     let host = tool_host::server::Host::new(config).unwrap();
-    let port = serve(tool_host::server::router(host)).await;
+    let port = serve(tool_host::server::router(host.clone())).await;
 
     let tool = &packaged["tools"][0];
     let target = json!({
@@ -276,6 +314,7 @@ async fn rig() -> Option<Rig> {
     });
     Some(Rig {
         url: format!("http://127.0.0.1:{port}/v1/dispatch"),
+        host,
         seen,
         target,
         dir,
@@ -489,9 +528,12 @@ async fn bad_permits_are_refused_before_anything_runs() {
         "a route the tool does not declare"
     );
 
-    let (mut jws, _) = permit(&rig, &arguments, |_| {});
-    jws.pop();
-    jws.push('A');
+    // Change a character inside the signature: the last one carries only 2 bits, and replacing it
+    // can leave the signature unchanged.
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let at = jws.len() - 10;
+    let flipped = if &jws[at..=at] == "A" { "B" } else { "A" };
+    let jws = format!("{}{flipped}{}", &jws[..at], &jws[at + 1..]);
     let lines = dispatch(&rig, &jws, &arguments).await;
     assert_eq!(refused(&lines), "PERMIT_INVALID", "a bad signature");
 
@@ -533,4 +575,53 @@ fn bare_runtime_names_resolve_on_the_host_path_because_tools_start_without_one()
         resolve(Path::new("no-such-runtime-xyz")),
         PathBuf::from("no-such-runtime-xyz")
     );
+}
+
+#[tokio::test]
+async fn pull_mode_takes_calls_from_control_and_answers_through_it() {
+    let rig = rig!();
+    let arguments = json!({"orderId": "123456"});
+    let (jws, id) = permit(&rig, &arguments, |_| {});
+    let (forged, forged_id) = permit(&rig, &arguments, |c| c["aud"] = json!("host-2"));
+    {
+        let mut seen = rig.seen.lock().unwrap();
+        seen.queued
+            .push(json!({"permit": {"jws": jws}, "arguments": arguments}));
+        seen.queued
+            .push(json!({"permit": {"jws": forged}, "arguments": arguments}));
+    }
+    tokio::spawn(tool_host::server::pull(rig.host.clone()));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        {
+            let seen = rig.seen.lock().unwrap();
+            if seen.results.len() == 1 && seen.admissions.len() == 2 {
+                break;
+            }
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the host never answered"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let seen = rig.seen.lock().unwrap();
+    // A permit for another host is refused under the id Control queued it by; nothing ran.
+    let refused = seen
+        .admissions
+        .iter()
+        .find(|a| a["invocationId"] == forged_id.as_str())
+        .unwrap();
+    assert_eq!(refused["kind"], "REFUSED");
+    assert_eq!(refused["reason"], "PERMIT_INVALID");
+    let admitted = seen
+        .admissions
+        .iter()
+        .find(|a| a["invocationId"] == id.as_str())
+        .unwrap();
+    assert_eq!(admitted["kind"], "ADMITTED");
+    assert_eq!(admitted["fencingToken"], FENCE);
+    assert_eq!(seen.results[0]["invocationId"], id);
+    assert_eq!(seen.results[0]["outcome"], "COMPLETED");
+    assert_eq!(seen.reports.len(), 1);
 }
