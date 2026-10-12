@@ -34,6 +34,9 @@ async fn main() -> ExitCode {
         match tool_host::device::Device::open(&config, host.control()) {
             Ok(device) => {
                 tokio::spawn(device.run());
+                // An enrolled host also takes calls relayed through Control, so it runs tools
+                // wherever it is, whether or not the Gateway can reach its listener.
+                tokio::spawn(tool_host::server::pull(host.clone()));
             }
             Err(e) => {
                 eprintln!("enrollment refused: {e}");

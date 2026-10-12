@@ -6,7 +6,10 @@
 //! certificate is either configured or the one enrollment issued, swapped in as it renews.
 
 use crate::config::ControlConfig;
-use olo_toolgate_contracts::v2::{InvocationResultReport, PermitConsumed, PermitConsumption};
+use olo_toolgate_contracts::v2::{
+    AdmissionResponse, Dispatch, InvocationResultReport, PermitConsumed, PermitConsumption,
+    ResultMessage,
+};
 use olo_toolgate_contracts::{EnterpriseSecretDelivery, EnterpriseSecretDeliveryRequest};
 use std::time::Duration;
 
@@ -14,6 +17,10 @@ const BASE: &str = "/api/control/v1/access";
 /// Carries the fencing token on secret delivery, whose v1 body has no field for it.
 pub const FENCING_HEADER: &str = "Toolgate-Fencing-Token";
 const MAX_REPLY: usize = 1024 * 1024;
+/// Pull mode, under the host's device certificate.
+const DISPATCHES: &str = "/api/control/v1/tool-hosts/dispatches";
+/// A relayed dispatch carries the call's arguments, at most the host's input ceiling.
+const MAX_DISPATCH: usize = 2 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControlError {
@@ -109,6 +116,36 @@ impl Control {
         let _: serde_json::Value = self
             .post("/effects/report", report, Some(&report.fencing_token))
             .await?;
+        Ok(())
+    }
+
+    /// Pull mode: the oldest call Control holds for this host, which the host now owns.
+    pub async fn next_dispatch(&self) -> Result<Option<Dispatch>, ControlError> {
+        let bytes = self
+            .send(
+                &format!("{DISPATCHES}/next"),
+                Some(b"{}".to_vec()),
+                &[],
+                MAX_DISPATCH,
+            )
+            .await?;
+        if bytes.is_empty() {
+            return Ok(None);
+        }
+        json(&bytes).map(Some)
+    }
+
+    /// Pull mode: the admission for a call taken from Control.
+    pub async fn admission(&self, admission: &AdmissionResponse) -> Result<(), ControlError> {
+        let path = format!("{DISPATCHES}/{}/admission", admission.invocation_id);
+        let _: serde_json::Value = self.post_json(&path, admission, &[]).await?;
+        Ok(())
+    }
+
+    /// Pull mode: the result of a call taken from Control.
+    pub async fn relayed_result(&self, result: &ResultMessage) -> Result<(), ControlError> {
+        let path = format!("{DISPATCHES}/{}/result", result.invocation_id);
+        let _: serde_json::Value = self.post_json(&path, result, &[]).await?;
         Ok(())
     }
 

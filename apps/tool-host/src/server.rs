@@ -3,6 +3,9 @@
 //! Gateway dispatch (plan.md §11.3). `POST /v1/dispatch` takes a `Dispatch` and answers NDJSON:
 //! one `AdmissionResponse` line, definitive, and after `ADMITTED` one `ResultMessage` line. The
 //! tool starts only after the admission line is written. `GET /v1/health` reports readiness.
+//!
+//! Pull mode ([`pull`]) takes the same dispatches from Control over the host's own connection,
+//! for a host the Gateway cannot reach: a laptop behind NAT runs tools exactly as a server does.
 
 use crate::broker::{self, Invocation};
 use crate::config::{Config, CEILING};
@@ -104,19 +107,19 @@ fn ndjson(body: Body) -> Response {
         .into_response()
 }
 
-fn refusal(invocation_id: &str, reason: RefusalReason) -> Response {
+fn refusal(invocation_id: &str, reason: RefusalReason) -> AdmissionResponse {
     tracing::info!(target: "toolgate::audit", invocation_id, reason = ?reason, "dispatch refused");
     let id = if valid_identifier(invocation_id) {
         invocation_id
     } else {
         "unknown"
     };
-    ndjson(Body::from(line(&AdmissionResponse {
+    AdmissionResponse {
         kind: AdmissionKind::Refused,
         invocation_id: id.into(),
         fencing_token: None,
         reason: Some(reason),
-    })))
+    }
 }
 
 fn valid_identifier(id: &str) -> bool {
@@ -152,36 +155,76 @@ async fn dispatch(State(host): State<Arc<Host>>, body: Bytes) -> Response {
     let Ok(dispatch) = serde_json::from_slice::<Dispatch>(&body) else {
         return (StatusCode::BAD_REQUEST, "the body is not a Dispatch").into_response();
     };
+    let admitted = match admit(&host, dispatch).await {
+        Ok(admitted) => admitted,
+        Err(refused) => return ndjson(Body::from(line(&refused))),
+    };
+    let (tx, rx) = mpsc::channel::<Bytes>(2);
+    let _ = tx.send(line(&admitted.admission())).await;
+    tokio::spawn(async move {
+        let result = run(host, admitted).await;
+        let _ = tx.send(line(&result)).await;
+    });
+    let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|b| (Ok::<_, std::io::Error>(b), rx))
+    });
+    ndjson(Body::from_stream(stream))
+}
+
+/// A dispatch the host admitted: its permit claimed with Control and a slot held. Nothing has
+/// run yet.
+pub struct Admitted {
+    claims: InvocationPermitClaims,
+    prepared: Prepared,
+    dispatch: Dispatch,
+    fencing_token: String,
+    slot: OwnedSemaphorePermit,
+}
+
+impl Admitted {
+    pub fn admission(&self) -> AdmissionResponse {
+        AdmissionResponse {
+            kind: AdmissionKind::Admitted,
+            invocation_id: self.claims.invocation_id.clone(),
+            fencing_token: Some(self.fencing_token.clone()),
+            reason: None,
+        }
+    }
+}
+
+/// Checks a dispatch, finds what its permit pins and claims the permit with Control. A refusal
+/// is definitive: nothing ran.
+pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, AdmissionResponse> {
     let jws = &dispatch.permit.jws;
     let claims = match host.verifier.verify(jws, now_ms()) {
         Ok(claims) => claims,
         Err(PermitError::Expired) => {
-            return refusal(&claimed_id(jws), RefusalReason::PermitExpired)
+            return Err(refusal(&claimed_id(jws), RefusalReason::PermitExpired))
         }
         Err(PermitError::Invalid(why)) => {
             tracing::info!(target: "toolgate::audit", why, "permit invalid");
-            return refusal(&claimed_id(jws), RefusalReason::PermitInvalid);
+            return Err(refusal(&claimed_id(jws), RefusalReason::PermitInvalid));
         }
     };
     let id = claims.invocation_id.clone();
     let arguments = Value::Object(dispatch.arguments.clone().into_iter().collect());
     if digest::jcs(&arguments).ok().as_deref() != Some(claims.arguments_digest.as_str()) {
         tracing::info!(target: "toolgate::audit", invocation_id = %id, "arguments differ from the permit's argumentsDigest");
-        return refusal(&id, RefusalReason::PermitInvalid);
+        return Err(refusal(&id, RefusalReason::PermitInvalid));
     }
     let prepared = match host.store.prepare(&claims.target) {
         Ok(prepared) => prepared,
         Err(StoreError::NotPresent(why)) => {
             tracing::info!(target: "toolgate::audit", invocation_id = %id, why, "content not present");
-            return refusal(&id, RefusalReason::DigestNotPresent);
+            return Err(refusal(&id, RefusalReason::DigestNotPresent));
         }
         Err(StoreError::Unavailable(why)) => {
             tracing::warn!(invocation_id = %id, why, "content store unavailable");
-            return refusal(&id, RefusalReason::StoreUnavailable);
+            return Err(refusal(&id, RefusalReason::StoreUnavailable));
         }
         Err(StoreError::Unsupported(why)) => {
             tracing::info!(target: "toolgate::audit", invocation_id = %id, why, "runtime unsupported");
-            return refusal(&id, RefusalReason::UnsupportedTier);
+            return Err(refusal(&id, RefusalReason::UnsupportedTier));
         }
     };
     let input_cap = prepared
@@ -193,10 +236,10 @@ async fn dispatch(State(host): State<Arc<Host>>, body: Bytes) -> Response {
             (m as usize).min(host.config.limits.max_input_bytes)
         });
     if serde_json::to_vec(&arguments).map_or(usize::MAX, |b| b.len()) > input_cap {
-        return refusal(&id, RefusalReason::PermitInvalid);
+        return Err(refusal(&id, RefusalReason::PermitInvalid));
     }
     let Ok(slot) = host.slots.clone().try_acquire_owned() else {
-        return refusal(&id, RefusalReason::Busy);
+        return Err(refusal(&id, RefusalReason::Busy));
     };
     let consumed = host
         .control
@@ -211,39 +254,24 @@ async fn dispatch(State(host): State<Arc<Host>>, body: Bytes) -> Response {
         .await;
     let consumed = match consumed {
         Ok(c) if c.invocation_id == id && valid_identifier(&c.fencing_token) => c,
-        Ok(_) => return refusal(&id, RefusalReason::StoreUnavailable),
+        Ok(_) => return Err(refusal(&id, RefusalReason::StoreUnavailable)),
         Err(ControlError::Refused(status)) => {
             tracing::info!(target: "toolgate::audit", invocation_id = %id, status, "Control refused the permit");
-            return refusal(&id, RefusalReason::PermitInvalid);
+            return Err(refusal(&id, RefusalReason::PermitInvalid));
         }
         Err(ControlError::Unavailable(why)) => {
             tracing::warn!(invocation_id = %id, why, "Control unavailable for permit consumption");
-            return refusal(&id, RefusalReason::StoreUnavailable);
+            return Err(refusal(&id, RefusalReason::StoreUnavailable));
         }
     };
     tracing::info!(target: "toolgate::audit", invocation_id = %id, tool_id = %claims.target.tool_id, attempt = claims.attempt, "dispatch admitted");
-
-    let (tx, rx) = mpsc::channel::<Bytes>(2);
-    let admitted = line(&AdmissionResponse {
-        kind: AdmissionKind::Admitted,
-        invocation_id: id.clone(),
-        fencing_token: Some(consumed.fencing_token.clone()),
-        reason: None,
-    });
-    let _ = tx.send(admitted).await;
-    tokio::spawn(execute(
-        host,
+    Ok(Admitted {
         claims,
         prepared,
         dispatch,
-        consumed.fencing_token,
+        fencing_token: consumed.fencing_token,
         slot,
-        tx,
-    ));
-    let stream = futures_util::stream::unfold(rx, |mut rx| async move {
-        rx.recv().await.map(|b| (Ok::<_, std::io::Error>(b), rx))
-    });
-    ndjson(Body::from_stream(stream))
+    })
 }
 
 fn error_frame(code: &str, message: &str, retryable: bool) -> ResultFrame {
@@ -265,16 +293,15 @@ fn error_frame(code: &str, message: &str, retryable: bool) -> ResultFrame {
     }
 }
 
-/// Runs an admitted invocation, reports its outcome to Control, then sends the result line.
-async fn execute(
-    host: Arc<Host>,
-    claims: InvocationPermitClaims,
-    prepared: Prepared,
-    dispatch: Dispatch,
-    fencing_token: String,
-    slot: OwnedSemaphorePermit,
-    tx: mpsc::Sender<Bytes>,
-) {
+/// Runs an admitted invocation and reports its outcome to Control.
+pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
+    let Admitted {
+        claims,
+        prepared,
+        dispatch,
+        fencing_token,
+        slot,
+    } = admitted;
     let id = claims.invocation_id.clone();
     let limits = &host.config.limits;
     let deadline = claims
@@ -438,12 +465,54 @@ async fn execute(
     if let Err(e) = host.control.report(&report).await {
         tracing::warn!(invocation_id = %id, error = ?e, "Control did not take the result report");
     }
-    let _ = tx
-        .send(line(&ResultMessage {
-            invocation_id: id,
-            fencing_token: Some(fencing_token),
-            outcome,
-            result: Some(result),
-        }))
-        .await;
+    ResultMessage {
+        invocation_id: id,
+        fencing_token: Some(fencing_token),
+        outcome,
+        result: Some(result),
+    }
+}
+
+/// How long pull mode waits before asking Control again when nothing is waiting.
+const PULL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Pull mode: takes the calls Control holds for this host and answers each through Control, as
+/// [`dispatch`] answers the Gateway. Until the host is enrolled and registered Control refuses,
+/// and the loop simply asks again later.
+pub async fn pull(host: Arc<Host>) {
+    loop {
+        match host.control.next_dispatch().await {
+            Ok(Some(dispatch)) => {
+                tokio::spawn(answer(host.clone(), dispatch));
+            }
+            Ok(None) => tokio::time::sleep(PULL_INTERVAL).await,
+            Err(e) => {
+                tracing::debug!(error = %e, "no relayed dispatch");
+                tokio::time::sleep(PULL_INTERVAL * 8).await;
+            }
+        }
+    }
+}
+
+async fn answer(host: Arc<Host>, dispatch: Dispatch) {
+    // Control queued the call under the invocation id its permit names; answer under that id even
+    // when the permit is refused, so the Gateway hears the refusal.
+    let id = claimed_id(&dispatch.permit.jws);
+    match admit(&host, dispatch).await {
+        Err(mut refused) => {
+            refused.invocation_id = id;
+            if let Err(e) = host.control.admission(&refused).await {
+                tracing::warn!(invocation_id = %refused.invocation_id, error = %e, "Control did not take the refusal");
+            }
+        }
+        Ok(admitted) => {
+            if let Err(e) = host.control.admission(&admitted.admission()).await {
+                tracing::warn!(invocation_id = %id, error = %e, "Control did not take the admission");
+            }
+            let result = run(host.clone(), admitted).await;
+            if let Err(e) = host.control.relayed_result(&result).await {
+                tracing::warn!(invocation_id = %id, error = %e, "Control did not take the result");
+            }
+        }
+    }
 }

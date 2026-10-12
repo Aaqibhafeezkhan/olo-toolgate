@@ -364,9 +364,11 @@ What happens on each call:
 3. Every route call goes to the host's **broker**, which builds the request from the approved route and destination and adds the credentials. The tool process has no other way out.
 4. The result goes back to the Gateway and to Control's audit record. Revoking a grant hides the tool and blocks further calls immediately.
 
+**Where it runs: local or remote.** A Tool Host can sit next to the Gateway or on any other machine, a laptop behind NAT included: an enrolled host also fetches its calls from Control, so it needs no inbound port. When deploying, name the hosts in *Tool Hosts* (blank means every Tool Host). To move your tool to another machine, deploy the same version again naming that host; calls go there as soon as it holds the package. (API: `hostIds` on the deployment request.) Your code does not change.
+
 What changes for your code between modes: nothing. Globals and claims come from the platform instead of environment variables, secrets are redeemed through handles, route credentials are added by the broker, and business keys are reserved by Control. TCP destinations are not available under a Tool Host yet.
 
-To try the whole path on one machine, the quickstart image (`apps/quickstart`) runs Control, a Gateway and a Tool Host together; `tools/quickstart/check.py` uploads, deploys and calls the starter exactly as above.
+To try the whole path on one machine, the quickstart image (`apps/quickstart`) runs Control, a Gateway and two Tool Hosts together, one of them pull-only; `tools/quickstart/check.py` uploads, deploys and calls the starter exactly as above, then moves it to the other host and calls it again.
 
 ## 14. Rules that keep a tool compatible
 

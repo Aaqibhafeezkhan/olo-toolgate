@@ -3,7 +3,8 @@
 //! Optional bounded Control relay. No agent bearer credential crosses this service boundary.
 use crate::validation::{strict_json, Contracts};
 use olo_toolgate_contracts::v2::{
-    PermitReservationRequest, RequestContext, SignedInvocationPermit,
+    Dispatch, PermitReservationRequest, RequestContext, SignedInvocationPermit,
+    ToolHostDispatchStatus,
 };
 use olo_toolgate_contracts::*;
 use serde::{Deserialize, Serialize};
@@ -78,6 +79,20 @@ pub trait RelayPort: Send + Sync {
     ) -> PortFuture<'a, Result<SignedInvocationPermit, ErrorCode>> {
         Box::pin(async { Err(ErrorCode::Conflict) })
     }
+    /// Hands Control a permitted dispatch for a Tool Host that fetches its calls (pull mode).
+    fn relay_dispatch<'a>(
+        &'a self,
+        _dispatch: &'a Dispatch,
+    ) -> PortFuture<'a, Result<ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
+    /// Where a dispatch handed to Control stands.
+    fn dispatch_status<'a>(
+        &'a self,
+        _invocation_id: &'a str,
+    ) -> PortFuture<'a, Result<ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
     fn ready(&self, now: u64) -> bool;
     fn health(&self) -> PortFuture<'_, Result<(), ErrorCode>>;
     fn catalog<'a>(
@@ -147,6 +162,18 @@ impl HttpRelay {
         request: &T,
         model: &str,
     ) -> Result<R, ErrorCode> {
+        self.exchange(path, Some(request), model, 131072).await
+    }
+    /// A relayed dispatch's status carries the tool's result, up to the 4 MiB output ceiling.
+    const MAX_DISPATCH_STATUS: usize = 8 * 1024 * 1024;
+    /// POSTs `request`, or GETs when there is none, and reads a `model` reply of at most `max` bytes.
+    async fn exchange<T: Serialize, R: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        request: Option<&T>,
+        model: &str,
+        max: usize,
+    ) -> Result<R, ErrorCode> {
         let token = self.token().await?;
         let correlation = crate::digest(
             format!(
@@ -157,24 +184,30 @@ impl HttpRelay {
             .as_bytes(),
         );
         let correlation = &correlation[..32];
-        let body = serde_json::to_vec(request).map_err(|_| ErrorCode::Validation)?;
-        crate::diagnostics::packet(
-            "SEND",
-            path,
-            correlation,
-            None,
-            crate::diagnostics::summary(
-                &serde_json::from_slice(&body).map_err(|_| ErrorCode::Validation)?,
-            ),
-        );
-        let mut response = self
-            .client
-            .post(format!("{}{}", self.config.url.trim_end_matches('/'), path))
+        let url = format!("{}{}", self.config.url.trim_end_matches('/'), path);
+        let builder = match request {
+            Some(request) => {
+                let body = serde_json::to_vec(request).map_err(|_| ErrorCode::Validation)?;
+                crate::diagnostics::packet(
+                    "SEND",
+                    path,
+                    correlation,
+                    None,
+                    crate::diagnostics::summary(
+                        &serde_json::from_slice(&body).map_err(|_| ErrorCode::Validation)?,
+                    ),
+                );
+                self.client
+                    .post(url)
+                    .header("Content-Type", "application/json")
+                    .body(body)
+            }
+            None => self.client.get(url),
+        };
+        let mut response = builder
             .bearer_auth(token)
             .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
             .header("X-Request-ID", correlation)
-            .body(body)
             .send()
             .await
             .map_err(|_| ErrorCode::DependencyUnavailable)?;
@@ -192,7 +225,7 @@ impl HttpRelay {
                 _ => ErrorCode::DependencyUnavailable,
             });
         }
-        if response.content_length().is_some_and(|n| n > 131072)
+        if response.content_length().is_some_and(|n| n > max as u64)
             || response
                 .headers()
                 .get("content-type")
@@ -207,7 +240,7 @@ impl HttpRelay {
             .await
             .map_err(|_| ErrorCode::DependencyUnavailable)?
         {
-            if bytes.len() + chunk.len() > 131072 {
+            if bytes.len() + chunk.len() > max {
                 return Err(ErrorCode::Validation);
             }
             bytes.extend_from_slice(&chunk);
@@ -261,6 +294,38 @@ impl RelayPort for HttpRelay {
             request,
             "SignedInvocationPermit",
         ))
+    }
+    fn relay_dispatch<'a>(
+        &'a self,
+        dispatch: &'a Dispatch,
+    ) -> PortFuture<'a, Result<ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(self.exchange(
+            "/api/control/v1/access/dispatches",
+            Some(dispatch),
+            "ToolHostDispatchStatus",
+            Self::MAX_DISPATCH_STATUS,
+        ))
+    }
+    fn dispatch_status<'a>(
+        &'a self,
+        invocation_id: &'a str,
+    ) -> PortFuture<'a, Result<ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(async move {
+            // Control's invocation ids are path-safe; anything else is not one of them.
+            if !invocation_id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+            {
+                return Err(ErrorCode::Validation);
+            }
+            self.exchange::<(), _>(
+                &format!("/api/control/v1/access/dispatches/{invocation_id}"),
+                None,
+                "ToolHostDispatchStatus",
+                Self::MAX_DISPATCH_STATUS,
+            )
+            .await
+        })
     }
     fn ready(&self, now: u64) -> bool {
         let last = self.last_success.load(Ordering::Acquire);

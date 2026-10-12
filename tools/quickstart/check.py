@@ -69,6 +69,7 @@ def tls(url, context, token=None, body=None, method='GET'):
 
 
 TOOL_HOST='tool-host-local'
+REMOTE_TOOL_HOST='tool-host-remote'
 
 
 def starter_package():
@@ -179,7 +180,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         deadline=time.monotonic()+45
         while True:
             # The Tool Host enrolls too; it is approved with its own gate below.
-            pending=[e for e in ok(api('/api/control/v1/endpoint/enrollments',admin))['items'] if e['deviceId']!=TOOL_HOST]
+            pending=[e for e in ok(api('/api/control/v1/endpoint/enrollments',admin))['items'] if e['deviceId'] not in (TOOL_HOST,REMOTE_TOOL_HOST)]
             if pending:break
             assert time.monotonic()<deadline,'Native executor did not begin enrollment'
             time.sleep(.5)
@@ -309,15 +310,30 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             review=ok(api('/api/control/v1/endpoint/enrollments/review?code='+pending[0]['userCode'],admin))
             ok(api('/api/control/v1/endpoint/enrollments/decision',admin,
                 {'userCode':review['userCode'],'keyFingerprint':review['keyFingerprint'],'choice':'APPROVE'},'POST'))
-        approve(TOOL_HOST)
+        approve(TOOL_HOST);approve(REMOTE_TOOL_HOST)
         owner=tokens['reviewer-2']  # Package upload and deployment are the installation owner's (Super Admin).
         status,raw,_=request(origin+'/api/control/v1/packages/uploads',owner,package,'POST',
             {'Content-Type':'application/vnd.ololabs.toolgate.package+zip','Idempotency-Key':secrets.token_hex(16)})
         assert status==201,(status,raw)
         uploaded=json.loads(raw);digest=uploaded['packageDigest']
         assert ok(api('/api/control/v1/packages',admin))['items'][0]['packageDigest']==digest
-        deployment=ok(api('/api/control/v1/packages/deployments',owner,
-            {'packageDigest':digest,'globals':{'Greeting':'Hi','ItemsApiHost':'items.invalid'}},'POST'))
+        def deploy(host_id):
+            deadline=time.monotonic()+60
+            while True:  # A host can be named once it has registered as a Tool Host.
+                status,value=api('/api/control/v1/packages/deployments',owner,
+                    {'packageDigest':digest,'globals':{'Greeting':'Hi','ItemsApiHost':'items.invalid'},'hostIds':[host_id]},'POST')
+                if status==200:return value
+                assert status==400 and time.monotonic()<deadline,(host_id,status,value)
+                time.sleep(1)
+        def ran_on(host_id):
+            count,after=0,None
+            while True:
+                page=ok(api('/api/control/v1/access/invocations?limit=100'+('&after='+after if after else ''),admin))
+                count+=sum(1 for i in page['items'] if i['evaluation']['context'].get('deviceId')==host_id and i['state']=='SUCCEEDED')
+                after=page.get('nextCursor')
+                if not after:return count
+        deployment=deploy(TOOL_HOST)
+        assert deployment['hostIds']==[TOOL_HOST],deployment
         assert set(deployment['toolIds'])=={'acme.orders/greet','acme.orders/items.get'},deployment
         greet=ok(api('/api/control/v1/tools/acme.orders/greet',admin))
         assert greet['enabled'] is False
@@ -339,12 +355,30 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         assert ok(api('/api/control/v1/endpoint/devices/'+TOOL_HOST,admin))['lastSeenUnixMs']>0
         hosted=ok(mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}}));assert 'result' in hosted,hosted
         assert hosted['result']['structuredContent']=={'text':'Hi, Ada'} and hosted['result']['isError'] is False,hosted
+        def placed(local,remote):  # The host's report settles the invocation just after the call answers.
+            deadline=time.monotonic()+15
+            while (ran_on(TOOL_HOST),ran_on(REMOTE_TOOL_HOST))!=(local,remote):
+                assert time.monotonic()<deadline,('Invocations did not run where deployed',ran_on(TOOL_HOST),ran_on(REMOTE_TOOL_HOST))
+                time.sleep(.5)
+        placed(1,0)
+        # Switch the device: the same version, deployed to the host the Gateway cannot reach. It fetches the call from
+        # Control and answers through it.
+        assert deploy(REMOTE_TOOL_HOST)['hostIds']==[REMOTE_TOOL_HOST]
+        deadline=time.monotonic()+120
+        while True:  # The tool is unavailable until the remote host has fetched the deployment and checked in.
+            status,moved=mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Grace'}})
+            if status==200 and 'result' in moved:break
+            assert status in (200,403),(status,moved)
+            assert time.monotonic()<deadline,('The remote Tool Host never took the call',moved,exec_text('ls','-R','/data/tool-host-remote'))
+            time.sleep(1)
+        assert moved['result']['structuredContent']=={'text':'Hi, Grace'},moved
+        placed(1,1)
         for grant_id in ('orders-service','orders-capability'):
             starter=ok(api('/api/control/v1/grants/'+grant_id,admin))
             reviewed('/api/control/v1/grants/'+grant_id,{**starter,'enabled':False},'PUT',starter['revision'])
         assert ok(mcp('tools/list'))['result']['tools']==[]
         assert mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}})[0]==403
-        mark('Tool Host enrollment/verified package upload/deployment/Gateway permit/Java tool run from the exact package/live revocation')
+        mark('Tool Host enrollment/verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation')
         if gateway_image:
             identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='admin')
             reviewed('/api/control/v1/workload-bindings',dict(id='workload-delegated',name='Verified human delegation',

@@ -156,6 +156,19 @@ public class PostgresStore implements Store {
                 public void saveDeployment(String packageId,String document){write("INSERT INTO control_server_deployments (tenant_id,package_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,package_id) DO UPDATE SET document=excluded.document",packageId,document);}
                 public String toolHost(String deviceId){return text("SELECT document FROM control_tool_hosts WHERE tenant_id=? AND device_id=?",deviceId);}
                 public void saveToolHost(String deviceId,String document){write("INSERT INTO control_tool_hosts (tenant_id,device_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,device_id) DO UPDATE SET document=excluded.document",deviceId,document);}
+                private Relayed relayedRow(String suffix,Object... parameters){
+                    try(var s=statement("SELECT invocation_id,host_id,state,expires_at,document FROM control_tool_host_dispatches WHERE tenant_id=? "+suffix,parameters);var rows=s.executeQuery()){
+                        return rows.next()?new Relayed(rows.getString(1),rows.getString(2),rows.getString(3),rows.getLong(4),rows.getString(5)):null;
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public Relayed relayed(String invocationId){return relayedRow("AND invocation_id=?",invocationId);}
+                public Relayed nextRelayed(String hostId,long now){return relayedRow("AND host_id=? AND state='QUEUED' AND expires_at>? ORDER BY created_at,invocation_id LIMIT 1",hostId,now);}
+                public void saveRelayed(Relayed r){
+                    // Finished dispatches are kept for an hour after their deadline, for the Gateway's last poll.
+                    try(var s=statement("DELETE FROM control_tool_host_dispatches WHERE tenant_id=? AND expires_at<?",System.currentTimeMillis()-3600000L)){s.executeUpdate();}catch(SQLException failure){throw Failure.unavailable();}
+                    write("INSERT INTO control_tool_host_dispatches (tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES (?,?,?,?,?,?,?) ON CONFLICT (tenant_id,invocation_id) DO UPDATE SET state=excluded.state,document=excluded.document",
+                        r.invocationId(),r.hostId(),r.state(),r.expiresAt(),System.currentTimeMillis(),r.document());
+                }
             };
         }
         public McpStore mcp() {

@@ -824,6 +824,8 @@ pub struct PackageDeployment {
     pub globals_digest: String,
     pub tool_ids: Vec<String>,
     pub deployed_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
 }
 /// Current deployments, one per package id.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -837,6 +839,8 @@ pub struct PackageDeploymentPage {
 pub struct PackageDeploymentRequest {
     pub package_digest: String,
     pub globals: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
 }
 /// Enable exactly the reviewed digest with this binding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1572,6 +1576,34 @@ pub struct ToolHostAssignments {
     pub host_id: String,
     pub tools: Vec<ToolHostAssignment>,
     pub deployments: Vec<PackageDeployment>,
+}
+/// Canonical ToolHostDispatchState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolHostDispatchState {
+    #[serde(rename = "QUEUED")]
+    Queued,
+    #[serde(rename = "CLAIMED")]
+    Claimed,
+    #[serde(rename = "ADMITTED")]
+    Admitted,
+    #[serde(rename = "REFUSED")]
+    Refused,
+    #[serde(rename = "FINISHED")]
+    Finished,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+}
+/// A dispatch the Gateway handed to Control for a Tool Host that fetches its calls (pull mode), with the host's admission and result once it has sent them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolHostDispatchStatus {
+    pub invocation_id: String,
+    pub host_id: String,
+    pub state: ToolHostDispatchState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admission: Option<AdmissionResponse>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<ResultMessage>,
 }
 /// Tool Host registration with its workload identity (mTLS).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

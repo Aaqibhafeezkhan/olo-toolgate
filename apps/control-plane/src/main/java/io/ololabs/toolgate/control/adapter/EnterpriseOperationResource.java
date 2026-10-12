@@ -48,6 +48,11 @@ public class EnterpriseOperationResource {
     public Response submit(String document){return reply(operations.submit(gateway(),body(document)));}
     @POST @Path("invocations/reserve") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response reserve(String document){return reply(v2(document,"audience")?packages.permit(gateway(),document,correlation.id()):operations.reserve(gateway(),body(document)));}
+    /** Pull mode: the Gateway hands Control a dispatch for a Tool Host that fetches its calls, then polls for the answer. */
+    @POST @Path("dispatches") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response relay(String document){return reply(packages.relay(gateway(),PackageResource.large(document)));}
+    @GET @Path("dispatches/{id}") @RolesAllowed("toolgate-relay-gateway")
+    public Response relayed(@PathParam("id")String id){return reply(packages.relayed(gateway(),id));}
     @GET @Path("invocations") @io.quarkus.security.Authenticated
     public Response invocations(@QueryParam("after")String after,@QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.page(actors.human(),after,limit));}
     @POST @Path("invocations/{id}/reconciliation") @Consumes("application/json") @io.quarkus.security.Authenticated

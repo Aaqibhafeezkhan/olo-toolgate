@@ -17,8 +17,10 @@ public class PackageResource {
     public static final String PACKAGE_MEDIA_TYPE = "application/vnd.ololabs.toolgate.package+zip";
     @Inject ServerPackages packages;@Inject VerifiedActors actors;@Inject EndpointService endpoints;@Inject RoutingContext routing;@Inject Correlation correlation;
 
-    private static Response reply(Store.Reply reply){return Response.status(reply.status()).header("Cache-Control","no-store").entity(reply.body()).build();}
+    private static Response reply(Store.Reply reply){return reply.status()==204?Response.noContent().header("Cache-Control","no-store").build():Response.status(reply.status()).header("Cache-Control","no-store").entity(reply.body()).build();}
     private static String body(String value){if(value==null||value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>65536)throw Failure.validation();return value;}
+    /** A tool's result frame may carry up to the platform's 4 MiB output ceiling. */
+    static String large(String value){if(value==null||value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>8388608)throw Failure.validation();return value;}
     private java.util.function.Function<Store.Session,io.ololabs.toolgate.contracts.EndpointDeviceRecord> device(){
         if(!routing.request().isSSL())throw new Failure(ErrorCode.UNAUTHORIZED,401,"Direct TLS required");
         java.security.cert.X509Certificate peer;
@@ -45,4 +47,11 @@ public class PackageResource {
     @GET @Path("tool-hosts/packages/{digest}") @Produces(PACKAGE_MEDIA_TYPE)
     public Response content(@PathParam("digest")String digest){return Response.ok(packages.content(tenant(),device(),digest)).header("Cache-Control","no-store").type(PACKAGE_MEDIA_TYPE).build();}
     @GET @Path("tool-hosts/documents/{digest}") public Response document(@PathParam("digest")String digest){return reply(packages.document(tenant(),device(),digest));}
+
+    /** Pull mode: the host's next call, its admission and its result, over the host's own connection. */
+    @POST @Path("tool-hosts/dispatches/next") public Response next(){return reply(packages.next(tenant(),device()));}
+    @POST @Path("tool-hosts/dispatches/{id}/admission") @Consumes("application/json")
+    public Response admission(@PathParam("id")String id,String document){return reply(packages.admission(tenant(),device(),id,body(document)));}
+    @POST @Path("tool-hosts/dispatches/{id}/result") @Consumes("application/json")
+    public Response result(@PathParam("id")String id,String document){return reply(packages.result(tenant(),device(),id,large(document)));}
 }

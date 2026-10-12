@@ -666,6 +666,15 @@
           "type": "object",
           "description": "Global name to value. Undeclared names are refused; a missing global takes its default.",
           "maxProperties": 256
+        },
+        "hostIds": {
+          "type": "array",
+          "description": "The Tool Hosts that run this deployment, by host id. Empty or absent means every registered Tool Host. Moving a tool to another device is a redeploy with another host.",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16,
+          "uniqueItems": true
         }
       },
       "required": [
@@ -709,6 +718,15 @@
         },
         "deployedAtUnixMs": {
           "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "hostIds": {
+          "type": "array",
+          "description": "The Tool Hosts that run this deployment, by host id. Empty or absent means every registered Tool Host. Moving a tool to another device is a redeploy with another host.",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16,
+          "uniqueItems": true
         }
       },
       "required": [
