@@ -43,7 +43,7 @@ One JSON file, refused at startup if anything is wrong.
 | `workDir` | Unpacked packages and one directory per running invocation. Keep the path short: it holds the broker's Unix sockets. |
 | `control` | `{url, clientCertificatePath?, clientKeyPath?, caCertificatePath?, developmentLoopbackHttp?}`. `url` is https, or http to loopback with `developmentLoopbackHttp`. The certificate and key are the host's workload identity; leave them out with `enrollment`. |
 | `enrollment` | `{identityDir, poolId?}`: enroll with Control as a device and fetch assignments (below). `identityDir` holds the device key, its certificate and the check-in sequence. |
-| `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). |
+| `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). A bare name is looked up on the host's `PATH` at startup, because tool processes start with an empty environment. |
 | `limits` | `maxConcurrent`, `maxInputBytes`, `maxOutputBytes`, `syncDeadlineMs`, `memoryBytes`, `maxPermitWindowMs`. Each may only be lowered below the platform ceiling (plan.md §13.5). |
 | `developmentLoopbackHttp` | Lets the broker send plain http to loopback destinations. For development and tests only. |
 

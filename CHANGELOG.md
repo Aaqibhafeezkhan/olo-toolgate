@@ -18,7 +18,9 @@ The project follows semantic versioning once stable versioning begins.
   v2 reserve and is dispatched to the host; Control takes the host's v2 consume and result
   report. The console gains a Server packages page, the quickstart image runs a Tool Host, and
   `tools/quickstart/check.py` uploads and deploys the `toolgate init` starter and calls its
-  Java tool through the Gateway.
+  Java tool through the Gateway, then revokes its grants and checks it disappears. Deploying
+  adds new tools to the default Tool Group, a bare `runtimes.javaPath` is resolved on the host's
+  `PATH` at startup, and the quickstart proxy accepts configuration snapshots up to 2 MiB.
 
 - The Tool Host runs server tools from verified packages (M0 part 13). `apps/tool-host`
   admits a Gateway dispatch only with an RS256 invocation permit Control signed for that host

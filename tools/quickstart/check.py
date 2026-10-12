@@ -337,9 +337,14 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             assert time.monotonic()<deadline,('The Tool Host never reported the starter tools',listed,exec_text('ls','-R','/data/tool-host'))
             time.sleep(1)
         assert ok(api('/api/control/v1/endpoint/devices/'+TOOL_HOST,admin))['lastSeenUnixMs']>0
-        hosted=ok(mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}}))
+        hosted=ok(mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}}));assert 'result' in hosted,hosted
         assert hosted['result']['structuredContent']=={'text':'Hi, Ada'} and hosted['result']['isError'] is False,hosted
-        mark('Tool Host enrollment/verified package upload/deployment/Gateway permit/Java tool run from the exact package')
+        for grant_id in ('orders-service','orders-capability'):
+            starter=ok(api('/api/control/v1/grants/'+grant_id,admin))
+            reviewed('/api/control/v1/grants/'+grant_id,{**starter,'enabled':False},'PUT',starter['revision'])
+        assert ok(mcp('tools/list'))['result']['tools']==[]
+        assert mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}})[0]==403
+        mark('Tool Host enrollment/verified package upload/deployment/Gateway permit/Java tool run from the exact package/live revocation')
         if gateway_image:
             identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='admin')
             reviewed('/api/control/v1/workload-bindings',dict(id='workload-delegated',name='Verified human delegation',

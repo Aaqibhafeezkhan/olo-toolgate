@@ -519,3 +519,18 @@ async fn a_process_that_dies_is_failed_or_unknown_by_the_ledger_class() {
         "OUTCOME_UNKNOWN"
     );
 }
+
+#[test]
+fn bare_runtime_names_resolve_on_the_host_path_because_tools_start_without_one() {
+    use tool_host::config::resolve;
+    let sh = resolve(Path::new("sh"));
+    assert!(sh.is_absolute() && sh.is_file(), "{}", sh.display());
+    assert_eq!(
+        resolve(Path::new("/opt/java/bin/java")),
+        PathBuf::from("/opt/java/bin/java")
+    );
+    assert_eq!(
+        resolve(Path::new("no-such-runtime-xyz")),
+        PathBuf::from("no-such-runtime-xyz")
+    );
+}

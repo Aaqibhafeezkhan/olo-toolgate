@@ -121,6 +121,14 @@ final class ServerPackagesTest {
         directory.mutate(actor, Ids.Kind.TOOL, "acme.orders/items.get", "UPDATE", entry.put("enabled", true).toString(), entry.get("revision").asLong(), "enable-1", "request-8");
         assertTrue(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))).enabled());
 
+        // A configuration export with deployed tools imports again.
+        var snapshot = directory.export(actor, false);
+        var input = "{\"snapshot\":" + snapshot.body() + ",\"mode\":\"REPLACE\",\"dryRun\":true}";
+        assertTrue(directory.importConfig(actor, input, false, snapshot.revision(), "dry-key", "request-9").body().contains("\"applied\":false"));
+        // Shadow evaluation reads the snapshot through the typed model; deployed tools survive that too.
+        var typed = codec.json(codec.model(snapshot.body(), ControlSnapshot.class));
+        codec.input("{\"snapshot\":" + typed + ",\"mode\":\"REPLACE\",\"dryRun\":true}", false, tenant);
+
         // Redeploying keeps the tool's state and moves the deployment to its next revision.
         var again = node(packages.deploy(actor, "{\"packageDigest\":\"" + digest + "\",\"globals\":{\"ItemsApiHost\":\"items2.example.com\"}}", "request-7").body());
         assertEquals(2, again.get("revision").asLong());

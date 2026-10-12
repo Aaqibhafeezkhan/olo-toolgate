@@ -90,6 +90,21 @@ impl Default for Runtimes {
     }
 }
 
+/// Tool processes start with an empty environment, so a bare runtime name such as `java` is
+/// looked up on the host's own `PATH` once, here. A name that is not found is kept as given and
+/// the launch fails with a clear error.
+pub fn resolve(program: &std::path::Path) -> PathBuf {
+    if program.components().count() != 1 {
+        return program.to_path_buf();
+    }
+    std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .map(|dir| dir.join(program))
+        .find(|candidate| candidate.is_file())
+        .unwrap_or_else(|| program.to_path_buf())
+}
+
 /// Host limits. Each is capped by the platform ceiling (plan.md §13.5); a configuration can only lower them.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -126,9 +141,10 @@ impl Default for Limits {
 impl Config {
     pub fn load(path: &std::path::Path) -> Result<Config, String> {
         let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let config: Config =
+        let mut config: Config =
             serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
         config.validate()?;
+        config.runtimes.java_path = resolve(&config.runtimes.java_path);
         Ok(config)
     }
 

@@ -502,9 +502,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if origin is not None and origin != 'http://'+host: raise PermissionError()
             if self.headers.get('Transfer-Encoding') or len(self.path)>2048 or '\\' in self.path or '..' in urllib.parse.unquote(self.path): raise ValueError()
             length = int(self.headers.get('Content-Length','0'))
-            # Packages are the one large body: Control verifies and bounds an upload itself.
-            upload = self.command=='POST' and urllib.parse.urlsplit(self.path).path=='/api/control/v1/packages/uploads'
-            if not 0<=length<=(64*1024*1024 if upload else 65536): raise ValueError()
+            # Packages and whole configuration snapshots are the large bodies; Control verifies and bounds them itself
+            # (a snapshot is at most 1 MiB of records, and deployed tools carry their descriptors).
+            target_path = urllib.parse.urlsplit(self.path).path if self.command=='POST' else ''
+            limit = 64*1024*1024 if target_path=='/api/control/v1/packages/uploads' else 2*1024*1024 if target_path in ('/api/control/v1/config/import','/api/control/v1/access/shadow') else 65536
+            if not 0<=length<=limit: raise ValueError()
             raw = self.rfile.read(length)
             if len(raw)!=length: raise ValueError()
             path = urllib.parse.urlsplit(self.path).path
