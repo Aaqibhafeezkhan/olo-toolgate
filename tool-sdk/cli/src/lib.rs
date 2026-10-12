@@ -15,6 +15,10 @@ pub mod schemas;
 use serde_json::Value;
 use std::fmt;
 
+/// The community guide to building tools with the SDK (`TOOL-SDK-GUIDE.md` at the repository
+/// root), shipped in the binary so `toolgate guide` works offline.
+pub const GUIDE: &str = include_str!("../../../TOOL-SDK-GUIDE.md");
+
 #[derive(Debug)]
 pub enum Error {
     /// A package or archive that fails a verification rule; nothing is repaired.
