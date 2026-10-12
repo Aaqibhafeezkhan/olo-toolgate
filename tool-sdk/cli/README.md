@@ -16,6 +16,7 @@
 | `toolgate dev --digests` | Starts the server, asks `server/discover`, and prints each `toolDescriptorDigest` and the `descriptorSetDigest` (runtime-modes.md §3) |
 | `toolgate check [dir]` | Compiles, runs the unit tests and every `@Example` in test mode, and fails if `toolgate.dev.json` is tracked by git |
 | `toolgate pack [dir] [-o file.tgpkg]` | Builds the package with the project's build, then validates it and prints its digests |
+| `toolgate guide` | Prints the [community guide](../../TOOL-SDK-GUIDE.md) to building tools with the SDK |
 
 `dir` defaults to the current directory. The CLI never compiles code: an adapter per language and build tool ([src/project.rs](src/project.rs)) finds the project by its marker file (`settings.gradle(.kts)`/`build.gradle(.kts)`, `pom.xml`) and runs that build's own tasks (`toolgateDev`, `check`, `toolgatePackage`; `toolgate:dev`, `test`, `package`), using `./gradlew` or `./mvnw` when the project has one. `--build gradle|maven` chooses when a directory has both, and anything after `--` goes to the build tool. The build calls back into this binary to pack (`TOOLGATE_CLI`).
 

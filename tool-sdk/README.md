@@ -6,6 +6,8 @@
 
 **Status:** milestone M0 ([implementation plan](../docs/sdk-plan/implementation-plan.md)). The normative specification (gate D0) and the conformance cases (gate D3) are here, with the `toolgate` CLI packager and the Java authoring API, descriptor processor and standalone runtime. The Java SDK is complete for standalone use, with its Gradle and Maven plugins and a starter that `toolgate init` writes. The Tool Host, the governed path through the Gateway, and the other language SDKs follow.
 
+New to the SDK? Start with the [community guide](../TOOL-SDK-GUIDE.md), from `toolgate init` to a governed MCP call.
+
 ## Layout
 
 | Path | Contents | Gate |

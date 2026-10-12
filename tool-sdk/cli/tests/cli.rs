@@ -74,3 +74,14 @@ fn digest_and_equivalent() {
     ]);
     assert_eq!(1, code);
 }
+
+#[test]
+fn guide_prints_the_bundled_community_guide() {
+    let (code, out) = toolgate(&["guide"]);
+    assert_eq!(0, code, "{out}");
+    assert_eq!(
+        std::fs::read_to_string(root().join("TOOL-SDK-GUIDE.md")).unwrap(),
+        out
+    );
+    assert_eq!(2, toolgate(&["guide", "extra"]).0);
+}

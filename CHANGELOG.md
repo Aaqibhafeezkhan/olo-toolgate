@@ -22,6 +22,11 @@ The project follows semantic versioning once stable versioning begins.
   quickstart image runs a second, pull-only Tool Host, and `tools/quickstart/check.py` calls the
   starter tool on the first host, redeploys it to the second and calls it again there.
 
+- A community guide to building MCP tools with the Tool SDK, `TOOL-SDK-GUIDE.md` at the
+  repository root. It covers authoring, values, routes, errors, effects, testing, standalone use,
+  packaging and running under ToolGate. The same file ships in the `toolgate-sdk-api` jar as
+  `META-INF/toolgate/TOOL-SDK-GUIDE.md` and prints with `toolgate guide`.
+
 - Java server tools run end to end through `/mcp` (M0 part 14). Control takes a `.tgpkg` at
   `POST /api/control/v1/packages/uploads` (Super Admin), applies the packager's archive rules,
   CHECKSUMS and descriptor digests, and stores the exact bytes; `POST .../packages/deployments`
