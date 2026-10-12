@@ -25,7 +25,9 @@ final class ServerPackagesTest {
     @TempDir Path directory;
 
     /** A package as `toolgate pack` lays it out: one Java tool with a global and a brokered destination. */
-    static Map<String, byte[]> files() throws Exception {
+    static Map<String, byte[]> files() throws Exception { return files(false); }
+    /** split: the tool also needs a zip of libraries, which a Java tool may not. */
+    static Map<String, byte[]> files(boolean split) throws Exception {
         var descriptor = (ObjectNode) JSON.readTree("""
             {"descriptorGeneration":1,"toolId":"acme.orders/items.get","mcpName":"orders.items.get","kind":"TOOL","title":"Get item",
              "description":"Gets one item.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},
@@ -42,11 +44,15 @@ final class ServerPackagesTest {
              "compatibility":{},"runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],"credentialReferences":[],"connections":[],"composition":[],
              "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""");
         var tool = manifest.putArray("tools").addObject(); tool.set("descriptor", descriptor); tool.put("toolDescriptorDigest", digest).put("runtimeId", "jvm"); tool.putArray("artifactIds").add("app");
-        manifest.putArray("artifacts").addObject().put("artifactId", "app").put("path", "artifacts/app.jar").put("runtimeId", "jvm").put("artifactDigest", Canonical.sha256(jar)).put("sizeBytes", jar.length);
+        manifest.putArray("artifacts").addObject().put("artifactId", "app").put("path", "artifacts/app.jar").put("mediaType", "application/java-archive").put("runtimeId", "jvm").put("artifactDigest", Canonical.sha256(jar)).put("sizeBytes", jar.length);
+        if (split) {
+            ((com.fasterxml.jackson.databind.node.ArrayNode) tool.get("artifactIds")).add("libs");
+            ((com.fasterxml.jackson.databind.node.ArrayNode) manifest.get("artifacts")).addObject().put("artifactId", "libs").put("path", "artifacts/libs.zip").put("mediaType", "application/zip").put("runtimeId", "jvm").put("artifactDigest", Canonical.sha256(jar)).put("sizeBytes", jar.length);
+        }
         var set = JSON.createArrayNode(); set.addObject().put("toolId", "acme.orders/items.get").put("toolDescriptorDigest", digest);
         manifest.put("descriptorSetDigest", Canonical.digest(set));
         var files = new TreeMap<String, byte[]>();
-        files.put("artifacts/app.jar", jar); files.put("tools/items.get.json", canonical); files.put("toolgate-package.json", JSON.writeValueAsBytes(manifest));
+        files.put("artifacts/app.jar", jar); files.put("tools/items.get.json", canonical); if (split) files.put("artifacts/libs.zip", jar); files.put("toolgate-package.json", JSON.writeValueAsBytes(manifest));
         var checksums = new StringBuilder();
         for (var e : files.entrySet()) checksums.append(Canonical.sha256(e.getValue()).substring(7)).append("  ").append(e.getKey()).append('\n');
         files.put("CHECKSUMS.sha256", checksums.toString().getBytes(StandardCharsets.UTF_8));
@@ -73,6 +79,8 @@ final class ServerPackagesTest {
         assertEquals(400, assertThrows(Failure.class, () -> PackageArchive.validate(zip(tampered), document -> (JsonNode) codec.value(document))).status());
         var extra = new TreeMap<>(files); extra.put("notes.txt", new byte[1]);
         assertThrows(Failure.class, () -> PackageArchive.validate(zip(extra), document -> (JsonNode) codec.value(document)));
+        // A Java tool is one self-contained jar: a device needs only a JRE.
+        assertThrows(Failure.class, () -> PackageArchive.validate(zip(files(true)), document -> (JsonNode) codec.value(document)));
         var traversal = new TreeMap<>(files); traversal.put("../evil", new byte[1]);
         assertThrows(Failure.class, () -> PackageArchive.validate(zip(traversal), document -> (JsonNode) codec.value(document)));
         // RFC 8785: ECMAScript numbers, UTF-16 key order; arguments are not NFC-normalised.

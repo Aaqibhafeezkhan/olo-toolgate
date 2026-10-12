@@ -28,7 +28,8 @@ pub enum Ran {
 /// What a launcher needs to start the tool.
 pub struct Launch<'a> {
     pub runtime_id: &'a str,
-    pub package_dir: &'a Path,
+    /// The tool's self-contained executable: for the JVM, a fat jar.
+    pub executable: &'a Path,
     pub entry_point: &'a str,
     pub sandbox_dir: &'a Path,
     pub broker_socket: &'a Path,
@@ -42,12 +43,6 @@ fn command(launch: &Launch<'_>) -> Result<tokio::process::Command, String> {
     match launch.runtime_id {
         "jvm" => {
             let mut c = tokio::process::Command::new(launch.java_path);
-            let lib = launch.package_dir.join("lib").join("*");
-            let class_path = format!(
-                "{}:{}",
-                launch.package_dir.join("app.jar").display(),
-                lib.display()
-            );
             c.arg(format!(
                 "-Xmx{}m",
                 (launch.memory_bytes / (1024 * 1024)).max(16)
@@ -59,7 +54,7 @@ fn command(launch: &Launch<'_>) -> Result<tokio::process::Command, String> {
                 launch.sandbox_dir.join("tmp").display()
             ))
             .arg("-cp")
-            .arg(class_path)
+            .arg(launch.executable)
             .arg(launch.entry_point);
             Ok(c)
         }

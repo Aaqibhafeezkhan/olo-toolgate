@@ -14,6 +14,8 @@ COPY apps/endpoint-client/src apps/endpoint-client/src
 COPY apps/tool-host/Cargo.toml apps/tool-host/Cargo.toml
 COPY apps/tool-host/src apps/tool-host/src
 COPY tool-sdk/cli tool-sdk/cli
+# The CLI embeds the community guide for `toolgate guide`.
+COPY TOOL-SDK-GUIDE.md TOOL-SDK-GUIDE.md
 COPY packages/contracts/tools packages/contracts/tools
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-gateway-musl-${TARGETARCH},target=/src/target,sharing=locked \

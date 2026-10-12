@@ -11,27 +11,36 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 /**
  * Writes the staging directory {@code toolgate pack} turns into a {@code .tgpkg} (tool-sdk/cli/README.md): the
- * {@code toolgate-package.json} source manifest, the tool jar as {@code artifacts/app.jar} and its runtime
- * dependencies as {@code artifacts/libs.zip}. Digests are left to the packer. The Tool Host runs every tool with
- * {@code app.jar} and the jars in {@code libs.zip} on the class path and the standalone runtime's {@code Main} as the
- * entry point, the same server {@code toolgateDev} starts.
+ * {@code toolgate-package.json} source manifest and one self-contained executable, {@code artifacts/tool.jar}, a fat
+ * jar of the tool jar and every runtime dependency whose {@code Main-Class} is the standalone runtime's {@code Main}.
+ * Digests are left to the packer. A device needs only a JRE: the Tool Host runs it with {@code java -cp tool.jar Main},
+ * and {@code java -jar tool.jar} serves the same tools over stdio as a plain MCP server, as {@code toolgateDev} does.
  */
 public final class Staging {
     public static final String MANIFEST = "toolgate-package.json";
@@ -44,6 +53,7 @@ public final class Staging {
     private static final Pattern SEMVER = Pattern.compile(
             "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?"
                     + "(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
+    public static final String TOOL_JAR = "artifacts/tool.jar";
     /** A fixed date for every zip entry, so the same jars give the same bytes. */
     private static final long ZIP_TIME = 315_532_800_000L;
 
@@ -75,8 +85,7 @@ public final class Staging {
 
         delete(out);
         Files.createDirectories(out.resolve("artifacts"));
-        Files.copy(appJar, out.resolve("artifacts/app.jar"));
-        writeLibraries(libraries, out.resolve("artifacts/libs.zip"));
+        writeFatJar(appJar, libraries, out.resolve(TOOL_JAR));
 
         Properties sdk = sdkProperties();
         ObjectNode m = JSON.createObjectNode();
@@ -98,12 +107,9 @@ public final class Staging {
             t.set("descriptor", d);
             t.put("runtimeId", RUNTIME_ID);
             t.put("entryPoint", ENTRY_POINT);
-            t.putArray("artifactIds").add("app").add("libs");
+            t.putArray("artifactIds").add("tool");
         }
-        ArrayNode artifacts = m.putArray("artifacts");
-        artifacts.addObject().put("artifactId", "app").put("path", "artifacts/app.jar").put("mediaType", "application/java-archive")
-                .put("runtimeId", RUNTIME_ID);
-        artifacts.addObject().put("artifactId", "libs").put("path", "artifacts/libs.zip").put("mediaType", "application/zip")
+        m.putArray("artifacts").addObject().put("artifactId", "tool").put("path", TOOL_JAR).put("mediaType", "application/java-archive")
                 .put("runtimeId", RUNTIME_ID);
         m.putArray("credentialReferences");
         m.putArray("connections");
@@ -133,25 +139,102 @@ public final class Staging {
         }
     }
 
-    /** A deterministic zip of the libraries under {@code lib/}: entries sorted, stored dates fixed. */
-    private static void writeLibraries(List<Path> libraries, Path zip) throws IOException {
-        Map<String, Path> byName = new TreeMap<>();
-        for (Path lib : libraries) {
-            if (!Files.isRegularFile(lib)) throw new IllegalArgumentException("a runtime library must be a jar, not " + lib);
-            Path prior = byName.put(lib.getFileName().toString(), lib);
-            if (prior != null && !Files.isSameFile(prior, lib)) {
-                throw new IllegalArgumentException("two runtime libraries are both named " + lib.getFileName() + ": " + prior + " and " + lib);
+    /**
+     * One deterministic fat jar: the tool jar's entries, then each library's, in class-path order. A resource two jars
+     * both carry is taken from the first, except {@code META-INF/services} files, whose providers are merged. Two
+     * different copies of one class are refused, since either choice could break the tool. Signatures, indexes,
+     * {@code module-info} and the libraries' manifests are dropped; entries are sorted and dated alike.
+     */
+    static void writeFatJar(Path appJar, List<Path> libraries, Path target) throws IOException {
+        Map<String, byte[]> entries = new TreeMap<>();
+        Map<String, Path> origin = new TreeMap<>();
+        Map<String, Set<String>> services = new TreeMap<>();
+        Set<Path> seen = new LinkedHashSet<>();
+        boolean multiRelease = false;
+        List<Path> jars = new ArrayList<>();
+        jars.add(appJar);
+        jars.addAll(libraries);
+        for (Path jarPath : jars) {
+            if (!Files.isRegularFile(jarPath)) throw new IllegalArgumentException("a runtime library must be a jar, not " + jarPath);
+            if (!seen.add(jarPath.toAbsolutePath().normalize())) continue;
+            try (JarFile jar = new JarFile(jarPath.toFile(), false)) {
+                Manifest manifest = jar.getManifest();
+                if (manifest != null && "true".equalsIgnoreCase(manifest.getMainAttributes().getValue("Multi-Release"))) multiRelease = true;
+                for (ZipEntry entry : java.util.Collections.list(jar.entries())) {
+                    String name = entry.getName();
+                    if (entry.isDirectory() || dropped(name)) continue;
+                    byte[] bytes;
+                    try (InputStream in = jar.getInputStream(entry)) {
+                        bytes = in.readAllBytes();
+                    }
+                    if (name.startsWith("META-INF/services/") && name.indexOf('/', 18) < 0) {
+                        Set<String> providers = services.computeIfAbsent(name, k -> new LinkedHashSet<>());
+                        for (String line : new String(bytes, StandardCharsets.UTF_8).split("\\R")) {
+                            String provider = line.replaceFirst("#.*", "").trim();
+                            if (!provider.isEmpty()) providers.add(provider);
+                        }
+                        continue;
+                    }
+                    byte[] prior = entries.putIfAbsent(name, bytes);
+                    if (prior == null) {
+                        origin.put(name, jarPath);
+                    } else if (name.endsWith(".class") && !Arrays.equals(prior, bytes)) {
+                        throw new IllegalArgumentException("two different copies of " + name + ", in " + origin.get(name) + " and " + jarPath
+                                + "; exclude one of the dependencies so the tool runs one version");
+                    }
+                }
+            } catch (ZipException e) {
+                throw new IllegalArgumentException("a runtime library must be a jar, not " + jarPath, e);
             }
         }
-        try (OutputStream file = Files.newOutputStream(zip); ZipOutputStream out = new ZipOutputStream(file)) {
-            for (Map.Entry<String, Path> lib : byName.entrySet()) {
-                ZipEntry entry = new ZipEntry("lib/" + lib.getKey());
+        for (Map.Entry<String, Set<String>> service : services.entrySet()) {
+            entries.put(service.getKey(), (String.join("\n", service.getValue()) + "\n").getBytes(StandardCharsets.UTF_8));
+        }
+
+        Manifest manifest = new Manifest();
+        Attributes main = manifest.getMainAttributes();
+        main.put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        main.put(Attributes.Name.MAIN_CLASS, ENTRY_POINT);
+        main.putValue("Created-By", "ToolGate SDK " + sdkProperties().getProperty("sdkVersion"));
+        if (multiRelease) main.put(Attributes.Name.MULTI_RELEASE, "true");
+        Map<String, byte[]> ordered = new LinkedHashMap<>();
+        java.io.ByteArrayOutputStream manifestBytes = new java.io.ByteArrayOutputStream();
+        manifest.write(manifestBytes);
+        ordered.put(JarFile.MANIFEST_NAME, manifestBytes.toByteArray());
+        ordered.putAll(entries);
+        Set<String> directories = new java.util.TreeSet<>();
+        for (String name : ordered.keySet()) {
+            for (int slash = name.indexOf('/'); slash >= 0; slash = name.indexOf('/', slash + 1)) directories.add(name.substring(0, slash + 1));
+        }
+        try (OutputStream file = Files.newOutputStream(target); ZipOutputStream out = new ZipOutputStream(file)) {
+            // META-INF/ and the manifest come first, as JarInputStream expects.
+            List<String> names = new ArrayList<>();
+            names.add("META-INF/");
+            names.add(JarFile.MANIFEST_NAME);
+            for (String directory : directories) if (!directory.equals("META-INF/")) names.add(directory);
+            for (String name : entries.keySet()) names.add(name);
+            names.sort(Comparator.comparing((String n) -> n.equals("META-INF/") ? 0 : n.equals(JarFile.MANIFEST_NAME) ? 1 : 2)
+                    .thenComparing(n -> n));
+            for (String name : names) {
+                ZipEntry entry = new ZipEntry(name);
                 entry.setTime(ZIP_TIME);
                 out.putNextEntry(entry);
-                Files.copy(lib.getValue(), out);
+                if (!name.endsWith("/")) out.write(ordered.get(name));
                 out.closeEntry();
             }
         }
+    }
+
+    /** Entries a fat jar must not carry from its parts. */
+    private static boolean dropped(String name) {
+        String upper = name.toUpperCase(java.util.Locale.ROOT);
+        if (upper.equals("META-INF/MANIFEST.MF") || upper.equals("META-INF/INDEX.LIST")) return true;
+        if (name.equals("module-info.class") || name.endsWith("/module-info.class")) return true;
+        if (upper.startsWith("META-INF/") && upper.indexOf('/', 9) < 0
+                && (upper.endsWith(".SF") || upper.endsWith(".RSA") || upper.endsWith(".DSA") || upper.endsWith(".EC") || upper.startsWith("META-INF/SIG-"))) {
+            return true;
+        }
+        return false;
     }
 
     static void delete(Path dir) throws IOException {

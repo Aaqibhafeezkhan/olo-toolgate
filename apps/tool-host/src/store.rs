@@ -35,8 +35,8 @@ pub enum StoreError {
 pub struct Prepared {
     pub tool: ToolDefinition,
     pub runtime: RuntimeDeclaration,
-    /// The unpacked package for the runtime's launcher.
-    pub package_dir: PathBuf,
+    /// The tool's one self-contained executable in the unpacked package: for the JVM, a fat jar.
+    pub executable: PathBuf,
     pub profile: ServiceProfile,
     pub globals: BTreeMap<String, Value>,
     /// The permit's routes, from the service profile.
@@ -125,10 +125,12 @@ impl Store {
             )));
         }
 
-        let entry = tool
-            .artifact_ids
-            .first()
-            .ok_or_else(|| not_present("the tool has no artifact"))?;
+        // A tool runs from one self-contained artifact, so a device needs nothing but the runtime.
+        let [entry] = tool.artifact_ids.as_slice() else {
+            return Err(not_present(
+                "the tool must run from one self-contained artifact",
+            ));
+        };
         let artifact = manifest["artifacts"]
             .as_array()
             .into_iter()
@@ -142,6 +144,17 @@ impl Store {
                 "the entry artifact digest differs from the permit",
             ));
         }
+        if runtime.runtime_id == "jvm"
+            && artifact.get("mediaType").and_then(Value::as_str) != Some("application/java-archive")
+        {
+            return Err(not_present("a JVM tool must run from one jar"));
+        }
+        let executable = package_dir.join(artifact_name(
+            artifact
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        ));
 
         let profile = self.document(
             "profiles",
@@ -178,7 +191,7 @@ impl Store {
         Ok(Prepared {
             tool,
             runtime,
-            package_dir,
+            executable,
             profile,
             globals,
             routes,
@@ -239,37 +252,23 @@ impl Store {
     }
 }
 
-/// Lays out a verified package for its runtime: every artifact under its package path, and for
-/// the JVM the jars of `libs.zip` under `lib/`. The manifest is written last; it marks the
-/// directory complete.
+/// The file name an artifact is unpacked under.
+fn artifact_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+/// Lays out a verified package for its runtime: every artifact under its file name. The manifest
+/// is written last; it marks the directory complete.
 fn unpack(verified: &package::Verified, dir: &Path) -> Result<(), StoreError> {
     let io = |e: std::io::Error| StoreError::Unavailable(format!("{}: {e}", dir.display()));
-    std::fs::create_dir_all(dir.join("lib")).map_err(io)?;
+    std::fs::create_dir_all(dir).map_err(io)?;
     for artifact in verified.manifest["artifacts"]
         .as_array()
         .into_iter()
         .flatten()
     {
         let path = artifact["path"].as_str().unwrap_or_default();
-        let bytes = &verified.files[path];
-        let name = path.rsplit('/').next().unwrap_or(path);
-        if artifact.get("mediaType").and_then(Value::as_str) == Some("application/zip") {
-            let libs = toolgate_cli::archive::read(bytes)
-                .map_err(|e| not_present(format!("{path} is {e}")))?;
-            for (entry, jar) in libs.files {
-                let Some(file) = entry
-                    .strip_prefix("lib/")
-                    .filter(|f| !f.is_empty() && !f.contains('/'))
-                else {
-                    return Err(not_present(format!(
-                        "{path} has an entry outside lib/: {entry}"
-                    )));
-                };
-                std::fs::write(dir.join("lib").join(file), jar).map_err(io)?;
-            }
-        } else {
-            std::fs::write(dir.join(name), bytes).map_err(io)?;
-        }
+        std::fs::write(dir.join(artifact_name(path)), &verified.files[path]).map_err(io)?;
     }
     let manifest = serde_json::to_vec(&verified.manifest)
         .map_err(|e| StoreError::Unavailable(e.to_string()))?;

@@ -312,15 +312,14 @@ To use it from an MCP client that launches servers over stdio, give the client t
 }
 ```
 
-**In production, standalone:** put the built jar, the SDK runtime and its dependencies on the class path and run `io.ololabs.toolgate.runtime.Main`. The package's `artifacts/app.jar` and `artifacts/libs.zip` are exactly that.
+**In production, standalone:** the package's `artifacts/tool.jar` is one self-contained executable: your code, the SDK runtime and every dependency in a single fat jar. A machine needs only a Java 17+ runtime to run it.
 
 ```sh
-unzip -q build/toolgate/orders-0.1.0.tgpkg -d orders-pkg
-unzip -q orders-pkg/artifacts/libs.zip -d orders-pkg
+unzip -q build/toolgate/orders-0.1.0.tgpkg artifacts/tool.jar -d orders-pkg
 TOOLGATE_GLOBAL_GREETING=Hello \
 TOOLGATE_DESTINATION_ITEMSAPIHOST=items.example.com \
 TOOLGATE_SECRET_ITEMSAPIKEY=... \
-java -cp "orders-pkg/artifacts/app.jar:orders-pkg/lib/*" io.ololabs.toolgate.runtime.Main
+java -jar orders-pkg/artifacts/tool.jar
 ```
 
 | Variable | Meaning |
@@ -340,7 +339,9 @@ toolgate validate build/toolgate/orders-0.1.0.tgpkg
 toolgate verify   build/toolgate/orders-0.1.0.tgpkg   # prints packageDigest
 ```
 
-`pack` runs your build, then writes a deterministic archive: the manifest, a canonical descriptor per tool, your artifacts and `CHECKSUMS.sha256`. It validates its own output. The `packageDigest` is the SHA-256 of the checksums file, so it identifies the exact package. Administrators allow packages by that digest.
+`pack` runs your build, then writes a deterministic archive: the manifest, a canonical descriptor per tool, your executable and `CHECKSUMS.sha256`.
+
+For Java the executable is `artifacts/tool.jar`, a fat jar of your jar and its whole runtime class path, with `Main-Class` set, so a device needs only a JRE. Merging follows a few rules: your jar comes first, then dependencies in class-path order, and the first copy of a resource wins; `META-INF/services` files are merged; signatures, `module-info` and the dependencies' manifests are dropped. Two *different* copies of one class stop the build, naming both jars, because either choice could break the tool at run time; exclude one of the dependencies. ToolGate refuses a Java tool that needs anything besides its one jar. It validates its own output. The `packageDigest` is the SHA-256 of the checksums file, so it identifies the exact package. Administrators allow packages by that digest.
 
 Optional files under `marketplace/` (`listing.json`, `README.md`, `CHANGELOG.md`, `icon.png`), `tests/self-tests.json` and `sbom/cyclonedx.json` in the staging directory are included as well.
 
@@ -392,6 +393,7 @@ To try the whole path on one machine, the quickstart image (`apps/quickstart`) r
 | `CLAIMS_UNAVAILABLE` | The tool reads a claim but the call has no verified identity (stdio has none). Use HTTP with `TOOLGATE_AUTH_*`, or the dev file's `claims` in development. |
 | `UNDECLARED_ERROR` | A `ToolBusinessError` code isn't in the tool's `errors`. |
 | Tool missing from `tools/list` under ToolGate | Check, in order: deployed, enabled, package digest allowed in the binding, `invoke` granted, and a Tool Host reporting the tool. |
+| `pack` fails with "two different copies of …class" | Two dependencies carry different versions of one class. Exclude one in your build (`exclude(...)` in Gradle, `<exclusions>` in Maven) so the fat jar holds one version. |
 | `toolgate check` fails on `toolgate.dev.json` | It's tracked by git. `git rm --cached toolgate.dev.json`. |
 
 ## 16. Reference

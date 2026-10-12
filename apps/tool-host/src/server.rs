@@ -392,7 +392,7 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 });
             let launch = Launch {
                 runtime_id: &prepared.runtime.runtime_id,
-                package_dir: &prepared.package_dir,
+                executable: &prepared.executable,
                 entry_point: &input.entry_point,
                 sandbox_dir: &sandbox,
                 broker_socket: &socket,

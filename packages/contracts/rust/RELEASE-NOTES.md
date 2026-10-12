@@ -13,6 +13,15 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Java tools ship as one self-contained executable. `toolgatePackage` and the Maven `package`
+  goal stage `artifacts/tool.jar`, a deterministic fat jar of the tool jar and its whole runtime
+  class path with `Main-Class: io.ololabs.toolgate.runtime.Main`, in place of `app.jar` and
+  `libs.zip`; a device needs only a JRE, and `java -jar tool.jar` serves the tools over stdio.
+  Resources go to the first jar that has them, `META-INF/services` files are merged, signatures
+  and `module-info` are dropped, and two different copies of one class fail the build. The
+  packager, Control and the Tool Host refuse a Java tool that names anything but one jar, so the
+  permit's pinned artifact digest now covers everything the tool runs.
+
 - Server tools run on any Tool Host, local or remote, and move by switching the device (M0
   part 15). A deployment may name its Tool Hosts (`hostIds` on `PackageDeploymentRequest` and
   `PackageDeployment`; none means every host); Control's placement sends a call only to a host

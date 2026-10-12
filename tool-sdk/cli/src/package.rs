@@ -225,10 +225,21 @@ pub fn validate(data: &[u8]) -> Result<Report, Error> {
         .flatten()
         .filter_map(|r| r.get("runtimeId").and_then(Value::as_str))
         .collect();
+    let java: BTreeSet<&str> = manifest["runtimes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|r| r.get("language").and_then(Value::as_str) == Some("java"))
+        .filter_map(|r| r.get("runtimeId").and_then(Value::as_str))
+        .collect();
+    let mut jars = BTreeSet::new();
     let mut artifact_ids = BTreeSet::new();
     let mut artifact_paths = BTreeSet::new();
     for artifact in manifest["artifacts"].as_array().into_iter().flatten() {
         let id = str_at(artifact, "artifactId")?;
+        if artifact.get("mediaType").and_then(Value::as_str) == Some("application/java-archive") {
+            jars.insert(id);
+        }
         let path = str_at(artifact, "path")?;
         if !artifact_ids.insert(id) || !artifact_paths.insert(path) {
             return Err(reject(format!("duplicate artifact {id:?}")));
@@ -300,6 +311,17 @@ pub fn validate(data: &[u8]) -> Result<Report, Error> {
         if let Some(runtime) = tool.get("runtimeId").and_then(Value::as_str) {
             if !runtimes.contains(runtime) {
                 return Err(reject(format!("{tool_id}: undeclared runtime {runtime:?}")));
+            }
+            // A Java tool is one self-contained jar, so a device needs only a JRE to run it.
+            if java.contains(runtime) {
+                match tool["artifactIds"].as_array().map(Vec::as_slice) {
+                    Some([only]) if only.as_str().is_some_and(|id| jars.contains(id)) => {}
+                    _ => {
+                        return Err(reject(format!(
+                            "{tool_id}: a Java tool must run from one self-contained jar"
+                        )))
+                    }
+                }
             }
         }
         digests.push((tool_id.to_owned(), digest));

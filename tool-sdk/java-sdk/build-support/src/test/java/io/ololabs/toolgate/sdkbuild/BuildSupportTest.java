@@ -43,13 +43,45 @@ class BuildSupportTest {
     }
 
     static Path library(String name) throws IOException {
+        return library(name, Map.of("lib/" + name + ".txt", "fixture " + name));
+    }
+
+    /** A dependency jar with these entries, signed-looking and with its own manifest, as published jars often are. */
+    static Path library(String name, Map<String, String> entries) throws IOException {
         Path lib = Files.createTempDirectory("toolgate-lib").resolve(name);
-        Files.write(lib, ("fixture " + name).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        java.util.jar.Manifest manifest = new java.util.jar.Manifest();
+        manifest.getMainAttributes().put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+        manifest.getMainAttributes().put(java.util.jar.Attributes.Name.MAIN_CLASS, "some.Other");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(lib), manifest)) {
+            for (Map.Entry<String, String> e : new java.util.TreeMap<>(Map.of("META-INF/LIB.SF", "signature", "module-info.class", "module"))
+                    .entrySet()) {
+                out.putNextEntry(new JarEntry(e.getKey()));
+                out.write(e.getValue().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            for (Map.Entry<String, String> e : new java.util.TreeMap<>(entries).entrySet()) {
+                out.putNextEntry(new JarEntry(e.getKey()));
+                out.write(e.getValue().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        }
         return lib;
     }
 
+    static List<String> names(Path jar) throws IOException {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            List<String> names = new java.util.ArrayList<>();
+            java.util.Collections.list(zip.entries()).forEach(e -> names.add(e.getName()));
+            return names;
+        }
+    }
+
+    static String text(Path jar, String name) throws IOException {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            return new String(zip.getInputStream(zip.getEntry(name)).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
     @Test
-    void stagingWritesTheSourceManifestAndBothArtifacts() throws Exception {
+    void stagingWritesTheSourceManifestAndOneSelfContainedJar() throws Exception {
         Path out = Files.createTempDirectory("toolgate-staging");
         Staging.stage(appJar(), List.of(library("b.jar"), library("a.jar")), "1.2.0", out);
         JsonNode m = Staging.JSON.readTree(out.resolve("toolgate-package.json").toFile());
@@ -62,14 +94,40 @@ class BuildSupportTest {
         JsonNode tool = m.path("tools").get(0);
         assertEquals("acme.stock/stock.level", tool.path("descriptor").path("toolId").asText());
         assertEquals(Staging.ENTRY_POINT, tool.path("entryPoint").asText());
-        assertEquals("[\"app\",\"libs\"]", tool.path("artifactIds").toString());
+        assertEquals("[\"tool\"]", tool.path("artifactIds").toString());
+        assertEquals("[{\"artifactId\":\"tool\",\"path\":\"artifacts/tool.jar\",\"mediaType\":\"application/java-archive\",\"runtimeId\":\"jvm\"}]",
+                m.path("artifacts").toString());
         assertFalse(tool.has("toolDescriptorDigest"), "digests are the packer's");
-        assertTrue(Files.isRegularFile(out.resolve("artifacts/app.jar")));
-        try (ZipFile libs = new ZipFile(out.resolve("artifacts/libs.zip").toFile())) {
-            List<String> names = new java.util.ArrayList<>();
-            java.util.Collections.list(libs.entries()).forEach(e -> names.add(e.getName()));
-            assertEquals(List.of("lib/a.jar", "lib/b.jar"), names);
+        try (Stream<Path> files = Files.walk(out.resolve("artifacts"))) {
+            assertEquals(List.of(out.resolve(Staging.TOOL_JAR)), files.filter(Files::isRegularFile).collect(Collectors.toList()));
         }
+        Path fat = out.resolve(Staging.TOOL_JAR);
+        List<String> names = names(fat);
+        assertEquals(List.of("META-INF/", "META-INF/MANIFEST.MF"), names.subList(0, 2), "the manifest leads, as JarInputStream expects");
+        assertTrue(names.contains("lib/a.jar.txt") && names.contains("lib/b.jar.txt"), names.toString());
+        assertTrue(names.contains("META-INF/toolgate/package.json") && names.contains("acme/stock/StockTools.class"), names.toString());
+        assertFalse(names.contains("META-INF/LIB.SF") || names.contains("module-info.class"), "signatures and module descriptors are dropped");
+        assertTrue(text(fat, "META-INF/MANIFEST.MF").contains("Main-Class: " + Staging.ENTRY_POINT), "java -jar serves the tools");
+        try (java.util.jar.JarInputStream in = new java.util.jar.JarInputStream(Files.newInputStream(fat))) {
+            assertEquals(Staging.ENTRY_POINT, in.getManifest().getMainAttributes().getValue("Main-Class"));
+        }
+    }
+
+    @Test
+    void theFatJarMergesServicesAndRefusesTwoVersionsOfAClass() throws Exception {
+        Path a = library("a.jar", Map.of("META-INF/services/x.Spi", "a.Impl\n# comment\n", "shared.txt", "from a", "p/Same.class", "same"));
+        Path b = library("b.jar", Map.of("META-INF/services/x.Spi", "b.Impl\na.Impl\n", "shared.txt", "from b", "p/Same.class", "same"));
+        Path out = Staging.stage(appJar(), List.of(a, b), "1.0.0", Files.createTempDirectory("toolgate-fat"));
+        Path fat = out.resolve(Staging.TOOL_JAR);
+        assertEquals("a.Impl\nb.Impl\n", text(fat, "META-INF/services/x.Spi"));
+        assertEquals("from a", text(fat, "shared.txt"), "the first jar on the class path wins a resource");
+        Path c = library("c.jar", Map.of("p/Same.class", "different"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> Staging.stage(appJar(), List.of(a, c), "1.0.0", Files.createTempDirectory("toolgate-clash")));
+        assertTrue(e.getMessage().contains("p/Same.class"), e.getMessage());
+        Path notAJar = Files.createTempDirectory("toolgate-bad").resolve("bad.jar");
+        Files.writeString(notAJar, "not a jar");
+        assertThrows(IllegalArgumentException.class, () -> Staging.stage(appJar(), List.of(notAJar), "1.0.0", Files.createTempDirectory("x")));
     }
 
     @Test
@@ -78,12 +136,10 @@ class BuildSupportTest {
         List<Path> libs = List.of(library("a.jar"));
         Path one = Staging.stage(jar, libs, "1.0.0", Files.createTempDirectory("toolgate-one"));
         Path two = Staging.stage(jar, libs, "1.0.0", Files.createTempDirectory("toolgate-two"));
-        for (String f : List.of("toolgate-package.json", "artifacts/libs.zip")) {
+        for (String f : List.of("toolgate-package.json", Staging.TOOL_JAR)) {
             assertArrayEquals(Files.readAllBytes(one.resolve(f)), Files.readAllBytes(two.resolve(f)), f);
         }
         assertThrows(IllegalArgumentException.class, () -> Staging.stage(jar, libs, "1.0", Files.createTempDirectory("x")));
-        assertThrows(IllegalArgumentException.class, () -> Staging.stage(jar, List.of(library("a.jar"), library("a.jar")), "1.0.0",
-                Files.createTempDirectory("x")), "two libraries with one name");
         Path empty = Files.createTempDirectory("toolgate-empty").resolve("empty.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(empty))) {
             out.putNextEntry(new JarEntry("x.txt"));
