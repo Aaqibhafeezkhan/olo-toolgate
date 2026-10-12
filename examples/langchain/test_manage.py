@@ -180,6 +180,75 @@ class ExtractorConflictTests(unittest.TestCase):
             manage.check_extractors(config, self.selection())
 
 
+class DeploymentTrustTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.state = Path(temporary.name)
+        self.directory = self.state / 'agents'
+        self.directory.mkdir()
+        self.descriptor = dict(deviceId=LINUX, platform='linux', gateway=manage.gateway_url(),
+                               expiresAtUnixMs=NOW + 60000)
+        self.save()
+        (self.directory / 'any.token').write_text('test-only-agent-credential')
+        # Inert DER bytes test PEM comparison only; the real Agent still validates X.509/TLS.
+        self.ca = manage.ssl.DER_cert_to_PEM_cert(b'test-only-public-certificate')
+        (self.directory / 'gateway-ca.crt').write_text(self.ca)
+        state = patch.object(manage, 'STATE', self.state)
+        state.start(); self.addCleanup(state.stop)
+        clock = patch.object(manage.time, 'time', return_value=NOW / 1000)
+        clock.start(); self.addCleanup(clock.stop)
+        docker = patch.object(manage, 'docker', return_value=self.ca)
+        self.docker = docker.start(); self.addCleanup(docker.stop)
+        device = patch.object(manage, 'linux_status', return_value=dict(deviceId=LINUX))
+        self.device = device.start(); self.addCleanup(device.stop)
+
+    def save(self):
+        (self.directory / 'any.json').write_text(json.dumps(self.descriptor))
+
+    def test_current_deployment_accepts_equivalent_pem_line_endings(self):
+        (self.directory / 'gateway-ca.crt').write_bytes(self.ca.replace('\n', '\r\n').encode())
+        self.assertEqual(manage.verify_deployment('any'), self.descriptor)
+        self.docker.assert_called_once_with('quickstart', ['cat', '/data/keys/device-ca.crt'])
+
+    def test_changed_gateway_ca_stops_without_adopting_trust_or_reading_device(self):
+        path = self.directory / 'gateway-ca.crt'
+        before = path.read_bytes()
+        self.docker.return_value = manage.ssl.DER_cert_to_PEM_cert(b'different-test-only-public-certificate')
+        with self.assertRaisesRegex(ValueError, 'Gateway trust changed.*deploy.bat'):
+            manage.verify_deployment('any')
+        self.assertEqual(path.read_bytes(), before)
+        self.device.assert_not_called()
+
+    def test_changed_linux_device_requires_deployment(self):
+        self.device.return_value = dict(deviceId=WINDOWS)
+        with self.assertRaisesRegex(ValueError, 'Linux device changed.*deploy.bat'):
+            manage.verify_deployment('any')
+
+    def test_other_gateway_and_expired_credential_stop_before_docker(self):
+        for field, value, message in [('gateway', 'https://localhost:18450', 'another Gateway'),
+                                      ('expiresAtUnixMs', NOW, 'expired')]:
+            with self.subTest(field=field):
+                before = self.descriptor[field]
+                self.descriptor[field] = value; self.save()
+                with self.assertRaisesRegex(ValueError, message): manage.verify_deployment('any')
+                self.descriptor[field] = before
+        self.docker.assert_not_called()
+
+    def test_missing_credential_or_ca_stops_before_docker(self):
+        for name in ('any.token', 'gateway-ca.crt'):
+            with self.subTest(name=name):
+                path = self.directory / name; data = path.read_bytes(); path.unlink()
+                with self.assertRaisesRegex(ValueError, 'incomplete'): manage.verify_deployment('any')
+                path.write_bytes(data)
+        self.docker.assert_not_called()
+
+    def test_windows_deployment_does_not_depend_on_compose_device_identity(self):
+        self.descriptor.update(platform='windows', deviceId=WINDOWS); self.save()
+        manage.verify_deployment('any')
+        self.device.assert_not_called()
+
+
 class DiscoveryTests(unittest.TestCase):
     def verify(self, catalogs, platform='windows'):
         gateway = SimpleNamespace(rpc=lambda method: dict(tools=[dict(name=n) for n in catalogs.pop(0)]))

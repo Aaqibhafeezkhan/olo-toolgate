@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import ssl
 import subprocess
 import sys
 import time
@@ -108,6 +109,31 @@ def wait_device(config, device, seen_after=0, timeout=90):
 
 def gateway_url():
     return 'https://localhost:' + os.environ.get('TOOLGATE_TLS_PORT', '18451')
+
+
+def verify_deployment(target):
+    """Reject stale local setup without adopting new trust or changing credentials."""
+    remedy = 'Run deploy.bat' + (' -Win' if target == 'windows' else
+                               ' -Target linux' if target == 'linux' else '') + ' again.'
+    directory = STATE / 'agents'
+    if not all((directory / name).is_file() for name in (target + '.json', target + '.token', 'gateway-ca.crt')):
+        raise ValueError('The selected deployment is incomplete. ' + remedy)
+    descriptor = json.loads((directory / (target + '.json')).read_text(encoding='utf-8'))
+    if descriptor.get('gateway') != gateway_url():
+        raise ValueError('The selected deployment belongs to another Gateway URL. ' + remedy)
+    expires = descriptor.get('expiresAtUnixMs', 0)
+    if not isinstance(expires, int) or expires <= int(time.time() * 1000):
+        raise ValueError('The selected agent credential has expired. ' + remedy)
+    try:
+        saved = ssl.PEM_cert_to_DER_cert((directory / 'gateway-ca.crt').read_text(encoding='ascii').strip())
+        current = ssl.PEM_cert_to_DER_cert(docker('quickstart', ['cat', '/data/keys/device-ca.crt']).strip())
+    except (OSError, ValueError):
+        raise ValueError('Cannot verify the saved Gateway trust. ' + remedy) from None
+    if saved != current:
+        raise ValueError('Gateway trust changed after this deployment was configured. ' + remedy)
+    if descriptor.get('platform') == 'linux' and descriptor.get('deviceId') != linux_status().get('deviceId'):
+        raise ValueError('The selected Linux device changed after deployment. ' + remedy)
+    return descriptor
 
 
 def example_profiles(profiles):
@@ -385,10 +411,15 @@ def main():
     setup.add_argument('--device-id')
     setup.add_argument('--profiles', type=Path)
     sub.add_parser('status')
+    verify = sub.add_parser('verify-deployment', help='Check saved trust and target before running the agent')
+    verify.add_argument('--target', choices=['any', 'linux', 'windows'], default='any')
     args = parser.parse_args()
     STATE.mkdir(mode=0o700, exist_ok=True)
     if args.command == 'setup':
         provision(args)
+    elif args.command == 'verify-deployment':
+        verify_deployment(args.target)
+        print('Saved deployment matches the current Gateway trust and selected device.')
     else:
         print(json.dumps(linux_status(), indent=2))
 
