@@ -151,7 +151,10 @@ The scripts work from another directory too. `deploy.bat` calls `deploy.ps1`, wh
    the fix, instead of the test failing later.
 
 `execute.bat` then checks that a current deployment exists for the target, starts a
-stopped stack without rebuilding it, and runs the selected LangChain task.
+stopped stack without rebuilding it, compares its saved public CA with the running
+Gateway and verifies the selected Linux device identity before running the task.
+Changed trust or device identity requires deployment again; execution never
+automatically adopts a new CA or replaces the agent credential.
 
 The bootstrap/reviewer automation is an **explicit local evaluation fixture**.
 Scoped configuration uses distinct requester/reviewer identities and the real
@@ -362,8 +365,15 @@ enrollment and generated reports.
   selected installed profiles and package pins. Device installation alone grants no access.
 - **Approval pending:** log in as the independent reviewers named by setup and
   review the draft. The requester cannot approve its own change.
-- **TLS failure:** retain the stack's data volume and its current exported public CA.
-  Never disable certificate validation.
+- **TLS failure / Gateway trust changed:** saved `.state/agents` may belong to an
+  earlier Gateway installation. Run `deploy.bat` again with the same target, then
+  `execute.bat -Smoke` to verify TLS, discovery and native effects without a model
+  call. Use `-SkipBuild` on deployment if the local images and agent code are
+  already current. Deployment refreshes the public CA, agent credential and device
+  selection together. Keep the named data volumes; never disable TLS verification.
+  On Linux/macOS, rerun `python3 manage.py setup --bootstrap-local --approve-linux-device`
+  with the same `--target`, and check `python3 manage.py verify-deployment` before
+  `docker compose run --rm -T agent --smoke`.
 - **Windows report absent:** verify you selected the correct device and actual
   configured HotFolder. The runner refuses to claim success without matching readback.
 
