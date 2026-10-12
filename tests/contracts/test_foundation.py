@@ -177,22 +177,6 @@ class FoundationTests(unittest.TestCase):
         self.assertFalse(values['gateway']['enabled'])
         self.assertIn('gateway.yaml', {p.name for p in (chart/'templates').iterdir()})
 
-    def test_ci_smoke(self):
-        ci = yaml.load((ROOT/'.github/workflows/foundation.yml').read_text(), Loader=yaml.BaseLoader)
-        self.assertEqual('read', ci['permissions']['contents'])
-        self.assertEqual({'push', 'workflow_dispatch'}, set(ci['on']))
-        self.assertEqual(['main'], ci['on']['push']['branches'])
-        self.assertEqual("github.ref == 'refs/heads/main'", ci['jobs']['admission']['if'])
-        commands = '\n'.join(s.get('run','') for s in ci['jobs']['check']['steps'])
-        self.assertIn('make check', commands)
-        self.assertIn('tools/check.py --scans', commands)
-        for path in (ROOT/'.github/workflows').glob('*.yml'):
-            workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
-            for job in workflow['jobs'].values():
-                for step in job.get('steps', []):
-                    if 'uses' in step:
-                        self.assertRegex(step['uses'], r'@[a-f0-9]{40}$')
-
     def test_release_bundle_is_reproducible(self):
         spec = importlib.util.spec_from_file_location('bundle', ROOT/'tools/release/bundle.py')
         bundle = importlib.util.module_from_spec(spec)

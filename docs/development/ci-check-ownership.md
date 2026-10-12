@@ -66,3 +66,14 @@ completed admission but skipped every validation job; the
 also skipped. Their successful workflow summaries do not prove the gates passed.
 The PR is rebased onto this newer main; the failure evidence above remains tied
 to the specific failing commit.
+
+After the trigger permission fix, [run 38188708660](https://github.com/olo-labs/olo-toolgate/actions/runs/38188708660)
+passed admission and preflight. Foundation then failed two workflow-layout checks
+in the contract suite that still expected independent foundation/client triggers
+and preflight jobs. Those checks now validate the unified caller and compatibility
+callers, including a negative case that rejects bypassing preflight. They run once
+in the preflight CI suite, before native builds; contract/schema checks remain in
+foundation. Focused workflow/admission/local-inventory tests verify the new layout.
+The same run also failed Linux x64 managed runtime validation at the Dotnet
+version/sandbox self-test. That distinct native failure is outside this workflow
+layout fix; its isolation gate remains required.
