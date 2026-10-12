@@ -1,0 +1,12 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {
+    "CleanupRoots": "/var/log/myapp,/data/exports",
+    "MinAgeDays": 14
+  },
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}

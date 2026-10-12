@@ -1,0 +1,5 @@
+# Local values and fixture claims for toolgate dev; never commit them. Copy toolgate.dev.example.json instead.
+toolgate.dev.json
+.toolgate/
+build/
+.gradle/

@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Runs the shared build one directory up, so `toolgate dev`, `check` and `pack` work from this directory.
+exec "$(dirname "$0")/../gradlew" "$@"

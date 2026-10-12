@@ -1,0 +1,12 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {
+    "DiskPaths": "C:\\,D:\\",
+    "DiskWarnPercent": 80
+  },
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}

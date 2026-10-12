@@ -1,0 +1,15 @@
+{
+  "mode": "development",
+  "destinations": {
+    "WebhookHost": "http://127.0.0.1:8080"
+  },
+  "globals": {
+    "AllowedChannels": "ops-alerts,sre"
+  },
+  "secrets": {
+    "WebhookApiKey": "replace-me"
+  },
+  "claims": {
+    "sub": "dev-1"
+  }
+}

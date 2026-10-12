@@ -179,6 +179,9 @@ def main():
     # The Java SDK's Gradle and Maven plugins on a sample project, end to end through toolgate pack.
     if os.name != 'nt' and not DOCKER and shutil.which('mvn') and shutil.which('cargo'): run(['bash','tool-sdk/java-sdk/e2e/run.sh'])
     else: print('Skipping the Java SDK plugin end-to-end run: it needs bash, mvn and a local cargo')
+    # The ten example tool packages under examples/java-tools: tests, @Examples, packs, and each fat jar answering tools/list.
+    if os.name != 'nt' and not DOCKER and shutil.which('cargo'): run(['bash','examples/java-tools/run.sh'])
+    else: print('Skipping the Java example tools: they need bash and a local cargo')
     if not args.ci_common:
         run(['npm','ci','--ignore-scripts'])
         run(['npm','run','contracts:check'])

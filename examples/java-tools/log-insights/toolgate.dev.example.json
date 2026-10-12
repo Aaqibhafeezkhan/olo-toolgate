@@ -1,0 +1,12 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {
+    "LogDir": "/var/log/myapp",
+    "LogTimeZone": "Europe/Berlin"
+  },
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}
