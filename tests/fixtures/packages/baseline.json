@@ -1,0 +1,354 @@
+{
+  "$comment" : "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0. Written by PackageArchiveBaselineTest.",
+  "fixtures" : {
+    "tests/fixtures/packages/cases/archive-comment.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/archive-trailing-bytes.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/artifact-digest-mismatch.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/artifact-duplicate-id.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/artifact-outside-artifacts.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/artifact-size-mismatch.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/artifact-undeclared-runtime.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/artifact-without-id.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/checksums-lists-itself.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/checksums-missing-final-newline.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/checksums-uppercase.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/descriptor-nfc-key-collision.tgpkg" : {
+      "result" : "error",
+      "exception" : "IllegalArgumentException"
+    },
+    "tests/fixtures/packages/cases/descriptor-number-overflow.tgpkg" : {
+      "result" : "error",
+      "exception" : "IllegalArgumentException"
+    },
+    "tests/fixtures/packages/cases/descriptor-over-max-bytes.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/duplicate-tool.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/empty.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/entry-directory.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/entry-symlink.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/entry-traversal.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/id-not-text.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/id-uppercase.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/java-tool-no-artifact.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/java-tool-not-a-jar.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/java-tool-two-jars.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/manifest-array.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/manifest-bom.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/manifest-comment.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/manifest-duplicate-key.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/manifest-invalid-utf8.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:93c2db234dffe272305b6f354dcce898c51474e6716595a85eb2e4cfeda993d6",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/manifest-not-json.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/manifest-too-deep.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/manifest-trailing-tokens.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/missing-checksums.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/missing-manifest.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/schema-unknown-field.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:765c95a90978ae8eafde8ec5118e0ee60a30839773307796044639efd95e3df4",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/schema-version-1.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/schema-version-float.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:a38c726514a8673550f935272461cb60ef2b79ea35148c17913efb238ca70612",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/schema-version-string.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:c15bbaa044a8b3ef2a276458f18a3e9201f262bb2d849fcda0ae51f057355baa",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/set-digest-mismatch.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-digest-mismatch.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-file-missing.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-file-not-canonical.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-generation-mismatch.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-id-no-local-name.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-outside-package.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-undeclared-runtime.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tool-unknown-artifact.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tools-extra-file.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tools-not-array.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/tools-over-max.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/truncated.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/valid-csv-two-tools.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.csv",
+      "packageDigest" : "sha256:f7d7c07afde410d530eb905535931f394c23b7737cdbb0c6d671fb6964c6bd0f",
+      "descriptorSetDigest" : "sha256:7fa7f11aa504bdfd00a27c4713a86af9d7d465e797cba11581360083201e9e70",
+      "files" : 5
+    },
+    "tests/fixtures/packages/cases/valid-deflated.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:80c196f34e184651972ef5c78120334af9467fef8cc2bac29e9cb9089f9061a7",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/valid-fractional-number.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:a7e99570f025bd13a9b622288a1379fa5b2a0749ca8c566817fccdbe887d8083",
+      "descriptorSetDigest" : "sha256:7cd4449f636b2a65fc1ef52b91df7e7199f73e34464738459cb4b1fede27a836",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/valid-notify.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:80c196f34e184651972ef5c78120334af9467fef8cc2bac29e9cb9089f9061a7",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/valid-signatures-entry.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:80c196f34e184651972ef5c78120334af9467fef8cc2bac29e9cb9089f9061a7",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 5
+    },
+    "tests/fixtures/packages/cases/valid-unicode-descriptor.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:3ee6c3ed55e9418558d7509fcad88725c6641c220c941a7f207e692ede723a1d",
+      "descriptorSetDigest" : "sha256:58cac2ddb3f86f18c6c5a10b00fb7c088cf477fcb72465fad6fb6a46cc7198da",
+      "files" : 4
+    },
+    "tests/fixtures/packages/cases/version-missing.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tests/fixtures/packages/cases/version-not-semver.tgpkg" : {
+      "result" : "accept",
+      "packageId" : "examples.notify",
+      "packageDigest" : "sha256:63e0f912f982fcdc032d3ce410cb444b60ea3618f712fadecfad98ee14880e3a",
+      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
+      "files" : 4
+    },
+    "tool-sdk/conformance/fixtures/packages/absolute-path.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/backslash.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/case-collision.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/checksums-blank-line.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/checksums-comment.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/checksums-crlf.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/checksums-unsorted.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/checksums-uppercase-hex.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/data-outside-central-directory.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/drive-letter.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/duplicate-entry.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/encrypted-entry.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/manifest-digest-mismatch.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/missing-listed-file.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/nfc-collision.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/symlink.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/unlisted-file.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/valid.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/zip-bomb-ratio.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    },
+    "tool-sdk/conformance/fixtures/packages/zip-slip.tgpkg" : {
+      "result" : "reject",
+      "status" : 400
+    }
+  }
+}
