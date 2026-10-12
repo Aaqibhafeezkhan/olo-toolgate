@@ -18,6 +18,11 @@ x-drupal: &drupal
   environment:
     MARKETPLACE_REVERSE_PROXY_ADDRESSES: 172.30.10.0/24
     MARKETPLACE_HELPER_FILE_ROOT: ""
+    # Secrets come from files; *_FILE wins over the plain variable in settings.php.
+    DRUPAL_HASH_SALT_FILE: /run/secrets/drupal_hash_salt
+    MARKETPLACE_HELPER_TOKEN_FILE: /run/secrets/marketplace_helper_token
+    MARKETPLACE_ADMIN_PASSWORD_FILE: /run/secrets/marketplace_admin_password
+    TOOLGATE_REVISION: ${TOOLGATE_REVISION:-unknown}
   secrets:
     - source: helper_token
       target: marketplace_helper_token
@@ -105,6 +110,8 @@ services:
     env_file: .env
     environment:
       MARKETPLACE_HELPER_TOKEN_FILE: /run/secrets/marketplace_helper_token
+      # Only the helper mounts the signing key (design §6.1).
+      MARKETPLACE_SIGNING_KEY_FILE: /run/secrets/marketplace_signing_key
       TOOLGATE_REVISION: ${TOOLGATE_REVISION:-unknown}
     secrets:
       - source: signing_key

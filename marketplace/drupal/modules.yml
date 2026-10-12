@@ -14,6 +14,7 @@
 #   pathauto (the routes are /tools/{id} and /publishers/{slug}), field_group (tool page sections),
 #   markdown_easy (league/commonmark with an allowlist), svg_image (logos and screenshots are PNG or JPEG only),
 #   simple_sitemap (/sitemap.xml).
+# Not used, because core does it: symfony_mailer_lite (core's symfony_mailer plugin sends over MARKETPLACE_SMTP_DSN).
 modules:
   # Admin theme and navigation
   - { package: drupal/gin, version: "^4", type: theme, enable: [gin], why: "admin theme" }
@@ -32,8 +33,6 @@ modules:
   - { package: drupal/flood_control, version: "^3", enable: [flood_control], why: "manage login and form flood limits" }
   - { package: drupal/seckit, version: "^2", enable: [seckit], why: "security headers" }
   - { package: drupal/password_policy, version: "^4", enable: [password_policy, password_policy_length], why: "password rules" }
-  # Mail
-  - { package: drupal/symfony_mailer_lite, version: "^2", enable: [symfony_mailer_lite], why: "account and notification mail over SMTP" }
 
 # Core modules enabled in addition (no Composer package needed).
 core:

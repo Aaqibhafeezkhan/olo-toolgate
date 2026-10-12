@@ -15,6 +15,7 @@ import java.util.List;
 public final class TestMain {
     private static final List<Class<?>> SUITES = List.of(
             JsonTest.class,
+            ConfigTest.class,
             SemVerTest.class,
             ApiDiffTest.class,
             SignerTest.class,

@@ -125,7 +125,7 @@ jobs:
           ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
         fi
     - name: Publish Marketplace images
-      id: marketplace
+      id: marketplace_images
       env:
         RELEASE_SHA: ${{ github.sha }}
         DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
@@ -137,8 +137,15 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
       with:
-        subject-name: ${{ steps.marketplace.outputs.helper_image }}
-        subject-digest: ${{ steps.marketplace.outputs.helper_digest }}
+        subject-name: ${{ steps.marketplace_images.outputs.helper_image }}
+        subject-digest: ${{ steps.marketplace_images.outputs.helper_digest }}
+        push-to-registry: true
+    - name: Attest Marketplace Drupal image
+      if: startsWith(github.ref, 'refs/tags/') && steps.marketplace_images.outputs.drupal_digest != ''
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-name: ${{ steps.marketplace_images.outputs.drupal_image }}
+        subject-digest: ${{ steps.marketplace_images.outputs.drupal_digest }}
         push-to-registry: true
 'on':
   workflow_call: null

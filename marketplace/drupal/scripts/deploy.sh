@@ -35,6 +35,14 @@ else
 fi
 
 if [ "${MARKETPLACE_SEED_EXAMPLES:-true}" = "true" ]; then
+  # The seed signs through the helper, which may still be starting on a first install.
+  for attempt in $(seq 1 60); do
+    if php -r 'exit(@file_get_contents(rtrim(getenv("MARKETPLACE_HELPER_URL") ?: "http://helper:8080", "/") . "/health") === false ? 1 : 0);'; then
+      break
+    fi
+    [ "$attempt" = 60 ] && echo "deploy: helper unreachable; the seed will report what is missing" >&2
+    sleep 2
+  done
   drush toolgate-marketplace:seed /opt/olo/seed
 fi
 drush toolgate-marketplace:seed-status

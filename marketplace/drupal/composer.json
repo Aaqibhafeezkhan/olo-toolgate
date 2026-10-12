@@ -28,8 +28,7 @@
         "drupal/honeypot": "^2",
         "drupal/flood_control": "^3",
         "drupal/seckit": "^2",
-        "drupal/password_policy": "^4",
-        "drupal/symfony_mailer_lite": "^2"
+        "drupal/password_policy": "^4"
     },
     "require-dev": {
         "behat/mink": "^1.11",

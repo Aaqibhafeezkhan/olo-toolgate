@@ -73,4 +73,5 @@ USER www-data
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
   CMD php /opt/drupal/scripts/healthcheck.php
-CMD ["apache2-foreground"]
+# /tmp is an empty tmpfs or emptyDir at start: create Apache's runtime directories and the opcache file cache there.
+CMD ["bash", "-c", "mkdir -p /tmp/apache2/lock /tmp/apache2/log /tmp/opcache && exec apache2-foreground"]

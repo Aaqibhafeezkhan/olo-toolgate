@@ -94,9 +94,11 @@ if ($s3) {
   $config['s3fs.settings']['private_folder'] = 's3fs-private';
   $config['s3fs.settings']['disable_cert_verify'] = FALSE;
   // Public files (CSS/JS aggregates, image styles) are served through the
-  // site's own origin, which proxies /<bucket>/s3fs-public/ to the store.
+  // site's own origin, which proxies /<bucket>/s3fs-public/ to the store,
+  // unless MARKETPLACE_S3_PUBLIC_DOMAIN names another host (a CDN, or the
+  // bucket's own public endpoint) that serves <domain>/s3fs-public/.
   $config['s3fs.settings']['use_cname'] = TRUE;
-  $config['s3fs.settings']['domain'] = parse_url($baseUrl, PHP_URL_HOST) . (parse_url($baseUrl, PHP_URL_PORT) ? ':' . parse_url($baseUrl, PHP_URL_PORT) : '') . '/' . $s3Bucket;
+  $config['s3fs.settings']['domain'] = $env('MARKETPLACE_S3_PUBLIC_DOMAIN') ?? parse_url($baseUrl, PHP_URL_HOST) . (parse_url($baseUrl, PHP_URL_PORT) ? ':' . parse_url($baseUrl, PHP_URL_PORT) : '') . '/' . $s3Bucket;
   $config['s3fs.settings']['domain_root'] = 'none';
   $config['s3fs.settings']['use_https'] = parse_url($baseUrl, PHP_URL_SCHEME) === 'https';
 }
@@ -125,7 +127,19 @@ if ($env('MARKETPLACE_REDIS_HOST') && file_exists($app_root . '/modules/contrib/
 // off for its own import.
 $settings['config_readonly'] = $flag('MARKETPLACE_CONFIG_READONLY', TRUE);
 
-// Mail.
+// Mail: core's Symfony mailer over MARKETPLACE_SMTP_DSN (smtp://user:pass@host:port).
+if ($dsn = $env('MARKETPLACE_SMTP_DSN')) {
+  $parts = parse_url($dsn);
+  $config['system.mail']['interface']['default'] = 'symfony_mailer';
+  $config['system.mail']['mailer_dsn'] = [
+    'scheme' => $parts['scheme'] ?? 'smtp',
+    'host' => $parts['host'] ?? 'localhost',
+    'user' => isset($parts['user']) ? urldecode($parts['user']) : NULL,
+    'password' => isset($parts['pass']) ? urldecode($parts['pass']) : NULL,
+    'port' => isset($parts['port']) ? (int) $parts['port'] : NULL,
+    'options' => [],
+  ];
+}
 $config['system.site']['mail'] = $env('MARKETPLACE_MAIL_FROM', 'noreply@localhost');
 $config['system.site']['name'] = $env('MARKETPLACE_SITE_NAME', 'OLO Orgs');
 $contact = $env('MARKETPLACE_CONTACT_EMAIL', $config['system.site']['mail']);

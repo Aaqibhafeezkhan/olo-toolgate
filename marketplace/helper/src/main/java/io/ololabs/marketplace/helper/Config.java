@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.marketplace.helper;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -34,7 +36,7 @@ public record Config(
     public static final Set<String> DEFAULT_RESERVED = Set.of("olo", "ololabs", "toolgate", "examples");
 
     public static Config fromEnvironment(Map<String, String> env) {
-        String token = env.getOrDefault("MARKETPLACE_HELPER_TOKEN", "");
+        String token = secret(env, "MARKETPLACE_HELPER_TOKEN", "");
         if (token.length() < 16 || token.equals("change-me")) {
             throw new IllegalStateException("MARKETPLACE_HELPER_TOKEN must be set to a random value of at least 16 characters");
         }
@@ -56,10 +58,23 @@ public record Config(
                 env.get("MARKETPLACE_S3_ENDPOINT"),
                 env.getOrDefault("MARKETPLACE_S3_REGION", "us-east-1"),
                 env.get("MARKETPLACE_S3_BUCKET"),
-                env.get("MARKETPLACE_S3_ACCESS_KEY"),
-                env.get("MARKETPLACE_S3_SECRET_KEY"),
+                secret(env, "MARKETPLACE_S3_ACCESS_KEY", null),
+                secret(env, "MARKETPLACE_S3_SECRET_KEY", null),
                 root == null || root.isBlank() ? null : Path.of(root),
                 env.getOrDefault("TOOLGATE_REVISION", "unknown"));
+    }
+
+    /** A secret from {@code <name>_FILE} (Compose and Kubernetes secret mounts) when set, else from {@code <name>}. */
+    static String secret(Map<String, String> env, String name, String fallback) {
+        String file = env.get(name + "_FILE");
+        if (file != null && !file.isBlank()) {
+            try {
+                return Files.readString(Path.of(file)).strip();
+            } catch (IOException e) {
+                throw new IllegalStateException(name + "_FILE is not readable: " + file, e);
+            }
+        }
+        return env.getOrDefault(name, fallback);
     }
 
     private static String required(Map<String, String> env, String name) {
