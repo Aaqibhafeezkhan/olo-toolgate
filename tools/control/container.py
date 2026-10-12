@@ -12,6 +12,47 @@ import sys
 import tempfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from control.check import ROOT,database,ready,request,run
+from access.presets import load as initial_configuration
+
+
+def protected_defaults(baseline):
+    """Verify release presets without treating empty preset groups as active access."""
+    expected=initial_configuration()['records']
+    def indexed(rows):
+        records={row['id']:row for row in rows}
+        assert len(records)==len(rows),'Duplicate initial records'
+        return records
+    for field in ('grants','policies'):
+        assert indexed(baseline[field])==indexed(expected[field]),'Unexpected initial '+field
+    for field,extra in (('roles','installation-management'),('bindings','binding-default')):
+        actual=indexed(baseline[field]);configured=indexed(expected[field])
+        assert set(actual)==set(configured)|{extra},'Unexpected initial '+field
+        assert all(actual[key]==value for key,value in configured.items()),'Changed initial '+field
+    for field,default,member in (('teams','team-default','userIds'),
+                               ('agentGroups','default-agents','agentIds'),
+                               ('toolGroups','default-tools','toolIds'),
+                               ('deviceGroups','default-devices','deviceIds')):
+        actual=indexed(baseline[field]);configured=indexed(expected[field])
+        assert set(actual)==set(configured)|({'installation-administrators'} if field=='teams' else set()),'Unexpected initial '+field
+        for key,value in configured.items():
+            if key==default:continue  # Signed installation membership is retained in default groups.
+            assert actual[key]==value and not actual[key][member],'Unexpected populated preset '+key
+    for field in ('delegations','agentDelegations','workloadBindings','devices','deviceEvidence'):
+        assert not baseline[field],'Unexpected initial '+field
+    assert all(not tool['enabled'] for tool in baseline['tools']),'Initially enabled tool'
+    assert all(not agent['enabled'] for agent in baseline['agents']),'Initially enabled agent'
+
+
+def scoped_reviewers(api,baseline):
+    """Keep one installation owner while testing ordinary maker/checker authority."""
+    management=next(role for role in baseline['roles'] if role['id']=='installation-management')
+    assert management['portalRole']=='SUPER_ADMIN'
+    owner={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1,'managementRules':[]}
+    assert api('/api/control/v1/roles',body=owner,method='POST')[0]==201
+    assert api('/api/control/v1/teams',body=dict(id='smoke-super-team',name='Smoke installation owners',
+        enabled=True,revision=1,userIds=['reviewer-2'],roleIds=[owner['id']]),method='POST')[0]==201
+    assert api('/api/control/v1/roles/'+management['id'],body={**management,'portalRole':'ADMINISTRATOR'},
+        method='PUT',revision=management['revision'])[0]==200
 
 
 @contextmanager
@@ -68,16 +109,17 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
 def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',replicas=2):
     with fixture(image,helper_image,replicas) as f:
         origins=f['origins'];tokens=f['tokens'];secret_values=list(tokens.values())+[f['db']['CONTROL_TEST_PASSWORD']]
-        def api(path,user='admin',body=None,method='GET',key=None,origin=0):
+        def api(path,user='admin',body=None,method='GET',key=None,origin=0,revision=None):
+            headers={'Idempotency-Key':key or secrets.token_hex(16)} if body is not None else {}
+            if revision is not None:headers['If-Match']='"'+str(revision)+'"'
             status,raw,_=request(origins[origin]+path,tokens.get(user),body,method,
-                {'Idempotency-Key':key or secrets.token_hex(16)} if body is not None else None)
+                headers or None)
             return status,json.loads(raw) if raw else None
         def ok(value,status=200):assert value[0]==status,(value[0],value[1]);return value[1]
         assert api('/api/control/v1/users','anonymous')[0]==401
         baseline=ok(api('/api/control/v1/config/export'))
-        assert not baseline['grants'] and not baseline['delegations']
-        assert all(not tool['enabled'] for tool in baseline['tools'])
-        assert {g['id'] for g in baseline['deviceGroups']}=={'default-devices'}
+        protected_defaults(baseline)
+        scoped_reviewers(api,baseline)
         entity=dict(id='replica-created-user',name='Reviewed employee',enabled=False,revision=1);key=secrets.token_hex(16)
         with ThreadPoolExecutor(max_workers=4) as pool:
             responses=list(pool.map(lambda n:api('/api/control/v1/users',body=entity,method='POST',key=key,origin=n%len(origins)),range(4)))
