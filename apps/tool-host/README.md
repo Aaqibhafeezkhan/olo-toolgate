@@ -75,11 +75,11 @@ Everything is found by the digest the permit pins, never by name or version.
 
 The permit's other pins are checked against the package: `toolDescriptorDigest` against the tool's definition, `runtimeDigest` against the canonical digest of the tool's `RuntimeDeclaration`, and `artifactDigest` against the tool's first artifact. `argumentsDigest` is `sha256` over the RFC 8785 form of the arguments, as Control's `Jcs.digest` computes it.
 
-A verified package is unpacked once under `workDir/packages/<hex>/` (`app.jar`, and the jars of `libs.zip` under `lib/`), through a temporary directory and a rename.
+A verified package is unpacked once under `workDir/packages/<hex>/` (each artifact under its file name; a Java tool is one fat jar, `tool.jar`), through a temporary directory and a rename.
 
 ## Runtime protocol
 
-The host starts the tool's runtime with a clean environment: `HOME` and the working directory are the invocation's own directory, plus `LANG`, `TOOLGATE_PROTOCOL=2`, `TOOLGATE_BROKER_SOCKET` and `TOOLGATE_BROKER_CAPABILITY`. It writes one `ToolInput` line to stdin and reads one `ResultFrame` line from stdout, killing the process at the deadline. The JVM launcher runs `java -Xmx<memory> -XX:+ExitOnOutOfMemoryError -cp app.jar:lib/* <entryPoint>`; the Java SDK's `Main` switches to governed mode on `TOOLGATE_PROTOCOL=2`. Another language needs a launcher in `runner.rs` and its `runtimeId` in `store::RUNTIMES`; admission, the store and the broker stay as they are.
+The host starts the tool's runtime with a clean environment: `HOME` and the working directory are the invocation's own directory, plus `LANG`, `TOOLGATE_PROTOCOL=2`, `TOOLGATE_BROKER_SOCKET` and `TOOLGATE_BROKER_CAPABILITY`. It writes one `ToolInput` line to stdin and reads one `ResultFrame` line from stdout, killing the process at the deadline. A tool runs from exactly one self-contained artifact, the one its permit pins, and a JVM tool's must be a jar, so the device needs only a JRE. The JVM launcher runs `java -Xmx<memory> -XX:+ExitOnOutOfMemoryError -cp tool.jar <entryPoint>`; the Java SDK's `Main` switches to governed mode on `TOOLGATE_PROTOCOL=2`. Another language needs a launcher in `runner.rs` and its `runtimeId` in `store::RUNTIMES`; admission, the store and the broker stay as they are.
 
 `secretHandles` are given only to tools with the `CREDENTIALS_IN_SANDBOX` permission. Other tools never see a secret: the broker adds credentials to their route calls.
 

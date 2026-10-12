@@ -44,7 +44,8 @@ public final class PackageArchive {
         if (!packageId.matches("^[a-z][a-z0-9-]{1,30}(\\.[a-z][a-z0-9-]{1,30}){1,3}$")) throw reject();
 
         var runtimes = new HashSet<String>();
-        for (var runtime : manifest.path("runtimes")) runtimes.add(runtime.path("runtimeId").asText());
+        var java = new HashSet<String>(); var jars = new HashSet<String>();
+        for (var runtime : manifest.path("runtimes")) {runtimes.add(runtime.path("runtimeId").asText());if ("java".equals(runtime.path("language").asText()))java.add(runtime.path("runtimeId").asText());}
         var artifactIds = new HashSet<String>(); var artifactPaths = new HashSet<String>();
         for (var artifact : manifest.path("artifacts")) {
             String id = artifact.path("artifactId").asText(), path = artifact.path("path").asText();
@@ -53,6 +54,7 @@ public final class PackageArchive {
             if (hex == null || !artifact.path("artifactDigest").asText().equals("sha256:" + hex)) throw reject();
             if (artifact.has("sizeBytes") && artifact.get("sizeBytes").asLong() != files.get(path).length) throw reject();
             if (artifact.has("runtimeId") && !runtimes.contains(artifact.get("runtimeId").asText())) throw reject();
+            if ("application/java-archive".equals(artifact.path("mediaType").asText())) jars.add(id);
         }
         var limits = manifest.path("limits");
         long maxTools = Math.min(limits.path("maxTools").asLong(0), MAX_TOOLS), maxBytes = Math.min(limits.path("maxDescriptorBytes").asLong(0), MAX_DESCRIPTOR_BYTES);
@@ -75,6 +77,8 @@ public final class PackageArchive {
             toolFiles.add(file);
             for (var id : tool.path("artifactIds")) if (!artifactIds.contains(id.asText())) throw reject();
             if (tool.has("runtimeId") && !runtimes.contains(tool.get("runtimeId").asText())) throw reject();
+            // A Java tool is one self-contained jar, so a device needs only a JRE to run it.
+            if (java.contains(tool.path("runtimeId").asText()) && (tool.path("artifactIds").size() != 1 || !jars.contains(tool.path("artifactIds").get(0).asText()))) throw reject();
             if (digests.put(toolId, digest) != null) throw reject();
         }
         for (var path : files.keySet()) if (path.startsWith("tools/") && !toolFiles.contains(path)) throw reject();
