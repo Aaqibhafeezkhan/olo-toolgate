@@ -125,3 +125,14 @@ identities before testing independent review. The production image passed the
 two-replica PostgreSQL smoke, including concurrent idempotency, restart, custody
 and graceful shutdown. All 199 CI helper tests passed; six guard the updated
 preset and review fixture expectations.
+
+In [run 38266893091](https://github.com/olo-labs/olo-toolgate/actions/runs/38266893091/job/114880157459),
+production Control and reviewed PostgreSQL restore passed. The client-download
+browser checks still expected immutable caching for `0.10.0-dev`, although
+prerelease filenames are reused and correctly receive `no-store`. The browser
+checks now distinguish prerelease and final versions, validate uncached manifests
+and stable aliases, and keep checksum verification. The local browser fixture
+matches Control's headers and exercises both versions on every run. Control's
+cache tests cover development, release-candidate and final versioned downloads,
+stable aliases and configured Windows installers. Native buffer equality checks
+the complete installer bytes within the browser's existing timeout.

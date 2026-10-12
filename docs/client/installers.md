@@ -23,8 +23,11 @@ Connect in the Admin console and follow the [Chrome Connect guide](connect.md).
 Installer downloads use stable names, such as
 `olo-toolgate-client-x86_64-pc-windows-msvc.setup.exe`, across releases. The public
 download API resolves that name to the current validated installer and sends
-`Cache-Control: no-store`; versioned files and manifests remain immutable for
-checksum verification. GitHub releases also include these stable installer names.
+`Cache-Control: no-store`. Versioned prerelease files also use `no-store`, because
+development builds can reuse the same filenames. Versioned final-release files
+use `public, max-age=31536000, immutable`. Manifest endpoints use `no-store`;
+every artifact is verified against its manifest checksum. GitHub releases also
+include these stable installer names.
 In Connect, **Install Chrome extension and client** downloads the same Windows setup EXE, which
 contains the client, native bridge and unpacked Chrome extension. There is no
 separate ZIP download. Open chrome://extensions, enable Developer mode and choose

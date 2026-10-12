@@ -14,15 +14,18 @@ final class ClientArtifactsTest {
     @TempDir Path directory;
     private final ContractCodec codec=new ContractCodec();
     private void bundle()throws Exception {
+        bundle("0.7.0-dev");
+    }
+    private void bundle(String version)throws Exception {
         var artifacts=new ArrayList<Map<String,Object>>();
         for(var target:List.of("x86_64-unknown-linux-gnu","x86_64-pc-windows-msvc","x86_64-apple-darwin")){
             var platform=target.contains("windows")?"WINDOWS":target.contains("apple")?"MACOS":"LINUX";
-            var filename="olo-toolgate-client-0.7.0-dev-"+target+(platform.equals("WINDOWS")?".zip":".tar.gz");
+            var filename="olo-toolgate-client-"+version+"-"+target+(platform.equals("WINDOWS")?".zip":".tar.gz");
             var bytes=("integrity-test-only:"+target).getBytes(java.nio.charset.StandardCharsets.UTF_8);Files.write(directory.resolve(filename),bytes);
             var digest=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
             artifacts.add(Map.of("platform",platform,"target",target,"filename",filename,"sha256",digest,"bytes",bytes.length));
         }
-        Files.writeString(directory.resolve("manifest.json"),codec.json(Map.of("version","0.7.0-dev","artifacts",artifacts)));
+        Files.writeString(directory.resolve("manifest.json"),codec.json(Map.of("version",version,"artifacts",artifacts)));
     }
     @Test void missingReleaseIsUnavailable(){var assets=new ClientArtifacts(Optional.empty(),codec);assertThrows(Failure.class,assets::manifest);}
     @Test void chromePackageIsVersionedAllowlistedAndVerified()throws Exception{
@@ -40,8 +43,8 @@ final class ClientArtifactsTest {
         assertThrows(IllegalStateException.class,()->new ClientArtifacts(Optional.of(directory.toString()),codec));
         Files.writeString(directory.resolve(filename),"corrupted");assertThrows(Failure.class,()->assets.download(filename));
     }
-    @Test void installersAreAllowlistedAndHashVerified()throws Exception{
-        bundle();var original=new ClientArtifacts(Optional.of(directory.toString()),codec).manifest();
+    private void installerBundle()throws Exception{
+        var original=codec.model(Files.readString(directory.resolve("manifest.json")),io.ololabs.toolgate.contracts.ClientDownloadManifest.class);
         var installers=new ArrayList<Map<String,Object>>();
         for(var artifact:original.artifacts()){
             var extension=switch(artifact.platform()){case WINDOWS->"setup.exe";case MACOS->"dmg";case LINUX->"run";};
@@ -50,6 +53,9 @@ final class ClientArtifactsTest {
             installers.add(Map.of("platform",artifact.platform(),"target",artifact.target(),"filename",filename,"sha256",artifact.sha256(),"bytes",artifact.bytes()));
         }
         Files.writeString(directory.resolve("installers.json"),codec.json(Map.of("version",original.version(),"artifacts",installers)));
+    }
+    @Test void installersAreAllowlistedAndHashVerified()throws Exception{
+        bundle();installerBundle();
         var assets=new ClientArtifacts(Optional.of(directory.toString()),codec);assertEquals(3,assets.installers().artifacts().size());
         var configured=assets.configuredWindowsInstaller("x86_64-pc-windows-msvc","https://control.example.test");
         assertEquals("no-store",configured.getHeaderString("Cache-Control"));
@@ -90,6 +96,27 @@ final class ClientArtifactsTest {
         assertEquals("no-store",response.getHeaderString("Cache-Control"));
         var output=new java.io.ByteArrayOutputStream();((jakarta.ws.rs.core.StreamingOutput)response.getEntity()).write(output);assertEquals(artifact.bytes(),output.size());
         Files.writeString(directory.resolve(artifact.filename()),"corrupted");assertThrows(Failure.class,()->assets.download(artifact.filename()));
+    }
+    @Test void cachePolicyDistinguishesPrereleasesFinalReleasesAndAliases()throws Exception{
+        for(var policy:Map.of("0.7.0-dev","no-store","0.7.0-rc.1","no-store",
+                             "0.7.0","public, max-age=31536000, immutable").entrySet()){
+            bundle(policy.getKey());installerBundle();
+            var assets=new ClientArtifacts(Optional.of(directory.toString()),codec);
+            for(var artifact:assets.manifest().artifacts()){
+                if(artifact.platform()!=io.ololabs.toolgate.contracts.ClientPlatform.WINDOWS)
+                    assertCache(assets.download(artifact.filename()),policy.getValue());
+            }
+            for(var installer:assets.installers().artifacts()){
+                assertCache(assets.download(installer.filename()),policy.getValue());
+                var suffix=switch(installer.platform()){case WINDOWS->"setup.exe";case MACOS->"dmg";case LINUX->"run";};
+                assertCache(assets.download("olo-toolgate-client-"+installer.target()+"."+suffix),"no-store");
+            }
+            assertCache(assets.configuredWindowsInstaller("x86_64-pc-windows-msvc","https://control.example.test"),"no-store");
+        }
+    }
+    private void assertCache(jakarta.ws.rs.core.Response response,String expected)throws Exception{
+        assertEquals(expected,response.getHeaderString("Cache-Control"));
+        ((jakarta.ws.rs.core.StreamingOutput)response.getEntity()).write(java.io.OutputStream.nullOutputStream());
     }
     @Test void corruptionAndUnsafeManifestFailStartup()throws Exception{
         bundle();var document=Files.readString(directory.resolve("manifest.json"));Files.writeString(directory.resolve("manifest.json"),document.replace("olo-toolgate-client-0.7.0-dev-x86_64-unknown-linux-gnu.tar.gz","../../secret"));
