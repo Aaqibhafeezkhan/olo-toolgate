@@ -76,6 +76,27 @@ class SameRunReleaseTests(unittest.TestCase):
 
 
 class SharedCheckOwnershipTests(unittest.TestCase):
+    def check_caller_permissions(self, pipeline):
+        levels = {'none': 0, 'read': 1, 'write': 2}
+        for name, caller in pipeline['jobs'].items():
+            target = workflow(Path(caller['uses']).name)
+            granted = caller.get('permissions', pipeline.get('permissions', {}))
+            requested = [target.get('permissions', {})]
+            requested += [job['permissions'] for job in target['jobs'].values() if 'permissions' in job]
+            for permissions in requested:
+                for scope, level in permissions.items():
+                    self.assertGreaterEqual(levels[granted.get(scope, 'none')], levels[level],
+                                            f'{name}: called workflow exceeds caller permission for {scope}')
+
+    def test_reusable_workflow_permissions_fit_the_calling_job(self):
+        self.check_caller_permissions(workflow('ci.yml'))
+
+    def test_missing_release_pr_read_permission_reproduces_startup_rejection(self):
+        pipeline = workflow('ci.yml')
+        del pipeline['jobs']['release']['permissions']['pull-requests']
+        with self.assertRaisesRegex(AssertionError, 'release.*pull-requests'):
+            self.check_caller_permissions(pipeline)
+
     def test_main_calls_one_shared_stage_and_one_platform_matrix(self):
         jobs = workflow('ci.yml')['jobs']
         self.assertEqual(set(jobs), {'admission','preflight','foundation','clients','images','release'})

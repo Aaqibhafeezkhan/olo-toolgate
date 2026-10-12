@@ -54,5 +54,10 @@ non-RC or missing PRs skip the dependent build/release jobs. The lookup uses
 and prevent publication.
 
 These changes take effect on GitHub only after the workflow files are pushed.
+Reusable workflow calls must grant every permission requested by the called
+workflow. The release caller explicitly includes `pull-requests: read`; omitting
+that scope from its job-level permissions sets it to `none` and causes GitHub to
+reject the entire workflow before admission starts. Focused ownership tests
+validate each main caller against its reusable workflow's requested scopes.
 They do not stop already-running jobs. Local `debug/start.bat` remains usable
 while CI is paused and does not commit or push.
