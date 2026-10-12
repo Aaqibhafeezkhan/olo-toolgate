@@ -199,7 +199,8 @@ def main():
         replicas = wait_healthy(2, host, https)
     else:
         check(len(args.replica) >= 2, "give --compose or at least two --replica URLs")
-        replicas = [Replica(f"replica-{i + 1}", url, None, False) for i, url in enumerate(args.replica)]
+        explicit = os.environ.get("MARKETPLACE_PUBLIC_HOST")
+        replicas = [Replica(f"replica-{i + 1}", url, explicit, https and bool(explicit)) for i, url in enumerate(args.replica)]
     a, b = replicas[0], replicas[1]
 
     step(f"log in on {a.name}")

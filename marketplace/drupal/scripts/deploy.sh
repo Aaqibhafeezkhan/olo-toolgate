@@ -11,14 +11,14 @@ cd /opt/drupal
 export MARKETPLACE_CONFIG_READONLY=false
 
 for attempt in $(seq 1 60); do
-  if drush sql:query 'SELECT 1' >/dev/null 2>&1; then
+  if state="$(php scripts/db-state.php 2>/dev/null)"; then
     break
   fi
   [ "$attempt" = 60 ] && { echo "deploy: database unreachable" >&2; exit 1; }
   sleep 2
 done
 
-if drush php:eval "echo \\Drupal\\Core\\Database\\Database::getConnection()->schema()->tableExists('key_value') ? 'installed' : 'empty';" 2>/dev/null | grep -q installed; then
+if [ "$state" = installed ]; then
   echo "deploy: existing site, running drush deploy"
   drush deploy -y
 else

@@ -73,6 +73,8 @@ services:
   deploy:
     <<: *drupal
     command: ["/opt/drupal/scripts/deploy.sh"]
+    healthcheck:
+      disable: true
     secrets:
       - source: helper_token
         target: marketplace_helper_token
@@ -91,6 +93,8 @@ services:
   cron:
     <<: *drupal
     command: ["bash", "-c", "while true; do /opt/drupal/scripts/cron.sh || true; sleep 300; done"]
+    healthcheck:
+      disable: true
     depends_on:
       deploy: { condition: service_completed_successfully }
     networks: [internal]
