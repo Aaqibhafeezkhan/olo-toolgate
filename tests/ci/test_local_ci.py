@@ -81,6 +81,17 @@ class LocalCiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unknown dependency'):
             local.inventory(self.workflows)
 
+    def test_scan_report_capture_preserves_always_without_allowing_conditional_gates(self):
+        body=local.replay_document('foundation.check',self.workflows)['jobs']['replay']
+        capture=next(s for s in body['steps'] if s.get('with',{}).get('name')=='source-scan-findings')
+        self.assertEqual(capture['if'],'always()')
+        for step in ({'run':'python tools/check.py --scans','if':'always()'},
+                     {**capture,'if':'failure()'}):
+            workflows=copy.deepcopy(self.workflows)
+            workflows['foundation']['jobs']['check']['steps'].append(step)
+            with self.subTest(step=step),self.assertRaisesRegex(ValueError,'conditional steps'):
+                local.inventory(workflows)
+
     def test_dependency_cycle_is_rejected(self):
         self.workflows['ci']['jobs']['admission']['needs'] = 'foundation'
         with self.assertRaisesRegex(ValueError, 'cycle'):

@@ -7,7 +7,8 @@ import java.sql.*;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
-/** Explicit single-node persistence adapter. IMMEDIATE transactions serialize writers;
+/** Explicit single-node persistence adapter. IMMEDIATE mutations serialize writers;
+ * the JDBC store selects read-only WAL snapshots for directory reads.
  * immutable migrations and triggers retain the same audit/version boundary as PostgreSQL.
  * The supervisor owns the exclusive /data lock; this adapter is never an HA backend.
  */

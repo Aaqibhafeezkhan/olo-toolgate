@@ -129,7 +129,7 @@ async fn cold_engine_startup_preserves_limits_and_capabilities() {
     // A healthy engine's first metadata query must survive a cold startup over 3s.
     std::fs::write(
         &binary,
-        format!("#!/bin/sh\n/bin/sleep 4\n/bin/printf '%s\\n' '{capabilities}'\n"),
+        format!("#!/bin/sh\n/bin/sleep 4\nprintf '%s\\n' '{capabilities}'\n"),
     )
     .unwrap();
     std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -144,14 +144,14 @@ async fn cold_engine_startup_preserves_limits_and_capabilities() {
     let unsupported = capabilities.replace("\"SwapLimit\":true", "\"SwapLimit\":false");
     std::fs::write(
         &binary,
-        format!("#!/bin/sh\n/bin/printf '%s\\n' '{unsupported}'\n"),
+        format!("#!/bin/sh\nprintf '%s\\n' '{unsupported}'\n"),
     )
     .unwrap();
     assert_eq!(engine.check().await.unwrap_err(), Failure::Unsupported);
     // Container creation is setup: a 4s cold create must not spend the 1s tool budget.
     std::fs::write(
         &binary,
-        "#!/bin/sh\ncase \"$5\" in\ncreate) /bin/sleep 4 ;;\nstart) /bin/printf 'ready\\n' ;;\nrm) exit 0 ;;\n*) exit 1 ;;\nesac\n",
+        "#!/bin/sh\ncase \"$5\" in\ncreate) /bin/sleep 4 ;;\nstart) printf 'ready\\n' ;;\nrm) exit 0 ;;\n*) exit 1 ;;\nesac\n",
     )
     .unwrap();
     let limits = LocalRuntimeLimits {

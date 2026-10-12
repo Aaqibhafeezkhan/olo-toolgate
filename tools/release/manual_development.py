@@ -79,7 +79,7 @@ def build():
     run('npm', 'run', 'contracts:build')
     run('npm', 'pack', './packages/contracts/typescript', '--ignore-scripts', '--pack-destination', str(ASSETS))
     run('./gradlew', '--no-daemon', '-PcontractsPublicationVersion='+info['libraryVersion'],
-        ':contracts-java:assemble', '-x', 'test')
+        ':contracts-java:assemble', ':contracts-java:generatePomFileForMavenJavaPublication', '-x', 'test')
     for path in (ROOT/'packages/contracts/java/build/libs').glob('*.jar'):
         shutil.copyfile(path, ASSETS/path.name)
     run(sys.executable, 'tools/release/bundle.py', '--output', str(ASSETS))

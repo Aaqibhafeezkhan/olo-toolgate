@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import ssl
 import statistics
 import subprocess
@@ -23,13 +24,17 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 ROOT=Path(__file__).resolve().parents[2]
+WINDOWS=os.name=='nt'
 sys.path.insert(0,str(ROOT/'tools/control'))
 from check import request, database
 
 
 def run(args, **kwargs):
-    if os.name=='nt' and args[0]=='npm':args=['npm.cmd',*args[1:]]
-    return subprocess.run(args,cwd=ROOT,check=True,**kwargs)
+    cwd=kwargs.pop('cwd',ROOT)
+    if WINDOWS:
+        if args[0]=='npm':args=['npm.cmd',*args[1:]]
+        elif args[0]=='./gradlew':args=[str(Path(cwd)/'gradlew.bat'),*args[1:]]
+    return subprocess.run(args,cwd=cwd,check=True,**kwargs)
 
 
 def ready(container, port):
@@ -72,16 +77,37 @@ TOOL_HOST='tool-host-local'
 REMOTE_TOOL_HOST='tool-host-remote'
 
 
+def toolgate_cli():
+    if shutil.which('cargo'):
+        run(['cargo','build','-q','--locked','-p','toolgate-cli','--bin','toolgate'])
+        target=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target'))
+        if not target.is_absolute():target=ROOT/target
+        return target.resolve()/'debug'/('toolgate.exe' if WINDOWS else 'toolgate')
+    if not WINDOWS:raise RuntimeError('Cargo is required to build the Quickstart starter tool')
+    # Debug Windows hosts already require Linux Docker and use this pinned MinGW toolchain.
+    image='olo-toolgate-client-debug-tools:rust-1.94.1'
+    target='x86_64-pc-windows-gnu'
+    registry=ROOT/'.dev/cargo-registry';registry.mkdir(parents=True,exist_ok=True)
+    run(['docker','build','-f',str(ROOT/'debug/windows-client.Dockerfile'),'-t',image,str(ROOT)])
+    run(['docker','run','--rm','-v',f'{ROOT.as_posix()}:/work',
+         '-v',f'{registry.as_posix()}:/usr/local/cargo/registry','-w','/work',
+         '-e','CARGO_TARGET_DIR=/work/target/client-release',image,
+         'cargo','build','-q','--release','--locked','-p','toolgate-cli','--bin','toolgate','--target',target])
+    return ROOT/'target/client-release'/target/'release/toolgate.exe'
+
+
 def starter_package():
     """The Java starter as a tool author builds it: `toolgate init`, then `toolgate pack`."""
     run(['./gradlew','-q','--configure-on-demand','publishJavaSdkLocally'])
-    run(['cargo','build','-q','-p','toolgate-cli'])
-    toolgate=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target'))/'debug'/'toolgate'
-    out=ROOT/'build/quickstart-starter'
-    subprocess.run(['rm','-rf',str(out)],check=True)
-    run([str(toolgate),'init','orders','--dir',str(out),'--id','acme.orders','--publisher','Acme','--sdk-repo',str(ROOT/'build/sdk-repo')],capture_output=True)
-    subprocess.run([str(toolgate),'pack'],cwd=out,check=True,capture_output=True)
-    return (out/'build/toolgate/orders-0.1.0.tgpkg').read_bytes()
+    toolgate=toolgate_cli()
+    build=(ROOT/'build').resolve();build.mkdir(parents=True,exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='quickstart-starter-',dir=build) as temporary:
+        out=Path(temporary).resolve()
+        if out.parent!=build or not out.name.startswith('quickstart-starter-'):
+            raise ValueError('Starter test directory must be owned by this workspace')
+        run([str(toolgate),'init','orders','--dir',str(out),'--id','acme.orders','--publisher','Acme','--sdk-repo',str(ROOT/'build/sdk-repo')])
+        run([str(toolgate),'pack'],cwd=out)
+        return (out/'build/toolgate/orders-0.1.0.tgpkg').read_bytes()
 
 
 def smoke(image, browser, database_options=None, gateway_image=None):

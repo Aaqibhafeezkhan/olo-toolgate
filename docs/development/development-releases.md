@@ -36,7 +36,7 @@ image tag. Kubernetes deployment credentials and enablement remain installation 
 |----------|---------|----------|
 | Control, Gateway, Quickstart, Linux device containers | Run platform services and endpoint devices | Docker Hub (`dev-<commit>` tags) |
 | Native client installers (`.setup.exe`/`.dmg`/`.run`) | Desktop installation | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
-| Java JARs + POM | JVM integration | Maven Central |
+| Java JARs + POM | JVM integration | Configured Maven repository (GitHub Packages by default) |
 | TypeScript library | Node/browser integration | GitHub npm Packages (`dev` dist-tag) |
 | Rust `.crate` / PHP distribution | Rust and PHP integration | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
 | Helm chart | Kubernetes deployment | GitHub OCI registry |
@@ -51,7 +51,9 @@ Maven defaults to GitHub Packages using `GITHUB_TOKEN`; a custom Maven URL requi
 `MAVEN_REPOSITORY_URL`, `MAVEN_USERNAME` and `MAVEN_PASSWORD`. GitHub npm/Helm use the
 workflow's Packages write permission. Any configured GitHub environment approval
 still applies. Registry publication is not atomic; inspect a failed run before
-rerunning it. This workflow has no automatic push/tag/schedule trigger.
+rerunning it. External Maven upload runs last, after npm, images, Helm and the
+GitHub prerelease. Its failure still fails the job without preventing those
+earlier publications. This workflow has no automatic push/tag/schedule trigger.
 
 ## Existing CI-backed development releases
 

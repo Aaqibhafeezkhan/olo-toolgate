@@ -20,8 +20,8 @@ context; identical checks run once within that context.
 Both channels use the existing `development-release` environment. Gateway and
 Foundation previously had distinct publication capabilities; those capabilities
 are merged here. Their obsolete publishing jobs and the standalone foundation
-release workflow are retired. After those callers are merged, their empty
-`gateway-release` and `foundation-release` environment records can be removed.
+release workflow are retired. The retired `gateway-release` and
+`foundation-release` environments have no remaining workflow callers.
 Configure reviewers and branch/tag restrictions on the common environment as needed.
 
 Tag/version drift or a tag resolving to a different commit prevents publication.
@@ -31,7 +31,11 @@ no Java rebuild or test replay. The exact release-tag lookup rejects an existing
 GitHub release and fails closed on authentication or network errors. Provenance
 for all four image digests and release assets must succeed before the GitHub
 release is created. Registry writes across Maven, GHCR and OCI are not atomic;
-inspect partial publication before retrying a failed run.
+inspect partial publication before retrying a failed run. External Maven upload
+runs last, after image/chart publication, provenance and the GitHub release.
+Development JARs and POMs are assembled locally before uploading GitHub assets.
+A Maven configuration or repository failure still fails the job, while the other
+publications remain available; inspect them before retrying.
 
 ## Credentials and Maven Central
 
@@ -54,8 +58,9 @@ Central Portal is not a standard Maven PUT repository. Its release flow requires
 Portal upload, GPG signatures and Central-compliant POM metadata; that integration
 is not implemented by the current publisher. Do not use a Central Portal URL as
 the custom repository URL expecting credentials alone to enable publication.
-The common publisher rejects that target before artifact collection or credential
-transmission, with an explicit configuration error.
+The publisher rejects that target at the final Maven step before credential
+transmission, with an explicit configuration error. This leaves image, chart and
+GitHub release publication independent of the external Maven repository.
 See [Sonatype publishing requirements](https://central.sonatype.org/publish/publish-portal-maven/).
 
 ## Retained validation contexts

@@ -158,7 +158,11 @@ def validate_replay(key, document, job):
     if set(job) - allowed or set(document) & {'env', 'defaults', 'services'}:
         raise ValueError(f'{key}: new workflow/job context needs local coverage review')
     for step in job.get('steps', []):
-        if 'if' in step:
+        # Status-only artifact capture preserves failed scan evidence without
+        # changing which validation commands run. Keep the condition in replay.
+        capture_always=(step.get('if')=='always()'
+                        and step.get('uses','').split('@')[0]=='actions/upload-artifact')
+        if 'if' in step and not capture_always:
             raise ValueError(f'{key}: conditional steps need explicit local coverage review')
         if 'uses' in step and step['uses'].split('@')[0] not in ALLOWED_ACTIONS:
             raise ValueError(f'{key}: action needs local coverage review: {step["uses"]}')

@@ -237,11 +237,35 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         self.assertEqual(len(attest),5)
         self.assertEqual({a['with'].get('subject-name') for a in attest if a['with'].get('push-to-registry')},
             {'${{ steps.push.outputs.'+c+'_image }}' for c in shared.IMAGES})
-        self.assertEqual(steps[-1]['run'],'python tools/release/development.py finalize')
-        scripts=[s.get('run') for s in steps]
-        self.assertLess(scripts.index('python tools/release/development.py validate-maven'),
-            scripts.index('python tools/release/development.py prepare --run-id "$GITHUB_RUN_ID"\n'))
+        self.assertEqual(steps[-2]['run'],'python tools/release/development.py finalize')
         self.assertTrue(all("refs/tags/" in a['if'] for a in attest))
+
+    def test_external_maven_configuration_and_upload_are_last_in_both_publishers(self):
+        for name in ('development-release','manual-development-release'):
+            with self.subTest(workflow=name):
+                job=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']['publish']
+                self.assertNotIn('MAVEN_REPOSITORY_URL',job.get('env',{}))
+                steps=job['steps'];maven=steps[-1]
+                self.assertIn('MAVEN_REPOSITORY_URL',maven['env'])
+                script=maven['run']
+                self.assertTrue(script.startswith('python tools/release/development.py validate-maven\n'))
+                self.assertLess(script.index('validate-maven'),script.index('export MAVEN_PASSWORD'))
+                self.assertIn(':contracts-java:publishMavenJavaPublicationToRemoteRepository',script)
+                earlier='\n'.join(step.get('run','') for step in steps[:-1])
+                self.assertNotIn('validate-maven',earlier)
+                self.assertNotIn('publishMavenJavaPublicationToRemoteRepository',earlier)
+                self.assertNotIn('publish-maven',earlier)
+                self.assertTrue(all('MAVEN_REPOSITORY_URL' not in step.get('env',{}) for step in steps[:-1]))
+                self.assertIn('development.py publish' if name=='development-release'
+                              else 'manual_development.py publish',earlier)
+        steps=yaml.safe_load((ROOT/'.github/workflows/development-release.yml').read_text())['jobs']['publish']['steps']
+        assembly=next(i for i,step in enumerate(steps) if step.get('name')=='Assemble development Maven release assets')
+        push=next(i for i,step in enumerate(steps) if step.get('id')=='push')
+        self.assertLess(assembly,push)
+        self.assertIn(':contracts-java:assemble :contracts-java:generatePomFileForMavenJavaPublication',steps[assembly]['run'])
+        self.assertIn('pom-default.xml',steps[assembly]['run'])
+        manual=yaml.safe_load((ROOT/'.github/workflows/manual-development-release.yml').read_text())['jobs']['publish']['steps']
+        self.assertIn('npm publish','\n'.join(step.get('run','') for step in manual[:-1]))
 
 
 if __name__=='__main__':unittest.main()

@@ -12,6 +12,32 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class SqliteTest {
     @TempDir Path directory;
+    @Test void concurrentDirectoryReadsDoNotReserveTheWriterAndKeepSnapshotIsolation() {
+        var codec=new ContractCodec();var store=new PostgresStore(SqliteState.open(directory.resolve("readers.sqlite")),codec);
+        var actor=TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");
+        var service=new DirectoryService(store,codec,512,1048576);
+        store.transaction(actor.tenant(),false,first->{
+            long revision=first.load().revision();
+            String audit=first.auditPage(0,20);
+            long concurrentRevision=store.transaction(actor.tenant(),false,second->second.load().revision());
+            assertEquals(revision,concurrentRevision);
+            // A writer can commit while this reader retains its original snapshot.
+            assertEquals(201,service.mutate(actor,Ids.Kind.USER,"concurrent-user","CREATE",
+                DomainTest.user("concurrent-user",1),0,"concurrent-user-key","request").status());
+            assertEquals(revision,first.load().revision());
+            assertEquals(audit,first.auditPage(0,20));
+            return null;
+        });
+        assertEquals(200,service.get(actor,Ids.Kind.USER,"concurrent-user").status());
+    }
+    @Test void readTransactionsCannotWriteAuditRecords() {
+        var codec=new ContractCodec();var store=new PostgresStore(SqliteState.open(directory.resolve("readonly.sqlite")),codec);
+        var actor=TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");
+        assertThrows(Failure.class,()->store.transaction(actor.tenant(),false,tx->{
+            tx.audit(actor.id(),"CREATE","forbidden",1,"readonly","b".repeat(64));return null;
+        }));
+        assertFalse(store.transaction(actor.tenant(),false,tx->tx.auditPage(0,20)).contains("forbidden"));
+    }
     @Test void defaultMembershipIsAtomicAndNeverGrantsRuntimeAccess() {
         var codec=new ContractCodec();var store=new PostgresStore(SqliteState.open(directory.resolve("membership.sqlite")),codec);
         var actor=TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");var service=new DirectoryService(store,codec,512,1048576);

@@ -89,3 +89,29 @@ six HIGH findings: active SDK Plexus Utils 3.6.0 and Jackson 3.1.4 in the frozen
 self-test. Both Windows jobs passed unit tests then failed the initial silent
 installer with exit 7; the logs lack an installer diagnostic log, so its cause
 is not established. These distinct gates remain required and block publication.
+
+In [run 38250572617](https://github.com/olo-labs/olo-toolgate/actions/runs/38250572617),
+Linux and Windows native jobs passed. Both macOS jobs failed a new cold-engine
+fixture that invoked Linux's `/bin/printf`; it now uses the POSIX shell builtin.
+Foundation passed its build/test gates, then reported the same six HIGH findings.
+The active Maven plugin now constrains Plexus Utils to the fixed 3.6.1 release;
+its tests and local SDK publication passed. Windows Quickstart smoke now selects
+`gradlew.bat`, builds a native CLI and uses an owned temporary starter project.
+
+Source scanning still includes every inventoried file and retains the full
+HIGH/CRITICAL vulnerability/license report. Dependency findings in the exact,
+unchanged 2026-10-10 compatibility manifests are historical evidence and are
+reported separately, without blocking publication. Their approved SHA-256 hashes
+are checked against the scanned snapshot. Changed manifests, new records and
+active dependencies remain blocking; all license and secret findings retain
+their existing gates. CI uploads `source-scan-findings` even when the scan fails.
+The five historical Jackson 3.1.4 findings remain visible in `historical.json`;
+the frozen conformance record and its hashes are unchanged.
+
+Browser login and configuration refresh checks now wait for their HTTP responses
+and use the Control client's 15-second deadline. A later picker failure was tied
+by request ID to SQLite transaction acquisition: read-only sessions unnecessarily
+reserved its sole writer. Quickstart reads now use read-only WAL snapshots;
+mutations retain IMMEDIATE serialization and commit without acquiring a second
+writer reservation. Regression tests cover overlapping readers/writers, snapshot
+isolation and rejection of writes in a read transaction.

@@ -35,6 +35,13 @@ jobs:
     - name: Dependency, license and secret scan hooks
       run: |
         python tools/check.py --scans --ci-common
+    - name: Preserve full and historical source scan findings
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: source-scan-findings
+        path: build/source-scan/
+        if-no-files-found: ignore
     - name: Create raw contract release smoke assets
       run: |
         python tools/release/bundle.py
