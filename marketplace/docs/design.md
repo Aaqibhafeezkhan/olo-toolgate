@@ -1,7 +1,7 @@
 # ToolGate Marketplace v1 — Design Document
 
 **Status:** Proposed implementation design  
-**Version:** 1.1 (adds release signing and the fixes from design-review.md)  
+**Version:** 1.2 (1.1 added release signing and the design-review.md fixes; 1.2 applies Rahul's P0–P2 review of 2026-10-12)  
 **Marketplace base URL (configurable):** `https://olo-labs.duckdns.org`  
 **Scope:** Upload → Validate → List → Consume  
 **Source:** Simplified from `v1-plan.md`; 1.1 applies [design-review.md](design-review.md) and keeps signing (Rahul, 2026-10-12), with the subsequently agreed public publisher profiles and user-entered listing details. This document is a proposed design, not a claim about implemented ToolGate or Drupal APIs.
@@ -18,13 +18,14 @@ Deliver a small, publicly accessible marketplace where community members can reg
 |---|---|
 | Marketplace website, users, metadata, public API | Drupal and a small custom `toolgate_marketplace` module |
 | Persistence | One relational database supported by the chosen Drupal distribution (MariaDB or PostgreSQL) and persistent private/public file volumes |
-| Validation | One small Java helper service reusing Control's own `PackageArchive` validation (extracted to a shared library), with `toolgate validate` on a file as a second check; no package execution |
+| Validation | One small Java helper service. **Authoritative:** Control's own `PackageArchive` validation, extracted to a shared library. The Rust `toolgate validate` is optional (§6, "Validators"); no package execution |
 | Package format | Existing `.tgpkg`; preserve package bytes. Identity is `packageDigest` (SHA-256 of `CHECKSUMS.sha256`); `archiveSha256` is only for download integrity |
 | Publisher identity | Drupal account + editable public publisher profile; ToolGate has no mirrored publisher accounts |
 | Listing information | Validated technical metadata plus separate editable display metadata |
 | Availability | Structurally validated package is signed by the helper (detached release record) and becomes public when the owner saves the listing |
 | Signing | One Ed25519 Marketplace key, held only by the helper (secret mount); public key at `/.well-known/toolgate-marketplace-keys.json` and pinned in ToolGate Control |
-| Namespaces | Package id prefix is bound to the publisher slug (`acme` owns `acme.*`) |
+| Namespaces | Package id prefix is bound to the publisher slug (`acme` owns `acme.*`); the slug is **immutable** in v1 |
+| Marketplace identity | A stable id, `MARKETPLACE_ID` (for example `olo-labs-marketplace`), is signed into every release. The base URL is not signed, so changing the domain never invalidates releases |
 | ToolGate consumption | Read-only catalog/detail download APIs; ToolGate Control imports by trusted marketplace identifier, verifies the release signature, revalidates locally, and invokes existing upload process |
 | Reverse proxy | Existing proxy if present; otherwise Caddy/Traefik |
 | Search | Basic Drupal/DB queries; no dedicated search service |
@@ -82,7 +83,7 @@ One public profile per Drupal account; use immutable internal IDs for relationsh
 | Field | Source | Rules |
 |---|---|---|
 | `publisherId` | Drupal | Stable internal identifier; public opaque ID allowed |
-| `slug` | Publisher | Required, unique, URL-safe; changing it requires redirect or stable-ID lookup |
+| `slug` | Publisher | Required, unique, URL-safe, chosen once when the profile is created and **immutable in v1**: it is the package-id namespace and is signed into every release. A change needs a later, explicit migration design |
 | `displayName` | Publisher | Required, escaped on output |
 | `avatarUrl` | Publisher | Optional; safe uploaded image or approved image URL |
 | `bio` | Publisher | Optional, sanitized text |
@@ -91,6 +92,8 @@ One public profile per Drupal account; use immutable internal IDs for relationsh
 | `country` | Publisher | Optional, public only when selected |
 | `publicContactEmail` | Publisher | Optional, separate from private login email, explicit opt-in |
 | `createdAt`, `updatedAt` | Drupal | System-managed |
+
+Display name, avatar, bio, organization, links, country and public contact stay editable at any time; none of them is signed or used for ownership.
 
 **Privacy:** Never expose the login email by default, password hashes, internal roles, tokens, private upload paths, or other private Drupal account data. The UI must clearly indicate which fields are public. All unverified publisher claims are just publisher-provided information; do not label them “verified.”
 
@@ -140,11 +143,12 @@ Published archive bytes and version identity cannot change. The owner may edit d
 
 1. Authenticated account opens **My Packages → Upload Package**.
 2. Drupal checks file extension and size (default **50 MB maximum**, configurable, and always below Control's 64 MiB upload limit), stores the upload in **private** storage, and creates an upload attempt.
-3. Drupal calls the internal helper with the uploaded bytes or with an authenticated internal-only download route. The helper inspects the archive without executing its contents and, if it is valid, signs the release record (§6.1).
-4. The helper returns normalized technical listing metadata and validation errors. Prefer `marketplace/listing.json` if supported and consistent with the canonical package manifest; otherwise fall back to `toolgate-package.json` and the tool descriptors for package ID/version/tools/settings. The Java SDK doesn't generate `listing.json` yet, so the fallback is the normal v1 path and is tested first. Treat content in both as untrusted text.
-5. Drupal shows immutable extracted fields and an editable form containing: display title, short summary, Markdown/plain-text description, category, tags, repository URL, documentation URL, optional screenshots, and license where not already authoritatively declared.
-6. Publisher saves. Server verifies the prefix/slug ownership and package/version uniqueness, binds the public publisher profile, stores the user-entered fields, and publishes the exact validated bytes and the `.release.json` as `AVAILABLE`.
-7. Package appears immediately in the public marketplace and JSON catalog. Rejected packages do not appear or expose their uploaded bytes.
+3. Drupal calls the helper's `POST /inspect` with the uploaded bytes or an authenticated internal-only file reference. The helper inspects the archive without executing its contents. **It does not sign.**
+4. Drupal checks ownership and uniqueness from the inspect result: the package id prefix must equal the slug of the publisher profile owned by the **logged-in user** (from the Drupal session, never from the form, the archive or the manifest `publisher` text), the prefix is not reserved, and `(packageId, version)` doesn't exist yet. Only then does Drupal call `POST /sign` (§6.1) with the same file reference, the `packageDigest` it was shown, and `authorizedPublisherSlug` set to that session-derived slug. A failed check rejects the upload with no signing call.
+5. The helper returns normalized technical listing metadata and validation errors. Prefer `marketplace/listing.json` if supported and consistent with the canonical package manifest; otherwise fall back to `toolgate-package.json` and the tool descriptors for package ID/version/tools/settings. The Java SDK doesn't generate `listing.json` yet, so the fallback is the normal v1 path and is tested first. Treat content in both as untrusted text.
+6. Drupal shows immutable extracted fields and an editable form containing: display title, short summary, Markdown/plain-text description, category, tags, repository URL, documentation URL, optional screenshots, and license where not already authoritatively declared.
+7. Publisher saves. Server re-verifies the prefix/slug ownership and package/version uniqueness, binds the public publisher profile, stores the user-entered fields, and publishes the exact validated bytes and the `.release.json` as `AVAILABLE`.
+8. Package appears immediately in the public marketplace and JSON catalog. Rejected packages do not appear or expose their uploaded bytes.
 
 **Important:** Make the “validation passed” step and “complete listing/save” step explicit in the UI. A partially completed listing must not accidentally become public. Use a short-lived private draft or staging status if necessary, without introducing a generalized workflow engine.
 
@@ -160,7 +164,10 @@ Published archive bytes and version identity cannot change. The owner may edit d
 
 ### Endpoint (internal only)
 
-`POST /inspect` — multipart upload of `.tgpkg` or a controlled internal file reference; returns a structured result.
+Both endpoints are on the internal network only and require Drupal's internal bearer token (`MARKETPLACE_HELPER_TOKEN`, a secret mount). A request without it is refused, whatever network it comes from.
+
+- `POST /inspect`: multipart upload of `.tgpkg` or a controlled internal file reference; returns the structured result below. **Never signs.**
+- `POST /sign`: `{fileRef, packageDigest, authorizedPublisherSlug}`. The helper re-reads the bytes, re-runs validation, requires the computed `packageDigest` to equal the one given, requires the manifest id prefix to equal `authorizedPublisherSlug`, and refuses reserved prefixes. Only then does it sign, with `publisherSlug` = `authorizedPublisherSlug`. It never takes the slug from the archive. Drupal is the only caller and is responsible for having authenticated the user and checked ownership (§5.2 step 4).
 
 ```json
 {
@@ -195,7 +202,9 @@ This JSON is the response contract. `requiredSettings` is built from each descri
 - Required manifest and descriptor fields consistent with the supported ToolGate package format.
 - Supported runtime only (the original plan specifies Java server tools for v1).
 - `packageDigest` (SHA-256 of `CHECKSUMS.sha256`, as Control computes it) and `descriptorSetDigest` taken from the validator; `archiveSha256` computed from the exact original archive bytes.
-- Validation runs Control's `PackageArchive` rules (for example, each Java tool has exactly one jar artifact), so anything listed is accepted by Control's upload. `toolgate validate` is run as a second check **only on a single regular file the helper wrote itself**, never on a directory: on a directory it compiles and runs the project's tests.
+- **Validators.** Control's `PackageArchive` (shared library) is the **authoritative** validator: its accept/reject decision is the helper's decision, so anything listed is accepted by Control's upload. That includes rules only Control has, such as each Java tool having exactly one jar artifact.
+  - The Rust `toolgate validate` is included **only if** PR 1's differential test (both validators over the same valid and malformed fixtures) shows it rejects something `PackageArchive` accepts. In that case the helper runs it as an additional, reject-only check, and the PR lists exactly which extra rules it contributes. If the test shows nothing extra, the CLI is left out of the helper.
+  - When run, it is given only a single regular file the helper wrote itself, never a directory: on a directory it compiles and runs the project's tests.
 - No execution of uploaded bytecode, scripts, install hooks or MCP tools during validation.
 - Worker runs as non-root with limited memory/CPU, read-only filesystem where practical, no Docker socket and minimal network access.
 
@@ -203,12 +212,12 @@ The helper should return a clear machine code and human-readable error for inval
 
 ### 6.1 Release signing
 
-When validation passes, the helper signs a release record and returns it with the result. The package bytes are not changed; the record is a detached `.release.json` stored and served next to the `.tgpkg`.
+On an authorized `POST /sign` (§6), the helper signs a release record and returns it. The package bytes are not changed; the record is a detached `.release.json` stored and served next to the `.tgpkg`.
 
 ```json
 {
   "schema": "toolgate.marketplace.release/1",
-  "marketplace": "https://olo-labs.duckdns.org",
+  "marketplace": "olo-labs-marketplace",
   "packageId": "acme.notify",
   "version": "0.1.0",
   "packageDigest": "sha256:<64 lowercase hex>",
@@ -221,9 +230,15 @@ When validation passes, the helper signs a release record and returns it with th
 }
 ```
 
-- The key is generated once (a documented script), mounted into the helper as a secret, and never reaches Drupal, the database or Git.
+- `marketplace` is the stable `MARKETPLACE_ID`, not the base URL, so moving from `olo-labs.duckdns.org` to the production domain changes no signature.
+- **Key lifecycle:**
+  - An explicit, one-time init step (`scripts/init-signing-key.sh`) generates the key. It refuses to run if a key already exists, so a restart or redeploy can never replace it.
+  - The private key is stored in a dedicated secret volume or host path that is mounted only into the helper. It is outside Drupal's volumes, database and backups, and never in Git. It is backed up separately, by a documented operator procedure.
+  - The helper refuses to start without a key.
+  - The init step prints the public key and its SHA-256 fingerprint. The website shows the same fingerprint on an "About signing" page and in the keys file.
+- **ToolGate configuration step:** an admin sets `TOOLGATE_CONTROL_MARKETPLACE_ID`, `_BASE_URL` and `_KEYS` (`keyId:base64 public key`). Control logs and displays the fingerprint of each pinned key, and the docs tell the admin to compare it with the fingerprint published by the Marketplace operator out of band. Control never fetches and trusts a key automatically.
 - `GET /.well-known/toolgate-marketplace-keys.json` lists `{keyId, algorithm: "Ed25519", publicKey}` for current and retired keys.
-- What the signature means: "this Marketplace validated these exact bytes for this publisher slug". It is **not** a safety review and grants no authority in ToolGate.
+- What the signature means: "this Marketplace (`marketplace`) validated these exact bytes, with this `packageDigest` and `descriptorSetDigest`, as `packageId`@`version` for this publisher slug". It authenticates **only the package bytes and the signed identity fields**. Titles, descriptions, tags, screenshots, licence text shown on the site, and publisher profile claims are unsigned display data that can change without a new release. It is **not** a safety review and grants no authority in ToolGate.
 - Rotation in v1 is manual: add the new key to the keys file and to each ToolGate's pinned keys, then switch the helper. Old releases stay valid under their `keyId`.
 
 ### 6.2 Version compatibility
@@ -271,7 +286,7 @@ All read endpoints expose only `AVAILABLE` packages, except that the detail endp
 | GET | `/api/toolgate/v1/catalog?page=1&limit=20&q=webhook` | Search/list available packages with publisher summaries |
 | GET | `/api/toolgate/v1/tools/{id}` | One package with all its available versions (newest first) |
 | GET | `/api/toolgate/v1/tools/{id}/{version}` | Complete package technical/listing metadata plus publisher public profile and the release record |
-| GET | `/api/toolgate/v1/tools/{id}/{version}/package` | Download exact validated archive bytes (`Cache-Control: public, max-age=31536000, immutable`) |
+| GET | `/api/toolgate/v1/tools/{id}/{version}/package` | Download exact validated archive bytes (`Cache-Control: public, max-age=300, must-revalidate`); `410 Gone` once delisted |
 | GET | `/api/toolgate/v1/tools/{id}/{version}/release` | The signed `.release.json` |
 | GET | `/api/toolgate/v1/media/{id}` | Avatars, icons and screenshots by opaque id, size-capped, `image/png` or `image/jpeg` only |
 | GET | `/.well-known/toolgate-marketplace-keys.json` | Public signing keys |
@@ -369,6 +384,7 @@ The sample identities and links above are illustrative. Do not seed them as real
 - Public responses must exclude drafts, rejected uploads and private account fields.
 - Add modest request rate limits and download protections at the reverse proxy/application layer.
 - Use appropriate cache headers; invalidate cached catalog and profile data after edits.
+- The package **bytes** are immutable, but responses are **not** marked `immutable`: every download is checked against the version's current status, with at most five minutes of shared caching. A delisted version's package and release endpoints return `410 Gone` with code `DELISTED`; its detail endpoint still answers with `delisted: true`. Purge the proxy cache for that path on delist.
 - Provide CORS only if a genuine browser-cross-origin integration needs it; ToolGate Control should request server-to-server.
 
 ## 8. ToolGate Admin consumer design
@@ -404,17 +420,25 @@ sequenceDiagram
     Control->>Drupal: GET package details
     Control->>Drupal: GET release record
     Control->>Drupal: GET package bytes
-    Control->>Control: Verify signature (pinned key), check archiveSha256, run existing validation, require computed packageDigest = signed packageDigest
+    Control->>Control: Check detail not delisted, verify signature (key pinned for this marketplace id), match every signed identity field (§8.3), run existing validation
     Control->>Existing: Existing upload/import operation
     Existing-->>UI: Imported (not deployed/enabled/granted)
 ```
 
 ### 8.3 Consumer controls
 
-- Control has `TOOLGATE_CONTROL_MARKETPLACE_ENABLED`, `TOOLGATE_CONTROL_MARKETPLACE_BASE_URL` and `TOOLGATE_CONTROL_MARKETPLACE_KEYS` (pinned public keys). These are environment-owned settings, so a configuration import can't redirect the fetch origin or swap keys.
+- Control has `TOOLGATE_CONTROL_MARKETPLACE_ENABLED`, `TOOLGATE_CONTROL_MARKETPLACE_ID`, `TOOLGATE_CONTROL_MARKETPLACE_BASE_URL` and `TOOLGATE_CONTROL_MARKETPLACE_KEYS` (public keys pinned to that marketplace id). These are environment-owned settings, so a configuration import can't redirect the fetch origin or swap keys.
 - Fetch only from administrator-configured marketplace origin; do **not** accept arbitrary URLs as package fetch targets.
 - Resolve download paths returned from catalog only if HTTPS and same trusted origin; disallow redirect to untrusted/internal hosts, enforce timeouts and size limits.
-- Fetch bytes through Control (not directly in browser). Verify the release signature against a pinned key, check `archiveSha256`, run the existing validation, and require the `packageDigest` Control computes to equal the signed one. Any mismatch rejects the import.
+- Fetch bytes through Control (not directly in browser). **Import verification, all required, any failure rejects the import:**
+  1. The detail record for the requested `packageId`@`version` is not delisted.
+  2. The release `schema` is one Control knows.
+  3. `keyId` is one of the keys pinned for the configured marketplace id, and the Ed25519 signature verifies over the canonical record.
+  4. The signed `marketplace` equals `TOOLGATE_CONTROL_MARKETPLACE_ID`.
+  5. The signed `packageId` and `version` equal what the admin asked to import and what the detail record says.
+  6. The signed `publisherSlug` equals the detail record's publisher slug, and equals the id prefix of the manifest Control validated.
+  7. SHA-256 of the downloaded bytes equals the signed `archiveSha256`.
+  8. Control's own validation passes, and the manifest `id` and `version`, the `packageDigest` and the `descriptorSetDigest` it computes all equal the signed values.
 - The signature proves the bytes are what the Marketplace validated for that publisher slug, so a compromised web server can't swap packages without the helper's key. It does not prove the code is safe. Treat marketplace bytes as untrusted executable artifacts.
 - Import requires Super Admin, the same check as the existing upload (`ServerPackages.upload`), and the audit event records the Marketplace origin, package id, version, publisher slug and `keyId`.
 - Import creates a normal package entry; separate existing steps remain necessary to configure secrets, deploy, enable, and grant Agent Group access.
@@ -496,7 +520,7 @@ The `TOOLGATE_CONTROL_*` names follow Control's existing convention (for example
 | Bad or unknown-key signature, hash or `packageDigest` mismatch, or failed local import validation | Reject import; do not deploy |
 | Signing fails in the helper | Upload fails with a retryable error; nothing becomes public unsigned |
 | Publisher updates profile | Drupal changes immediately; ToolGate reflects it on refresh/short cache expiry |
-| Admin delists package | Remove catalog/download access while retaining audit and local ToolGate installs untouched; the detail endpoint shows `delisted: true` so ToolGate can flag it |
+| Admin delists package | Remove catalog and download access (`410 Gone`) while keeping the audit trail; local ToolGate installs are untouched; the detail endpoint shows `delisted: true` so ToolGate can flag it, and fresh imports are rejected |
 
 For publication, first store and hash the validated archive, write the final public artifact safely, verify accessibility/digest, and only then mark `AVAILABLE`. Reconcile or clean orphaned files on failures. Package bytes remain immutable after availability.
 
@@ -513,7 +537,10 @@ For publication, first store and hash the validated archive, write the final pub
 - Catalog/detail/profile APIs return consistent public information, never private account data.
 - ToolGate marketplace view displays owner public profile plus manually entered listing fields.
 - Install imports into existing Control package flow and requires separate deployment/permissions.
-- Package tampering, forged or unknown-key signatures, unsafe redirects and non-allowlisted origins are rejected.
+- Package tampering, forged or unknown-key signatures, a signed `marketplace`, `packageId`, `version`, `publisherSlug` or `descriptorSetDigest` that differs from the validated package or the requested catalog record, unsafe redirects and non-allowlisted origins are rejected.
+- `/sign` without the internal token, or with an `authorizedPublisherSlug` that doesn't match the id prefix, is refused; `/inspect` never returns a signature.
+- The publisher slug cannot be changed through the UI or API.
+- A delisted version's download returns `410` and its import is rejected.
 - The helper never passes a directory to `toolgate validate`, and a package Control would reject (for example a Java tool without exactly one jar) is rejected at upload.
 - An upload whose id prefix is not the publisher's slug, or uses a reserved prefix, is rejected.
 - Rejected and unfinished packages cannot be publicly downloaded.
