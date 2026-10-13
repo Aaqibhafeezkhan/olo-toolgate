@@ -21,8 +21,9 @@ verified.descriptorSetDigest();
 `PackageArchive` before the extraction, and both `PackageArchiveBaselineTest` (Control) and `PackageArchiveTest`
 (this library) check it. Regenerate the fixtures with `python3 tests/fixtures/packages/generate.py`.
 
-The extraction changed two decisions on purpose: a descriptor whose keys collide in NFC, and one with a number outside
-the double range, used to end in an `IllegalArgumentException` (an HTTP 500) and are now rejected with 400.
+The extraction made two rejections explicit: a descriptor whose keys collide in NFC, and one with a number outside the
+double range, used to escape validation as an `IllegalArgumentException` (which Control's error mapper already answered
+with 400) and are now a `PackageRejected` with a reason, so the helper rejects them the same way.
 
 ```bash
 ./gradlew :package-archive:test :control-plane:test --tests io.ololabs.toolgate.control.PackageArchiveBaselineTest

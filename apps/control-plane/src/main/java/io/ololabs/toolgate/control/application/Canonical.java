@@ -18,6 +18,8 @@ public final class Canonical {
 
     public static String digest(JsonNode value) { return sha256(bytes(value)); }
     public static byte[] bytes(JsonNode value) { var out = new StringBuilder(); write(out, value, true); return out.toString().getBytes(StandardCharsets.UTF_8); }
+    /** RFC 8785 bytes without NFC, as the Marketplace signs a release record (api.md §2). */
+    public static byte[] jcs(JsonNode value) { var out = new StringBuilder(); write(out, value, false); return out.toString().getBytes(StandardCharsets.UTF_8); }
     public static String arguments(JsonNode value) { var out = new StringBuilder(); write(out, value, false); return sha256(out.toString().getBytes(StandardCharsets.UTF_8)); }
     /** {@code "sha256:" + lowercase hex} of exact bytes. */
     public static String sha256(byte[] bytes) {

@@ -40,11 +40,21 @@ public final class ServerPackages {
     private void reader(Store.Session tx, DirectoryService.Actor actor) { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "read", clock.millis()); }
     private static String hex(String digest) { if (digest == null || !digest.matches("sha256:[a-f0-9]{64}")) throw Failure.validation(); return digest.substring(7); }
 
-    public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId) {
+    /** Where an imported package came from, recorded in the audit log (marketplace design §8.3). */
+    public record Origin(String marketplaceId, String packageId, String version, String publisherSlug, String keyId) {
+        String target() { return "marketplace:" + marketplaceId + "/" + packageId + "@" + version + " publisher:" + publisherSlug + " key:" + keyId; }
+    }
+
+    public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId) { return upload(actor, data, requestId, null); }
+
+    /** The existing upload: the package rules, then what this ToolGate can run, under Super Admin. */
+    public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId, Origin origin) {
         var verified = PackageArchive.validate(data, this::node); var manifest = verified.manifest();
+        PackageCompatibility.require(PackageCompatibility.problems(manifest));
         String digest = verified.packageDigest(), id = manifest.get("id").asText(), version = manifest.get("version").asText();
         return store.transaction(actor.tenant(), true, tx -> {
             superAdmin(tx, actor);
+            if (origin != null) tx.audit(actor.id(), "PACKAGE_MARKETPLACE_IMPORT", origin.target(), 1, requestId, hex(digest));
             var existing = tx.packages().version(digest);
             if (existing != null) return new Store.Reply(200, existing.document(), 0);
             long now = clock.millis();
@@ -94,7 +104,13 @@ public final class ServerPackages {
             }
             for (var name : request.globals().keySet()) if (!declared.containsKey(name) && !hosts.contains(name)) throw Failure.validation();
             var targets = new TreeSet<String>(request.hostIds() == null ? List.of() : request.hostIds());
-            for (var target : targets) if (tx.packages().toolHost(target) == null) throw Failure.validation();
+            var problems = new ArrayList<>(PackageCompatibility.runtimeProblems(manifest));
+            for (var target : targets) {
+                var registration = tx.packages().toolHost(target);
+                if (registration == null) throw Failure.validation();
+                problems.addAll(PackageCompatibility.hostProblems(manifest, target, node(registration)));
+            }
+            PackageCompatibility.require(problems);
             var globals = JSON.objectNode();
             declared.forEach((name, declaration) -> {
                 var value = request.globals().containsKey(name) ? request.globals().get(name) : declaration.get("default");
