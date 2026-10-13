@@ -14,12 +14,13 @@ param(
     [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
-$root = Split-Path $PSScriptRoot -Parent
+$marketplace = Split-Path $PSScriptRoot -Parent
+$root = Split-Path $marketplace -Parent
 $port = if ($env:OLO_ORGS_PORT) { $env:OLO_ORGS_PORT } else { '8080' }
 $siteImage = if ($env:OLO_ORGS_IMAGE) { $env:OLO_ORGS_IMAGE } else { 'olo-orgs-standalone:local' }
 $helperImage = if ($env:OLO_HELPER_IMAGE) { $env:OLO_HELPER_IMAGE } else { 'olo-toolgate-marketplace-helper:local' }
 $builderImage = 'olo-orgs-builder:local'
-$compose = @('compose', '-f', "$PSScriptRoot/standalone/compose.yaml")
+$compose = @('compose', '-f', "$marketplace/standalone/compose.yaml")
 
 function Invoke-Checked([string]$Executable, [string[]]$Arguments) {
     & $Executable @Arguments
@@ -48,7 +49,7 @@ function Build-MarketplaceImages {
         $value = [Environment]::GetEnvironmentVariable($name)
         if ($value) { $arguments += @('-e', "$name=$value") }
     }
-    Invoke-Checked docker @('build', '-q', '-t', $builderImage, '-f', "$PSScriptRoot/scripts/builder.Dockerfile", "$PSScriptRoot/scripts")
+    Invoke-Checked docker @('build', '-q', '-t', $builderImage, '-f', "$marketplace/scripts/builder.Dockerfile", "$marketplace/scripts")
     Invoke-Checked docker ($arguments + @($builderImage, 'bash', 'scripts/build-images.sh', '--core-only', '--standalone'))
 }
 

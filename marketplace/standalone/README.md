@@ -5,15 +5,15 @@
 
 ## On Windows: one script
 
-`marketplace\start.bat` brings up everything for local testing: the ToolGate debug stack (`debug\start.bat`), one Linux debug device (`create-devices.bat -Count 1`) and these two containers, then opens http://localhost:8080. It builds the Marketplace images the first time (in a Linux builder container, so no bash or PHP is needed on Windows), creates the signing key once and waits until Drupal and the helper are healthy.
+`marketplace\debug\start.bat` brings up everything for local testing: the ToolGate debug stack (`debug\start.bat`), one Linux debug device (`create-devices.bat -Count 1`) and these two containers, then opens http://localhost:8080. It builds the Marketplace images the first time (in a Linux builder container, so no bash or PHP is needed on Windows), creates the signing key once and waits until Drupal and the helper are healthy.
 
 ```bat
-marketplace\start.bat                    :: all four containers
-marketplace\start.bat -FocusedCheck      :: the same with debug\start.bat's focused checks
-marketplace\start.bat -MarketplaceOnly   :: only Drupal and the helper
-marketplace\start.bat -Build             :: rebuild the Marketplace images first
-marketplace\restart.bat                  :: rebuild and recreate
-marketplace\stop.bat                     :: stop all four, keeping their data (-MarketplaceOnly: just these two)
+marketplace\debug\start.bat                    :: all four containers
+marketplace\debug\start.bat -FocusedCheck      :: the same with debug\start.bat's focused checks
+marketplace\debug\start.bat -MarketplaceOnly   :: only Drupal and the helper
+marketplace\debug\start.bat -Build             :: rebuild the Marketplace images first
+marketplace\debug\restart.bat                  :: rebuild and recreate
+marketplace\debug\stop.bat                     :: stop all four, keeping their data (-MarketplaceOnly: just these two)
 ```
 
 ## From images you were given
