@@ -4,7 +4,7 @@ Control can read one OLO Orgs Marketplace and import its packages as uploaded se
 validates and signs releases; Control checks them again before it stores anything, and an imported package then
 follows the same review, deploy, enable and grant steps as an upload. The Marketplace side is described in
 [olo-marketplace docs/design.md](https://github.com/olo-labs/olo-marketplace/blob/main/docs/design.md) and its API in
-[olo-marketplace docs/api.md](https://github.com/olo-labs/olo-marketplace/blob/main/docs/api.md).
+[the ToolGate-owned Marketplace API contract](../api/marketplace-api.md).
 
 ## Settings
 
