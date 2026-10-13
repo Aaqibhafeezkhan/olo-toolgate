@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { PackageDeployment, PackageVersion } from '@olo-labs/toolgate-contracts/v2';
 import { ControlClient } from './api';
 import { Failure } from './Failure';
+import { Marketplace } from './Marketplace';
 import { Table } from './Table';
 
 /** The values a version's tools declare: each global with its default, and each destination's host setting. */
@@ -75,5 +76,6 @@ export function ServerPackages({ client }: { client: ControlClient }) {
       <label htmlFor="server-package-globals">Global and host setting values (JSON)</label>
       <textarea id="server-package-globals" required maxLength={65536} value={globals} onChange={e => setGlobals(e.target.value)} />
       <button disabled={busy || !selected}>Deploy</button></form></section>
+    <Marketplace client={client} onImported={() => setAttempt(a => a + 1)} />
   </>;
 }
