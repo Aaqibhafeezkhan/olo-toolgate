@@ -77,10 +77,10 @@ if [ "$core_only" = true ]; then
   ' "$context/composer.json"
   sed -i '/^modules:$/,/^# Core modules/{/^modules:$/!{/^# Core modules/!d}}; s/^modules:$/modules: []\n/' "$context/modules.yml"
   if command -v composer >/dev/null; then
-    (cd "$context" && env COMPOSER_ALLOW_SUPERUSER=1 ${ca:+SSL_CERT_FILE="$ca"} composer update --no-install --no-interaction --no-progress --quiet)
+    (cd "$context" && env COMPOSER_ALLOW_SUPERUSER=1 ${ca:+SSL_CERT_FILE="$ca"} composer update --no-install --ignore-platform-req="ext-*" --no-interaction --no-progress --quiet)
   else
     docker run --rm -v "$context:/app" -w /app ${ca:+-v "$ca:/ca.pem:ro" -e SSL_CERT_FILE=/ca.pem} \
-      composer:2.10.3 update --no-install --no-interaction --no-progress --quiet
+      composer:2.10.3 update --no-install --ignore-platform-req="ext-*" --no-interaction --no-progress --quiet
   fi
   args+=(--build-arg REDIS_EXTENSION=false)
 elif [ ! -f "$context/composer.lock" ]; then
