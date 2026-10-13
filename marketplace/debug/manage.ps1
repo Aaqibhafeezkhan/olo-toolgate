@@ -35,13 +35,15 @@ function Invoke-DebugScript([string]$Script, [string[]]$Arguments) {
 }
 
 function Test-Image([string]$Image) {
+    # Windows PowerShell turns redirected native stderr into a terminating error under 'Stop'.
+    $ErrorActionPreference = 'Continue'
     & docker image inspect $Image *> $null
     return $LASTEXITCODE -eq 0
 }
 
 function Build-MarketplaceImages {
     Write-Host 'Building the Marketplace images (helper, example packages, Drupal, standalone site)...'
-    $revision = (& git -C $root rev-parse HEAD 2>$null)
+    $revision = & { $ErrorActionPreference = 'Continue'; & git -C $root rev-parse HEAD 2>$null }
     if ($LASTEXITCODE -ne 0) { $revision = 'unknown' }
     $arguments = @('run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', '-v', "${root}:/src",
         '-w', '/src/marketplace', '-e', "TOOLGATE_REVISION=$revision")
