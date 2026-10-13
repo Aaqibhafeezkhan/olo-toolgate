@@ -141,8 +141,10 @@ Drupal must have checked, from the logged-in user's session, that the user owns 
 | `TOOLGATE_CONTROL_MARKETPLACE_ID` | Expected `marketplace` in release records |
 | `TOOLGATE_CONTROL_MARKETPLACE_BASE_URL` | The only origin Control fetches from (HTTPS) |
 | `TOOLGATE_CONTROL_MARKETPLACE_KEYS` | Comma-separated `keyId:base64PublicKey`; fingerprints are logged and shown |
+| `TOOLGATE_CONTROL_MARKETPLACE_CA_PATH` | Optional PEM bundle (1 to 4 certificates) trusted for the origin instead of the default trust store |
 
-These are environment-owned, so a configuration import can't change them.
+These are environment-owned, so a configuration import can't change them. Control's side is described in
+[docs/control-plane/marketplace-integration.md](../../docs/control-plane/marketplace-integration.md).
 
 ## 5. Status and seeding
 

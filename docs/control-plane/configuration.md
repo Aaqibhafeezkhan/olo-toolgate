@@ -22,6 +22,7 @@ Gateway. See [publication, trust configuration and operations](policy-bundles.md
 | `TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED` | Default false; enable sanitized outbound traces at runtime |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Explicit trusted collector URL; use HTTPS in production |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | `grpc` (default) or `http/protobuf` |
+| `TOOLGATE_CONTROL_MARKETPLACE_*` | Optional OLO Orgs Marketplace import; see [Marketplace integration](marketplace-integration.md) |
 
 Tokens require signed `sub`, `tenant_id`, `groups`, `iat` and `exp` claims. A token's
 maximum lifetime and age are 900 seconds, with no expiry skew or future issue time.

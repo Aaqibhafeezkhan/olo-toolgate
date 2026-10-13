@@ -42,6 +42,15 @@ data:
   TOOLGATE_CONTROL_RECOVERY_TRUST_PATH: /etc/toolgate/recovery-trust/reviewer-keys.json
   {{- end }}
   TOOLGATE_CONTROL_APPROVAL_ENABLED: {{ $g.approval.enabled | quote }}
+  TOOLGATE_CONTROL_MARKETPLACE_ENABLED: {{ $g.marketplace.enabled | quote }}
+  {{- if $g.marketplace.enabled }}
+  TOOLGATE_CONTROL_MARKETPLACE_ID: {{ required "control.marketplace.id required" $g.marketplace.id | quote }}
+  TOOLGATE_CONTROL_MARKETPLACE_BASE_URL: {{ required "control.marketplace.baseUrl required" $g.marketplace.baseUrl | quote }}
+  TOOLGATE_CONTROL_MARKETPLACE_KEYS: {{ required "control.marketplace.keys required" $g.marketplace.keys | quote }}
+  {{- if $g.marketplace.caSecret }}
+  TOOLGATE_CONTROL_MARKETPLACE_CA_PATH: /etc/toolgate/marketplace-ca/ca.pem
+  {{- end }}
+  {{- end }}
   TOOLGATE_CONTROL_FLEET_ENABLED: {{ $g.fleet.enabled | quote }}
   {{- if $g.fleet.enabled }}
   TOOLGATE_CONTROL_FLEET_KEY_ID: {{ required "control.fleet.keyId required" $g.fleet.keyId | quote }}
@@ -194,6 +203,9 @@ spec:
             - {name: recovery-packet, mountPath: /etc/toolgate/recovery-packet, readOnly: true}
             - {name: recovery-trust, mountPath: /etc/toolgate/recovery-trust, readOnly: true}
             {{- end }}
+            {{- if and $g.marketplace.enabled $g.marketplace.caSecret }}
+            - {name: marketplace-ca, mountPath: /etc/toolgate/marketplace-ca, readOnly: true}
+            {{- end }}
             {{- if $g.fleet.enabled }}
             - {name: fleet-signing, mountPath: /etc/toolgate/fleet-signing, readOnly: true}
             - {name: fleet-trust, mountPath: /etc/toolgate/fleet-trust, readOnly: true}
@@ -233,6 +245,13 @@ spec:
             secretName: {{ required "control.recovery.trustSecret required" $g.recovery.trustSecret | quote }}
             defaultMode: 0440
             items: [{key: {{ $g.recovery.trustKey | quote }}, path: reviewer-keys.json}]
+        {{- end }}
+        {{- if and $g.marketplace.enabled $g.marketplace.caSecret }}
+        - name: marketplace-ca
+          secret:
+            secretName: {{ $g.marketplace.caSecret | quote }}
+            defaultMode: 0440
+            items: [{key: ca.pem, path: ca.pem}]
         {{- end }}
         {{- if $g.fleet.enabled }}
         - name: fleet-signing
@@ -329,8 +348,13 @@ spec:
     matchLabels:
       {{- include "olo-toolgate.controlSelector" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
-  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) }}
+  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) (and $g.marketplace.enabled $g.networkPolicy.marketplaceTo) }}
   egress:
+    {{- if and $g.marketplace.enabled $g.networkPolicy.marketplaceTo }}
+    - ports: [{protocol: TCP, port: 443}]
+      to:
+        {{- toYaml $g.networkPolicy.marketplaceTo | nindent 8 }}
+    {{- end }}
     {{- if and $g.fleet.enabled $g.networkPolicy.artifactTo }}
     - ports: [{protocol: TCP, port: {{ $g.fleet.artifactPort }}}]
       to:
