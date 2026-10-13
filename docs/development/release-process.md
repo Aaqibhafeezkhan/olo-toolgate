@@ -32,8 +32,11 @@ GitHub release and fails closed on authentication or network errors. Provenance
 for all four image digests and release assets must succeed before the GitHub
 release is created. Registry writes across Maven, GHCR and OCI are not atomic;
 inspect partial publication before retrying a failed run. Shared preparation
-collects the verified artifacts and assembles development JARs and POMs before
-handing them to parallel core release, Maven and Marketplace publish jobs.
+collects verified artifacts without invoking Gradle before handing them to
+parallel core release, Maven and Marketplace publish jobs. GitHub development
+releases include the checked foundation Java artifacts at their source version.
+Only the Maven job assembles and publishes the unique development Maven version,
+using the Gradle publication-version property without rewriting product versions.
 Each publisher depends only on preparation, so a failure in one cannot skip or
 cancel another. Failures remain visible in the job and overall workflow result.
 The core publisher still requires image/chart publication and provenance before

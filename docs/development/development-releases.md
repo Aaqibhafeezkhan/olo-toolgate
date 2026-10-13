@@ -101,16 +101,22 @@ for comma-separated gateway URLs, automatic connection retries and enrollment.
 GitHub Releases receives an immutable prerelease named
 `dev-<full-commit>-<publishing-run-id>`, including six native client archives
 (Windows, macOS and Linux; x64 and ARM64), checksums, embedded client SBOMs, image
-SBOMs, raw contracts, Java JAR/source/Javadoc/POM and development-release.json.
+SBOMs, raw contracts, checked Java JAR/source/Javadoc/POM/module and
+development-release.json.
 The native archives retain their tested VERSION; release metadata ties them to
 the exact commit and CI run IDs. The image digests are recorded in the metadata.
 No installer/runtime signing is claimed by this workflow.
 
 The Maven library is `io.ololabs.toolgate:toolgate-contracts`. Each publishing run
 uses `<core-version>-dev.<publishing-run-id>.g<12-character-commit>`, avoiding reuse
-of the checked-in development coordinate. Source version changes occur only in the
-CI checkout. Java contract tests run in foundation before remote publication;
-publication does not run the same suite again.
+of the checked-in development coordinate. Java contract tests run in foundation
+before remote publication;
+publication does not run the same suite again. Shared preparation reuses the
+checksummed foundation Java artifacts without running Gradle; these GitHub assets
+retain the checked source coordinate, recorded as `javaAssetVersion`. Only the
+Maven publish job builds its development coordinate using
+`contractsPublicationVersion`, leaving product and wire versions unchanged.
+Its Java setup, compilation or upload failures cannot block other publishers.
 
 Maven defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`, authenticated
 with the CI GITHUB_TOKEN. Consumers need GitHub Packages read access. To use another

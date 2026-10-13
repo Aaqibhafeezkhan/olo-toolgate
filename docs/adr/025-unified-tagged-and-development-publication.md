@@ -25,6 +25,10 @@ publication as sibling jobs. The explicit manual workflow also publishes
 TypeScript in its own sibling job. Publication failures remain visible without
 skipping or cancelling other publishers. Keep image/chart and provenance ordering
 inside the core publisher so release metadata includes the published digests.
+Shared preparation copies the checked foundation Java artifacts without Java
+setup or Gradle execution. Development Maven compilation stays in its publisher
+and overrides only the publication version; the source product/wire versions
+and initial-configuration identity stay unchanged.
 The inspected Gateway and Foundation environments have no secrets, variables,
 reviewers, wait timers or branch/tag restrictions; no protected settings are lost.
 Their empty environment records can be removed after their callers are retired.
