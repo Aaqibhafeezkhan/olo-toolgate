@@ -40,14 +40,14 @@ The media and source are distributed under this repository's Apache-2.0 license.
 
 Captured with a headless browser from the running local `0.10.0-dev` console on
 October 13, 2026, at 1440×900 and scaled to 1800 px wide, with a Windows and a Linux
-client connected. The README shows them as a [console tour](console-tour.gif), the
-device registration steps (`device-flow-*.jpg`) and grouped galleries (`console-*.jpg`,
-with `-light` variants in the light theme).
+client connected. The README shows them as rotating tours (`console-tour.gif`, `device-flow.gif` and one per
+area), built from these stills: the device registration steps (`device-flow-*.jpg`) and
+the console pages (`console-*.jpg`, with `-light` variants in the light theme).
 
 These are captures of the actual application, with no fabricated UI or replacement
 data. They contain no passwords, tokens or private user details. The device screens
 show the local demo devices' identifiers, key fingerprints and a private network
 address. Capturing the screens did not change access configuration; the Windows
 client was approved by an administrator as part of the registration flow shown. The
-tour is built from the stills with Pillow (1024×640, 2.6 s per screen with a short
+tours are built from the stills with Pillow (1024×640, a caption bar, 3 s per screen with a short
 crossfade). The video renderer does not regenerate screenshots.
