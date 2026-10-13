@@ -105,6 +105,20 @@ def unified_run(repo, sha, run_id):
     return dict.fromkeys(WORKFLOWS,int(run_id))
 
 
+def prepare_development_java_assets():
+    """Copy the checked Java distribution without changing versions or invoking Gradle."""
+    from tools.release.tagged import verified_files
+    folder=OUTPUT/'foundation/build/release'
+    version=(ROOT/'packages/contracts/VERSION').read_text(encoding='utf-8').strip()
+    required={f'toolgate-contracts-{version}{classifier}.jar' for classifier in ('','-sources','-javadoc')}
+    required.update(f'toolgate-contracts-{version}.{extension}' for extension in ('pom','module'))
+    if not required<=verified_files(folder):
+        raise ValueError('Development release is missing checked foundation Java artifacts')
+    for name in sorted(required):
+        shutil.copyfile(folder/name,OUTPUT/'assets'/name)
+    return version
+
+
 def prepare(run_id=None):
     repo,sha,_=coordinates()
     if run('git','rev-parse','HEAD',capture=True).stdout.strip()!=sha:raise ValueError('Checkout SHA mismatch')
@@ -150,11 +164,12 @@ def prepare(run_id=None):
         from tools.release.tagged import prepare_assets
         prepare_assets(selected)
         return
-    base=(ROOT/'packages/contracts/VERSION').read_text().strip().split('-')[0]
+    java_version=prepare_development_java_assets()
+    base=java_version.split('-')[0]
     version=f"{base}-dev.{os.environ['GITHUB_RUN_ID']}.g{sha[:12]}"
     (OUTPUT/'MAVEN_VERSION').write_text(version+'\n')
     (assets/'development-release.json').write_text(json.dumps({'commit':sha,'ciRuns':selected,
-        'mavenVersion':version,'binaryVersion':manifest['version'],'releaseTag':'dev-'+sha+'-'+os.environ['GITHUB_RUN_ID'],
+        'mavenVersion':version,'javaAssetVersion':java_version,'binaryVersion':manifest['version'],'releaseTag':'dev-'+sha+'-'+os.environ['GITHUB_RUN_ID'],
         'dockerTag':'dev-'+sha[:12]},indent=2)+'\n')
 
 

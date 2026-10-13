@@ -19,10 +19,6 @@ jobs:
       with:
         ref: ${{ github.sha }}
         persist-credentials: false
-    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
-      with:
-        distribution: temurin
-        java-version: '21'
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
@@ -35,14 +31,6 @@ jobs:
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       run: |
         python tools/release/development.py prepare --run-id "$GITHUB_RUN_ID"
-    - name: Assemble development Maven release assets
-      if: github.ref == 'refs/heads/main'
-      run: |
-        python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
-        python tools/contracts/generate.py
-        ./gradlew --no-daemon :contracts-java:assemble :contracts-java:generatePomFileForMavenJavaPublication
-        cp packages/contracts/java/build/libs/*.jar build/development/assets/
-        cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/development/assets/toolgate-contracts-$(cat build/development/MAVEN_VERSION).pom"
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: verified-release-packages
@@ -194,9 +182,8 @@ jobs:
         if [[ "$GITHUB_REF" == refs/tags/* ]]; then
           python tools/release/development.py publish-maven
         else
-          python tools/contracts/version.py --set "$(cat build/development/MAVEN_VERSION)"
-          python tools/contracts/generate.py
-          ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
+          maven_version="$(cat build/development/MAVEN_VERSION)"
+          ./gradlew --no-daemon "-PcontractsPublicationVersion=$maven_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test
         fi
   publish-marketplace:
     name: Publish Marketplace images

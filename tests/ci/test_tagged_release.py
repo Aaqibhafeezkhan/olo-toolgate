@@ -286,13 +286,30 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
                 self.assertIn('development.py publish' if name=='development-release'
                               else 'manual_development.py publish',other_commands)
         jobs=yaml.safe_load((ROOT/'.github/workflows/development-release.yml').read_text())['jobs']
-        assembly=next(step for step in jobs['prepare']['steps'] if step.get('name')=='Assemble development Maven release assets')
-        self.assertIn(':contracts-java:assemble :contracts-java:generatePomFileForMavenJavaPublication',assembly['run'])
-        self.assertIn('pom-default.xml',assembly['run'])
         maven=jobs['publish-maven']['steps'][-1]['run']
-        self.assertIn('version.py --set "$(cat build/development/MAVEN_VERSION)"',maven)
+        self.assertIn('maven_version="$(cat build/development/MAVEN_VERSION)"',maven)
+        self.assertIn('"-PcontractsPublicationVersion=$maven_version"',maven)
+        self.assertNotIn('version.py --set',maven)
         manual=yaml.safe_load((ROOT/'.github/workflows/manual-development-release.yml').read_text())['jobs']
         self.assertIn('npm publish',manual['publish-typescript']['steps'][-1]['run'])
+
+    def test_gradle_failures_are_confined_to_the_verified_maven_publisher(self):
+        jobs=yaml.safe_load((ROOT/'.github/workflows/development-release.yml').read_text())['jobs']
+        for name,job in jobs.items():
+            commands='\n'.join(step.get('run','') for step in job['steps'])
+            with self.subTest(job=name):
+                self.assertNotIn('version.py --set',commands)
+                self.assertNotIn('tools/contracts/generate.py',commands)
+                if name=='publish-maven':
+                    self.assertIn('./gradlew',commands)
+                else:
+                    self.assertNotIn('./gradlew',commands)
+                    self.assertFalse(any(s.get('uses','').startswith('actions/setup-java@') for s in job['steps']))
+        # Even a failed Gradle invocation only changes publish-maven's result.
+        outcomes={'prepare':'success','publish-maven':'failure'}
+        for name in ('publish','publish-marketplace'):
+            self.assertEqual(outcomes[jobs[name]['needs']],'success')
+            self.assertNotIn('publish-maven',jobs[name]['if'])
 
     def test_parallel_publishers_receive_prepared_packages_and_images(self):
         for workflow,preparation,prefix,output in (

@@ -13,6 +13,28 @@ from tools.release import manual_development
 
 
 class DevelopmentReleaseTests(unittest.TestCase):
+    def test_development_java_assets_reuse_checked_bytes_without_a_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);output=root/'build/development'
+            source=output/'foundation/build/release';source.mkdir(parents=True)
+            assets=output/'assets';assets.mkdir()
+            contracts=root/'packages/contracts';contracts.mkdir(parents=True)
+            (contracts/'VERSION').write_text('1.0.0\n',encoding='utf-8')
+            (root/'VERSION').write_text('0.10.0-dev\n',encoding='utf-8')
+            names=['toolgate-contracts-1.0.0'+suffix for suffix in ('.jar','-sources.jar','-javadoc.jar','.pom','.module')]
+            for name in names:(source/name).write_bytes(('checked '+name).encode())
+            (source/'SHA256SUMS').write_text(''.join(development.digest(source/name)+'  '+name+'\n' for name in names),encoding='utf-8')
+            with patch.object(development,'ROOT',root),patch.object(development,'OUTPUT',output),patch.object(development,'run') as run:
+                self.assertEqual(development.prepare_development_java_assets(),'1.0.0')
+                run.assert_not_called()
+                for name in names:self.assertEqual((assets/name).read_bytes(),(source/name).read_bytes())
+                self.assertEqual((root/'VERSION').read_text(),'0.10.0-dev\n')
+                self.assertEqual((contracts/'VERSION').read_text(),'1.0.0\n')
+                (source/names[0]).write_bytes(b'tampered jar')
+                with self.assertRaisesRegex(ValueError,'checksum'):
+                    development.prepare_development_java_assets()
+                run.assert_not_called()
+
     def test_manual_build_prepares_the_pom_for_another_runner(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
