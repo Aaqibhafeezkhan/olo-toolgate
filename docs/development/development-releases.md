@@ -51,9 +51,13 @@ Maven defaults to GitHub Packages using `GITHUB_TOKEN`; a custom Maven URL requi
 `MAVEN_REPOSITORY_URL`, `MAVEN_USERNAME` and `MAVEN_PASSWORD`. GitHub npm/Helm use the
 workflow's Packages write permission. Any configured GitHub environment approval
 still applies. Registry publication is not atomic; inspect a failed run before
-rerunning it. External Maven upload runs last, after npm, images, Helm and the
-GitHub prerelease. Its failure still fails the job without preventing those
-earlier publications. This workflow has no automatic push/tag/schedule trigger.
+rerunning it. After native packaging and the shared build succeed, the core
+image/Helm/GitHub release, TypeScript, Maven and Marketplace publishers run as
+parallel jobs. They consume the prepared artifacts and have no dependencies on
+each other. A failure still fails its job and the workflow, while the other
+publishers continue. The core publisher retains the ordering needed to include
+container digests in the GitHub prerelease. This workflow has no automatic
+push/tag/schedule trigger.
 
 ## Existing CI-backed development releases
 
@@ -63,7 +67,9 @@ succeed. It verifies and downloads artifacts from that exact workflow run and
 commit. Failed, skipped, cancelled or missing prerequisites prevent publication.
 Dispatch `ci.yml` on main to repeat this complete flow. The publisher does not
 wait for its own unfinished job. Legacy five-run preparation remains available
-only for compatibility callers.
+only for compatibility callers. Shared preparation hands the verified artifacts
+to independent core release, Maven and Marketplace publish jobs. A registry or
+Maven configuration failure cannot skip or cancel a sibling publisher.
 
 Automatic CI and development release admission require `TOOLGATE_CI_ENABLED=true`
 and a PR title starting with `RC:`. Push and release events resolve the merged PR

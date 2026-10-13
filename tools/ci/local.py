@@ -38,9 +38,16 @@ POLICY = {
     'client.public-bundle': 'artifacts',
     'control.container-and-replicas': 'artifacts',
     'quickstart.image': 'artifacts',
+    'development-release.prepare': 'publication',
     'development-release.publish': 'publication',
+    'development-release.publish-maven': 'publication',
+    'development-release.publish-marketplace': 'publication',
     'manual-development-release.native': 'native',
+    'manual-development-release.build': 'publication',
     'manual-development-release.publish': 'publication',
+    'manual-development-release.publish-typescript': 'publication',
+    'manual-development-release.publish-maven': 'publication',
+    'manual-development-release.publish-marketplace': 'publication',
 }
 REASONS = {
     'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',

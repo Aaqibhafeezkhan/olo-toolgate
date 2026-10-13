@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Development publishing must reject unverified artifacts and failed CI."""
 import tempfile
+import json
 import os
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -11,6 +13,58 @@ from tools.release import manual_development
 
 
 class DevelopmentReleaseTests(unittest.TestCase):
+    def test_manual_build_prepares_the_pom_for_another_runner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            output=root/'build/manual-development'
+            assets=output/'assets'
+            clients=root/'clients';clients.mkdir()
+            contracts=root/'packages/contracts'
+            typescript=contracts/'typescript';typescript.mkdir(parents=True)
+            (typescript/'package.json').write_text('{"version":"0.0.0"}',encoding='utf-8')
+            (contracts/'php').mkdir()
+            jars=contracts/'java/build/libs';jars.mkdir(parents=True)
+            (jars/'toolgate-contracts-fixture.jar').write_bytes(b'prepared jar')
+            publication=contracts/'java/build/publications/mavenJava';publication.mkdir(parents=True)
+            (publication/'pom-default.xml').write_bytes(b'prepared pom')
+            (root/'target/package').mkdir(parents=True)
+            chart=root/'deploy/helm/olo-toolgate';chart.mkdir(parents=True)
+            (chart/'values.yaml').write_text('global:\n  imageRegistry: fixture\n',encoding='utf-8')
+            info={'commit':'a'*40,'binaryVersion':'1.0.0','libraryVersion':'1.0.0-dev.fixture','dockerTag':'dev-fixture'}
+            with patch.object(manual_development,'ROOT',root),patch.object(manual_development,'OUTPUT',output), \
+                 patch.object(manual_development,'ASSETS',assets),patch.object(manual_development,'CLIENTS',clients), \
+                 patch.object(manual_development,'metadata',return_value=info),patch.object(manual_development,'run'), \
+                 patch.dict(os.environ,{'GITHUB_RUN_NUMBER':'1','DOCKERHUB_NAMESPACE':'fixture'}):
+                manual_development.build()
+            self.assertEqual((assets/'toolgate-contracts-1.0.0-dev.fixture.pom').read_bytes(),b'prepared pom')
+
+    def test_manual_publication_uses_prepared_assets_on_a_fresh_runner(self):
+        sha='a'*40
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            output=root/'build/manual-development'
+            assets=output/'assets';assets.mkdir(parents=True)
+            (root/'RELEASE-NOTES.md').write_text('release notes',encoding='utf-8')
+            info={'commit':sha,'dockerTag':'dev-fixture','libraryVersion':'1.0.0-dev.fixture','releaseTag':'dev-fixture'}
+            (assets/'development-release.json').write_text(json.dumps(info),encoding='utf-8')
+            (assets/'compatibility.json').write_text('{}',encoding='utf-8')
+            pom=assets/'toolgate-contracts-1.0.0-dev.fixture.pom';pom.write_bytes(b'prepared pom')
+            def command(*args,**kwargs):
+                stdout=''
+                if args[:2]==('gh','api'):stdout=json.dumps({'object':{'sha':sha}})
+                if args[:2]==('docker','inspect'):stdout=args[2].split(':')[0]+'@sha256:'+'b'*64
+                return subprocess.CompletedProcess(args,0,stdout=stdout)
+            with patch.object(manual_development,'ROOT',root),patch.object(manual_development,'OUTPUT',output), \
+                 patch.object(manual_development,'ASSETS',assets),patch.object(manual_development,'run',side_effect=command) as run, \
+                 patch.dict(os.environ,{'GITHUB_REPOSITORY':'olo-labs/olo-toolgate','DOCKERHUB_NAMESPACE':'fixture',
+                                        'DOCKERHUB_TOKEN':'fixture','DOCKERHUB_USERNAME':'fixture'}):
+                manual_development.publish()
+            self.assertFalse((root/'packages/contracts/java/build').exists())
+            self.assertEqual(pom.read_bytes(),b'prepared pom')
+            self.assertIn(pom.name,(assets/'SHA256SUMS').read_text())
+            release=next(call.args for call in run.call_args_list if call.args[:3]==('gh','release','create'))
+            self.assertIn(str(pom),release)
+
     def test_device_is_published_by_both_existing_release_paths(self):
         self.assertEqual(development.IMAGES['device'],('olo-toolgate-device:module11','olo-toolgate-device'))
         self.assertEqual(manual_development.IMAGES['device'],'olo-toolgate-device')
