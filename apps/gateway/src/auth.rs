@@ -4,8 +4,14 @@
 use crate::{digest, validation::Contracts};
 use olo_toolgate_contracts::v2::{CredentialKind, RequestContext, RequestMode};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, PoisonError, RwLock},
+};
 use subtle::ConstantTimeEq;
+
+/// Largest credential file accepted at startup or on reload.
+pub const MAX_CREDENTIAL_FILE_BYTES: usize = 1_048_576;
 
 /// Deliberately no Debug implementation. Static tokens cannot impersonate a HUMAN session.
 /// The context names no device: Control places each call on a device of the binding's group.
@@ -16,8 +22,16 @@ pub struct Credential {
     pub context: RequestContext,
     pub expires_at_unix_ms: u64,
 }
-pub struct Authenticator {
+
+/// One fully validated credential set and the digest of the bytes it came from.
+struct Loaded {
     credentials: Vec<Credential>,
+    sha256: String,
+}
+
+/// The live set is swapped whole: a request sees either the previous or the new set, never a mix.
+pub struct Authenticator {
+    loaded: RwLock<Arc<Loaded>>,
 }
 impl Authenticator {
     pub fn new(
@@ -25,43 +39,43 @@ impl Authenticator {
         contracts: &Contracts,
         now: u64,
     ) -> Result<Self, &'static str> {
-        if credentials.is_empty() || credentials.len() > 256 {
-            return Err("invalid credential count");
-        }
-        let mut hashes = BTreeSet::new();
-        for c in &credentials {
-            let context = &c.context;
-            if c.token_sha256.len() != 64
-                || !c
-                    .token_sha256
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-                || !hashes.insert(&c.token_sha256)
-                || c.expires_at_unix_ms <= now
-                || context.mode == RequestMode::Human
-                || context.credential_kind != CredentialKind::StaticToken
-                || context
-                    .expires_at_unix_ms
-                    .is_some_and(|expires| expires != c.expires_at_unix_ms)
-                || context.workload_binding_id.is_none()
-                || context.agent_id.is_none()
-                || context.credential_epoch.is_none()
-                || context.credential_sha256.as_deref() != Some(c.token_sha256.as_str())
-                || context.mode == RequestMode::Delegated
-                    && (context.user_id.is_none() || context.session_epoch.is_none())
-                || context.mode == RequestMode::Service
-                    && (context.user_id.is_some()
-                        || context.session_epoch.is_some()
-                        || !context.chain.is_empty())
-                || !contracts.valid(
-                    "RequestContext",
-                    &serde_json::to_value(context).map_err(|_| "invalid workload")?,
-                )
-            {
-                return Err("invalid workload credential");
-            }
-        }
-        Ok(Self { credentials })
+        let sha256 = digest(&serde_json::to_vec(&credentials).map_err(|_| "invalid workload")?);
+        let credentials = validate(credentials, contracts, now)?;
+        Ok(Self {
+            loaded: RwLock::new(Arc::new(Loaded {
+                credentials,
+                sha256,
+            })),
+        })
+    }
+    /// Parse a mounted credential file; its digest identifies exactly which file is loaded.
+    pub fn from_bytes(bytes: &[u8], contracts: &Contracts, now: u64) -> Result<Self, &'static str> {
+        Ok(Self {
+            loaded: RwLock::new(Arc::new(parse(bytes, contracts, now)?)),
+        })
+    }
+    /// Replace the set only after the whole new file validates; any error keeps the current set.
+    pub fn reload(
+        &self,
+        bytes: &[u8],
+        contracts: &Contracts,
+        now: u64,
+    ) -> Result<usize, &'static str> {
+        let next = Arc::new(parse(bytes, contracts, now)?);
+        let count = next.credentials.len();
+        *self.loaded.write().unwrap_or_else(PoisonError::into_inner) = next;
+        Ok(count)
+    }
+    /// Digest and size of the loaded set; never any credential material.
+    pub fn loaded(&self) -> (String, usize) {
+        let current = self.current();
+        (current.sha256.clone(), current.credentials.len())
+    }
+    fn current(&self) -> Arc<Loaded> {
+        self.loaded
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
     pub fn authenticate(
         &self,
@@ -77,8 +91,9 @@ impl Authenticator {
             return None;
         }
         let hash = digest(bearer.as_bytes());
+        let current = self.current();
         let mut found = None;
-        for c in &self.credentials {
+        for c in &current.credentials {
             if bool::from(hash.as_bytes().ct_eq(c.token_sha256.as_bytes()))
                 && c.expires_at_unix_ms > now
             {
@@ -93,6 +108,65 @@ impl Authenticator {
         })
     }
     pub fn ready(&self, now: u64) -> bool {
-        self.credentials.iter().any(|c| c.expires_at_unix_ms > now)
+        self.current()
+            .credentials
+            .iter()
+            .any(|c| c.expires_at_unix_ms > now)
     }
+}
+
+fn parse(bytes: &[u8], contracts: &Contracts, now: u64) -> Result<Loaded, &'static str> {
+    if bytes.len() > MAX_CREDENTIAL_FILE_BYTES {
+        return Err("credential file too large");
+    }
+    let credentials: Vec<Credential> =
+        serde_json::from_slice(bytes).map_err(|_| "invalid credential JSON")?;
+    Ok(Loaded {
+        credentials: validate(credentials, contracts, now)?,
+        sha256: digest(bytes),
+    })
+}
+
+fn validate(
+    credentials: Vec<Credential>,
+    contracts: &Contracts,
+    now: u64,
+) -> Result<Vec<Credential>, &'static str> {
+    if credentials.is_empty() || credentials.len() > 256 {
+        return Err("invalid credential count");
+    }
+    let mut hashes = BTreeSet::new();
+    for c in &credentials {
+        let context = &c.context;
+        if c.token_sha256.len() != 64
+            || !c
+                .token_sha256
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || !hashes.insert(&c.token_sha256)
+            || c.expires_at_unix_ms <= now
+            || context.mode == RequestMode::Human
+            || context.credential_kind != CredentialKind::StaticToken
+            || context
+                .expires_at_unix_ms
+                .is_some_and(|expires| expires != c.expires_at_unix_ms)
+            || context.workload_binding_id.is_none()
+            || context.agent_id.is_none()
+            || context.credential_epoch.is_none()
+            || context.credential_sha256.as_deref() != Some(c.token_sha256.as_str())
+            || context.mode == RequestMode::Delegated
+                && (context.user_id.is_none() || context.session_epoch.is_none())
+            || context.mode == RequestMode::Service
+                && (context.user_id.is_some()
+                    || context.session_epoch.is_some()
+                    || !context.chain.is_empty())
+            || !contracts.valid(
+                "RequestContext",
+                &serde_json::to_value(context).map_err(|_| "invalid workload")?,
+            )
+        {
+            return Err("invalid workload credential");
+        }
+    }
+    Ok(credentials)
 }
