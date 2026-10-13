@@ -82,6 +82,15 @@ jobs:
           docker save olo-toolgate-device:module11 -o build/device/image.tar
           cp docs/deployment/device.md build/device/
           (cd build/device && sha256sum image.tar device-sbom.cdx.json > SHA256SUMS)
+      - name: Build and verify the Gateway-only secured Linux device
+        run: |
+          docker build -f apps/device/secured.Dockerfile --build-arg DEVICE_IMAGE=olo-toolgate-device:module11 -t olo-toolgate-linux-secured-device:module11 .
+          python tools/device/secured_check.py
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-linux-secured-device:module11
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/secured_device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/secured-device-sbom.cdx.json olo-toolgate-linux-secured-device:module11
+          docker save olo-toolgate-linux-secured-device:module11 -o build/secured_device/image.tar
+          cp docs/deployment/secured-device.md build/secured_device/
+          (cd build/secured_device && sha256sum image.tar secured-device-sbom.cdx.json > SHA256SUMS)
       - name: LangChain native smoke on the device image being published
         env:
           TOOLGATE_QUICKSTART_IMAGE: olo-toolgate-quickstart:module11
@@ -107,4 +116,9 @@ jobs:
         with:
           name: device-evidence
           path: build/device/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: secured-device-evidence
+          path: build/secured_device/
           if-no-files-found: error

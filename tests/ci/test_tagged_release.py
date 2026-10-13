@@ -152,14 +152,14 @@ class TaggedReleaseTests(unittest.TestCase):
             tagged.publish()
         return commands
 
-    def test_four_checked_images_and_helm_publish_before_release_finalization(self):
+    def test_all_checked_images_and_helm_publish_before_release_finalization(self):
         commands=self.publication_commands();arguments=[args for args,_ in commands]
-        self.assertEqual(len([a for a in arguments if a[:2]==('docker','load')]),4)
+        self.assertEqual(len([a for a in arguments if a[:2]==('docker','load')]),len(shared.IMAGES))
         self.assertEqual({a[2] for a in arguments if a[:2]==('docker','push')},
             {f'ghcr.io/olo-labs/{name}:1.2.3' for _,name in shared.IMAGES.values()})
         self.assertIn(('helm','push',str(self.assets/'olo-toolgate-1.2.3.tgz'),'oci://ghcr.io/olo-labs/charts'),arguments)
         self.assertFalse(any(a[:3]==('gh','release','create') for a in arguments))
-        self.assertEqual(len((self.root/'outputs.txt').read_text().splitlines()),8)
+        self.assertEqual(len((self.root/'outputs.txt').read_text().splitlines()),2*len(shared.IMAGES))
         for args,kwargs in commands:
             if '--password-stdin' in args:self.assertEqual(kwargs['input'],'fixture-token')
         with patch.object(shared,'run') as run,patch.object(tagged,'verify_tag_commit'),patch.object(tagged,'ensure_unpublished'):
@@ -234,20 +234,18 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         job=workflows['development-release']['jobs']['publish']
         self.assertEqual(job['environment'],'development-release')
         steps=job['steps'];attest=[s for s in steps if s.get('uses','').startswith('actions/attest-build-provenance@')]
-        # Marketplace keeps its provenance in its independent publisher.
-        marketplace=[s for s in workflows['development-release']['jobs']['publish-marketplace']['steps']
-                     if s.get('uses','').startswith('actions/attest-build-provenance@')]
-        self.assertEqual(len(marketplace),2)
-        self.assertEqual(len(attest),5)
+        # Marketplace publication belongs to its own repository.
+        self.assertNotIn('publish-marketplace',workflows['development-release']['jobs'])
+        self.assertEqual(len(attest),len(shared.IMAGES)+1)
         self.assertEqual({a['with'].get('subject-name') for a in attest if a['with'].get('push-to-registry')},
             {'${{ steps.push.outputs.'+c+'_image }}' for c in shared.IMAGES})
         self.assertEqual(steps[-1]['run'],'python tools/release/development.py finalize')
-        self.assertTrue(all("refs/tags/" in a['if'] for a in attest+marketplace))
+        self.assertTrue(all("refs/tags/" in a['if'] for a in attest))
 
     def test_publishers_can_run_when_any_sibling_publisher_fails(self):
         for name,prerequisite,expected in (
-                ('development-release','prepare',{'publish','publish-maven','publish-marketplace'}),
-                ('manual-development-release','build',{'publish','publish-typescript','publish-maven','publish-marketplace'})):
+                ('development-release','prepare',{'publish','publish-maven'}),
+                ('manual-development-release','build',{'publish','publish-typescript','publish-maven'})):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
             publishers={key for key in jobs if key.startswith('publish')}
             self.assertEqual(publishers,expected)
@@ -307,7 +305,7 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
                     self.assertFalse(any(s.get('uses','').startswith('actions/setup-java@') for s in job['steps']))
         # Even a failed Gradle invocation only changes publish-maven's result.
         outcomes={'prepare':'success','publish-maven':'failure'}
-        for name in ('publish','publish-marketplace'):
+        for name in ('publish',):
             self.assertEqual(outcomes[jobs[name]['needs']],'success')
             self.assertNotIn('publish-maven',jobs[name]['if'])
 

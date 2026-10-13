@@ -90,6 +90,9 @@ class DevelopmentReleaseTests(unittest.TestCase):
     def test_device_is_published_by_both_existing_release_paths(self):
         self.assertEqual(development.IMAGES['device'],('olo-toolgate-device:module11','olo-toolgate-device'))
         self.assertEqual(manual_development.IMAGES['device'],'olo-toolgate-device')
+        self.assertEqual(development.IMAGES['secured_device'],
+                         ('olo-toolgate-linux-secured-device:module11','olo-toolgate-linux-secured-device'))
+        self.assertEqual(manual_development.IMAGES['secured_device'],'olo-toolgate-linux-secured-device')
 
     def test_archive_requires_matching_checksum(self):
         with tempfile.TemporaryDirectory() as directory:
