@@ -207,6 +207,7 @@ impl Device {
                 client_version: VERSION.into(),
                 applied_revision: 0,
                 packages: vec![],
+                power: None,
             },
             adoption_digest: None,
             local_tools: Some(tools),

@@ -23,6 +23,7 @@ LABEL org.opencontainers.image.title="OLO ToolGate Linux device" \
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 ca-certificates && \
     rm -rf /var/lib/apt/lists/* && ln -s /usr/bin/python3 /usr/local/bin/python && \
     mkdir -p /etc/systemd/system /etc/olo-toolgate /var/lib/olo-toolgate /usr/local/lib/olo-toolgate && \
+    ln -s /usr/local/lib/olo-toolgate/olo-toolgate-client /usr/local/bin/olo-toolgate-client && \
     chmod 700 /var/lib/olo-toolgate
 COPY --from=extract /opt/toolgate/client /opt/toolgate/client
 COPY debug/device-entrypoint.py /opt/toolgate/device_entrypoint.py

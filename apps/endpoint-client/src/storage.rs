@@ -124,6 +124,7 @@ impl ProtectedStore {
                 | "fleet-active.json"
                 | "local-tools.json"
                 | "local-tools-token"
+                | "power.json"
         ) {
             return Err(Failure::Validation);
         }

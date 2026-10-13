@@ -49,8 +49,12 @@ function New-ToolGateWindow {
     $form.Tag = @{ Layout = $layout; Logo = $logo; BrandIcon = $brandIcon }
     return $form
 }
+# Power is the owner's local switch (olo-toolgate-client power on|off); off overrides gateway state.
 function Get-ToolGateHealthSummary {
-    param($Health)
+    param($Health, [string]$Power = 'on')
+    if ($Power -eq 'off') {
+        return @{ Status = 'Powered off'; Guidance = 'You switched this device off. Choose Power on to reconnect it; no approval is needed.'; Connected = $false }
+    }
     $state = [string]$Health.state
     $status = switch ($state) {
         'UNENROLLED' { 'Enrollment required' }
@@ -170,7 +174,7 @@ function Sync-ToolGateConnectionPages {
     $Form.CancelButton = $pages[0].Close
 }
 function Update-ToolGateStatusWindow {
-    param($Form, [string]$Detail, $Activity, [bool]$Available, [object[]]$Connections = @())
+    param($Form, [string]$Detail, $Activity, [bool]$Available, [object[]]$Connections = @(), [string]$Power = 'on')
     if (-not $Connections -or $Connections.Count -eq 0) {
         $Connections = @([pscustomobject]@{ serverUrl = ''; focused = $true; activity = $Activity })
     }
@@ -189,8 +193,8 @@ function Update-ToolGateStatusWindow {
         if ($connection.focused) {
             $text = $Detail
         } elseif ($connection.health) {
-            $summary = Get-ToolGateHealthSummary $connection.health
-            $text = "Connected in the background`r`nStatus: $($summary.Status)`r`n$($summary.Guidance)`r`nSuccessful check-ins: $($connection.health.successfulCheckIns)`r`nFailed check-ins: $($connection.health.failedCheckIns)"
+            $summary = Get-ToolGateHealthSummary $connection.health $Power
+            $text = "$(if ($Power -eq 'off') { 'Powered off' } else { 'Connected in the background' })`r`nStatus: $($summary.Status)`r`n$($summary.Guidance)`r`nSuccessful check-ins: $($connection.health.successfulCheckIns)`r`nFailed check-ins: $($connection.health.failedCheckIns)"
         } else {
             $text = 'Waiting for the device service.'
         }

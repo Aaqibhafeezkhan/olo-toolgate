@@ -245,7 +245,7 @@ export interface ClientInstallerManifest {
   readonly version: string;
   readonly artifacts: ReadonlyArray<ClientInstallerArtifact>;
 }
-export type ClientIpcOperation = "HEALTH" | "ENROLL" | "CHECK_IN" | "ACTIVITY";
+export type ClientIpcOperation = "HEALTH" | "ENROLL" | "CHECK_IN" | "ACTIVITY" | "POWER_ON" | "POWER_OFF";
 /** Endpoint identity foundation wire model. */
 export interface ClientIpcRequest {
   readonly protocolVersion: number;
@@ -260,6 +260,7 @@ export interface ClientIpcResponse {
   readonly error?: ErrorCode;
   readonly activity?: ClientActivity;
   readonly connections?: ReadonlyArray<ClientGatewayConnection>;
+  readonly power?: DevicePower;
 }
 export type ClientPlatform = "WINDOWS" | "LINUX" | "MACOS";
 /** Batched report of device inventory and applied desired revision. */
@@ -268,6 +269,7 @@ export interface ClientReport {
   readonly clientVersion: string;
   readonly appliedRevision: number;
   readonly packages: ReadonlyArray<ReportedPackage>;
+  readonly power?: DevicePower;
 }
 export type ClientSocketOperation = "CHECK_IN" | "AUTHORIZE" | "RESULT" | "BUILDER_POLL" | "BUILDER_RESULT";
 /** Correlated status and response; body is validated again as the expected response contract. */
@@ -680,6 +682,7 @@ export interface DeviceIdentity {
   readonly issuerCertificatePem: string;
   readonly expiresAtUnixMs: number;
 }
+export type DevicePower = "ON" | "OFF";
 /** Authenticated device adoption metadata. No owner or per-agent permission cache; discovery and effects require current online authority. */
 export interface EndpointAdoption {
   readonly serverId: string;

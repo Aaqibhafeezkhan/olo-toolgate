@@ -29,6 +29,9 @@ struct Journal {
     /// Display name the gateway last sent; shown beside its URL on the device.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     server_name: Option<String>,
+    /// The last report this gateway acknowledged said the owner had switched the device off.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    power_off_reported: bool,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -43,6 +46,8 @@ struct RemoteJournal {
 pub struct ClientService {
     pub activity: Arc<crate::activity::Activity>,
     pub(crate) schedule_changed: Arc<tokio::sync::Notify>,
+    /// Shared by every gateway connection on this device; the runtime installs the saved switch.
+    pub(crate) power: Arc<crate::power::Power>,
     remote_job: Option<crate::remote::Job>,
     remote_result: Option<RemoteToolResult>,
     adoption: Option<EndpointAdoption>,
@@ -144,6 +149,7 @@ impl ClientService {
         Ok(Self {
             activity: crate::activity::Activity::open(config.state_directory.clone())?,
             schedule_changed: Arc::new(tokio::sync::Notify::new()),
+            power: crate::power::Power::volatile(),
             remote_job: None,
             remote_result: None,
             adoption: match store.read("adoption.json")? {
@@ -171,6 +177,11 @@ impl ClientService {
             observed,
             boot_time: observed,
         })
+    }
+    /// Shares the device's saved power switch with this gateway connection.
+    pub fn with_power(mut self, power: Arc<crate::power::Power>) -> Self {
+        self.power = power;
+        self
     }
     fn clock(&mut self) -> Result<u64> {
         let wall = crate::now();
@@ -272,6 +283,9 @@ impl ClientService {
             .ok_or(Failure::Unsupported)
     }
     pub async fn prepare_runtimes(&mut self) -> Result<LocalRuntimeHealth> {
+        if !self.power.is_on() {
+            return Err(Failure::Unavailable);
+        }
         if self.remote_job.is_some() {
             return Err(Failure::Conflict);
         }
@@ -642,7 +656,7 @@ impl ClientService {
             } else {
                 self.state.clone()
             },
-            ready: self.state == EndpointState::Active && fresh,
+            ready: self.state == EndpointState::Active && fresh && self.power.is_on(),
             uptime_seconds: self.started.elapsed().as_secs(),
             successful_check_ins: self.successes,
             failed_check_ins: self.failures,
@@ -904,7 +918,9 @@ impl ClientService {
         if identity.expires_at_unix_ms <= now {
             return Err(Failure::Expired);
         }
+        // A power switch is reported at once instead of waiting for the next interval.
         if self.journal.pending_report.is_none()
+            && self.power_reported()
             && self
                 .journal
                 .last_success
@@ -937,6 +953,8 @@ impl ClientService {
                     client_version: env!("CARGO_PKG_VERSION").into(),
                     applied_revision: self.deployment.status.generation,
                     packages: self.deployment.status.packages.clone(),
+                    // Omitted while on, so gateways without the power switch accept the report.
+                    power: (!self.power.is_on()).then_some(DevicePower::Off),
                 },
                 adoption_digest: self
                     .adoption
@@ -1027,6 +1045,7 @@ impl ClientService {
         self.journal.sequence = request.sequence;
         self.journal.pending_report = None;
         self.journal.last_success = Some(now);
+        self.journal.power_off_reported = request.report.power == Some(DevicePower::Off);
         self.save()?;
         self.successes = self.successes.saturating_add(1);
         self.state = EndpointState::Active;
@@ -1035,6 +1054,10 @@ impl ClientService {
             result = "accepted",
             sequence = self.journal.sequence
         );
+        // Switched off: no task, package or builder work is taken from this or any later reply.
+        if !self.power.is_on() {
+            return Ok(());
+        }
         // Check authority first on every cycle, including while a leased job is running.
         let identity = self.journal.identity.clone().ok_or(Failure::Unauthorized)?;
         if let Some(task) = ack.task {
@@ -1060,6 +1083,24 @@ impl ClientService {
             }
         }
         Ok(())
+    }
+    /// True when this gateway's last acknowledged report matches the owner's switch.
+    fn power_reported(&self) -> bool {
+        self.journal.power_off_reported != self.power.is_on()
+    }
+    /// The owner switched the device off: stop local work, then send this gateway one final
+    /// report. A report already pending is delivered first, so at most two check-ins are sent.
+    pub async fn power_off(&mut self) -> Result<()> {
+        let stopped = self.shutdown_runtimes().await;
+        if self.journal.identity.is_some() && !self.journal.revoked {
+            for _ in 0..2 {
+                if self.power.is_on() || self.power_reported() {
+                    break;
+                }
+                self.tick().await?;
+            }
+        }
+        stopped
     }
     /// Keeps the gateway's latest display name; the next journal save persists it.
     fn remember_server_name(&mut self, name: Option<&str>) {
@@ -1122,6 +1163,7 @@ mod tests {
         deadline: AtomicU64,
         interval_ms: AtomicU64,
         consumption: std::sync::Mutex<Option<EnterpriseInvocation>>,
+        reports: std::sync::Mutex<Vec<Option<DevicePower>>>,
     }
     impl ControlPort for Gateway {
         fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
@@ -1192,6 +1234,10 @@ mod tests {
         ) -> Call<'_, EndpointCheckInAck> {
             Box::pin(async move {
                 self.polls.fetch_add(1, Ordering::SeqCst);
+                self.reports
+                    .lock()
+                    .unwrap()
+                    .push(report.report.power.clone());
                 if self.deleted.load(Ordering::SeqCst) {
                     return Err(Failure::EnrollmentRequired);
                 }
@@ -1296,6 +1342,7 @@ mod tests {
             deadline: AtomicU64::new(crate::now() + 29000),
             interval_ms: AtomicU64::new(500),
             consumption: std::sync::Mutex::new(None),
+            reports: std::sync::Mutex::new(vec![]),
         });
         let service = ClientService::open(config, store, key, gateway.clone()).unwrap();
         (service, gateway, directory)
@@ -1504,6 +1551,104 @@ mod tests {
         service.tick().await.unwrap();
         assert_eq!(service.journal.sequence, 1);
         assert!(service.journal.pending_report.is_none());
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn power_off_reports_once_and_power_on_resumes_without_reenrollment() {
+        let (mut service, gateway, directory) = test_service();
+        let mut identity: DeviceIdentity =
+            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
+        identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.identity = Some(identity);
+        service.tick().await.unwrap();
+        assert!(service.health().ready);
+        let power = crate::power::Power::open(directory.clone()).unwrap();
+        let mut service = service.with_power(power.clone());
+        power.set(false).unwrap();
+        assert!(!service.health().ready);
+        // The final report goes out at once, inside the check-in interval, and only once.
+        service.power_off().await.unwrap();
+        service.power_off().await.unwrap();
+        assert_eq!(
+            *gateway.reports.lock().unwrap(),
+            [None, Some(DevicePower::Off)]
+        );
+        assert!(service.journal.power_off_reported);
+        assert_eq!(
+            service.prepare_runtimes().await.err(),
+            Some(Failure::Unavailable)
+        );
+        // Switched on: the next cycle reports at once, with the same enrollment.
+        power.set(true).unwrap();
+        service.tick().await.unwrap();
+        service.tick().await.unwrap();
+        assert_eq!(
+            *gateway.reports.lock().unwrap(),
+            [None, Some(DevicePower::Off), None]
+        );
+        assert!(!service.journal.power_off_reported);
+        assert!(service.health().ready);
+        assert_eq!(service.journal.sequence, 3);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn only_the_local_switch_changes_power_and_off_refuses_gateway_work() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (service, _, directory) = test_service();
+        let power = crate::power::Power::open(directory.clone()).unwrap();
+        let activity = service.activity.clone();
+        let service = Arc::new(tokio::sync::Mutex::new(service.with_power(power.clone())));
+        let contracts = crate::contracts::Contracts::new().unwrap();
+        let call = |operation: ClientIpcOperation, power: Option<Arc<crate::power::Power>>| {
+            let (service, contracts, activity) = (service.clone(), &contracts, activity.clone());
+            async move {
+                let request = ClientIpcRequest {
+                    protocol_version: 1,
+                    request_id: crate::identity::nonce().unwrap(),
+                    operation,
+                };
+                let bytes = contracts.encode("ClientIpcRequest", &request).unwrap();
+                let (mut stream, mut peer) = tokio::io::duplex(16384);
+                peer.write_u32(bytes.len() as u32).await.unwrap();
+                peer.write_all(&bytes).await.unwrap();
+                crate::ipc::connection_with_gateways(
+                    &mut stream,
+                    "authorized",
+                    &["authorized".into()],
+                    &service,
+                    None,
+                    power.as_deref(),
+                    contracts,
+                    &activity,
+                )
+                .await
+                .unwrap();
+                let mut response = vec![0; peer.read_u32().await.unwrap() as usize];
+                peer.read_exact(&mut response).await.unwrap();
+                contracts
+                    .decode::<ClientIpcResponse>("ClientIpcResponse", &response)
+                    .unwrap()
+            }
+        };
+        // Without the device switch, as for an unauthenticated test listener, nothing changes.
+        let response = call(ClientIpcOperation::PowerOff, None).await;
+        assert_eq!(response.error, Some(ErrorCode::Unsupported));
+        assert!(power.is_on());
+        let response = call(ClientIpcOperation::PowerOff, Some(power.clone())).await;
+        assert_eq!(response.power, Some(DevicePower::Off));
+        assert!(!crate::power::Power::open(directory.clone())
+            .unwrap()
+            .is_on());
+        let response = call(ClientIpcOperation::CheckIn, Some(power.clone())).await;
+        assert_eq!(response.error, Some(ErrorCode::DependencyUnavailable));
+        let response = call(ClientIpcOperation::Health, Some(power.clone())).await;
+        assert_eq!(response.power, Some(DevicePower::Off));
+        assert!(!response.health.unwrap().ready);
+        let response = call(ClientIpcOperation::PowerOn, Some(power.clone())).await;
+        assert_eq!(response.power, Some(DevicePower::On));
+        assert!(power.is_on());
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
     }

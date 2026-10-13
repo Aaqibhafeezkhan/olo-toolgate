@@ -9,13 +9,15 @@ package io.ololabs.toolgate.contracts;
  * @param clientVersion canonical clientVersion value
  * @param appliedRevision canonical appliedRevision value
  * @param packages canonical packages value
+ * @param power canonical power value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ClientReport(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceId", required = true) String deviceId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "clientVersion", required = true) String clientVersion,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "appliedRevision", required = true) Long appliedRevision,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "packages", required = true) java.util.List<ReportedPackage> packages
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "packages", required = true) java.util.List<ReportedPackage> packages,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "power", required = false) DevicePower power
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,6 +25,7 @@ public record ClientReport(
      * @param clientVersion canonical clientVersion value
      * @param appliedRevision canonical appliedRevision value
      * @param packages canonical packages value
+     * @param power canonical power value
      */
     public ClientReport {
         java.util.Objects.requireNonNull(deviceId, "deviceId");

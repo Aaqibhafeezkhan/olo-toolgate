@@ -8,7 +8,8 @@ import io.ololabs.toolgate.contracts.v2.RequestContext;
 import java.util.*;
 
 /** Places a call on one device (ADR 015 amendment). The request context carries no device, so Control picks from the
- *  execution binding's device group: devices that are enabled, enrolled, approved and online, narrowed to the caller's
+ *  execution binding's device group: devices that are enabled, enrolled, approved, online and not switched off by their
+ *  owner, narrowed to the caller's
  *  own devices when there are any. Server executors are devices too, so a pool of executor containers is one group and
  *  each call goes to the member with the fewest queued calls; ties go by a hash of the request id, which spreads calls
  *  and keeps a retried request on the same device. */
@@ -68,7 +69,11 @@ public final class DevicePlacement {
     }
     private boolean online(Store.Session tx,String deviceId,long now){
         var row=tx.endpoint(deviceId);if(row==null)return false;var d=codec.model(row.document(),EndpointDeviceRecord.class);
-        return d.state()==EndpointState.ACTIVE&&!Boolean.FALSE.equals(d.connectionApproved())
+        return d.state()==EndpointState.ACTIVE&&!Boolean.FALSE.equals(d.connectionApproved())&&!poweredOff(d)
             &&(d.connectionExpiresAtUnixMs()==null||d.connectionExpiresAtUnixMs()>now)&&!checkIn.offline(d.lastSeenUnixMs(),now);
     }
+    /** The owner switched the device off in its client; it gets no calls at once, before the offline timeout. */
+    public static boolean poweredOff(EndpointDeviceRecord device){return device!=null&&poweredOff(device.report());}
+    /** Reports from clients without the switch carry no power and count as on. */
+    public static boolean poweredOff(ClientReport report){return report!=null&&report.power()==DevicePower.OFF;}
 }

@@ -52,6 +52,11 @@ describe('Device management',()=>{
     expect(screen.getByRole('columnheader',{name:'System name'})).toBeTruthy();expect(screen.getByRole('columnheader',{name:'IP address'})).toBeTruthy();
     expect(screen.getAllByText('Not reported').length).toBe(2);
   });
+  it('shows a device its owner switched off as powered off, not offline, in the list and details',async()=>{
+    setup([{...active,endpointDevice:{...active.endpointDevice!,report:{deviceId:'device-1',clientVersion:'0.10.0',appliedRevision:0,packages:[],power:'OFF'}}}]);
+    const state=await screen.findByText('Powered off by owner');expect(state.className).toContain('offline');expect(screen.queryByText('Offline')).toBeNull();
+    fireEvent.focus(screen.getByRole('button',{name:'Details for device-1'}));expect(screen.getByRole('tooltip').textContent).toContain('Connection: Powered off by owner');
+  });
   it('lists approved, pending and system devices with names, users and accessible details',async()=>{
     setup([active,pending,system]);await screen.findByText('Trading workstation');
     expect(screen.getByRole('columnheader',{name:'Registered user'})).toBeTruthy();expect(screen.getByText('Alice Smith')).toBeTruthy();expect(screen.getByText('Awaiting registration')).toBeTruthy();

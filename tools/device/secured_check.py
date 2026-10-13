@@ -170,6 +170,16 @@ def check(image, quickstart):
                  'retained secured identity after recreation')
             assert probe(client, peer4, 8123, confined=True) == 'BLOCKED'
             mark('recreation retains device identity and reinstalls the firewall')
+            # Only the owner switches power, from the host; the final report reaches Control.
+            assert run('docker', 'exec', client, 'olo-toolgate-client', 'power', 'off') == 'off'
+            wait(lambda: (api('/api/control/v1/endpoint/devices/'+device_id, token=token).get('report') or {}).get('power') == 'OFF',
+                 'powered-off report')
+            assert run('docker', 'exec', client, 'olo-toolgate-client', 'power', 'status') == 'off'
+            after = int(time.time()*1000)
+            assert run('docker', 'exec', client, 'olo-toolgate-client', 'power', 'on') == 'on'
+            wait(lambda: active(after), 'check-ins resumed after power on')
+            assert status().get('deviceId') == device_id
+            mark('owner power switch through docker exec; power on resumes without re-enrollment')
             run('docker', 'pause', gateway)
             time.sleep(6)
             assert info(client)['State']['Running']

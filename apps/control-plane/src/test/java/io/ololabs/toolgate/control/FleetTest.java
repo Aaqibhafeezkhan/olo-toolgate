@@ -61,9 +61,9 @@ final class FleetTest {
         assertThrows(Failure.class,()->fleet.rollouts(new DirectoryService.Actor(new Ids.TenantId("other"),"a".repeat(64),true),null));
         store.transaction(tenant,true,tx->{
             var desired=codec.model(tx.fleet().get(FleetStore.Kind.DESIRED,"device-a").document(),FleetDesiredSnapshot.class);
-            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation(),List.of(new ReportedPackage("wrong","1.0.0",PackageState.READY)))));
-            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation()+1,List.of())));
-            FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",0L,List.of()));
+            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation(),List.of(new ReportedPackage("wrong","1.0.0",PackageState.READY)),null)));
+            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation()+1,List.of(),null)));
+            FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",0L,List.of(),null));
             return null;
         });
         var race=new FleetRolloutRequest("race",release.packageId(),release.version(),List.of("device-a","device-b"),true,100L);

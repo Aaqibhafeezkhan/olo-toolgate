@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Length-framed, bounded OS-authenticated IPC; no remote listener or credential export.
 use crate::{
-    connections::Connections, contracts::Contracts, service::ClientService, Failure, Result,
+    connections::Connections, contracts::Contracts, power::Power, service::ClientService, Failure,
+    Result,
 };
 use olo_toolgate_contracts::*;
 use std::{sync::Arc, time::Duration};
@@ -56,15 +57,21 @@ pub async fn connection<S: AsyncRead + AsyncWrite + Unpin>(
     contracts: &Contracts,
     activity: &Arc<crate::activity::Activity>,
 ) -> Result<()> {
-    connection_with_gateways(stream, peer, peers, service, None, contracts, activity).await
+    connection_with_gateways(
+        stream, peer, peers, service, None, None, contracts, activity,
+    )
+    .await
 }
-/// Same as [`connection`], and also reports every gateway connection the service holds.
+/// Same as [`connection`], and also reports every gateway connection the service holds and
+/// switches the device's power. Without a switch the power commands are unsupported.
+#[allow(clippy::too_many_arguments)]
 pub async fn connection_with_gateways<S: AsyncRead + AsyncWrite + Unpin>(
     stream: &mut S,
     peer: &str,
     peers: &[String],
     service: &Arc<tokio::sync::Mutex<ClientService>>,
     gateways: Option<&Connections>,
+    power: Option<&Power>,
     contracts: &Contracts,
     activity: &Arc<crate::activity::Activity>,
 ) -> Result<()> {
@@ -76,7 +83,7 @@ pub async fn connection_with_gateways<S: AsyncRead + AsyncWrite + Unpin>(
         .await
         .map_err(|_| Failure::Unavailable)??;
     handle(
-        stream, peer, peers, service, gateways, contracts, activity, &bytes,
+        stream, peer, peers, service, gateways, power, contracts, activity, &bytes,
     )
     .await
 }
@@ -88,6 +95,7 @@ async fn handle<S: AsyncWrite + Unpin>(
     peers: &[String],
     service: &Arc<tokio::sync::Mutex<ClientService>>,
     gateways: Option<&Connections>,
+    power: Option<&Power>,
     contracts: &Contracts,
     activity: &Arc<crate::activity::Activity>,
     bytes: &[u8],
@@ -98,6 +106,8 @@ async fn handle<S: AsyncWrite + Unpin>(
     }
     let envelope: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|_| Failure::Validation)?;
+    // Switched off by the owner: no tool request, runtime or gateway contact is started.
+    let off = power.is_some_and(|p| !p.is_on());
     if envelope["protocolVersion"] == 3 {
         let request: LocalRuntimeIpcRequest = contracts.decode("LocalRuntimeIpcRequest", bytes)?;
         let mut response = LocalRuntimeIpcResponse {
@@ -106,6 +116,14 @@ async fn handle<S: AsyncWrite + Unpin>(
             result: None,
             error: None,
         };
+        if off && request.operation != LocalRuntimeOperation::Status {
+            response.error = Some(code(Failure::Unavailable));
+            return write(
+                stream,
+                &contracts.encode("LocalRuntimeIpcResponse", &response)?,
+            )
+            .await;
+        }
         let mut state = match service.try_lock() {
             Ok(state) => state,
             Err(_) => {
@@ -166,6 +184,10 @@ async fn handle<S: AsyncWrite + Unpin>(
             output: None,
             error: None,
         };
+        if off {
+            response.error = Some(code(Failure::Unavailable));
+            return write(stream, &contracts.encode("BuiltinIpcResponse", &response)?).await;
+        }
         let mut state = match service.try_lock() {
             Ok(state) => state,
             Err(_) => {
@@ -221,11 +243,29 @@ async fn handle<S: AsyncWrite + Unpin>(
         activity: None,
         error: None,
         connections: None,
+        power: power.map(Power::state),
     };
     // Connection snapshots are published by each heartbeat and never wait for a service lock.
     if request.operation == ClientIpcOperation::Activity {
         response.activity = Some(activity.snapshot());
         response.connections = gateways.map(|g| g.snapshot(true));
+        return write(stream, &contracts.encode("ClientIpcResponse", &response)?).await;
+    }
+    // The owner's switch never waits behind a check-in; each gateway connection reacts to it.
+    if let ClientIpcOperation::PowerOn | ClientIpcOperation::PowerOff = request.operation {
+        let on = request.operation == ClientIpcOperation::PowerOn;
+        match power.ok_or(Failure::Unsupported).and_then(|p| p.set(on)) {
+            Ok(state) => {
+                activity.event("Power", if on { "ON" } else { "OFF" });
+                tracing::info!(event = "device_power", on);
+                response.power = Some(state);
+            }
+            Err(failure) => response.error = Some(code(failure)),
+        }
+        return write(stream, &contracts.encode("ClientIpcResponse", &response)?).await;
+    }
+    if off && request.operation != ClientIpcOperation::Health {
+        response.error = Some(code(Failure::Unavailable));
         return write(stream, &contracts.encode("ClientIpcResponse", &response)?).await;
     }
     // Health may wait briefly behind a poll. Listener permits bound waiting readers;
@@ -250,7 +290,9 @@ async fn handle<S: AsyncWrite + Unpin>(
         _ => None,
     };
     let result = match request.operation {
-        ClientIpcOperation::Activity => unreachable!(),
+        ClientIpcOperation::Activity
+        | ClientIpcOperation::PowerOn
+        | ClientIpcOperation::PowerOff => unreachable!(),
         ClientIpcOperation::Health => {
             response.health = Some(state.health());
             response.connections = gateways.map(|g| g.snapshot(false));
@@ -290,6 +332,7 @@ pub async fn listen(
     peers: Vec<String>,
     service: Arc<tokio::sync::Mutex<ClientService>>,
     gateways: Arc<Connections>,
+    power: Arc<Power>,
     contracts: Arc<Contracts>,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
@@ -317,8 +360,8 @@ pub async fn listen(
             incoming=listener.accept()=>{
                 let(mut stream,_)=incoming.map_err(|_|Failure::Unavailable)?;let permit=match limit.clone().try_acquire_owned(){Ok(p)=>p,Err(_)=>continue};
                 let peer=stream.peer_cred().map_err(|_|Failure::Unauthorized)?.uid().to_string();
-                let service=service.clone();let gateways=gateways.clone();let contracts=contracts.clone();let peers=peers.clone();let activity=activity.clone();
-                tasks.spawn(async move{let _permit=permit;let _=tokio::time::timeout(Duration::from_secs(230),connection_with_gateways(&mut stream,&peer,&peers,&service,Some(&gateways),&contracts,&activity)).await;});
+                let service=service.clone();let gateways=gateways.clone();let power=power.clone();let contracts=contracts.clone();let peers=peers.clone();let activity=activity.clone();
+                tasks.spawn(async move{let _permit=permit;let _=tokio::time::timeout(Duration::from_secs(230),connection_with_gateways(&mut stream,&peer,&peers,&service,Some(&gateways),Some(&power),&contracts,&activity)).await;});
             },
             Some(_)=tasks.join_next()=>{},
         }
@@ -334,6 +377,7 @@ pub async fn listen(
     peers: Vec<String>,
     service: Arc<tokio::sync::Mutex<ClientService>>,
     gateways: Arc<Connections>,
+    power: Arc<Power>,
     contracts: Arc<Contracts>,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
@@ -370,12 +414,12 @@ pub async fn listen(
                 connected.map_err(|_|Failure::Unavailable)?;
                 let next=create(endpoint,&peers,false)?;
                 let mut stream=std::mem::replace(&mut pipe,next);let permit=match limit.clone().try_acquire_owned(){Ok(p)=>p,Err(_)=>continue};
-                let service=service.clone();let gateways=gateways.clone();let contracts=contracts.clone();let peers=peers.clone();let activity=activity.clone();
+                let service=service.clone();let gateways=gateways.clone();let power=power.clone();let contracts=contracts.clone();let peers=peers.clone();let activity=activity.clone();
                 tasks.spawn(async move{let _permit=permit;let _=tokio::time::timeout(Duration::from_secs(230),async{
                     // Impersonation authenticates the token associated with data actually read.
                     // SAFETY: stream owns the live connected server pipe during the query.
                     let bytes=read(&mut stream).await?;let peer=unsafe { crate::platform::windows::peer_sid(stream.as_raw_handle()) }?;
-                    handle(&mut stream,&peer,&peers,&service,Some(&gateways),&contracts,&activity,&bytes).await
+                    handle(&mut stream,&peer,&peers,&service,Some(&gateways),Some(&power),&contracts,&activity,&bytes).await
                 }).await;});
             },
             Some(_)=tasks.join_next()=>{},

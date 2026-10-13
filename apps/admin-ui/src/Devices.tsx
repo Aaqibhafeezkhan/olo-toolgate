@@ -20,6 +20,8 @@ function connection(row:DeviceView,now:number){
   if(row.directoryDevice?.enabled===false)return 'Disabled';
   if(!approved(row,now))return row.endpointDevice?.state==='REVOKED'?'Revoked':'Needs approval';
   const device=row.endpointDevice!;const age=now-device.lastSeenUnixMs;
+  // Only the device's owner switches it; the console shows the reason instead of waiting for Offline.
+  if(device.report?.power==='OFF')return 'Powered off by owner';
   return device.reportSequence>0&&device.lastSeenUnixMs>0&&age>=-5000&&age<120000?'Connected':'Offline';
 }
 function purpose(row:DeviceView){return row.systemExecutorKind==='HOTFOLDER'?'Runs file tools inside the server’s configured HotFolder. Disabling this device blocks HotFolder operations.':row.systemExecutorKind==='REST_FORWARDING'?'The existing ToolGate gateway forwards tool calls to approved clients. Disabling this device blocks that forwarding.':row.systemExecutor?'Quickstart’s internal fixed executor runs compute and server tools. Disabling it blocks all server built-in operations, including HotFolder.':'An installed client with a protected device key. Both approval and enablement are required for access.';}

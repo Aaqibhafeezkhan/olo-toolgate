@@ -57,6 +57,11 @@ Windows tray) to request a fresh admin review immediately. The admin console als
 offers **Request approval again**; both flows retain the device ID and key and
 require fresh approval before protected access resumes.
 
+`olo-toolgate-client power on|off|status` (tray **Power on / Power off**) is the
+owner's local switch. Off sends one final report, then stops every gateway
+connection and refuses tool requests until the owner switches it on; enrollment
+is kept. See [the owner power switch](../../docs/client/health-and-inventory.md#owner-power-switch).
+
 `health` and `check-in` are bounded IPC commands. Unix sockets use kernel peer
 UIDs; Windows pipes use OS impersonation SIDs and reject remote clients. The CLI
 verifies that its IPC server is root or LocalSystem. Allowed peers are explicitly

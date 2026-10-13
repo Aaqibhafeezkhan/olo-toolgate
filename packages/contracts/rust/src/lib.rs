@@ -385,6 +385,10 @@ pub enum ClientIpcOperation {
     CheckIn,
     #[serde(rename = "ACTIVITY")]
     Activity,
+    #[serde(rename = "POWER_ON")]
+    PowerOn,
+    #[serde(rename = "POWER_OFF")]
+    PowerOff,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -409,6 +413,8 @@ pub struct ClientIpcResponse {
     pub activity: Option<ClientActivity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connections: Option<Vec<ClientGatewayConnection>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<DevicePower>,
 }
 /// Canonical ClientPlatform wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -428,6 +434,8 @@ pub struct ClientReport {
     pub client_version: String,
     pub applied_revision: u64,
     pub packages: Vec<ReportedPackage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<DevicePower>,
 }
 /// Canonical ClientSocketOperation wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1055,6 +1063,14 @@ pub struct DeviceIdentity {
     pub certificate_pem: String,
     pub issuer_certificate_pem: String,
     pub expires_at_unix_ms: u64,
+}
+/// Canonical DevicePower wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DevicePower {
+    #[serde(rename = "ON")]
+    On,
+    #[serde(rename = "OFF")]
+    Off,
 }
 /// Authenticated device adoption metadata. No owner or per-agent permission cache; discovery and effects require current online authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

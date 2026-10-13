@@ -261,17 +261,20 @@ public final class EndpointService {
             if(check.report().appliedRevision()!=0||!check.report().packages().isEmpty())FleetService.validateReport(tx,codec,check.report());
             if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),milliseconds,serverName(tx));}
             if(check.sequence()!=device.reportSequence()+1)throw Failure.conflict();
+            // Only the device's owner switches its power; the report that says so is sent at once.
+            boolean off=DevicePlacement.poweredOff(check.report()),switched=off!=DevicePlacement.poweredOff(device.report());
             // Allow the configured cycle with its jitter and transport jitter; reject request bursts.
-            if(device.reportSequence()>0 && now-device.lastSeenUnixMs()<checkInPolicy.burstGuardMs())throw Failure.conflict();
+            if(!switched&&device.reportSequence()>0 && now-device.lastSeenUnixMs()<checkInPolicy.burstGuardMs())throw Failure.conflict();
             // A certificate already capped at the approved deadline needs no repeated renewal.
             long connectionExpires=device.connectionExpiresAtUnixMs()==null?Long.MAX_VALUE:device.connectionExpiresAtUnixMs();
             DeviceIdentity renewed=null;if(peer.getNotAfter().getTime()-now<43200000&&peer.getNotAfter().getTime()<connectionExpires/1000*1000)renewed=issuer.issue(row.csr(),device.deviceId(),tenant.value(),device.userId(),server,now,connectionExpires);
             var configuration=new EndpointAdoptions(codec).poll(tx,device,server,check.adoptionDigest(),check.localTools());
-            var task=relay().poll(tx,device,now,requestId);
+            var task=off?null:relay().poll(tx,device,now,requestId);
             var ack=new EndpointCheckInAck(device.deviceId(),check.sequence(),now,2L,null,renewed,configuration,task,null);
             var updated=new EndpointDeviceRecord(device.deviceId(),tenant.value(),device.userId(),fingerprint,EndpointState.ACTIVE,device.revision()+1,now,check.sequence(),check.report(),device.connectionExpiresAtUnixMs(),device.connectionApproved(),device.approvalRevision(),systemName==null?device.systemName():systemName,ipAddress==null?device.ipAddress():ipAddress);
             var response=reply(ack,updated.revision());tx.saveEndpoint(new Store.EndpointRecord(row.id(),row.fingerprint(),codec.json(updated),row.csr(),digest,response.body()));
-            tx.audit(fingerprint,renewed==null?"DEVICE_CHECK_IN":"DEVICE_RENEW","endpoint:"+row.id(),updated.revision(),requestId,digest);return interval(response,milliseconds,serverName(tx));
+            tx.audit(fingerprint,renewed==null?"DEVICE_CHECK_IN":"DEVICE_RENEW","endpoint:"+row.id(),updated.revision(),requestId,digest);
+            if(switched)tx.audit(fingerprint,off?"DEVICE_POWER_OFF":"DEVICE_POWER_ON","endpoint:"+row.id(),updated.revision(),requestId,digest);return interval(response,milliseconds,serverName(tx));
         });
     }
     public EndpointDeviceRecord authenticate(Store.Session tx,java.security.cert.X509Certificate peer,long now){
