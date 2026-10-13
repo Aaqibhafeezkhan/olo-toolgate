@@ -234,6 +234,12 @@ pub enum ConfigLayer {
     #[serde(rename = "PACKAGE_DEFAULT")]
     PackageDefault,
 }
+/// Configuration review settings. requiredReviews 0 applies changes immediately.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfigurationSettings {
+    pub required_reviews: u64,
+}
 /// SaaS connection the package needs (plan.md §14.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -260,8 +266,9 @@ pub struct ControlServerSettings {
     pub gateway: GatewaySettings,
     pub device_approval: DeviceApproval,
     pub client_check_in: ClientCheckIn,
+    pub configuration: ConfigurationSettings,
 }
-/// application/merge-patch+json body. Env-owned clientCheckIn is not patchable.
+/// application/merge-patch+json body, and the settings of a configuration snapshot. Env-owned clientCheckIn is not patchable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ControlServerSettingsPatch {
@@ -269,6 +276,8 @@ pub struct ControlServerSettingsPatch {
     pub gateway: Option<GatewaySettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_approval: Option<DeviceApproval>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<ConfigurationSettings>,
 }
 /// Canonical CredentialKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

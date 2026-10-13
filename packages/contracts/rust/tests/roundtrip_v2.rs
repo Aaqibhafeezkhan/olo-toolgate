@@ -39,6 +39,7 @@ fn v2_fixture_round_trips() {
         CompositionMapping,
         CompositionRecord,
         ConfigLayer,
+        ConfigurationSettings,
         ConnectionRequirement,
         ContractSet,
         ControlServerSettings,

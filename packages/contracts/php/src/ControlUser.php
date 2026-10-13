@@ -12,12 +12,14 @@ final readonly class ControlUser implements \JsonSerializable {
         public string $name,
         public bool $enabled,
         public int $revision,
-        public ?string $email = null
+        public ?string $email = null,
+        public ?bool $showOnLogin = null,
+        public ?\stdClass $claims = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'email']) || array_diff(['id', 'name', 'enabled', 'revision'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'email', 'showOnLogin', 'claims']) || array_diff(['id', 'name', 'enabled', 'revision'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +27,9 @@ final readonly class ControlUser implements \JsonSerializable {
             $data['name'],
             $data['enabled'],
             $data['revision'],
-            array_key_exists('email', $data) ? $data['email'] : null
+            array_key_exists('email', $data) ? $data['email'] : null,
+            array_key_exists('showOnLogin', $data) ? $data['showOnLogin'] : null,
+            array_key_exists('claims', $data) ? (object) $data['claims'] : null
         );
     }
 

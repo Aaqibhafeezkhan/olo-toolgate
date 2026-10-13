@@ -40,5 +40,7 @@ public enum ControlEntityKind {
     /** Canonical IDENTITY_BINDING value. */
     IDENTITY_BINDING,
     /** Canonical DEVICE_EVIDENCE value. */
-    DEVICE_EVIDENCE
+    DEVICE_EVIDENCE,
+    /** Canonical SETTINGS value. */
+    SETTINGS
 }
