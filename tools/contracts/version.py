@@ -15,40 +15,40 @@ SEMVER = re.compile(rf'{NUMERIC}\.{NUMERIC}\.{NUMERIC}(?:-{PRERELEASE}(?:\.{PRER
 
 
 def expected():
-    contracts = (ROOT/'packages/contracts/VERSION').read_text().strip()
-    product = (ROOT/'VERSION').read_text().strip()
+    contracts = (ROOT/'packages/contracts/VERSION').read_text(encoding='utf-8').strip()
+    product = (ROOT/'VERSION').read_text(encoding='utf-8').strip()
     if not SEMVER.fullmatch(contracts) or not SEMVER.fullmatch(product):
         raise ValueError('Release version must be SemVer core/prerelease without build metadata')
     outputs = {}
     manifest = ROOT/'packages/contracts/contract-set.yaml'
-    outputs[manifest] = re.sub(r'^version: .*', f'version: {contracts}', manifest.read_text(), flags=re.M)
+    outputs[manifest] = re.sub(r'^version: .*', f'version: {contracts}', manifest.read_text(encoding='utf-8'), flags=re.M)
     cargo = ROOT/'Cargo.toml'
     for lock in sorted((ROOT/'apps').glob('*/gradle-artifact.lockfile')):
-        outputs[lock]=re.sub(r'(?m)^(io\.ololabs\.toolgate:toolgate-contracts:)[^=]+=',lambda m:m[1]+contracts+'=',lock.read_text())
+        outputs[lock]=re.sub(r'(?m)^(io\.ololabs\.toolgate:toolgate-contracts:)[^=]+=',lambda m:m[1]+contracts+'=',lock.read_text(encoding='utf-8'))
     # Rust applications ship with the product; the contracts crate carries the contract-set version.
-    outputs[cargo] = re.sub(r'^version = "[^"]+"', f'version = "{product}"', cargo.read_text(), flags=re.M)
+    outputs[cargo] = re.sub(r'^version = "[^"]+"', f'version = "{product}"', cargo.read_text(encoding='utf-8'), flags=re.M)
     outputs[cargo] = re.sub(r'(olo-toolgate-contracts = \{[^\n]*version = ")[^"]+', lambda m: m[1]+contracts, outputs[cargo])
     crate = ROOT/'packages/contracts/rust/Cargo.toml'
-    outputs[crate] = re.sub(r'^version(?:\.workspace = true| = "[^"]+")', f'version = "{contracts}"', crate.read_text(), flags=re.M)
+    outputs[crate] = re.sub(r'^version(?:\.workspace = true| = "[^"]+")', f'version = "{contracts}"', crate.read_text(encoding='utf-8'), flags=re.M)
     for path in ('package.json','packages/contracts/typescript/package.json','apps/admin-ui/package.json'):
         p = ROOT/path
-        content = json.loads(p.read_text())
+        content = json.loads(p.read_text(encoding='utf-8'))
         content['version'] = contracts if 'contracts' in path else product
         if path == 'apps/admin-ui/package.json':
             content['dependencies']['@olo-labs/toolgate-contracts'] = contracts
         outputs[p] = json.dumps(content, indent=2) + '\n'
     chart = ROOT/'deploy/helm/olo-toolgate/Chart.yaml'
-    outputs[chart] = re.sub(r'^version: .*', f'version: {product}', chart.read_text(), flags=re.M)
+    outputs[chart] = re.sub(r'^version: .*', f'version: {product}', chart.read_text(encoding='utf-8'), flags=re.M)
     outputs[chart] = re.sub(r'^appVersion: .*', f'appVersion: "{product}"', outputs[chart], flags=re.M)
     gateway_api = ROOT/'packages/contracts/openapi/gateway-v1.yaml'
     if gateway_api.exists():
-        outputs[gateway_api] = re.sub(r'^  version: .*', f'  version: {product}', gateway_api.read_text(), flags=re.M)
+        outputs[gateway_api] = re.sub(r'^  version: .*', f'  version: {product}', gateway_api.read_text(encoding='utf-8'), flags=re.M)
     control_api = ROOT/'packages/contracts/openapi/control-v1.yaml'
     if control_api.exists():
-        outputs[control_api] = re.sub(r'^  version: .*', f'  version: {product}', control_api.read_text(), flags=re.M)
+        outputs[control_api] = re.sub(r'^  version: .*', f'  version: {product}', control_api.read_text(encoding='utf-8'), flags=re.M)
     quickstart_api = ROOT/'packages/contracts/openapi/quickstart-v1.yaml'
     if quickstart_api.exists():
-        outputs[quickstart_api] = re.sub(r'^  version: .*', f'  version: {product}', quickstart_api.read_text(), flags=re.M)
+        outputs[quickstart_api] = re.sub(r'^  version: .*', f'  version: {product}', quickstart_api.read_text(encoding='utf-8'), flags=re.M)
     outputs[ROOT/"RELEASE-NOTES.md"] = ("<!-- GENERATED FILE: tools/contracts/version.py; do not edit -->\n"
         + f"# OLO ToolGate {product} release notes\n\nContracts version: `{contracts}`.\n\n"
         + "License: Apache-2.0. See LICENSE and bundled third-party notices/SBOMs.\n\n"
