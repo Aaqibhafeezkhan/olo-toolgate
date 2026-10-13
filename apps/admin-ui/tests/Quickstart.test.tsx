@@ -17,10 +17,10 @@ describe('Quickstart',()=>{
     expect(Object.keys(localStorage).every(key=>key.startsWith('toolgate.navigation.'))).toBe(true);expect(JSON.stringify(localStorage)).not.toMatch(/session-secret|restored-session|bootstrap-secret|password-never-stored/);expect(sessionStorage.length).toBe(0);
     expect(document.body.textContent).not.toContain('local-auto-session');
   });
-  it('exchanges bootstrap and replacement passwords without persisting credentials',async()=>{
+  it('signs in with a password alone, without a first-login password change, and persists no credentials',async()=>{
     const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);
     const transport=vi.fn(async(input:string)=>input.endsWith('/session')?response({},401):input.endsWith('/login')?response({accessToken:'session-secret'}):input.includes('/api/public/')?response({},503):response({items:[]}));vi.stubGlobal('fetch',transport);
-    render(<App/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Connect to workspace'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.change(screen.getByLabelText('Password'),{target:{value:'bootstrap-secret'}});fireEvent.change(screen.getByLabelText('New password (required on first login)'),{target:{value:'a-different-strong-password'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
+    render(<App/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Connect to workspace'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.change(screen.getByLabelText('Password'),{target:{value:'bootstrap-secret'}});expect(screen.queryByLabelText(/New password/)).toBeNull();expect(document.body.textContent).not.toContain('first login');fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
     await screen.findByRole('heading',{name:'Your organization, at a glance'});expect(document.body.textContent).toContain('Quickstart · Non-HA');expect(Object.keys(localStorage).every(key=>key.startsWith('toolgate.navigation.'))).toBe(true);expect(JSON.stringify(localStorage)).not.toMatch(/session-secret|restored-session|bootstrap-secret|password-never-stored/);expect(sessionStorage.length).toBe(0);expect(document.body.textContent).not.toContain('session-secret');
     fireEvent.click(screen.getByRole('button',{name:'Disconnect'}));expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('');
   });

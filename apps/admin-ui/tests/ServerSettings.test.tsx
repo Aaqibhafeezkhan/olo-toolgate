@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import {describe,it,expect,vi,afterEach} from 'vitest';
 import {render,screen,fireEvent,cleanup} from '@testing-library/react';
-import {ServerConfiguration,DeviceConfiguration,SettingsTransfer,importedSettings,CHANGED_ELSEWHERE} from '../src/ServerSettings';
+import {ServerConfiguration,DeviceConfiguration,CHANGED_ELSEWHERE,REVIEW_POLICY_CHANGE} from '../src/ServerSettings';
 import {ControlClient} from '../src/api';
 afterEach(cleanup);
 const DAY=86400000;
@@ -11,15 +11,6 @@ const client=(transport:typeof fetch)=>new ControlClient('token',vi.fn(),transpo
 const ok=(body:unknown)=>new Response(JSON.stringify(body),{status:200});
 
 describe('Configuration settings pages',()=>{
-  it('accepts only exported formatVersion 2 settings files',()=>{
-    const owned={...initial,deviceApproval:{autoApprove:true,durationMs:7*DAY,ownerUserId:'admin'}};
-    expect(importedSettings(owned)).toEqual(owned);
-    expect(()=>importedSettings({...initial,formatVersion:1})).toThrow();
-    expect(()=>importedSettings({formatVersion:1,revision:0,autoApproveDevices:false,autoApproveDurationDays:30})).toThrow();
-    expect(()=>importedSettings({...initial,gateway:{gatewayName:' spaced'}})).toThrow();
-    expect(()=>importedSettings({...initial,deviceApproval:{autoApprove:false,durationMs:DAY-1}})).toThrow();
-    expect(()=>importedSettings({...initial,deviceApproval:{autoApprove:true}})).toThrow();
-  });
   it('Server patches only the gateway group with the loaded revision',async()=>{
     const transport=vi.fn<typeof fetch>().mockImplementation(async(_url,options)=>ok(options?.method==='PATCH'?{...initial,revision:4,...JSON.parse(String(options.body))}:initial));
     render(<ServerConfiguration client={client(transport)}/>);
@@ -57,26 +48,26 @@ describe('Configuration settings pages',()=>{
     await screen.findByDisplayValue('Renamed elsewhere');
     expect(transport).toHaveBeenCalledTimes(3);
   });
-  it('restores a settings file with a full PUT only after review',async()=>{
-    const transport=vi.fn<typeof fetch>().mockImplementation(async(_url,options)=>ok(options?.method==='PUT'?{...JSON.parse(String(options.body)),revision:4,clientCheckIn:initial.clientCheckIn}:initial));
-    render(<SettingsTransfer client={client(transport)}/>);
-    await screen.findByRole('button',{name:'Export server settings'});
-    const exported={...initial,revision:9,gateway:{gatewayName:'Restored'},deviceApproval:{autoApprove:true,durationMs:7*DAY,ownerUserId:'owner'}};
-    const file=new File(['ignored'],'settings.json',{type:'application/json'});Object.defineProperty(file,'text',{value:async()=>JSON.stringify(exported)});
-    await vi.waitFor(()=>expect((screen.getByLabelText('Server settings JSON file') as HTMLInputElement).disabled).toBe(false));
-    fireEvent.change(screen.getByLabelText('Server settings JSON file'),{target:{files:[file]}});
-    await screen.findByText('Settings file loaded. Review it, then restore.');
-    expect(screen.getByText('Restored')).toBeTruthy();expect(screen.getByText('7 days')).toBeTruthy();expect(transport).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button',{name:'Restore server settings'}));
-    await screen.findByText('Server settings restored.');
-    const [,options]=transport.mock.calls[1];expect(options?.method).toBe('PUT');expect(new Headers(options?.headers).get('If-Match')).toBe('"3"');
-    expect(JSON.parse(String(options?.body))).toEqual({...exported,revision:3});
+  it('Server saves the configuration review threshold and refreshes the review banner',async()=>{
+    const settings={...initial,configuration:{requiredReviews:0}};
+    const transport=vi.fn<typeof fetch>().mockImplementation(async(_url,options)=>ok(options?.method==='PATCH'?{...settings,revision:4,...JSON.parse(String(options.body))}:settings));
+    const changed=vi.fn();window.addEventListener(REVIEW_POLICY_CHANGE,changed);
+    render(<ServerConfiguration client={client(transport)}/>);
+    const reviews=await screen.findByLabelText('Configuration reviews');expect((reviews as HTMLSelectElement).value).toBe('0');
+    const save=screen.getByRole('button',{name:'Save configuration reviews'});expect((save as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(reviews,{target:{value:'2'}});fireEvent.click(save);
+    await screen.findByText('Configuration reviews saved.');
+    expect(JSON.parse(String(transport.mock.calls[1][1]?.body))).toEqual({configuration:{requiredReviews:2}});
+    expect(changed).toHaveBeenCalledTimes(1);window.removeEventListener(REVIEW_POLICY_CHANGE,changed);
   });
-  it('rejects a v1 settings file',async()=>{
-    render(<SettingsTransfer client={client(vi.fn<typeof fetch>().mockImplementation(async()=>ok(initial)))}/>);
-    await vi.waitFor(()=>expect((screen.getByLabelText('Server settings JSON file') as HTMLInputElement).disabled).toBe(false));
-    const file=new File(['ignored'],'settings.json',{type:'application/json'});Object.defineProperty(file,'text',{value:async()=>JSON.stringify({formatVersion:1,revision:0,autoApproveDevices:false,autoApproveDurationDays:30})});
-    fireEvent.change(screen.getByLabelText('Server settings JSON file'),{target:{files:[file]}});
-    await screen.findByText('The file is not an exported ToolGate server settings document (format version 2).');
+  it('a threshold change under an active threshold becomes a reviewed configuration change',async()=>{
+    const settings={...initial,configuration:{requiredReviews:2}};const id='config-'+'b'.repeat(40);
+    const transport=vi.fn<typeof fetch>().mockImplementation(async(_url,options)=>options?.method==='PATCH'?new Response(JSON.stringify({id,state:'DRAFT'}),{status:202}):ok(settings));
+    render(<ServerConfiguration client={client(transport)}/>);
+    fireEvent.change(await screen.findByLabelText('Configuration reviews'),{target:{value:'0'}});
+    expect(screen.getByText(/two reviewers must approve/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Save configuration reviews'}));
+    expect((await screen.findByRole('link',{name:'Review configuration draft'})).getAttribute('href')).toBe('#config-reviews?id='+id);
+    expect(screen.queryByText('Configuration reviews saved.')).toBeNull();
   });
 });

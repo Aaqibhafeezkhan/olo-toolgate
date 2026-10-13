@@ -3,13 +3,15 @@
 import {Table,ActionButton} from './Table';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { EndpointEnrollmentReview, EnrollmentChoice } from '@olo-labs/toolgate-contracts';
-import { ControlClient } from './api';
+import { ApiError, ControlClient } from './api';
 import { Failure } from './Failure';
 import { Connect } from './Connect';
 import {ApprovalDuration,defaultDuration,durationBody,validDuration} from './ApprovalDuration';
 
-/** Human confirmation displays server-verified scope; backend owns identity and certificate issuance. */
-export function Enrollment({ client }: { client: ControlClient }) {
+/** Human confirmation displays server-verified scope; backend owns identity and certificate issuance.
+ * A code is looked up first (device ID, platform and fingerprint for that one enrollment), then approved with the same code and fingerprint.
+ * The pending list appears only for callers Control shows enrollment codes to (approve-device through a group rule); Super Admin always sees it. */
+export function Enrollment({ client, superAdmin=false }: { client: ControlClient; superAdmin?: boolean }) {
   const initial = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('code') ?? '';
   const [code,setCode] = useState(/^[A-F0-9]{16}$/.test(initial) ? initial : '');
   const [review,setReview] = useState<EndpointEnrollmentReview>(); const [error,setError] = useState<unknown>();
@@ -51,8 +53,8 @@ export function Enrollment({ client }: { client: ControlClient }) {
   function clearReview(){setReview(undefined);setConfirmed(false);setTimeError('');}
   async function load(selectedCode:string) {
     if (busy) return;setBusy(true);setError(undefined);clearReview();setCode(selectedCode);
-    try {setReview(await client.enrollment(selectedCode));setDuration(defaultDuration());}
-    catch (failure) {setError(failure);} finally {setBusy(false);}
+    try {const found=await client.lookupEnrollment(selectedCode);setReview({...found,userCode:selectedCode,state:'PENDING'});setDuration(defaultDuration());}
+    catch (failure) {setError(failure instanceof ApiError&&failure.status===404?new ApiError(404,'ENROLLMENT_NOT_FOUND'):failure);} finally {setBusy(false);}
   }
   function submitReview(event:FormEvent){event.preventDefault();void load(code);}
   async function decide(choice: EnrollmentChoice) {
@@ -66,21 +68,23 @@ export function Enrollment({ client }: { client: ControlClient }) {
     }catch (failure) {setError(failure);clearReview();setRefresh(value=>value+1);} finally {setBusy(false);}
   }
   const validUntil=validDuration(duration,now);
+  const approvable=pending?.filter(device=>Boolean(device.userCode));
+  const showPending=superAdmin||Boolean(approvable?.length);
   return <><p className="eyebrow">Endpoint identity</p><h1>Enroll this device</h1>
     <Connect onCode={value=>{setCode(value);clearReview();}} onCancel={clearReview} />
-    <p>Devices waiting for approval appear below. Compare the code and key fingerprint with the client on that device before approving access.</p>
-    <section aria-labelledby="pending-devices"><h2 id="pending-devices">Devices waiting for approval</h2>
+    <p>Enter the enrollment code your client shows. ToolGate shows that device’s ID, platform and key fingerprint; compare them with the client before approving access.</p>
+    {showPending&&<section aria-labelledby="pending-devices"><h2 id="pending-devices">Devices waiting for approval</h2>
       <p>Requests refresh every 5 seconds and expire after 10 minutes.</p>
       <button onClick={()=>setRefresh(value=>value+1)} disabled={refreshing}>Refresh requests</button>
       {Boolean(listError)&&<Failure error={listError}/>}
       {pending===undefined&&!listError&&<p role="status">Loading device requests…</p>}
-      {pending?.length===0&&!listError&&<p role="status">No devices are waiting for approval.</p>}
-      {Boolean(pending?.length)&&<div className="table-wrap"><Table><thead><tr><th scope="col">Device</th><th scope="col">Platform</th><th scope="col">Code</th><th scope="col">Request expires</th><th scope="col">Action</th></tr></thead>
-        <tbody>{pending?.map(device=><tr key={device.enrollmentId}><th scope="row">{device.deviceId}</th><td>{device.platform}</td><td><code>{device.userCode}</code></td>
+      {approvable?.length===0&&!listError&&<p role="status">No devices are waiting for approval.</p>}
+      {Boolean(approvable?.length)&&<div className="table-wrap"><Table><thead><tr><th scope="col">Device</th><th scope="col">Platform</th><th scope="col">Code</th><th scope="col">Request expires</th><th scope="col">Action</th></tr></thead>
+        <tbody>{approvable?.map(device=><tr key={device.enrollmentId}><th scope="row">{device.deviceId}</th><td>{device.platform}</td><td><code>{device.userCode}</code></td>
           <td data-sort-value={device.expiresAtUnixMs}>{new Date(device.expiresAtUnixMs).toLocaleString()}</td><td><ActionButton icon="view" label={'Review '+device.deviceId} onClick={()=>void load(device.userCode)} disabled={busy||Boolean(listError)||device.expiresAtUnixMs<=now}/></td></tr>)}</tbody></Table></div>}
-    </section>
+    </section>}
     {liveness&&<p role="status">{liveness}</p>}
-    {Boolean(error) && <Failure error={error} />}
+    {error instanceof ApiError&&error.code==='ENROLLMENT_NOT_FOUND'?<div className="notice error" role="alert"><strong>No pending enrollment you can approve matches this code. Check the code on your client; codes expire after 10 minutes.</strong></div>:Boolean(error)&&<Failure error={error} />}
     <form onSubmit={submitReview}><label htmlFor="enrollment-code">Enrollment code</label>
       <input id="enrollment-code" value={code} onChange={event => {setCode(event.target.value.toUpperCase());clearReview();}} maxLength={16} pattern="[A-F0-9]{16}" required disabled={busy} autoComplete="off" />
       <button disabled={busy}>Review device</button></form>

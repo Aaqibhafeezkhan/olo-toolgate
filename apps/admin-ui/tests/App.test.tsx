@@ -20,7 +20,7 @@ describe('Management shell states', () => {
 
   it('redirects old configuration links and keeps review links working', async () => {
     const settings={formatVersion:2,revision:1,gateway:{gatewayName:'ToolGate'},deviceApproval:{autoApprove:false,durationMs:2592000000},clientCheckIn:{checkInMs:2000,jitterPct:20,offlineAfterMs:120000,source:'DEFAULT'}};
-    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>url==='/api/control/v1/settings'?new Response(JSON.stringify(settings)):url.includes('/configuration-changes/')?new Response('{}',{status:404}):response()));
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>url.endsWith('/admin-session')?new Response(JSON.stringify({role:'SUPER_ADMIN'})):url==='/api/control/v1/settings'?new Response(JSON.stringify(settings)):url.includes('/configuration-changes/')?new Response('{}',{status:404}):response()));
     window.location.hash='#configuration';render(<App/>);await connect();
     expect(window.location.hash).toBe('#config-server');
     expect(await screen.findByRole('heading',{name:'Server',level:1})).toBeTruthy();
