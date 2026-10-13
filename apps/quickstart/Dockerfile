@@ -26,7 +26,7 @@ USER root
 COPY apps/quickstart/requirements.txt /opt/quickstart-requirements.txt
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv libpq5 && \
     python3 -m venv /opt/quickstart-python && /opt/quickstart-python/bin/pip install --no-cache-dir -r /opt/quickstart-requirements.txt && \
-    rm -rf /var/lib/apt/lists/* && mkdir -p /data /usr/local/lib/toolgate && chown 65532:65532 /data && chmod 0700 /data
+    rm -rf /var/lib/apt/lists/* && mkdir -p /data /trust /usr/local/lib/toolgate && chown 65532:65532 /data /trust && chmod 0700 /data /trust
 # JNI is loaded from immutable image storage, keeping /tmp compatible with noexec.
 RUN /opt/quickstart-python/bin/python -c "import glob,platform,zipfile; p=glob.glob('/app/lib/main/org.xerial.sqlite-jdbc-*.jar')[0]; z=zipfile.ZipFile(p); a={'x86_64':'x86_64','aarch64':'aarch64'}[platform.machine()]; open('/usr/local/lib/toolgate/libsqlitejdbc.so','wb').write(z.read('org/sqlite/native/Linux/'+a+'/libsqlitejdbc.so'))"
 COPY tools/quickstart/python_notices.py /opt/quickstart-python-notices.py
