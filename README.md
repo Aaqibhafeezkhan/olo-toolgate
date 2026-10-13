@@ -20,61 +20,40 @@ decisions, and device status. It plays without sound; the animation above is a p
 ## Console tour
 
 <p align="center">
-  <img src="docs/media/console-tour.gif" width="100%" alt="Animated tour of the ToolGate console: overview, users, tools, tool groups, access grants, policies, device enrollment and approval, package deployments, configuration backup, and the light theme">
+  <img src="docs/media/console-tour.gif" width="100%" alt="Rotating tour of the ToolGate console: overview, users, tools, Tool Groups, access grants, policies, connected Windows and Linux clients, package deployments, configuration backup and the light theme">
+</p>
+
+## Device tour
+
+Register a device in five steps: install the client, wait for approval, compare the key
+fingerprint, approve, and the device is connected.
+
+<p align="center">
+  <img src="docs/media/device-flow.gif" width="100%" alt="Rotating tour of device registration: install and connect, waiting for approval, compare the key fingerprint, approved and connected, device details">
 </p>
 
 Captured from the running local **0.10.0-dev** console on October 13, 2026, with a Windows
 and a Linux client connected. Enabled and disabled states are the local demo's configuration.
-Each still below opens at full size.
-
-### Register a device
-
-| Step | What you see |
-| --- | --- |
-| 1. Install and connect | [<img src="docs/media/device-flow-1-enroll.jpg" width="100%" alt="Enroll this device: connect the computer, then devices wait for approval">](docs/media/device-flow-1-enroll.jpg) |
-| 2. Waiting for approval | [<img src="docs/media/device-flow-2-waiting-for-approval.jpg" width="100%" alt="Clients list with new devices marked Needs approval">](docs/media/device-flow-2-waiting-for-approval.jpg) |
-| 3. Compare the key fingerprint | [<img src="docs/media/device-flow-3-compare-fingerprint.jpg" width="100%" alt="Device details with the protected device key fingerprint to compare before approving">](docs/media/device-flow-3-compare-fingerprint.jpg) |
-| 4. Approved and connected | [<img src="docs/media/device-flow-4-approved-and-connected.jpg" width="100%" alt="Clients list with an enrolled Windows client and an enrolled Linux client, both connected, enabled and approved">](docs/media/device-flow-4-approved-and-connected.jpg) |
-| 5. Device details | [<img src="docs/media/device-flow-5-connected-device-details.jpg" width="100%" alt="Details of the connected Windows client: system name, registered user, key fingerprint and last check-in">](docs/media/device-flow-5-connected-device-details.jpg) |
+The full-size screenshots are in [docs/media](docs/media/README.md).
 
 <details>
-<summary><b>People and access</b>: users, teams, typed roles, access grants, policies</summary>
+<summary><b>More tours</b>: people and access, tools, devices and agents, administration, light theme</summary>
 
-![Users directory](docs/media/console-users.jpg)
-![Teams](docs/media/console-teams.jpg)
-![Typed roles](docs/media/console-roles.jpg)
-![Access grants](docs/media/console-access-grants.jpg)
-![Policies](docs/media/console-policies.jpg)
+### People and access
 
-</details>
+<p align="center"><img src="docs/media/console-people-access.gif" width="100%" alt="Users, teams, typed roles, access grants and policies"></p>
 
-<details>
-<summary><b>Tools</b>: tool directory, Tool Groups, execution bindings, resource extractors</summary>
+### Tools
 
-![Tool directory: registered tools, identifiers, status and revision](docs/media/console-tools.jpg)
-![Tool Groups: ReadOnly, ReadAndWrite, Admin and the default group](docs/media/console-tool-groups.jpg)
-![Execution bindings](docs/media/console-execution-bindings.jpg)
-![Resource extractors](docs/media/console-resource-extractors.jpg)
+<p align="center"><img src="docs/media/console-tools-tour.gif" width="100%" alt="Tool directory, Tool Groups, execution bindings and resource extractors"></p>
 
-</details>
+### Devices and agents
 
-<details>
-<summary><b>Devices and agents</b>: clients, device groups, agent groups, package deployments, server packages</summary>
+<p align="center"><img src="docs/media/console-devices-agents.gif" width="100%" alt="Clients, device groups, agent groups, package deployments and server packages"></p>
 
-![Clients: an enrolled Windows client and an enrolled Linux client, both connected](docs/media/console-devices.jpg)
-![Device groups](docs/media/console-device-groups.jpg)
-![Agent groups](docs/media/console-agent-groups.jpg)
-![Package deployments](docs/media/console-package-deployments.jpg)
-![Server packages](docs/media/console-server-packages.jpg)
+### Administration
 
-</details>
-
-<details>
-<summary><b>Administration</b>: server and device settings, configuration backup and restore</summary>
-
-![Server settings](docs/media/console-settings-server.jpg)
-![Device settings](docs/media/console-settings-device.jpg)
-![Configuration backup and restore: complete export, Replace and Merge import modes](docs/media/console-configuration.jpg)
+<p align="center"><img src="docs/media/console-administration.gif" width="100%" alt="Server settings, device settings, and configuration backup and restore"></p>
 
 **Merge** keeps existing records that are absent from the import file and updates records that appear in both. For example, if the live configuration has tools A, B, C and the import file contains only B (modified) and D (new), Merge produces A, B (updated), C, D.
 
@@ -82,15 +61,9 @@ Each still below opens at full size.
 
 > Passwords, private keys and live audit/job state are never included in the exported file. Each import mode supports [independent reviews and revision-conflict guidance](docs/enterprise-access-control/operations.md) before changes take effect.
 
-</details>
+### Light theme
 
-<details>
-<summary><b>Light theme</b></summary>
-
-![Overview, light theme](docs/media/console-overview-light.jpg)
-![Clients, light theme](docs/media/console-devices-light.jpg)
-![Tools, light theme](docs/media/console-tools-light.jpg)
-![Tool Groups, light theme](docs/media/console-tool-groups-light.jpg)
+<p align="center"><img src="docs/media/console-light.gif" width="100%" alt="Overview, clients, tools and Tool Groups in the light theme"></p>
 
 </details>
 
