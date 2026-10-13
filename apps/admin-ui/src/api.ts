@@ -4,8 +4,9 @@ import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRoll
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
 import type { BuilderDraft, BuilderDraftPage, BuilderDraftRequest, BuilderTestPage, BuilderTestRequest, BuilderTestRecord, BuilderDefinition } from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage } from '@olo-labs/toolgate-contracts';
-import type {MarketplaceStatus,MarketplaceImportRequest,ControlServerSettings,ControlServerSettingsPatch,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
+import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
+import {pendingOperations,type ConfigurationFile,type EnrollmentLookup,type ImportIdentityOptions,type PendingServerSettings,type PendingServerSettingsPatch,type ReauthorizedWorkload,type ReviewPolicy} from './pendingContracts';
 
 /** Marketplace display records as Control passes them through (marketplace docs/api.md), with Control's verdict. */
 export type MarketplaceVerdict = { readonly compatible: boolean; readonly reasons: readonly string[] };
@@ -21,17 +22,21 @@ export type MarketplacePublisher = MarketplacePublisherSummary & { readonly bio?
 
 /** Human-safe messages never render server text, exception bodies or credentials. */
 export class ApiError extends Error {
-  constructor(readonly status: number, readonly code: string, readonly requestId?: string) {
+  /** Identifiers the server listed with the failure (for example UNRESOLVED_IDENTITIES), already validated. */
+  readonly ids: readonly string[];
+  constructor(readonly status: number, readonly code: string, readonly requestId?: string, ids: readonly string[] = []) {
     super(status === 401 ? 'Your session ended. Connect again with a valid access token.'
       : status === 403 ? 'Your account does not have permission for this action.'
       : status === 409 ? 'This record changed or conflicts with another record. Refresh before trying again.'
       : status === 400 ? 'The server rejected these values. Check the fields and references.'
       : status === 404 ? 'This record is no longer available.'
       : status === 413 ? 'This request is too large.'
+      : status === 429 ? 'Too many attempts. Wait a few minutes before trying again.'
       : status === 422 ? 'Control refused this package: it failed a verification or compatibility check.'
       : code === 'TIMEOUT' ? 'The request timed out. You can try again.'
       : status === 0 ? 'Unable to reach Control. Check your connection and try again.'
       : 'Control could not complete this request. Try again shortly.');
+    this.ids = ids;
   }
 }
 
@@ -105,10 +110,12 @@ export class ControlClient {
       if (response.status === 401) { this.dispose(); this.onUnauthorized(); }
       const body = await readBody(response);
       if (!response.ok) {
-        const envelope = body as Partial<ErrorEnvelope> | undefined;
-        const code = typeof envelope?.code === 'string' && /^[A-Z_]{1,64}$/.test(envelope.code) ? envelope.code : 'HTTP_ERROR';
+        const envelope = body as (Partial<ErrorEnvelope> & {error?: unknown; ids?: unknown}) | undefined;
+        const named = envelope?.code ?? envelope?.error;
+        const code = typeof named === 'string' && /^[A-Z_]{1,64}$/.test(named) ? named : 'HTTP_ERROR';
         const requestId = response.headers.get('X-Request-ID') ?? envelope?.requestId;
-        throw new ApiError(response.status, code, typeof requestId === 'string' && /^[a-zA-Z0-9._:/-]{1,128}$/.test(requestId) ? requestId : undefined);
+        const ids = Array.isArray(envelope?.ids) ? envelope.ids.filter((id): id is string => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:@-]{0,127}$/.test(id)).slice(0, 512) : [];
+        throw new ApiError(response.status, code, typeof requestId === 'string' && /^[a-zA-Z0-9._:/-]{1,128}$/.test(requestId) ? requestId : undefined, ids);
       }
       if(response.status===202&&body&&typeof body==='object'&&'state' in body&&typeof body.state==='string'&&'id' in body&&typeof body.id==='string'&&/^config-[a-f0-9]{40}$/.test(body.id))throw new ConfigurationPending(body.id);
       return body as T;
@@ -164,15 +171,17 @@ export class ControlClient {
   memberships(entity:'users'|'agents'|'tools'|'devices',id:string,signal?:AbortSignal):Promise<GroupMembership>{const operation={users:operations.getUserGroupMembership,agents:operations.getAgentGroupMembership,tools:operations.getToolGroupMembership,devices:operations.getDeviceGroupMembership}[entity];return this.send(operation,{id,signal});}
   saveMemberships(entity:'users'|'agents'|'tools'|'devices',body:GroupMembership,key:string):Promise<GroupMembership>{const operation={users:operations.updateUserGroupMembership,agents:operations.updateAgentGroupMembership,tools:operations.updateToolGroupMembership,devices:operations.updateDeviceGroupMembership}[entity];return this.send(operation,{id:body.entityId,body,revision:body.revision,key});}
   simulateAccess(body:EnterpriseEvaluation):Promise<EnterpriseDecision>{return this.send(operations.simulateEnterpriseAccess,{body});}
-  serverSettings(signal?:AbortSignal):Promise<ControlServerSettings>{return this.send(operations.getServerSettings,{signal});}
-  /** Restores a full exported record; clientCheckIn in the body is ignored by Control. */
-  restoreServerSettings(settings:ControlServerSettings,revision:number,key:string):Promise<ControlServerSettings>{return this.send(operations.updateServerSettings,{body:settings,revision,key});}
+  serverSettings(signal?:AbortSignal):Promise<PendingServerSettings>{return this.send(operations.getServerSettings,{signal});}
+  /** Every signed-in console user may read the configuration review threshold. */
+  reviewPolicy(signal?:AbortSignal):Promise<ReviewPolicy>{return this.send(pendingOperations.getReviewPolicy,{signal});}
   /** Saves only the groups one Configuration page owns. */
-  patchServerSettings(groups:ControlServerSettingsPatch,revision:number,key:string):Promise<ControlServerSettings>{return this.send(operations.patchServerSettings,{body:groups,revision,key,contentType:'application/merge-patch+json'});}
+  patchServerSettings(groups:PendingServerSettingsPatch,revision:number,key:string):Promise<PendingServerSettings>{return this.send(operations.patchServerSettings,{body:groups,revision,key,contentType:'application/merge-patch+json'});}
   exportConfig():Promise<ControlSnapshot>{return this.send(operations.exportConfig);}
   installPresets(snapshot:ControlSnapshot,key:string):Promise<unknown>{return this.send(operations.importConfig,{body:{snapshot,mode:'MERGE',dryRun:false},revision:snapshot.revision,key});}
-  previewConfiguration(snapshot:ControlSnapshot,mode:'MERGE'|'REPLACE'):Promise<{changes:readonly {kind:string;id:string;operation:string}[]}>{return this.send(operations.importConfig,{body:{snapshot,mode,dryRun:true},revision:snapshot.revision,key:crypto.randomUUID()});}
-  importConfiguration(snapshot:ControlSnapshot,mode:'MERGE'|'REPLACE',key:string):Promise<unknown>{return this.send(operations.importConfig,{body:{snapshot,mode,dryRun:false},revision:snapshot.revision,key});}
+  /** The configuration file as exported: no users, plus settings and required identities. */
+  exportConfiguration():Promise<ConfigurationFile>{return this.send(operations.exportConfig);}
+  previewConfiguration(snapshot:ConfigurationFile,mode:'MERGE'|'REPLACE',identities?:ImportIdentityOptions):Promise<{changes:readonly {kind:string;id:string;operation:string}[]}>{return this.send(operations.importConfig,{body:{snapshot,mode,dryRun:true,...identities},revision:snapshot.revision,key:crypto.randomUUID()});}
+  importConfiguration(snapshot:ConfigurationFile,mode:'MERGE'|'REPLACE',key:string,identities?:ImportIdentityOptions):Promise<unknown>{return this.send(operations.importConfig,{body:{snapshot,mode,dryRun:false,...identities},revision:snapshot.revision,key});}
   currentBundle():Promise<SignedPolicyBundle>{return this.send(operations.getCurrentPolicyBundle);}
   publishAccess(body:BundlePublishRequest,key:string):Promise<SignedPolicyBundle>{return this.send(operations.publishPolicyBundle,{body,key});}
   saveRecord<K extends DirectoryKind>(kind:K,record:DirectoryRecords[K],existing:boolean,key:string):Promise<DirectoryRecords[K]> {
@@ -206,6 +215,10 @@ export class ControlClient {
   enrollment(code: string, signal?: AbortSignal): Promise<EndpointEnrollmentReview> {
     return this.send(operations.reviewEndpointEnrollment, { query: new URLSearchParams({ code }), signal });
   }
+  /** Rate-limited: Control answers 404 with no detail for an unknown code and 429 after repeated failures. */
+  lookupEnrollment(userCode:string,signal?:AbortSignal):Promise<EnrollmentLookup>{return this.send(pendingOperations.lookupEndpointEnrollment,{body:{userCode},signal});}
+  /** Quickstart rotates the delegated binding credential, waits for the Gateway, and returns the new agent token once. */
+  reauthorizeWorkload(id:string,key:string):Promise<ReauthorizedWorkload>{return this.send(pendingOperations.reauthorizeQuickstartWorkload,{id,body:{},key,timeoutMs:60000});}
   endpointDevice(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointDeviceRecord>{return this.send(operations.getEndpointDevice,{id,signal});}
   decideEnrollment(decision: EndpointEnrollmentDecision, key: string): Promise<EndpointEnrollmentReview> {
     return this.send(operations.decideEndpointEnrollment, { body: decision, key });

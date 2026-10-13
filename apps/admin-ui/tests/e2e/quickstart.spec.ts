@@ -34,7 +34,7 @@ test('real Quickstart password, non-HA status, protected compute and vault names
   const checkedInClient=page.getByRole('row').filter({hasText:'quickstart-test-device'});
   await expect(checkedInClient.locator('.client-connection.online')).toHaveText('Connected');
   await expect(page.getByRole('columnheader',{name:'Device name',exact:true})).toBeVisible();
-  await expect(page.getByRole('columnheader',{name:'Registered user',exact:true})).toBeVisible();
+  await expect(page.getByRole('columnheader',{name:'Owner',exact:true})).toBeVisible();
   for(const id of ['local-builtins','local-hotfolder','local-rest-forwarding']){
     const row=page.getByRole('row').filter({hasText:id});await expect(row.locator('.client-connection.online')).toHaveText('Available');await expect(row).toContainText('Local tool requester');
   }
