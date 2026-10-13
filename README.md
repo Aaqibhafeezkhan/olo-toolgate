@@ -5,7 +5,9 @@
 OLO ToolGate is an open-source control plane for **building, distributing,
 authorizing, and governing AI tools** across users, agents, devices, and resources.
 
-[![Watch the 36-second OLO ToolGate overview: agent requests, group access, Allow/Ask/Block, and device activity](docs/media/toolgate-overview.gif)](https://github.com/olo-labs/olo-toolgate/raw/refs/heads/main/docs/media/toolgate-overview.mp4)
+<p align="center">
+  <a href="https://github.com/olo-labs/olo-toolgate/raw/refs/heads/main/docs/media/toolgate-overview.mp4"><img src="docs/media/toolgate-overview.gif" width="100%" alt="Watch the 36-second OLO ToolGate overview: agent requests, group access, Allow/Ask/Block, and device activity"></a>
+</p>
 
 **[Watch the video (36 seconds, MP4)](https://github.com/olo-labs/olo-toolgate/raw/refs/heads/main/docs/media/toolgate-overview.mp4)**
 · [Read the transcript](docs/media/README.md)
@@ -15,35 +17,80 @@ authorizing, and governing AI tools** across users, agents, devices, and resourc
 The captioned overview explains an agent's request, group-based access, policy
 decisions, and device status. It plays without sound; the animation above is a preview.
 
-## Console snapshots
+## Console tour
 
-Captured from the running local **0.10.0-dev** console on October 10, 2026.
-The enabled/disabled states shown are the local demo's current configuration.
+<p align="center">
+  <img src="docs/media/console-tour.gif" width="100%" alt="Animated tour of the ToolGate console: overview, users, tools, tool groups, access grants, policies, device enrollment and approval, package deployments, configuration backup, and the light theme">
+</p>
+
+Captured from the running local **0.10.0-dev** console on October 13, 2026, with a Windows
+and a Linux client connected. Enabled and disabled states are the local demo's configuration.
+Each still below opens at full size.
+
+### Register a device
+
+| Step | What you see |
+| --- | --- |
+| 1. Install and connect | [<img src="docs/media/device-flow-1-enroll.jpg" width="100%" alt="Enroll this device: connect the computer, then devices wait for approval">](docs/media/device-flow-1-enroll.jpg) |
+| 2. Waiting for approval | [<img src="docs/media/device-flow-2-waiting-for-approval.jpg" width="100%" alt="Clients list with new devices marked Needs approval">](docs/media/device-flow-2-waiting-for-approval.jpg) |
+| 3. Compare the key fingerprint | [<img src="docs/media/device-flow-3-compare-fingerprint.jpg" width="100%" alt="Device details with the protected device key fingerprint to compare before approving">](docs/media/device-flow-3-compare-fingerprint.jpg) |
+| 4. Approved and connected | [<img src="docs/media/device-flow-4-approved-and-connected.jpg" width="100%" alt="Clients list with an enrolled Windows client and an enrolled Linux client, both connected, enabled and approved">](docs/media/device-flow-4-approved-and-connected.jpg) |
+| 5. Device details | [<img src="docs/media/device-flow-5-connected-device-details.jpg" width="100%" alt="Details of the connected Windows client: system name, registered user, key fingerprint and last check-in">](docs/media/device-flow-5-connected-device-details.jpg) |
 
 <details>
-<summary>Tool directory — registered capabilities and their current status</summary>
+<summary><b>People and access</b>: users, teams, typed roles, access grants, policies</summary>
 
-![Real ToolGate console showing registered tools, identifiers, status and revision](docs/media/console-tools.jpg)
+![Users directory](docs/media/console-users.jpg)
+![Teams](docs/media/console-teams.jpg)
+![Typed roles](docs/media/console-roles.jpg)
+![Access grants](docs/media/console-access-grants.jpg)
+![Policies](docs/media/console-policies.jpg)
 
 </details>
 
 <details>
-<summary>Tool Groups — ReadOnly, ReadAndWrite, Admin and the default group</summary>
+<summary><b>Tools</b>: tool directory, Tool Groups, execution bindings, resource extractors</summary>
 
-![Real ToolGate console showing the four standard Tool Groups and their access-level explanation](docs/media/console-tool-groups.jpg)
+![Tool directory: registered tools, identifiers, status and revision](docs/media/console-tools.jpg)
+![Tool Groups: ReadOnly, ReadAndWrite, Admin and the default group](docs/media/console-tool-groups.jpg)
+![Execution bindings](docs/media/console-execution-bindings.jpg)
+![Resource extractors](docs/media/console-resource-extractors.jpg)
 
 </details>
 
 <details>
-<summary>Configuration > Backup/Restore — complete export, import modes and preview</summary>
+<summary><b>Devices and agents</b>: clients, device groups, agent groups, package deployments, server packages</summary>
 
-![Real ToolGate console showing complete configuration export, JSON file selection, Replace and Merge import modes, and independent review guidance](docs/media/console-configuration.jpg)
+![Clients: an enrolled Windows client and an enrolled Linux client, both connected](docs/media/console-devices.jpg)
+![Device groups](docs/media/console-device-groups.jpg)
+![Agent groups](docs/media/console-agent-groups.jpg)
+![Package deployments](docs/media/console-package-deployments.jpg)
+![Server packages](docs/media/console-server-packages.jpg)
+
+</details>
+
+<details>
+<summary><b>Administration</b>: server and device settings, configuration backup and restore</summary>
+
+![Server settings](docs/media/console-settings-server.jpg)
+![Device settings](docs/media/console-settings-device.jpg)
+![Configuration backup and restore: complete export, Replace and Merge import modes](docs/media/console-configuration.jpg)
 
 **Merge** keeps existing records that are absent from the import file and updates records that appear in both. For example, if the live configuration has tools A, B, C and the import file contains only B (modified) and D (new), Merge produces A, B (updated), C, D.
 
 **Replace** removes every existing record not present in the import file. With the same starting set A, B, C and import file B (modified), D, Replace produces B (updated), D — tools A and C are deleted.
 
 > Passwords, private keys and live audit/job state are never included in the exported file. Each import mode supports [independent reviews and revision-conflict guidance](docs/enterprise-access-control/operations.md) before changes take effect.
+
+</details>
+
+<details>
+<summary><b>Light theme</b></summary>
+
+![Overview, light theme](docs/media/console-overview-light.jpg)
+![Clients, light theme](docs/media/console-devices-light.jpg)
+![Tools, light theme](docs/media/console-tools-light.jpg)
+![Tool Groups, light theme](docs/media/console-tool-groups-light.jpg)
 
 </details>
 
