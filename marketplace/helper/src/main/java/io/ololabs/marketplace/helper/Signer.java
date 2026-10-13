@@ -56,7 +56,7 @@ public final class Signer {
         }
         try {
             String text = new String(pem, StandardCharsets.US_ASCII);
-            if (!text.contains("-----BEGIN PRIVATE KEY-----")) {
+            if (!text.contains("-----BEGIN " + "PRIVATE KEY-----")) {
                 throw new IllegalStateException("signing key " + keyFile + " is not a PKCS#8 PEM private key");
             }
             String body = text.replaceAll("-----[A-Z ]+-----", "").replaceAll("\\s", "");

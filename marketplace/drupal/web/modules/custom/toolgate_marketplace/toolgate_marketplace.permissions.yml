@@ -1,3 +1,5 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
 publish toolgate packages:
   title: 'Publish ToolGate packages'
   description: 'Create a publisher profile and upload packages under its slug.'
