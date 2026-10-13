@@ -92,7 +92,8 @@ class SecurityTests(unittest.TestCase):
         bootstrap='initial-Strong-Password-2026'
         quickstart.atomic(quickstart.DATA/'identity.json',json.dumps(quickstart.password_record(bootstrap)))
         with self.assertRaises(PermissionError):self.identity.authenticate('wrong-password')
-        with self.assertRaises(ValueError):self.identity.authenticate(bootstrap)
+        # No forced change at first login; a change is still possible on request.
+        self.assertEqual(quickstart.session('Bearer '+self.identity.authenticate(bootstrap))['password_generation'],1)
         token=self.identity.authenticate(bootstrap,'replacement-Strong-Password-2026')
         self.assertEqual(quickstart.session('Bearer '+token)['sub'],'admin')
         with self.assertRaises(PermissionError):quickstart.session('Bearer '+token[:-4]+'xxxx')
