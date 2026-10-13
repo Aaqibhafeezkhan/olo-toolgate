@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf
 COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties VERSION ./
 COPY gradle/ gradle/
 COPY packages/contracts/ packages/contracts/
+COPY backend-libs/package-archive/ backend-libs/package-archive/
 COPY apps/control-plane/ apps/control-plane/
 COPY config/initial/ config/initial/
 COPY --from=console /workspace/apps/admin-ui/dist/ apps/admin-ui/dist/

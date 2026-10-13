@@ -530,6 +530,25 @@
   },
   "LogLevel": "info",
   "MappingKind": "SECRET",
+  "MarketplaceImportRequest": {
+    "packageId": "examples.notify",
+    "version": "0.1.0"
+  },
+  "MarketplaceKey": {
+    "keyId": "olo-orgs-2026",
+    "fingerprint": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "MarketplaceStatus": {
+    "enabled": true,
+    "marketplaceId": "olo-orgs",
+    "baseUrl": "https://marketplace.example.com",
+    "keys": [
+      {
+        "keyId": "olo-orgs-2026",
+        "fingerprint": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    ]
+  },
   "McpName": "orders.orders.lookup",
   "McpTaskStatus": "working",
   "MissingKeyPolicy": "REJECT",

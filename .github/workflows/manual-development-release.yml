@@ -111,6 +111,14 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: python tools/release/manual_development.py publish
+      - name: Publish Marketplace images
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash marketplace/ci/publish-images.sh
       - name: Publish Java library to Maven last
         env:
           MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
@@ -129,11 +137,3 @@ jobs:
           fi
           library_version="$(python -c 'import json; print(json.load(open("build/manual-development/assets/development-release.json"))["libraryVersion"])')"
           ./gradlew --no-daemon "-PcontractsPublicationVersion=$library_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test
-      - name: Publish Marketplace images
-        env:
-          RELEASE_SHA: ${{ github.sha }}
-          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-        run: bash marketplace/ci/publish-images.sh

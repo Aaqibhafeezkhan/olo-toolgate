@@ -22,6 +22,9 @@ def checks(lint=True):
                 'ingress':['--set','control.ingress.enabled=true','--set','control.ingress.className=nginx','--set','control.ingress.tlsSecret=control-tls'],
                 'monitor':['--set','control.serviceMonitor.enabled=true'],
                 'tracing':['--set','control.tracing.enabled=true','--set','control.networkPolicy.collectorTo[0].podSelector.matchLabels.app=collector'],
+                'marketplace':['--set','control.marketplace.enabled=true','--set','control.marketplace.id=olo-orgs','--set','control.marketplace.baseUrl=https://marketplace.example.com',
+                               '--set','control.marketplace.keys=olo-orgs-2026:'+'A'*43+'=','--set','control.marketplace.caSecret=marketplace-ca',
+                               '--set','control.networkPolicy.marketplaceTo[0].ipBlock.cidr=203.0.113.0/24'],
                 'selectors':['--set','control.networkPolicy.databaseTo[0].podSelector.matchLabels.app=postgres',
                              '--set',r'control.networkPolicy.dnsTo[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=kube-system']}
     folder = ROOT/'build/control/render'; folder.mkdir(parents=True,exist_ok=True)
@@ -47,7 +50,14 @@ def checks(lint=True):
             assert config['TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED']==('true' if name=='tracing' else 'false')
             assert (config['TOOLGATE_CONTROL_CLIENT_CHECKIN_MS'],config['TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT'])==('2000','20')
             assert 'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS' not in config
+            assert config['TOOLGATE_CONTROL_MARKETPLACE_ENABLED']==('true' if name=='marketplace' else 'false')
+            if name=='marketplace':
+                assert (config['TOOLGATE_CONTROL_MARKETPLACE_ID'],config['TOOLGATE_CONTROL_MARKETPLACE_BASE_URL'])==('olo-orgs','https://marketplace.example.com')
+                assert config['TOOLGATE_CONTROL_MARKETPLACE_CA_PATH']=='/etc/toolgate/marketplace-ca/ca.pem'
+                assert any(m['mountPath']=='/etc/toolgate/marketplace-ca' for m in container['volumeMounts'])
+            else: assert not any(key.startswith('TOOLGATE_CONTROL_MARKETPLACE_') and key!='TOOLGATE_CONTROL_MARKETPLACE_ENABLED' for key in config)
             policy=next(doc for doc in docs if doc['kind']=='NetworkPolicy')
+            assert any(rule['ports']==[{'protocol':'TCP','port':443}] for rule in policy['spec'].get('egress',[]))==(name=='marketplace')
             collector_rules=[rule for rule in policy['spec']['egress'] if any(port['port']==4317 for port in rule['ports'])]
             assert bool(collector_rules)==(name=='tracing')
             assert not any(doc['kind']=='Secret' for doc in docs)
@@ -61,7 +71,9 @@ def checks(lint=True):
                   ['--set','control.terminationGracePeriodSeconds=20'],['--set','control.limits.maxRecords=513'],
                   ['--set','control.autoscaling.enabled=true','--set','control.autoscaling.minReplicas=9'],['--set','control.ingress.enabled=true'],
                   ['--set','control.tracing.enabled=true'],['--set','control.clientCheckIn.checkInMs=400'],
-                  ['--set','control.clientCheckIn.checkInMs=22000'],['--set','control.clientCheckIn.jitterPct=51']):
+                  ['--set','control.clientCheckIn.checkInMs=22000'],['--set','control.clientCheckIn.jitterPct=51'],
+                  ['--set','control.marketplace.enabled=true'],
+                  ['--set','control.marketplace.enabled=true','--set','control.marketplace.id=olo-orgs','--set','control.marketplace.keys=k:x','--set','control.marketplace.baseUrl=http://marketplace.example.com']):
         run(['helm','template','invalid',chart,*base,*flags],expect_failure=True)
     print('Control Helm install/upgrade variants, strict schemas and negative configuration passed')
 

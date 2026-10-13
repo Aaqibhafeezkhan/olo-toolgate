@@ -706,3 +706,14 @@ body:has(.editor-dialog[open]) .app-frame .workspace { overflow:hidden; }
   .bulk-actions button { padding:6px 10px; font-size:13px; }
   .bulk-actions > span { flex-basis:100%; }
 }
+
+/* Marketplace: catalog cards, Control's compatibility verdict and the detail panels. */
+.cards { list-style:none; padding:0; display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); }
+.card { background:var(--raised); border:1px solid var(--border); border-radius:7px; padding:14px; display:flex; flex-direction:column; gap:6px; }
+.card h3, .card p { margin:0; }
+.card img, .guidance img { border-radius:4px; vertical-align:middle; }
+.badge { align-self:flex-start; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:var(--text); font-size:.85em; }
+.badge.warning { background:var(--warning-soft); color:var(--warning); }
+.pre-wrap { white-space:pre-wrap; }
+.screenshot { max-width:100%; height:auto; border:1px solid var(--border); margin:8px 0; }
+button.link { background:none; border:0; padding:0; color:var(--accent); text-decoration:underline; cursor:pointer; }

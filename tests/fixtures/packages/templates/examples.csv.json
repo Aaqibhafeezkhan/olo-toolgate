@@ -1,0 +1,319 @@
+{
+  "artifacts": [
+    {
+      "artifactDigest": "sha256:4bd6ba36a866ea0c2074aa9de1495911d80e5d9bfd5aa99d0d361e7560890000",
+      "artifactId": "tool",
+      "mediaType": "application/java-archive",
+      "path": "artifacts/tool.jar",
+      "runtimeId": "jvm",
+      "sizeBytes": 14641930
+    }
+  ],
+  "compatibility": {
+    "contractsVersion": "1.0.0"
+  },
+  "composition": [],
+  "connections": [],
+  "credentialReferences": [],
+  "descriptorSetDigest": "sha256:7fa7f11aa504bdfd00a27c4713a86af9d7d465e797cba11581360083201e9e70",
+  "id": "examples.csv",
+  "kind": "SDK",
+  "limits": {
+    "maxDescriptorBytes": 1048576,
+    "maxTools": 64
+  },
+  "publisher": "ToolGate Examples",
+  "runtimes": [
+    {
+      "language": "java",
+      "runtimeId": "jvm",
+      "version": "17"
+    }
+  ],
+  "schemaVersion": 2,
+  "sdk": {
+    "descriptorGeneration": 1,
+    "language": "JAVA",
+    "protocol": {
+      "max": 2,
+      "min": 2
+    },
+    "version": "0.10.0-dev"
+  },
+  "tools": [
+    {
+      "artifactIds": [
+        "tool"
+      ],
+      "descriptor": {
+        "businessKey": {
+          "namespace": "AGENT",
+          "required": false
+        },
+        "description": "Lists the CSV files that csv.query can read, with their columns.",
+        "descriptorGeneration": 1,
+        "destinations": [],
+        "effect": {
+          "destructive": false,
+          "openWorld": false,
+          "safety": "READ_ONLY"
+        },
+        "errors": [],
+        "execution": {
+          "async": false,
+          "cancelIfAbandoned": false,
+          "maxDurationMs": 30000,
+          "stateless": false
+        },
+        "httpAuth": [],
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "kind": "SERVER",
+        "mcpName": "csv.files",
+        "outputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "files": {
+              "description": "Files callers may query",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "columns": {
+                    "description": "Column names from the header row",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "file": {
+                    "description": "File name",
+                    "type": "string"
+                  },
+                  "sizeBytes": {
+                    "description": "Size in bytes",
+                    "maximum": 9007199254740991,
+                    "minimum": -9007199254740991,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "columns",
+                  "file",
+                  "sizeBytes"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "files"
+          ],
+          "type": "object"
+        },
+        "permissions": [],
+        "routes": [],
+        "tcp": [],
+        "title": "List CSV files",
+        "toolId": "examples.csv/files",
+        "toolsets": [],
+        "variables": {
+          "claims": [],
+          "globals": [
+            {
+              "default": "data",
+              "description": "Directory holding the CSV files callers may query. Use an absolute path under a Tool Host.",
+              "name": "DataDir",
+              "required": true,
+              "sensitive": false,
+              "type": "STRING"
+            },
+            {
+              "default": 100,
+              "description": "Largest CSV file a call reads.",
+              "maximum": 2048,
+              "minimum": 1,
+              "name": "MaxFileMegabytes",
+              "required": true,
+              "sensitive": false,
+              "type": "INT"
+            }
+          ],
+          "secrets": []
+        }
+      },
+      "entryPoint": "io.ololabs.toolgate.runtime.Main",
+      "runtimeId": "jvm",
+      "toolDescriptorDigest": "sha256:7a8f9f1b527f070b3d5af14dc6e840ecbc7ae3ca2d7150d8f482139c8d7bd36a"
+    },
+    {
+      "artifactIds": [
+        "tool"
+      ],
+      "descriptor": {
+        "businessKey": {
+          "namespace": "AGENT",
+          "required": false
+        },
+        "description": "Reads a CSV file from the data directory and returns the rows matching every condition, with chosen columns, sorted. With groupBy it returns one row per group with a count and, with sum, a total.",
+        "descriptorGeneration": 1,
+        "destinations": [],
+        "effect": {
+          "destructive": false,
+          "openWorld": false,
+          "safety": "READ_ONLY"
+        },
+        "errors": [],
+        "execution": {
+          "async": false,
+          "cancelIfAbandoned": false,
+          "maxDurationMs": 30000,
+          "stateless": false
+        },
+        "httpAuth": [],
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "description": "Columns to return, in order; all columns when omitted",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "descending": {
+              "default": false,
+              "description": "Sort largest first",
+              "type": "boolean"
+            },
+            "file": {
+              "description": "File name in the data directory, such as orders.csv",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "groupBy": {
+              "description": "Column to group by; returns <column>, count and, with sum, sum",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "limit": {
+              "default": 100,
+              "description": "Most rows to return",
+              "maximum": 5000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "sortBy": {
+              "description": "Column to sort by; with groupBy also count or sum",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "sum": {
+              "description": "With groupBy, a numeric column to total per group",
+              "maxLength": 200,
+              "type": "string"
+            },
+            "where": {
+              "description": "Conditions, all of which must hold. Each is <column><op><value> with op one of = != > >= < <= (numbers compare numerically) or ~ (contains, case-insensitive), such as status=FAILED, amount>500, customer~acme.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "file"
+          ],
+          "type": "object"
+        },
+        "kind": "SERVER",
+        "mcpName": "csv.query",
+        "outputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "description": "Column names of the rows",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "matchedRows": {
+              "description": "Rows that matched the conditions",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "rows": {
+              "description": "Result rows, each a list of values in column order",
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "totalRows": {
+              "description": "Rows read from the file",
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "truncated": {
+              "description": "True when more results exist than limit allowed",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "columns",
+            "matchedRows",
+            "rows",
+            "totalRows",
+            "truncated"
+          ],
+          "type": "object"
+        },
+        "permissions": [],
+        "routes": [],
+        "tcp": [],
+        "title": "Query a CSV file",
+        "toolId": "examples.csv/query",
+        "toolsets": [],
+        "useWhen": "Use it to answer questions from exported reports, such as 'failed orders over 500 by region'.",
+        "variables": {
+          "claims": [],
+          "globals": [
+            {
+              "default": "data",
+              "description": "Directory holding the CSV files callers may query. Use an absolute path under a Tool Host.",
+              "name": "DataDir",
+              "required": true,
+              "sensitive": false,
+              "type": "STRING"
+            },
+            {
+              "default": 100,
+              "description": "Largest CSV file a call reads.",
+              "maximum": 2048,
+              "minimum": 1,
+              "name": "MaxFileMegabytes",
+              "required": true,
+              "sensitive": false,
+              "type": "INT"
+            }
+          ],
+          "secrets": []
+        }
+      },
+      "entryPoint": "io.ololabs.toolgate.runtime.Main",
+      "runtimeId": "jvm",
+      "toolDescriptorDigest": "sha256:d0b7fd539a3d8ec86995b5e6236ada1820b7cfa0703c17eb1a73030af2284157"
+    }
+  ],
+  "version": "0.1.0"
+}

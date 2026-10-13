@@ -20,6 +20,13 @@ tasks.jar {
 
 // MARKETPLACE_DIR, TOOLGATE_DIR and TOOLGATE_CLI come from scripts/toolgate-dir.sh through ci/run.sh, or from the environment.
 val toolgateDir = providers.environmentVariable("TOOLGATE_DIR")
+
+// The package validator is ToolGate's own library, backend-libs/package-archive, compiled from the resolved ToolGate
+// checkout. It uses only the JDK, so the helper still needs no repository.
+sourceSets.main {
+    java.srcDir(toolgateDir.map { "$it/backend-libs/package-archive/src/main/java" }
+        .orElse(provider { throw GradleException("TOOLGATE_DIR is not set; run through scripts/toolgate-dir.sh or ci/run.sh") }))
+}
 val marketplaceDir = providers.environmentVariable("MARKETPLACE_DIR")
 val toolgateCli = providers.environmentVariable("TOOLGATE_CLI")
 val seedDir = providers.environmentVariable("MARKETPLACE_SEED_DIR")

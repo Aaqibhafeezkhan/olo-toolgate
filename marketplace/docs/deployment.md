@@ -73,7 +73,7 @@ kubectl create secret generic olo-orgs-drupal \
   --from-literal=admin_password="$(openssl rand -base64 18)"
 kubectl create secret generic olo-orgs-helper \
   --from-file=helper_token=helper_token --from-literal=s3_access_key=… --from-literal=s3_secret_key=…
-kubectl create secret generic olo-orgs-signing-key --from-file=marketplace_signing_key=marketplace_signing_key
+kubectl create secret generic olo-orgs-signing-key --from-file=./marketplace_signing_key
 
 helm install olo-orgs deploy/helm/olo-orgs-marketplace -f my-values.yaml
 ```

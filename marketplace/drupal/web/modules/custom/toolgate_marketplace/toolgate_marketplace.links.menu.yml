@@ -1,3 +1,5 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
 toolgate_marketplace.admin:
   title: Marketplace
   description: 'Versions, takedowns and the example seed status.'

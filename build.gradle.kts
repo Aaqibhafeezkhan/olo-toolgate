@@ -39,7 +39,7 @@ allprojects {
 
 tasks.named("check") { dependsOn("javaCheck") }
 tasks.named("build") {
-    dependsOn(":contracts-java:build", ":control-plane:build", ":marketplace-api:build", ":marketplace-worker:build", ":sdk-java-api:build", ":sdk-java-processor:build", ":sdk-java-protocol:build", ":sdk-java-runtime-mcp:build", ":sdk-java-testing:build", ":sdk-java-build:build", ":sdk-java-gradle-plugin:build", ":sdk-java-maven-plugin:build", ":sdk-java-conformance-server:build")
+    dependsOn(":contracts-java:build", ":package-archive:build", ":control-plane:build", ":marketplace-api:build", ":marketplace-worker:build", ":sdk-java-api:build", ":sdk-java-processor:build", ":sdk-java-protocol:build", ":sdk-java-runtime-mcp:build", ":sdk-java-testing:build", ":sdk-java-build:build", ":sdk-java-gradle-plugin:build", ":sdk-java-maven-plugin:build", ":sdk-java-conformance-server:build")
 }
 
 subprojects {
@@ -66,6 +66,7 @@ tasks.register("javaCheck") {
     description = "Runs checks for all Java/Gradle modules."
     dependsOn(
         ":contracts-java:check",
+        ":package-archive:check",
         ":control-plane:check",
         ":marketplace-api:check",
         ":marketplace-worker:check",

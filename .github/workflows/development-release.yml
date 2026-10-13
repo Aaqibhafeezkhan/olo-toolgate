@@ -95,6 +95,29 @@ jobs:
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
       with:
         subject-path: build/development/assets/*
+    - name: Publish Marketplace images
+      id: marketplace_images
+      env:
+        RELEASE_SHA: ${{ github.sha }}
+        DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
+      run: bash marketplace/ci/publish-images.sh
+    - name: Attest Marketplace helper image
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-name: ${{ steps.marketplace_images.outputs.helper_image }}
+        subject-digest: ${{ steps.marketplace_images.outputs.helper_digest }}
+        push-to-registry: true
+    - name: Attest Marketplace Drupal image
+      if: startsWith(github.ref, 'refs/tags/') && steps.marketplace_images.outputs.drupal_digest != ''
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+      with:
+        subject-name: ${{ steps.marketplace_images.outputs.drupal_image }}
+        subject-digest: ${{ steps.marketplace_images.outputs.drupal_digest }}
+        push-to-registry: true
     - name: Create immutable tagged GitHub release after provenance
       if: startsWith(github.ref, 'refs/tags/')
       env:
@@ -124,28 +147,5 @@ jobs:
         else
           ./gradlew --no-daemon :contracts-java:publishMavenJavaPublicationToRemoteRepository
         fi
-    - name: Publish Marketplace images
-      id: marketplace_images
-      env:
-        RELEASE_SHA: ${{ github.sha }}
-        DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        GH_TOKEN: ${{ github.token }}
-      run: bash marketplace/ci/publish-images.sh
-    - name: Attest Marketplace helper image
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
-      with:
-        subject-name: ${{ steps.marketplace_images.outputs.helper_image }}
-        subject-digest: ${{ steps.marketplace_images.outputs.helper_digest }}
-        push-to-registry: true
-    - name: Attest Marketplace Drupal image
-      if: startsWith(github.ref, 'refs/tags/') && steps.marketplace_images.outputs.drupal_digest != ''
-      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
-      with:
-        subject-name: ${{ steps.marketplace_images.outputs.drupal_image }}
-        subject-digest: ${{ steps.marketplace_images.outputs.drupal_digest }}
-        push-to-registry: true
 'on':
   workflow_call: null

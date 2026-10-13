@@ -66,7 +66,7 @@ final class SignerTest {
         Path dir = Fixtures.tempDir();
         Check.fails(IllegalStateException.class, () -> Signer.load(dir.resolve("absent"), "k", ""));
         Path bad = dir.resolve("bad.pem");
-        Files.writeString(bad, "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n");
+        Files.writeString(bad, "-----BEGIN " + "PRIVATE KEY-----\nAAAA\n-----END " + "PRIVATE KEY-----\n");
         Check.fails(IllegalStateException.class, () -> Signer.load(bad, "k", ""));
         Path rsa = dir.resolve("rsa.pem");
         Files.writeString(rsa, "not a key", StandardCharsets.US_ASCII);

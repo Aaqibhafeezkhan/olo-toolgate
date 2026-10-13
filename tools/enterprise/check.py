@@ -10,12 +10,12 @@ def tests():
  with database() as db:
   env=dict(os.environ,CONTROL_TEST_URL=db['CONTROL_TEST_URL'],CONTROL_TEST_PASSWORD=db['CONTROL_TEST_PASSWORD'])
   wrapper=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
-  run([str(wrapper),'--no-daemon',':contracts-java:test',':control-plane:test',':control-plane:enterpriseTest','--console=plain'],env=env)
+  run([str(wrapper),'--no-daemon',':contracts-java:test',':package-archive:test',':control-plane:test',':control-plane:enterpriseTest','--console=plain'],env=env)
  evidence()
 
 def evidence():
  suites=[]
- for folder in ('packages/contracts/java/build/test-results/test','apps/control-plane/build/test-results/test','apps/control-plane/build/test-results/enterpriseTest'):
+ for folder in ('packages/contracts/java/build/test-results/test','backend-libs/package-archive/build/test-results/test','apps/control-plane/build/test-results/test','apps/control-plane/build/test-results/enterpriseTest'):
   reports=sorted((ROOT/folder).glob('TEST-*.xml'))
   if not reports:raise ValueError('Missing enterprise test results: '+folder)
   for p in reports:

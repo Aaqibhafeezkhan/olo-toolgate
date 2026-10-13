@@ -234,11 +234,15 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         job=workflows['development-release']['jobs']['publish']
         self.assertEqual(job['environment'],'development-release')
         steps=job['steps'];attest=[s for s in steps if s.get('uses','').startswith('actions/attest-build-provenance@')]
+        # The OLO Orgs Marketplace images (helper, Drupal) are attested by their own steps (marketplace/ci/publish-images.sh).
+        marketplace=[a for a in attest if 'steps.marketplace_images.' in a['with'].get('subject-name','')]
+        self.assertEqual(len(marketplace),2)
+        attest=[a for a in attest if a not in marketplace]
         self.assertEqual(len(attest),5)
         self.assertEqual({a['with'].get('subject-name') for a in attest if a['with'].get('push-to-registry')},
             {'${{ steps.push.outputs.'+c+'_image }}' for c in shared.IMAGES})
         self.assertEqual(steps[-2]['run'],'python tools/release/development.py finalize')
-        self.assertTrue(all("refs/tags/" in a['if'] for a in attest))
+        self.assertTrue(all("refs/tags/" in a['if'] for a in attest+marketplace))
 
     def test_external_maven_configuration_and_upload_are_last_in_both_publishers(self):
         for name in ('development-release','manual-development-release'):

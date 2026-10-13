@@ -30,11 +30,13 @@ RUN --mount=type=secret,id=ca,required=false,target=/run/secrets/ca \
     cargo build --release --locked -p toolgate-cli --bin toolgate && \
     install -m 0555 target/release/toolgate /toolgate
 
-# The helper: plain javac and jar, no build tool and no repositories.
+# The helper: plain javac and jar, no build tool and no repositories. The package validator is ToolGate's
+# backend-libs/package-archive, compiled from the same checkout.
 FROM eclipse-temurin:21-jdk-noble@sha256:70898f0f893a6b772a0f29834d8b022e3ac20b6a0c33a922973cf66342ef56be AS helper
 WORKDIR /src
 COPY --from=marketplace helper/src/main/java /src/java
-RUN find /src/java -name '*.java' >/tmp/sources && \
+COPY backend-libs/package-archive/src/main/java /src/package-archive
+RUN find /src/java /src/package-archive -name '*.java' >/tmp/sources && \
     javac --release 17 -encoding UTF-8 -Xlint:all -Werror -d /classes @/tmp/sources && \
     jar --create --file /marketplace-helper.jar --main-class io.ololabs.marketplace.helper.Main -C /classes .
 

@@ -5,6 +5,9 @@ rootProject.name = "olo-toolgate"
 include(":contracts-java")
 project(":contracts-java").projectDir = file("packages/contracts/java")
 
+include(":package-archive")
+project(":package-archive").projectDir = file("backend-libs/package-archive")
+
 include(":control-plane")
 project(":control-plane").projectDir = file("apps/control-plane")
 

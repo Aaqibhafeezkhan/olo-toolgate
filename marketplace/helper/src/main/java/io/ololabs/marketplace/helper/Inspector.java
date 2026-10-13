@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.marketplace.helper;
 
+import io.ololabs.toolgate.packagearchive.PackageArchive;
+import io.ololabs.toolgate.packagearchive.PackageRejected;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -78,14 +80,35 @@ public final class Inspector {
         }
         Map<String, byte[]> entries;
         try {
+            // The shared library (backend-libs/package-archive) is the authoritative validator: Control's own rules.
+            PackageArchive.Verified verified;
+            try {
+                verified = PackageArchive.validate(bytes);
+            } catch (PackageRejected e) {
+                errors.add(error(e.status() == 413 ? "SIZE" : CliValidator.code(e.getMessage()), e.getMessage()));
+                return new Inspection(result, null);
+            }
+            // The unchanged CLI only adds rejections: it also checks the manifest against PackageManifest v2 and
+            // refuses a manifest that is not UTF-8 (CliValidator lists these cases).
             CliValidator.Result cli = validator.validate(bytes);
             if (!cli.valid()) {
                 errors.add(error(cli.code(), cli.message()));
                 return new Inspection(result, null);
             }
-            result.put("packageDigest", cli.packageDigest());
-            result.put("descriptorSetDigest", cli.descriptorSetDigest());
-            entries = PackageReader.read(bytes, config.maxExpandedBytes());
+            if (!verified.packageDigest().equals(cli.packageDigest()) || !verified.descriptorSetDigest().equals(cli.descriptorSetDigest())) {
+                throw new HelperException(500, "SERVER_ERROR", "the package validators disagree on the digests");
+            }
+            long expanded = 0;
+            for (byte[] file : verified.files().values()) {
+                expanded += file.length;
+            }
+            if (expanded > config.maxExpandedBytes()) {
+                errors.add(error("SIZE", "package expands to more than " + config.maxExpandedBytes() / (1024 * 1024) + " MiB"));
+                return new Inspection(result, null);
+            }
+            result.put("packageDigest", verified.packageDigest());
+            result.put("descriptorSetDigest", verified.descriptorSetDigest());
+            entries = verified.files();
         } catch (HelperException e) {
             if (e.status() != 422) {
                 throw e;

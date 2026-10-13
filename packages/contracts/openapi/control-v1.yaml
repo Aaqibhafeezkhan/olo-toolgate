@@ -7859,6 +7859,246 @@ paths:
           description: Not found, or not deployed
         '503':
           description: Dependency unavailable
+  /api/control/v1/marketplace:
+    get:
+      operationId: getMarketplaceStatus
+      description: Administrators with read access to every tool. Whether this ToolGate reads an OLO Orgs Marketplace, its
+        id and origin, and the fingerprints of the pinned release signing keys. All are environment-owned settings.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/MarketplaceStatus
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/marketplace/catalog:
+    get:
+      operationId: listMarketplaceCatalog
+      description: Administrators with read access to every tool. One page of the Marketplace catalog, as the Marketplace
+        answers it, with each item's latest version marked compatible or not with this ToolGate in `control`.
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 10000
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: category
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: tag
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: publisher
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace catalog page, as the Marketplace API defines it, each item annotated with
+                  control.compatible and control.reasons.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: The Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/packages/{packageId}:
+    get:
+      operationId: listMarketplacePackageVersions
+      description: Administrators with read access to every tool. The versions of one Marketplace package, each marked
+        compatible or not, and installVersion, the newest listed version this ToolGate can run.
+      parameters:
+      - name: packageId
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/PackageId
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace version list, as the Marketplace API defines it, with control annotations and installVersion.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/packages/{packageId}/{version}:
+    get:
+      operationId: getMarketplacePackageVersion
+      description: Administrators with read access to every tool. One Marketplace version's detail record, marked
+        compatible or not with this ToolGate.
+      parameters:
+      - name: packageId
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/PackageId
+      - name: version
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/SemanticVersion
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace detail record, as the Marketplace API defines it, with control annotations.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/publishers/{slug}:
+    get:
+      operationId: getMarketplacePublisher
+      description: Administrators with read access to every tool. A Marketplace publisher's public profile.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,30}$
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace publisher record, as the Marketplace API defines it.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/imports:
+    post:
+      operationId: importMarketplacePackage
+      description: Super Admin only. Fetches one Marketplace version from the configured origin and stores it as an
+        uploaded server package after the checks of the Marketplace design §8.3 (not delisted, a known release schema, a
+        signature by a pinned key, this Marketplace id, the same ids and publisher, the archive SHA-256 and the package
+        rules) and this ToolGate's compatibility rules. Redirects are never followed. The audit log records the
+        Marketplace, version, publisher and key. Nothing is deployed, enabled or granted; the package then follows the
+        same review, deploy, enable and grant steps as an upload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/package.schema.json#/$defs/MarketplaceImportRequest
+      responses:
+        '201':
+          description: Imported, verified and stored
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '200':
+          description: Already stored
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '413':
+          description: Package or record too large
+        '422':
+          description: Refused by an import check or not compatible with this ToolGate
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/media/{mediaId}:
+    get:
+      operationId: getMarketplaceMedia
+      security: []
+      description: A Marketplace screenshot or logo from the configured origin, so the console keeps img-src 'self'. Public
+        Marketplace content; only PNG and JPEG up to 1 MiB are passed through.
+      parameters:
+      - name: mediaId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^m_[0-9a-f]{32}$
+      responses:
+        '200':
+          description: The image; private, max-age=300
+          content:
+            image/png:
+              schema:
+                type: string
+                contentMediaType: image/png
+            image/jpeg:
+              schema:
+                type: string
+                contentMediaType: image/jpeg
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '413':
+          description: Image too large
+        '503':
+          description: Marketplace unavailable or not an image Control accepts
   /api/control/v1/tool-hosts/registrations:
     post:
       operationId: registerToolHost

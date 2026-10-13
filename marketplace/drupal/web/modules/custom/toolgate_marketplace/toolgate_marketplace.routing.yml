@@ -1,3 +1,5 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
 # Public API v1 (docs/api.md §1)
 toolgate_marketplace.api.catalog:
   path: '/api/toolgate/v1/catalog'

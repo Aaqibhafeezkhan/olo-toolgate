@@ -579,8 +579,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             mcp_http = path=='/mcp' and self.command=='POST' and os.environ.get('TOOLGATE_ALLOW_LOOPBACK_MCP_HTTP')=='true'
             if mcp_http or path.startswith(('/console/', '/api/control/v1/', '/api/public/v1/clients', '/api/public/v1/installers')) or path in ('/','/console'):
                 # Direct TLS adapter is used for enrollment administration; device peers use :8443 itself.
+                # A Marketplace import fetches and verifies the package in Control (60 s per request), so it waits longer.
                 secure = path.startswith(('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/'))
-                client = http.client.HTTPSConnection('127.0.0.1',8443,context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt')),timeout=10) if secure else http.client.HTTPConnection('127.0.0.1',8081 if mcp_http else 8082,timeout=35 if mcp_http else 10)
+                client = http.client.HTTPSConnection('127.0.0.1',8443,context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt')),timeout=10) if secure else http.client.HTTPConnection('127.0.0.1',8081 if mcp_http else 8082,timeout=35 if mcp_http else 75 if path=='/api/control/v1/marketplace/imports' else 10)
                 forwarded = {'authorization','content-type','idempotency-key','if-match','x-request-id','traceparent'}
                 if mcp_http: forwarded.update(('accept','mcp-protocol-version','mcp-method','mcp-name'))
                 headers = {k:v for k,v in self.headers.items() if k.lower() in forwarded}

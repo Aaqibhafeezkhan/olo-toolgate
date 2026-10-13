@@ -399,6 +399,23 @@ export interface LogFrame {
 }
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type MappingKind = "SECRET" | "GLOBAL" | "CLAIM" | "DESTINATION";
+/** Imports one Marketplace version as an uploaded server package. Control fetches, verifies and stores it; nothing is deployed, enabled or granted. */
+export interface MarketplaceImportRequest {
+  readonly packageId: string;
+  readonly version: string;
+}
+/** A Marketplace release signing key Control trusts, by id and SHA-256 fingerprint of its raw Ed25519 public key. */
+export interface MarketplaceKey {
+  readonly keyId: string;
+  readonly fingerprint: string;
+}
+/** Whether this ToolGate reads an OLO Orgs Marketplace. The id, origin and keys are environment-owned settings, absent when disabled. */
+export interface MarketplaceStatus {
+  readonly enabled: boolean;
+  readonly marketplaceId?: string;
+  readonly baseUrl?: string;
+  readonly keys?: ReadonlyArray<MarketplaceKey>;
+}
 export type McpName = string;
 export type McpTaskStatus = "working" | "input_required" | "completed" | "failed" | "cancelled";
 export type MissingKeyPolicy = "REJECT" | "ASK" | "ALLOW_WITH_DEDUPE";

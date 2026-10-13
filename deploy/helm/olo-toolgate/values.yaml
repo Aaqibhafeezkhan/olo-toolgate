@@ -144,6 +144,7 @@ control:
     dnsTo: []
     collectorTo: []
     artifactTo: []
+    marketplaceTo: []
   ingress:
     enabled: false
     className: ''
@@ -194,6 +195,15 @@ control:
   limits:
     maxRecords: 512
     maxConfigBytes: 1048576
+  # OLO Orgs Marketplace (marketplace docs/api.md §4). Environment-owned: a configuration import can't change these.
+  # keys lists keyId:base64RawEd25519PublicKey pairs; Control logs and shows their fingerprints. caSecret optionally
+  # names a Secret whose ca.pem Control trusts for the Marketplace origin instead of the default trust store.
+  marketplace:
+    enabled: false
+    id: ''
+    baseUrl: ''
+    keys: ''
+    caSecret: ''
   fleet:
     enabled: false
     keyId: ''

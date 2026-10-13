@@ -945,6 +945,13 @@
               "items": {
                 "type": "object"
               }
+            },
+            "marketplaceTo": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "type": "object"
+              }
             }
           }
         },
@@ -1259,7 +1266,7 @@
         "clientCheckIn": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Env-owned Phase A client check-in (plan.md §17.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
+          "description": "Env-owned Phase A client check-in (plan.md \u00a717.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
           "required": [
             "checkInMs",
             "jitterPct",
@@ -1368,6 +1375,64 @@
                   },
                   "gatewayUrl": {
                     "pattern": "^https://[^/@?#]+/?$"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "marketplace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "id",
+            "baseUrl",
+            "keys",
+            "caSecret"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "baseUrl": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "keys": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "caSecret": {
+              "type": "string",
+              "maxLength": 253
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "id": {
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+                  },
+                  "baseUrl": {
+                    "minLength": 1,
+                    "pattern": "^https://[^/?#@]+/?$"
+                  },
+                  "keys": {
+                    "minLength": 1
                   }
                 }
               }

@@ -4,8 +4,20 @@ import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRoll
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
 import type { BuilderDraft, BuilderDraftPage, BuilderDraftRequest, BuilderTestPage, BuilderTestRequest, BuilderTestRecord, BuilderDefinition } from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage } from '@olo-labs/toolgate-contracts';
-import type {ControlServerSettings,ControlServerSettingsPatch,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
+import type {MarketplaceStatus,MarketplaceImportRequest,ControlServerSettings,ControlServerSettingsPatch,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
+
+/** Marketplace display records as Control passes them through (marketplace docs/api.md), with Control's verdict. */
+export type MarketplaceVerdict = { readonly compatible: boolean; readonly reasons: readonly string[] };
+export type MarketplacePublisherSummary = { readonly slug: string; readonly displayName: string; readonly organization?: string | null; readonly avatarMediaId?: string | null; readonly profileUrl?: string | null };
+export type MarketplaceItem = { readonly packageId: string; readonly version: string; readonly title: string; readonly summary: string; readonly category?: string; readonly tags?: readonly string[]; readonly runtime?: string; readonly iconMediaId?: string | null; readonly publisher: MarketplacePublisherSummary; readonly control?: MarketplaceVerdict };
+export type MarketplaceCatalog = { readonly page: number; readonly limit: number; readonly total: number; readonly items: readonly MarketplaceItem[] };
+export type MarketplaceVersions = { readonly packageId: string; readonly latestVersion: string | null; readonly installVersion: string | null; readonly versions: readonly { readonly version: string; readonly delisted: boolean; readonly control?: MarketplaceVerdict }[] };
+export type MarketplaceDetail = MarketplaceItem & { readonly description: string; readonly repositoryUrl?: string | null; readonly documentationUrl?: string | null; readonly license?: string | null; readonly screenshots?: readonly string[];
+  readonly tools?: readonly { readonly name: string; readonly title?: string; readonly description?: string; readonly effect?: string }[];
+  readonly requiredSettings?: readonly { readonly kind: string; readonly name: string; readonly type?: string | null; readonly default?: string | null; readonly description?: string | null }[];
+  readonly packageDigest: string; readonly archiveSha256: string };
+export type MarketplacePublisher = MarketplacePublisherSummary & { readonly bio?: string | null; readonly websiteUrl?: string | null; readonly githubUrl?: string | null; readonly linkedinUrl?: string | null; readonly country?: string | null; readonly publicContactEmail?: string | null; readonly packages?: readonly MarketplaceItem[] };
 
 /** Human-safe messages never render server text, exception bodies or credentials. */
 export class ApiError extends Error {
@@ -16,6 +28,7 @@ export class ApiError extends Error {
       : status === 400 ? 'The server rejected these values. Check the fields and references.'
       : status === 404 ? 'This record is no longer available.'
       : status === 413 ? 'This request is too large.'
+      : status === 422 ? 'Control refused this package: it failed a verification or compatibility check.'
       : code === 'TIMEOUT' ? 'The request timed out. You can try again.'
       : status === 0 ? 'Unable to reach Control. Check your connection and try again.'
       : 'Control could not complete this request. Try again shortly.');
@@ -23,6 +36,10 @@ export class ApiError extends Error {
 }
 
 type Operation = { readonly method: string; readonly path: string };
+/** An operation with its named path parameters filled in, each encoded as one segment. */
+function at(operation: Operation, values: Record<string, string>): Operation {
+  return { method: operation.method, path: operation.path.replace(/\{(\w+)\}/g, (_, name: string) => encodeURIComponent(values[name] ?? '')) };
+}
 const MAX_RESPONSE = 2 * 1024 * 1024;
 
 async function readBody(response: Response): Promise<unknown> {
@@ -107,6 +124,13 @@ export class ControlClient {
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */
   uploadServerPackage(file:Blob):Promise<PackageVersion>{return this.send(operations.uploadServerPackage,{raw:file,contentType:'application/vnd.ololabs.toolgate.package+zip',timeoutMs:120000});}
   deployServerPackage(body:PackageDeploymentRequest):Promise<PackageDeployment>{return this.send(operations.deployServerPackage,{body});}
+  marketplaceStatus(signal?:AbortSignal):Promise<MarketplaceStatus>{return this.send(operations.getMarketplaceStatus,{signal});}
+  marketplaceCatalog(q:string,signal?:AbortSignal):Promise<MarketplaceCatalog>{const query=new URLSearchParams({limit:'50'});if(q)query.set('q',q);return this.send(operations.listMarketplaceCatalog,{query,signal});}
+  marketplaceVersions(packageId:string,signal?:AbortSignal):Promise<MarketplaceVersions>{return this.send(at(operations.listMarketplacePackageVersions,{packageId}),{signal});}
+  marketplaceDetail(packageId:string,version:string,signal?:AbortSignal):Promise<MarketplaceDetail>{return this.send(at(operations.getMarketplacePackageVersion,{packageId,version}),{signal});}
+  marketplacePublisher(slug:string,signal?:AbortSignal):Promise<MarketplacePublisher>{return this.send(at(operations.getMarketplacePublisher,{slug}),{signal});}
+  /** Control fetches, verifies and stores the version; a large package can take a while. */
+  importMarketplacePackage(body:MarketplaceImportRequest):Promise<PackageVersion>{return this.send(operations.importMarketplacePackage,{body,timeoutMs:120000});}
   configurationChanges(after?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationPage>{const query=new URLSearchParams();if(after)query.set('after',after);return this.send(operations.listConfigurationChanges,{query,signal});}
   configurationChange(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.getConfigurationChange,{id,signal});}
   transitionConfiguration(id:string,body:import('@olo-labs/toolgate-contracts').EnterpriseConfigurationTransition,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.transitionConfigurationChange,{id,body,key});}
