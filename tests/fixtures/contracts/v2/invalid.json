@@ -379,6 +379,32 @@
       }
     }
   ],
+  "MarketplaceImportRequest": [
+    {
+      "case": "version is not semantic",
+      "value": {
+        "packageId": "examples.notify",
+        "version": "latest"
+      }
+    },
+    {
+      "case": "unknown field",
+      "value": {
+        "packageId": "examples.notify",
+        "version": "0.1.0",
+        "url": "https://elsewhere.example.com/x.tgpkg"
+      }
+    }
+  ],
+  "MarketplaceStatus": [
+    {
+      "case": "plain http origin",
+      "value": {
+        "enabled": true,
+        "baseUrl": "http://marketplace.example.com"
+      }
+    }
+  ],
   "PackageEnableRequest": [
     {
       "case": "digest must be prefixed",
