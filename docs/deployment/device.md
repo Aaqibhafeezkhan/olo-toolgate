@@ -2,6 +2,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Linux device container
 
+For a device that can communicate only with its Gateway, use the
+[Linux secured device](secured-device.md) image and launcher.
+
 `ololab/olo-toolgate-device:dev` contains the native Linux client from the matching
 published Quickstart release. The existing manual and CI-backed development
 release jobs publish it alongside Control, Gateway and Quickstart, using the same

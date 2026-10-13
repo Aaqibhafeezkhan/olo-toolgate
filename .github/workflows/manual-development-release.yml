@@ -99,7 +99,8 @@ jobs:
         run: |
           docker save --output build/manual-development/images.tar \
             olo-toolgate-control:manual-development olo-toolgate-gateway:manual-development \
-            olo-toolgate-quickstart:manual-development olo-toolgate-device:manual-development
+            olo-toolgate-quickstart:manual-development olo-toolgate-device:manual-development \
+            olo-toolgate-linux-secured-device:manual-development
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: manual-development-assets

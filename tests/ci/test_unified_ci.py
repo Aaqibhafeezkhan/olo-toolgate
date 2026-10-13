@@ -141,12 +141,12 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         scripts = '\n'.join(step.get('run','') for step in steps)
         for gate in ('tools/control/container.py','tools/enterprise/restore_check.py',
                      'tools/client/downloads.py','tools/gateway/container.py',
-                     'tools/gateway/benchmark.py','tools/device/check.py'):
+                     'tools/gateway/benchmark.py','tools/device/check.py','tools/device/secured_check.py'):
             self.assertEqual(scripts.count(gate), 1, gate)
         self.assertEqual(scripts.count('--prebuilt-ui'), 2)
         self.assertIn('--postgresql --no-browser', scripts)
         self.assertIn('agent --target linux --smoke', scripts)
-        for image in ('quickstart','control','gateway','device'):
+        for image in ('quickstart','control','gateway','device','linux-secured-device'):
             self.assertIn(f'--severity HIGH,CRITICAL olo-toolgate-{image}:', scripts)
         self.assertNotIn('tools/check.py', scripts)
         self.assertNotIn('cargo test', scripts)

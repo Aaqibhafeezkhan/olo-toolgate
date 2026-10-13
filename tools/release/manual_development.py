@@ -21,6 +21,7 @@ from tools.release.bundle import checksum_assets
 
 HELM_IMAGE = 'alpine/helm:3.17.3'
 IMAGES = {name: 'olo-toolgate-'+name for name in ('control', 'gateway', 'quickstart', 'device')}
+IMAGES['secured_device'] = 'olo-toolgate-linux-secured-device'
 
 
 def run(*args, capture=False, input=None):
@@ -59,6 +60,9 @@ def build():
     run('docker', 'build', '-f', 'apps/device/Dockerfile', *common,
         '--build-arg', 'QUICKSTART_IMAGE=olo-toolgate-quickstart:manual-development',
         '-t', 'olo-toolgate-device:manual-development', '.')
+    run('docker', 'build', '-f', 'apps/device/secured.Dockerfile',
+        '--build-arg', 'DEVICE_IMAGE=olo-toolgate-device:manual-development',
+        '-t', 'olo-toolgate-linux-secured-device:manual-development', '.')
     for path in sorted(CLIENTS.iterdir()):
         if path.is_file() and public_asset(path):
             shutil.copyfile(path, ASSETS/path.name)
@@ -130,7 +134,8 @@ def publish():
     distribution = json.loads(compatibility.read_text(encoding='utf-8'))
     distribution.update(maven=info['maven'], npm=info['npm'], helmOci=info['helm'],
                         gatewayImage=images['gateway'], controlImage=images['control'],
-                        quickstartImage=images['quickstart'], deviceImage=images['device'])
+                        quickstartImage=images['quickstart'], deviceImage=images['device'],
+                        securedDeviceImage=images['secured_device'])
     compatibility.write_text(json.dumps(distribution, indent=2)+'\n', encoding='utf-8')
     checksum_assets(ASSETS)
     notes = OUTPUT/'notes.md'
