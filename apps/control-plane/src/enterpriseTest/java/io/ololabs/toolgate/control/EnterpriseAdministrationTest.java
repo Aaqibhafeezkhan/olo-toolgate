@@ -42,7 +42,7 @@ class EnterpriseAdministrationTest {
         graph=new EnterpriseConformanceTest();graph.graph();var all=new GroupSelection(List.of(),true);
         var ceilings=new EnterpriseScope(all,all,List.of(),true,List.of(new EnterpriseResourceRule(ResourceKind.FILE,"",EnterpriseResourceMatch.ANY)),graph.conditions());
         var actions=List.of("read","create","update","delete","enable","disable","recover","manage-role","grant","import","export","audit","simulate","publish","policy","attest","rotate-credential");
-        var rules=Arrays.stream(EnterpriseGroupType.values()).map(g->new EnterpriseManagementRule(actions,g,all,List.of(ceilings),graph.conditions())).toList();
+        var rules=Arrays.stream(EnterpriseGroupType.values()).map(g->new EnterpriseManagementRule(actions,g,all,List.of(ceilings),graph.conditions(),null)).toList();
         graph.add(Kind.ROLE,new ControlRole("recovery-role","Recovery role",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,rules));
         graph.add(Kind.TEAM,new ControlTeam("recovery-team","Reviewed administrators",true,1L,List.of("admin"),List.of("recovery-role")));
         var source=SqliteState.open(temp.resolve("state.sqlite"));store=new PostgresStore(source,graph.codec);store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});

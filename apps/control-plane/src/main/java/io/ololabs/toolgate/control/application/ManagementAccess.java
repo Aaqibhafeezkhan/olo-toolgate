@@ -18,8 +18,13 @@ public final class ManagementAccess {
     }
     public boolean allowed(Directory directory,String user,String action,Kind group,String id,long now) {
         if(superAdministrator(directory,user))return true;
-        return access(directory,user).grants().stream().anyMatch(r->r.actions().contains(action)&&r.groupType().name().equals(group.name())&&EnterpriseEvaluator.selected(r.groups(),id)&&current(r.conditions(),now));
+        return groupRules(directory,user).anyMatch(r->r.actions().contains(action)&&r.groupType().name().equals(group.name())&&EnterpriseEvaluator.selected(r.groups(),id)&&current(r.conditions(),now));
     }
+    /** Rules that confer authority over whole groups; ownDevices rules only cover devices the caller owns. */
+    public java.util.stream.Stream<EnterpriseManagementRule> groupRules(Directory directory,String user){return access(directory,user).grants().stream().filter(r->!own(r));}
+    public static boolean own(EnterpriseManagementRule rule){return Boolean.TRUE.equals(rule.ownDevices());}
+    /** The device group an ownDevices approve-device rule places approved devices in, or null when the caller holds none. */
+    public String ownDeviceGroup(Directory directory,String user,long now){return access(directory,user).grants().stream().filter(r->own(r)&&r.actions().contains("approve-device")&&current(r.conditions(),now)).map(r->r.groups().ids().getFirst()).sorted().findFirst().orElse(null);}
     /** Resolve live directory membership; never trust token roles or an actor's cached flag. */
     public boolean superAdministrator(Directory directory,String user) {return access(directory,user).portalRole()==UserRole.SUPER_ADMIN;}
     public void require(Directory directory,String user,String action,Kind group,String id,long now) {
@@ -79,7 +84,7 @@ public final class ManagementAccess {
             if(grant.sourceType()==EnterpriseSourceType.ROLE&&grant.sourceId().equals(role.id())&&authority.grants().stream().noneMatch(rule->rule.actions().contains("grant")&&current(rule.conditions(),now)&&rule.grantableScopes().stream().anyMatch(scope->contains(scope,grant.scope()))))throw denied();
         }
         for(var requested:role.managementRules()){
-            if(authority.grants().stream().noneMatch(ceiling->ceiling.groupType()==requested.groupType()&&current(ceiling.conditions(),now)
+            if(authority.grants().stream().noneMatch(ceiling->ceiling.groupType()==requested.groupType()&&current(ceiling.conditions(),now)&&(!own(ceiling)||own(requested))
                 &&selectionContains(ceiling.groups(),requested.groups())&&ceiling.actions().containsAll(requested.actions())
                 &&requested.grantableScopes().stream().allMatch(scope->ceiling.grantableScopes().stream().anyMatch(candidate->contains(candidate,scope)))
                 &&conditionsContain(ceiling.conditions(),requested.conditions())))throw denied();
@@ -91,13 +96,13 @@ public final class ManagementAccess {
     }
     public void requireAll(Directory directory,String user,String action,long now) {
         if(superAdministrator(directory,user))return;
-        for(var group:GroupGraph.DEFAULTS.keySet())if(access(directory,user).grants().stream().noneMatch(r->r.groupType().name().equals(group.name())&&r.groups().all()&&r.actions().contains(action)&&current(r.conditions(),now)))throw denied();
+        for(var group:GroupGraph.DEFAULTS.keySet())if(groupRules(directory,user).noneMatch(r->r.groupType().name().equals(group.name())&&r.groups().all()&&r.actions().contains(action)&&current(r.conditions(),now)))throw denied();
     }
     private void requireScopeRead(Directory d,String user,EnterpriseScope scope,long now) {
         for(var kind:List.of(Kind.TOOL_GROUP,Kind.DEVICE_GROUP)) {
             var selection=kind==Kind.TOOL_GROUP?scope.toolGroups():scope.deviceGroups();
             if(selection.all()) {
-                if(access(d,user).grants().stream().noneMatch(r->r.groupType().name().equals(kind.name())&&r.groups().all()&&r.actions().contains("read")&&current(r.conditions(),now)))throw denied();
+                if(groupRules(d,user).noneMatch(r->r.groupType().name().equals(kind.name())&&r.groups().all()&&r.actions().contains("read")&&current(r.conditions(),now)))throw denied();
             } else for(var id:selection.ids())require(d,user,"read",kind,id,now);
         }
     }

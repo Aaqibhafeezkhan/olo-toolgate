@@ -23,7 +23,7 @@ class EnterpriseRecoveryTest {
         var generator=KeyPairGenerator.getInstance("RSA");generator.initialize(2048);keys=List.of(generator.generateKeyPair(),generator.generateKeyPair());
         trust=new ArrayList<>();for(int index=0;index<keys.size();index++){var n=((RSAPublicKey)keys.get(index).getPublic()).getModulus().toByteArray();if(n[0]==0)n=Arrays.copyOfRange(n,1,n.length);trust.add(new FleetTrustKey("reviewer-"+index,Base64.getUrlEncoder().withoutPadding().encodeToString(n),"AQAB"));}
         var conditions=new EnterpriseConditions(EnterpriseConformanceTest.NOW,EnterpriseConformanceTest.NOW+60000,List.of(),List.of(),List.of(),List.of(),true,false,null,null);
-        var rules=Arrays.stream(EnterpriseGroupType.values()).map(kind->new EnterpriseManagementRule(List.of("recover","read"),kind,new GroupSelection(List.of(),true),List.of(),conditions)).toList();
+        var rules=Arrays.stream(EnterpriseGroupType.values()).map(kind->new EnterpriseManagementRule(List.of("recover","read"),kind,new GroupSelection(List.of(),true),List.of(),conditions,null)).toList();
         graph.add(Ids.Kind.ROLE,new ControlRole("reviewed-recovery","Emergency recovery",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,rules));
         graph.add(Ids.Kind.TEAM,new ControlTeam("reviewed-recovery-team","Reviewed recovery",true,1L,List.of("admin"),List.of("reviewed-recovery")));
         authorization=new EnterpriseRecoveryAuthorization(1L,EnterpriseConformanceTest.TENANT.value(),7L,graph.codec.model(graph.codec.snapshot(EnterpriseConformanceTest.TENANT,graph.directory(),false),ControlSnapshot.class),"b".repeat(64),EnterpriseConformanceTest.NOW,EnterpriseConformanceTest.NOW+60000);

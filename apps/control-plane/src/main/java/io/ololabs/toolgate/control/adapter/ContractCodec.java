@@ -225,14 +225,33 @@ public class ContractCodec implements Codec {
             var entry = entry(kind, json(node));
             if (entries.put(entry.id(), entry) != null) throw Failure.validation();
         }
-        return new Import(new Directory(snapshot.get("revision").asLong(), entries), input.get("mode").asText().equals("REPLACE"), input.get("dryRun").asBoolean());
+        try {
+            var settings = snapshot.has("settings") ? mapper.treeToValue(snapshot.get("settings"), io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch.class) : null;
+            var required = new java.util.ArrayList<io.ololabs.toolgate.contracts.ControlRequiredIdentity>();
+            for (var node : snapshot.path("requiredIdentities")) required.add(mapper.treeToValue(node, io.ololabs.toolgate.contracts.ControlRequiredIdentity.class));
+            var resolution = new java.util.TreeMap<String, io.ololabs.toolgate.contracts.ControlIdentityResolution>();
+            for (var e : input.path("identityResolution").properties()) resolution.put(Ids.valid(e.getKey()), mapper.treeToValue(e.getValue(), io.ololabs.toolgate.contracts.ControlIdentityResolution.class));
+            return new Import(new Directory(snapshot.get("revision").asLong(), entries), input.get("mode").asText().equals("REPLACE"), input.get("dryRun").asBoolean(),
+                settings, java.util.List.copyOf(required), java.util.Map.copyOf(resolution), input.path("removeUnlistedMemberships").asBoolean(false));
+        } catch (java.io.IOException | IllegalArgumentException e) { throw Failure.validation(); }
     }
-    public String snapshot(TenantId tenant, Directory directory, boolean yaml) {
+    public String document(TenantId tenant, Import input) {
+        var fields = new java.util.HashMap<String, Object>();
+        if (input.settings() != null) fields.put("settings", input.settings());
+        if (!input.requiredIdentities().isEmpty()) fields.put("requiredIdentities", input.requiredIdentities());
+        var request = new java.util.HashMap<String, Object>(java.util.Map.of("snapshot", parse(snapshot(tenant, input.directory(), false, fields), false), "mode", input.replace() ? "REPLACE" : "MERGE", "dryRun", input.dryRun()));
+        if (!input.identityResolution().isEmpty()) request.put("identityResolution", input.identityResolution());
+        if (input.removeUnlistedMemberships()) request.put("removeUnlistedMemberships", true);
+        return json(request);
+    }
+    public String snapshot(TenantId tenant, Directory directory, boolean yaml) { return snapshot(tenant, directory, yaml, java.util.Map.of()); }
+    public String snapshot(TenantId tenant, Directory directory, boolean yaml, java.util.Map<String, Object> fileFields) {
         var node = mapper.createObjectNode(); node.put("formatVersion", 2); node.put("tenantId", tenant.value()); node.put("revision", directory.revision());
         for (var kind : Kind.values()) {
             var values = node.putArray(kind.snapshotKey()); directory.entries().values().stream().filter(e -> e.id().kind() == kind)
                 .sorted(java.util.Comparator.comparing(e -> e.id().value())).forEach(e -> values.add(parse(e.document(), false)));
         }
+        fileFields.forEach((key, value) -> node.set(key, mapper.valueToTree(value)));
         try { return yaml ? new YAMLMapper().writeValueAsString(sorted(node)) : json(node); }
         catch (java.io.IOException e) { throw new IllegalStateException(e); }
     }
