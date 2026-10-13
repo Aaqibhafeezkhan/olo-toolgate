@@ -44,6 +44,9 @@ client connected. The README shows them as rotating tours (`console-tour.gif`, `
 area), built from these stills: the device registration steps (`device-flow-*.jpg`) and
 the console pages (`console-*.jpg`, with `-light` variants in the light theme).
 
+The Windows device client screens (`device-client-*.jpg`: tray menu, status, activity
+log) were captured on the Windows device itself and placed on a 16:10 backdrop.
+
 These are captures of the actual application, with no fabricated UI or replacement
 data. They contain no passwords, tokens or private user details. The device screens
 show the local demo devices' identifiers, key fingerprints and a private network

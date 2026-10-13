@@ -25,11 +25,12 @@ decisions, and device status. It plays without sound; the animation above is a p
 
 ## Device tour
 
-Register a device in five steps: install the client, wait for approval, compare the key
-fingerprint, approve, and the device is connected.
+Register a device, shown from both sides: the console and the Windows device client. Install
+the client and request approval from its tray icon, compare the key fingerprint in the console,
+approve, and the device reports it is connected with protected tools ready.
 
 <p align="center">
-  <img src="docs/media/device-flow.gif" width="100%" alt="Rotating tour of device registration: install and connect, waiting for approval, compare the key fingerprint, approved and connected, device details">
+  <img src="docs/media/device-flow.gif" width="100%" alt="Rotating tour of device registration: enrollment page, Request device approval from the Windows tray icon, waiting for approval, compare the key fingerprint, approved and connected, the Windows client status and activity log, device details">
 </p>
 
 Captured from the running local **0.10.0-dev** console on October 13, 2026, with a Windows
