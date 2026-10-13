@@ -3,8 +3,8 @@
 Control can read one OLO Orgs Marketplace and import its packages as uploaded server packages. The Marketplace
 validates and signs releases; Control checks them again before it stores anything, and an imported package then
 follows the same review, deploy, enable and grant steps as an upload. The Marketplace side is described in
-[marketplace/docs/design.md](../../marketplace/docs/design.md) and its API in
-[marketplace/docs/api.md](../../marketplace/docs/api.md).
+[olo-marketplace docs/design.md](https://github.com/olo-labs/olo-marketplace/blob/main/docs/design.md) and its API in
+[olo-marketplace docs/api.md](https://github.com/olo-labs/olo-marketplace/blob/main/docs/api.md).
 
 ## Settings
 

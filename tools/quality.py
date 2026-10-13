@@ -13,8 +13,9 @@ SECRET_PATTERNS = [
     re.compile(r'\bAKIA[0-9A-Z]{16}\b'),
     re.compile(r'\bgh[pousr]_[A-Za-z0-9]{36,}\b'),
 ]
-# Configuration Drupal exports (`drush config:export` rewrites each file whole), so a header would not survive.
-EXPORTED = ('marketplace/drupal/config/sync/',)
+# Paths whose files are rewritten whole by other tools, so a header would not survive. The Drupal config that needed
+# this moved to olo-marketplace.
+EXPORTED = ()
 
 
 def violations(path, text, exported=False):
