@@ -38,14 +38,16 @@ The media and source are distributed under this repository's Apache-2.0 license.
 
 ## Real console screenshots
 
-Captured from the running local `0.10.0-dev` console on October 10, 2026:
+Captured with a headless browser from the running local `0.10.0-dev` console on
+October 13, 2026, at 1440×900 and scaled to 1800 px wide, with a Windows and a Linux
+client connected. The README shows them as a [console tour](console-tour.gif), the
+device registration steps (`device-flow-*.jpg`) and grouped galleries (`console-*.jpg`,
+with `-light` variants in the light theme).
 
-- [Tool directory](console-tools.jpg): registered tool names, enabled/disabled state and revision.
-- [Tool Groups](console-tool-groups.jpg): the standard presets and default group.
-- [Configuration reviews](console-configuration.jpg): complete export and import controls.
-
-These are browser captures of the actual application, with no fabricated UI or
-replacement data. The configuration capture is cropped above change-history rows.
-The selected screens contain no passwords, tokens, private user details or device
-identifiers. The local demo's tool states are preserved; capturing the screens did
-not change access configuration. The video renderer does not regenerate screenshots.
+These are captures of the actual application, with no fabricated UI or replacement
+data. They contain no passwords, tokens or private user details. The device screens
+show the local demo devices' identifiers, key fingerprints and a private network
+address. Capturing the screens did not change access configuration; the Windows
+client was approved by an administrator as part of the registration flow shown. The
+tour is built from the stills with Pillow (1024×640, 2.6 s per screen with a short
+crossfade). The video renderer does not regenerate screenshots.
