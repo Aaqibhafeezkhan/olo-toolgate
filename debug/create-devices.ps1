@@ -89,6 +89,8 @@ try {
                 '--stop-timeout', '30', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
                 '--network', $network, '--tmpfs', '/run:rw,nosuid,size=8m,mode=755',
                 '--label', "$deviceLabel=linux", '-e', "TOOLGATE_DEVICE_UPSTREAM=$upstream",
+                # Docker Desktop groups containers by Compose project, so the device is listed with the debug stack.
+                '--label', 'com.docker.compose.project=toolgate-debug', '--label', "com.docker.compose.service=$name",
                 '--mount', "type=volume,source=$name-config,target=/etc/olo-toolgate",
                 '--mount', "type=volume,source=$name-state,target=/var/lib/olo-toolgate", $deviceImage)
         }
