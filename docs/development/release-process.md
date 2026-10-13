@@ -31,11 +31,13 @@ no Java rebuild or test replay. The exact release-tag lookup rejects an existing
 GitHub release and fails closed on authentication or network errors. Provenance
 for all four image digests and release assets must succeed before the GitHub
 release is created. Registry writes across Maven, GHCR and OCI are not atomic;
-inspect partial publication before retrying a failed run. External Maven upload
-runs last, after image/chart publication, provenance and the GitHub release.
-Development JARs and POMs are assembled locally before uploading GitHub assets.
-A Maven configuration or repository failure still fails the job, while the other
-publications remain available; inspect them before retrying.
+inspect partial publication before retrying a failed run. Shared preparation
+collects the verified artifacts and assembles development JARs and POMs before
+handing them to parallel core release, Maven and Marketplace publish jobs.
+Each publisher depends only on preparation, so a failure in one cannot skip or
+cancel another. Failures remain visible in the job and overall workflow result.
+The core publisher still requires image/chart publication and provenance before
+creating the tagged GitHub release.
 
 ## Credentials and Maven Central
 
@@ -58,9 +60,9 @@ Central Portal is not a standard Maven PUT repository. Its release flow requires
 Portal upload, GPG signatures and Central-compliant POM metadata; that integration
 is not implemented by the current publisher. Do not use a Central Portal URL as
 the custom repository URL expecting credentials alone to enable publication.
-The publisher rejects that target at the final Maven step before credential
-transmission, with an explicit configuration error. This leaves image, chart and
-GitHub release publication independent of the external Maven repository.
+The Maven job rejects that target before credential transmission, with an
+explicit configuration error. Image, chart, GitHub release and Marketplace
+publication continue independently of the external Maven repository.
 See [Sonatype publishing requirements](https://central.sonatype.org/publish/publish-portal-maven/).
 
 ## Retained validation contexts

@@ -146,9 +146,12 @@ class AdmissionTests(unittest.TestCase):
     def test_manual_development_release_has_no_test_or_ci_dependencies(self):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/manual-development-release.yml').read_text(encoding='utf-8'))
-        self.assertEqual(set(document['jobs']),{'native','publish'})
+        self.assertEqual(set(document['jobs']),{'native','build','publish','publish-typescript','publish-maven','publish-marketplace'})
         self.assertNotIn('needs',document['jobs']['native'])
-        self.assertEqual(document['jobs']['publish']['needs'],'native')
+        self.assertEqual(document['jobs']['build']['needs'],'native')
+        for name,job in document['jobs'].items():
+            if name.startswith('publish'):
+                self.assertEqual(job['needs'],'build')
         commands='\n'.join(step.get('run','') for job in document['jobs'].values() for step in job['steps'])
         for command in ('cargo test','cargo clippy','cargo fmt','--check','make check','pytest','unittest','tools/check.py','development.py prepare'):
             self.assertNotIn(command,commands)

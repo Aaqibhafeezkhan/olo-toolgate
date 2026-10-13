@@ -82,6 +82,8 @@ def build():
         ':contracts-java:assemble', ':contracts-java:generatePomFileForMavenJavaPublication', '-x', 'test')
     for path in (ROOT/'packages/contracts/java/build/libs').glob('*.jar'):
         shutil.copyfile(path, ASSETS/path.name)
+    pom = ROOT/'packages/contracts/java/build/publications/mavenJava/pom-default.xml'
+    shutil.copyfile(pom, ASSETS/('toolgate-contracts-'+info['libraryVersion']+'.pom'))
     run(sys.executable, 'tools/release/bundle.py', '--output', str(ASSETS))
     chart = OUTPUT/'chart'
     shutil.copytree(ROOT/'deploy/helm/olo-toolgate', chart)
@@ -130,8 +132,6 @@ def publish():
                         gatewayImage=images['gateway'], controlImage=images['control'],
                         quickstartImage=images['quickstart'], deviceImage=images['device'])
     compatibility.write_text(json.dumps(distribution, indent=2)+'\n', encoding='utf-8')
-    pom = ROOT/'packages/contracts/java/build/publications/mavenJava/pom-default.xml'
-    shutil.copyfile(pom, ASSETS/('toolgate-contracts-'+info['libraryVersion']+'.pom'))
     checksum_assets(ASSETS)
     notes = OUTPUT/'notes.md'
     notes.write_text('Manual development build for commit `'+info['commit']+'`.\n\n'

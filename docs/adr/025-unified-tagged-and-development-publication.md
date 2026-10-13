@@ -20,6 +20,11 @@ immutable GitHub assets. Remove obsolete component publishing jobs and the
 standalone foundation release workflow.
 
 Use the existing development-release environment for the common publisher.
+After shared artifact preparation, run core release, Maven and Marketplace
+publication as sibling jobs. The explicit manual workflow also publishes
+TypeScript in its own sibling job. Publication failures remain visible without
+skipping or cancelling other publishers. Keep image/chart and provenance ordering
+inside the core publisher so release metadata includes the published digests.
 The inspected Gateway and Foundation environments have no secrets, variables,
 reviewers, wait timers or branch/tag restrictions; no protected settings are lost.
 Their empty environment records can be removed after their callers are retired.
@@ -53,6 +58,7 @@ uploaded the exact three previously validated JARs, POM and Gradle module bytes
 using only POM generation and publication tasks. No Java build/test task, remote
 registry write, version tag or actual release was executed locally. Existing
 source vulnerability and native runtime/installer failures remain blocking.
-The common publisher rejects the configured Sonatype Portal upload URL before
-artifact collection or credential transmission; a standard Maven repository
-is required until a separately reviewed Central/GPG integration exists.
+The isolated Maven publisher rejects the configured Sonatype Portal upload URL
+before credential transmission; a standard Maven repository is required until
+a separately reviewed Central/GPG integration exists. This failure does not
+block the other publication jobs.

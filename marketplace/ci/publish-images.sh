@@ -2,9 +2,9 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 #
-# Builds and pushes the Marketplace images (implementation prompt §7). Called by a step appended to the publish jobs
-# of .github/workflows/development-release.yml (on merge to main) and manual-development-release.yml (manual), after
-# all of ToolGate's own publishing, so a Marketplace failure cannot stop ToolGate's images.
+# Builds and pushes the Marketplace images (implementation prompt §7). Called by independent publish-marketplace jobs
+# in .github/workflows/development-release.yml (main/tags) and manual-development-release.yml (manual).
+# Marketplace and ToolGate publication run in parallel; a failure in either job does not block the other.
 #
 # Registries: Docker Hub (DOCKERHUB_NAMESPACE or DOCKERHUB_USERNAME, with DOCKERHUB_TOKEN), as the existing release
 # scripts use, and GitHub Packages (ghcr.io/<owner>) when GH_TOKEN and GITHUB_REPOSITORY_OWNER are set.
