@@ -8,7 +8,10 @@
 #   2. seed build: every example package, from the unchanged examples;
 #   3. helper tests, including /inspect and /sign over every seed package against seed/expected-packages.json;
 #   4. the split simulation (the same checks with ToolGate as a git submodule), unless MARKETPLACE_SKIP_SPLIT=1;
-#   5. the helper image build, when MARKETPLACE_DOCKER=1.
+#   5. the helper image build, when MARKETPLACE_DOCKER=1;
+#   6. the end-to-end import into Quickstart (ci/e2e.sh), when MARKETPLACE_E2E=1. It needs the Marketplace images
+#      (scripts/build-images.sh --core-only) and the Quickstart image ($TOOLGATE_DIR/tools/quickstart/check.py --build
+#      --build-only) to be built first.
 #
 # MARKETPLACE_SEED_STRICT=true fails on any knownMissing seed package (release gate).
 set -euo pipefail
@@ -42,5 +45,8 @@ if [ "${MARKETPLACE_DOCKER:-0}" = 1 ]; then
     --build-arg TOOLGATE_REVISION="$TOOLGATE_REVISION" \
     --label "io.ololabs.toolgate.revision=$TOOLGATE_REVISION" \
     -t olo-toolgate-marketplace-helper:ci "$TOOLGATE_DIR"
+fi
+if [ "${MARKETPLACE_E2E:-0}" = 1 ]; then
+  bash "$MARKETPLACE_DIR/ci/e2e.sh"
 fi
 echo "marketplace: checks passed"

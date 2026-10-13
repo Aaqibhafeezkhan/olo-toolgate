@@ -25,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *  non-allowlisted origin and a redirect, an oversize package, the incompatibilities of §6.2 A, and the audit record. */
 final class MarketplaceTest {
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final String ORIGIN = "https://marketplace.example.test", ID = "olo-labs-marketplace", KEY = "olo-marketplace-2026-1";
+    private static final String ORIGIN = "https://marketplace.example.test", ID = "olo-labs-marketplace";
+    private static final String KEY_ID = "olo-marketplace-2026-1";
     private static final String BASE = "/api/toolgate/v1/tools/acme.orders/0.1.0";
     @TempDir Path directory;
 
@@ -59,7 +60,7 @@ final class MarketplaceTest {
 
     private static byte[] raw(KeyPair pair) { var encoded = pair.getPublic().getEncoded(); return Arrays.copyOfRange(encoded, encoded.length - 32, encoded.length); }
     private Marketplace marketplace() {
-        var settings = Marketplace.Settings.parse(ID, ORIGIN, KEY + ":" + Base64.getEncoder().encodeToString(raw(key)));
+        var settings = Marketplace.Settings.parse(ID, ORIGIN, KEY_ID + ":" + Base64.getEncoder().encodeToString(raw(key)));
         return new Marketplace(settings, source, packages, store, codec, java.time.Clock.systemUTC());
     }
 
@@ -76,7 +77,7 @@ final class MarketplaceTest {
         var verified = PackageArchive.validate(bytes, document -> (JsonNode) codec.value(document));
         var record = JSON.createObjectNode().put("schema", Marketplace.RELEASE_SCHEMA).put("marketplace", ID).put("packageId", "acme.orders").put("version", "0.1.0")
             .put("packageDigest", verified.packageDigest()).put("descriptorSetDigest", verified.descriptorSetDigest())
-            .put("archiveSha256", sha256(data)).put("publisherSlug", "acme").put("signedAt", "2026-10-12T18:45:00Z").put("keyId", KEY);
+            .put("archiveSha256", sha256(data)).put("publisherSlug", "acme").put("signedAt", "2026-10-12T18:45:00Z").put("keyId", KEY_ID);
         release.accept(record);
         var body = JSON.createObjectNode().put("packageId", "acme.orders").put("version", "0.1.0").put("title", "Orders").put("delisted", false)
             .put("downloadUrl", ORIGIN + BASE + "/package").put("releaseUrl", ORIGIN + BASE + "/release").put("archiveSha256", sha256(data));
@@ -108,7 +109,7 @@ final class MarketplaceTest {
         var operations = new ArrayList<String>(); String target = null;
         for (var item : audit) { operations.add(item.get("operation").asText()); if (item.get("operation").asText().equals("PACKAGE_MARKETPLACE_IMPORT")) target = item.get("target").asText(); }
         assertTrue(operations.containsAll(List.of("PACKAGE_MARKETPLACE_IMPORT", "PACKAGE_UPLOAD")), operations.toString());
-        assertEquals("marketplace:" + ID + "/acme.orders@0.1.0 publisher:acme key:" + KEY, target);
+        assertEquals("marketplace:" + ID + "/acme.orders@0.1.0 publisher:acme key:" + KEY_ID, target);
         // Importing the same version again answers the stored version; nothing is deployed, enabled or granted.
         assertEquals(200, install().status());
         assertTrue(store.transaction(tenant, false, tx -> tx.packages().deployments()).isEmpty());
@@ -177,9 +178,9 @@ final class MarketplaceTest {
         source.responses.put(BASE + "/package", new MarketplaceSource.Response(200, Marketplace.PACKAGE_MEDIA_TYPE, new byte[PackageArchive.MAX_PACKAGE_BYTES + 1]));
         assertEquals(413, assertThrows(Failure.class, this::install).status());
         // Settings accept an HTTPS origin only.
-        assertThrows(IllegalArgumentException.class, () -> Marketplace.Settings.parse(ID, "http://marketplace.example.test", KEY + ":" + Base64.getEncoder().encodeToString(raw(key))));
-        assertThrows(IllegalArgumentException.class, () -> Marketplace.Settings.parse(ID, ORIGIN + "/path", KEY + ":" + Base64.getEncoder().encodeToString(raw(key))));
-        assertThrows(IllegalArgumentException.class, () -> Marketplace.Settings.parse(ID, ORIGIN, KEY + ":short"));
+        assertThrows(IllegalArgumentException.class, () -> Marketplace.Settings.parse(ID, "http://marketplace.example.test", KEY_ID + ":" + Base64.getEncoder().encodeToString(raw(key))));
+        assertThrows(IllegalArgumentException.class, () -> Marketplace.Settings.parse(ID, ORIGIN + "/path", KEY_ID + ":" + Base64.getEncoder().encodeToString(raw(key))));
+        assertThrows(IllegalArgumentException.class, () -> Marketplace.Settings.parse(ID, ORIGIN, KEY_ID + ":short"));
         assertThrows(IllegalArgumentException.class, () -> Marketplace.Settings.parse(ID, ORIGIN, ""));
     }
 

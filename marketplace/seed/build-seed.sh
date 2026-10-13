@@ -35,10 +35,11 @@ for package in "$TOOLGATE_DIR"/examples/{java-tools,mocked-tools}/*/build/toolga
   "$TOOLGATE_CLI" verify "$package" >/dev/null
 done
 
-# The manifest writer is part of the helper; compile it with plain javac (no build tool, no downloads).
+# The manifest writer is part of the helper; compile it, with the package-archive library it validates through, with
+# plain javac (no build tool, no downloads).
 classes="$(mktemp -d)"
 trap 'rm -rf "$classes"' EXIT
-find "$MARKETPLACE_DIR/helper/src/main/java" -name '*.java' >"$classes/sources"
+find "$MARKETPLACE_DIR/helper/src/main/java" "$TOOLGATE_DIR/backend-libs/package-archive/src/main/java" -name '*.java' >"$classes/sources"
 javac --release 17 -encoding UTF-8 -d "$classes" "@$classes/sources"
 rm -rf "$out/packages" "$out/seed-manifest.json"
 TOOLGATE_REVISION="$TOOLGATE_REVISION" java -cp "$classes" io.ololabs.marketplace.helper.Main seed-manifest "$TOOLGATE_DIR" "$out"

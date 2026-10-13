@@ -7922,8 +7922,8 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace catalog page (marketplace docs/api.md), each item annotated with control.compatible
-                  and control.reasons.
+                description: The Marketplace catalog page, as the Marketplace API defines it, each item annotated with
+                  control.compatible and control.reasons.
         '400':
           description: Invalid bounded input
         '401':
@@ -7952,7 +7952,7 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace version list (marketplace docs/api.md) with control annotations and installVersion.
+                description: The Marketplace version list, as the Marketplace API defines it, with control annotations and installVersion.
         '400':
           description: Invalid bounded input
         '401':
@@ -7986,7 +7986,7 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace detail record (marketplace docs/api.md) with control annotations.
+                description: The Marketplace detail record, as the Marketplace API defines it, with control annotations.
         '400':
           description: Invalid bounded input
         '401':
@@ -8015,7 +8015,7 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace publisher record (marketplace docs/api.md).
+                description: The Marketplace publisher record, as the Marketplace API defines it.
         '400':
           description: Invalid bounded input
         '401':
@@ -8030,8 +8030,8 @@ paths:
     post:
       operationId: importMarketplacePackage
       description: Super Admin only. Fetches one Marketplace version from the configured origin and stores it as an
-        uploaded server package after the checks of marketplace design §8.3 (not delisted, a known release schema, a
-        signature by a pinned key, this marketplace id, the same ids and publisher, the archive SHA-256 and the package
+        uploaded server package after the checks of the Marketplace design §8.3 (not delisted, a known release schema, a
+        signature by a pinned key, this Marketplace id, the same ids and publisher, the archive SHA-256 and the package
         rules) and this ToolGate's compatibility rules. Redirects are never followed. The audit log records the
         Marketplace, version, publisher and key. Nothing is deployed, enabled or granted; the package then follows the
         same review, deploy, enable and grant steps as an upload.
