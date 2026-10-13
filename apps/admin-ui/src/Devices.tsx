@@ -82,7 +82,7 @@ export function Devices({client,superAdmin=false,userId}:{client:ControlClient;s
     const row=selected;const endpoint=row.endpointDevice;
     void mutate(async()=>{
       if(endpoint)await client.setDeviceApproval(row.deviceId,{expectedApprovalRevision:endpoint.approvalRevision??1,approved:true,...durationBody(duration)},crypto.randomUUID());
-      else await client.decideEnrollment({userCode:row.enrollment!.userCode,keyFingerprint:row.enrollment!.keyFingerprint,choice:'APPROVE',...durationBody(duration)},crypto.randomUUID());
+      else await client.decideEnrollment({userCode:row.enrollment!.userCode!,keyFingerprint:row.enrollment!.keyFingerprint!,choice:'APPROVE',...durationBody(duration)},crypto.randomUUID());
       // Own-device approval: Control places the device in the rule's group itself.
       if(!groupApprover(row,superAdmin))return;
       const current=await client.memberships('devices',row.deviceId);

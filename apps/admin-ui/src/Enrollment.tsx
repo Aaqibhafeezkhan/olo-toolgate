@@ -62,7 +62,7 @@ export function Enrollment({ client, superAdmin=false }: { client: ControlClient
     if(choice==='APPROVE'&&!validDuration(duration,Date.now())){setTimeError('Choose a future date and time.');return;}
     setBusy(true);setError(undefined);setTimeError('');
     try {
-      setReview(await client.decideEnrollment({userCode:review.userCode,keyFingerprint:review.keyFingerprint,choice,
+      setReview(await client.decideEnrollment({userCode:review.userCode!,keyFingerprint:review.keyFingerprint!,choice,
         ...(choice==='APPROVE'?durationBody(duration):{})},crypto.randomUUID()));
       setConfirmed(false);setRefresh(value=>value+1);window.dispatchEvent(new Event('toolgate:approval-change'));
     }catch (failure) {setError(failure);clearReview();setRefresh(value=>value+1);} finally {setBusy(false);}
@@ -81,7 +81,7 @@ export function Enrollment({ client, superAdmin=false }: { client: ControlClient
       {approvable?.length===0&&!listError&&<p role="status">No devices are waiting for approval.</p>}
       {Boolean(approvable?.length)&&<div className="table-wrap"><Table><thead><tr><th scope="col">Device</th><th scope="col">Platform</th><th scope="col">Code</th><th scope="col">Request expires</th><th scope="col">Action</th></tr></thead>
         <tbody>{approvable?.map(device=><tr key={device.enrollmentId}><th scope="row">{device.deviceId}</th><td>{device.platform}</td><td><code>{device.userCode}</code></td>
-          <td data-sort-value={device.expiresAtUnixMs}>{new Date(device.expiresAtUnixMs).toLocaleString()}</td><td><ActionButton icon="view" label={'Review '+device.deviceId} onClick={()=>void load(device.userCode)} disabled={busy||Boolean(listError)||device.expiresAtUnixMs<=now}/></td></tr>)}</tbody></Table></div>}
+          <td data-sort-value={device.expiresAtUnixMs}>{new Date(device.expiresAtUnixMs).toLocaleString()}</td><td><ActionButton icon="view" label={'Review '+device.deviceId} onClick={()=>void load(device.userCode!)} disabled={busy||!device.userCode||Boolean(listError)||device.expiresAtUnixMs<=now}/></td></tr>)}</tbody></Table></div>}
     </section>}
     {liveness&&<p role="status">{liveness}</p>}
     {error instanceof ApiError&&error.code==='ENROLLMENT_NOT_FOUND'?<div className="notice error" role="alert"><strong>No pending enrollment you can approve matches this code. Check the code on your client; codes expire after 10 minutes.</strong></div>:Boolean(error)&&<Failure error={error} />}
