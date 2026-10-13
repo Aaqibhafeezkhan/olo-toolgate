@@ -185,48 +185,5 @@ jobs:
           maven_version="$(cat build/development/MAVEN_VERSION)"
           ./gradlew --no-daemon "-PcontractsPublicationVersion=$maven_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test
         fi
-  publish-marketplace:
-    name: Publish Marketplace images
-    needs: prepare
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    environment: development-release
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      with:
-        ref: ${{ github.sha }}
-        persist-credentials: false
-    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-      with:
-        python-version: '3.12'
-    - name: Publish Marketplace images
-      id: marketplace_images
-      env:
-        RELEASE_SHA: ${{ github.sha }}
-        DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        GH_TOKEN: ${{ github.token }}
-      run: bash marketplace/ci/publish-images.sh
-    - name: Attest Marketplace helper image
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
-      with:
-        subject-name: ${{ steps.marketplace_images.outputs.helper_image }}
-        subject-digest: ${{ steps.marketplace_images.outputs.helper_digest }}
-        push-to-registry: true
-    - name: Attest Marketplace Drupal image
-      if: startsWith(github.ref, 'refs/tags/') && steps.marketplace_images.outputs.drupal_digest != ''
-      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
-      with:
-        subject-name: ${{ steps.marketplace_images.outputs.drupal_image }}
-        subject-digest: ${{ steps.marketplace_images.outputs.drupal_digest }}
-        push-to-registry: true
 'on':
   workflow_call: null

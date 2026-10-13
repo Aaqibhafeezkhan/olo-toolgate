@@ -1,8 +1,0 @@
-OLO Orgs {{ .Chart.AppVersion }} is installed as {{ include "olo-orgs.fullname" . }}.
-
-The deploy Job ({{ include "olo-orgs.fullname" . }}-deploy-{{ .Release.Revision }}) installs or updates the site and
-seeds the example packages. Follow it with:
-  kubectl logs -f job/{{ include "olo-orgs.fullname" . }}-deploy-{{ .Release.Revision }}
-
-Site: {{ .Values.marketplace.baseUrl }}
-Keys: {{ .Values.marketplace.baseUrl }}/.well-known/toolgate-marketplace-keys.json
