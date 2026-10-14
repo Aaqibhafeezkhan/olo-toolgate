@@ -93,6 +93,8 @@ def check(image, quickstart):
         with tempfile.TemporaryDirectory(prefix='toolgate-public-ca-') as directory:
             ca = Path(directory)/'gateway.crt'
             run('docker', 'cp', gateway+':/data/keys/device-ca.crt', str(ca))
+            # docker cp keeps Quickstart's 0600 mode; root without CAP_DAC_OVERRIDE cannot read it.
+            ca.chmod(0o644)
             common = ['--network', network, '--security-opt=no-new-privileges',
                 '--read-only', '--tmpfs', '/usr/local/lib/olo-toolgate:rw,exec,nosuid,size=32m,mode=755',
                 '--tmpfs', '/run:rw,nosuid,noexec,size=8m,mode=755',
