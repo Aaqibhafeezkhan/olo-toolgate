@@ -146,7 +146,7 @@ class AdmissionTests(unittest.TestCase):
     def test_manual_development_release_has_no_test_or_ci_dependencies(self):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/manual-development-release.yml').read_text(encoding='utf-8'))
-        self.assertEqual(set(document['jobs']),{'native','build','publish','publish-typescript','publish-maven','publish-marketplace'})
+        self.assertEqual(set(document['jobs']),{'native','build','publish','publish-typescript','publish-maven'})
         self.assertNotIn('needs',document['jobs']['native'])
         self.assertEqual(document['jobs']['build']['needs'],'native')
         for name,job in document['jobs'].items():

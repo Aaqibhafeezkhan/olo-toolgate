@@ -108,6 +108,17 @@ class CentralReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'namespace'):
             self.publish_with([{'deploymentState':'FAILED', 'errors':{'namespace':'not verified'}}])
 
+    def test_timeout_reports_deployment_instead_of_claiming_success(self):
+        archive = self.root/'archive.zip'
+        archive.write_bytes(b'bundle bytes')
+        with patch.object(central, 'bundle', return_value=archive), \
+             patch.object(central, 'request', side_effect=[DEPLOYMENT, json.dumps({'deploymentState':'PENDING'})]) as request, \
+             patch.object(central.time, 'monotonic', side_effect=[0, 1, 1201]), \
+             patch.object(central.time, 'sleep'):
+            with self.assertRaisesRegex(TimeoutError, DEPLOYMENT):
+                central.publish(self.assets, VERSION)
+        self.assertEqual(request.call_count, 2)
+
     def test_missing_credentials_prevent_signing_or_upload(self):
         with patch.dict(os.environ, {'MAVEN_PASSWORD':''}), patch.object(central, 'bundle') as bundle:
             with self.assertRaisesRegex(ValueError, 'Portal user token'):
