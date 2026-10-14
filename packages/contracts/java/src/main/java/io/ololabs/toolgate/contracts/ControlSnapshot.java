@@ -26,6 +26,10 @@ package io.ololabs.toolgate.contracts;
  * @param workloadBindings canonical workloadBindings value
  * @param identityBindings canonical identityBindings value
  * @param deviceEvidence canonical deviceEvidence value
+ * @param settings canonical settings value
+ * @param requiredIdentities canonical requiredIdentities value
+ * @param visitorPool canonical visitorPool value
+ * @param reservedRecords canonical reservedRecords value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ControlSnapshot(
@@ -49,7 +53,11 @@ public record ControlSnapshot(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "extractors", required = true) java.util.List<ControlResourceExtractor> extractors,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "workloadBindings", required = true) java.util.List<ControlWorkloadBinding> workloadBindings,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "identityBindings", required = true) java.util.List<ControlIdentityBinding> identityBindings,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceEvidence", required = true) java.util.List<ControlDeviceEvidence> deviceEvidence
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceEvidence", required = true) java.util.List<ControlDeviceEvidence> deviceEvidence,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "settings", required = false) io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch settings,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "requiredIdentities", required = false) java.util.List<ControlRequiredIdentity> requiredIdentities,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "visitorPool", required = false) ControlVisitorPool visitorPool,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "reservedRecords", required = false) Long reservedRecords
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -74,6 +82,10 @@ public record ControlSnapshot(
      * @param workloadBindings canonical workloadBindings value
      * @param identityBindings canonical identityBindings value
      * @param deviceEvidence canonical deviceEvidence value
+     * @param settings canonical settings value
+     * @param requiredIdentities canonical requiredIdentities value
+     * @param visitorPool canonical visitorPool value
+     * @param reservedRecords canonical reservedRecords value
      */
     public ControlSnapshot {
         java.util.Objects.requireNonNull(formatVersion, "formatVersion");
@@ -115,5 +127,6 @@ public record ControlSnapshot(
         identityBindings = identityBindings == null ? null : java.util.List.copyOf(identityBindings);
         java.util.Objects.requireNonNull(deviceEvidence, "deviceEvidence");
         deviceEvidence = deviceEvidence == null ? null : java.util.List.copyOf(deviceEvidence);
+        requiredIdentities = requiredIdentities == null ? null : java.util.List.copyOf(requiredIdentities);
     }
 }

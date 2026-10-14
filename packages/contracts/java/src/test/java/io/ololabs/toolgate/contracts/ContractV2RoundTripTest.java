@@ -38,6 +38,7 @@ final class ContractV2RoundTripTest {
         "CompositionMapping",
         "CompositionRecord",
         "ConfigLayer",
+        "ConfigurationSettings",
         "ConnectionRequirement",
         "ContractSet",
         "ControlServerSettings",

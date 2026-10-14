@@ -102,6 +102,9 @@
         },
         "clientCheckIn": {
           "$ref": "settings.schema.json#/$defs/ClientCheckIn"
+        },
+        "configuration": {
+          "$ref": "settings.schema.json#/$defs/ConfigurationSettings"
         }
       },
       "required": [
@@ -109,12 +112,13 @@
         "revision",
         "gateway",
         "deviceApproval",
-        "clientCheckIn"
+        "clientCheckIn",
+        "configuration"
       ]
     },
     "ControlServerSettingsPatch": {
       "type": "object",
-      "description": "application/merge-patch+json body. Env-owned clientCheckIn is not patchable.",
+      "description": "application/merge-patch+json body, and the settings of a configuration snapshot. Env-owned clientCheckIn is not patchable.",
       "additionalProperties": false,
       "properties": {
         "gateway": {
@@ -122,9 +126,27 @@
         },
         "deviceApproval": {
           "$ref": "settings.schema.json#/$defs/DeviceApproval"
+        },
+        "configuration": {
+          "$ref": "settings.schema.json#/$defs/ConfigurationSettings"
         }
       },
       "required": []
+    },
+    "ConfigurationSettings": {
+      "type": "object",
+      "description": "Configuration review settings. requiredReviews 0 applies changes immediately.",
+      "additionalProperties": false,
+      "properties": {
+        "requiredReviews": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "requiredReviews"
+      ]
     }
   }
 }

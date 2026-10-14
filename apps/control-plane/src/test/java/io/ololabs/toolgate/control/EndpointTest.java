@@ -91,7 +91,7 @@ final class EndpointTest {
         var grant=codec.model(fleet.grant(peer,codec.json(new FleetArtifactGrantRequest(1L,release.manifestDigest())),"artifact").body(),FleetSignedDocument.class);
         s.store.transaction(s.admin.tenant(),true,tx->{assertEquals(release,fleet.authorizeDownload(tx,peer,grant));return null;});
         var role=codec.model(s.directory.get(s.admin,Ids.Kind.ROLE,"test-recovery-role").body(),ControlRole.class);
-        var rules=role.managementRules().stream().map(r->new EnterpriseManagementRule(r.actions().stream().filter(a->!Set.of("build","deploy").contains(a)).toList(),r.groupType(),r.groups(),r.grantableScopes(),r.conditions())).toList();
+        var rules=role.managementRules().stream().map(r->new EnterpriseManagementRule(r.actions().stream().filter(a->!Set.of("build","deploy").contains(a)).toList(),r.groupType(),r.groups(),r.grantableScopes(),r.conditions(),null)).toList();
         var revoked=new ControlRole(role.id(),role.name(),role.enabled(),role.revision(),role.portalRole(),role.roleType(),rules);
         s.directory.mutate(s.admin,Ids.Kind.ROLE,role.id(),"UPDATE",codec.json(revoked),role.revision(),"revoke-build-deploy","request");
         assertNull(codec.model(builder.poll(peer,"revoked-poll").body(),BuilderTestPoll.class).task());
@@ -171,7 +171,7 @@ final class EndpointTest {
     }
     private static io.ololabs.toolgate.contracts.v2.ControlServerSettings settings(boolean auto,long days,String owner,String name){
         return new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,1L,new io.ololabs.toolgate.contracts.v2.GatewaySettings(name),
-            new io.ololabs.toolgate.contracts.v2.DeviceApproval(auto,days*ServerSettingsService.DAY_MS,owner),ClientCheckInPolicy.QUICKSTART.effective());
+            new io.ololabs.toolgate.contracts.v2.DeviceApproval(auto,days*ServerSettingsService.DAY_MS,owner),ClientCheckInPolicy.QUICKSTART.effective(),new io.ololabs.toolgate.contracts.v2.ConfigurationSettings(2L));
     }
     @Test void autoApprovalUsesSettingsAndSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
         var s=configured(new PostgresStore(SqliteState.open(directory.resolve("auto.sqlite")),codec));
@@ -206,7 +206,7 @@ final class EndpointTest {
         assertEquals(List.of(manual.userCode()),codec.model(s.service.pending(s.admin,"owner").body(),EndpointEnrollmentPage.class).items().stream().map(EndpointEnrollmentReview::userCode).toList());
         // Restoring an export replaces the record; its check-in values are ignored.
         var exported=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
-        var foreign=new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,3L,exported.gateway(),new io.ololabs.toolgate.contracts.v2.DeviceApproval(false,7L*ServerSettingsService.DAY_MS,null),ClientCheckInPolicy.QUICKSTART.effective());
+        var foreign=new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,3L,exported.gateway(),new io.ololabs.toolgate.contracts.v2.DeviceApproval(false,7L*ServerSettingsService.DAY_MS,null),ClientCheckInPolicy.QUICKSTART.effective(),new io.ololabs.toolgate.contracts.v2.ConfigurationSettings(2L));
         var restored=codec.model(settings.update(s.admin,codec.json(foreign),3,"restore","request").body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
         assertEquals(4L,restored.revision());assertFalse(restored.deviceApproval().autoApprove());assertEquals(policy.effective(),restored.clientCheckIn());
         assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,"{\"formatVersion\":1,\"revision\":4,\"autoApproveDevices\":false,\"autoApproveDurationDays\":7}",4,"v1","request")).status());
@@ -424,5 +424,44 @@ final class EndpointTest {
         s.service.revoke(s.admin,"managed",codec.json(new EndpointRevokeRequest(row.revision())),"permanent","request");
         assertEquals(409,assertThrows(Failure.class,()->s.service.approval(s.admin,"owner","managed",codec.json(new EndpointApprovalRequest(4L,true,null,true)),"revoked-reapprove","request")).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.start(codec.json(new EndpointEnrollmentStart("managed","0.6.0-dev",ClientPlatform.LINUX,registeredCsr,List.of())),"revoked-recover")).status());
+    }
+    @Test void ownDevicesApprovalKeepsCodesPrivateAndLimitsEachAccountToOneDevice()throws Exception{
+        var s=setup();var tenant=s.admin.tenant();
+        s.store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var all=new GroupSelection(List.of(),true);var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
+            var rules=new ArrayList<EnterpriseManagementRule>();for(var kind:EnterpriseGroupType.values())rules.add(new EnterpriseManagementRule(List.of("read"),kind,all,List.of(),conditions,null));
+            rules.add(new EnterpriseManagementRule(List.of("approve-device"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("visitor-devices"),false),List.of(),conditions,true));
+            TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("visitor-devices","Visitor devices",true,1L,List.of()));
+            for(var user:List.of("visitor-a","visitor-b"))TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser(user,user,true,1L));
+            TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("visitor-role","Visitor",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
+            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("visitors","Visitors",true,1L,List.of("visitor-a","visitor-b"),List.of("visitor-role")));
+            tx.save(before,new Directory(before.revision()+1,entries));return null;});
+        var a=s.directory.portalActor(tenant,"c".repeat(64),"visitor-a");var b=s.directory.portalActor(tenant,"d".repeat(64),"visitor-b");
+        var mine=start(s,"device-a");var theirs=start(s,"device-b");
+        // Visitor B sees no pending enrollment at all, and the administrator's group rule still shows codes.
+        assertTrue(codec.model(s.service.pending(b,"visitor-b").body(),EndpointEnrollmentPage.class).items().isEmpty());
+        assertTrue(codec.model(s.service.devices(b).body(),EndpointManagedDevicePage.class).items().isEmpty());
+        assertTrue(codec.model(s.service.pending(s.admin,"owner").body(),EndpointEnrollmentPage.class).items().stream().allMatch(r->r.userCode()!=null&&r.keyFingerprint()!=null));
+        assertEquals(404,assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup("0".repeat(16))))).status());
+        var found=codec.model(s.service.lookup(a,"visitor-a",codec.json(new EndpointEnrollmentLookup(mine.userCode()))).body(),EndpointEnrollmentLookupResult.class);
+        assertEquals("device-a",found.deviceId());assertEquals(review(s,mine).keyFingerprint(),found.keyFingerprint());
+        var approved=codec.model(s.service.decide(a,"visitor-a",codec.json(new EndpointEnrollmentDecision(mine.userCode(),found.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"own-approve","request").body(),EndpointEnrollmentReview.class);
+        assertEquals(EnrollmentState.APPROVED,approved.state());assertNull(approved.keyFingerprint());
+        s.store.transaction(tenant,false,tx->{assertEquals("visitor-a",codec.model(tx.load().entries().get(Ids.Kind.DEVICE.id("device-a")).document(),ControlDevice.class).ownerUserId());assertEquals(List.of("visitor-devices"),GroupGraph.memberships(tx.load(),codec,Ids.Kind.DEVICE,"device-a",false));return null;});
+        poll(s,mine);
+        // A sees only its own device, without the fingerprint; the administrator sees it with the fingerprint.
+        var own=codec.model(s.service.devices(a).body(),EndpointManagedDevicePage.class).items();assertEquals(List.of("device-a"),own.stream().map(EndpointManagedDevice::deviceId).toList());assertNull(own.getFirst().endpointDevice().keyFingerprint());
+        assertNotNull(codec.model(s.service.device(s.admin,"device-a").body(),EndpointDeviceRecord.class).keyFingerprint());assertEquals(403,assertThrows(Failure.class,()->s.service.device(b,"device-a")).status());
+        // B cannot take A's device after approval, by code or by id; A can unapprove and approve its own.
+        assertEquals(403,assertThrows(Failure.class,()->s.service.decide(b,"visitor-b",codec.json(new EndpointEnrollmentDecision(mine.userCode(),found.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"theft","request")).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.approval(b,"visitor-b","device-a",codec.json(new EndpointApprovalRequest(1L,false,null,null)),"theft-id","request")).status());
+        assertEquals(200,s.service.approval(a,"visitor-a","device-a",codec.json(new EndpointApprovalRequest(1L,false,null,null)),"own-off","request").status());
+        // One owned device per account.
+        var second=start(s,"device-a2");var secondFound=codec.model(s.service.lookup(a,"visitor-a",codec.json(new EndpointEnrollmentLookup(second.userCode()))).body(),EndpointEnrollmentLookupResult.class);
+        var limit=assertThrows(Failure.class,()->s.service.decide(a,"visitor-a",codec.json(new EndpointEnrollmentDecision(second.userCode(),secondFound.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"second","request"));
+        assertEquals(409,limit.status());assertEquals(ControlErrorDetailCode.ONE_DEVICE_PER_ACCOUNT,limit.detail());
+        // Failed lookups and approvals are rate limited per user: B has three failures, two more, then 429 even for a valid code.
+        for(int i=0;i<2;i++)assertEquals(404,assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup("1".repeat(16))))).status());
+        var limited=assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(theirs.userCode()))));assertEquals(429,limited.status());assertEquals(ControlErrorDetailCode.RATE_LIMITED,limited.detail());
+        s.clock.time+=600001;var later=start(s,"device-b2");assertEquals("device-b2",codec.model(s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(later.userCode()))).body(),EndpointEnrollmentLookupResult.class).deviceId());
     }
 }

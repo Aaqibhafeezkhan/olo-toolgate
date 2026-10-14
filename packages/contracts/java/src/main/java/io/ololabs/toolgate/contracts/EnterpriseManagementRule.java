@@ -10,6 +10,7 @@ package io.ololabs.toolgate.contracts;
  * @param groups canonical groups value
  * @param grantableScopes canonical grantableScopes value
  * @param conditions canonical conditions value
+ * @param ownDevices canonical ownDevices value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EnterpriseManagementRule(
@@ -17,7 +18,8 @@ public record EnterpriseManagementRule(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "groupType", required = true) EnterpriseGroupType groupType,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "groups", required = true) GroupSelection groups,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "grantableScopes", required = true) java.util.List<EnterpriseScope> grantableScopes,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "conditions", required = true) EnterpriseConditions conditions
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "conditions", required = true) EnterpriseConditions conditions,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "ownDevices", required = false) Boolean ownDevices
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -26,6 +28,7 @@ public record EnterpriseManagementRule(
      * @param groups canonical groups value
      * @param grantableScopes canonical grantableScopes value
      * @param conditions canonical conditions value
+     * @param ownDevices canonical ownDevices value
      */
     public EnterpriseManagementRule {
         java.util.Objects.requireNonNull(actions, "actions");

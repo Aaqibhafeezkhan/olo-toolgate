@@ -433,7 +433,14 @@ export interface ControlDevicePage {
   readonly items: ReadonlyArray<ControlDevice>;
   readonly nextCursor?: string;
 }
-export type ControlEntityKind = "USER" | "TEAM" | "AGENT" | "TOOL" | "POLICY" | "DEVICE" | "ROLE" | "DEVICE_GROUP" | "AGENT_GROUP" | "TOOL_GROUP" | "GRANT" | "DELEGATION" | "AGENT_DELEGATION" | "BINDING" | "EXTRACTOR" | "WORKLOAD_BINDING" | "IDENTITY_BINDING" | "DEVICE_EVIDENCE";
+export type ControlEntityKind = "USER" | "TEAM" | "AGENT" | "TOOL" | "POLICY" | "DEVICE" | "ROLE" | "DEVICE_GROUP" | "AGENT_GROUP" | "TOOL_GROUP" | "GRANT" | "DELEGATION" | "AGENT_DELEGATION" | "BINDING" | "EXTRACTOR" | "WORKLOAD_BINDING" | "IDENTITY_BINDING" | "DEVICE_EVIDENCE" | "SETTINGS";
+/** Error that names what the caller must resolve; IDs only, never payloads. */
+export interface ControlErrorDetail {
+  readonly error: ControlErrorDetailCode;
+  readonly ids?: ReadonlyArray<string>;
+  readonly requestId?: string;
+}
+export type ControlErrorDetailCode = "UNRESOLVED_IDENTITIES" | "REPLACE_CONFLICTS" | "ONE_DEVICE_PER_ACCOUNT" | "REQUIRED_REVIEWS_CHANGE" | "RATE_LIMITED";
 /** Explicit Tool Group to Device Group binding; one binding is selected per invocation. */
 export interface ControlExecutionBinding {
   readonly id: string;
@@ -473,12 +480,21 @@ export interface ControlIdentityBindingPage {
   readonly items: ReadonlyArray<ControlIdentityBinding>;
   readonly nextCursor?: string;
 }
+/** How one required identity is resolved on import. MAP needs targetUserId; teamIds are added, never replaced. */
+export interface ControlIdentityResolution {
+  readonly action: ControlIdentityResolutionAction;
+  readonly targetUserId?: string;
+  readonly teamIds?: ReadonlyArray<string>;
+}
+export type ControlIdentityResolutionAction = "EXISTING" | "MAP" | "PLACEHOLDER";
 export type ControlImportMode = "MERGE" | "REPLACE";
 /** Validate and diff before applying a bounded configuration transaction. */
 export interface ControlImportRequest {
   readonly snapshot: ControlSnapshot;
   readonly mode: ControlImportMode;
   readonly dryRun: boolean;
+  readonly identityResolution?: Record<string, unknown>;
+  readonly removeUnlistedMemberships?: boolean;
 }
 /** Import validation/diff result with the current tenant revision. */
 export interface ControlImportResult {
@@ -503,6 +519,11 @@ export interface ControlPolicyPage {
   readonly items: ReadonlyArray<ControlPolicy>;
   readonly nextCursor?: string;
 }
+/** A user ID that exported records reference, with the exported teams it belonged to. IDs only. */
+export interface ControlRequiredIdentity {
+  readonly id: string;
+  readonly teamIds: ReadonlyArray<string>;
+}
 /** Reviewed immutable versioned extraction definition; changing it invalidates operation bindings. */
 export interface ControlResourceExtractor {
   readonly id: string;
@@ -521,6 +542,10 @@ export interface ControlResourceExtractor {
 export interface ControlResourceExtractorPage {
   readonly items: ReadonlyArray<ControlResourceExtractor>;
   readonly nextCursor?: string;
+}
+/** Configuration review threshold in force for new changes. */
+export interface ControlReviewPolicy {
+  readonly requiredReviews: number;
 }
 /** Typed role assigned only to compatible groups. Management rules cannot confer runtime access. */
 export interface ControlRole {
@@ -560,6 +585,10 @@ export interface ControlSnapshot {
   readonly workloadBindings: ReadonlyArray<ControlWorkloadBinding>;
   readonly identityBindings: ReadonlyArray<ControlIdentityBinding>;
   readonly deviceEvidence: ReadonlyArray<ControlDeviceEvidence>;
+  readonly settings?: V2.ControlServerSettingsPatch;
+  readonly requiredIdentities?: ReadonlyArray<ControlRequiredIdentity>;
+  readonly visitorPool?: ControlVisitorPool;
+  readonly reservedRecords?: number;
 }
 /** Tenant-scoped teams configuration record. Not a runtime credential or policy grant. */
 export interface ControlTeam {
@@ -611,11 +640,22 @@ export interface ControlUser {
   readonly enabled: boolean;
   readonly revision: number;
   readonly email?: string;
+  readonly showOnLogin?: boolean;
+  readonly claims?: Record<string, unknown>;
 }
 /** Cursor page; nextCursor is absent after the last item. */
 export interface ControlUserPage {
   readonly items: ReadonlyArray<ControlUser>;
   readonly nextCursor?: string;
+}
+/** Quickstart demo account pool, read only at install. Never stored as directory records. */
+export interface ControlVisitorPool {
+  readonly prefix: string;
+  readonly teamId: string;
+  readonly agentGroupId: string;
+  readonly delegationId?: string;
+  readonly claims?: Record<string, unknown>;
+  readonly passClaims?: Record<string, unknown>;
 }
 /** Individual identity binding is authentication only; permissions derive from Agent Groups. */
 export interface ControlWorkloadBinding {
@@ -634,11 +674,24 @@ export interface ControlWorkloadBinding {
   readonly delegatedUserId?: string;
   readonly parentBindingId?: string;
   readonly delegatedSessionEpoch?: number;
+  readonly passClaims?: Record<string, unknown>;
+  readonly needsReauthorization?: boolean;
 }
 /** Bounded canonical directory cursor page. */
 export interface ControlWorkloadBindingPage {
   readonly items: ReadonlyArray<ControlWorkloadBinding>;
   readonly nextCursor?: string;
+}
+/** Updated binding and the Gateway request context to install with the token; bindingId is the execution binding the agent's grants select, when exactly one does. */
+export interface ControlWorkloadCredentialResult {
+  readonly binding: ControlWorkloadBinding;
+  readonly context: V2.RequestContext;
+}
+/** Installs a new static token hash; delegated bindings are rebound to their user's current session epoch. */
+export interface ControlWorkloadCredentialRotation {
+  readonly credentialSha256: string;
+  readonly enable: boolean;
+  readonly bindingId?: string;
 }
 export type Decision = "ALLOW" | "ASK" | "BLOCK";
 /** Organization assignment with independent Marketplace evidence; grants no runtime permission. */
@@ -726,12 +779,12 @@ export interface EndpointConnectionDirective {
   readonly reportSequence: number;
   readonly nextIntervalMs: number;
 }
-/** Endpoint identity foundation wire model. */
+/** Endpoint identity foundation wire model. keyFingerprint is returned only to callers who may approve through a group rule. */
 export interface EndpointDeviceRecord {
   readonly deviceId: string;
   readonly tenantId: string;
   readonly userId: string;
-  readonly keyFingerprint: string;
+  readonly keyFingerprint?: string;
   readonly state: EndpointState;
   readonly revision: number;
   readonly lastSeenUnixMs: number;
@@ -765,6 +818,18 @@ export interface EndpointEnrollmentDecision {
   readonly connectionExpiresAtUnixMs?: number;
   readonly unlimitedConnection?: boolean;
 }
+/** Look up one pending enrollment by the code its client shows. */
+export interface EndpointEnrollmentLookup {
+  readonly userCode: string;
+}
+/** The pending enrollment a valid code names, for comparison with the client before approval. */
+export interface EndpointEnrollmentLookupResult {
+  readonly enrollmentId: string;
+  readonly deviceId: string;
+  readonly platform: ClientPlatform;
+  readonly keyFingerprint: string;
+  readonly expiresAtUnixMs: number;
+}
 /** All unexpired pending requests in the authenticated tenant; enrollment quota is 32. */
 export interface EndpointEnrollmentPage {
   readonly items: ReadonlyArray<EndpointEnrollmentReview>;
@@ -789,13 +854,13 @@ export interface EndpointEnrollmentResult {
   readonly identity?: DeviceIdentity;
   readonly serverName?: string;
 }
-/** Endpoint identity foundation wire model. */
+/** Endpoint identity foundation wire model. userCode and keyFingerprint are returned only to callers who may approve through a group rule. */
 export interface EndpointEnrollmentReview {
   readonly enrollmentId: string;
-  readonly userCode: string;
+  readonly userCode?: string;
   readonly deviceId: string;
   readonly platform: ClientPlatform;
-  readonly keyFingerprint: string;
+  readonly keyFingerprint?: string;
   readonly state: EnrollmentState;
   readonly expiresAtUnixMs: number;
   readonly connectionExpiresAtUnixMs?: number;
@@ -1092,6 +1157,7 @@ export interface EnterpriseManagementRule {
   readonly groups: GroupSelection;
   readonly grantableScopes: ReadonlyArray<EnterpriseScope>;
   readonly conditions: EnterpriseConditions;
+  readonly ownDevices?: boolean;
 }
 export type EnterpriseMemberType = "USER" | "AGENT" | "TOOL" | "DEVICE";
 /** Scoped operational health and configured hard bounds. Snapshot lag never authorizes a cached effect. */

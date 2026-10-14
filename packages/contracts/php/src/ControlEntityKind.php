@@ -25,4 +25,5 @@ enum ControlEntityKind: string {
     case WORKLOAD_BINDING = 'WORKLOAD_BINDING';
     case IDENTITY_BINDING = 'IDENTITY_BINDING';
     case DEVICE_EVIDENCE = 'DEVICE_EVIDENCE';
+    case SETTINGS = 'SETTINGS';
 }

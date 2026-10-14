@@ -716,6 +716,32 @@ pub enum ControlEntityKind {
     IdentityBinding,
     #[serde(rename = "DEVICE_EVIDENCE")]
     DeviceEvidence,
+    #[serde(rename = "SETTINGS")]
+    Settings,
+}
+/// Error that names what the caller must resolve; IDs only, never payloads.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlErrorDetail {
+    pub error: ControlErrorDetailCode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+}
+/// Canonical ControlErrorDetailCode wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlErrorDetailCode {
+    #[serde(rename = "UNRESOLVED_IDENTITIES")]
+    UnresolvedIdentities,
+    #[serde(rename = "REPLACE_CONFLICTS")]
+    ReplaceConflicts,
+    #[serde(rename = "ONE_DEVICE_PER_ACCOUNT")]
+    OneDevicePerAccount,
+    #[serde(rename = "REQUIRED_REVIEWS_CHANGE")]
+    RequiredReviewsChange,
+    #[serde(rename = "RATE_LIMITED")]
+    RateLimited,
 }
 /// Explicit Tool Group to Device Group binding; one binding is selected per invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -766,6 +792,26 @@ pub struct ControlIdentityBindingPage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
 }
+/// How one required identity is resolved on import. MAP needs targetUserId; teamIds are added, never replaced.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlIdentityResolution {
+    pub action: ControlIdentityResolutionAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_ids: Option<Vec<String>>,
+}
+/// Canonical ControlIdentityResolutionAction wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlIdentityResolutionAction {
+    #[serde(rename = "EXISTING")]
+    Existing,
+    #[serde(rename = "MAP")]
+    Map,
+    #[serde(rename = "PLACEHOLDER")]
+    Placeholder,
+}
 /// Canonical ControlImportMode wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlImportMode {
@@ -781,6 +827,10 @@ pub struct ControlImportRequest {
     pub snapshot: ControlSnapshot,
     pub mode: ControlImportMode,
     pub dry_run: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_resolution: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remove_unlisted_memberships: Option<bool>,
 }
 /// Import validation/diff result with the current tenant revision.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -812,6 +862,13 @@ pub struct ControlPolicyPage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
 }
+/// A user ID that exported records reference, with the exported teams it belonged to. IDs only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlRequiredIdentity {
+    pub id: String,
+    pub team_ids: Vec<String>,
+}
 /// Reviewed immutable versioned extraction definition; changing it invalidates operation bindings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -837,6 +894,12 @@ pub struct ControlResourceExtractorPage {
     pub items: Vec<ControlResourceExtractor>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+}
+/// Configuration review threshold in force for new changes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlReviewPolicy {
+    pub required_reviews: u64,
 }
 /// Typed role assigned only to compatible groups. Management rules cannot confer runtime access.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -883,6 +946,14 @@ pub struct ControlSnapshot {
     pub workload_bindings: Vec<ControlWorkloadBinding>,
     pub identity_bindings: Vec<ControlIdentityBinding>,
     pub device_evidence: Vec<ControlDeviceEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<v2::ControlServerSettingsPatch>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_identities: Option<Vec<ControlRequiredIdentity>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visitor_pool: Option<ControlVisitorPool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reserved_records: Option<u64>,
 }
 /// Tenant-scoped teams configuration record. Not a runtime credential or policy grant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -952,6 +1023,10 @@ pub struct ControlUser {
     pub revision: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_on_login: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Cursor page; nextCursor is absent after the last item.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -960,6 +1035,20 @@ pub struct ControlUserPage {
     pub items: Vec<ControlUser>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+}
+/// Quickstart demo account pool, read only at install. Never stored as directory records.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlVisitorPool {
+    pub prefix: String,
+    pub team_id: String,
+    pub agent_group_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass_claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Individual identity binding is authentication only; permissions derive from Agent Groups.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -983,6 +1072,10 @@ pub struct ControlWorkloadBinding {
     pub parent_binding_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegated_session_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass_claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub needs_reauthorization: Option<bool>,
 }
 /// Bounded canonical directory cursor page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -991,6 +1084,22 @@ pub struct ControlWorkloadBindingPage {
     pub items: Vec<ControlWorkloadBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+}
+/// Updated binding and the Gateway request context to install with the token; bindingId is the execution binding the agent's grants select, when exactly one does.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlWorkloadCredentialResult {
+    pub binding: ControlWorkloadBinding,
+    pub context: v2::RequestContext,
+}
+/// Installs a new static token hash; delegated bindings are rebound to their user's current session epoch.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlWorkloadCredentialRotation {
+    pub credential_sha256: String,
+    pub enable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding_id: Option<String>,
 }
 /// Canonical Decision wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1143,14 +1252,15 @@ pub struct EndpointConnectionDirective {
     pub report_sequence: u64,
     pub next_interval_ms: u64,
 }
-/// Endpoint identity foundation wire model.
+/// Endpoint identity foundation wire model. keyFingerprint is returned only to callers who may approve through a group rule.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointDeviceRecord {
     pub device_id: String,
     pub tenant_id: String,
     pub user_id: String,
-    pub key_fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_fingerprint: Option<String>,
     pub state: EndpointState,
     pub revision: u64,
     pub last_seen_unix_ms: u64,
@@ -1198,6 +1308,22 @@ pub struct EndpointEnrollmentDecision {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unlimited_connection: Option<bool>,
 }
+/// Look up one pending enrollment by the code its client shows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointEnrollmentLookup {
+    pub user_code: String,
+}
+/// The pending enrollment a valid code names, for comparison with the client before approval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointEnrollmentLookupResult {
+    pub enrollment_id: String,
+    pub device_id: String,
+    pub platform: ClientPlatform,
+    pub key_fingerprint: String,
+    pub expires_at_unix_ms: u64,
+}
 /// All unexpired pending requests in the authenticated tenant; enrollment quota is 32.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1232,15 +1358,17 @@ pub struct EndpointEnrollmentResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
 }
-/// Endpoint identity foundation wire model.
+/// Endpoint identity foundation wire model. userCode and keyFingerprint are returned only to callers who may approve through a group rule.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointEnrollmentReview {
     pub enrollment_id: String,
-    pub user_code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_code: Option<String>,
     pub device_id: String,
     pub platform: ClientPlatform,
-    pub key_fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_fingerprint: Option<String>,
     pub state: EnrollmentState,
     pub expires_at_unix_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1845,6 +1973,8 @@ pub struct EnterpriseManagementRule {
     pub groups: GroupSelection,
     pub grantable_scopes: Vec<EnterpriseScope>,
     pub conditions: EnterpriseConditions,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own_devices: Option<bool>,
 }
 /// Canonical EnterpriseMemberType wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

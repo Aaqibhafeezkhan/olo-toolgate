@@ -324,6 +324,10 @@
         },
         "conditions": {
           "$ref": "enterprise.schema.json#/$defs/EnterpriseConditions"
+        },
+        "ownDevices": {
+          "type": "boolean",
+          "description": "approve-device for devices the caller owns and pending enrollments the caller submits by code; DEVICE_GROUP only, with exactly one group that approved devices are placed in."
         }
       },
       "required": [
@@ -787,6 +791,30 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
+        },
+        "passClaims": {
+          "type": "object",
+          "description": "Claim name to the tool id or MCP name globs it is passed to; * is allowed only as the last character.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:/-]*\\*?$"
+            },
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true
+          }
+        },
+        "needsReauthorization": {
+          "type": "boolean",
+          "description": "Imported for a mapped or placeholder user; stays disabled until an administrator rotates its credential. Absent means false."
         }
       },
       "required": [
@@ -2987,6 +3015,44 @@
         "clockSkewMs",
         "authorityCacheGraceMs",
         "readyProbeFreshnessMs"
+      ]
+    },
+    "ControlWorkloadCredentialRotation": {
+      "type": "object",
+      "description": "Installs a new static token hash; delegated bindings are rebound to their user's current session epoch.",
+      "additionalProperties": false,
+      "properties": {
+        "credentialSha256": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "enable": {
+          "type": "boolean"
+        },
+        "bindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier",
+          "description": "Execution binding for the Gateway context; defaults to the single one the agent groups' grants select."
+        }
+      },
+      "required": [
+        "credentialSha256",
+        "enable"
+      ]
+    },
+    "ControlWorkloadCredentialResult": {
+      "type": "object",
+      "description": "Updated binding and the Gateway request context to install with the token; bindingId is the execution binding the agent's grants select, when exactly one does.",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "enterprise.schema.json#/$defs/ControlWorkloadBinding"
+        },
+        "context": {
+          "$ref": "../v2/common.schema.json#/$defs/RequestContext"
+        }
+      },
+      "required": [
+        "binding",
+        "context"
       ]
     }
   }

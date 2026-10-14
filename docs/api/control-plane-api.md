@@ -23,6 +23,28 @@ verified code/fingerprint. Pending metadata cannot issue a certificate. Permanen
 See [the registry reference](../control-plane/device-registry.md) for complete
 requests, expiry, legacy defaults and routing boundaries.
 
+`POST /endpoint/enrollments/lookup` with `{"userCode"}` returns `{enrollmentId, deviceId,
+platform, keyFingerprint, expiresAtUnixMs}` for a valid pending code the caller may approve
+(group rule or `ownDevices`), and 404 without detail otherwise. Enrollment lists and device
+reads return `userCode` and `keyFingerprint` only to callers holding `approve-device` through
+a group rule. Five failed lookups or approvals per user in ten minutes return
+`429 {"error":"RATE_LIMITED"}`.
+
+## Administration and credentials
+
+Settings (`GET/PATCH/PUT /settings`) are Super Admin only; a threshold change returns `202`
+with a `SETTINGS` configuration change while reviews are required. `GET /review-policy`
+returns `{"requiredReviews": n}` to every signed-in console user.
+`POST /workload-bindings/{id}/credential` (Super Admin) takes `{"credentialSha256", "enable",
+"bindingId"?}`, increments `credentialEpoch`, rebinds a delegated binding to its user's
+current session epoch, clears `needsReauthorization` and returns
+`{"binding": ControlWorkloadBinding, "context": RequestContext}` for the Gateway.
+`POST /users/{id}/enable` and `/disable` (Super Admin) change a user and end its sessions
+and delegated workload tokens. Refusals that name what to resolve use
+`ControlErrorDetail`: `{"error": "UNRESOLVED_IDENTITIES"|"REPLACE_CONFLICTS"|
+"ONE_DEVICE_PER_ACCOUNT"|"REQUIRED_REVIEWS_CHANGE"|"RATE_LIMITED", "ids": [...], "requestId"}`.
+See [import/export](../control-plane/import-export.md).
+
 ## Purpose
 
 Users, teams, tools, policies, approvals, clients, deployments, vault bindings, import/export and audit.
@@ -46,9 +68,10 @@ rows by supplying a cursor, ID or snapshot.
 `GET /config/export` returns a `ControlSnapshot` with a tenant revision ETag; Accept
 may be `application/json` or `application/yaml`. `POST /config/import` accepts
 `ControlImportRequest` in either format, requiring `If-Match` to equal both current
-tenant revision and snapshot revision. `formatVersion: 1` only is supported; unknown
-versions are rejected for an explicit future migration. MERGE overlays input records;
-REPLACE uses only input records. Imported record revisions are normalized against
+tenant revision and snapshot revision. `formatVersion: 2` only is supported; unknown
+versions are rejected. MERGE overlays input records; REPLACE also deletes records of
+exported kinds absent from the file, never users, memberships, identity bindings or
+device evidence. Imported record revisions are normalized against
 existing records. Dry-run validates the entire resulting graph and returns a stable
 CREATE/UPDATE/DELETE diff without writes/audit/replay storage. Applying changes commits
 atomically; tenant revision advances once, changed record revisions advance once.

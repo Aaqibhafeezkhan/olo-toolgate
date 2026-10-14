@@ -77,6 +77,28 @@ public final class EndpointService {
         var entry=tx.load().entries().get(Ids.Kind.DEVICE.id(deviceId));var access=new ManagementAccess(codec);
         if(entry==null)access.require(tx.load(),actor.userId(),action,Ids.Kind.DEVICE_GROUP,"default-devices",clock.millis());else access.requireEntry(tx.load(),actor.userId(),action,entry,clock.millis());
     }
+    /** Approval through a group rule returns null; an ownDevices rule returns the group approved devices are placed in.
+     *  Under ownDevices only the caller's own devices, or a new enrollment approved by its code, may be approved. */
+    private String approver(Store.Session tx,DirectoryService.Actor actor,String deviceId,boolean byCode){
+        try{management(tx,actor,"approve-device",deviceId);return null;}catch(Failure denied){if(denied.status()!=403)throw denied;}
+        var group=new ManagementAccess(codec).ownDeviceGroup(tx.load(),actor.userId(),clock.millis());var entry=tx.load().entries().get(Ids.Kind.DEVICE.id(deviceId));
+        if(group==null||(entry==null?!byCode:!codec.model(entry.document(),ControlDevice.class).ownerUserId().equals(actor.userId())))throw ManagementAccess.denied();return group;
+    }
+    /** User codes and key fingerprints go only to callers who may approve the device through a group rule. */
+    private boolean groupApprover(Store.Session tx,DirectoryService.Actor actor,String deviceId){try{management(tx,actor,"approve-device",deviceId);return true;}catch(Failure denied){if(denied.status()!=403)throw denied;return false;}}
+    /** Callers whose only device approval is ownDevices see no pending enrollments and only the devices they own. */
+    private boolean ownOnly(Store.Session tx,DirectoryService.Actor actor){var access=new ManagementAccess(codec);return access.ownDeviceGroup(tx.load(),actor.userId(),clock.millis())!=null&&!access.superAdministrator(tx.load(),actor.userId())&&access.groupRules(tx.load(),actor.userId()).noneMatch(r->r.actions().contains("approve-device"));}
+    private static EndpointEnrollmentReview redacted(EndpointEnrollmentReview r){return new EndpointEnrollmentReview(r.enrollmentId(),null,r.deviceId(),r.platform(),null,r.state(),r.expiresAtUnixMs(),r.connectionExpiresAtUnixMs(),r.unlimitedConnection());}
+    private static EndpointDeviceRecord redacted(EndpointDeviceRecord d){return new EndpointDeviceRecord(d.deviceId(),d.tenantId(),d.userId(),null,d.state(),d.revision(),d.lastSeenUnixMs(),d.reportSequence(),d.report(),d.connectionExpiresAtUnixMs(),d.connectionApproved(),d.approvalRevision(),d.systemName(),d.ipAddress());}
+    /** An ownDevices approval leaves the device in exactly the rule's group. */
+    private void ownMembership(Store.Session tx,String deviceId,String group){var before=tx.load();var entries=new HashMap<>(before.entries());GroupGraph.setMemberships(entries,codec,Ids.Kind.DEVICE,deviceId,List.of(group));var after=new Directory(before.revision()+1,entries);after.validate(512,1048576);tx.save(before,after);}
+    private final java.util.concurrent.ConcurrentHashMap<String,ArrayDeque<Long>> failures=new java.util.concurrent.ConcurrentHashMap<>();
+    /** Five failed code lookups or approvals per user in ten minutes, then 429 until the oldest failure ages out. */
+    private <T> T limited(DirectoryService.Actor actor,java.util.function.Supplier<T> work){
+        var times=failures.computeIfAbsent(actor.tenant().value()+"/"+actor.userId(),k->new ArrayDeque<>());long now=clock.millis();
+        synchronized(times){while(!times.isEmpty()&&times.peekFirst()<=now-600000)times.pollFirst();if(times.size()>=5)throw Failure.detail(429,ControlErrorDetailCode.RATE_LIMITED,List.of());}
+        try{return work.get();}catch(Failure failure){if(failure.status()==403||failure.status()==404||failure.status()==409)synchronized(times){times.addLast(now);}throw failure;}
+    }
     private Store.Reply reply(Object body,long revision){return new Store.Reply(200,codec.json(body),revision);}
     private static String random(int bytes){byte[] value=new byte[bytes];new java.security.SecureRandom().nextBytes(value);return HexFormat.of().formatHex(value);}
     private String verification(){return control+"/console/#enroll";}
@@ -165,29 +187,40 @@ public final class EndpointService {
         });
     }
     public Store.Reply pending(DirectoryService.Actor actor,String user) {
-        return transaction((tx,now)->{human(actor,user,tx);
+        return transaction((tx,now)->{human(actor,user,tx);if(ownOnly(tx,actor))return reply(new EndpointEnrollmentPage(List.of()),0);
             var items=tx.enrollments(now).stream().map(row->codec.model(row.document(),EndpointEnrollmentReview.class))
-                .filter(review->review.state()==EnrollmentState.PENDING).filter(review->{try{management(tx,actor,"read",review.deviceId());return true;}catch(Failure denied){if(denied.status()==403)return false;throw denied;}}).toList();
+                .filter(review->review.state()==EnrollmentState.PENDING).filter(review->{try{management(tx,actor,"read",review.deviceId());return true;}catch(Failure denied){if(denied.status()==403)return false;throw denied;}}).map(review->groupApprover(tx,actor,review.deviceId())?review:redacted(review)).toList();
             return reply(new EndpointEnrollmentPage(items),0);
         });
     }
     private EndpointEnrollmentReview withState(EndpointEnrollmentReview r,EnrollmentState state){return new EndpointEnrollmentReview(r.enrollmentId(),r.userCode(),r.deviceId(),r.platform(),r.keyFingerprint(),state,r.expiresAtUnixMs(),r.connectionExpiresAtUnixMs(),r.unlimitedConnection());}
     public Store.Reply decide(DirectoryService.Actor actor,String user,String body,String key,String requestId) {
         var decision=codec.model(body,EndpointEnrollmentDecision.class);Ids.valid(key);Ids.valid(requestId);var digest=DirectoryService.digest(body);
-        return transaction((tx,now)->{
+        return limited(actor,()->transaction((tx,now)->{
             human(actor,user,tx);var row=tx.enrollmentCode(DirectoryService.digest(decision.userCode()));if(row==null)throw Failure.conflict();
             var review=codec.model(row.document(),EndpointEnrollmentReview.class);
-            management(tx,actor,"approve-device",review.deviceId());var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
+            var own=approver(tx,actor,review.deviceId(),true);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
             if(row.expiresAt()<=now)throw Failure.conflict();
             if(review.state()!=EnrollmentState.PENDING||!review.keyFingerprint().equals(decision.keyFingerprint()))throw Failure.conflict();
             boolean approve=decision.choice()==EnrollmentChoice.APPROVE;
             Long connectionExpires=approve?connectionDeadline(decision.connectionExpiresAtUnixMs(),decision.unlimitedConnection(),now):null;
             var state=approve?EnrollmentState.APPROVED:EnrollmentState.DENIED;String certificate=null;
+            if(approve&&own!=null){var group=tx.load().entries().get(Ids.Kind.DEVICE_GROUP.id(own));
+                if(group!=null&&GroupGraph.members(group,codec).stream().map(id->tx.load().entries().get(Ids.Kind.DEVICE.id(id))).anyMatch(d->d!=null&&codec.model(d.document(),ControlDevice.class).ownerUserId().equals(user)))throw Failure.detail(409,ControlErrorDetailCode.ONE_DEVICE_PER_ACCOUNT,List.of(user));}
             if(approve)certificate=register(tx,review,row.csr(),user,connectionExpires,now);
+            if(approve&&own!=null)ownMembership(tx,review.deviceId(),own);
             var updated=new EndpointEnrollmentReview(review.enrollmentId(),review.userCode(),review.deviceId(),review.platform(),review.keyFingerprint(),state,review.expiresAtUnixMs(),connectionExpires,approve?connectionExpires==null:null);tx.saveEnrollment(new Store.EnrollmentRecord(row.id(),row.codeDigest(),row.deviceDigest(),codec.json(updated),row.csr(),approve?user:null,certificate,row.expiresAt(),row.lastPoll()));
             tx.audit(actor.id(),approve?"ENROLLMENT_APPROVE":"ENROLLMENT_DENY","endpoint:"+review.deviceId(),1,requestId,digest);
-            var result=reply(updated,1);tx.remember(actor.id(),key,digest,result);return result;
-        });
+            var result=reply(own==null?updated:redacted(updated),1);tx.remember(actor.id(),key,digest,result);return result;
+        }));
+    }
+    /** The pending enrollment a valid code names, for callers who may approve it; anything else is 404 without detail. */
+    public Store.Reply lookup(DirectoryService.Actor actor,String user,String body){
+        var request=codec.model(body,EndpointEnrollmentLookup.class);
+        return limited(actor,()->transaction((tx,now)->{human(actor,user,tx);var row=tx.enrollmentCode(DirectoryService.digest(request.userCode()));var missing=new Failure(ErrorCode.NOT_FOUND,404,"Enrollment not found");
+            if(row==null||row.expiresAt()<=now)throw missing;var review=codec.model(row.document(),EndpointEnrollmentReview.class);if(review.state()!=EnrollmentState.PENDING)throw missing;
+            try{approver(tx,actor,review.deviceId(),true);}catch(Failure denied){if(denied.status()==403)throw missing;throw denied;}
+            return reply(new EndpointEnrollmentLookupResult(review.enrollmentId(),review.deviceId(),review.platform(),review.keyFingerprint(),review.expiresAtUnixMs()),1);}));
     }
     /** Issues the first identity for an approved key and creates its bounded endpoint and directory records atomically. */
     private String register(Store.Session tx,EndpointEnrollmentReview review,String csr,String user,Long connectionExpires,long now){
@@ -290,27 +323,28 @@ public final class EndpointService {
         if(!entry.enabled())throw suspended();
     }
     public Store.Reply device(DirectoryService.Actor actor,String id) {
-        actor.requireAdmin();if(!actor.tenant().equals(tenant))throw forbidden();return transaction((tx,now)->{management(tx,actor,"read",id);var row=tx.endpoint(Ids.valid(id));if(row==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Device not found");return reply(codec.value(row.document()),0);});
+        actor.requireAdmin();if(!actor.tenant().equals(tenant))throw forbidden();return transaction((tx,now)->{management(tx,actor,"read",id);var row=tx.endpoint(Ids.valid(id));if(row==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Device not found");var device=codec.model(row.document(),EndpointDeviceRecord.class);
+            if(ownOnly(tx,actor)&&!device.userId().equals(actor.userId()))throw ManagementAccess.denied();return reply(groupApprover(tx,actor,id)?device:redacted(device),0);});
     }
     public Store.Reply devices(DirectoryService.Actor actor) {
         actor.requireAdmin();if(!actor.tenant().equals(tenant))throw forbidden();
         return transaction((tx,now)->{
-            var items=new TreeMap<String,EndpointManagedDevice>();var entries=tx.load().entries();
+            var items=new TreeMap<String,EndpointManagedDevice>();var entries=tx.load().entries();boolean ownOnly=ownOnly(tx,actor);
             for(var entry:entries.values())if(entry.id().kind()==Ids.Kind.DEVICE){
                 try{management(tx,actor,"read",entry.id().value());}catch(Failure denied){if(denied.status()==403)continue;throw denied;}
-                var directory=codec.model(entry.document(),ControlDevice.class);var row=tx.endpoint(directory.id());
+                var directory=codec.model(entry.document(),ControlDevice.class);var row=tx.endpoint(directory.id());if(ownOnly&&!directory.ownerUserId().equals(actor.userId()))continue;var secrets=groupApprover(tx,actor,directory.id());
                 var kind=tenant.value().equals("quickstart")&&server.equals("quickstart-server")&&directory.ownerUserId().equals("local-tools")?switch(directory.id()){
                     case "local-builtins"->SystemExecutorKind.BUILTINS;case "local-hotfolder"->SystemExecutorKind.HOTFOLDER;case "local-rest-forwarding"->SystemExecutorKind.REST_FORWARDING;default->null;
                 }:null;
                 var owner=entries.get(Ids.Kind.USER.id(directory.ownerUserId()));
-                items.put(directory.id(),new EndpointManagedDevice(directory.id(),kind!=null,directory,row==null?null:codec.model(row.document(),EndpointDeviceRecord.class),null,owner==null?null:codec.model(owner.document(),ControlUser.class),kind,null,row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).systemName(),row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).ipAddress()));
+                items.put(directory.id(),new EndpointManagedDevice(directory.id(),kind!=null,directory,row==null?null:secrets?codec.model(row.document(),EndpointDeviceRecord.class):redacted(codec.model(row.document(),EndpointDeviceRecord.class)),null,owner==null?null:codec.model(owner.document(),ControlUser.class),kind,null,row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).systemName(),row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).ipAddress()));
             }
             for(var row:tx.enrollments(now)){
                 var review=codec.model(row.document(),EndpointEnrollmentReview.class);var endpoint=tx.endpoint(review.deviceId());
-                if(review.state()!=EnrollmentState.PENDING||(endpoint!=null&&codec.model(endpoint.document(),EndpointDeviceRecord.class).state()!=EndpointState.UNENROLLED))continue;
+                if(ownOnly||review.state()!=EnrollmentState.PENDING||(endpoint!=null&&codec.model(endpoint.document(),EndpointDeviceRecord.class).state()!=EndpointState.UNENROLLED))continue;
                 try{management(tx,actor,"read",review.deviceId());}catch(Failure denied){if(denied.status()==403)continue;throw denied;}
                 var previous=items.get(review.deviceId());
-                items.put(review.deviceId(),new EndpointManagedDevice(review.deviceId(),false,previous==null?null:previous.directoryDevice(),null,review,previous==null?null:previous.registeredUser(),null,null,null,null));
+                items.put(review.deviceId(),new EndpointManagedDevice(review.deviceId(),false,previous==null?null:previous.directoryDevice(),null,groupApprover(tx,actor,review.deviceId())?review:redacted(review),previous==null?null:previous.registeredUser(),null,null,null,null));
             }
             return reply(new EndpointManagedDevicePage(List.copyOf(items.values())),0);
         });
@@ -318,7 +352,7 @@ public final class EndpointService {
     public Store.Reply approval(DirectoryService.Actor actor,String user,String id,String body,String key,String requestId) {
         actor.requireAdmin();Ids.valid(id);Ids.valid(key);Ids.valid(requestId);
         var request=codec.model(body,EndpointApprovalRequest.class);var digest=DirectoryService.digest("approval\n"+id+"\n"+body);
-        return transaction((tx,now)->{human(actor,user,tx);management(tx,actor,"approve-device",id);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
+        return limited(actor,()->transaction((tx,now)->{human(actor,user,tx);var own=approver(tx,actor,id,false);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
             var row=tx.endpoint(id);if(row==null)throw Failure.conflict();var device=codec.model(row.document(),EndpointDeviceRecord.class);
             if(request.expectedApprovalRevision()!=approvalRevision(device)||device.state()!=EndpointState.ACTIVE)throw Failure.conflict();
             // Administrative reapproval never reassigns the identity or reenables directory access.
@@ -326,9 +360,10 @@ public final class EndpointService {
             Long expires=request.approved()?connectionDeadline(request.connectionExpiresAtUnixMs(),request.unlimitedConnection(),now):device.connectionExpiresAtUnixMs();
             var updated=new EndpointDeviceRecord(id,tenant.value(),device.userId(),device.keyFingerprint(),device.state(),device.revision()+1,device.lastSeenUnixMs(),device.reportSequence(),device.report(),expires,request.approved(),approvalRevision(device)+1,device.systemName(),device.ipAddress());
             tx.saveEndpoint(new Store.EndpointRecord(id,row.fingerprint(),codec.json(updated),row.csr(),row.reportDigest(),row.acknowledgment()));
+            if(own!=null&&request.approved())ownMembership(tx,id,own);
             tx.audit(actor.id(),request.approved()?"DEVICE_APPROVE":"DEVICE_DEAPPROVE","endpoint:"+id,updated.revision(),requestId,digest);
-            var result=reply(updated,updated.revision());tx.remember(actor.id(),key,digest,result);return result;
-        });
+            var result=reply(own==null?updated:redacted(updated),updated.revision());tx.remember(actor.id(),key,digest,result);return result;
+        }));
     }
     public Store.Reply enabled(DirectoryService.Actor actor,String user,String id,String body,String key,String requestId) {
         actor.requireAdmin();Ids.valid(id);Ids.valid(key);Ids.valid(requestId);
@@ -357,7 +392,7 @@ public final class EndpointService {
     public Store.Reply requestApproval(DirectoryService.Actor actor,String user,String id,String body,String key,String requestId){
         actor.requireAdmin();Ids.valid(id);Ids.valid(key);Ids.valid(requestId);
         var request=codec.model(body,EndpointRevokeRequest.class);var digest=DirectoryService.digest("request-approval\n"+id+"\n"+body);
-        return transaction((tx,now)->{human(actor,user,tx);management(tx,actor,"approve-device",id);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
+        return transaction((tx,now)->{human(actor,user,tx);approver(tx,actor,id,false);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
             var row=tx.endpoint(id);if(row==null)throw Failure.conflict();var device=codec.model(row.document(),EndpointDeviceRecord.class);
             if(!request.expectedRevision().equals(device.revision())||device.state()!=EndpointState.REVOKED)throw Failure.conflict();
             var reset=resetForApproval(tx,row,device);

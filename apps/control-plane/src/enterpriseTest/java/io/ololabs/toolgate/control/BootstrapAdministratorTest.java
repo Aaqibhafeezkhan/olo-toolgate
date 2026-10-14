@@ -41,22 +41,15 @@ class BootstrapAdministratorTest {
 
     @Test void importsAndReviewedPreviewsCannotRemoveOrDisableFirstAdmin() {
         var exported=directory.export(second,false);
-        for(boolean remove:List.of(false,true))for(boolean dryRun:List.of(false,true)) {
-            var snapshot=(com.fasterxml.jackson.databind.node.ObjectNode)codec.value(exported.body());
-            var users=(com.fasterxml.jackson.databind.node.ArrayNode)snapshot.get("users");
-            for(int i=0;i<users.size();i++)if(users.get(i).get("id").asText().equals("admin")) {
-                if(remove)users.remove(i);else ((com.fasterxml.jackson.databind.node.ObjectNode)users.get(i)).put("enabled",false);break;
-            }
-            if(remove) {
-                for(var team:snapshot.get("teams")) {
-                    var members=(com.fasterxml.jackson.databind.node.ArrayNode)team.get("userIds");
-                    for(int i=members.size()-1;i>=0;i--)if(members.get(i).asText().equals("admin"))members.remove(i);
-                }
-            }
+        // Backups carry no users, so Replace cannot remove the setup administrator; a file that lists it disabled is refused.
+        var admin=(com.fasterxml.jackson.databind.node.ObjectNode)codec.value(directory.get(second,Ids.Kind.USER,"admin").body());admin.put("enabled",false);
+        for(boolean dryRun:List.of(false,true)) {
+            var snapshot=(com.fasterxml.jackson.databind.node.ObjectNode)codec.value(exported.body());assertTrue(snapshot.get("users").isEmpty());((com.fasterxml.jackson.databind.node.ArrayNode)snapshot.get("users")).add(admin);
             var body=codec.json(Map.of("snapshot",snapshot,"mode","REPLACE","dryRun",dryRun));
             var failure=assertThrows(Failure.class,()->directory.importConfig(second,body,false,exported.revision(),UUID.randomUUID().toString(),"request"));
             assertEquals(409,failure.status());assertTrue(failure.getMessage().contains("setup administrator"));
         }
+        var replace=codec.json(Map.of("snapshot",codec.value(exported.body()),"mode","REPLACE","dryRun",true));assertEquals(200,directory.importConfig(second,replace,false,exported.revision(),"replace-keeps-admin","request").status());
         var changes=new ConfigurationChanges(fixture.store,codec,Clock.systemUTC(),512,1048576);
         var disable=new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.UPDATE,ControlEntityKind.USER,"admin",codec.json(new ControlUser("admin","Admin",false,1L)),1L);
         assertEquals(409,assertThrows(Failure.class,()->changes.mutate(second,disable,"direct-disable","request")).status());
@@ -65,12 +58,12 @@ class BootstrapAdministratorTest {
     }
 
     @Test void emailAndNameRemainEditableAndOrdinaryUsersCanStillBeDisabledOrDeleted() {
-        var user=codec.model(directory.mutate(second,Kind.USER,"admin","UPDATE",codec.json(new ControlUser("admin","Installation owner",true,1L,"owner@example.com")),1,"edit-owner","request").body(),ControlUser.class);
+        var user=codec.model(directory.mutate(second,Kind.USER,"admin","UPDATE",codec.json(new ControlUser("admin","Installation owner",true,1L,"owner@example.com",null,null)),1,"edit-owner","request").body(),ControlUser.class);
         assertEquals("owner@example.com",user.email());assertEquals("Installation owner",user.name());
         directory.mutate(second,Kind.USER,"ordinary","CREATE",codec.json(new ControlUser("ordinary","Ordinary",true,1L)),0,"create-ordinary","request");
         assertEquals(200,directory.mutate(second,Kind.USER,"ordinary","UPDATE",codec.json(new ControlUser("ordinary","Ordinary",false,1L)),1,"disable-ordinary","request").status());
         assertEquals(204,directory.mutate(second,Kind.USER,"ordinary","DELETE",null,2,"delete-ordinary","request").status());
-        assertThrows(Failure.class,()->codec.entry(Kind.USER,codec.json(new ControlUser("bad-email","Invalid",false,1L,"not-an-email"))));
+        assertThrows(Failure.class,()->codec.entry(Kind.USER,codec.json(new ControlUser("bad-email","Invalid",false,1L,"not-an-email",null,null))));
     }
 
     @Test void liveSuperAdminRoleAssignmentGrantsAuthorityAndAccountProtectionDoesNot() {

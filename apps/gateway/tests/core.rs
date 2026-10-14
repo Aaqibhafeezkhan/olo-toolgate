@@ -752,3 +752,75 @@ async fn a_tool_host_without_a_route_gets_its_calls_through_control() {
     assert_eq!(a.polls.load(Ordering::SeqCst), 3);
     assert!(a.submission.lock().unwrap().is_none());
 }
+#[tokio::test]
+async fn credential_reload_validates_the_whole_file_and_keeps_the_live_set_on_error() {
+    const NEXT: &str = "enterprise-next-credential-000000000000000000000000000000000";
+    let s = state(Arc::new(Authority::default()));
+    let directory = std::env::temp_dir().join(format!(
+        "toolgate-credentials-{}-{}",
+        std::process::id(),
+        unix_ms().unwrap()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("credentials.json");
+    let mut next = credential();
+    next.token_sha256 = digest(NEXT.as_bytes());
+    next.context.credential_sha256 = Some(next.token_sha256.clone());
+    next.context.workload_binding_id = Some("workload-next".into());
+    let digest_endpoint = |s: Arc<AppState>| async move {
+        let response = management_router(s)
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/credentials")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+        serde_json::from_slice::<Value>(&bytes).unwrap()
+    };
+    let before = digest_endpoint(s.clone()).await;
+    assert_eq!(before["count"], 1);
+    // A valid file replaces the whole set: the old token stops, the new one works at once.
+    let good = serde_json::to_vec(&vec![next.clone()]).unwrap();
+    std::fs::write(&path, &good).unwrap();
+    assert_eq!(s.reload_credentials(&path), Ok(1));
+    assert_eq!(
+        digest_endpoint(s.clone()).await,
+        json!({"sha256": digest(&good), "count": 1})
+    );
+    assert!(s.auth.authenticate(TOKEN, "r".into(), 2).is_none());
+    assert!(s.auth.authenticate(NEXT, "r".into(), 2).is_some());
+    // Malformed, oversized, duplicate, unknown-field and invalid files are rejected; the set stays.
+    let mut human = next.clone();
+    human.context.mode = RequestMode::Human;
+    let mut unknown = serde_json::to_value(vec![next.clone()]).unwrap();
+    unknown[0]["rawToken"] = json!("never");
+    for bad in [
+        b"[{\"tokenSha256\":".to_vec(),
+        b"[]".to_vec(),
+        serde_json::to_vec(&vec![next.clone(), next.clone()]).unwrap(),
+        serde_json::to_vec(&vec![credential(), human]).unwrap(),
+        serde_json::to_vec(&unknown).unwrap(),
+        vec![b' '; 1_048_577],
+    ] {
+        std::fs::write(&path, &bad).unwrap();
+        assert!(s.reload_credentials(&path).is_err());
+        assert_eq!(
+            digest_endpoint(s.clone()).await,
+            json!({"sha256": digest(&good), "count": 1})
+        );
+        assert!(s.auth.authenticate(NEXT, "r".into(), 2).is_some());
+        assert!(s.auth.authenticate(TOKEN, "r".into(), 2).is_none());
+    }
+    std::fs::remove_file(&path).unwrap();
+    assert!(s.reload_credentials(&path).is_err());
+    assert!(s.auth.authenticate(NEXT, "r".into(), 2).is_some());
+    std::fs::remove_dir_all(&directory).unwrap();
+    // The startup path digests the exact file bytes too.
+    let contracts = Contracts::new().unwrap();
+    let loaded = Authenticator::from_bytes(&good, &contracts, 1).unwrap();
+    assert_eq!(loaded.loaded(), (digest(&good), 1));
+}

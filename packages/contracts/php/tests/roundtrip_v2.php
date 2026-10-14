@@ -34,6 +34,7 @@ $models = [
     'CompositionMapping',
     'CompositionRecord',
     'ConfigLayer',
+    'ConfigurationSettings',
     'ConnectionRequirement',
     'ContractSet',
     'ControlServerSettings',
