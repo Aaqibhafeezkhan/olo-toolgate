@@ -128,7 +128,33 @@ class FoundationTests(unittest.TestCase):
         with self.assertRaises(ValueError):compatible(baseline['common.schema.json'],self.schemas['common.schema.json'])
         for name,schema in baseline.items():
             if name not in ('common.schema.json','policy.schema.json','runtime.schema.json'):
-                compatible(schema,self.schemas[name],name)
+                current = self.schemas[name]
+                if name == 'client.schema.json':
+                    # The local power switch requires a current Control reader. Its
+                    # precise extension is covered below; all other frozen fields
+                    # retain the strict reader compatibility check.
+                    current = copy.deepcopy(current)
+                    del current['$defs']['ClientReport']['properties']['power']
+                compatible(schema,current,name)
+
+    def test_device_power_report_requires_current_control_reader(self):
+        baseline = schemas_at(ROOT/'tests/fixtures/contracts/v1/schemas')
+        archived = validators(baseline)['ClientReport']
+        current = self.validators['ClientReport']
+        report = json.loads((ROOT/'tests/fixtures/contracts/v1/compatibility.json').read_text())['fixtures']['ClientReport']
+        archived.validate(report)
+        current.validate(report)  # Older clients remain accepted by current Control.
+        power = self.schemas['client.schema.json']['$defs']['ClientReport']['properties']['power']
+        self.assertEqual(power, {'$ref':'client.schema.json#/$defs/DevicePower'})
+        self.assertEqual(self.schemas['client.schema.json']['$defs']['DevicePower']['enum'], ['ON','OFF'])
+        for value in ('ON','OFF'):
+            powered = dict(report, power=value)
+            current.validate(powered)
+            with self.assertRaises(ValidationError):archived.validate(powered)
+        for value in ('UNKNOWN', None, True):
+            with self.assertRaises(ValidationError):current.validate(dict(report, power=value))
+        with self.assertRaisesRegex(ValueError, 'Closed reader fields changed'):
+            compatible(baseline['client.schema.json'], self.schemas['client.schema.json'])
 
     def test_compatibility_checker_detects_breaks(self):
         old = {'$defs':{'Decision':self.schemas['policy.schema.json']['$defs']['Decision'],'EnterpriseDecision':self.schemas['enterprise.schema.json']['$defs']['EnterpriseDecision']}}
