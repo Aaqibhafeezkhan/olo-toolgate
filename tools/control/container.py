@@ -130,7 +130,10 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
                 dict(action=action,expectedRevision=change['revision']),'POST',origin=origin))
         transition('SUBMIT')
         assert api('/api/control/v1/configuration-changes/'+change['id']+'/transition',body=dict(action='APPROVE',expectedRevision=change['revision']),method='POST')[0]==403
-        transition('APPROVE','reviewer-1',len(origins)-1);transition('APPLY')
+        # The review threshold in force at creation decides how many independent reviewers approve.
+        for index,reviewer in enumerate(('reviewer-1','reviewer-2')[:change['requiredReviews']]):
+            transition('APPROVE',reviewer,(len(origins)-1-index)%len(origins))
+        transition('APPLY')
         for origin in range(len(origins)):
             assert ok(api('/api/control/v1/users/'+entity['id'],origin=origin))['enabled'] is False
             assert entity['id'] in ok(api('/api/control/v1/teams/team-default',origin=origin))['userIds']
