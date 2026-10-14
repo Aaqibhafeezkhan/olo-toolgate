@@ -140,6 +140,14 @@ class TaggedReleaseTests(unittest.TestCase):
         self.assertIn('MAVEN_PASSWORD',script)
         self.assertNotIn('fixture-token',script)
 
+    def test_central_receives_verified_tagged_artifacts_without_gradle(self):
+        from tools.release import central
+        with patch.dict(os.environ,{'MAVEN_REPOSITORY_URL':central.UPLOAD_URL}), \
+             patch.object(central,'publish') as publish,patch.object(shared,'run') as run:
+            tagged.publish_maven()
+        publish.assert_called_once_with(self.assets,'1.2.3')
+        run.assert_not_called()
+
     def publication_commands(self):
         commands=[]
         def run(*args,**kwargs):
@@ -215,10 +223,11 @@ class TaggedReleaseTests(unittest.TestCase):
 
 
 class UnifiedPublicationWorkflowTests(unittest.TestCase):
-    def test_portal_or_invalid_maven_urls_fail_before_remote_publication(self):
-        for url in ('https://maven.pkg.github.com/olo-labs/olo-toolgate','https://maven.example.invalid/releases'):
+    def test_portal_and_standard_urls_are_routed_but_invalid_urls_fail(self):
+        for url in ('https://maven.pkg.github.com/olo-labs/olo-toolgate','https://maven.example.invalid/releases',
+                    'https://central.sonatype.com/api/v1/publisher/upload'):
             with patch.dict(os.environ,{'MAVEN_REPOSITORY_URL':url}):shared.validate_maven_repository()
-        for url in ('https://central.sonatype.com/api/v1/publisher/upload','https://s01.oss.sonatype.org',
+        for url in ('https://central.sonatype.com','https://central.sonatype.com/api/v1/publisher/status','https://s01.oss.sonatype.org',
                     'http://maven.example.invalid','https://user:password@maven.example.invalid','https://maven.example.invalid?token=fixture',''):
             with self.subTest(url=url),patch.dict(os.environ,{'MAVEN_REPOSITORY_URL':url}),patch.object(shared,'run') as run:
                 with self.assertRaises(ValueError):shared.validate_maven_repository()

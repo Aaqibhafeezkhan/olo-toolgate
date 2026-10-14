@@ -41,7 +41,9 @@ def validate_maven_repository():
     if target.scheme!='https' or not target.hostname or target.username or target.password or target.query or target.fragment:
         raise ValueError('Maven publication requires an HTTPS repository URL without embedded credentials')
     if target.hostname.lower() in ('central.sonatype.com','oss.sonatype.org','s01.oss.sonatype.org'):
-        raise ValueError('Use a standard Maven repository such as GitHub Packages. Sonatype Central requires a separate Portal/GPG integration.')
+        from tools.release.central import UPLOAD_URL
+        if os.environ['MAVEN_REPOSITORY_URL'] != UPLOAD_URL:
+            raise ValueError('Use the Central Portal upload URL: '+UPLOAD_URL)
 
 
 def digest(path):
