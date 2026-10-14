@@ -104,11 +104,11 @@ public class ControlResource {
         var entry = codec.entry(Kind.path(kind), document);
         return response(changes.mutate(actor(),command(Kind.path(kind),entry.id().value(),"CREATE",document,0),key,correlation.id()), "CREATE", kind);
     }
-    @GET @Path("{entity:users|agents|tools|devices}/{id}/groups")
+    @GET @Path("{entity:users|agents|tools|devices}/{id:.+}/groups")
     public Response memberships(@PathParam("entity") String entity,@PathParam("id") String id) { return response(service.memberships(actor(),Kind.path(entity),id),"READ","memberships"); }
-    @GET @Path("{entity:users|agents|tools|devices}/{id}/effective-access")
+    @GET @Path("{entity:users|agents|tools|devices}/{id:.+}/effective-access")
     public Response effectiveAccess(@PathParam("entity")String entity,@PathParam("id")String id){return response(new io.ololabs.toolgate.control.application.EffectiveAccess(store,codec).get(actor(),Kind.path(entity),id),"READ","effective-access");}
-    @PUT @Path("{entity:users|agents|tools|devices}/{id}/groups") @Consumes("application/json") @io.quarkus.security.Authenticated
+    @PUT @Path("{entity:users|agents|tools|devices}/{id:.+}/groups") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response memberships(@PathParam("entity") String entity,@PathParam("id") String id,@HeaderParam("If-Match") String etag,@HeaderParam("Idempotency-Key") String key,String document) {
         return response(changes.mutate(actor(),command(Kind.path(entity),id,"MEMBERSHIPS",document,expected(etag)),key,correlation.id()),"UPDATE","memberships");
     }
