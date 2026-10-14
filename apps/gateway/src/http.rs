@@ -88,6 +88,13 @@ impl AppState {
             && unix_ms().is_some_and(|now| self.gateway.ready(now) && self.auth.ready(now))
     }
 
+    /// Re-read the mounted credential file; on any error the current set stays live.
+    pub fn reload_credentials(&self, path: &std::path::Path) -> Result<usize, &'static str> {
+        let bytes = crate::config::read_bytes(path)?;
+        let now = unix_ms().ok_or("system clock unavailable")?;
+        self.auth.reload(&bytes, &self.gateway.contracts, now)
+    }
+
     fn correlation(&self, headers: &HeaderMap) -> Correlation {
         let n = self.sequence.fetch_add(1, Ordering::Relaxed);
         let id = digest(format!("{}-{n}", self.instance).as_bytes());
@@ -131,6 +138,14 @@ pub fn management_router(state: Arc<AppState>) -> Router {
                 } else {
                     StatusCode::SERVICE_UNAVAILABLE
                 }
+            }),
+        )
+        // Which credential file is live: its digest and size only, so a writer can confirm a reload.
+        .route(
+            "/v1/credentials",
+            get(|State(s): State<Arc<AppState>>| async move {
+                let (sha256, count) = s.auth.loaded();
+                Json(serde_json::json!({"sha256": sha256, "count": count}))
             }),
         )
         .route(

@@ -357,7 +357,14 @@ paths:
         '403':
           description: Wrong tenant/user, inactive or revoked device
         '409':
-          description: State, replay or polling conflict
+          description: State, replay or polling conflict; ONE_DEVICE_PER_ACCOUNT when an
+            ownDevices approver already owns a device in the rule's group
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlErrorDetail
+        '429':
+          description: Too many failed lookups or approvals (RATE_LIMITED)
         '503':
           description: Dependency unavailable
       requestBody:
@@ -374,6 +381,40 @@ paths:
           type: string
           minLength: 1
           maxLength: 128
+  /api/control/v1/endpoint/enrollments/lookup:
+    post:
+      operationId: lookupEndpointEnrollment
+      description: Returns the pending enrollment a client's code names, for comparison
+        before approval, when the signed-in user may approve it through a group rule or
+        an ownDevices rule. An unknown, expired, decided or unapprovable code is 404 without
+        detail. Five failed lookups or approvals per user in ten minutes return 429.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentLookupResult
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS/identity required
+        '404':
+          description: No enrollment this user may approve
+        '429':
+          description: Too many failed lookups or approvals (RATE_LIMITED)
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlErrorDetail
+        '503':
+          description: Dependency unavailable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentLookup
   /api/control/v1/endpoint/socket:
     get:
       operationId: endpointJobSocket
@@ -2509,7 +2550,10 @@ paths:
   /api/control/v1/config/export:
     get:
       operationId: exportConfig
-      description: Requires toolgate-admin or toolgate-reader.
+      description: Requires export on every group. Users, team userIds, identity bindings
+        and device evidence are left out; requiredIdentities lists, by ID, every user an
+        exported record references with the teams it belonged to. settings are included
+        for a Super Admin only.
       responses:
         '200':
           description: Success
@@ -2541,7 +2585,15 @@ paths:
   /api/control/v1/config/import:
     post:
       operationId: importConfig
-      description: Requires toolgate-admin.
+      description: Requires import on every group; a snapshot with settings requires Super
+        Admin. Every requiredIdentities ID must exist or be resolved in identityResolution
+        (EXISTING, MAP, PLACEHOLDER), otherwise 409 UNRESOLVED_IDENTITIES lists them, dry
+        runs included. Resolved users are added to their teamIds; other memberships stay
+        unless removeUnlistedMemberships. Replace deletes only exported kinds absent from
+        the file and refuses with 409 REPLACE_CONFLICTS when a preserved record would point
+        at a deleted one. A settings.configuration.requiredReviews change is refused with
+        409 REQUIRED_REVIEWS_CHANGE while reviews are required. With requiredReviews 0 the
+        import applies at once.
       responses:
         '200':
           description: Success
@@ -2589,7 +2641,9 @@ paths:
   /api/control/v1/settings:
     get:
       operationId: getServerSettings
-      description: Requires toolgate-admin. Returns the tenant's control-plane settings
+      description: Super Admin only. A write that changes configuration.requiredReviews
+        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
+        current number of reviews, with no Super Admin bypass. Returns the tenant's control-plane settings
         (formatVersion 2), grouped by Configuration page. clientCheckIn is read-only and
         always shows the running deployment's values. The document is also the export
         format.
@@ -2620,7 +2674,9 @@ paths:
         '503': *id010
     put:
       operationId: updateServerSettings
-      description: Requires toolgate-admin. Replaces the editable settings with a full
+      description: Super Admin only. A write that changes configuration.requiredReviews
+        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
+        current number of reviews, with no Super Admin bypass. Replaces the editable settings with a full
         formatVersion 2 record; used to restore an exported settings document. The
         revision and clientCheckIn in the body are ignored; If-Match carries the current
         revision.
@@ -2660,7 +2716,9 @@ paths:
         '503': *id010
     patch:
       operationId: patchServerSettings
-      description: Requires toolgate-admin. Merge patch (RFC 7396) of the editable settings
+      description: Super Admin only. A write that changes configuration.requiredReviews
+        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
+        current number of reviews, with no Super Admin bypass. Merge patch (RFC 7396) of the editable settings
         groups; each Configuration page sends only its own fields. clientCheckIn is
         env-owned and cannot be patched. A stale If-Match returns 409.
       parameters:
@@ -2697,6 +2755,129 @@ paths:
         '415': *id008
         '500': *id009
         '503': *id010
+  /api/control/v1/review-policy:
+    get:
+      operationId: getReviewPolicy
+      description: Any signed-in console user. The configuration review threshold in force
+        for new changes; 0 means changes apply immediately.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlReviewPolicy
+        '401':
+          description: Signed-in user required
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/workload-bindings/{id}/credential:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+    post:
+      operationId: rotateWorkloadCredential
+      description: Super Admin only. Installs a new static token hash, increments credentialEpoch,
+        rebinds a delegated binding to its user's current session epoch, clears needsReauthorization
+        and sets enabled. Returns the binding and the Gateway request context to install;
+        context.bindingId is the request's bindingId or the single execution binding the
+        agent groups' grants select.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ControlWorkloadCredentialRotation
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ControlWorkloadCredentialResult
+        '400':
+          description: Invalid bounded input
+        '403':
+          description: Super Admin required
+        '404':
+          description: Workload binding not found
+        '409':
+          description: Hash already used, or no identity binding for the delegated user
+  /api/control/v1/users/{id}/enable:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+    post:
+      operationId: enableControlUser
+      description: Super Admin only. Enables the user; its sessions and delegated workload
+        tokens end, so delegated bindings need a credential rotation afterwards.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      responses:
+        '200':
+          description: The updated user
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlUser
+        '403':
+          description: Super Admin required
+        '404':
+          description: User not found
+        '409':
+          description: Revision conflict
+  /api/control/v1/users/{id}/disable:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+    post:
+      operationId: disableControlUser
+      description: Super Admin only. Disables the user and ends its sessions and delegated
+        workload tokens.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      responses:
+        '200':
+          description: The updated user
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlUser
+        '403':
+          description: Super Admin required
+        '404':
+          description: User not found
+        '409':
+          description: Revision conflict or setup administrator
   /api/control/v1/audit:
     get:
       operationId: listAudit

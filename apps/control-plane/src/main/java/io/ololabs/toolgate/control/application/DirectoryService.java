@@ -44,7 +44,19 @@ public final class DirectoryService {
         final String position=after;
         return store.transaction(actor.tenant(),false,tx->{var d=tx.load();var rows=d.entries().values().stream().filter(e->e.id().kind()==kind&&e.id().value().compareTo(position)>0).sorted(Comparator.comparing(e->e.id().value())).filter(e->{try {require(actor,d,"read",e);return true;}catch(Failure denied){if(denied.status()!=403)throw denied;return false;}}).limit(limit+1L).toList();var body=new HashMap<String,Object>();body.put("items",rows.stream().limit(limit).map(e->codec.value(e.document())).toList());if(rows.size()>limit)body.put("nextCursor",Base64.getUrlEncoder().withoutPadding().encodeToString((actor.tenant().value()+"\n"+kind.name()+"\n"+rows.get(limit-1).id().value()).getBytes(StandardCharsets.UTF_8)));return new Store.Reply(200,codec.json(body),d.revision());});
     }
-    public Store.Reply export(Actor actor,boolean yaml) {actor.requireAdmin();return store.transaction(actor.tenant(),false,tx->{var d=tx.load();management.requireAll(d,actor.userId(),"export",System.currentTimeMillis());return new Store.Reply(200,codec.snapshot(actor.tenant(),d,yaml),d.revision());});}
+    /** Kinds a backup carries. Users, identity bindings and device evidence stay with the instance and survive Replace. */
+    public static boolean exported(Kind kind) {return kind!=Kind.USER&&kind!=Kind.IDENTITY_BINDING&&kind!=Kind.DEVICE_EVIDENCE;}
+    /** Users are left out: teams lose userIds and requiredIdentities lists, by ID only, every user an exported record references.
+     * Settings are Super Admin data and are included only for a Super Admin. */
+    public Store.Reply export(Actor actor,boolean yaml) {actor.requireAdmin();return store.transaction(actor.tenant(),false,tx->{var d=tx.load();management.requireAll(d,actor.userId(),"export",System.currentTimeMillis());
+        var entries=new HashMap<Ids.RecordId,Directory.Entry>();var users=new TreeSet<String>();
+        for(var e:d.entries().values()){if(!exported(e.id().kind()))continue;
+            if(e.id().kind()==Kind.TEAM){var t=codec.model(e.document(),ControlTeam.class);users.addAll(t.userIds());entries.put(e.id(),codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.of(),t.roleIds()))));continue;}
+            for(var r:e.references())if(r.kind()==Kind.USER)users.add(r.value());entries.put(e.id(),e);}
+        var fields=new HashMap<String,Object>();
+        if(management.superAdministrator(d,actor.userId())){var s=new ServerSettingsService(null,codec,ClientCheckInPolicy.QUICKSTART).current(tx);if(s.deviceApproval().ownerUserId()!=null)users.add(s.deviceApproval().ownerUserId());fields.put("settings",new io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch(s.gateway(),s.deviceApproval(),s.configuration()));}
+        fields.put("requiredIdentities",users.stream().map(u->new ControlRequiredIdentity(u,GroupGraph.memberships(d,codec,Kind.USER,u,false))).toList());
+        return new Store.Reply(200,codec.snapshot(actor.tenant(),new Directory(d.revision(),entries),yaml,fields),d.revision());});}
     public Store.Reply audit(Actor actor,long after,int limit) {actor.requireAdmin();if(after<0||limit<1||limit>100)throw Failure.validation();return store.transaction(actor.tenant(),false,tx->{management.requireAll(tx.load(),actor.userId(),"audit",System.currentTimeMillis());return new Store.Reply(200,tx.auditPage(after,limit),0);});}
     public Store.Reply mutate(Actor actor,Kind kind,String id,String operation,String document,long expected,String key,String requestId) {
         actor.requireAdmin();Ids.valid(key);Ids.valid(requestId);if(!Set.of("CREATE","UPDATE","DELETE").contains(operation))throw Failure.validation();
@@ -84,7 +96,7 @@ public final class DirectoryService {
     }
     private void invalidateWorkloads(Map<Ids.RecordId,Directory.Entry> entries,String agent,String user) {
         for(var entry:List.copyOf(entries.values()))if(entry.id().kind()==Kind.WORKLOAD_BINDING){var b=codec.model(entry.document(),ControlWorkloadBinding.class);
-            if(Objects.equals(b.agentId(),agent)||user!=null&&user.equals(b.delegatedUserId()))entries.put(entry.id(),codec.entry(Kind.WORKLOAD_BINDING,codec.json(new ControlWorkloadBinding(b.id(),b.name(),false,b.revision()+1,b.agentId(),b.mode(),b.issuer(),b.subject(),b.audience(),b.credentialSha256(),b.credentialEpoch()+1,b.expiresAtUnixMs(),b.delegatedUserId(),b.parentBindingId(),b.delegatedSessionEpoch()))));
+            if(Objects.equals(b.agentId(),agent)||user!=null&&user.equals(b.delegatedUserId()))entries.put(entry.id(),codec.entry(Kind.WORKLOAD_BINDING,codec.json(new ControlWorkloadBinding(b.id(),b.name(),false,b.revision()+1,b.agentId(),b.mode(),b.issuer(),b.subject(),b.audience(),b.credentialSha256(),b.credentialEpoch()+1,b.expiresAtUnixMs(),b.delegatedUserId(),b.parentBindingId(),b.delegatedSessionEpoch(),b.passClaims(),b.needsReauthorization()))));
         }
     }
     private void lifecycle(Store.Session tx,Directory.Entry old,Directory.Entry next) {
@@ -104,26 +116,108 @@ public final class DirectoryService {
             if((security||rotated)&&b.credentialEpoch()<=a.credentialEpoch()||rotated&&tx.enterprise().credentialUsed(b.credentialSha256())||!a.enabled()&&b.enabled()&&!rotated)throw Failure.conflict();
         }
     }
+    /** Merge keeps existing records and updates duplicates; Replace also deletes records of exported kinds the file leaves out.
+     * Users, team memberships, identity bindings, device evidence and default groups are never deleted. Every required identity
+     * must exist or be resolved (EXISTING, MAP or PLACEHOLDER); resolved users are added to their ticked teams. */
     public Store.Reply importConfig(Actor actor,String document,boolean yaml,long expected,String key,String requestId) {
-        actor.requireAdmin();Ids.valid(key);Ids.valid(requestId);var input=codec.input(document,yaml,actor.tenant());if(input.directory().revision()!=expected)throw Failure.conflict();var hash=digest("IMPORT\n"+expected+"\n"+input.replace()+"\n"+input.dryRun()+"\n"+codec.snapshot(actor.tenant(),input.directory(),false));
+        actor.requireAdmin();Ids.valid(key);Ids.valid(requestId);var input=codec.input(document,yaml,actor.tenant());if(input.directory().revision()!=expected)throw Failure.conflict();var hash=digest("IMPORT\n"+expected+"\n"+codec.document(actor.tenant(),input));
         return store.transaction(actor.tenant(),true,tx->{
             var before=tx.load();management.requireAll(before,actor.userId(),"import",System.currentTimeMillis());
+            // Settings are Super Admin data, and the review threshold changes only through its own reviewed workflow.
+            if(input.settings()!=null&&!management.superAdministrator(before,actor.userId()))throw ManagementAccess.denied();
+            var resolved=resolve(before,input);var settings=resolved.settings();
+            if(settings!=null&&settings.configuration()!=null){int current=ServerSettingsService.requiredReviews(tx,codec);if(current>0&&settings.configuration().requiredReviews()!=current)throw Failure.detail(409,ControlErrorDetailCode.REQUIRED_REVIEWS_CHANGE,List.of(ServerSettingsService.ENTITY));}
             // Authorization precedes replay; imports may not restore old credential/session epochs.
-            for(var e:input.directory().entries().values())require(actor,before,"update",e);
+            for(var e:resolved.entries().values())require(actor,before,"update",e);
             var replay=input.dryRun()?null:tx.replay(actor.id(),key,hash);if(replay!=null)return replay;if(before.revision()!=expected)throw Failure.conflict();
-            var entries=input.replace()?new HashMap<Ids.RecordId,Directory.Entry>():new HashMap<>(before.entries());
-            for(var proposed:input.directory().entries().values()) {var old=before.entries().get(proposed.id());var e=importObservations(old,proposed);if(old==null&&tx.used(e.id()))throw Failure.conflict();lifecycle(tx,old,e);var normalized=codec.revision(e,old==null?1:old.revision());entries.put(e.id(),old!=null&&old.document().equals(normalized.document())?old:codec.revision(e,old==null?1:old.revision()+1));}
+            var entries=new HashMap<Ids.RecordId,Directory.Entry>();
+            for(var e:before.entries().values())if(!input.replace()||!exported(e.id().kind())||GroupGraph.protectedDefault(e.id()))entries.put(e.id(),e);
+            for(var proposed:resolved.entries().values()) {var old=before.entries().get(proposed.id());var e=importObservations(old,proposed);if(old==null&&tx.used(e.id()))throw Failure.conflict();lifecycle(tx,old,e);var normalized=codec.revision(e,old==null?1:old.revision());entries.put(e.id(),old!=null&&old.document().equals(normalized.document())?old:codec.revision(e,old==null?1:old.revision()+1));}
+            // Memberships are only added: existing members stay, resolved users join their ticked teams, removal is explicit.
+            for(var team:List.copyOf(entries.values()))if(team.id().kind()==Kind.TEAM) {
+                var members=new LinkedHashSet<String>();var old=before.entries().get(team.id());if(old!=null)members.addAll(GroupGraph.members(old,codec));members.addAll(GroupGraph.members(team,codec));
+                for(var r:resolved.teams().entrySet()){if(r.getValue().contains(team.id().value()))members.add(r.getKey());else if(input.removeUnlistedMemberships()&&!GroupGraph.protectedDefault(team.id()))members.remove(r.getKey());}
+                for(var r:resolved.teams().values())for(var id:r)if(!entries.containsKey(Kind.TEAM.id(id)))throw Failure.validation();
+                if(!List.copyOf(members).equals(GroupGraph.members(team,codec))){var t=codec.model(team.document(),ControlTeam.class);var next=codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.copyOf(members),t.roleIds())));entries.put(team.id(),old!=null&&old.document().equals(codec.revision(next,old.revision()).document())?old:codec.revision(next,old==null?1:old.revision()+1));}
+            }
+            for(var e:List.copyOf(entries.values()))if(e.id().kind()==Kind.USER&&GroupGraph.memberships(new Directory(before.revision(),entries),codec,Kind.USER,e.id().value(),false).isEmpty())GroupGraph.addDefault(entries,codec,Kind.USER,e.id().value());
             for(var e:before.entries().values()){var next=entries.get(e.id());if(GroupGraph.individual(e.id().kind())&&e.enabled()!=inputEnabled(next)){if(e.id().kind()==Kind.USER)invalidateSessions(entries,e.id().value());if(e.id().kind()==Kind.AGENT)invalidateWorkloads(entries,e.id().value(),null);}}
+            if(input.replace()){var conflicts=new TreeSet<String>();for(var e:entries.values())for(var r:e.references())if(!entries.containsKey(r))conflicts.add(e.id().kind()+":"+e.id().value());if(!conflicts.isEmpty())throw Failure.detail(409,ControlErrorDetailCode.REPLACE_CONFLICTS,conflicts);}
             // Import is reviewed as a complete graph; missing memberships are rejected rather than guessed.
-            var changes=changes(before,new Directory(before.revision(),entries));var after=validated(tx,before,before.revision()+(changes.isEmpty()||input.dryRun()?0:1),entries);secretReferences(tx,after);
+            var changes=new ArrayList<>(changes(before,new Directory(before.revision(),entries)));var after=validated(tx,before,before.revision()+(changes.isEmpty()||input.dryRun()?0:1),entries);secretReferences(tx,after);
             for(var group:after.entries().values())if(GroupGraph.group(group.id().kind())) {
                 var old=before.entries().get(group.id());var prior=old==null?List.<String>of():GroupGraph.members(old,codec);
                 if(GroupGraph.members(group,codec).stream().anyMatch(member->!prior.contains(member))||!GroupGraph.roles(group,codec).equals(old==null?List.of():GroupGraph.roles(old,codec)))management.requireAllocation(before,after,actor.userId(),group,System.currentTimeMillis());
             }
-            for(var e:before.entries().values())if(GroupGraph.protectedDefault(e.id())&&!entries.containsKey(e.id()))throw Failure.conflict();
             for(var e:after.entries().values()) {var old=before.entries().get(e.id());if(old==null)continue;if(e.id().kind()==Kind.IDENTITY_BINDING&&(codec.model(e.document(),ControlIdentityBinding.class).sessionEpoch()<codec.model(old.document(),ControlIdentityBinding.class).sessionEpoch()||codec.model(e.document(),ControlIdentityBinding.class).sessionsValidAfterUnixMs()<codec.model(old.document(),ControlIdentityBinding.class).sessionsValidAfterUnixMs())||e.id().kind()==Kind.WORKLOAD_BINDING&&codec.model(e.document(),ControlWorkloadBinding.class).credentialEpoch()<codec.model(old.document(),ControlWorkloadBinding.class).credentialEpoch())throw Failure.conflict();}
-            var reply=new Store.Reply(200,codec.result(!input.dryRun(),after.revision(),changes),after.revision());if(!input.dryRun()){tx.save(before,after);auditChanges(tx,actor,before,after,requestId,"IMPORT",hash);tx.remember(actor.id(),key,hash,reply);}return reply;
+            boolean settingsChange=settings!=null&&ServerSettingsService.changes(tx,codec,settings);if(settingsChange)changes.add(Map.of("kind","SETTINGS","id",ServerSettingsService.ENTITY,"operation","UPDATE"));
+            var reply=new Store.Reply(200,codec.result(!input.dryRun(),after.revision(),changes),after.revision());
+            if(!input.dryRun()){tx.save(before,after);if(settingsChange){var saved=ServerSettingsService.apply(tx,codec,settings,null,after);tx.audit(actor.id(),"SERVER_SETTINGS_IMPORT",ServerSettingsService.ENTITY,saved.revision(),requestId,hash);}auditChanges(tx,actor,before,after,requestId,"IMPORT",hash);tx.remember(actor.id(),key,hash,reply);}return reply;
         });
+    }
+    private record Resolved(Map<Ids.RecordId,Directory.Entry> entries,Map<String,Set<String>> teams,io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch settings){}
+    private static final Set<String> USER_FIELDS=Set.of("ownerUserId","delegatedUserId","userId");
+    /** Resolves required identities before anything is applied: MAP rewrites user references, PLACEHOLDER adds a disabled user
+     * without credentials, and delegated bindings of either arrive disabled until their credential is rotated. */
+    private Resolved resolve(Directory before,Codec.Import input) {
+        var file=input.directory().entries();var unresolved=new TreeSet<String>();var mapped=new HashMap<String,String>();var placeholders=new TreeSet<String>();var teams=new TreeMap<String,Set<String>>();
+        java.util.function.Predicate<String> exists=id->before.entries().containsKey(Kind.USER.id(id))||file.containsKey(Kind.USER.id(id));
+        for(var required:input.requiredIdentities()) {
+            var r=input.identityResolution().get(required.id());String target=required.id();
+            if(r==null){if(!exists.test(target))unresolved.add(target);continue;}
+            switch(r.action()) {
+                case EXISTING->{if(!exists.test(target)){unresolved.add(target);continue;}}
+                case MAP->{target=r.targetUserId();if(target==null||!exists.test(target)){unresolved.add(required.id());continue;}if(!target.equals(required.id()))mapped.put(required.id(),target);}
+                case PLACEHOLDER->{if(!exists.test(target))placeholders.add(target);}
+            }
+            if(r.teamIds()!=null)teams.computeIfAbsent(target,k->new TreeSet<>()).addAll(r.teamIds());
+        }
+        if(!unresolved.isEmpty())throw Failure.detail(409,ControlErrorDetailCode.UNRESOLVED_IDENTITIES,unresolved);
+        var entries=new HashMap<Ids.RecordId,Directory.Entry>();
+        for(var e:file.values()) {
+            if(e.id().kind()==Kind.USER&&mapped.containsKey(e.id().value()))continue;
+            var node=(com.fasterxml.jackson.databind.node.ObjectNode)codec.value(e.document());
+            if(e.id().kind()==Kind.WORKLOAD_BINDING&&node.has("delegatedUserId")&&(mapped.containsKey(node.get("delegatedUserId").asText())||placeholders.contains(node.get("delegatedUserId").asText()))){node.put("enabled",false);node.put("needsReauthorization",true);}
+            if(!mapped.isEmpty()){for(var field:USER_FIELDS)if(node.has(field)&&mapped.containsKey(node.get(field).asText()))node.put(field,mapped.get(node.get(field).asText()));
+                if(node.has("userIds")&&e.id().kind()==Kind.TEAM){var ids=new LinkedHashSet<String>();node.get("userIds").forEach(id->ids.add(mapped.getOrDefault(id.asText(),id.asText())));var array=node.putArray("userIds");ids.forEach(array::add);}}
+            var entry=codec.entry(e.id().kind(),codec.json(node));entries.put(entry.id(),entry);
+        }
+        for(var id:placeholders){var user=codec.entry(Kind.USER,codec.json(new ControlUser(id,id,false,1L)));entries.putIfAbsent(user.id(),user);}
+        var settings=input.settings();var approval=settings==null?null:settings.deviceApproval();
+        if(approval!=null&&approval.ownerUserId()!=null&&mapped.containsKey(approval.ownerUserId()))settings=new io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch(settings.gateway(),new io.ololabs.toolgate.contracts.v2.DeviceApproval(approval.autoApprove(),approval.durationMs(),mapped.get(approval.ownerUserId())),settings.configuration());
+        return new Resolved(entries,teams,settings);
+    }
+    /** Super Admin installs a new token hash: the epoch increments, a delegated binding is rebound to its user's current session
+     * epoch, needsReauthorization clears, and the Gateway context for the token is returned. Any previous token stops working. */
+    public Store.Reply rotateCredential(Actor actor,String id,String document,String key,String requestId) {
+        actor.requireAdmin();Ids.valid(id);Ids.valid(key);Ids.valid(requestId);var request=codec.model(document,ControlWorkloadCredentialRotation.class);var hash=digest("CREDENTIAL\n"+id+"\n"+codec.json(request));
+        return store.transaction(actor.tenant(),true,tx->{
+            var before=tx.load();if(!management.superAdministrator(before,actor.userId()))throw ManagementAccess.denied();var replay=tx.replay(actor.id(),key,hash);if(replay!=null)return replay;
+            var old=before.entries().get(Kind.WORKLOAD_BINDING.id(id));if(old==null)throw missingFailure();var b=codec.model(old.document(),ControlWorkloadBinding.class);
+            if(request.bindingId()!=null&&!before.entries().containsKey(Kind.BINDING.id(request.bindingId())))throw Failure.validation();if(b.credentialSha256().equals(request.credentialSha256()))throw Failure.conflict();
+            boolean delegated=b.mode()==io.ololabs.toolgate.contracts.v2.RequestMode.DELEGATED;
+            Long session=!delegated?b.delegatedSessionEpoch():before.entries().values().stream().filter(e->e.id().kind()==Kind.IDENTITY_BINDING&&e.enabled()).map(e->codec.model(e.document(),ControlIdentityBinding.class)).filter(i->i.userId().equals(b.delegatedUserId())).map(ControlIdentityBinding::sessionEpoch).max(Long::compare).orElseThrow(Failure::conflict);
+            var next=codec.entry(Kind.WORKLOAD_BINDING,codec.json(new ControlWorkloadBinding(b.id(),b.name(),request.enable(),b.revision()+1,b.agentId(),b.mode(),b.issuer(),b.subject(),b.audience(),request.credentialSha256(),b.credentialEpoch()+1,b.expiresAtUnixMs(),b.delegatedUserId(),b.parentBindingId(),session,b.passClaims(),null)));
+            lifecycle(tx,old,next);var entries=new HashMap<>(before.entries());entries.put(next.id(),next);var after=validated(tx,before,before.revision()+1,entries);tx.save(before,after);auditChanges(tx,actor,before,after,requestId,"WORKLOAD_CREDENTIAL_ROTATE",hash);
+            var chain=new ArrayList<io.ololabs.toolgate.contracts.v2.ActorHop>();for(var parent=b.parentBindingId();parent!=null;){var p=codec.model(after.entries().get(Kind.WORKLOAD_BINDING.id(parent)).document(),ControlWorkloadBinding.class);chain.addFirst(new io.ololabs.toolgate.contracts.v2.ActorHop(p.agentId(),p.id()));parent=p.parentBindingId();if(chain.size()>8)throw Failure.conflict();}
+            var binding=codec.model(next.document(),ControlWorkloadBinding.class);
+            var execution=request.bindingId()!=null?request.bindingId():executionBinding(after,b.agentId());
+            var context=new io.ololabs.toolgate.contracts.v2.RequestContext(id,actor.tenant().value(),b.mode(),io.ololabs.toolgate.contracts.v2.CredentialKind.STATIC_TOKEN,null,delegated?b.delegatedUserId():null,b.agentId(),id,chain,delegated?session:null,binding.credentialEpoch(),null,null,execution,request.credentialSha256());
+            var reply=new Store.Reply(200,codec.json(new ControlWorkloadCredentialResult(binding,context)),binding.revision());tx.remember(actor.id(),key,hash,reply);return reply;
+        });
+    }
+    /** The one enabled execution binding that the agent groups' CAPABILITY or SERVICE grants select, or null when none or several do. */
+    private String executionBinding(Directory d,String agent) {
+        var groups=GroupGraph.memberships(d,codec,Kind.AGENT,agent,true);var result=new TreeSet<String>();
+        for(var g:d.entries().values())if(g.id().kind()==Kind.GRANT&&g.enabled()){var grant=codec.model(g.document(),ControlAccessGrant.class);if(grant.sourceType()!=EnterpriseSourceType.AGENT_GROUP||!groups.contains(grant.sourceId())||grant.purpose()!=EnterpriseGrantPurpose.CAPABILITY&&grant.purpose()!=EnterpriseGrantPurpose.SERVICE)continue;
+            for(var e:d.entries().values())if(e.id().kind()==Kind.BINDING&&e.enabled()){var x=codec.model(e.document(),ControlExecutionBinding.class);if(EnterpriseEvaluator.selected(grant.scope().toolGroups(),x.toolGroupId())&&EnterpriseEvaluator.selected(grant.scope().deviceGroups(),x.deviceGroupId()))result.add(x.id());}}
+        return result.size()==1?result.first():null;
+    }
+    /** Super Admin enables or disables a user; either change ends the user's sessions and delegated workload tokens. */
+    public Store.Reply userEnabled(Actor actor,String id,boolean enabled,String key,String requestId) {
+        actor.requireAdmin();Ids.valid(id);
+        var user=store.transaction(actor.tenant(),false,tx->{var d=tx.load();if(!management.superAdministrator(d,actor.userId()))throw ManagementAccess.denied();var e=d.entries().get(Kind.USER.id(id));if(e==null)throw missingFailure();return codec.model(e.document(),ControlUser.class);});
+        return mutate(actor,Kind.USER,id,"UPDATE",codec.json(new ControlUser(user.id(),user.name(),enabled,user.revision(),user.email(),user.showOnLogin(),user.claims())),user.revision(),key,requestId);
     }
     private Directory.Entry importObservations(Directory.Entry old,Directory.Entry proposed) {
         if(old==null||proposed.id().kind()!=Kind.IDENTITY_BINDING)return proposed;

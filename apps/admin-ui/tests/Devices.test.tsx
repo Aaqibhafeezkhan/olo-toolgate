@@ -54,7 +54,7 @@ describe('Device management',()=>{
   });
   it('lists approved, pending and system devices with names, users and accessible details',async()=>{
     setup([active,pending,system]);await screen.findByText('Trading workstation');
-    expect(screen.getByRole('columnheader',{name:'Registered user'})).toBeTruthy();expect(screen.getByText('Alice Smith')).toBeTruthy();expect(screen.getByText('Awaiting registration')).toBeTruthy();
+    expect(screen.getByRole('columnheader',{name:'Owner'})).toBeTruthy();expect(screen.getByText('Alice Smith')).toBeTruthy();expect(screen.getByText('Awaiting registration')).toBeTruthy();
     expect(screen.getByText('Available').className).toContain('online');
     expect(screen.queryByRole('button',{name:'Approve local-builtins'})).toBeNull();
     fireEvent.focus(screen.getByRole('button',{name:'Details for device-1'}));expect(screen.getByRole('tooltip').textContent).toContain('Alice Smith (alice)');expect(screen.getByRole('tooltip').textContent).toContain('protected device key');
@@ -87,5 +87,26 @@ describe('Device management',()=>{
     await screen.findByRole('alert');expect(screen.queryByRole('heading',{name:'Approve device-1'})).toBeNull();
     const mutation=transport.mock.calls.find(call=>call[1]?.method==='POST')!;expect(JSON.parse(String(mutation[1]?.body))).toEqual({expectedApprovalRevision:3,approved:true,unlimitedConnection:true});
     expect(new Headers(mutation[1]?.headers).has('Idempotency-Key')).toBe(true);
+  });
+  it('shows owners and hides approval actions where Control would refuse them',async()=>{
+    const {keyFingerprint:_key,...redacted}=active.endpointDevice!;
+    const lab={...active,deviceId:'lab-1',directoryDevice:{...active.directoryDevice!,id:'lab-1',name:'Lab device',ownerUserId:'admin'},registeredUser:undefined,endpointDevice:{...redacted,deviceId:'lab-1',userId:'admin'}} as EndpointManagedDevice;
+    const mine={...active,deviceId:'own-1',directoryDevice:{...active.directoryDevice!,id:'own-1',name:'My laptop',ownerUserId:'visitor-001'},registeredUser:undefined,endpointDevice:{...redacted,deviceId:'own-1',userId:'visitor-001',connectionApproved:false}} as EndpointManagedDevice;
+    const hiddenPending={...pending,deviceId:'device-9',enrollment:{...pending.enrollment!,deviceId:'device-9',userCode:'',keyFingerprint:''}};
+    const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>new Response(JSON.stringify(options?.method==='POST'?{}:String(path).endsWith('/groups')?{}:{items:[lab,mine,hiddenPending]}),{status:200}));
+    const view=render(<Devices client={new ControlClient('test-token',vi.fn(),transport)} userId="visitor-001"/>);
+    await screen.findByText('My laptop');
+    expect(within(screen.getByRole('row',{name:/Lab device/})).getByText('admin')).toBeTruthy();
+    for(const id of ['lab-1','device-9'])expect(screen.queryByRole('button',{name:new RegExp(`(Approve|Deapprove|Change approval) ${id}$`)})).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'Approve own-1'}));
+    const dialog=screen.getByRole('dialog',{name:'Approve own-1'});
+    expect(within(dialog).queryByText('Device groups')).toBeNull();expect(within(dialog).getByText(/You own this device/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('checkbox',{name:/I confirm/}));fireEvent.click(within(dialog).getByRole('button',{name:'Approve device'}));
+    await screen.findByText('Device approved.');
+    expect(transport.mock.calls.filter(call=>call[1]?.method==='POST').map(call=>call[0])).toEqual(['/api/control/v1/endpoint/devices/own-1/approval']);
+    expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/groups'))).toBe(false);
+    view.unmount();
+    render(<Devices client={new ControlClient('test-token',vi.fn(),transport)} superAdmin/>);
+    expect(await screen.findByRole('button',{name:'Deapprove lab-1'})).toBeTruthy();
   });
 });

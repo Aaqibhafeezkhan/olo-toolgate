@@ -32,6 +32,24 @@
           "minLength": 3,
           "maxLength": 254,
           "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        },
+        "showOnLogin": {
+          "type": "boolean",
+          "description": "Listed with its generated password on the Quickstart login page. Absent means false."
+        },
+        "claims": {
+          "type": "object",
+          "description": "Non-secret attributes passed to tools only when a delegated workload binding lists them in passClaims.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+          }
         }
       },
       "required": [
@@ -560,6 +578,25 @@
           },
           "maxItems": 512,
           "uniqueItems": true
+        },
+        "settings": {
+          "$ref": "../v2/settings.schema.json#/$defs/ControlServerSettingsPatch"
+        },
+        "requiredIdentities": {
+          "type": "array",
+          "items": {
+            "$ref": "control.schema.json#/$defs/ControlRequiredIdentity"
+          },
+          "maxItems": 512,
+          "uniqueItems": true
+        },
+        "visitorPool": {
+          "$ref": "control.schema.json#/$defs/ControlVisitorPool"
+        },
+        "reservedRecords": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 512
         }
       },
       "required": [
@@ -606,6 +643,21 @@
         },
         "dryRun": {
           "type": "boolean"
+        },
+        "identityResolution": {
+          "type": "object",
+          "description": "Required identity ID to its resolution.",
+          "maxProperties": 512,
+          "propertyNames": {
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$"
+          },
+          "additionalProperties": {
+            "$ref": "control.schema.json#/$defs/ControlIdentityResolution"
+          }
+        },
+        "removeUnlistedMemberships": {
+          "type": "boolean",
+          "description": "Also remove resolved users from destination teams they are not resolved into. Default false."
         }
       },
       "required": [
@@ -642,7 +694,8 @@
         "EXTRACTOR",
         "WORKLOAD_BINDING",
         "IDENTITY_BINDING",
-        "DEVICE_EVIDENCE"
+        "DEVICE_EVIDENCE",
+        "SETTINGS"
       ]
     },
     "ControlChange": {
@@ -921,6 +974,177 @@
       },
       "required": [
         "items"
+      ]
+    },
+    "ControlRequiredIdentity": {
+      "type": "object",
+      "description": "A user ID that exported records reference, with the exported teams it belonged to. IDs only.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "teamIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 512,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "teamIds"
+      ]
+    },
+    "ControlVisitorPool": {
+      "type": "object",
+      "description": "Quickstart demo account pool, read only at install. Never stored as directory records.",
+      "additionalProperties": false,
+      "properties": {
+        "prefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "teamId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "agentGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "delegationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "claims": {
+          "type": "object",
+          "description": "Claim name to values assigned round-robin to pool accounts.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+            },
+            "minItems": 1,
+            "maxItems": 512
+          }
+        },
+        "passClaims": {
+          "type": "object",
+          "description": "Claim name to the tool id or MCP name globs it is passed to; * is allowed only as the last character.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:/-]*\\*?$"
+            },
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true
+          }
+        }
+      },
+      "required": [
+        "prefix",
+        "teamId",
+        "agentGroupId"
+      ]
+    },
+    "ControlIdentityResolutionAction": {
+      "type": "string",
+      "enum": [
+        "EXISTING",
+        "MAP",
+        "PLACEHOLDER"
+      ]
+    },
+    "ControlIdentityResolution": {
+      "type": "object",
+      "description": "How one required identity is resolved on import. MAP needs targetUserId; teamIds are added, never replaced.",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "control.schema.json#/$defs/ControlIdentityResolutionAction"
+        },
+        "targetUserId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "teamIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 512,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "ControlErrorDetailCode": {
+      "type": "string",
+      "enum": [
+        "UNRESOLVED_IDENTITIES",
+        "REPLACE_CONFLICTS",
+        "ONE_DEVICE_PER_ACCOUNT",
+        "REQUIRED_REVIEWS_CHANGE",
+        "RATE_LIMITED"
+      ]
+    },
+    "ControlErrorDetail": {
+      "type": "object",
+      "description": "Error that names what the caller must resolve; IDs only, never payloads.",
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "$ref": "control.schema.json#/$defs/ControlErrorDetailCode"
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "^[A-Za-z0-9._:/-]+$"
+          },
+          "maxItems": 1024
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "error"
+      ]
+    },
+    "ControlReviewPolicy": {
+      "type": "object",
+      "description": "Configuration review threshold in force for new changes.",
+      "additionalProperties": false,
+      "properties": {
+        "requiredReviews": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "requiredReviews"
       ]
     }
   }

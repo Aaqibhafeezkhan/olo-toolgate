@@ -47,7 +47,7 @@ test('real group administration, inherited provenance and review impact are acce
     for(const [index,reviewer] of reviewers.entries()){
       reviewer.setDefaultTimeout(15000);
       await reviewer.goto(origin+'/console/');
-      await reviewer.getByLabel('Local account').selectOption('reviewer-'+(index+1));
+      await reviewer.getByLabel('Username',{exact:true}).fill('reviewer-'+(index+1));
       await reviewer.getByLabel('Password',{exact:true}).fill(process.env['TOOLGATE_ENTERPRISE_REVIEWER_'+(index+1)]!);
       await connect(reviewer);
     }

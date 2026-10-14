@@ -115,6 +115,11 @@ impl Config {
 
 /// Bound startup file reads, including files whose metadata size is misleading.
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, &'static str> {
+    serde_json::from_slice(&read_bytes(path)?).map_err(|_| "invalid configuration JSON")
+}
+
+/// Bounded read of a mounted file; the credential reload uses the same bound as startup.
+pub fn read_bytes(path: &Path) -> Result<Vec<u8>, &'static str> {
     let file = std::fs::File::open(path).map_err(|_| "configuration file unavailable")?;
     let mut bytes = Vec::new();
     file.take(1_048_577)
@@ -123,5 +128,5 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, &'sta
     if bytes.len() > 1_048_576 {
         return Err("configuration file too large");
     }
-    serde_json::from_slice(&bytes).map_err(|_| "invalid configuration JSON")
+    Ok(bytes)
 }

@@ -3,8 +3,8 @@
 //! Service bootstrap. Secrets/config contents are never included in diagnostics.
 use olo_toolgate_gateway::{
     application::Gateway,
-    auth::{Authenticator, Credential},
-    config::{read_json, Config},
+    auth::Authenticator,
+    config::{read_bytes, read_json, Config},
     http::{management_router, runtime_router, AppState},
     server, unix_ms,
     validation::Contracts,
@@ -44,11 +44,14 @@ async fn run() -> Result<(), &'static str> {
         std::env::var("TOOLGATE_GATEWAY_CREDENTIALS")
             .map_err(|_| "TOOLGATE_GATEWAY_CREDENTIALS is required")?,
     );
+    // Installed before anything else: an early SIGHUP must reload, never terminate the process.
+    #[cfg(unix)]
+    let mut hangup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
+        .map_err(|_| "signal subsystem unavailable")?;
     let config: Config = read_json(&config_path)?;
-    let credentials: Vec<Credential> = read_json(&credentials_path)?;
     let now = unix_ms().ok_or("system clock unavailable")?;
     config.validate(&contracts, now)?;
-    let auth = Authenticator::new(credentials, &contracts, now)?;
+    let auth = Authenticator::from_bytes(&read_bytes(&credentials_path)?, &contracts, now)?;
     let runtime = TcpListener::bind(config.listen)
         .await
         .map_err(|_| "runtime listener bind failed")?;
@@ -77,6 +80,27 @@ async fn run() -> Result<(), &'static str> {
     });
     let state = AppState::new(gateway, auth, config.clone());
     let state = Arc::new(state);
+    // SIGHUP: the administrator replaced the credential file atomically. Validate it whole, then swap.
+    #[cfg(unix)]
+    let reload_worker = {
+        let state = state.clone();
+        tokio::spawn(async move {
+            while hangup.recv().await.is_some() {
+                match state.reload_credentials(&credentials_path) {
+                    Ok(count) => tracing::info!(
+                        service = "gateway",
+                        event = "credentials_reloaded",
+                        count = count
+                    ),
+                    Err(reason) => tracing::warn!(
+                        service = "gateway",
+                        event = "credentials_reload_rejected",
+                        reason = reason
+                    ),
+                }
+            }
+        })
+    };
     let runtime_task = tokio::spawn(server::serve(
         runtime,
         runtime_router(state.clone()),
@@ -105,6 +129,8 @@ async fn run() -> Result<(), &'static str> {
         _ = &mut management_task => { failed = true; },
         _ = &mut health_worker => { failed = true; },
     }
+    #[cfg(unix)]
+    reload_worker.abort();
     state.draining.store(true, Ordering::Release);
     let _ = shutdown.send(true);
     if !health_worker.is_finished()

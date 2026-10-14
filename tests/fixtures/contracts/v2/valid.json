@@ -103,6 +103,9 @@
     "narrowed": []
   },
   "ConfigLayer": "TENANT_POLICY",
+  "ConfigurationSettings": {
+    "requiredReviews": 0
+  },
   "ConnectionRequirement": {
     "id": "salesforce",
     "provider": "salesforce",
@@ -130,6 +133,9 @@
       "jitterPct": 20,
       "offlineAfterMs": 120000,
       "source": "ENVIRONMENT"
+    },
+    "configuration": {
+      "requiredReviews": 2
     }
   },
   "ControlServerSettingsPatch": {

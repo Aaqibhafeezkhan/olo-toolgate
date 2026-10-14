@@ -22,7 +22,7 @@ final class PostgresBootstrapAdministratorTest {
         try(var c=java.sql.DriverManager.getConnection(baseUrl,"control_migrator",password);var s=c.createStatement()){s.execute("CREATE DATABASE "+database);}
         var url=baseUrl.replace("/control?","/"+database+"?");
         Flyway.configure().dataSource(url,"control_migrator",password).target("18").load().migrate();
-        var codec=new ContractCodec();var user=new ControlUser("admin","Existing owner",true,1L,"existing@example.com");
+        var codec=new ContractCodec();var user=new ControlUser("admin","Existing owner",true,1L,"existing@example.com",null,null);
         var binding=new ControlIdentityBinding("installed-admin","Reviewed identity",true,1L,"admin","https://quickstart.local","admin",1L,1L,1L,1L,"REVIEWED_INSTALLATION",0L);
         try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES('upgrade',?,?,1,?::jsonb)")) {
             s.setString(1,"USER");s.setString(2,"admin");s.setString(3,codec.json(user));s.executeUpdate();
@@ -32,7 +32,7 @@ final class PostgresBootstrapAdministratorTest {
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         var store=new PostgresStore(source,codec);var tenant=new Ids.TenantId("upgrade");
         store.transaction(tenant,false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());assertEquals(user,codec.model(tx.load().entries().get(Kind.USER.id("admin")).document(),ControlUser.class));return null;});
-        for(boolean remove:List.of(false,true))assertEquals(409,assertThrows(Failure.class,()->store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());if(remove)entries.remove(Kind.USER.id("admin"));else entries.put(Kind.USER.id("admin"),codec.entry(Kind.USER,codec.json(new ControlUser("admin",user.name(),false,2L,user.email()))));tx.save(before,new Directory(before.revision()+1,entries));return null;})).status());
+        for(boolean remove:List.of(false,true))assertEquals(409,assertThrows(Failure.class,()->store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());if(remove)entries.remove(Kind.USER.id("admin"));else entries.put(Kind.USER.id("admin"),codec.entry(Kind.USER,codec.json(new ControlUser("admin",user.name(),false,2L,user.email(),null,null))));tx.save(before,new Directory(before.revision()+1,entries));return null;})).status());
         try(var c=source.getConnection();var s=c.createStatement()) {
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_bootstrap_admins SET user_id='replacement'"));
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("DELETE FROM control_bootstrap_admins"));

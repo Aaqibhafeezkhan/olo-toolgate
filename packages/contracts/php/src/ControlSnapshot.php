@@ -28,12 +28,16 @@ final readonly class ControlSnapshot implements \JsonSerializable {
         public array $extractors,
         public array $workloadBindings,
         public array $identityBindings,
-        public array $deviceEvidence
+        public array $deviceEvidence,
+        public ?\OloLabs\ToolGate\Contracts\V2\ControlServerSettingsPatch $settings = null,
+        public ?array $requiredIdentities = null,
+        public ?ControlVisitorPool $visitorPool = null,
+        public ?int $reservedRecords = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['formatVersion', 'tenantId', 'revision', 'users', 'teams', 'agents', 'tools', 'policies', 'devices', 'roles', 'deviceGroups', 'agentGroups', 'toolGroups', 'grants', 'delegations', 'agentDelegations', 'bindings', 'extractors', 'workloadBindings', 'identityBindings', 'deviceEvidence']) || array_diff(['formatVersion', 'tenantId', 'revision', 'users', 'teams', 'agents', 'tools', 'policies', 'devices', 'roles', 'deviceGroups', 'agentGroups', 'toolGroups', 'grants', 'delegations', 'agentDelegations', 'bindings', 'extractors', 'workloadBindings', 'identityBindings', 'deviceEvidence'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['formatVersion', 'tenantId', 'revision', 'users', 'teams', 'agents', 'tools', 'policies', 'devices', 'roles', 'deviceGroups', 'agentGroups', 'toolGroups', 'grants', 'delegations', 'agentDelegations', 'bindings', 'extractors', 'workloadBindings', 'identityBindings', 'deviceEvidence', 'settings', 'requiredIdentities', 'visitorPool', 'reservedRecords']) || array_diff(['formatVersion', 'tenantId', 'revision', 'users', 'teams', 'agents', 'tools', 'policies', 'devices', 'roles', 'deviceGroups', 'agentGroups', 'toolGroups', 'grants', 'delegations', 'agentDelegations', 'bindings', 'extractors', 'workloadBindings', 'identityBindings', 'deviceEvidence'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -57,7 +61,11 @@ final readonly class ControlSnapshot implements \JsonSerializable {
             array_map(static fn ($item) => ControlResourceExtractor::fromArray($item), $data['extractors']),
             array_map(static fn ($item) => ControlWorkloadBinding::fromArray($item), $data['workloadBindings']),
             array_map(static fn ($item) => ControlIdentityBinding::fromArray($item), $data['identityBindings']),
-            array_map(static fn ($item) => ControlDeviceEvidence::fromArray($item), $data['deviceEvidence'])
+            array_map(static fn ($item) => ControlDeviceEvidence::fromArray($item), $data['deviceEvidence']),
+            array_key_exists('settings', $data) ? \OloLabs\ToolGate\Contracts\V2\ControlServerSettingsPatch::fromArray($data['settings']) : null,
+            array_key_exists('requiredIdentities', $data) ? array_map(static fn ($item) => ControlRequiredIdentity::fromArray($item), $data['requiredIdentities']) : null,
+            array_key_exists('visitorPool', $data) ? ControlVisitorPool::fromArray($data['visitorPool']) : null,
+            array_key_exists('reservedRecords', $data) ? $data['reservedRecords'] : null
         );
     }
 

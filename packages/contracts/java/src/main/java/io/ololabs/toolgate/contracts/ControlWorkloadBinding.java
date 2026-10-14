@@ -20,6 +20,8 @@ package io.ololabs.toolgate.contracts;
  * @param delegatedUserId canonical delegatedUserId value
  * @param parentBindingId canonical parentBindingId value
  * @param delegatedSessionEpoch canonical delegatedSessionEpoch value
+ * @param passClaims canonical passClaims value
+ * @param needsReauthorization canonical needsReauthorization value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ControlWorkloadBinding(
@@ -37,7 +39,9 @@ public record ControlWorkloadBinding(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "expiresAtUnixMs", required = true) Long expiresAtUnixMs,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "delegatedUserId", required = false) String delegatedUserId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "parentBindingId", required = false) String parentBindingId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "delegatedSessionEpoch", required = false) Long delegatedSessionEpoch
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "delegatedSessionEpoch", required = false) Long delegatedSessionEpoch,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "passClaims", required = false) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> passClaims,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "needsReauthorization", required = false) Boolean needsReauthorization
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -56,6 +60,8 @@ public record ControlWorkloadBinding(
      * @param delegatedUserId canonical delegatedUserId value
      * @param parentBindingId canonical parentBindingId value
      * @param delegatedSessionEpoch canonical delegatedSessionEpoch value
+     * @param passClaims canonical passClaims value
+     * @param needsReauthorization canonical needsReauthorization value
      */
     public ControlWorkloadBinding {
         java.util.Objects.requireNonNull(id, "id");
@@ -70,5 +76,6 @@ public record ControlWorkloadBinding(
         java.util.Objects.requireNonNull(credentialSha256, "credentialSha256");
         java.util.Objects.requireNonNull(credentialEpoch, "credentialEpoch");
         java.util.Objects.requireNonNull(expiresAtUnixMs, "expiresAtUnixMs");
+        passClaims = passClaims == null ? null : java.util.Map.copyOf(passClaims);
     }
 }

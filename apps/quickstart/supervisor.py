@@ -37,13 +37,55 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from enterprise_bootstrap import prepare
+from enterprise_bootstrap import Refused, execution_binding, prepare, workload_context
 
 DATA = Path('/data')
+# Optional second volume: device CA and server TLS keys outlive a /data reset, so enrolled clients keep trusting it.
+TRUST = Path('/trust')
+TRUST_FILES = {'device-ca.crt': 'device-ca.crt', 'device-ca.key': 'device-ca.pem', 'server.crt': 'server.crt',
+               'server.key': 'server-tls.pem', 'device-trust.p12': 'device-trust.p12'}
 TENANT = 'quickstart'
 ISSUER = 'https://quickstart.local'
 GROUPS = ()  # Human portal permissions derive only from the reviewed Team/Role graph.
-LOCAL_USERS = ('admin', 'reviewer-1', 'reviewer-2', 'test-readonly', 'test-readwrite', 'test-admin')
+# Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
+BASE_USERS = ('admin', 'reviewer-1', 'reviewer-2', 'test-readonly', 'test-readwrite', 'test-admin')
+CLAIM_PATH = '/api/quickstart/v1/demo-accounts/claim'
+CREDENTIALS_LOCK = threading.RLock()
+CLAIM_LOCK = threading.Lock()
+
+
+class Forbidden(Exception):
+    """Authenticated, but this account may not perform the operation."""
+
+
+def trust_mounted():
+    try: return any(line.split()[4] == str(TRUST) for line in Path('/proc/self/mountinfo').read_text().splitlines())
+    except (OSError, IndexError): return False
+
+
+def trust(name):
+    """Path of a trust file: in /trust when that volume is mounted, otherwise in /data/keys as before."""
+    return TRUST/name if trust_mounted() else DATA/'keys'/TRUST_FILES[name]
+
+
+def installation():
+    """Local installation state written by prepare(); installations made before it have none."""
+    path = DATA/'state/installation.json'
+    if not path.exists(): return dict(users=[], agents=[], pool=[], environment={}, maxPool=32, fixedCredentials=1)
+    return strict(path.read_bytes())
+
+
+def demo_accounts():
+    path = DATA/'state/demo-accounts.json'
+    return strict(path.read_bytes()) if path.exists() else {'accounts': {}}
+
+
+def local_users():
+    return BASE_USERS+tuple(user['id'] for user in installation()['users'])+tuple(demo_accounts()['accounts'])
+
+
+def shown_on_login(user):
+    return any(entry['id'] == user and entry['showOnLogin'] for entry in installation()['users'])
 
 
 def password_disabled():
@@ -119,14 +161,14 @@ def password_valid(value):
     return isinstance(value, str) and 16 <= len(value) <= 128 and value.isascii() and all(32 < ord(c) < 127 for c in value) and len(set(value)) >= 8
 
 
-def password_record(value, changed=False, generation=1):
+def password_record(value, changed=True, generation=1):
     if not password_valid(value): raise ValueError('Password must be 16–128 printable ASCII characters with eight distinct characters')
     salt = secrets.token_bytes(32)
     return {'salt': salt.hex(), 'hash': hashlib.pbkdf2_hmac('sha256', value.encode(), salt, 600000).hex(), 'changed': changed, 'generation': generation}
 
 
 def identity_path(user):
-    if user not in LOCAL_USERS: raise PermissionError()
+    if not isinstance(user, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', user) or user not in local_users(): raise PermissionError()
     return DATA/('identity.json' if user == 'admin' else 'identity-'+user+'.json')
 
 
@@ -150,7 +192,9 @@ class LocalIdentity:
             candidate = value if isinstance(value, str) and len(value) <= 128 else ''
             digest = hashlib.pbkdf2_hmac('sha256', candidate.encode(), bytes.fromhex(record['salt']), 600000).hex()
             if not hmac.compare_digest(digest, record['hash']): raise PermissionError()
-            if not record['changed'] or replacement is not None:
+            # No account must change its password at login. Shared accounts shown on the login page never may.
+            if replacement is not None:
+                if shown_on_login(user): raise Forbidden()
                 if not password_valid(replacement) or replacement == value: raise ValueError('A different strong password is required')
                 record = password_record(replacement, True, record['generation']+1)
                 request_id=secrets.token_hex(16)
@@ -169,11 +213,13 @@ REMOTE_TOOL_HOST='tool-host-remote'
 
 
 def key(name):
-    path = DATA/'keys'/f'{name}.pem'
+    kept = {'device-ca': 'device-ca.key', 'server-tls': 'server.key'}.get(name)
+    path = trust(kept) if kept else DATA/'keys'/f'{name}.pem'
     if not path.exists():
         private = rsa.generate_private_key(public_exponent=65537, key_size=3072)
         atomic(path, private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
-        atomic(path.with_name(name+'-public.pem'), private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+        if path.parent == DATA/'keys':
+            atomic(path.with_name(name+'-public.pem'), private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
     return serialization.load_pem_private_key(path.read_bytes(), password=None)
 
 
@@ -181,7 +227,7 @@ def jwt(groups, subject='admin', generation=None, directory_bound=True):
     now = int(time.time())
     claims = {'iss': ISSUER, 'aud': 'toolgate-control', 'sub': subject, 'user_id': subject, 'tenant_id': TENANT, 'groups': groups, 'iat': now, 'exp': now+900}
     if not directory_bound: claims.pop('user_id')
-    elif subject in LOCAL_USERS:
+    elif subject in local_users():
         with Database() as db:
             row=db.execute('SELECT CAST(document AS TEXT) FROM control_records WHERE tenant_id=? AND kind=? AND record_id=?',
                            (TENANT,'IDENTITY_BINDING','installed-'+subject)).fetchone()
@@ -210,15 +256,24 @@ def session(header):
 
 
 def certificates():
-    if (DATA/'keys/server.crt').exists(): return
+    """Device CA, server TLS certificate and trust store; with /trust mounted they survive a /data reset."""
+    if not trust('device-trust.p12').exists():
+        issue()
+    if trust_mounted():  # Public copies keep /data/keys/device-ca.crt the one place local tools read the CA from.
+        for name in ('device-ca.crt', 'server.crt'): atomic(DATA/'keys'/name, trust(name).read_bytes())
+
+
+def issue():
     now = datetime.datetime.now(datetime.timezone.utc)
     ca_key = key('device-ca'); server_key = key('server-tls')
     name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'ToolGate Quickstart Device CA')])
     ca = x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(ca_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=3650)).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True).add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True).add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False).sign(ca_key, hashes.SHA256())
     server = x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'localhost')])).issuer_name(name).public_key(server_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=365)).add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True).add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost'), x509.IPAddress(ipaddress.ip_address('127.0.0.1'))]), critical=False).add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False).add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False).add_extension(x509.SubjectKeyIdentifier.from_public_key(server_key.public_key()), critical=False).sign(ca_key, hashes.SHA256())
-    atomic(DATA/'keys/device-ca.crt', ca.public_bytes(serialization.Encoding.PEM))
-    atomic(DATA/'keys/server.crt', server.public_bytes(serialization.Encoding.PEM))
-    subprocess.run(['keytool', '-importcert', '-noprompt', '-alias', 'device-ca', '-file', str(DATA/'keys/device-ca.crt'), '-keystore', str(DATA/'keys/device-trust.p12'), '-storetype', 'PKCS12', '-storepass', 'changeit'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    atomic(trust('device-ca.crt'), ca.public_bytes(serialization.Encoding.PEM))
+    atomic(trust('server.crt'), server.public_bytes(serialization.Encoding.PEM))
+    store = trust('device-trust.p12'); partial = store.with_name(store.name+'.partial'); partial.unlink(missing_ok=True)
+    subprocess.run(['keytool', '-importcert', '-noprompt', '-alias', 'device-ca', '-file', str(trust('device-ca.crt')), '-keystore', str(partial), '-storetype', 'PKCS12', '-storepass', 'changeit'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    partial.replace(store)  # The trust store is written last: it marks the set complete.
 
 
 def initialize():
@@ -227,6 +282,9 @@ def initialize():
     DATA.mkdir(exist_ok=True)
     if DATA.is_symlink() or DATA.stat().st_uid != os.getuid(): raise ValueError('Private service-owned /data required')
     DATA.chmod(0o700)
+    if trust_mounted():
+        if TRUST.is_symlink() or TRUST.stat().st_uid != os.getuid(): raise ValueError('Private service-owned /trust required')
+        TRUST.chmod(0o700)
     for name in ('keys', 'run', 'state', 'hotfolder', 'artifacts'):
         path = DATA/name
         if path.is_symlink(): raise ValueError('Unsafe local layout')
@@ -244,7 +302,7 @@ def initialize():
         atomic(DATA/'identity.json', json.dumps(password_record(password)))
         if supplied is None: atomic(DATA/'bootstrap-password', password+'\n')
     else: os.environ.pop('TOOLGATE_BOOTSTRAP_PASSWORD', None)  # Existing identity is never reset by startup settings.
-    for user in LOCAL_USERS[1:]:
+    for user in BASE_USERS[1:]:
         if not identity_path(user).exists():
             password=secrets.token_urlsafe(32)
             atomic(identity_path(user),json.dumps(password_record(password)))
@@ -286,7 +344,7 @@ def client_credentials():
     metadata = path.stat()
     if path.is_symlink() or not path.is_file() or metadata.st_size > 65536 or metadata.st_mode & 0o077 or metadata.st_uid not in (0, os.geteuid()): raise ValueError('Unsafe client credential file')
     values = strict(path.read_bytes())
-    if not isinstance(values, list) or len(values)>32: raise ValueError('Invalid workload credentials')
+    if not isinstance(values, list) or len(values)>credential_cap(): raise ValueError('Invalid workload credentials')
     now = int(time.time()*1000)
     for value in values:
         if not isinstance(value,dict) or set(value)!={'tokenSha256','context','expiresAtUnixMs'} or not isinstance(value['expiresAtUnixMs'],int) or isinstance(value['expiresAtUnixMs'],bool): raise ValueError('Invalid workload credentials')
@@ -295,22 +353,176 @@ def client_credentials():
     return [value for value in values if value['expiresAtUnixMs']>now]
 
 
+def credential_cap():
+    """Largest pool the record budget allows plus every fixed credential; the Gateway accepts at most 256."""
+    state = installation()
+    return min(256, state['maxPool']+state['fixedCredentials'])
+
+
+def workload_credentials():
+    """Live agent token hashes and Gateway contexts by workload binding. Raw tokens are never kept here."""
+    path = DATA/'state/workload-credentials.json'
+    return strict(path.read_bytes()) if path.exists() else {}
+
+
+def private(path, value):
+    atomic(path, json.dumps(value)); Path(path).chmod(0o600)
+
+
+def accounts():
+    """Logins for initialize-file users and the one private credentials file. Idempotent on every start."""
+    state = installation(); path = DATA/'credentials.json'
+    saved = strict(path.read_bytes()) if path.exists() else None
+    known = {user['username']: user['password'] for user in saved['users']} if saved else {}
+    users, created = [], {}
+    for user in BASE_USERS[:3]:
+        bootstrap = DATA/('bootstrap-password' if user == 'admin' else 'bootstrap-password-'+user)
+        users.append(dict(username=user, password=bootstrap.read_text().strip() if bootstrap.exists() else None, showOnLogin=False))
+    for entry in state['users']:
+        password = known.get(entry['id']) or secrets.token_urlsafe(32)
+        users.append(dict(username=entry['id'], password=password, showOnLogin=entry['showOnLogin']))
+        if not identity_path(entry['id']).exists(): created[entry['id']] = password
+    # Written before the login records, so a restart after a crash reuses exactly these passwords.
+    if saved is None:
+        private(path, dict(users=users, agents=[dict(agentId=agent['agentId'], workloadBindingId=agent['workloadBindingId'],
+                token=agent.get('token'), userId=agent['userId']) for agent in state['agents']], claimToken=secrets.token_urlsafe(32)))
+    for user, password in created.items(): atomic(identity_path(user), json.dumps(password_record(password)))
+    stored = workload_credentials()
+    for agent in state['agents']:
+        stored.setdefault(agent['workloadBindingId'], dict(tokenSha256=agent['context']['credentialSha256'], context=agent['context']))
+    private(DATA/'state/workload-credentials.json', stored)
+    if any('token' in agent for agent in state['agents']):
+        for agent in state['agents']: agent.pop('token', None)
+        private(DATA/'state/installation.json', state)
+
+
+def gateway_credentials():
+    """Write the Gateway's whole credential set atomically; returns the digest of the exact bytes written."""
+    with CREDENTIALS_LOCK:
+        digest = hashlib.sha256((DATA/'run/runtime-token').read_text().encode()).hexdigest()
+        expires = int(time.time()*1000)+86400000
+        # This disabled workload is an authentication identity only. Installation creates no workload grants.
+        # No device in the context: Control places each call on a device of binding-default's group.
+        context = dict(requestId='local-workload',tenantId=TENANT,mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='agent-local',
+                       workloadBindingId='workload-local',chain=[],credentialEpoch=1,bindingId='binding-default',
+                       credentialSha256=digest)
+        credentials = [dict(tokenSha256=digest,context=context,expiresAtUnixMs=expires)]
+        credentials.extend(dict(tokenSha256=value['tokenSha256'],context=value['context'],expiresAtUnixMs=expires)
+                           for value in workload_credentials().values())
+        credentials.extend(client_credentials())
+        if len(credentials) > credential_cap(): raise ValueError('Gateway credential cap exceeded')
+        raw = json.dumps(credentials).encode()
+        atomic(DATA/'run/credentials.json', raw)
+        return hashlib.sha256(raw).hexdigest()
+
+
+def install(signal_gateway, timeout=15):
+    """Write the credential set, signal the Gateway and wait until its management listener reports that file."""
+    with CREDENTIALS_LOCK:
+        digest = gateway_credentials(); deadline = time.monotonic()+timeout; again = 0
+        while time.monotonic() < deadline:
+            try:
+                status, raw, _ = call('/v1/credentials', port=9091)
+                if status == 200 and strict(raw).get('sha256') == digest: return
+                # A Gateway that answers has its SIGHUP handler installed, so the signal reloads and never stops it.
+                if status == 200 and time.monotonic() >= again: signal_gateway(); again = time.monotonic()+1
+            except (OSError, http.client.HTTPException, ValueError): pass
+            time.sleep(.05)
+        raise TimeoutError('Gateway did not confirm the credential reload')
+
+
+def admin_token():
+    """A short-lived session of the installation's Super Admin, for the supervisor's own Control calls."""
+    return jwt(GROUPS, 'admin', generation=strict((DATA/'identity.json').read_bytes())['generation'])
+
+
+def control(path, token, body=None):
+    status, raw, _ = call(path, token, body)
+    if status not in (200, 201): raise RuntimeError('Control refused the request')
+    return strict(raw) if raw else {}
+
+
+def rotate(binding_id, token, actor, execution=None):
+    """Control stores the new token's hash and epoch and enables the binding; the Gateway context follows it."""
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    reply = control('/api/control/v1/workload-bindings/'+urllib.parse.quote(binding_id, safe='')+'/credential', actor,
+                    {'credentialSha256': digest, 'enable': True})
+    binding = reply['binding'] if isinstance(reply.get('binding'), dict) else reply
+    if binding.get('id') != binding_id or binding.get('credentialSha256') != digest: raise RuntimeError('Unexpected credential rotation')
+    supplied = reply['context'] if isinstance(reply.get('context'), dict) else {}
+    context = workload_context(TENANT, binding, supplied.get('bindingId') or execution)
+    with CREDENTIALS_LOCK:
+        stored = workload_credentials(); stored[binding_id] = dict(tokenSha256=digest, context=context)
+        private(DATA/'state/workload-credentials.json', stored)
+
+
+def refresh_at():
+    return os.environ.get('TOOLGATE_DEMO_REFRESH_AT', '').strip() or None
+
+
+def claim_account(requester, signal_gateway):
+    """Hand one pool account to a requester with a fresh password and agent token; a repeat claim revokes the old ones."""
+    pool = {entry['userId']: entry for entry in installation()['pool']}
+    with CLAIM_LOCK:
+        state = demo_accounts(); claimed = state['accounts']
+        user = next((name for name, value in claimed.items() if hmac.compare_digest(value['requester'].encode(), requester.encode())), None)
+        if user is None:
+            user = next((name for name in pool if name not in claimed), None)
+            if user is None: return None
+            # Recorded before any credential exists: no account goes to a second requester in this volume's life.
+            claimed[user] = dict(requester=requester, claimedAtUnixMs=int(time.time()*1000), enabled=False)
+            private(DATA/'state/demo-accounts.json', state)
+        admin = admin_token()
+        if not claimed[user]['enabled']:
+            status, _, _ = call('/api/control/v1/users/'+urllib.parse.quote(user, safe='')+'/enable', admin, {})
+            if status not in (200, 204, 409): raise RuntimeError('Control refused to enable the account')
+            claimed[user]['enabled'] = True; private(DATA/'state/demo-accounts.json', state)
+        password, token = secrets.token_urlsafe(32), secrets.token_urlsafe(48)
+        path = identity_path(user)
+        generation = strict(path.read_bytes())['generation']+1 if path.exists() else 1
+        identity_audit('PASSWORD_ISSUED', generation, secrets.token_hex(16), user)
+        atomic(path, json.dumps(password_record(password, True, generation)))  # Ends every earlier session.
+        rotate(pool[user]['workloadBindingId'], token, admin, pool[user]['context'].get('bindingId'))
+        install(signal_gateway)  # The previous token leaves the Gateway in this same reload.
+        gateway = os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL', 'https://localhost:8443').rstrip('/')+'/mcp'
+        return dict(username=user, password=password, agentToken=token,
+                    consoleUrl=os.environ.get('TOOLGATE_PUBLIC_CONSOLE_URL', '').strip() or 'http://localhost:8080/console/',
+                    gatewayUrl=os.environ.get('TOOLGATE_PUBLIC_MCP_URL', '').strip() or gateway, expiresAt=refresh_at())
+
+
+def reauthorize(binding_id, actor, signal_gateway):
+    """A Super Admin issues a fresh token for one workload binding; it is returned once and never stored."""
+    status, raw, _ = call('/api/control/v1/admin-session', actor)
+    if status != 200 or strict(raw).get('role') != 'SUPER_ADMIN': raise Forbidden()
+    stored = workload_credentials().get(binding_id)
+    execution = stored['context'].get('bindingId') if stored else None
+    if execution is None:
+        snapshot = control('/api/control/v1/config/export', actor)
+        snapshot = snapshot['snapshot'] if isinstance(snapshot.get('snapshot'), dict) else snapshot
+        agent = next(row['agentId'] for row in snapshot.get('workloadBindings', []) if row['id'] == binding_id)
+        execution = execution_binding(snapshot, agent)
+    token = secrets.token_urlsafe(48)
+    rotate(binding_id, token, actor, execution)
+    install(signal_gateway)
+    return token
+
+
+def login_hints():
+    """Shared demo logins only (showOnLogin); administrator and reviewer passwords are never listed."""
+    path = DATA/'credentials.json'
+    users = strict(path.read_bytes())['users'] if path.exists() else []
+    return {'accounts': [dict(username=user['username'], password=user['password']) for user in users if user['showOnLogin']],
+            'refreshAt': refresh_at()}
+
+
 def configure():
     profiles = strict(subprocess.run(['/usr/local/bin/quickstart-tools','--authorization-profiles'],
                      check=True,capture_output=True,timeout=20).stdout)
     runtime_path=DATA/'run/runtime-token'
     if not runtime_path.exists(): atomic(runtime_path,secrets.token_urlsafe(48))
-    runtime=runtime_path.read_text()
-    digest=hashlib.sha256(runtime.encode()).hexdigest()
-    device, packet, trust = prepare(DATA,TENANT,ISSUER,key,atomic,profiles)
-    # This disabled workload is an authentication identity only. Installation creates no workload grants.
-    # No device in the context: Control places each call on a device of binding-default's group.
-    context=dict(requestId='local-workload',tenantId=TENANT,mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='agent-local',
-                 workloadBindingId='workload-local',chain=[],credentialEpoch=1,bindingId='binding-default',
-                 credentialSha256=digest)
-    credentials=[dict(tokenSha256=digest,context=context,expiresAtUnixMs=int(time.time()*1000)+86400000)]
-    credentials.extend(client_credentials())
-    atomic(DATA/'run/credentials.json',json.dumps(credentials))
+    device, packet, review_trust = prepare(DATA,TENANT,ISSUER,key,atomic,profiles)
+    accounts()
+    gateway_credentials()
     config = {'listen':'127.0.0.1:8081','managementListen':'127.0.0.1:9091',
               'trustedTlsProxy':False,'allowedOrigins':[],
               'limits':{'maxBodyBytes':65536,'maxHeaderBytes':8192,'maxConcurrentRequests':128,
@@ -346,8 +558,8 @@ def configure():
                 'QUARKUS_PROFILE':'quickstart', 'QUARKUS_FLYWAY_ACTIVE':'false', 'QUARKUS_DATASOURCE_ACTIVE': 'false', 'QUARKUS_DATASOURCE_HEALTH_ENABLED': 'false', 'QUARKUS_FLYWAY_MIGRATE_AT_START': 'false',
                 'QUARKUS_HTTP_HOST': '0.0.0.0', 'QUARKUS_HTTP_PORT': '8082', 'QUARKUS_HTTP_SSL_PORT': '8443',
                 'QUARKUS_HTTP_INSECURE_REQUESTS': 'enabled', 'QUARKUS_MANAGEMENT_HOST': '127.0.0.1',
-                'QUARKUS_HTTP_SSL_CERTIFICATE_FILES': '/data/keys/server.crt', 'QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES': '/data/keys/server-tls.pem',
-                'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE': '/data/keys/device-trust.p12', 'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_PASSWORD': 'changeit',
+                'QUARKUS_HTTP_SSL_CERTIFICATE_FILES': str(trust('server.crt')), 'QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES': str(trust('server.key')),
+                'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE': str(trust('device-trust.p12')), 'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_PASSWORD': 'changeit',
                 'MP_JWT_VERIFY_ISSUER': ISSUER, 'MP_JWT_VERIFY_AUDIENCES': 'toolgate-control', 'MP_JWT_VERIFY_PUBLICKEY_LOCATION': '/data/keys/identity-public.pem',
                 'TOOLGATE_CONTROL_BUNDLE_ENABLED': 'true', 'TOOLGATE_CONTROL_BUNDLE_KEY_ID': 'policy-local', 'TOOLGATE_CONTROL_BUNDLE_PRIVATE_KEY_PATH': '/data/keys/policy.pem',
                 'TOOLGATE_QUICKSTART_ARTIFACT_DIRECTORY': '/data/artifacts',
@@ -361,13 +573,14 @@ def configure():
                 'TOOLGATE_CONTROL_EFFECT_KEY_ID':'effect-local','TOOLGATE_CONTROL_EFFECT_ISSUER':'control',
                 'TOOLGATE_CONTROL_EFFECT_AUDIENCE':'toolgate-client',
                 'TOOLGATE_CONTROL_VAULT_KEY_PATH':'/data/keys/vault.key',
-                'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(trust)),
+                'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(review_trust)),
+                'TOOLGATE_CONTROL_INITIALIZE_PATH':str(DATA/'state/initialize-snapshot.json'),
                 'TOOLGATE_CONTROL_ENDPOINT_ENABLED': 'true',
                 # Quickstart check-in defaults (plan.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
                 'TOOLGATE_CONTROL_CLIENT_CHECKIN_MS': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_MS') or '500',
                 'TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT') or '0',
                 'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS': env.get('TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS') or '120000',
-                'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': '/data/keys/device-ca.pem', 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': '/data/keys/device-ca.crt',
+                'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': str(trust('device-ca.key')), 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': str(trust('device-ca.crt')),
                 'TOOLGATE_CONTROL_ENDPOINT_TENANT_ID': TENANT, 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
                 'TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION': 'Quickstart',
                 'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443'),
@@ -378,6 +591,8 @@ def configure():
             if not env.get(name): raise ValueError('External database settings required')
         settings.update(TOOLGATE_QUICKSTART_STORAGE='postgresql', QUARKUS_FLYWAY_ACTIVE='true',
             QUARKUS_DATASOURCE_ACTIVE='true', QUARKUS_DATASOURCE_HEALTH_ENABLED='true', QUARKUS_FLYWAY_MIGRATE_AT_START='true')
+    # Initialize-file server settings seed Control; an explicit container value always wins.
+    settings.update({name: value for name, value in installation()['environment'].items() if not env.get(name)})
     env.update(settings)
     return env, tools
 
@@ -448,6 +663,7 @@ class BoundedServer(http.server.ThreadingHTTPServer):
         self.identity=LocalIdentity()
         self.login_lock=threading.Lock()
         self.login_times=[]
+        self.signal_gateway=lambda: None  # main() sends SIGHUP to the running Gateway.
     def process_request(self, request, address):
         if not self.capacity.acquire(False): request.close(); return
         try: super().process_request(request, address)
@@ -504,10 +720,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except (KeyError, ValueError, CookieError): raise PermissionError() from None
     def dispatch(self):
         try:
+            # The claim API is server to server on the container network: a bearer secret, no cookie, no browser Origin.
+            claiming = urllib.parse.urlsplit(self.path).path==CLAIM_PATH and self.command=='POST'
             host = self.headers.get('Host', '')
-            if not re.fullmatch(r'(localhost|127\.0\.0\.1)(:[0-9]{1,5})?', host): raise PermissionError()
+            if not claiming and not re.fullmatch(r'(localhost|127\.0\.0\.1)(:[0-9]{1,5})?', host): raise PermissionError()
             origin = self.headers.get('Origin')
-            if origin is not None and origin != 'http://'+host: raise PermissionError()
+            if origin is not None and (claiming or origin != 'http://'+host): raise PermissionError()
             if self.headers.get('Transfer-Encoding') or len(self.path)>2048 or '\\' in self.path or '..' in urllib.parse.unquote(self.path): raise ValueError()
             length = int(self.headers.get('Content-Length','0'))
             # Packages and whole configuration snapshots are the large bodies; Control verifies and bounds them itself
@@ -520,6 +738,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path = urllib.parse.urlsplit(self.path).path
             if path=='/api/quickstart/v1/status' and self.command=='GET':
                 return self.reply(200, {'mode': 'Quickstart', 'nonHa': True, 'ready': self.server.ready.is_set(), 'version': Path('/opt/quickstart/VERSION').read_text().strip(), 'passwordRequired': not password_disabled(), 'database': database_mode(), 'authority': 'online'})
+            if path=='/api/quickstart/v1/login-hints' and self.command=='GET': return self.reply(200, login_hints())
+            if claiming:
+                saved = strict((DATA/'credentials.json').read_bytes()) if (DATA/'credentials.json').exists() else {}
+                header = self.headers.get('Authorization', '')
+                if not saved.get('claimToken') or not header.startswith('Bearer ') or not hmac.compare_digest(header[7:].encode(), saved['claimToken'].encode()): raise PermissionError()
+                data = strict(raw)
+                if not isinstance(data, dict) or set(data)!={'requester'} or not isinstance(data['requester'], str) or not re.fullmatch(r'[\x21-\x7e]{1,256}', data['requester']): raise ValueError()
+                result = claim_account(data['requester'], self.server.signal_gateway)
+                if result is None: return self.reply(409, {'error': 'POOL_EMPTY', 'nextResetAt': refresh_at()})
+                return self.reply(200, result)
             if path=='/health/ready' and self.command=='GET': return self.reply(200 if self.server.ready.is_set() else 503, {'ready': self.server.ready.is_set()})
             if path=='/api/quickstart/v1/session' and self.command=='GET':
                 try:
@@ -536,7 +764,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = strict(raw)
                 if not isinstance(data, dict) or set(data)-{'username','password','newPassword'}: raise ValueError()
                 user=data.get('username','admin')
-                if user not in LOCAL_USERS: raise PermissionError()
+                if user not in local_users(): raise PermissionError()
                 if password_disabled() and user=='admin':
                     record = strict((DATA/'identity.json').read_bytes())
                     token = jwt(GROUPS, 'admin', generation=record['generation'])
@@ -545,6 +773,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.reply(200, {'accessToken': token}, headers={'Set-Cookie': self.session_cookie(token)[1]})
             protected = path.startswith(('/api/control/', '/api/quickstart/'))
             if protected: session(self.headers.get('Authorization',''))
+            workload = re.fullmatch(r'/api/quickstart/v1/workloads/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})/reauthorize', path)
+            if workload and self.command=='POST':
+                return self.reply(200, {'token': reauthorize(workload.group(1), self.headers['Authorization'][7:], self.server.signal_gateway)})
             if path=='/api/quickstart/v1/tools' and self.command=='GET':
                 target=strict((DATA/'run/executor.json').read_bytes())
                 status,response,upstream=call('/api/control/v1/access/human/catalog',self.headers['Authorization'][7:],target)
@@ -607,6 +838,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self.reply(response.status, body, response.getheader('Content-Type','application/octet-stream'),dict(response.getheaders()))
                 finally: client.close()
             return self.reply(404, {'code':'NOT_FOUND'})
+        except Forbidden: self.reply(403, {'code':'FORBIDDEN'})
         except PermissionError: self.reply(401, {'code':'UNAUTHORIZED'})
         except (ValueError, KeyError, TypeError): self.reply(400, {'code':'INVALID_REQUEST'})
         except Exception: self.reply(503, {'code':'DEPENDENCY_UNAVAILABLE'})
@@ -695,6 +927,7 @@ def main():
             remote_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host-remote.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=remote_env))
             server = BoundedServer(('0.0.0.0',8080),Handler,ready_state)
+            server.signal_gateway = lambda: children[1].send_signal(signal.SIGHUP)
             threading.Thread(target=server.serve_forever,daemon=True).start()
             renewed = time.monotonic(); boot = renewed
             while not stop.wait(1):
@@ -727,6 +960,9 @@ def main():
 
 if __name__=='__main__':
     try: main()
+    except Refused as refused:  # A configuration the operator must change; the message names the fix.
+        print(json.dumps({'service':'quickstart','event':'startup_refused','code':'CONFIGURATION_REFUSED','reason':str(refused)}),flush=True)
+        raise SystemExit(1) from None
     except Exception:
         print(json.dumps({'service':'quickstart','event':'startup_or_runtime_failure','code':'DEPENDENCY_UNAVAILABLE'}),flush=True)
         raise SystemExit(1) from None

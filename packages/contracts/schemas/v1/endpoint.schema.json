@@ -291,7 +291,7 @@
     },
     "EndpointEnrollmentReview": {
       "type": "object",
-      "description": "Endpoint identity foundation wire model.",
+      "description": "Endpoint identity foundation wire model. userCode and keyFingerprint are returned only to callers who may approve through a group rule.",
       "additionalProperties": false,
       "properties": {
         "enrollmentId": {
@@ -332,10 +332,8 @@
       },
       "required": [
         "enrollmentId",
-        "userCode",
         "deviceId",
         "platform",
-        "keyFingerprint",
         "state",
         "expiresAtUnixMs"
       ]
@@ -532,7 +530,7 @@
     },
     "EndpointDeviceRecord": {
       "type": "object",
-      "description": "Endpoint identity foundation wire model.",
+      "description": "Endpoint identity foundation wire model. keyFingerprint is returned only to callers who may approve through a group rule.",
       "additionalProperties": false,
       "properties": {
         "deviceId": {
@@ -604,7 +602,6 @@
         "deviceId",
         "tenantId",
         "userId",
-        "keyFingerprint",
         "state",
         "revision",
         "lastSeenUnixMs",
@@ -1491,6 +1488,52 @@
       },
       "required": [
         "items"
+      ]
+    },
+    "EndpointEnrollmentLookup": {
+      "type": "object",
+      "description": "Look up one pending enrollment by the code its client shows.",
+      "additionalProperties": false,
+      "properties": {
+        "userCode": {
+          "type": "string",
+          "pattern": "^[A-F0-9]{16}$"
+        }
+      },
+      "required": [
+        "userCode"
+      ]
+    },
+    "EndpointEnrollmentLookupResult": {
+      "type": "object",
+      "description": "The pending enrollment a valid code names, for comparison with the client before approval.",
+      "additionalProperties": false,
+      "properties": {
+        "enrollmentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "platform": {
+          "$ref": "endpoint.schema.json#/$defs/ClientPlatform"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "enrollmentId",
+        "deviceId",
+        "platform",
+        "keyFingerprint",
+        "expiresAtUnixMs"
       ]
     }
   }

@@ -104,6 +104,10 @@ export interface CompositionRecord {
   readonly narrowed: ReadonlyArray<string>;
 }
 export type ConfigLayer = "PLATFORM_CEILING" | "ENVIRONMENT" | "TENANT_POLICY" | "POOL_OR_DEVICE_GROUP" | "DEPLOYMENT_BINDING" | "PACKAGE_DEFAULT";
+/** Configuration review settings. requiredReviews 0 applies changes immediately. */
+export interface ConfigurationSettings {
+  readonly requiredReviews: number;
+}
 /** SaaS connection the package needs (plan.md §14.3). */
 export interface ConnectionRequirement {
   readonly id: string;
@@ -122,11 +126,13 @@ export interface ControlServerSettings {
   readonly gateway: GatewaySettings;
   readonly deviceApproval: DeviceApproval;
   readonly clientCheckIn: ClientCheckIn;
+  readonly configuration: ConfigurationSettings;
 }
-/** application/merge-patch+json body. Env-owned clientCheckIn is not patchable. */
+/** application/merge-patch+json body, and the settings of a configuration snapshot. Env-owned clientCheckIn is not patchable. */
 export interface ControlServerSettingsPatch {
   readonly gateway?: GatewaySettings;
   readonly deviceApproval?: DeviceApproval;
+  readonly configuration?: ConfigurationSettings;
 }
 export type CredentialKind = "STATIC_TOKEN" | "JWT" | "INTROSPECTION";
 export type DeclarationId = string;

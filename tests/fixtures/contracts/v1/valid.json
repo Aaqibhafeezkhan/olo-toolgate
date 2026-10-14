@@ -1567,6 +1567,10 @@
     ]
   },
   "ControlEntityKind": "USER",
+  "ControlErrorDetail": {
+    "error": "UNRESOLVED_IDENTITIES"
+  },
+  "ControlErrorDetailCode": "UNRESOLVED_IDENTITIES",
   "ControlExecutionBinding": {
     "id": "example",
     "name": "example",
@@ -1600,6 +1604,10 @@
   "ControlIdentityBindingPage": {
     "items": []
   },
+  "ControlIdentityResolution": {
+    "action": "EXISTING"
+  },
+  "ControlIdentityResolutionAction": "EXISTING",
   "ControlImportMode": "MERGE",
   "ControlImportRequest": {
     "snapshot": {
@@ -1727,6 +1735,10 @@
       }
     ]
   },
+  "ControlRequiredIdentity": {
+    "id": "device-1",
+    "teamIds": []
+  },
   "ControlResourceExtractor": {
     "id": "example",
     "name": "example",
@@ -1740,6 +1752,9 @@
   },
   "ControlResourceExtractorPage": {
     "items": []
+  },
+  "ControlReviewPolicy": {
+    "requiredReviews": 0
   },
   "ControlRole": {
     "id": "example",
@@ -1883,6 +1898,11 @@
       }
     ]
   },
+  "ControlVisitorPool": {
+    "prefix": "example",
+    "teamId": "device-1",
+    "agentGroupId": "device-1"
+  },
   "ControlWorkloadBinding": {
     "id": "example",
     "name": "example",
@@ -1899,6 +1919,40 @@
   },
   "ControlWorkloadBindingPage": {
     "items": []
+  },
+  "ControlWorkloadCredentialResult": {
+    "binding": {
+      "id": "example",
+      "name": "example",
+      "enabled": false,
+      "revision": 1,
+      "agentId": "example",
+      "mode": "HUMAN",
+      "issuer": "example",
+      "subject": "example",
+      "audience": "example",
+      "credentialSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "credentialEpoch": 1,
+      "expiresAtUnixMs": 0
+    },
+    "context": {
+      "requestId": "req-1",
+      "tenantId": "tenant-1",
+      "mode": "DELEGATED",
+      "credentialKind": "JWT",
+      "issuer": "https://login.example.com/",
+      "userId": "user-1",
+      "agentId": "agent-1",
+      "workloadBindingId": "wb-1",
+      "chain": [],
+      "credentialEpoch": 3,
+      "delegatedSessionEpoch": 2,
+      "expiresAtUnixMs": 1791676860000
+    }
+  },
+  "ControlWorkloadCredentialRotation": {
+    "credentialSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "enable": false
   },
   "Decision": "BLOCK",
   "DeploymentAssignment": {
@@ -1935,6 +1989,28 @@
       }
     ]
   },
+  "DeviceDeploymentMetadata": {
+    "executionKind": "QUICKSTART_CLIENT",
+    "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "containerName": "toolgate-langchain-quickstart-1",
+    "systemName": "abc123",
+    "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "networkName": "toolgate-langchain_default",
+    "ipAddress": "172.18.0.2"
+  },
+  "DeviceDeploymentRecord": {
+    "deviceId": "device-test",
+    "deployment": {
+      "executionKind": "QUICKSTART_CLIENT",
+      "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "containerName": "toolgate-langchain-quickstart-1",
+      "systemName": "abc123",
+      "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "networkName": "toolgate-langchain_default",
+      "ipAddress": "172.18.0.2"
+    }
+  },
+  "DeviceExecutionKind": "QUICKSTART_CLIENT",
   "DeviceIdentity": {
     "deviceId": "device-1",
     "tenantId": "device-1",
@@ -2014,6 +2090,16 @@
     "keyFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "choice": "APPROVE"
   },
+  "EndpointEnrollmentLookup": {
+    "userCode": "0123456789ABCDEF"
+  },
+  "EndpointEnrollmentLookupResult": {
+    "enrollmentId": "device-1",
+    "deviceId": "device-1",
+    "platform": "WINDOWS",
+    "keyFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expiresAtUnixMs": 0
+  },
   "EndpointEnrollmentPage": {
     "items": []
   },
@@ -2053,6 +2139,30 @@
     "systemExecutor": false,
     "systemName": "test-machine",
     "ipAddress": "2001:db8::1"
+  },
+  "EndpointManagedDeviceDeploymentPage": {
+    "items": [
+      {
+        "deviceId": "device-1",
+        "systemExecutor": false,
+        "systemName": "test-machine",
+        "ipAddress": "2001:db8::1"
+      }
+    ],
+    "deployments": [
+      {
+        "deviceId": "device-test",
+        "deployment": {
+          "executionKind": "QUICKSTART_CLIENT",
+          "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "containerName": "toolgate-langchain-quickstart-1",
+          "systemName": "abc123",
+          "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "networkName": "toolgate-langchain_default",
+          "ipAddress": "172.18.0.2"
+        }
+      }
+    ]
   },
   "EndpointManagedDevicePage": {
     "items": []
@@ -3448,51 +3558,5 @@
       "type": "number"
     }
   },
-  "UserRole": "BASIC",
-  "DeviceDeploymentMetadata": {
-    "executionKind": "QUICKSTART_CLIENT",
-    "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "containerName": "toolgate-langchain-quickstart-1",
-    "systemName": "abc123",
-    "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "networkName": "toolgate-langchain_default",
-    "ipAddress": "172.18.0.2"
-  },
-  "DeviceExecutionKind": "QUICKSTART_CLIENT",
-  "DeviceDeploymentRecord": {
-    "deviceId": "device-test",
-    "deployment": {
-      "executionKind": "QUICKSTART_CLIENT",
-      "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "containerName": "toolgate-langchain-quickstart-1",
-      "systemName": "abc123",
-      "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "networkName": "toolgate-langchain_default",
-      "ipAddress": "172.18.0.2"
-    }
-  },
-  "EndpointManagedDeviceDeploymentPage": {
-    "items": [
-      {
-        "deviceId": "device-1",
-        "systemExecutor": false,
-        "systemName": "test-machine",
-        "ipAddress": "2001:db8::1"
-      }
-    ],
-    "deployments": [
-      {
-        "deviceId": "device-test",
-        "deployment": {
-          "executionKind": "QUICKSTART_CLIENT",
-          "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "containerName": "toolgate-langchain-quickstart-1",
-          "systemName": "abc123",
-          "networkId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "networkName": "toolgate-langchain_default",
-          "ipAddress": "172.18.0.2"
-        }
-      }
-    ]
-  }
+  "UserRole": "BASIC"
 }

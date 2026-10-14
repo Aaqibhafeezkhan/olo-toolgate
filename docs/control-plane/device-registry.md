@@ -130,6 +130,21 @@ disabled, deapproved, expired-approval or permanently revoked key cannot recover
 Lost check-in responses retain sequence and effect replay protection; old replies
 cannot reinstall an expired certificate or force a stale clock comparison.
 
+### Own-device approval and code privacy
+
+A management rule may set `"ownDevices": true` (`groupType: DEVICE_GROUP`, `approve-device`
+only, exactly one group). A user holding `approve-device` only through such a rule may approve
+or unapprove only devices whose owner is that user, and a pending enrollment it looks up by
+code (`POST /endpoint/enrollments/lookup`). Approving by code makes the approver the owner
+and replaces the device's memberships with the rule's group. Each user may own one device
+in that group; a second approval returns `409 {"error":"ONE_DEVICE_PER_ACCOUNT"}`.
+
+User codes and key fingerprints are returned only to callers who hold `approve-device`
+through a group rule on the device's groups (`default-devices` for pending enrollments).
+Other readers see pending rows without them; `ownDevices`-only callers see no pending
+enrollments and only their own devices. Five failed lookups or approvals per user in ten
+minutes return 429, so one visitor cannot find or take another's pending code.
+
 ## Uniform tool routing and filters
 
 ```mermaid

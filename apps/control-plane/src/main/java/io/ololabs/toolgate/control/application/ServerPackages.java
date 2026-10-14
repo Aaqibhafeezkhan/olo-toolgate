@@ -309,7 +309,7 @@ public final class ServerPackages {
             if (context.userId() != null) identity.put("userId", context.userId());
             identity.putArray("chain");
             if (context.credentialEpoch() != null) identity.put("credentialEpoch", context.credentialEpoch());
-            identity.put("authorizationEpoch", i.authorizationEpoch()); identity.putObject("claims");
+            identity.put("authorizationEpoch", i.authorizationEpoch()); identity.set("claims", passedClaims(codec, tx.load(), context, e.toolId(), descriptor.path("mcpName").asText(null)));
             var target = JSON.objectNode().put("toolId", e.toolId()).put("toolDescriptorDigest", tool.get("toolDescriptorDigest").asText())
                 .put("packageDigest", deployment.get("packageDigest").asText()).put("artifactDigest", artifact.get("artifactDigest").asText())
                 .put("runtimeDigest", Canonical.digest(runtime)).put("globalsDigest", deployment.get("globalsDigest").asText())
@@ -329,6 +329,19 @@ public final class ServerPackages {
             return reply(200, signed);
         });
     }
+
+    /** Delegated user claims the workload binding passes to this tool (glob on tool id or MCP name, * suffix only). Nothing else reaches the permit. */
+    public static com.fasterxml.jackson.databind.node.ObjectNode passedClaims(Codec codec, io.ololabs.toolgate.control.domain.Directory directory, io.ololabs.toolgate.contracts.EnterpriseContext context, String toolId, String mcpName) {
+        var claims = JSON.objectNode(); if (context.userId() == null || context.workloadBindingId() == null) return claims;
+        var binding = directory.entries().get(io.ololabs.toolgate.control.domain.Ids.Kind.WORKLOAD_BINDING.id(context.workloadBindingId())); var user = directory.entries().get(io.ololabs.toolgate.control.domain.Ids.Kind.USER.id(context.userId()));
+        if (binding == null || user == null) return claims;
+        var passed = ((JsonNode) codec.value(binding.document())).path("passClaims"); var values = ((JsonNode) codec.value(user.document())).path("claims");
+        if (!passed.isObject() || !context.userId().equals(((JsonNode) codec.value(binding.document())).path("delegatedUserId").asText())) return claims;
+        passed.properties().forEach(e -> { var value = values.path(e.getKey()); if (!value.isTextual()) return;
+            for (var glob : e.getValue()) if (matches(glob.asText(), toolId) || mcpName != null && matches(glob.asText(), mcpName)) { claims.put(e.getKey(), value.asText()); return; } });
+        return claims;
+    }
+    static boolean matches(String glob, String name) { return glob.endsWith("*") ? name.startsWith(glob.substring(0, glob.length() - 1)) : glob.equals(name); }
 
     // Pull mode: a Tool Host that the Gateway cannot reach (a laptop behind NAT, another network) fetches its calls from
     // Control over its own connection. The Gateway hands Control the permitted dispatch and polls for the host's answer;

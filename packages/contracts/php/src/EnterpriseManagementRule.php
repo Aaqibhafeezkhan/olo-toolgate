@@ -12,12 +12,13 @@ final readonly class EnterpriseManagementRule implements \JsonSerializable {
         public EnterpriseGroupType $groupType,
         public GroupSelection $groups,
         public array $grantableScopes,
-        public EnterpriseConditions $conditions
+        public EnterpriseConditions $conditions,
+        public ?bool $ownDevices = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['actions', 'groupType', 'groups', 'grantableScopes', 'conditions']) || array_diff(['actions', 'groupType', 'groups', 'grantableScopes', 'conditions'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['actions', 'groupType', 'groups', 'grantableScopes', 'conditions', 'ownDevices']) || array_diff(['actions', 'groupType', 'groups', 'grantableScopes', 'conditions'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +26,8 @@ final readonly class EnterpriseManagementRule implements \JsonSerializable {
             EnterpriseGroupType::from($data['groupType']),
             GroupSelection::fromArray($data['groups']),
             array_map(static fn ($item) => EnterpriseScope::fromArray($item), $data['grantableScopes']),
-            EnterpriseConditions::fromArray($data['conditions'])
+            EnterpriseConditions::fromArray($data['conditions']),
+            array_key_exists('ownDevices', $data) ? $data['ownDevices'] : null
         );
     }
 
