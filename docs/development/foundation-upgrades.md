@@ -36,6 +36,15 @@ product version and `appVersion` names that product version; contract versions
 are independently recorded in the compatibility matrix. No fake deployment is
 created to make chart installation appear functional.
 
+The owner-controlled device power switch adds optional `ClientReport.power` with
+the closed values `ON` and `OFF`. This is an explicit reader incompatibility with
+the archived foundation report, whose schema rejects extra properties. Upgrade
+Control to the matching power-report implementation before upgrading clients;
+current Control accepts archived reports without `power` and treats them as on.
+Rollback requires older clients before older Control. The frozen schema and
+corpus remain unchanged. The compatibility tests cover this exact extension
+separately and retain strict comparison for every other original report field.
+
 Release artifacts are immutable. Fix a published defect with a new version.
 Rollback of a foundation library means selecting the previous compatible package
 version; there is no runtime rollout procedure yet. Stable N/N-1 runtime support

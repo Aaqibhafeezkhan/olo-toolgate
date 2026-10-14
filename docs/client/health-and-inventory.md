@@ -30,3 +30,9 @@ use the same command from the host: `docker exec <container> olo-toolgate-client
   instead of Offline, placement skips the device at once, direct requests to it
   are refused, and the audit log records `DEVICE_POWER_OFF` / `DEVICE_POWER_ON`.
   Reports from clients without the switch carry no `power` and count as on.
+
+Power-switch clients require Control with power-report support. Upgrade Control
+before installing these clients: older closed `ClientReport` readers reject the
+`power` field, even when its value is `ON`. Current Control continues to accept
+older clients' reports without `power`. Downgrading Control requires rolling back
+power-switch clients first; there is no power-report capability negotiation.
