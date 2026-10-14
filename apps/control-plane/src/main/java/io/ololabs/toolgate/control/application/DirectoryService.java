@@ -130,17 +130,9 @@ public final class DirectoryService {
             // Authorization precedes replay; imports may not restore old credential/session epochs.
             for(var e:resolved.entries().values())require(actor,before,"update",e);
             var replay=input.dryRun()?null:tx.replay(actor.id(),key,hash);if(replay!=null)return replay;if(before.revision()!=expected)throw Failure.conflict();
-            var entries=new HashMap<Ids.RecordId,Directory.Entry>();
-            for(var e:before.entries().values())if(!input.replace()||!exported(e.id().kind())||GroupGraph.protectedDefault(e.id()))entries.put(e.id(),e);
+            var entries=retainedImportEntries(before,input);
             for(var proposed:resolved.entries().values()) {var old=before.entries().get(proposed.id());var e=importObservations(old,proposed);if(old==null&&tx.used(e.id()))throw Failure.conflict();lifecycle(tx,old,e);var normalized=codec.revision(e,old==null?1:old.revision());entries.put(e.id(),old!=null&&old.document().equals(normalized.document())?old:codec.revision(e,old==null?1:old.revision()+1));}
-            // Memberships are only added: existing members stay, resolved users join their ticked teams, removal is explicit.
-            for(var team:List.copyOf(entries.values()))if(team.id().kind()==Kind.TEAM) {
-                var members=new LinkedHashSet<String>();var old=before.entries().get(team.id());if(old!=null)members.addAll(GroupGraph.members(old,codec));members.addAll(GroupGraph.members(team,codec));
-                for(var r:resolved.teams().entrySet()){if(r.getValue().contains(team.id().value()))members.add(r.getKey());else if(input.removeUnlistedMemberships()&&!GroupGraph.protectedDefault(team.id()))members.remove(r.getKey());}
-                for(var r:resolved.teams().values())for(var id:r)if(!entries.containsKey(Kind.TEAM.id(id)))throw Failure.validation();
-                if(!List.copyOf(members).equals(GroupGraph.members(team,codec))){var t=codec.model(team.document(),ControlTeam.class);var next=codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.copyOf(members),t.roleIds())));entries.put(team.id(),old!=null&&old.document().equals(codec.revision(next,old.revision()).document())?old:codec.revision(next,old==null?1:old.revision()+1));}
-            }
-            for(var e:List.copyOf(entries.values()))if(e.id().kind()==Kind.USER&&GroupGraph.memberships(new Directory(before.revision(),entries),codec,Kind.USER,e.id().value(),false).isEmpty())GroupGraph.addDefault(entries,codec,Kind.USER,e.id().value());
+            restoreImportMemberships(before,input,resolved,entries);
             for(var e:before.entries().values()){var next=entries.get(e.id());if(GroupGraph.individual(e.id().kind())&&e.enabled()!=inputEnabled(next)){if(e.id().kind()==Kind.USER)invalidateSessions(entries,e.id().value());if(e.id().kind()==Kind.AGENT)invalidateWorkloads(entries,e.id().value(),null);}}
             if(input.replace()){var conflicts=new TreeSet<String>();for(var e:entries.values())for(var r:e.references())if(!entries.containsKey(r))conflicts.add(e.id().kind()+":"+e.id().value());if(!conflicts.isEmpty())throw Failure.detail(409,ControlErrorDetailCode.REPLACE_CONFLICTS,conflicts);}
             // Import is reviewed as a complete graph; missing memberships are rejected rather than guessed.
@@ -156,6 +148,22 @@ public final class DirectoryService {
         });
     }
     private record Resolved(Map<Ids.RecordId,Directory.Entry> entries,Map<String,Set<String>> teams,io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch settings){}
+    /** Local identity state and protected defaults survive replacement, including read-only shadow projection. */
+    private HashMap<Ids.RecordId,Directory.Entry> retainedImportEntries(Directory before,Codec.Import input) {
+        var entries=new HashMap<Ids.RecordId,Directory.Entry>();
+        for(var e:before.entries().values())if(!input.replace()||!exported(e.id().kind())||GroupGraph.protectedDefault(e.id()))entries.put(e.id(),e);
+        return entries;
+    }
+    /** Memberships are only added: existing members stay, resolved users join their ticked teams, removal is explicit. */
+    private void restoreImportMemberships(Directory before,Codec.Import input,Resolved resolved,Map<Ids.RecordId,Directory.Entry> entries) {
+        for(var team:List.copyOf(entries.values()))if(team.id().kind()==Kind.TEAM) {
+            var members=new LinkedHashSet<String>();var old=before.entries().get(team.id());if(old!=null)members.addAll(GroupGraph.members(old,codec));members.addAll(GroupGraph.members(team,codec));
+            for(var r:resolved.teams().entrySet()){if(r.getValue().contains(team.id().value()))members.add(r.getKey());else if(input.removeUnlistedMemberships()&&!GroupGraph.protectedDefault(team.id()))members.remove(r.getKey());}
+            for(var r:resolved.teams().values())for(var id:r)if(!entries.containsKey(Kind.TEAM.id(id)))throw Failure.validation();
+            if(!List.copyOf(members).equals(GroupGraph.members(team,codec))){var t=codec.model(team.document(),ControlTeam.class);var next=codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.copyOf(members),t.roleIds())));entries.put(team.id(),old!=null&&old.document().equals(codec.revision(next,old.revision()).document())?old:codec.revision(next,old==null?1:old.revision()+1));}
+        }
+        for(var e:List.copyOf(entries.values()))if(e.id().kind()==Kind.USER&&GroupGraph.memberships(new Directory(before.revision(),entries),codec,Kind.USER,e.id().value(),false).isEmpty())GroupGraph.addDefault(entries,codec,Kind.USER,e.id().value());
+    }
     private static final Set<String> USER_FIELDS=Set.of("ownerUserId","delegatedUserId","userId");
     /** Resolves required identities before anything is applied: MAP rewrites user references, PLACEHOLDER adds a disabled user
      * without credentials, and delegated bindings of either arrive disabled until their credential is rotated. */
@@ -240,7 +248,11 @@ public final class DirectoryService {
     }
     public Store.Reply simulate(Actor actor,String document) {actor.requireAdmin();var input=codec.model(document,EnterpriseEvaluation.class);return store.transaction(actor.tenant(),false,tx->{management.requireAll(tx.load(),actor.userId(),"simulate",System.currentTimeMillis());var decision=new EnterpriseEvaluator(codec).evaluate(actor.tenant(),tx.load(),input);return new Store.Reply(200,codec.json(decision),tx.load().revision());});}
     public Store.Reply shadow(Actor actor,String document){actor.requireAdmin();var request=codec.model(document,EnterpriseShadowRequest.class);return store.transaction(actor.tenant(),false,tx->{management.requireAll(tx.load(),actor.userId(),"simulate",lifecycleClock.millis());
-        var proposed=codec.input(codec.json(Map.of("snapshot",request.snapshot(),"mode","REPLACE","dryRun",true)),false,actor.tenant()).directory();proposed.validate(maxRecords,maxBytes);codec.validatePolicies(proposed);
+        var input=codec.input(codec.json(Map.of("snapshot",request.snapshot(),"mode","REPLACE","dryRun",true)),false,actor.tenant());
+        var before=tx.load();var resolved=resolve(before,input);var entries=retainedImportEntries(before,input);
+        for(var entry:resolved.entries().values())entries.put(entry.id(),importObservations(before.entries().get(entry.id()),entry));
+        restoreImportMemberships(before,input,resolved,entries);
+        var proposed=new Directory(input.directory().revision(),entries);proposed.validate(maxRecords,maxBytes);codec.validatePolicies(proposed);
         var decision=new EnterpriseEvaluator(codec).evaluateWithQuotas(actor.tenant(),proposed,request.evaluation(),budget->tx.enterprise().budgetUsage(budget,Math.max(0,request.evaluation().nowUnixMs()-60000),null));
         boolean expansion=request.observedLegacyDecision()==Decision.BLOCK&&decision.decision()!=Decision.BLOCK||request.observedLegacyDecision()==Decision.ASK&&decision.decision()==Decision.ALLOW;
         return new Store.Reply(200,codec.json(new EnterpriseShadowResult(decision,request.observedLegacyDecision(),request.legacyEvidenceDigest(),digest(codec.json(request.snapshot())),expansion)),tx.load().revision());});}
