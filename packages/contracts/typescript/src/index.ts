@@ -6,6 +6,7 @@ import type * as V2 from "./v2/index.js";
 export interface AdminSession {
   readonly role: UserRole;
   readonly bootstrapAdminUserId?: string;
+  readonly tenantId?: string;
 }
 /** Immutable artifact identity; digest must be verified by consumers. */
 export interface ArtifactDescriptor {

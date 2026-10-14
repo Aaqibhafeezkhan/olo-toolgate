@@ -737,7 +737,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if len(raw)!=length: raise ValueError()
             path = urllib.parse.urlsplit(self.path).path
             if path=='/api/quickstart/v1/status' and self.command=='GET':
-                return self.reply(200, {'mode': 'Quickstart', 'nonHa': True, 'ready': self.server.ready.is_set(), 'version': Path('/opt/quickstart/VERSION').read_text().strip(), 'passwordRequired': not password_disabled(), 'database': database_mode(), 'authority': 'online'})
+                return self.reply(200, {'mode': 'Quickstart', 'tenant': TENANT, 'nonHa': True, 'ready': self.server.ready.is_set(), 'version': Path('/opt/quickstart/VERSION').read_text().strip(), 'passwordRequired': not password_disabled(), 'database': database_mode(), 'authority': 'online'})
             if path=='/api/quickstart/v1/login-hints' and self.command=='GET': return self.reply(200, login_hints())
             if claiming:
                 saved = strict((DATA/'credentials.json').read_bytes()) if (DATA/'credentials.json').exists() else {}

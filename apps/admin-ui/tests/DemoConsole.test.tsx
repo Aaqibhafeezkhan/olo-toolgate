@@ -18,9 +18,10 @@ describe('Login page',()=>{
     quickstartMode();
     const refreshAt='2030-01-02T03:00:00Z';const writeText=vi.fn(async()=>{});vi.stubGlobal('navigator',{...navigator,clipboard:{writeText}});
     const transport=vi.fn(async(input:string,_init?:RequestInit)=>input.endsWith('/login-hints')?json({accounts:[{username:'public',password:'shown-demo-password'}],refreshAt})
-      :input.endsWith('/session')?json({},401):input.endsWith('/status')?json({passwordRequired:true}):input.endsWith('/login')?json({accessToken:token('public')}):input.includes('/api/public/')?json({},503):json({items:[]}));
+      :input.endsWith('/session')?json({},401):input.endsWith('/status')?json({passwordRequired:true,tenant:'quickstart'}):input.endsWith('/login')?json({accessToken:token('public')}):input.includes('/api/public/')?json({},503):json({items:[]}));
     vi.stubGlobal('fetch',transport);render(<App/>);
     const hints=await screen.findByRole('region',{name:'Demo sign-in'});
+    await screen.findByText('Quickstart · Single node · Non-HA · Tenant: quickstart.');
     expect(within(hints).getByText('public')).toBeTruthy();expect(within(hints).getByText('shown-demo-password')).toBeTruthy();
     expect(within(hints).getByText(`This demo resets at ${new Date(refreshAt).toLocaleString()}.`)).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Copy password for public'}));await screen.findByText('Password copied.');expect(writeText).toHaveBeenCalledWith('shown-demo-password');
@@ -31,6 +32,7 @@ describe('Login page',()=>{
     expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('public');
     await waitFor(()=>expect((screen.getByRole('button',{name:'Connect to workspace'}) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));await screen.findByRole('navigation');
+    expect(screen.getByText('Tenant: quickstart')).toBeTruthy();
     expect(JSON.parse(String(transport.mock.calls.find(([url])=>url.endsWith('/login'))![1]!.body))).toEqual({username:'public',password:'shown-demo-password'});
     expect(JSON.stringify(localStorage)).not.toContain('shown-demo-password');
   });

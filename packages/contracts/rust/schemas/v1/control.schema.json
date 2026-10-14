@@ -839,6 +839,10 @@
         },
         "bootstrapAdminUserId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "tenantId": {
+          "description": "The tenant this session administers; ToolGate is multi-tenant.",
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
         }
       },
       "required": [

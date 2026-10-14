@@ -2020,6 +2020,7 @@
     "issuerCertificatePem": "example",
     "expiresAtUnixMs": 1
   },
+  "DevicePower": "ON",
   "EndpointAdoption": {
     "serverId": "server",
     "deviceId": "device",

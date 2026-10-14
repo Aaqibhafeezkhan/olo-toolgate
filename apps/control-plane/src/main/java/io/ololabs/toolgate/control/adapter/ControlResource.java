@@ -69,7 +69,7 @@ public class ControlResource {
     @GET @Path("admin-session") @io.quarkus.security.Authenticated
     public String adminSession() {
         var identity=actor();
-        return codec.json(store.transaction(identity.tenant(),false,tx->new io.ololabs.toolgate.contracts.AdminSession(identity.superAdmin()?io.ololabs.toolgate.contracts.UserRole.SUPER_ADMIN:io.ololabs.toolgate.contracts.UserRole.ADMINISTRATOR,tx.bootstrapAdminUserId())));
+        return codec.json(store.transaction(identity.tenant(),false,tx->new io.ololabs.toolgate.contracts.AdminSession(identity.superAdmin()?io.ololabs.toolgate.contracts.UserRole.SUPER_ADMIN:io.ololabs.toolgate.contracts.UserRole.ADMINISTRATOR,tx.bootstrapAdminUserId(),identity.tenant().value())));
     }
     @GET @Path("bundles/current") @io.quarkus.security.Authenticated
     public Response currentBundle() {
