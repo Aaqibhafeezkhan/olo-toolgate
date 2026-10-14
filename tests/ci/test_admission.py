@@ -148,14 +148,23 @@ class AdmissionTests(unittest.TestCase):
         document=yaml.safe_load((root/'.github/workflows/manual-development-release.yml').read_text(encoding='utf-8'))
         self.assertEqual(set(document['jobs']),{'native','build','publish','publish-typescript','publish-maven'})
         self.assertNotIn('needs',document['jobs']['native'])
+        self.assertEqual(document['jobs']['native']['uses'],'./.github/workflows/client.yml')
+        self.assertIs(document['jobs']['native']['with']['run_tests'],False)
+        self.assertEqual(document['jobs']['build']['uses'],'./.github/workflows/images.yml')
+        self.assertIs(document['jobs']['build']['with']['run_tests'],False)
         self.assertEqual(document['jobs']['build']['needs'],'native')
         for name,job in document['jobs'].items():
             if name.startswith('publish'):
                 self.assertEqual(job['needs'],'build')
-        commands='\n'.join(step.get('run','') for job in document['jobs'].values() for step in job['steps'])
-        for command in ('cargo test','cargo clippy','cargo fmt','--check','make check','pytest','unittest','tools/check.py','development.py prepare'):
-            self.assertNotIn(command,commands)
-        self.assertIn('-x test',commands)
+        # Reusable build jobs explicitly disable every test/smoke step for manual runs.
+        for name in ('client','images'):
+            shared=yaml.safe_load((root/'.github/workflows'/f'{name}.yml').read_text())
+            for job in shared['jobs'].values():
+                for step in job['steps']:
+                    command=step.get('run','')
+                    if any(check in command for check in ('cargo test','cargo clippy','cargo fmt','unittest','--smoke','service_smoke.py','installer_smoke.py','uninstall_test.ps1','runtime_check.py','check.py')):
+                        self.assertIn('inputs.run_tests',step.get('if',''))
+                        self.assertNotIn('!inputs.run_tests',step['if'])
         script=(root/'tools/release/manual_development.py').read_text(encoding='utf-8')
         self.assertIn("'--no-verify'",script)
         self.assertNotIn('workflow_runs',script)

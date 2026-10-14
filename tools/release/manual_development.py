@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT/'tools/client'))
 sys.path.insert(0, str(ROOT))
 from publication import public_asset
 from tools.release.bundle import checksum_assets
+from tools.release import github_release, images as image_publication
 
 HELM_IMAGE = 'alpine/helm:3.17.3'
 IMAGES = {name: 'olo-toolgate-'+name for name in ('control', 'gateway', 'quickstart', 'device')}
@@ -105,28 +106,16 @@ def publish():
     info = json.loads((ASSETS/'development-release.json').read_text(encoding='utf-8'))
     repo = os.environ['GITHUB_REPOSITORY']
     namespace = os.environ.get('DOCKERHUB_NAMESPACE') or os.environ['DOCKERHUB_USERNAME']
-    token = os.environ['DOCKERHUB_TOKEN']
-    current = json.loads(run('gh', 'api', 'repos/'+repo+'/git/ref/heads/main', capture=True).stdout)['object']['sha'] == info['commit']
-    run('docker', 'login', '--username', os.environ['DOCKERHUB_USERNAME'], '--password-stdin', input=token)
-    images = {}
-    try:
-        for component, name in IMAGES.items():
-            target = namespace+'/'+name+':'+info['dockerTag']
-            run('docker', 'tag', name+':manual-development', target)
-            run('docker', 'push', target)
-            images[component] = run('docker', 'inspect', target, '--format', '{{index .RepoDigests 0}}', capture=True).stdout.strip()
-            for alias in ['dev-'+info['commit'][:12]]+(['dev'] if current else []):
-                run('docker', 'tag', target, namespace+'/'+name+':'+alias)
-                run('docker', 'push', namespace+'/'+name+':'+alias)
-    finally:
-        run('docker', 'logout')
+    images = image_publication.publish(run, repo, info['commit'], namespace,
+        {component:(name+':manual-development',name) for component,name in IMAGES.items()},
+        info['dockerTag'], aliases=('dev-'+info['commit'][:12],))
     owner = repo.split('/')[0].lower()
     run('docker', 'run', '--rm', '--env', 'GH_TOKEN', '--env', 'GITHUB_ACTOR',
         '--env', 'HELM_OWNER='+owner, '--env', 'HELM_VERSION='+info['libraryVersion'],
         '-v', str(ROOT)+':/work', '-w', '/work', '--entrypoint', 'sh', HELM_IMAGE, '-c',
         'printf %s "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin && '
         'helm push "build/manual-development/assets/olo-toolgate-${HELM_VERSION}.tgz" "oci://ghcr.io/${HELM_OWNER}/charts"')
-    info.update(images=images, maven='io.ololabs.toolgate:toolgate-contracts:'+info['libraryVersion'],
+    info.update(images=images, maven='io.github.olo-labs:toolgate-contracts:'+info['libraryVersion'],
                 npm='@olo-labs/toolgate-contracts@'+info['libraryVersion'],
                 helm='oci://ghcr.io/'+owner+'/charts/olo-toolgate:'+info['libraryVersion'])
     (ASSETS/'development-release.json').write_text(json.dumps(info, indent=2)+'\n', encoding='utf-8')
@@ -140,12 +129,11 @@ def publish():
     checksum_assets(ASSETS)
     notes = OUTPUT/'notes.md'
     notes.write_text('Manual development build for commit `'+info['commit']+'`.\n\n'
-        'No CI verification, tests, scans, smoke tests, or signing were run.\n\n'
+        'No CI verification, tests, scans or smoke tests were run. Maven signing runs in its separate publication job.\n\n'
         'Library version: `'+info['libraryVersion']+'`. Container digests and checksums are attached.\n\n'
         +(ROOT/'RELEASE-NOTES.md').read_text(encoding='utf-8'), encoding='utf-8')
-    run('gh', 'release', 'create', info['releaseTag'], *[str(p) for p in sorted(ASSETS.iterdir()) if p.is_file()],
-        '--repo', repo, '--target', info['commit'], '--prerelease', '--latest=false',
-        '--title', 'ToolGate manual development '+info['commit'][:12], '--notes-file', str(notes))
+    github_release.publish(run, repo, info['releaseTag'], info['commit'], ASSETS,
+                           'ToolGate manual development '+info['commit'][:12], notes)
 
 
 if __name__ == '__main__':

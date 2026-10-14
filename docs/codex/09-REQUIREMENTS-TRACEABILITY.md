@@ -29,7 +29,7 @@ BLOCKED — module cannot be declared complete
 | ID | Requirement |
 |---|---|
 | CON-001 | Canonical contract source is language-neutral. |
-| CON-002 | Java contracts publish as `io.ololabs.toolgate:toolgate-contracts`. |
+| CON-002 | Java contracts publish as `io.github.olo-labs:toolgate-contracts`. |
 | CON-003 | Workspace and published dependency modes both work. |
 | CON-004 | Contract compatibility tests exist. |
 | CON-005 | Generated bindings are reproducible and drift-checked. |

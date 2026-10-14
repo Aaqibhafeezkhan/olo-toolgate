@@ -386,7 +386,7 @@ Java modules use **Gradle Kotlin DSL + Java 21**.
 The shared Java contracts are consumed as a workspace project today and are publishable as:
 
 ```text
-io.ololabs.toolgate:toolgate-contracts
+io.github.olo-labs:toolgate-contracts
 ```
 
 so Java services can later move into separate repositories without changing imports.

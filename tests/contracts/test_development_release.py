@@ -78,14 +78,15 @@ class DevelopmentReleaseTests(unittest.TestCase):
                 return subprocess.CompletedProcess(args,0,stdout=stdout)
             with patch.object(manual_development,'ROOT',root),patch.object(manual_development,'OUTPUT',output), \
                  patch.object(manual_development,'ASSETS',assets),patch.object(manual_development,'run',side_effect=command) as run, \
+                 patch.object(manual_development.github_release,'publish') as publish_release, \
                  patch.dict(os.environ,{'GITHUB_REPOSITORY':'olo-labs/olo-toolgate','DOCKERHUB_NAMESPACE':'fixture',
                                         'DOCKERHUB_TOKEN':'fixture','DOCKERHUB_USERNAME':'fixture'}):
                 manual_development.publish()
             self.assertFalse((root/'packages/contracts/java/build').exists())
             self.assertEqual(pom.read_bytes(),b'prepared pom')
             self.assertIn(pom.name,(assets/'SHA256SUMS').read_text())
-            release=next(call.args for call in run.call_args_list if call.args[:3]==('gh','release','create'))
-            self.assertIn(str(pom),release)
+            self.assertEqual(publish_release.call_args.args[4],assets)
+            self.assertEqual(publish_release.call_args.args[2],info['releaseTag'])
 
     def test_device_is_published_by_both_existing_release_paths(self):
         self.assertEqual(development.IMAGES['device'],('olo-toolgate-device:module11','olo-toolgate-device'))

@@ -53,7 +53,7 @@ Rust:
   olo-toolgate-contracts
 
 Maven:
-  io.ololabs.toolgate:toolgate-contracts
+  io.github.olo-labs:toolgate-contracts
 
 npm:
   @olo-labs/toolgate-contracts

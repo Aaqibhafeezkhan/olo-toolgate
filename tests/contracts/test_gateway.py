@@ -43,7 +43,7 @@ class GatewayAssetsTests(unittest.TestCase):
         commands='\n'.join(s.get('run','') for s in workflow['jobs']['container-and-replicas']['steps'])
         for required in ['cargo test --workspace --locked','tools/gateway/container.py','tools/enterprise/helm.py','--severity HIGH,CRITICAL','--format cyclonedx','sha256sum']: self.assertIn(required,commands)
         self.assertNotIn('publish',workflow['jobs'])
-        publisher=yaml.load((ROOT/'.github/workflows/development-release.yml').read_text(),Loader=yaml.BaseLoader)
+        publisher=yaml.load((ROOT/'.github/workflows/release-images.yml').read_text(),Loader=yaml.BaseLoader)
         self.assertEqual('development-release',publisher['jobs']['publish']['environment'])
         attest=[step for step in publisher['jobs']['publish']['steps'] if step.get('name')=='Attest Gateway image']
         self.assertEqual('true',attest[0]['with']['push-to-registry'])

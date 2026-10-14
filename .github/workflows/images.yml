@@ -2,7 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 name: Tested production images
 'on':
-  workflow_call: null
+  workflow_call:
+    inputs:
+      run_tests:
+        type: boolean
+        default: true
+        description: Verify production images before publication; false builds manual release artifacts only
 permissions:
   contents: read
 jobs:
@@ -29,12 +34,14 @@ jobs:
       with:
         name: foundation-evidence
         path: .
+      if: ${{ inputs.run_tests }}
     - name: Prepare runtime tooling
       run: |
         python -m pip install -r tools/requirements.txt
         npm ci --ignore-scripts
         npx --no-install playwright install --with-deps chromium
         rustup show
+      if: ${{ inputs.run_tests }}
     - name: Build and test the actual composed image
       run: |
         python tools/quickstart/check.py --build --image olo-toolgate-quickstart:module11 --client-assets deploy/client-assets/release --prebuilt-ui
@@ -46,6 +53,7 @@ jobs:
         docker save olo-toolgate-quickstart:module11 -o build/quickstart/image.tar
         cp CHANGELOG.md docs/deployment/quickstart.md build/quickstart/
         (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json > SHA256SUMS)
+      if: ${{ inputs.run_tests }}
     - name: Reuse the tested Quickstart helper and verify production Control
       run: |
         docker tag olo-toolgate-quickstart:module11 olo-toolgate-quickstart:enterprise-validation
@@ -62,6 +70,7 @@ jobs:
         cp -r build/ui build/control/ui-evidence
         cp CHANGELOG.md docs/control-plane/upgrades.md build/control/
         (cd build/control && sha256sum image.tar control-sbom.cdx.json > SHA256SUMS)
+      if: ${{ inputs.run_tests }}
     - name: Verify production Gateway using the tested helper
       run: |
         docker build -f apps/gateway/Dockerfile --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$GITHUB_SHA" -t olo-toolgate-gateway:module05 .
@@ -72,6 +81,7 @@ jobs:
         docker save olo-toolgate-gateway:module05 -o build/gateway/image.tar
         cp CHANGELOG.md docs/gateway/upgrades.md build/gateway/
         (cd build/gateway && sha256sum image.tar gateway-sbom.cdx.json > SHA256SUMS)
+      if: ${{ inputs.run_tests }}
     - name: Build and verify the matching Linux device image
       run: |
         docker build -f apps/device/Dockerfile --build-arg QUICKSTART_IMAGE=olo-toolgate-quickstart:module11 --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$GITHUB_SHA" -t olo-toolgate-device:module11 .
@@ -81,6 +91,7 @@ jobs:
         docker save olo-toolgate-device:module11 -o build/device/image.tar
         cp docs/deployment/device.md build/device/
         (cd build/device && sha256sum image.tar device-sbom.cdx.json > SHA256SUMS)
+      if: ${{ inputs.run_tests }}
     - name: Build and verify the Gateway-only secured Linux device
       run: |
         docker build -f apps/device/secured.Dockerfile --build-arg DEVICE_IMAGE=olo-toolgate-device:module11 -t olo-toolgate-linux-secured-device:module11 .
@@ -90,6 +101,7 @@ jobs:
         docker save olo-toolgate-linux-secured-device:module11 -o build/secured_device/image.tar
         cp docs/deployment/secured-device.md build/secured_device/
         (cd build/secured_device && sha256sum image.tar secured-device-sbom.cdx.json > SHA256SUMS)
+      if: ${{ inputs.run_tests }}
     - name: LangChain native smoke on the device image being published
       env:
         TOOLGATE_QUICKSTART_IMAGE: olo-toolgate-quickstart:module11
@@ -106,28 +118,73 @@ jobs:
         docker compose up -d --wait --wait-timeout 180 quickstart linux-device
         python manage.py setup --bootstrap-local --approve-linux-device --target linux
         docker compose run --rm -T agent --target linux --smoke
+      if: ${{ inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: quickstart-evidence
         path: build/quickstart/
         if-no-files-found: error
+      if: ${{ inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: device-evidence
         path: build/device/
         if-no-files-found: error
+      if: ${{ inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: secured-device-evidence
         path: build/secured_device/
         if-no-files-found: error
+      if: ${{ inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: control-evidence
         path: build/control/
         if-no-files-found: error
+      if: ${{ inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: gateway-evidence
         path: build/gateway/
         if-no-files-found: error
+      if: ${{ inputs.run_tests }}
+    - name: Build containers and library packages
+      env:
+        RELEASE_SHA: ${{ github.sha }}
+        DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      run: |
+        npm ci --ignore-scripts --no-audit
+        python tools/release/manual_development.py build
+      if: ${{ !inputs.run_tests }}
+    - name: Save built container images
+      run: |
+        docker save --output build/manual-development/images.tar \
+          olo-toolgate-control:manual-development olo-toolgate-gateway:manual-development \
+          olo-toolgate-quickstart:manual-development olo-toolgate-device:manual-development \
+          olo-toolgate-linux-secured-device:manual-development
+      if: ${{ !inputs.run_tests }}
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: manual-development-assets
+        path: build/manual-development/assets/
+        if-no-files-found: error
+      if: ${{ !inputs.run_tests }}
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: manual-development-libraries
+        path: |
+          build/manual-development/assets/*.jar
+          build/manual-development/assets/*.pom
+          build/manual-development/assets/olo-labs-toolgate-contracts-*.tgz
+          build/manual-development/assets/development-release.json
+        if-no-files-found: error
+      if: ${{ !inputs.run_tests }}
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: manual-development-images
+        path: build/manual-development/images.tar
+        compression-level: 1
+        if-no-files-found: error
+      if: ${{ !inputs.run_tests }}

@@ -41,7 +41,7 @@ def bundle(assets, version, folder, pom_path=None):
     module = assets/(prefix+'.module')
     if module.exists():
         identity = json.loads(module.read_text(encoding='utf-8')).get('component', {})
-        if [identity.get(k) for k in ('group', 'module', 'version')] != ['io.ololabs.toolgate', 'toolgate-contracts', version]:
+        if [identity.get(k) for k in ('group', 'module', 'version')] != ['io.github.olo-labs', 'toolgate-contracts', version]:
             raise ValueError('Gradle module identity mismatch')
         files.append((module, module.name))
     for source, _ in files:
@@ -49,7 +49,7 @@ def bundle(assets, version, folder, pom_path=None):
             raise ValueError('Missing Maven artifact: ' + source.name)
     pom = ET.parse(files[3][0]).getroot()
     ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
-    if [pom.findtext('m:'+field, namespaces=ns) for field in ('groupId', 'artifactId', 'version')] != ['io.ololabs.toolgate', 'toolgate-contracts', version]:
+    if [pom.findtext('m:'+field, namespaces=ns) for field in ('groupId', 'artifactId', 'version')] != ['io.github.olo-labs', 'toolgate-contracts', version]:
         raise ValueError('Maven POM identity mismatch')
     for field in ('name', 'description', 'url', 'licenses/license/name', 'licenses/license/url',
                   'developers/developer/name', 'scm/connection', 'scm/url'):
@@ -62,7 +62,7 @@ def bundle(assets, version, folder, pom_path=None):
     home.mkdir(mode=0o700)
     try:
         gpg(home, '--import', input=key)
-        destination = folder/'repository/io/ololabs/toolgate/toolgate-contracts'/version
+        destination = folder/'repository/io/github/olo-labs/toolgate-contracts'/version
         destination.mkdir(parents=True)
         for source, name in files:
             target = destination/name
@@ -120,7 +120,7 @@ def publish(assets, version, pom_path=None):
         summary = os.environ.get('GITHUB_STEP_SUMMARY')
         if summary:
             with open(summary, 'a', encoding='utf-8') as output:
-                output.write(f'Central deployment `{deployment}` for `io.ololabs.toolgate:toolgate-contracts:{version}`\n')
+                output.write(f'Central deployment `{deployment}` for `io.github.olo-labs:toolgate-contracts:{version}`\n')
         deadline = time.monotonic()+1200
         previous = None
         while time.monotonic() < deadline:

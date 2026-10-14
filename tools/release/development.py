@@ -185,19 +185,12 @@ def publish():
     repo,sha,namespace=coordinates();assets=OUTPUT/'assets'
     metadata=json.loads((assets/'development-release.json').read_text())
     if metadata['commit']!=sha:raise ValueError('Prepared SHA mismatch')
-    run('docker','login','--username',os.environ['DOCKERHUB_USERNAME'],'--password-stdin',input=os.environ['DOCKERHUB_TOKEN'])
-    current=api(f'repos/{repo}/git/ref/heads/main')['object']['sha']==sha
-    images={}
-    try:
-        for component,(local,name) in IMAGES.items():
-            folder=OUTPUT/component;verify_checksums(folder)
-            run('docker','load','-i',str(folder/'image.tar'))
-            target=f'{namespace}/{name}:dev-{sha[:12]}'
-            run('docker','tag',local,target);run('docker','push',target)
-            images[component]=run('docker','inspect',target,'--format','{{index .RepoDigests 0}}',capture=True).stdout.strip()
-            if current:
-                run('docker','tag',target,f'{namespace}/{name}:dev');run('docker','push',f'{namespace}/{name}:dev')
-    finally:run('docker','logout')
+    from tools.release import images as image_publication
+    def prepare_image(component):
+        folder=OUTPUT/component
+        verify_checksums(folder)
+        run('docker','load','-i',str(folder/'image.tar'))
+    images=image_publication.publish(run,repo,sha,namespace,IMAGES,'dev-'+sha[:12],prepare=prepare_image)
     metadata['images']=images
     (assets/'development-release.json').write_text(json.dumps(metadata,indent=2)+'\n')
     for document in ('LICENSE', 'NOTICE.md', 'RELEASE-NOTES.md'):
@@ -205,13 +198,11 @@ def publish():
     checksums=''.join(f'{digest(path)}  {path.name}\n' for path in sorted(assets.iterdir()) if path.is_file() and path.name!='SHA256SUMS')
     (assets/'SHA256SUMS').write_text(checksums)
     notes=OUTPUT/'notes.md'
-    notes.write_text(f'Development artifacts for commit `{sha}`.\n\nMaven: `io.ololabs.toolgate:toolgate-contracts:{metadata["mavenVersion"]}`.\n\nSix native client packages retain the tested source version `{metadata["binaryVersion"]}`; their commit identity is recorded in development-release.json.\n\nContainer digests and checksums are included.\n')
+    notes.write_text(f'Development artifacts for commit `{sha}`.\n\nMaven: `io.github.olo-labs:toolgate-contracts:{metadata["mavenVersion"]}`.\n\nSix native client packages retain the tested source version `{metadata["binaryVersion"]}`; their commit identity is recorded in development-release.json.\n\nContainer digests and checksums are included.\n')
     notes.write_text(notes.read_text()+'\n'+(assets/'RELEASE-NOTES.md').read_text(), encoding='utf-8', newline='\n')
     tag=metadata['releaseTag']
-    # One immutable prerelease per publishing run; no clobber of an existing release.
-    run('gh','release','create',tag,*[str(p) for p in sorted(assets.iterdir()) if p.is_file()],
-        '--repo',repo,'--target',sha,'--prerelease','--latest=false','--generate-notes','--title','ToolGate development '+sha[:12],
-        '--notes-file',str(notes))
+    from tools.release import github_release
+    github_release.publish(run, repo, tag, sha, assets, 'ToolGate development '+sha[:12], notes)
 
 
 if __name__=='__main__':

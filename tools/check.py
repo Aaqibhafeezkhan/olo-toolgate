@@ -61,7 +61,7 @@ def publication_proof(prebuilt_ui=False):
     local.mkdir(parents=True, exist_ok=True)
     version = (ROOT/'packages/contracts/VERSION').read_text().strip()
     run(['gradle', f'-Dmaven.repo.local={local.as_posix()}', ':contracts-java:publishToMavenLocal'])
-    artifact = local/'io/ololabs/toolgate/toolgate-contracts'/version
+    artifact = local/'io/github/olo-labs/toolgate-contracts'/version
     for classifier in ('','-sources','-javadoc'):
         file = artifact/f'toolgate-contracts-{version}{classifier}.jar'
         if not file.is_file(): raise SystemExit('Publication artifact missing: '+file.name)
@@ -71,6 +71,7 @@ def publication_proof(prebuilt_ui=False):
                     raise SystemExit('Published release document mismatch: '+file.name+'/'+document)
     pom = ET.parse(artifact/f'toolgate-contracts-{version}.pom').getroot()
     namespace = {'m':'http://maven.apache.org/POM/4.0.0'}
+    if pom.findtext('m:groupId', namespaces=namespace) != 'io.github.olo-labs': raise SystemExit('Incorrect Maven group')
     if pom.findtext('m:artifactId', namespaces=namespace) != 'toolgate-contracts': raise SystemExit('Incorrect Maven identity')
     if pom.findtext('m:version', namespaces=namespace) != version: raise SystemExit('Incorrect Maven version')
     if not pom.findall('m:dependencies/m:dependency',namespace): raise SystemExit('Transitive serializer dependencies missing from POM')

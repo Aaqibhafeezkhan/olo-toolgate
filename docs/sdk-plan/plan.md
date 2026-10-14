@@ -234,7 +234,7 @@ Each finding below was checked in the repository. Where it differs from text els
 | DDL | Contracts must not contain database code (`CONTRACTS.md`) | State DDL lives in Control's Flyway and Quickstart migrations, not under `packages/contracts` |
 | Console | `App.tsx:29-30` sections and navigation; `routeFromHash` falls back to overview with no redirects | §18 adds sections and a redirect for `#configuration` |
 | Helm | Top-level key `control:`, env prefix `TOOLGATE_CONTROL_*`, `values.schema.json` with `additionalProperties: false` | §17.2 uses `control.clientCheckIn.*` and `TOOLGATE_CONTROL_CLIENT_*`, plus a schema update |
-| Packages | npm scope `@olo-labs` (`@olo-labs/toolgate-contracts`); Maven `io.ololabs.toolgate:toolgate-contracts`; one root `VERSION` | SDK npm packages use `@olo-labs`; SDKs get their own version files under `tool-sdk/` |
+| Packages | npm scope `@olo-labs` (`@olo-labs/toolgate-contracts`); Maven `io.github.olo-labs:toolgate-contracts`; one root `VERSION` | SDK npm packages use `@olo-labs`; SDKs get their own version files under `tool-sdk/` |
 | CI | Release templates `release-foundation.yml`, `gateway.yml`, `control.yml`, `quickstart.yml` (environments, Trivy SBOM, `attest-build-provenance`, GHCR); `admission.yml` is a reusable gate; no public registry publishing | SDK workflows follow `release-foundation.yml`; trusted publishing to Maven Central, npm, PyPI and NuGet is new |
 | Roadmap | `ROADMAP.md` Phases 0–8 (Phase 5 Tool Builder, Phase 6 Marketplace, Phase 8 sandboxing) | Rewritten to point at §22 in D1 |
 

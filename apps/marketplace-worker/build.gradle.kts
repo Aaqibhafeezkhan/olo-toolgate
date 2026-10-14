@@ -6,7 +6,7 @@ val usePublishedContracts = providers.gradleProperty("usePublishedContracts").ma
 val contractsVersion = providers.gradleProperty("contractsVersion").getOrElse(rootProject.file("packages/contracts/VERSION").readText().trim())
 dependencies {
     if (usePublishedContracts.get()) {
-        implementation("io.ololabs.toolgate:toolgate-contracts:$contractsVersion")
+        implementation("io.github.olo-labs:toolgate-contracts:$contractsVersion")
     } else {
         implementation(project(":contracts-java"))
     }
