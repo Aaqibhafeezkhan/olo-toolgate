@@ -66,6 +66,13 @@ publishing {
                     developerConnection.set("scm:git:ssh://git@github.com/olo-labs/olo-toolgate.git")
                     url.set("https://github.com/olo-labs/olo-toolgate")
                 }
+                developers {
+                    developer {
+                        id.set("olo-labs")
+                        name.set("OLO Labs")
+                        url.set("https://github.com/olo-labs")
+                    }
+                }
             }
         }
     }

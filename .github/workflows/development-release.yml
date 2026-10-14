@@ -175,6 +175,8 @@ jobs:
         DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
         MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
         MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+        MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         GH_TOKEN: ${{ github.token }}
       run: |
         python tools/release/development.py validate-maven
@@ -191,7 +193,12 @@ jobs:
           python tools/release/development.py publish-maven
         else
           maven_version="$(cat build/development/MAVEN_VERSION)"
-          ./gradlew --no-daemon "-PcontractsPublicationVersion=$maven_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test
+          if [ "$MAVEN_REPOSITORY_URL" = "https://central.sonatype.com/api/v1/publisher/upload" ]; then
+            ./gradlew --no-daemon "-PcontractsPublicationVersion=$maven_version" :contracts-java:assemble :contracts-java:generatePomFileForMavenJavaPublication -x test
+            python tools/release/central.py --assets packages/contracts/java/build/libs --version "$maven_version" --pom packages/contracts/java/build/publications/mavenJava/pom-default.xml
+          else
+            ./gradlew --no-daemon "-PcontractsPublicationVersion=$maven_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test
+          fi
         fi
 'on':
   workflow_call: null

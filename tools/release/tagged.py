@@ -118,6 +118,10 @@ def publish_maven():
     identity=module.get('component',{})
     if [identity.get(k) for k in ('group','module','version')]!=['io.ololabs.toolgate','toolgate-contracts',version]:
         raise ValueError('Checked Gradle module identity mismatch')
+    from tools.release import central
+    if os.environ.get('MAVEN_REPOSITORY_URL') == central.UPLOAD_URL:
+        central.publish(assets, version)
+        return
     if not os.environ.get('MAVEN_REPOSITORY_URL','').startswith('https://'):
         raise ValueError('Maven publication requires an HTTPS repository')
     project=shared.OUTPUT/'maven-publication';project.mkdir()
