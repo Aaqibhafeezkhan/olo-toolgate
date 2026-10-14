@@ -147,7 +147,7 @@ packages/contracts/php/
 Stable Java artifact:
 
 ```text
-io.ololabs.toolgate:toolgate-contracts
+io.github.olo-labs:toolgate-contracts
 ```
 
 Within monorepo:

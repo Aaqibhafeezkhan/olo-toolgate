@@ -24,7 +24,7 @@ def expected():
     outputs[manifest] = re.sub(r'^version: .*', f'version: {contracts}', manifest.read_text(encoding='utf-8'), flags=re.M)
     cargo = ROOT/'Cargo.toml'
     for lock in sorted((ROOT/'apps').glob('*/gradle-artifact.lockfile')):
-        outputs[lock]=re.sub(r'(?m)^(io\.ololabs\.toolgate:toolgate-contracts:)[^=]+=',lambda m:m[1]+contracts+'=',lock.read_text(encoding='utf-8'))
+        outputs[lock]=re.sub(r'(?m)^(io\.github\.olo-labs:toolgate-contracts:)[^=]+=',lambda m:m[1]+contracts+'=',lock.read_text(encoding='utf-8'))
     # Rust applications ship with the product; the contracts crate carries the contract-set version.
     outputs[cargo] = re.sub(r'^version = "[^"]+"', f'version = "{product}"', cargo.read_text(encoding='utf-8'), flags=re.M)
     outputs[cargo] = re.sub(r'(olo-toolgate-contracts = \{[^\n]*version = ")[^"]+', lambda m: m[1]+contracts, outputs[cargo])

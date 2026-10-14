@@ -5,6 +5,7 @@ from contextlib import redirect_stderr
 import io
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -36,11 +37,11 @@ class TaggedReleaseTests(unittest.TestCase):
         for name in names:(self.foundation/name).write_bytes(('checked '+name).encode())
         (self.foundation/'toolgate-contracts-1.2.3.pom').write_text(
             '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
-            '<groupId>io.ololabs.toolgate</groupId><artifactId>toolgate-contracts</artifactId>'
+            '<groupId>io.github.olo-labs</groupId><artifactId>toolgate-contracts</artifactId>'
             '<version>1.2.3</version><dependencies><dependency><groupId>example</groupId>'
             '<artifactId>serializer</artifactId><version>1.0</version></dependency></dependencies></project>',encoding='utf-8')
         (self.foundation/'toolgate-contracts-1.2.3.module').write_text(json.dumps({
-            'component':{'group':'io.ololabs.toolgate','module':'toolgate-contracts','version':'1.2.3'}}),encoding='utf-8')
+            'component':{'group':'io.github.olo-labs','module':'toolgate-contracts','version':'1.2.3'}}),encoding='utf-8')
         self.foundation_checksums()
         for attribute,value in [('ROOT',self.root),('OUTPUT',self.output)]:
             mock=patch.object(shared,attribute,value);mock.start();self.addCleanup(mock.stop)
@@ -122,7 +123,7 @@ class TaggedReleaseTests(unittest.TestCase):
     def test_maven_rejects_a_checksums_valid_but_wrong_coordinate(self):
         for name in ('toolgate-contracts-1.2.3.pom','toolgate-contracts-1.2.3.module'):
             path=self.foundation/name;original=path.read_bytes()
-            path.write_bytes(original.replace(b'io.ololabs.toolgate',b'wrong.group'))
+            path.write_bytes(original.replace(b'io.github.olo-labs',b'wrong.group'))
             self.foundation_checksums();(self.assets/name).write_bytes(path.read_bytes());tagged.checksum_assets()
             with self.subTest(name=name),patch.object(shared,'run') as run:
                 with self.assertRaisesRegex(ValueError,'identity mismatch'):tagged.publish_maven()
@@ -240,7 +241,8 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         self.assertNotIn('release-foundation',workflows)
         for name in ('control','gateway','quickstart'):
             self.assertNotIn('publish',workflows[name]['jobs'])
-        job=workflows['development-release']['jobs']['publish']
+        self.assertEqual(workflows['development-release']['jobs']['publish']['uses'],'./.github/workflows/release-images.yml')
+        job=workflows['release-images']['jobs']['publish']
         self.assertEqual(job['environment'],'development-release')
         steps=job['steps'];attest=[s for s in steps if s.get('uses','').startswith('actions/attest-build-provenance@')]
         # Marketplace publication belongs to its own repository.
@@ -268,73 +270,68 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
                         self.assertEqual(needs,[prerequisite])
                         self.assertTrue(all(outcomes.get(parent)=='success' for parent in needs))
                         self.assertNotIn('needs.',jobs[sibling]['if'])
-                        self.assertEqual(jobs[sibling]['environment'],'development-release')
+                        body=yaml.safe_load((ROOT/jobs[sibling]['uses'][2:]).read_text())['jobs']['publish']
+                        self.assertEqual(body['environment'],'development-release')
+                        self.assertNotIn('needs',body)
                         self.assertFalse(jobs[sibling].get('continue-on-error',False))
-                        self.assertTrue(all(not s.get('continue-on-error',False) for s in jobs[sibling]['steps']))
+                        self.assertTrue(all(not s.get('continue-on-error',False) for s in body['steps']))
 
-    def test_external_maven_configuration_and_upload_are_isolated_in_both_publishers(self):
-        for name in ('development-release','manual-development-release'):
-            with self.subTest(workflow=name):
-                jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
-                job=jobs['publish-maven']
-                self.assertNotIn('MAVEN_REPOSITORY_URL',job.get('env',{}))
-                steps=job['steps'];maven=steps[-1]
-                self.assertIn('MAVEN_REPOSITORY_URL',maven['env'])
-                script=maven['run']
-                self.assertTrue(script.startswith('python tools/release/development.py validate-maven\n'))
-                self.assertLess(script.index('validate-maven'),script.index('export MAVEN_PASSWORD'))
-                self.assertIn(':contracts-java:publishMavenJavaPublicationToRemoteRepository',script)
-                other_steps=[step for key,other in jobs.items() if key!='publish-maven' for step in other['steps']]
-                other_commands='\n'.join(step.get('run','') for step in other_steps)
-                self.assertNotIn('validate-maven',other_commands)
-                self.assertNotIn('publishMavenJavaPublicationToRemoteRepository',other_commands)
-                self.assertNotIn('publish-maven',other_commands)
-                self.assertTrue(all('MAVEN_REPOSITORY_URL' not in step.get('env',{}) for step in other_steps))
-                self.assertIn('development.py publish' if name=='development-release'
-                              else 'manual_development.py publish',other_commands)
-        jobs=yaml.safe_load((ROOT/'.github/workflows/development-release.yml').read_text())['jobs']
-        maven=jobs['publish-maven']['steps'][-1]['run']
-        self.assertIn('maven_version="$(cat build/development/MAVEN_VERSION)"',maven)
-        self.assertIn('"-PcontractsPublicationVersion=$maven_version"',maven)
-        self.assertNotIn('version.py --set',maven)
-        manual=yaml.safe_load((ROOT/'.github/workflows/manual-development-release.yml').read_text())['jobs']
-        self.assertIn('npm publish',manual['publish-typescript']['steps'][-1]['run'])
+    def test_external_maven_configuration_and_upload_are_isolated_in_shared_publisher(self):
+        shared_job=yaml.safe_load((ROOT/'.github/workflows/release-maven.yml').read_text())['jobs']['publish']
+        step=shared_job['steps'][-1]
+        self.assertNotIn('MAVEN_REPOSITORY_URL',shared_job.get('env',{}))
+        self.assertIn('MAVEN_REPOSITORY_URL',step['env'])
+        self.assertTrue(step['run'].startswith('python tools/release/development.py validate-maven\n'))
+        self.assertLess(step['run'].index('validate-maven'),step['run'].index('export MAVEN_PASSWORD'))
+        self.assertIn('tools/release/maven.py',step['run'])
+        self.assertIn('maven_version="$(cat build/development/MAVEN_VERSION)"',step['run'])
+        self.assertIn('"-PcontractsPublicationVersion=$maven_version"',step['run'])
+        self.assertNotIn('version.py --set',step['run'])
+        for name,manual in (('development-release',False),('manual-development-release',True)):
+            jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
+            self.assertEqual(jobs['publish-maven']['uses'],'./.github/workflows/release-maven.yml')
+            self.assertIs(jobs['publish-maven']['with']['manual'],manual)
+        other=yaml.safe_load((ROOT/'.github/workflows/release-images.yml').read_text())['jobs']['publish']
+        self.assertNotIn('MAVEN_REPOSITORY_URL',json.dumps(other))
 
-    def test_gradle_failures_are_confined_to_the_verified_maven_publisher(self):
-        jobs=yaml.safe_load((ROOT/'.github/workflows/development-release.yml').read_text())['jobs']
-        for name,job in jobs.items():
-            commands='\n'.join(step.get('run','') for step in job['steps'])
-            with self.subTest(job=name):
-                self.assertNotIn('version.py --set',commands)
-                self.assertNotIn('tools/contracts/generate.py',commands)
-                if name=='publish-maven':
-                    self.assertIn('./gradlew',commands)
-                else:
-                    self.assertNotIn('./gradlew',commands)
-                    self.assertFalse(any(s.get('uses','').startswith('actions/setup-java@') for s in job['steps']))
-        # Even a failed Gradle invocation only changes publish-maven's result.
-        outcomes={'prepare':'success','publish-maven':'failure'}
-        for name in ('publish',):
-            self.assertEqual(outcomes[jobs[name]['needs']],'success')
-            self.assertNotIn('publish-maven',jobs[name]['if'])
+    def test_gradle_failures_are_confined_to_shared_maven_publisher(self):
+        images=yaml.safe_load((ROOT/'.github/workflows/release-images.yml').read_text())['jobs']['publish']
+        self.assertNotIn('./gradlew',json.dumps(images))
+        self.assertFalse(any(s.get('uses','').startswith('actions/setup-java@') for s in images['steps']))
+        maven=yaml.safe_load((ROOT/'.github/workflows/release-maven.yml').read_text())['jobs']['publish']
+        self.assertIn('./gradlew',json.dumps(maven))
+        self.assertNotIn('needs',maven)
+        for name,prerequisite in (('development-release','prepare'),('manual-development-release','build')):
+            jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
+            self.assertEqual(jobs['publish']['needs'],prerequisite)
+            self.assertNotIn('publish-maven',jobs['publish']['if'])
 
     def test_parallel_publishers_receive_prepared_packages_and_images(self):
         for workflow,preparation,prefix,output in (
                 ('development-release','prepare','verified-release','build/development'),
                 ('manual-development-release','build','manual-development','build/manual-development')):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{workflow}.yml').read_text())['jobs']
-            uploads={s['with']['name']:s['with'] for s in jobs[preparation]['steps']
+            prepared=jobs[preparation]
+            if 'uses' in prepared:prepared=yaml.safe_load((ROOT/prepared['uses'][2:]).read_text())['jobs']['verify']
+            uploads={s['with']['name']:s['with'] for s in prepared['steps']
                      if s.get('uses','').startswith('actions/upload-artifact@')}
             for publisher in ('publish','publish-maven'):
-                for step in jobs[publisher]['steps']:
+                body=yaml.safe_load((ROOT/jobs[publisher]['uses'][2:]).read_text())['jobs']['publish']
+                for step in body['steps']:
                     if not step.get('uses','').startswith('actions/download-artifact@'):continue
-                    download=step['with']
+                    download=dict(step['with'])
+                    for field in ('name','path'):
+                        if download[field].startswith('${{ inputs.manual'):
+                            choices=re.findall(r"'([^']+)'",download[field])
+                            download[field]=choices[0 if workflow=='manual-development-release' else 1]
                     with self.subTest(workflow=workflow,publisher=publisher,artifact=download['name']):
                         self.assertIn(download['name'],uploads)
                         self.assertTrue(download['path'].startswith(output))
                         self.assertEqual(uploads[download['name']]['if-no-files-found'],'error')
-            self.assertTrue(any(s.get('with',{}).get('name')==prefix+'-images' for s in jobs['publish']['steps']))
-            self.assertFalse(any(s.get('with',{}).get('name')==prefix+'-images' for s in jobs['publish-maven']['steps']))
+            image_body=yaml.safe_load((ROOT/jobs['publish']['uses'][2:]).read_text())['jobs']['publish']
+            maven_body=yaml.safe_load((ROOT/jobs['publish-maven']['uses'][2:]).read_text())['jobs']['publish']
+            self.assertIn(prefix+'-images',json.dumps(image_body))
+            self.assertNotIn(prefix+'-images',json.dumps(maven_body))
 
 
 if __name__=='__main__':unittest.main()

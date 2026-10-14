@@ -112,55 +112,19 @@ def publish_maven():
     assets=shared.OUTPUT/'assets'
     pom=ET.parse(assets/f'toolgate-contracts-{version}.pom').getroot()
     ns={'m':'http://maven.apache.org/POM/4.0.0'}
-    if [pom.findtext('m:'+field,namespaces=ns) for field in ('groupId','artifactId','version')]!=['io.ololabs.toolgate','toolgate-contracts',version]:
+    if [pom.findtext('m:'+field,namespaces=ns) for field in ('groupId','artifactId','version')]!=['io.github.olo-labs','toolgate-contracts',version]:
         raise ValueError('Checked Maven POM identity mismatch')
     module=json.loads((assets/f'toolgate-contracts-{version}.module').read_text(encoding='utf-8'))
     identity=module.get('component',{})
-    if [identity.get(k) for k in ('group','module','version')]!=['io.ololabs.toolgate','toolgate-contracts',version]:
+    if [identity.get(k) for k in ('group','module','version')]!=['io.github.olo-labs','toolgate-contracts',version]:
         raise ValueError('Checked Gradle module identity mismatch')
     from tools.release import central
     if os.environ.get('MAVEN_REPOSITORY_URL') == central.UPLOAD_URL:
         central.publish(assets, version)
         return
-    if not os.environ.get('MAVEN_REPOSITORY_URL','').startswith('https://'):
-        raise ValueError('Maven publication requires an HTTPS repository')
-    project=shared.OUTPUT/'maven-publication';project.mkdir()
-    (project/'settings.gradle.kts').write_text('rootProject.name = "toolgate-verified-publication"\n',encoding='utf-8')
-    script='''// Copyright 2026 OLO Labs
-// SPDX-License-Identifier: Apache-2.0
-import org.gradle.api.publish.maven.tasks.GenerateMavenPom
-plugins { `maven-publish` }
-group = "io.ololabs.toolgate"
-version = file("../MAVEN_VERSION").readText().trim()
-val assets = file("../assets")
-publishing {
-    publications {
-        create<MavenPublication>("verified") {
-            artifactId = "toolgate-contracts"
-            artifact(assets.resolve("toolgate-contracts-${project.version}.jar"))
-            artifact(assets.resolve("toolgate-contracts-${project.version}-sources.jar")) { classifier = "sources" }
-            artifact(assets.resolve("toolgate-contracts-${project.version}-javadoc.jar")) { classifier = "javadoc" }
-            artifact(assets.resolve("toolgate-contracts-${project.version}.module")) { extension = "module" }
-        }
-    }
-    repositories {
-        maven {
-            name = "remote"
-            url = uri(providers.environmentVariable("MAVEN_REPOSITORY_URL").get())
-            credentials {
-                username = providers.environmentVariable("MAVEN_USERNAME").orNull
-                password = providers.environmentVariable("MAVEN_PASSWORD").orNull
-            }
-        }
-    }
-}
-tasks.withType<GenerateMavenPom>().configureEach {
-    doLast { destination.writeBytes(assets.resolve("toolgate-contracts-${project.version}.pom").readBytes()) }
-}
-'''
-    (project/'build.gradle.kts').write_text(script,encoding='utf-8')
-    wrapper=shared.ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
-    shared.run(str(wrapper),'--no-daemon','--project-dir',str(project),'publishVerifiedPublicationToRemoteRepository')
+    from tools.release import maven
+    maven.publish(assets, version, project=shared.OUTPUT/'maven-publication', run=shared.run)
+
 
 
 def publish():

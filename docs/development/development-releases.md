@@ -68,7 +68,7 @@ commit. Failed, skipped, cancelled or missing prerequisites prevent publication.
 Dispatch `ci.yml` on main to repeat this complete flow. The publisher does not
 wait for its own unfinished job. Legacy five-run preparation remains available
 only for compatibility callers. Shared preparation hands the verified artifacts
-to independent core release, Maven and Marketplace publish jobs. A registry or
+to independent core release and Maven publish jobs. A registry or
 Maven configuration failure cannot skip or cancel a sibling publisher.
 
 Automatic CI and development release admission require `TOOLGATE_CI_ENABLED=true`
@@ -107,7 +107,7 @@ The native archives retain their tested VERSION; release metadata ties them to
 the exact commit and CI run IDs. The image digests are recorded in the metadata.
 No installer/runtime signing is claimed by this workflow.
 
-The Maven library is `io.ololabs.toolgate:toolgate-contracts`. Each publishing run
+The Maven library is `io.github.olo-labs:toolgate-contracts`. Each publishing run
 uses `<core-version>-dev.<publishing-run-id>.g<12-character-commit>`, avoiding reuse
 of the checked-in development coordinate. Java contract tests run in foundation
 before remote publication;
@@ -121,8 +121,11 @@ Its Java setup, compilation or upload failures cannot block other publishers.
 Maven defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`, authenticated
 with the CI GITHUB_TOKEN. Consumers need GitHub Packages read access. To use another
 repository, set `MAVEN_REPOSITORY_URL`, `MAVEN_USERNAME` and `MAVEN_PASSWORD`. For a
-custom repository use both Maven secrets; the workflow does not implement Maven
-Central Portal upload or GPG signing. Versioned publication uses the same `ci.yml`
+custom repository use both Maven secrets. Central Portal publishing uses the shared
+Maven job with GPG signing and the verified `io.github.olo-labs` namespace.
+The automatic and manual entry points share native, image and publication job
+bodies; manual sets `run_tests: false` and automatic CI sets it to true.
+Versioned publication uses the same `ci.yml`
 workflow and environment; see [release process](release-process.md).
 
 Publishing requires GitHub Actions write access for repository contents/packages.

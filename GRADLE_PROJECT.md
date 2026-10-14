@@ -42,7 +42,7 @@ implementation(project(":contracts-java"))
 Published/split-repo mode:
 
 ```text
-io.ololabs.toolgate:toolgate-contracts:<version>
+io.github.olo-labs:toolgate-contracts:<version>
 ```
 
 Test the split-repo path:

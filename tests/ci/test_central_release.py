@@ -30,7 +30,7 @@ class CentralReleaseTests(unittest.TestCase):
             (self.assets/(self.prefix+suffix)).write_bytes(('checked '+suffix).encode())
         (self.assets/(self.prefix+'.pom')).write_text(
             '<project xmlns="http://maven.apache.org/POM/4.0.0">'
-            '<groupId>io.ololabs.toolgate</groupId><artifactId>toolgate-contracts</artifactId>'
+            '<groupId>io.github.olo-labs</groupId><artifactId>toolgate-contracts</artifactId>'
             f'<version>{VERSION}</version><name>Contracts</name><description>Contracts</description>'
             '<url>https://github.com/olo-labs/olo-toolgate</url><licenses><license>'
             '<name>Apache-2.0</name><url>https://www.apache.org/licenses/LICENSE-2.0</url>'
@@ -49,7 +49,7 @@ class CentralReleaseTests(unittest.TestCase):
 
     def test_bundle_preserves_bytes_and_has_maven_layout_signatures_and_checksums(self):
         module = self.assets/(self.prefix+'.module')
-        module.write_text(json.dumps({'component':{'group':'io.ololabs.toolgate',
+        module.write_text(json.dumps({'component':{'group':'io.github.olo-labs',
             'module':'toolgate-contracts', 'version':VERSION}}), encoding='utf-8')
         folder = self.root/'bundle'
         folder.mkdir()
@@ -58,7 +58,7 @@ class CentralReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(archive) as output:
             self.assertEqual(len(output.namelist()), 30)
             for source in self.assets.iterdir():
-                name = 'io/ololabs/toolgate/toolgate-contracts/'+VERSION+'/'+source.name
+                name = 'io/github/olo-labs/toolgate-contracts/'+VERSION+'/'+source.name
                 self.assertEqual(output.read(name), source.read_bytes())
                 self.assertEqual(output.read(name+'.asc'), b'fixture signature')
                 for algorithm in ('md5', 'sha1', 'sha256', 'sha512'):
@@ -73,7 +73,7 @@ class CentralReleaseTests(unittest.TestCase):
                     central.bundle(self.assets, version, self.root)
             pom = self.assets/(self.prefix+'.pom')
             original = pom.read_text()
-            pom.write_text(original.replace('io.ololabs.toolgate', 'wrong.group'))
+            pom.write_text(original.replace('io.github.olo-labs', 'wrong.group'))
             with self.assertRaisesRegex(ValueError, 'identity mismatch'):
                 central.bundle(self.assets, VERSION, self.root)
             pom.write_text(original.replace('<name>OLO Labs</name>', ''))
@@ -125,16 +125,17 @@ class CentralReleaseTests(unittest.TestCase):
                 central.publish(self.assets, VERSION)
         bundle.assert_not_called()
 
-    def test_central_secrets_and_routing_are_in_both_maven_jobs(self):
+    def test_central_secrets_and_routing_are_in_one_shared_maven_job(self):
         for workflow in ('development-release', 'manual-development-release'):
-            jobs = yaml.safe_load((ROOT/'.github/workflows'/f'{workflow}.yml').read_text())['jobs']
-            step = jobs['publish-maven']['steps'][-1]
-            self.assertEqual(step['env']['MAVEN_GPG_PRIVATE_KEY'], '${{ secrets.MAVEN_GPG_PRIVATE_KEY }}')
-            self.assertIn('tools/release/central.py', step['run'])
-            self.assertIn(central.UPLOAD_URL, step['run'])
-            for name, job in jobs.items():
-                if name != 'publish-maven':
-                    self.assertNotIn('MAVEN_GPG_PRIVATE_KEY', json.dumps(job))
+            jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{workflow}.yml').read_text())['jobs']
+            self.assertEqual(jobs['publish-maven']['uses'],'./.github/workflows/release-maven.yml')
+            self.assertNotIn('MAVEN_GPG_PRIVATE_KEY',json.dumps(jobs))
+        job=yaml.safe_load((ROOT/'.github/workflows/release-maven.yml').read_text())['jobs']['publish']
+        step=job['steps'][-1]
+        self.assertEqual(step['env']['MAVEN_GPG_PRIVATE_KEY'],'${{ secrets.MAVEN_GPG_PRIVATE_KEY }}')
+        self.assertIn('tools/release/maven.py',step['run'])
+        images=yaml.safe_load((ROOT/'.github/workflows/release-images.yml').read_text())
+        self.assertNotIn('MAVEN_GPG_PRIVATE_KEY',json.dumps(images))
 
 
 if __name__ == '__main__':

@@ -1,0 +1,31 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: Publish TypeScript contracts
+'on':
+  workflow_call: null
+permissions:
+  contents: read
+jobs:
+  publish:
+    name: Publish TypeScript library
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: development-release
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '22'
+        registry-url: https://npm.pkg.github.com
+        scope: '@olo-labs'
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: manual-development-libraries
+        path: build/manual-development/assets
+    - name: Publish TypeScript library
+      env:
+        NODE_AUTH_TOKEN: ${{ github.token }}
+      run: npm publish build/manual-development/assets/olo-labs-toolgate-contracts-*.tgz --registry https://npm.pkg.github.com --tag dev --ignore-scripts

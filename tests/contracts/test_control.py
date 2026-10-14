@@ -57,7 +57,7 @@ class ControlAssetsTests(unittest.TestCase):
         for command in ('tools/control/check.py','tools/control/helm.py','tools/control/container.py','tools/enterprise/helm.py','--severity HIGH,CRITICAL','--format cyclonedx','docker save'):
             self.assertIn(command,text)
         self.assertNotIn('publish',workflow['jobs'])
-        publisher=yaml.safe_load((ROOT/'.github/workflows/development-release.yml').read_text())
+        publisher=yaml.safe_load((ROOT/'.github/workflows/release-images.yml').read_text())
         self.assertEqual('development-release',publisher['jobs']['publish']['environment'])
         shared=(ROOT/'tools/release/tagged.py').read_text()
         self.assertIn("shared.run('docker','load','-i'",shared)

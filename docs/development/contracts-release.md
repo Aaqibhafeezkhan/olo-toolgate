@@ -14,7 +14,7 @@ publishes:
 
 ```text
 olo-toolgate-contracts              Rust 1.6.0
-io.ololabs.toolgate:toolgate-contracts  1.6.0
+io.github.olo-labs:toolgate-contracts  1.6.0
 @olo-labs/toolgate-contracts        1.6.0
 olo-labs/toolgate-contracts         1.6.0
 raw contract bundle                 1.6.0

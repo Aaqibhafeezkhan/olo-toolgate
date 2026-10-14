@@ -58,7 +58,7 @@ def main():
                     'endpoint':{'protocolVersion':1,'enrollment':'HTTPS browser code plus verified P-256 CSR','identity':'dedicated RSA device CA; actual mTLS peer; active registry','platforms':['windows-x64','windows-arm64','linux-x64','linux-arm64','macos-x64','macos-arm64'],'execution':True},
                     'mcp':{'version':'2026-07-28','capabilities':'stateless ingress; current group-authorized discovery and device-bound execution; per-invocation approvals'},
                     'gatewayImage':f'ghcr.io/olo-labs/olo-toolgate-gateway:{product}', 'controlImage':f'ghcr.io/olo-labs/olo-toolgate-control:{product}',
-                    'compatibilityWindow':'enterprise access revision 2 is a breaking runtime/configuration boundary; preserved archival evidence grants no access', 'maven':f'io.ololabs.toolgate:toolgate-contracts:{version}', 'helmOci':f'oci://ghcr.io/olo-labs/charts/olo-toolgate:{product}'}
+                    'compatibilityWindow':'enterprise access revision 2 is a breaking runtime/configuration boundary; preserved archival evidence grants no access', 'maven':f'io.github.olo-labs:toolgate-contracts:{version}', 'helmOci':f'oci://ghcr.io/olo-labs/charts/olo-toolgate:{product}'}
         (args.output/'compatibility.json').write_text(json.dumps(metadata, indent=2)+'\n', encoding='utf-8', newline='\n')
     checksum_assets(args.output)
     print(f'Release assets prepared: {args.output}')

@@ -14,7 +14,7 @@ events/    event/webhook envelopes
 
 ```text
 rust/        crate: olo-toolgate-contracts
-java/        Maven: io.ololabs.toolgate:toolgate-contracts
+java/        Maven: io.github.olo-labs:toolgate-contracts
 typescript/  npm: @olo-labs/toolgate-contracts
 php/         Composer: olo-labs/toolgate-contracts
 ```

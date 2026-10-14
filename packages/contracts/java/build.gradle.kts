@@ -5,6 +5,8 @@ plugins {
     `maven-publish`
 }
 
+group = "io.github.olo-labs"
+
 description = "Shared protocol and data contracts for OLO ToolGate"
 base { archivesName.set("toolgate-contracts") }
 version = providers.gradleProperty("contractsPublicationVersion")

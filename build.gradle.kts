@@ -30,7 +30,7 @@ allprojects {
                         url = uri(providers.gradleProperty("contractsRepository").getOrElse("${rootDir}/.dev/maven"))
                     }
                 }
-                filter { includeModule("io.ololabs.toolgate", "toolgate-contracts") }
+                filter { includeModule("io.github.olo-labs", "toolgate-contracts") }
             }
         }
         mavenCentral()

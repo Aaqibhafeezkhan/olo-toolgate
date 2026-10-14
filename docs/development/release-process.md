@@ -54,19 +54,30 @@ HTTPS Maven repository uses the `MAVEN_REPOSITORY_URL` variable and
 `MAVEN_USERNAME`/`MAVEN_PASSWORD` secrets. Existing repository settings work too;
 they do not need to be duplicated in the environment.
 
-The current group ID is `io.ololabs.toolgate`. To retain it on Maven Central,
-register `io.ololabs` and prove ownership of `ololabs.io` with Sonatype's DNS TXT
-verification. If that domain is unavailable, choose a verified namespace before
-changing public Maven coordinates. See [Sonatype namespace registration](https://central.sonatype.org/register/namespace/).
+The contracts Maven coordinate is `io.github.olo-labs:toolgate-contracts` under
+the verified GitHub namespace. Consumers must update their dependency group ID
+from `io.ololabs.toolgate`; Java package names remain `io.ololabs.toolgate.contracts`.
+SDK module coordinates are independent of the contracts artifact.
 
-Central Portal is not a standard Maven PUT repository. Its release flow requires
-Portal upload, GPG signatures and Central-compliant POM metadata; that integration
-is not implemented by the current publisher. Do not use a Central Portal URL as
-the custom repository URL expecting credentials alone to enable publication.
-The Maven job rejects that target before credential transmission, with an
-explicit configuration error. Image, chart, GitHub release and Marketplace
-publication continue independently of the external Maven repository.
-See [Sonatype publishing requirements](https://central.sonatype.org/publish/publish-portal-maven/).
+For Central, use `https://central.sonatype.com/api/v1/publisher/upload` as the
+repository URL. The shared Maven job signs a Maven-layout ZIP and uploads it
+using a Portal user token with access to `io.github.olo-labs`. It waits for
+Central to report `PUBLISHED`. GPG setup is documented in
+[the release tools README](../../tools/release/README.md).
+Image, chart and GitHub release publication continue independently of Maven.
+
+Both release paths call the same native, image and publishing workflows.
+Automatic CI enables `run_tests` and completes foundation, native and image
+verification before publication. The manual entry point is restricted to main
+and sets `run_tests: false`: it builds and publishes without tests, scans or
+smoke checks. Publisher jobs depend only on preparation, so a failed Maven
+upload does not stop images or npm.
+
+Development GitHub releases are assembled as drafts. Uploads run one file at a
+time and resume existing assets only when their SHA-256 digest and size match
+the prepared file. The release becomes public only after the complete asset
+set is verified. An existing published release must already match all prepared
+bytes; conflicting assets are never replaced.
 
 ## Retained validation contexts
 

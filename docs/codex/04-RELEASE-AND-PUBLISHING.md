@@ -37,7 +37,7 @@ Drupal container if maintained by project.
 Java:
 
 ```text
-io.ololabs.toolgate:toolgate-contracts:<version>
+io.github.olo-labs:toolgate-contracts:<version>
 ```
 
 Publish Maven-compatible artifacts.

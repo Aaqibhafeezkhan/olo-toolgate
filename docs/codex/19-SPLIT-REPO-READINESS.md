@@ -42,7 +42,7 @@ implementation(project(":contracts-java"))
 Separated:
 
 ```kotlin
-implementation("io.ololabs.toolgate:toolgate-contracts:<version>")
+implementation("io.github.olo-labs:toolgate-contracts:<version>")
 ```
 
 Imports unchanged.

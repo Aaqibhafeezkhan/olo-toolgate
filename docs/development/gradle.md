@@ -70,7 +70,7 @@ Then:
 The Java modules then resolve:
 
 ```text
-io.ololabs.toolgate:toolgate-contracts:0.1.0-SNAPSHOT
+io.github.olo-labs:toolgate-contracts:0.1.0-SNAPSHOT
 ```
 
 from Maven Local instead of the workspace project.

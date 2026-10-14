@@ -264,7 +264,7 @@ class LocalCiTests(unittest.TestCase):
         self.assertTrue(any(row['status'] == 'not-selected' for row in report['jobs']))
 
     def test_selecting_publication_never_executes_it(self):
-        code, report, calls = self.run_mocked(['development-release.publish'])
+        code, report, calls = self.run_mocked(['release-images.publish'])
         self.assertEqual(code, 2)
         self.assertEqual(calls, [])
         self.assertFalse(report['passed'])
