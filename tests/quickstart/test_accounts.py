@@ -63,8 +63,21 @@ class Control:
         return 404,b'{}',{}
 
 
-def strict_packet():
+def installation_packet():
     return json.loads((quickstart.DATA/'installation-review.json').read_text())['authorization']['snapshot']
+
+
+def strict_packet():
+    """What Control holds after first start: the installation packet, then the initialize file's records over it."""
+    snapshot = installation_packet()
+    extra = quickstart.DATA/'state/initialize-snapshot.json'
+    if extra.exists():
+        for name, rows in json.loads(extra.read_text()).items():
+            if isinstance(rows, list):
+                merged = {row['id']: row for row in snapshot[name]}
+                merged.update({row['id']: row for row in rows})
+                snapshot[name] = list(merged.values())
+    return snapshot
 
 
 class AccountTests(unittest.TestCase):
@@ -126,6 +139,8 @@ class AccountTests(unittest.TestCase):
 
     def test_initialize_file_merges_into_the_installation_snapshot(self):
         self.prepare()
+        # The reviewed packet carries only installation records; the file follows as Control's first import.
+        self.assertFalse(installation_packet()['grants']);self.assertNotIn('public',{row['id'] for row in installation_packet()['users']})
         snapshot=strict_packet();state=json.loads((quickstart.DATA/'state/installation.json').read_text())
         rows=lambda kind:{row['id']:row for row in snapshot[kind]}
         users,teams=rows('users'),rows('teams')
