@@ -102,6 +102,32 @@ class EnterpriseAdministrationTest {
         store.transaction(administrator.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.put(Kind.ROLE.id("recovery-role"),graph.codec.entry(Kind.ROLE,graph.codec.json(new ControlRole("recovery-role","Super Admin",true,2L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()))));tx.save(before,new Directory(before.revision()+1,entries));return null;});
         directory.requirePortal(administrator,"admin");assertEquals(201,directory.mutate(administrator,Kind.USER,"exceptional-user","CREATE",graph.codec.json(new ControlUser("exceptional-user","Pending review",false,1L)),0,"exceptional-user-key","request").status());assertThrows(Failure.class,()->directory.mutate(administrator,Kind.USER,"admin","UPDATE",graph.codec.json(new ControlUser("admin","Admin",false,1L)),1,"disable-super","request"));
     }
+    @Test void shadowAcceptsExportedConfigurationAndPreservesLocalAuthorityWithoutWrites(){
+        var snapshot=graph.codec.model(directory.export(administrator,false).body(),ControlSnapshot.class);
+        assertTrue(snapshot.users().isEmpty());assertTrue(snapshot.identityBindings().isEmpty());assertFalse(snapshot.requiredIdentities().isEmpty());
+        var evaluation=graph.input(graph.context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
+        var before=store.transaction(administrator.tenant(),false,tx->List.of(tx.load(),tx.enterprise().authorizationEpoch(),tx.enterprise().invocationsSince(0)));
+        var result=graph.codec.model(directory.shadow(administrator,graph.codec.json(new EnterpriseShadowRequest(snapshot,evaluation,Decision.BLOCK,EnterpriseConformanceTest.DIGEST))).body(),EnterpriseShadowResult.class);
+        assertEquals(Decision.ALLOW,result.decision().decision());assertTrue(result.accessExpansion());
+        assertEquals(before,store.transaction(administrator.tenant(),false,tx->List.of(tx.load(),tx.enterprise().authorizationEpoch(),tx.enterprise().invocationsSince(0))));
+    }
+    @Test void shadowRejectsUnresolvedExportIdentities(){
+        var snapshot=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(directory.export(administrator,false).body());
+        snapshot.putArray("requiredIdentities").addObject().put("id","missing-user").putArray("teamIds");
+        var evaluation=graph.input(graph.context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
+        var request=graph.codec.json(Map.of("snapshot",snapshot,"evaluation",evaluation,"observedLegacyDecision",Decision.BLOCK,"legacyEvidenceDigest",EnterpriseConformanceTest.DIGEST));
+        assertEquals(409,assertThrows(Failure.class,()->directory.shadow(administrator,request)).status());
+    }
+    @Test void shadowOfExportedRevocationStillBlocksAndLeavesLiveGrantsIntact(){
+        var snapshot=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(directory.export(administrator,false).body());
+        snapshot.get("grants").forEach(grant->((com.fasterxml.jackson.databind.node.ObjectNode)grant).put("enabled",false));
+        var evaluation=graph.input(graph.context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
+        var before=store.transaction(administrator.tenant(),false,tx->tx.load());
+        var request=graph.codec.json(Map.of("snapshot",snapshot,"evaluation",evaluation,"observedLegacyDecision",Decision.BLOCK,"legacyEvidenceDigest",EnterpriseConformanceTest.DIGEST));
+        var result=graph.codec.model(directory.shadow(administrator,request).body(),EnterpriseShadowResult.class);
+        assertEquals(Decision.BLOCK,result.decision().decision());assertFalse(result.accessExpansion());
+        assertEquals(before,store.transaction(administrator.tenant(),false,tx->tx.load()));
+    }
     @Test void shadowComparesCapturedLegacyDecisionWithoutApplyingGrantsOrConsumingAuthority(){
         var proposed=graph.codec.model(graph.codec.snapshot(administrator.tenant(),graph.directory(),false),ControlSnapshot.class);var evaluation=graph.input(graph.context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
         var before=store.transaction(administrator.tenant(),false,tx->List.of(tx.load().revision(),tx.enterprise().authorizationEpoch(),tx.enterprise().invocationsSince(0)));
