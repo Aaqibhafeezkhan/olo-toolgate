@@ -26,11 +26,17 @@ test('real group administration, inherited provenance and review impact are acce
     await expect(workspace.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
   }
   await connect(page);
-  for(const [route,title] of [['users','Users'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['bindings','Execution bindings'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
+  for(const [route,title] of [['users','Users'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['bindings','Execution bindings'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['config-reviews','Configuration reviews']] as const){
     await page.goto(origin+'/console/#'+route);
     await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
     await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
     expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+  }
+  // The smoke setup downgrades the maker to Administrator. Settings stay owner-only.
+  for(const route of ['config-server','config-device','config-backup']){
+    await page.goto(origin+'/console/#'+route);
+    await expect(page.getByRole('heading',{name:'Administration',exact:true})).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText('Administration is available to Super Admin accounts only.');
   }
   await page.goto(origin+'/console/#config-reviews');
   await expect(page.getByRole('heading',{name:'Configuration reviews',exact:true})).toBeVisible();
@@ -50,6 +56,15 @@ test('real group administration, inherited provenance and review impact are acce
       await reviewer.getByLabel('Username',{exact:true}).fill('reviewer-'+(index+1));
       await reviewer.getByLabel('Password',{exact:true}).fill(process.env['TOOLGATE_ENTERPRISE_REVIEWER_'+(index+1)]!);
       await connect(reviewer);
+    }
+    // Reviewer 2 is the installation owner; keep this session separate from the maker.
+    const owner=reviewers[1];
+    owner.on('pageerror',e=>errors.push(e.name));
+    for(const [route,title] of [['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
+      await owner.goto(origin+'/console/#'+route);
+      await expect(owner.getByRole('heading',{name:title,exact:true})).toBeVisible();
+      await expect(owner.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
+      expect((await new AxeBuilder({page:owner}).analyze()).violations).toEqual([]);
     }
     async function applyDraft(){
       const link=page.getByRole('link',{name:'Review configuration draft'});
