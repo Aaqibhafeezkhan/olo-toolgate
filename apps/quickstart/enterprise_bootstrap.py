@@ -138,6 +138,13 @@ def initialize(snapshot, tenant, issuer, now):
             if name == 'teams': row['userIds'] = sorted(set(rows.get(row['id'], {}).get('userIds', [])) | set(row.get('userIds', [])))
             rows[row['id']] = row
         snapshot[name] = list(rows.values())
+    # A tool, device or agent belongs to exactly one group: the file's group takes it from the installation's group.
+    for name, members in (('toolGroups', 'toolIds'), ('deviceGroups', 'deviceIds'), ('agentGroups', 'agentIds')):
+        claimed = {member for row in document.get(name, []) for member in row.get(members, [])}
+        listed = {row['id'] for row in document.get(name, [])}
+        for index, row in enumerate(snapshot[name]):
+            if row['id'] not in listed and claimed & set(row.get(members, [])):
+                snapshot[name][index] = {**row, members: [member for member in row[members] if member not in claimed]}
     users = {user['id'] for user in snapshot['users']}
     teams = {team['id']: team for team in snapshot['teams']}
     # Initialize resolves every required identity as existing or as a disabled placeholder, added to its teams.
@@ -274,11 +281,17 @@ def prepare(data, tenant, issuer, key, atomic, profiles):
                                                 for action in tool['definition']['actions']}),
                                 allowedPackageDigests=sorted({tool['packageDigest'] for tool in snapshot['tools']}),
                                 requireOnline=True, ownerDependency=False)]
+    installation = json.loads(json.dumps(snapshot))
     installed = initialize(snapshot, tenant, issuer, now)
+    # The packet carries only installation records; Control applies the file's records as its own first import.
+    extra = {name: [row for row in snapshot[name] if row not in installation[name]] for name in COLLECTIONS}
+    if any(extra.values()):
+        atomic(data / 'state/initialize-snapshot.json', json.dumps(dict(formatVersion=2, tenantId=tenant, revision=0, **extra)))
+        (data / 'state/initialize-snapshot.json').chmod(0o600)
     # Tokens, logins and settings land before the packet, which is the commit point of a fresh install.
     atomic(data / 'state/installation.json', json.dumps(installed))
     (data / 'state/installation.json').chmod(0o600)
-    authorization = dict(formatVersion=1, tenantId=tenant, expectedRevision=0, snapshot=snapshot,
+    authorization = dict(formatVersion=1, tenantId=tenant, expectedRevision=0, snapshot=installation,
                          reasonDigest=hashlib.sha256(b'Fresh Quickstart installation; zero runtime grants').hexdigest(),
                          issuedAtUnixMs=now, expiresAtUnixMs=now+3600000)
     installation_key = key('installation')
