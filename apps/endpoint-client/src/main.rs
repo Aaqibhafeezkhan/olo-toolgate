@@ -65,6 +65,36 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             );
             Ok(())
         }
+        // The owner's power switch; `status` never waits behind a check-in.
+        "power"
+            if arguments.len() == 2 && ["on", "off", "status"].contains(&arguments[1].as_str()) =>
+        {
+            let request = match arguments[1].as_str() {
+                "on" => ClientIpcOperation::PowerOn,
+                "off" => ClientIpcOperation::PowerOff,
+                _ => ClientIpcOperation::Activity,
+            };
+            let response = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                olo_toolgate_client::ipc::call(
+                    &olo_toolgate_client::install::ipc_endpoint(),
+                    request,
+                ),
+            )
+            .await
+            .map_err(|_| Failure::Unavailable)??;
+            if response.error.is_some() {
+                return Err(Failure::Unavailable);
+            }
+            println!(
+                "{}",
+                match response.power.ok_or(Failure::Unavailable)? {
+                    olo_toolgate_contracts::DevicePower::On => "on",
+                    olo_toolgate_contracts::DevicePower::Off => "off",
+                }
+            );
+            Ok(())
+        }
         "authorization-profiles" if arguments.len() == 1 => {
             println!(
                 "{}",

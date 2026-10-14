@@ -75,6 +75,13 @@ The CA is supplied at deployment so no HTTP console exception is required.
 Gateway traffic remains TLS-verified. The policy confines network destinations;
 authorization of actions at the permitted Gateway remains ToolGate's usual policy.
 
+## Power switch
+
+The owner switches the device off and on from the host with
+`docker exec <container> olo-toolgate-client power off` (or `on`, `status`).
+The container keeps running and keeps its identity; see
+[the owner power switch](../client/health-and-inventory.md#owner-power-switch).
+
 ## Local validation
 
 ```sh
@@ -89,4 +96,4 @@ python tools/device/secured_check.py --image olo-toolgate-linux-secured-device:l
 The gate uses isolated real containers, reviews enrollment, verifies mTLS check-in,
 tests reachable TCP/UDP/IPv6 peers and Docker DNS, tests ingress against live
 listeners, proves the unprivileged service cannot change the firewall, and checks
-retained identity and reconnection. It writes `build/secured_device/smoke.json`.
+retained identity, the owner power switch and reconnection. It writes `build/secured_device/smoke.json`.

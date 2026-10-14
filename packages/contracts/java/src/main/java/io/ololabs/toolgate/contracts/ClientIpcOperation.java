@@ -12,5 +12,9 @@ public enum ClientIpcOperation {
     /** Canonical CHECK_IN value. */
     CHECK_IN,
     /** Canonical ACTIVITY value. */
-    ACTIVITY
+    ACTIVITY,
+    /** Canonical POWER_ON value. */
+    POWER_ON,
+    /** Canonical POWER_OFF value. */
+    POWER_OFF
 }

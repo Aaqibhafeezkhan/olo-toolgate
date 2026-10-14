@@ -20,6 +20,7 @@ pub mod local_tools;
 
 pub mod authorization_profile;
 pub mod platform;
+pub mod power;
 mod remote;
 pub mod runtime;
 pub mod service;

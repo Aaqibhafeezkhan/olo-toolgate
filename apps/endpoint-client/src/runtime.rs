@@ -49,8 +49,13 @@ pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -
         }
         Err(failure) => return Err(failure),
     };
-    let service = Arc::new(tokio::sync::Mutex::new(service));
+    // One owner switch for the focused gateway and every background connection.
+    let power = crate::power::Power::open(config.state_directory.clone())?;
+    let service = Arc::new(tokio::sync::Mutex::new(service.with_power(power.clone())));
     let activity = service.lock().await.activity.clone();
+    if !power.is_on() {
+        activity.event("Power", "OFF");
+    }
     if let Some(summary) = healing {
         activity.event("Tools", &summary);
     }
@@ -69,6 +74,7 @@ pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -
                 contracts.clone(),
             )?);
             ClientService::open(background, store, key.clone(), control)
+                .map(|state| state.with_power(power.clone()))
         };
         let (background_healed, healing) = healed(&background, &config.state_directory);
         let opened = match open(background_healed) {
@@ -105,6 +111,7 @@ pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -
         config.authorized_peers,
         service.clone(),
         connections,
+        power,
         contracts,
         shutdown,
     )
@@ -156,30 +163,52 @@ fn healed(config: &Config, device_root: &std::path::Path) -> (Config, Option<Str
         }
     }
 }
-/// One serialized check-in loop per gateway connection.
+/// One serialized check-in loop per gateway connection. While the owner's switch is off the
+/// loop sends one final report and then stays silent until the owner switches it on.
 fn heartbeat(
     service: Arc<tokio::sync::Mutex<ClientService>>,
     connection: Arc<Connection>,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let (activity, schedule_changed) = {
+        let (activity, schedule_changed, mut power) = {
             let state = service.lock().await;
-            (state.activity.clone(), state.schedule_changed.clone())
+            (
+                state.activity.clone(),
+                state.schedule_changed.clone(),
+                state.power.subscribe(),
+            )
         };
         let mut last_health = None;
         let mut next = tokio::time::Instant::now();
+        // The switch is applied at start and again, at once, every time the owner flips it.
+        let mut switched = true;
         loop {
-            tokio::select! {
-                _=shutdown.changed()=>break,
-                _=schedule_changed.notified()=>{
-                    let state = service.lock().await;
-                    connection.publish(&state);
-                    let finished = tokio::time::Instant::now();
-                    next = heartbeat_deadline(finished, finished, state.next_delay_millis(), state.is_revoked());
-                    continue;
-                },
-                _=tokio::time::sleep_until(next)=>{}
+            if !switched {
+                let on = *power.borrow();
+                tokio::select! {
+                    _=shutdown.changed()=>break,
+                    changed=power.changed()=>{
+                        if changed.is_err() { break; }
+                        switched = true;
+                    },
+                    _=schedule_changed.notified()=>{
+                        let state = service.lock().await;
+                        connection.publish(&state);
+                        let finished = tokio::time::Instant::now();
+                        next = heartbeat_deadline(finished, finished, state.next_delay_millis(), state.is_revoked());
+                        continue;
+                    },
+                    _=tokio::time::sleep_until(next), if on=>{}
+                }
+            }
+            if std::mem::take(&mut switched) && !*power.borrow_and_update() {
+                let mut state = service.lock().await;
+                if let Err(failure) = state.power_off().await {
+                    activity.event("Power off report", &format!("{:?}", failure));
+                }
+                connection.publish(&state);
+                continue;
             }
             let started = tokio::time::Instant::now();
             let (delay, revoked) = {

@@ -796,7 +796,9 @@
         "HEALTH",
         "ENROLL",
         "CHECK_IN",
-        "ACTIVITY"
+        "ACTIVITY",
+        "POWER_ON",
+        "POWER_OFF"
       ]
     },
     "ClientIpcRequest": {
@@ -847,6 +849,9 @@
           "items": {
             "$ref": "endpoint.schema.json#/$defs/ClientGatewayConnection"
           }
+        },
+        "power": {
+          "$ref": "client.schema.json#/$defs/DevicePower"
         }
       },
       "required": [

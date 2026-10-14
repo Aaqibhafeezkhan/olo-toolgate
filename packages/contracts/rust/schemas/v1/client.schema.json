@@ -61,6 +61,14 @@
         "state"
       ]
     },
+    "DevicePower": {
+      "type": "string",
+      "description": "Owner-controlled device power switch. OFF is set only by the local user; no server can switch a device on.",
+      "enum": [
+        "ON",
+        "OFF"
+      ]
+    },
     "ClientReport": {
       "type": "object",
       "description": "Batched report of device inventory and applied desired revision.",
@@ -83,6 +91,9 @@
             "$ref": "client.schema.json#/$defs/ReportedPackage"
           },
           "maxItems": 1000
+        },
+        "power": {
+          "$ref": "client.schema.json#/$defs/DevicePower"
         }
       },
       "required": [
