@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Any, Iterable, List
 
 __all__ = ["canonical", "canonical_text", "sha256", "digest", "nfc", "sorted_utf16", "utf16_key", "number",
-           "utf16_length", "SAFE_INTEGER"]
+           "utf16_length", "SAFE_INTEGER", "protocol_canonical", "protocol_digest"]
 
 SAFE_INTEGER = 9007199254740991
 
@@ -76,7 +76,7 @@ def number(v: float) -> str:
     return sign + body
 
 
-def _write(out: List[str], value: Any) -> None:
+def _write(out: List[str], value: Any, descriptor: bool = True) -> None:
     if value is None:
         out.append("null")
     elif value is True:
@@ -84,19 +84,23 @@ def _write(out: List[str], value: Any) -> None:
     elif value is False:
         out.append("false")
     elif isinstance(value, int):
-        if abs(value) > SAFE_INTEGER:
+        if not descriptor:
+            out.append(str(int(value)))
+        elif abs(value) > SAFE_INTEGER:
             raise ValueError("integer beyond 2^53-1: %d" % value)
         out.append(str(int(value)))
     elif isinstance(value, float):
         out.append(number(value))
+    elif not descriptor and isinstance(value, Decimal):
+        out.append(number(float(value)))
     elif isinstance(value, str):
-        out.append(_string(nfc(value)))
+        out.append(_string(nfc(value) if descriptor else value))
     elif isinstance(value, dict):
         entries = {}
         for k, v in value.items():
             if not isinstance(k, str):
                 raise ValueError("object keys must be strings: %r" % (k,))
-            key = nfc(k)
+            key = nfc(k) if descriptor else k
             if key in entries:
                 raise ValueError("keys are equal after NFC: " + key)
             entries[key] = v
@@ -108,14 +112,14 @@ def _write(out: List[str], value: Any) -> None:
             first = False
             out.append(_string(key))
             out.append(":")
-            _write(out, entries[key])
+            _write(out, entries[key], descriptor)
         out.append("}")
     elif isinstance(value, (list, tuple)):
         out.append("[")
         for i, v in enumerate(value):
             if i:
                 out.append(",")
-            _write(out, v)
+            _write(out, v, descriptor)
         out.append("]")
     else:
         raise ValueError("not a JSON value: %r" % (value,))
@@ -140,3 +144,16 @@ def sha256(data: bytes) -> str:
 def digest(value: Any) -> str:
     """``sha256:<hex>`` of a value's canonical bytes."""
     return sha256(canonical(value))
+
+
+def protocol_canonical(value: Any) -> str:
+    """RFC 8785 for ``argsHash`` and business-key fingerprints: as the descriptor form but without NFC, and
+    integers keep every digit, so two different large integers never share a digest."""
+    out: List[str] = []
+    _write(out, value, False)
+    return "".join(out)
+
+
+def protocol_digest(value: Any) -> str:
+    """``sha256:<hex>`` of :func:`protocol_canonical`."""
+    return sha256(protocol_canonical(value).encode("utf-8", "replace"))
