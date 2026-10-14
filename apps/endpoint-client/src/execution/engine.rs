@@ -18,6 +18,10 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 // Keep metadata bounded separately from the tool's execution and output limits.
 const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 pub(super) const CONTAINER_CREATE_TIMEOUT: Duration = Duration::from_secs(10);
+// The first version probe can need a cold image snapshot on a shared runner.
+// Preparation grants no tool execution authority; invocations retain their
+// existing startup budget and authorization deadline reservation.
+const PROBE_CREATE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 pub struct DockerEngine {
@@ -47,8 +51,24 @@ pub trait SandboxPort: Send + Sync {
         input: &'a [u8],
         limits: &'a LocalRuntimeLimits,
     ) -> crate::transport::Call<'a, Captured>;
+    fn probe_version<'a>(
+        &'a self,
+        image: &'a str,
+        command: &'a [String],
+        limits: &'a LocalRuntimeLimits,
+    ) -> crate::transport::Call<'a, Captured> {
+        self.run(image, command, b"", limits)
+    }
 }
 impl SandboxPort for DockerEngine {
+    fn probe_version<'a>(
+        &'a self,
+        image: &'a str,
+        command: &'a [String],
+        limits: &'a LocalRuntimeLimits,
+    ) -> crate::transport::Call<'a, Captured> {
+        Box::pin(self.run_with_create_timeout(image, command, b"", limits, PROBE_CREATE_TIMEOUT))
+    }
     fn check(&self) -> crate::transport::Call<'_, ()> {
         Box::pin(DockerEngine::check(self))
     }
@@ -331,6 +351,17 @@ impl DockerEngine {
         input: &[u8],
         limits: &LocalRuntimeLimits,
     ) -> Result<Captured> {
+        self.run_with_create_timeout(image, command, input, limits, CONTAINER_CREATE_TIMEOUT)
+            .await
+    }
+    async fn run_with_create_timeout(
+        &self,
+        image: &str,
+        command: &[String],
+        input: &[u8],
+        limits: &LocalRuntimeLimits,
+        create_timeout: Duration,
+    ) -> Result<Captured> {
         if self.dirty.load(Ordering::SeqCst) {
             return Err(Failure::Unavailable);
         }
@@ -394,8 +425,7 @@ impl DockerEngine {
         ]);
         args.extend_from_slice(&command[1..]);
         let result = async {
-            self.capture(&args, b"", CONTAINER_CREATE_TIMEOUT, 4096)
-                .await?;
+            self.capture(&args, b"", create_timeout, 4096).await?;
             self.capture(
                 &strings(&["start", "--attach", "--interactive", &name]),
                 input,

@@ -107,7 +107,7 @@ fn input(text: &str, mode: &str) -> LocalToolInput {
 #[cfg(unix)]
 #[tokio::test]
 async fn cold_engine_startup_preserves_limits_and_capabilities() {
-    use olo_toolgate_client::execution::engine::DockerEngine;
+    use olo_toolgate_client::execution::engine::{DockerEngine, SandboxPort};
     use std::os::unix::fs::PermissionsExt;
     struct Directory(PathBuf);
     impl Drop for Directory {
@@ -148,10 +148,11 @@ async fn cold_engine_startup_preserves_limits_and_capabilities() {
     )
     .unwrap();
     assert_eq!(engine.check().await.unwrap_err(), Failure::Unsupported);
-    // Container creation is setup: a 4s cold create must not spend the 1s tool budget.
+    // Version preparation is setup: a cold create over the former 10s deadline
+    // must succeed without spending the separate 1s tool execution budget.
     std::fs::write(
         &binary,
-        "#!/bin/sh\ncase \"$5\" in\ncreate) /bin/sleep 4 ;;\nstart) printf 'ready\\n' ;;\nrm) exit 0 ;;\n*) exit 1 ;;\nesac\n",
+        "#!/bin/sh\ncase \"$5\" in\ncreate) exec /bin/sleep 11 ;;\nstart) printf 'ready\\n' ;;\nrm) exit 0 ;;\n*) exit 1 ;;\nesac\n",
     )
     .unwrap();
     let limits = LocalRuntimeLimits {
@@ -161,10 +162,37 @@ async fn cold_engine_startup_preserves_limits_and_capabilities() {
         max_output_bytes: 4096,
     };
     let output = engine
-        .run("sha256:fixture", &["/fixture".into()], b"", &limits)
+        .probe_version("sha256:fixture", &["/fixture".into()], &limits)
         .await
         .unwrap();
     assert_eq!(output.stdout, b"ready\n");
+    // The same cold create still exceeds an ordinary invocation's 10s budget.
+    assert_eq!(
+        engine
+            .run("sha256:fixture", &["/fixture".into()], b"", &limits)
+            .await
+            .err(),
+        Some(Failure::Expired)
+    );
+    // Startup headroom must not extend the tool's own deadline or skip cleanup.
+    let removed = directory.0.join("removed");
+    std::fs::write(
+        &binary,
+        format!(
+            "#!/bin/sh\ncase \"$5\" in\ncreate) exit 0 ;;\nstart) exec /bin/sleep 2 ;;\nrm) printf removed > '{}' ;;\n*) exit 1 ;;\nesac\n",
+            removed.display()
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        engine
+            .probe_version("sha256:fixture", &["/fixture".into()], &limits)
+            .await
+            .err(),
+        Some(Failure::Expired)
+    );
+    assert_eq!(std::fs::read(removed).unwrap(), b"removed");
+    assert!(!engine.dirty());
 }
 #[test]
 fn fixed_adapter_vectors_never_interpolate_input() {

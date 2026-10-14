@@ -246,7 +246,7 @@ impl Manager {
         command.extend(arguments);
         let data = self
             .engine
-            .run(&runtime.image, &command, b"", &limits)
+            .probe_version(&runtime.image, &command, &limits)
             .await?;
         let bytes = if runtime.kind == LocalRuntimeKind::JavaJar {
             &data.stderr

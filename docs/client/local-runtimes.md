@@ -183,7 +183,8 @@ Tool output is data; it does not become instructions or authorization.
 | BATCH | UNSUPPORTED until equivalent Windows isolation is implemented |
 | WASM | UNSUPPORTED future sandbox-port capability |
 
-Version probes run in the same constrained sandbox with a 10-second deadline
+Version probes allow up to 30 seconds for cold container creation, then run in
+the same constrained sandbox with a separate 10-second execution deadline
 and 512 MiB memory budget and require exact SemVer. PowerShell registrations
 should allow an adequate startup budget (the real fixture uses 10 seconds/512 MiB).
 Version preparation is administrative sandbox work; it does not grant a tool
