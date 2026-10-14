@@ -60,6 +60,8 @@ export function App() {
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [presentation,setPresentation]=useState<ReturnType<typeof sessionPresentation>>();
   const [superAdmin,setSuperAdmin]=useState(false);
+  // ToolGate is multi-tenant; the console shows which tenant it administers.
+  const [tenant,setTenant]=useState<string>();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('toolgate.sidebar.collapsed') === 'true'; } catch { return false; }
   });
@@ -111,6 +113,7 @@ export function App() {
       const body = await status;
       if (abort.signal.aborted) return;
       setConnecting(false);
+      if (typeof body?.tenant === 'string') setTenant(body.tenant);
       if (body?.passwordRequired === false) {
         setPasswordDisabled(true);
         if (noSession) void connect(null, true);
@@ -139,7 +142,7 @@ export function App() {
     active.current = candidate; setCredential('');
     try {
       let isAdministrator=true,isSuper=false;
-      try { const session=await candidate.adminSession(); isSuper=session.role==='SUPER_ADMIN'; }
+      try { const session=await candidate.adminSession(); isSuper=session.role==='SUPER_ADMIN'; if(session.tenantId)setTenant(session.tenantId); }
       catch (failure) {
         if (!(failure instanceof ApiError) || failure.status !== 403) throw failure;
         isAdministrator=false;
@@ -163,7 +166,7 @@ export function App() {
   return <><a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     {!client ? <main id="main" tabIndex={-1} className="connect-page"><header className="login-header"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /> <span>ToolGate</span></div>
       <ThemePicker /></header><div className="connect-card"><p className="eyebrow">Organization console</p><h1>Manage your workspace</h1>
-        {quickstart ? <p role="status" className="notice">Quickstart · Single node · Non-HA.</p> : <p>Connect to Control with an access token issued by your organization’s identity provider.</p>}
+        {quickstart ? <p role="status" className="notice">Quickstart · Single node · Non-HA{tenant?` · Tenant: ${tenant}`:''}.</p> : <p>Connect to Control with an access token issued by your organization’s identity provider.</p>}
         {!safeOrigin() && <div role="alert" className="notice error">Open this console over HTTPS before connecting.</div>}
         {Boolean(error) && <Failure error={error} />}
         {quickstart && safeOrigin() && <LoginHints use={(name,password)=>{setUsername(name);setCredential(password);}}/>}
@@ -174,7 +177,7 @@ export function App() {
           <button className="primary" disabled={connecting || !safeOrigin()}>{connecting ? 'Connecting…' : 'Connect to workspace'}</button>
           {connecting && <p role="status">Verifying your session with Control…</p>}
         </form></div><ClientDownloads /><footer>ToolGate {__APP_VERSION__} · Organization administration</footer></main>
-    : <div className="app-frame"><header className="topbar app-topbar"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /><span>ToolGate</span></div><span className="portal-label">{administrator?'Admin Portal':'Approval workspace'}</span><div className="topbar-actions"><span className="tag">{quickstart ? 'Quickstart · Non-HA' : 'Organization workspace'}</span><ThemePicker /></div></header>
+    : <div className="app-frame"><header className="topbar app-topbar"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /><span>ToolGate</span></div><span className="portal-label">{administrator?'Admin Portal':'Approval workspace'}</span><div className="topbar-actions"><span className="tag">{quickstart ? 'Quickstart · Non-HA' : 'Organization workspace'}</span>{tenant&&<span className="tag" title="ToolGate is multi-tenant; this console administers one tenant.">Tenant: {tenant}</span>}<ThemePicker /></div></header>
       <div className={`shell${sidebarCollapsed ? ' navigation-collapsed' : ''}`}><aside id="sidebar" className={`sidebar${sidebarCollapsed ? ' sidebar-collapsed' : ''}`} style={{width:sidebarCollapsed ? 64 : sidebarWidth}}>
       {!sidebarCollapsed && <p className="sidebar-caption">{administrator?'Workspace':'Approval workspace'}</p>}
       <nav aria-label="Main navigation"><div className="navigation-scroll"><a href="#overview" title="Overview" aria-label={sidebarCollapsed?'Overview':undefined} aria-current={route==='overview'?'page':undefined}><MenuIcon name="overview"/>{!sidebarCollapsed&&'Overview'}</a>

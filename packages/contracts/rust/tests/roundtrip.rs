@@ -124,6 +124,7 @@ fn shared_fixture_round_trips() {
         DeviceDeploymentRecord,
         DeviceExecutionKind,
         DeviceIdentity,
+        DevicePower,
         EndpointAdoption,
         EndpointApprovalRequest,
         EndpointCheckIn,

@@ -13,6 +13,8 @@ pub struct AdminSession {
     pub role: UserRole,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bootstrap_admin_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
 }
 /// Immutable artifact identity; digest must be verified by consumers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

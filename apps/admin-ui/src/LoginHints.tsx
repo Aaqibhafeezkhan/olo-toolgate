@@ -30,9 +30,15 @@ export function LoginHints({use}:{use:(username:string,password:string)=>void}){
     {hints.refreshAt&&<p role="status" className="notice">This demo resets at {new Date(hints.refreshAt).toLocaleString()}.</p>}
     {hints.accounts.length>0&&<><h2>Demo accounts</h2>
       <p className="hint">Anyone can use these shared accounts. Their passwords change at every reset.</p>
-      <dl className="policy-details">{hints.accounts.map(value=><div key={value.username}><dt>Username</dt><dd><code>{value.username}</code> <button type="button" onClick={()=>void copy(value.username,'Username')} aria-label={`Copy username ${value.username}`}>Copy</button></dd>
-        <dt>Password</dt><dd><code>{value.password}</code> <button type="button" onClick={()=>void copy(value.password,'Password')} aria-label={`Copy password for ${value.username}`}>Copy</button></dd>
-        <dd><button type="button" onClick={()=>use(value.username,value.password)}>Use {value.username}</button></dd></div>)}</dl>
+      <ul className="demo-accounts">{hints.accounts.map(value=><li key={value.username} className="demo-account">
+        <dl>
+          <dt>Username</dt><dd><code>{value.username}</code></dd>
+          <dd><button type="button" onClick={()=>void copy(value.username,'Username')} aria-label={`Copy username ${value.username}`}>Copy</button></dd>
+          <dt>Password</dt><dd><code>{value.password}</code></dd>
+          <dd><button type="button" onClick={()=>void copy(value.password,'Password')} aria-label={`Copy password for ${value.username}`}>Copy</button></dd>
+        </dl>
+        <button type="button" className="primary" onClick={()=>use(value.username,value.password)}>Use {value.username}</button>
+      </li>)}</ul>
       {copied&&<p role="status">{copied}</p>}</>}
   </section>;
 }

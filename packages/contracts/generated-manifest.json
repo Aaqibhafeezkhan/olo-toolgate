@@ -6,7 +6,7 @@
     "packages/contracts/schemas/v1/bundle.schema.json": "4056c803153e58fbc7b220c70423d288fbc547f4f02f93e8432e2c846ee720a4",
     "packages/contracts/schemas/v1/client.schema.json": "7f90eba0d390d4df0a485c4c84df5fa20606bde6646d6baebe16fca3844478fb",
     "packages/contracts/schemas/v1/common.schema.json": "dbc3c58d35e4fa7919db172f340a4cf460b601d65e83debdbf11cb21672df313",
-    "packages/contracts/schemas/v1/control.schema.json": "2aa91baf5673adfae1ba3b80e459c60b6420896908c12d10e3585f15c6baf442",
+    "packages/contracts/schemas/v1/control.schema.json": "a6cb889b3e23a49e1c824a0a73ab89e5459843761cf94503d5658fe50d544047",
     "packages/contracts/schemas/v1/deployment.schema.json": "cd3bbc59d25050b3fd820cb2a635a73a9959f8260eda06a408646a5d52e4c7f1",
     "packages/contracts/schemas/v1/endpoint.schema.json": "74d51a3732fa607e4170c560291509d8f5ba44b4f31c49659fab210000d3d15d",
     "packages/contracts/schemas/v1/enterprise.schema.json": "338d9c5ecbfbb148225005c6724df9be7ad68a8f0afb4ac3ca9a298f7d3775af",
