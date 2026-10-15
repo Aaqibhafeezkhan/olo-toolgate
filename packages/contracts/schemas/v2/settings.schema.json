@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/settings.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Control server settings v2",
-  "description": "ControlServerSettings formatVersion 2 and client check-in values (platform-requirements.md §17, §18).",
+  "description": "ControlServerSettings formatVersion 2 and client check-in values (platform-requirements.md \u00c2\u00a717, \u00c2\u00a718).",
   "$ref": "#/$defs/ControlServerSettings",
   "$defs": {
     "ValueSource": {
@@ -146,6 +146,36 @@
       },
       "required": [
         "requiredReviews"
+      ]
+    },
+    "ControlSettingsView": {
+      "type": "object",
+      "description": "Settings visible to the current actor. Unreadable feature groups are omitted.",
+      "additionalProperties": false,
+      "properties": {
+        "formatVersion": {
+          "type": "integer",
+          "const": 2
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "gateway": {
+          "$ref": "settings.schema.json#/$defs/GatewaySettings"
+        },
+        "deviceApproval": {
+          "$ref": "settings.schema.json#/$defs/DeviceApproval"
+        },
+        "clientCheckIn": {
+          "$ref": "settings.schema.json#/$defs/ClientCheckIn"
+        },
+        "configuration": {
+          "$ref": "settings.schema.json#/$defs/ConfigurationSettings"
+        }
+      },
+      "required": [
+        "formatVersion",
+        "revision"
       ]
     }
   }

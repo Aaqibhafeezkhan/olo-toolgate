@@ -94,7 +94,7 @@ public final class GroupGraph {
             if(kind==Kind.ROLE) {
                 var role=codec.model(e.document(),ControlRole.class);
                 if(role.roleType()!=EnterpriseRoleType.MANAGEMENT && (!role.managementRules().isEmpty()||role.portalRole()!=UserRole.BASIC))throw new IllegalArgumentException("Runtime role cannot confer management permissions");
-                for(var rule:role.managementRules()) { selection(rule.groups());if(ManagementAccess.own(rule)&&(rule.groupType()!=EnterpriseGroupType.DEVICE_GROUP||rule.groups().all()||rule.groups().ids().size()!=1||!rule.actions().equals(List.of("approve-device"))))throw new IllegalArgumentException("ownDevices needs one device group and approve-device only"); conditions(rule.conditions()); rule.grantableScopes().forEach(GroupGraph::scope); }
+                for(var rule:role.managementRules()) { selection(rule.groups());if(!ManagementPermissionCatalog.ALL.containsAll(rule.actions()))throw new IllegalArgumentException("Unknown feature permission");if(ManagementAccess.own(rule)&&(rule.groupType()!=EnterpriseGroupType.DEVICE_GROUP||rule.groups().all()||rule.groups().ids().size()!=1||rule.actions().stream().anyMatch(a->!a.startsWith("device."))))throw new IllegalArgumentException("Device scope requires one placement group and device permissions only"); conditions(rule.conditions()); rule.grantableScopes().forEach(GroupGraph::scope); }
             }
             if(kind==Kind.GRANT) {
                 var grant=codec.model(e.document(),ControlAccessGrant.class); scope(grant.scope());

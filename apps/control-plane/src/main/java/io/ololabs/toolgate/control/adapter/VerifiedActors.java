@@ -40,7 +40,9 @@ public class VerifiedActors {
             user instanceof String id?id:null,epoch instanceof Number n?n.longValue():null,
             jwt.getIssuedAtTime()*1000,jwt.getExpirationTime()*1000,System.currentTimeMillis());
         if(!identity.enabled())throw new Failure(ErrorCode.FORBIDDEN,403,"User awaits administrator enablement");
-        sessionEpoch=identity.sessionEpoch();human=directory.portalActor(principal.tenant(),principal.id(),identity.userId());return human;
+        sessionEpoch=identity.sessionEpoch();var session=DirectoryService.digest(jwt.getRawToken());
+        var current=store.transaction(principal.tenant(),false,tx->ConsoleDeviceSessions.current(tx,codec,session,identity.userId(),System.currentTimeMillis()));
+        human=directory.portalActor(principal.tenant(),principal.id(),identity.userId()).consoleSession(session,jwt.getExpirationTime()*1000,current);return human;
     }
     public long humanEpoch(){human();return sessionEpoch;}
     public DirectoryService.Actor management() {

@@ -9,6 +9,7 @@ import java.util.function.Function;
 /** Transaction port. Data, audit and idempotency must share a commit/rollback boundary. */
 public interface Store {
     <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work);
+    record ConsoleDeviceRecord(String sessionId,String userId,String deviceId,String nonceDigest,String codeDigest,String csr,String fingerprint,long expiresAt,long verifiedAt){}
     interface Session {
         default EnterpriseStore enterprise() { throw Failure.unavailable(); }
         default FleetStore fleet() { throw Failure.unavailable(); }
@@ -21,6 +22,8 @@ public interface Store {
         /** Immutable setup identity, separate from editable roles and identity bindings. */
         default String bootstrapAdminUserId() { return null; }
         default void protectBootstrapAdmin(String userId) { throw Failure.unavailable(); }
+        default ConsoleDeviceRecord consoleDevice(String sessionId){return null;}
+        default void saveConsoleDevice(ConsoleDeviceRecord record){throw Failure.unavailable();}
         boolean used(io.ololabs.toolgate.control.domain.Ids.RecordId id);
         void save(Directory before, Directory after);
         default void observeIdentity(io.ololabs.toolgate.contracts.ControlIdentityBinding identity){throw Failure.unavailable();}

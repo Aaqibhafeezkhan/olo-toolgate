@@ -44,6 +44,7 @@ fn v2_fixture_round_trips() {
         ContractSet,
         ControlServerSettings,
         ControlServerSettingsPatch,
+        ControlSettingsView,
         CredentialKind,
         DeploymentBinding,
         DeploymentGrant,

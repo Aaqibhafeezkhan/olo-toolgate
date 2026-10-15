@@ -1342,6 +1342,28 @@
       }
     }
   },
+  "ConsoleDeviceChallenge": {
+    "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "deviceId": "device-1",
+    "keyFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expiresAtUnixMs": 0
+  },
+  "ConsoleDeviceLookup": {},
+  "ConsoleDeviceProof": {
+    "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "deviceId": "device-1",
+    "keyFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "signature": "example"
+  },
+  "ConsoleDeviceProofRequest": {
+    "kind": "example",
+    "consoleUrl": "example",
+    "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ConsoleDeviceVerified": {
+    "deviceId": "device-1",
+    "expiresAtUnixMs": 0
+  },
   "ContractSet": {
     "name": "olo-toolgate-contracts",
     "version": "0.1.0-dev"

@@ -1,6 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.toolgate.control.application;
+import java.util.List;
 
 import io.ololabs.toolgate.control.domain.Directory;
 import io.ololabs.toolgate.control.domain.Ids;
@@ -13,7 +14,7 @@ import io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch;
 import io.ololabs.toolgate.contracts.v2.DeviceApproval;
 import io.ololabs.toolgate.contracts.v2.GatewaySettings;
 
-/** Tenant control-plane settings (formatVersion 2, platform-requirements.md §18), Super Admin only. Auto-approval is off until an administrator,
+/** Tenant control-plane settings (formatVersion 2, platform-requirements.md §18), controlled by feature permissions. Auto-approval is off until an administrator,
  *  an imported snapshot or the startup environment enables it. Client check-in is env-owned: always the running policy, never stored or imported.
  *  A change of configuration.requiredReviews needs the reviews of the threshold in force, with no Super Admin bypass. */
 public final class ServerSettingsService {
@@ -55,39 +56,51 @@ public final class ServerSettingsService {
         return owner!=null&&owner.enabled()?approval.ownerUserId():null;
     }
     public static long autoApprovalMs(ControlServerSettings settings){var duration=settings.deviceApproval().durationMs();return duration==null?DEFAULT_AUTO_APPROVE_MS:duration;}
-    private Store.Reply reply(ControlServerSettings settings){return new Store.Reply(200,codec.json(settings),settings.revision());}
-    /** Administration is Super Admin only, resolved from live directory membership rather than the actor's cached flag. */
-    private void superAdmin(Store.Session tx,DirectoryService.Actor actor){actor.requireAdmin();if(!new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId()))throw ManagementAccess.denied();}
-    public Store.Reply get(DirectoryService.Actor actor){actor.requireAdmin();return store.transaction(actor.tenant(),false,tx->{superAdmin(tx,actor);return reply(current(tx));});}
+    private Store.Reply reply(Store.Session tx,DirectoryService.Actor actor,ControlServerSettings settings){
+        var access=new ManagementAccess(codec);var directory=tx.load();long now=System.currentTimeMillis();
+        boolean server=access.globallyAllowed(directory,actor.userId(),"server_configuration.read",now),device=access.globallyAllowed(directory,actor.userId(),"device_configuration.read",now);
+        return new Store.Reply(200,codec.json(new io.ololabs.toolgate.contracts.v2.ControlSettingsView(settings.formatVersion(),settings.revision(),server?settings.gateway():null,device?settings.deviceApproval():null,device?settings.clientCheckIn():null,server?settings.configuration():null)),settings.revision());
+    }
+    private void settingsPermission(Store.Session tx,DirectoryService.Actor actor,boolean write){actor.requireAdmin();var access=new ManagementAccess(codec);for(var resource:List.of("server_configuration","device_configuration"))access.requireAll(tx.load(),actor.userId(),resource+(write?".update":".read"),System.currentTimeMillis());}
+    public static void requirePatch(Store.Session tx,Codec codec,DirectoryService.Actor actor,ControlServerSettingsPatch groups){
+        actor.requireAdmin();var access=new ManagementAccess(codec);long now=System.currentTimeMillis();
+        if(groups.gateway()!=null||groups.configuration()!=null)access.requireAll(tx.load(),actor.userId(),"server_configuration.update",now);
+        if(groups.deviceApproval()!=null)access.requireAll(tx.load(),actor.userId(),"device_configuration.update",now);
+        if(groups.gateway()==null&&groups.configuration()==null&&groups.deviceApproval()==null)throw Failure.validation();
+    }
+    public Store.Reply get(DirectoryService.Actor actor){return get(actor,null);}
+    public Store.Reply get(DirectoryService.Actor actor,String section){actor.requireAdmin();if(section!=null&&!List.of("server","device").contains(section))throw Failure.validation();return store.transaction(actor.tenant(),false,tx->{
+        if(section==null)settingsPermission(tx,actor,false);else new ManagementAccess(codec).requireAll(tx.load(),actor.userId(),section.equals("server")?"server_configuration.read":"device_configuration.read",System.currentTimeMillis());
+        return reply(tx,actor,current(tx));});}
     /** Review threshold for every signed-in console user; reveals no other setting. */
     public Store.Reply reviewPolicy(DirectoryService.Actor actor){if(actor.userId()==null)throw ManagementAccess.denied();return store.transaction(actor.tenant(),false,tx->new Store.Reply(200,codec.json(new io.ololabs.toolgate.contracts.ControlReviewPolicy((long)requiredReviews(tx,codec))),0));}
 
     /** Full-record replace, used to restore an exported document. clientCheckIn in the body is ignored. */
     public Store.Reply update(DirectoryService.Actor actor,String body,long expected,String key,String requestId){
         actor.requireAdmin();Ids.valid(key);Ids.valid(requestId);var requested=codec.model(body,ControlServerSettings.class);
-        return write(actor,"settings\n"+expected+"\n"+body,expected,key,requestId,current->requested);
+        return write(actor,"settings\n"+expected+"\n"+body,expected,key,requestId,current->requested,null);
     }
     /** Merge patch (RFC 7396) applied per group: each group in the body replaces that group, so a page can clear an
      *  optional field by leaving it out. Groups left out are unchanged; env-owned clientCheckIn cannot be patched. */
     public Store.Reply patch(DirectoryService.Actor actor,String body,long expected,String key,String requestId){
         actor.requireAdmin();Ids.valid(key);Ids.valid(requestId);var groups=codec.model(body,ControlServerSettingsPatch.class);
-        return write(actor,"settings-patch\n"+expected+"\n"+body,expected,key,requestId,current->merge(current,groups));
+        return write(actor,"settings-patch\n"+expected+"\n"+body,expected,key,requestId,current->merge(current,groups),groups);
     }
     static ControlServerSettings merge(ControlServerSettings current,ControlServerSettingsPatch groups){
         return new ControlServerSettings(2L,current.revision(),groups.gateway()!=null?groups.gateway():current.gateway(),groups.deviceApproval()!=null?groups.deviceApproval():current.deviceApproval(),current.clientCheckIn(),groups.configuration()!=null?groups.configuration():current.configuration());
     }
     private record Write(Store.Reply reply,ControlServerSettings next){}
-    private Store.Reply write(DirectoryService.Actor actor,String request,long expected,String key,String requestId,java.util.function.UnaryOperator<ControlServerSettings> change){
+    private Store.Reply write(DirectoryService.Actor actor,String request,long expected,String key,String requestId,java.util.function.UnaryOperator<ControlServerSettings> change,ControlServerSettingsPatch groups){
         var digest=DirectoryService.digest(request);
-        var write=store.transaction(actor.tenant(),true,tx->{superAdmin(tx,actor);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return new Write(replay,null);
+        var write=store.transaction(actor.tenant(),true,tx->{if(groups==null)settingsPermission(tx,actor,true);else requirePatch(tx,codec,actor,groups);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return new Write(replay,null);
             var current=current(tx);if(current.revision()!=expected)throw Failure.conflict();var next=change.apply(current);
             // The threshold itself changes only under the current threshold's reviews, never through the Super Admin path.
             if(current.configuration().requiredReviews()>0&&!next.configuration().requiredReviews().equals(current.configuration().requiredReviews()))return new Write(null,next);
             var saved=save(tx,next,current,tx.load());tx.audit(actor.id(),"SERVER_SETTINGS_UPDATE",ENTITY,saved.revision(),requestId,digest);
-            var result=reply(saved);tx.remember(actor.id(),key,digest,result);return new Write(result,null);});
+            var result=reply(tx,actor,saved);tx.remember(actor.id(),key,digest,result);return new Write(result,null);});
         if(write.reply()!=null)return write.reply();
         if(reviews==null)throw Failure.unavailable();var next=write.next();
-        return reviews.create(actor,new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.UPDATE,ControlEntityKind.SETTINGS,ENTITY,codec.json(new ControlServerSettingsPatch(next.gateway(),next.deviceApproval(),next.configuration())),expected),key,requestId);
+        return reviews.create(actor,new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.UPDATE,ControlEntityKind.SETTINGS,ENTITY,codec.json(groups==null?new ControlServerSettingsPatch(next.gateway(),next.deviceApproval(),next.configuration()):groups),expected),key,requestId);
     }
     /** Applies settings groups inside a reviewed change or an import; owners are checked against the directory being saved. */
     public static ControlServerSettings apply(Store.Session tx,Codec codec,ControlServerSettingsPatch groups,Long expected,Directory directory){

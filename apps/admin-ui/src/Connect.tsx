@@ -1,28 +1,17 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {usePermissions} from './Permissions';
 import {useEffect, useRef, useState} from 'react';
 import type {ClientInstallerManifest} from '@olo-labs/toolgate-contracts';
+import {ControlClient} from './api';
+import {extensionStatus,type ConnectStatus} from './ChromeBridge';
+import {verifyCurrentDevice} from './ClientDeviceProof';
+export {extensionStatus,type ConnectStatus} from './ChromeBridge';
 
 type ExtensionRelease = {protocol:number;version:string;chromeVersion:string;extensionId:string;storeUrl:string;filename:string;sha256:string;bytes:number};
-export type ConnectStatus = {protocol:number;version:string;chromeVersion:string;phase:string;serverUrl?:string;userCode?:string;client?:{health?:{ready:boolean;state?:string};error?:unknown}};
 
-/** Bounded, same-window status bridge. Local presence never grants authorization. */
-export function extensionStatus(signal:AbortSignal,operation:'hello'|'connect'|'status'|'cancel'='status'):Promise<ConnectStatus> {
-  return new Promise((resolve,reject)=>{
-    const id=crypto.randomUUID();
-    const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',receive);signal.removeEventListener('abort',abort);};
-    const abort=()=>{cleanup();reject(new DOMException('Cancelled','AbortError'));};
-    const receive=(event:MessageEvent)=>{
-      if(event.source!==window||event.origin!==location.origin||event.data?.channel!=='toolgate-connect-response'||event.data.id!==id)return;
-      cleanup();resolve(event.data as ConnectStatus);
-    };
-    const timer=setTimeout(()=>{cleanup();reject(Error('Extension unavailable'));},operation==='hello'?2000:operation==='connect'?900000:25000);
-    window.addEventListener('message',receive);signal.addEventListener('abort',abort,{once:true});
-    if(signal.aborted){abort();return;}
-    window.postMessage({channel:'toolgate-connect-request',id,operation},location.origin);
-  });
-}
-export function Connect({onCode,onCancel}:{onCode:(code:string)=>void;onCancel?:()=>void}) {
+export function Connect({onCode,onCancel,client}:{onCode:(code:string)=>void;onCancel?:()=>void;client?:ControlClient}) {
+  const permissions=usePermissions(client);const canConnect=!client||permissions.can('device.enroll');
   const [message,setMessage]=useState('Install the combined setup and enable the Chrome extension, then Connect to configure this gateway and enroll the client.');
   const [busy,setBusy]=useState(false),[release,setRelease]=useState<ExtensionRelease>();
   const [installer,setInstaller]=useState<string>();
@@ -30,6 +19,7 @@ export function Connect({onCode,onCancel}:{onCode:(code:string)=>void;onCancel?:
   useEffect(()=>()=>active.current?.abort(),[]);
   const supported=/Chrome\//.test(navigator.userAgent)&&/Windows/.test(navigator.userAgent)&&!/Edg\/|OPR\//.test(navigator.userAgent);
   async function start() {
+    if(!canConnect)return;
     active.current?.abort();const controller=new AbortController();active.current=controller;
     setBusy(true);setRelease(undefined);setInstaller(undefined);setMessage('Checking Chrome Connect release…');
     try {
@@ -56,7 +46,7 @@ export function Connect({onCode,onCancel}:{onCode:(code:string)=>void;onCancel?:
           }
         }
       } catch { /* Missing setup must not turn an extension ZIP into an installer. */ }
-      const deadline=Date.now()+900000;let detected=false;let requested=false;let previousCode='';let retried=false;
+      const deadline=Date.now()+900000;let detected=false;let requested=false;let previousCode='';let retried=false;let lastProof=0;let proofError='';
       while(!controller.signal.aborted&&Date.now()<deadline) {
         let status:ConnectStatus|undefined;
         try { status=await extensionStatus(controller.signal,detected?'status':'hello'); } catch { if(controller.signal.aborted)break;detected=false; }
@@ -71,11 +61,16 @@ export function Connect({onCode,onCancel}:{onCode:(code:string)=>void;onCancel?:
           // longer accepts after this page's Connect, is a wrong configuration. Retry once from scratch; an already
           // approved device reconnects without a new approval.
           const health=status.client?.health;
+          if(client&&status.phase==='ready'&&health&&!status.client?.error&&Date.now()-lastProof>=60000){
+            lastProof=Date.now();setMessage('Verifying this device for the signed-in console session…');
+            try{await verifyCurrentDevice(client,controller.signal,['UNENROLLED','PENDING'].includes(health.state??'')?status.userCode:undefined);proofError='';}
+            catch(error){if(controller.signal.aborted)break;proofError=error instanceof Error?error.message:'Current-device verification failed. Retry Connect.';}
+          }
           if(requested&&!retried&&(status.phase==='gateway-changed'||(status.phase==='ready'&&!status.client?.error&&health&&!health.ready&&['OFFLINE','REVOKED'].includes(health.state??'')))){retried=true;requested=false;}
           if(!requested){requested=true;void extensionStatus(controller.signal,'connect').catch(()=>{});}
           if(status.phase==='gateway-changed'&&previousCode){previousCode='';onCancel?.();}
-          if(typeof status.userCode==='string'&&/^[A-F0-9]{16}$/.test(status.userCode)&&status.userCode!==previousCode){previousCode=status.userCode;onCode(status.userCode);}
-          setMessage(status.client?.health&&!status.client.error
+          if(['UNENROLLED','PENDING'].includes(health?.state??'')&&typeof status.userCode==='string'&&/^[A-F0-9]{16}$/.test(status.userCode)&&status.userCode!==previousCode){previousCode=status.userCode;onCode(status.userCode);}
+          setMessage(proofError|| (status.client?.health&&!status.client.error
             ? 'Client detected'+(status.serverUrl?' at '+status.serverUrl:'')+'. '+(status.client.health.ready
               ? 'The client reports successful gateway check-ins. Open Clients to view its current server status.'
               : status.client.health.state==='REVOKED' ? 'This gateway no longer accepts the device. Click Retry Connect to request a fresh enrollment for approval.'
@@ -84,7 +79,7 @@ export function Connect({onCode,onCancel}:{onCode:(code:string)=>void;onCancel?:
             : status.phase==='connecting' ? 'Installing the verified client or updating its gateway URL. Approve Windows administrator permission if shown…'
             : status.phase==='gateway-changed' ? (retried ? 'The client was connected to another gateway. Reconnecting it to this gateway…' : 'The client was connected to another gateway. Click Retry Connect to use this gateway again.')
             : status.phase==='setup-required' ? 'Install the combined client and Chrome extension setup below, then click Retry Connect. If setup is installed, check the gateway connection and Windows permissions.'
-            : 'Chrome extension detected. Configuring the client for this gateway…');
+            : 'Chrome extension detected. Configuring the client for this gateway…'));
         }
         await new Promise<void>(resolve=>{
           const finish=()=>{clearTimeout(timer);controller.signal.removeEventListener('abort',finish);resolve();};
@@ -97,7 +92,7 @@ export function Connect({onCode,onCancel}:{onCode:(code:string)=>void;onCancel?:
   }
   function cancel(){active.current?.abort();onCancel?.();setBusy(false);setMessage('Connect cancelled. Close any open Windows installer separately.');const controller=new AbortController();void extensionStatus(controller.signal,'cancel').catch(()=>{});}
   return <section aria-labelledby="connect-title"><h2 id="connect-title">Connect this computer</h2>
-    <button onClick={()=>void start()}>{busy?'Retry Connect':'Connect'}</button>{busy&&<button onClick={cancel}>Cancel Connect</button>}
+    <button disabled={!canConnect} onClick={()=>void start()}>{busy?'Retry Connect':'Connect'}</button>{busy&&<button onClick={cancel}>Cancel Connect</button>}
     <p role="status">{message}</p>
     {release&&<><p>Chrome extension {release.chromeVersion} · Client {release.version}</p>
       {installer?<a href={`/api/public/v1/clients/setup/${installer}`} download>Install Chrome extension and client</a>:<p>Windows setup is not published for this client release.</p>}

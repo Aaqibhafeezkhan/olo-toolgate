@@ -39,6 +39,7 @@ $models = [
     'ContractSet',
     'ControlServerSettings',
     'ControlServerSettingsPatch',
+    'ControlSettingsView',
     'CredentialKind',
     'DeploymentBinding',
     'DeploymentGrant',

@@ -290,7 +290,7 @@ public class PostgresStore implements Store {
         }
         public void save(Directory before, Directory after) {
             try {
-                io.ololabs.toolgate.control.application.BootstrapAdministrator.validate(this,after);
+                io.ololabs.toolgate.control.application.BootstrapAdministrator.validate(this,before,after,codec);
                 if(after.equals(before))return;
                 if(after.revision()<before.revision() || !after.entries().equals(before.entries())&&after.revision()<=before.revision())throw Failure.conflict();
                 invalidateDirectory();
@@ -329,6 +329,17 @@ public class PostgresStore implements Store {
         }
         public String bootstrapAdminUserId() {
             try(var s=statement("SELECT user_id FROM control_bootstrap_admins WHERE tenant_id=?");var rows=s.executeQuery()){return rows.next()?rows.getString(1):null;}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public ConsoleDeviceRecord consoleDevice(String sessionId){
+            try(var s=statement("SELECT session_id,user_id,device_id,nonce_digest,code_digest,csr,fingerprint,expires_at,verified_at FROM control_console_devices WHERE tenant_id=? AND session_id=?",sessionId);var rows=s.executeQuery()){
+                return rows.next()?new ConsoleDeviceRecord(rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5),rows.getString(6),rows.getString(7),rows.getLong(8),rows.getLong(9)):null;
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void saveConsoleDevice(ConsoleDeviceRecord record){
+            try(var cleanup=statement("DELETE FROM control_console_devices WHERE tenant_id=? AND expires_at<?",record.verifiedAt()>0?record.verifiedAt():record.expiresAt()-120000L)){cleanup.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+            try(var s=statement("INSERT INTO control_console_devices(tenant_id,session_id,user_id,device_id,nonce_digest,code_digest,csr,fingerprint,expires_at,verified_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,session_id) DO UPDATE SET user_id=excluded.user_id,device_id=excluded.device_id,nonce_digest=excluded.nonce_digest,code_digest=excluded.code_digest,csr=excluded.csr,fingerprint=excluded.fingerprint,expires_at=excluded.expires_at,verified_at=excluded.verified_at",record.sessionId(),record.userId(),record.deviceId(),record.nonceDigest(),record.codeDigest(),record.csr(),record.fingerprint(),record.expiresAt(),record.verifiedAt())){s.executeUpdate();}
             catch(SQLException failure){throw Failure.unavailable();}
         }
         public void protectBootstrapAdmin(String userId) {

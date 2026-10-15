@@ -6,11 +6,24 @@ import {Devices} from '../src/Devices';
 import {ControlClient} from '../src/api';
 import type {EndpointManagedDevice} from '@olo-labs/toolgate-contracts';
 afterEach(cleanup);
-const active:EndpointManagedDevice={deviceId:'device-1',systemExecutor:false,directoryDevice:{id:'device-1',name:'Trading workstation',ownerUserId:'alice',enabled:true,revision:4},registeredUser:{id:'alice',name:'Alice Smith',enabled:true,revision:1},endpointDevice:{deviceId:'device-1',tenantId:'test',userId:'alice',keyFingerprint:'a'.repeat(64),state:'ACTIVE',revision:10,approvalRevision:3,connectionApproved:true,reportSequence:2,lastSeenUnixMs:Date.now()}};
-const pending:EndpointManagedDevice={deviceId:'device-2',systemExecutor:false,enrollment:{enrollmentId:'enroll-2',deviceId:'device-2',userCode:'ABCDEF0123456789',platform:'WINDOWS',keyFingerprint:'b'.repeat(64),state:'PENDING',expiresAtUnixMs:Date.now()+600000}};
+const active:EndpointManagedDevice={permissions:['device.read','device.approve','device.manage_groups','device.update','device.delete','device.enable','device.disable'],deviceId:'device-1',systemExecutor:false,directoryDevice:{id:'device-1',name:'Trading workstation',ownerUserId:'alice',enabled:true,revision:4},registeredUser:{id:'alice',name:'Alice Smith',enabled:true,revision:1},endpointDevice:{deviceId:'device-1',tenantId:'test',userId:'alice',keyFingerprint:'a'.repeat(64),state:'ACTIVE',revision:10,approvalRevision:3,connectionApproved:true,reportSequence:2,lastSeenUnixMs:Date.now()}};
+const pending:EndpointManagedDevice={permissions:['device.read','device.approve','device.manage_groups'],deviceId:'device-2',systemExecutor:false,enrollment:{enrollmentId:'enroll-2',deviceId:'device-2',userCode:'ABCDEF0123456789',platform:'WINDOWS',keyFingerprint:'b'.repeat(64),state:'PENDING',expiresAtUnixMs:Date.now()+600000}};
 const system:EndpointManagedDevice={deviceId:'local-builtins',systemExecutor:true,systemExecutorKind:'BUILTINS',systemAvailable:true,directoryDevice:{id:'local-builtins',name:'Quickstart fixed executor',ownerUserId:'local-tools',enabled:true,revision:1},registeredUser:{id:'local-tools',name:'Local tool requester',enabled:true,revision:1}};
 function setup(items:EndpointManagedDevice[],mutationStatus=200){const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>new Response(JSON.stringify(String(path).endsWith('/groups')?{entityType:'DEVICE',entityId:String(path).split('/').at(-2),groupIds:['default-devices'],revision:1}:options?.method==='POST'?{}:{items}),{status:options?.method==='POST'?mutationStatus:200}));render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);return transport;}
 describe('Device management',()=>{
+  it('approves a code-verified owned pending request without changing group memberships',async()=>{
+    const mine={...pending,permissions:['device.read','device.approve'],registeredUser:{id:'visitor-001',name:'Visitor',enabled:true,revision:1}};
+    const transport=vi.fn<typeof fetch>().mockImplementation(async(_path,options)=>new Response(JSON.stringify(options?.method==='POST'?{}:{items:[mine]}),{status:200}));
+    render(<Devices client={new ControlClient('test-token',vi.fn(),transport)} userId="visitor-001"/>);
+    fireEvent.click(await screen.findByRole('button',{name:'Approve device-2'}));
+    const dialog=screen.getByRole('dialog',{name:'Approve device-2'});
+    expect(within(dialog).queryByText('Device groups')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('checkbox',{name:/I compared/}));
+    fireEvent.click(within(dialog).getByRole('button',{name:'Approve device'}));
+    await screen.findByText('Device approved.');
+    expect(transport.mock.calls.filter(call=>call[1]?.method==='POST').map(call=>call[0])).toEqual(['/api/control/v1/endpoint/enrollments/decision']);
+    expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/groups'))).toBe(false);
+  });
   it('shows shared deployment hosts, distinct execution roles and actual network details',async()=>{
     const deployment={executionKind:'QUICKSTART_CLIENT' as const,containerId:'a'.repeat(64),containerName:'toolgate-langchain-quickstart-1',systemName:'quickstart-container',networkId:'b'.repeat(64),networkName:'toolgate-langchain_default',ipAddress:'172.18.0.2'};
     const local={...active,deviceId:'tool-host-local',directoryDevice:{...active.directoryDevice!,id:'tool-host-local',name:'Local host'},systemName:undefined,ipAddress:'::1'};
@@ -95,9 +108,9 @@ describe('Device management',()=>{
   });
   it('shows owners and hides approval actions where Control would refuse them',async()=>{
     const {keyFingerprint:_key,...redacted}=active.endpointDevice!;
-    const lab={...active,deviceId:'lab-1',directoryDevice:{...active.directoryDevice!,id:'lab-1',name:'Lab device',ownerUserId:'admin'},registeredUser:undefined,endpointDevice:{...redacted,deviceId:'lab-1',userId:'admin'}} as EndpointManagedDevice;
-    const mine={...active,deviceId:'own-1',directoryDevice:{...active.directoryDevice!,id:'own-1',name:'My laptop',ownerUserId:'visitor-001'},registeredUser:undefined,endpointDevice:{...redacted,deviceId:'own-1',userId:'visitor-001',connectionApproved:false}} as EndpointManagedDevice;
-    const hiddenPending={...pending,deviceId:'device-9',enrollment:{...pending.enrollment!,deviceId:'device-9',userCode:'',keyFingerprint:''}};
+    const lab={...active,permissions:['device.read'],deviceId:'lab-1',directoryDevice:{...active.directoryDevice!,id:'lab-1',name:'Lab device',ownerUserId:'admin'},registeredUser:undefined,endpointDevice:{...redacted,deviceId:'lab-1',userId:'admin'}} as EndpointManagedDevice;
+    const mine={...active,permissions:['device.read','device.approve'],deviceId:'own-1',directoryDevice:{...active.directoryDevice!,id:'own-1',name:'My laptop',ownerUserId:'visitor-001'},registeredUser:undefined,endpointDevice:{...redacted,deviceId:'own-1',userId:'visitor-001',connectionApproved:false}} as EndpointManagedDevice;
+    const hiddenPending={...pending,permissions:[],deviceId:'device-9',enrollment:{...pending.enrollment!,deviceId:'device-9',userCode:'',keyFingerprint:''}};
     const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>new Response(JSON.stringify(options?.method==='POST'?{}:String(path).endsWith('/groups')?{}:{items:[lab,mine,hiddenPending]}),{status:200}));
     const view=render(<Devices client={new ControlClient('test-token',vi.fn(),transport)} userId="visitor-001"/>);
     await screen.findByText('My laptop');
@@ -112,6 +125,7 @@ describe('Device management',()=>{
     expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/groups'))).toBe(false);
     view.unmount();
     render(<Devices client={new ControlClient('test-token',vi.fn(),transport)} superAdmin/>);
-    expect(await screen.findByRole('button',{name:'Deapprove lab-1'})).toBeTruthy();
+    // A presentation prop cannot override the server's target-specific decision.
+    await screen.findByText('Lab device');expect(screen.queryByRole('button',{name:'Deapprove lab-1'})).toBeNull();
   });
 });

@@ -3,7 +3,7 @@
 import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRolloutRecord, FleetPackageRelease, EnterpriseApprovalDecisionRequest, EnterpriseApprovalPage, EnterpriseApproval, ControlUser, ErrorEnvelope, EndpointEnrollmentReview, EndpointEnrollmentDecision } from '@olo-labs/toolgate-contracts';
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
 import type { BuilderDraft, BuilderDraftPage, BuilderDraftRequest, BuilderTestPage, BuilderTestRequest, BuilderTestRecord, BuilderDefinition } from '@olo-labs/toolgate-contracts';
-import type { AdminSession, ControlAuditPage } from '@olo-labs/toolgate-contracts';
+import type { AdminSession, ControlAuditPage,ConsoleDeviceLookup,ConsoleDeviceChallenge,ConsoleDeviceProof,ConsoleDeviceVerified } from '@olo-labs/toolgate-contracts';
 import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
 import {pendingOperations,type ConfigurationFile,type EnrollmentLookup,type ImportIdentityOptions,type PendingServerSettings,type PendingServerSettingsPatch,type ReauthorizedWorkload,type ReviewPolicy} from './pendingContracts';
@@ -159,7 +159,13 @@ export class ControlClient {
     return this.send(listOperations[kind], { query, signal });
   }
   bootstrapAdminUserId?:string;
-  async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;return session;}
+  private permissionSet=new Set<string>();
+  private permissionVersion=0;
+  private permissionListeners=new Set<()=>void>();
+  can(permission:string):boolean{return this.permissionSet.has(permission);}
+  permissionSnapshot=()=>this.permissionVersion;
+  subscribePermissions=(listener:()=>void)=>{this.permissionListeners.add(listener);return()=>{this.permissionListeners.delete(listener);};};
+  async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;this.permissionSet=new Set(session.permissions??[]);this.permissionVersion++;this.permissionListeners.forEach(listener=>listener());return session;}
   audit(cursor:string,signal?:AbortSignal):Promise<ControlAuditPage>{return this.send(operations.listAudit,{query:new URLSearchParams({cursor,limit:'50'}),signal});}
   record<K extends DirectoryKind>(kind:K,id:string):Promise<DirectoryRecords[K]> {return this.send(getOperations[kind],{id});}
   async all<K extends DirectoryKind>(kind:K,signal?:AbortSignal):Promise<DirectoryRecords[K][]> {
@@ -171,7 +177,7 @@ export class ControlClient {
   memberships(entity:'users'|'agents'|'tools'|'devices',id:string,signal?:AbortSignal):Promise<GroupMembership>{const operation={users:operations.getUserGroupMembership,agents:operations.getAgentGroupMembership,tools:operations.getToolGroupMembership,devices:operations.getDeviceGroupMembership}[entity];return this.send(operation,{id,signal});}
   saveMemberships(entity:'users'|'agents'|'tools'|'devices',body:GroupMembership,key:string):Promise<GroupMembership>{const operation={users:operations.updateUserGroupMembership,agents:operations.updateAgentGroupMembership,tools:operations.updateToolGroupMembership,devices:operations.updateDeviceGroupMembership}[entity];return this.send(operation,{id:body.entityId,body,revision:body.revision,key});}
   simulateAccess(body:EnterpriseEvaluation):Promise<EnterpriseDecision>{return this.send(operations.simulateEnterpriseAccess,{body});}
-  serverSettings(signal?:AbortSignal):Promise<PendingServerSettings>{return this.send(operations.getServerSettings,{signal});}
+  serverSettings(signal?:AbortSignal,section?:'server'|'device'):Promise<PendingServerSettings>{return this.send(operations.getServerSettings,{signal,...(section?{query:new URLSearchParams({section})}:{})});}
   /** Every signed-in console user may read the configuration review threshold. */
   reviewPolicy(signal?:AbortSignal):Promise<ReviewPolicy>{return this.send(pendingOperations.getReviewPolicy,{signal});}
   /** Saves only the groups one Configuration page owns. */
@@ -217,6 +223,8 @@ export class ControlClient {
   }
   /** Rate-limited: Control answers 404 with no detail for an unknown code and 429 after repeated failures. */
   lookupEnrollment(userCode:string,signal?:AbortSignal):Promise<EnrollmentLookup>{return this.send(pendingOperations.lookupEndpointEnrollment,{body:{userCode},signal});}
+  consoleDeviceChallenge(body:ConsoleDeviceLookup,signal?:AbortSignal):Promise<ConsoleDeviceChallenge>{return this.send(operations.challengeConsoleDevice,{body,signal});}
+  verifyConsoleDevice(body:ConsoleDeviceProof,signal?:AbortSignal):Promise<ConsoleDeviceVerified>{return this.send(operations.verifyConsoleDevice,{body,signal});}
   /** Quickstart rotates the delegated binding credential, waits for the Gateway, and returns the new agent token once. */
   reauthorizeWorkload(id:string,key:string):Promise<ReauthorizedWorkload>{return this.send(pendingOperations.reauthorizeQuickstartWorkload,{id,body:{},key,timeoutMs:60000});}
   endpointDevice(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointDeviceRecord>{return this.send(operations.getEndpointDevice,{id,signal});}

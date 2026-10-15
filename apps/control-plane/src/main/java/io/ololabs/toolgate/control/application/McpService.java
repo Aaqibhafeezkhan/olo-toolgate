@@ -34,6 +34,7 @@ public final class McpService {
         var e=i.evaluation();if(local(tx,d).tools().stream().noneMatch(t->t.enabled()&&t.toolId().equals(request.toolId())&&t.action().equals(request.action())&&t.toolDigest().equals(e.toolDigest())&&t.packageDigest().equals(e.packageDigest())))throw forbidden();
     }
     private void scope(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,String action){
+        action=action.equals("read")?"remote_tool.read":ManagementAccess.permission(Ids.Kind.BINDING,action);
         actor.requireAdmin();if(!actor.tenant().equals(tenant)||actor.userId()==null)throw forbidden();
         var b=codec.model(tx.load().entries().get(Ids.Kind.BINDING.id(i.evaluation().context().bindingId())).document(),ControlExecutionBinding.class);var access=new ManagementAccess(codec);
         access.require(tx.load(),actor.userId(),action,Ids.Kind.TOOL_GROUP,b.toolGroupId(),now(tx));access.require(tx.load(),actor.userId(),action,Ids.Kind.DEVICE_GROUP,b.deviceGroupId(),now(tx));

@@ -1,0 +1,66 @@
+// Copyright 2026 OLO Labs
+// SPDX-License-Identifier: Apache-2.0
+package io.ololabs.toolgate.control;
+
+import io.ololabs.toolgate.control.adapter.*;
+import io.ololabs.toolgate.control.application.*;
+import io.ololabs.toolgate.control.domain.*;
+import io.ololabs.toolgate.contracts.*;
+import java.nio.file.Path;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.*;
+
+final class ManagementPermissionTest {
+ @TempDir Path directory;
+ private final ContractCodec codec=new ContractCodec();
+ private final Ids.TenantId tenant=new Ids.TenantId("permissions");
+ private EnterpriseConditions conditions(){return new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);}
+ private PostgresStore setup(String... permissions){
+  var store=new PostgresStore(SqliteState.open(directory.resolve(UUID.randomUUID()+".sqlite")),codec);TestSupport.seed(store,codec,tenant,"root");
+  store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
+   TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("viewer","Viewer",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"viewer");
+   TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("viewer-role","Viewer role",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of(new EnterpriseManagementRule(List.of(permissions),EnterpriseGroupType.TEAM,new GroupSelection(List.of(),true),List.of(),conditions(),null))));
+   TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("viewers","Viewers",true,1L,List.of("viewer"),List.of("viewer-role")));
+   tx.save(before,new Directory(before.revision()+1,entries));return null;});return store;
+ }
+ @Test void resourcePermissionsAreIndependentAndCapabilityResultsUseTheSameVocabulary(){
+  var store=setup("user.read");var access=new ManagementAccess(codec);
+  store.transaction(tenant,false,tx->{var graph=tx.load();var user=graph.entries().get(Ids.Kind.USER.id("viewer"));
+   assertDoesNotThrow(()->access.requireEntry(graph,"viewer","read",user,1));
+   assertThrows(Failure.class,()->access.requireEntry(graph,"viewer","update",user,1));
+   assertThrows(Failure.class,()->access.requireEntry(graph,"viewer","read",graph.entries().get(Ids.Kind.TEAM.id("viewers")),1));
+   assertEquals(Set.of("user.read"),access.capabilities(graph,"viewer",1));return null;});
+ }
+ @Test void superAdminAlwaysHasKnownManagementPermissionsButUnknownPermissionsFailClosed(){
+  var store=setup();var access=new ManagementAccess(codec);
+  store.transaction(tenant,false,tx->{var graph=tx.load();
+   for(var permission:ManagementPermissionCatalog.ALL)assertTrue(access.allowed(graph,"root",permission,Ids.Kind.TEAM,"missing",1),permission);
+   assertFalse(access.allowed(graph,"root","invented.permission",Ids.Kind.TEAM,"missing",1));
+   assertEquals(ManagementPermissionCatalog.ALL,access.capabilities(graph,"root",1));return null;});
+ }
+ @Test void legacyActionNamesAndLegacyDeviceScopeAreRejectedAtTheContractBoundary(){
+  assertThrows(RuntimeException.class,()->codec.model("{\"actions\":[\"read\"],\"groupType\":\"TEAM\",\"groups\":{\"ids\":[],\"all\":true},\"grantableScopes\":[],\"conditions\":"+codec.json(conditions())+"}",EnterpriseManagementRule.class));
+  assertThrows(RuntimeException.class,()->codec.model("{\"actions\":[\"device.approve\"],\"groupType\":\"DEVICE_GROUP\",\"groups\":{\"ids\":[\"devices\"],\"all\":false},\"grantableScopes\":[],\"conditions\":"+codec.json(conditions())+",\"ownDevices\":true}",EnterpriseManagementRule.class));
+ }
+ @Test void expiredGrantsNeitherAuthorizeRequestsNorAppearAsCapabilities(){
+  var store=setup("user.read");store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var expired=new EnterpriseConditions(0L,10L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
+   TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("viewer-role","Expired",true,2L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of(new EnterpriseManagementRule(List.of("user.read"),EnterpriseGroupType.TEAM,new GroupSelection(List.of(),true),List.of(),expired,null))));tx.save(before,new Directory(before.revision()+1,entries));return null;});
+  store.transaction(tenant,false,tx->{var access=new ManagementAccess(codec);assertTrue(access.capabilities(tx.load(),"viewer",11).isEmpty());assertFalse(access.allowed(tx.load(),"viewer","user.read",Ids.Kind.TEAM,"viewers",11));return null;});
+ }
+ @Test void settingsReadAndWritePermissionsAreIndependentAndResponsesOmitUnreadableGroups(){
+  var store=setup("server_configuration.read","server_configuration.update");
+  store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var rule=codec.model(entries.get(Ids.Kind.ROLE.id("viewer-role")).document(),ControlRole.class).managementRules().getFirst();
+   var rules=Arrays.stream(EnterpriseGroupType.values()).map(group->new EnterpriseManagementRule(rule.actions(),group,rule.groups(),rule.grantableScopes(),rule.conditions(),null)).toList();
+   TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("viewer-role","Server administrator",true,2L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));tx.save(before,new Directory(before.revision()+1,entries));return null;});
+  var actor=new DirectoryService.Actor(tenant,"a".repeat(64),true,false,"viewer");var settings=new ServerSettingsService(store,codec,ClientCheckInPolicy.QUICKSTART);
+  var visible=codec.model(settings.get(actor,"server").body(),io.ololabs.toolgate.contracts.v2.ControlSettingsView.class);
+  assertNotNull(visible.gateway());assertNull(visible.deviceApproval());assertNull(visible.clientCheckIn());
+  assertEquals(403,assertThrows(Failure.class,()->settings.get(actor,"device")).status());
+  var changed=codec.model(settings.patch(actor,"{\"gateway\":{\"gatewayName\":\"Scoped server\"}}",1,"server-name","request").body(),io.ololabs.toolgate.contracts.v2.ControlSettingsView.class);
+  assertEquals("Scoped server",changed.gateway().gatewayName());assertNull(changed.deviceApproval());
+  assertEquals(403,assertThrows(Failure.class,()->settings.patch(actor,"{\"deviceApproval\":{\"autoApprove\":false,\"durationMs\":86400000}}",2,"device-setting","request")).status());
+ }
+
+}

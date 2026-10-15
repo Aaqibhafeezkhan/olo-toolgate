@@ -7,9 +7,21 @@ import { ControlClient } from '../src/api';
 afterEach(() => { cleanup();vi.useRealTimers();window.location.hash = ''; });
 const review = {enrollmentId:'enrollment-1', userCode:'ABCDEF0123456789', deviceId:'device-1', platform:'LINUX',
   keyFingerprint:'a'.repeat(64), state:'PENDING', expiresAtUnixMs:1900000000000};
-function clientFor(transport:typeof fetch){return new ControlClient('test-only-token',vi.fn(),async(url,options)=>
-  url==='/api/control/v1/endpoint/enrollments'?new Response(JSON.stringify({items:[]})):transport(url,options));}
+function clientFor(transport:typeof fetch){const client=new ControlClient('test-only-token',vi.fn(),async(url,options)=>
+  url==='/api/control/v1/admin-session'?new Response(JSON.stringify({role:'ADMINISTRATOR',permissions:['device.read','device.enroll','device.approve']})):
+  url==='/api/control/v1/endpoint/enrollments'?new Response(JSON.stringify({items:[]})):transport(url,options));void client.adminSession();return client;}
+function authorizedClient(transport:typeof fetch){const client=new ControlClient('test-only-token',vi.fn(),(url,options)=>url==='/api/control/v1/admin-session'?Promise.resolve(new Response(JSON.stringify({role:'ADMINISTRATOR',permissions:['device.read','device.enroll','device.approve']}))):transport(url,options));void client.adminSession();return client;}
 describe('Endpoint enrollment', () => {
+  it('verifies a code supplied by the client without approving access',async()=>{
+    window.location.hash='#enroll?code=ABCDEF0123456789';
+    const transport=vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(review)));
+    render(<Enrollment client={clientFor(transport)}/>);
+    await screen.findByRole('heading',{name:'Device confirmation'});
+    expect(screen.getByRole('link',{name:'Open Clients to review and approve it.'}).getAttribute('href')).toBe('#devices');
+    expect(transport.mock.calls).toHaveLength(1);
+    expect(String(transport.mock.calls[0][0])).toMatch(/\/enrollments\/lookup$/);
+    expect((screen.getByRole('button',{name:'Enroll device'}) as HTMLButtonElement).disabled).toBe(true);
+  });
   it('supports explicit unlimited approval and omits the finite deadline',async()=>{
     window.location.hash='#enroll?code=ABCDEF0123456789';
     const transport=vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify(review))).mockResolvedValue(new Response(JSON.stringify({...review,state:'APPROVED',unlimitedConnection:true})));
@@ -21,7 +33,7 @@ describe('Endpoint enrollment', () => {
   it('automatically finds new requests and stops polling when unmounted',async()=>{
     vi.useFakeTimers();let items:typeof review[]=[];
     const transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify({items})));
-    const {unmount}=render(<Enrollment client={new ControlClient('test-only-token',vi.fn(),transport)} superAdmin/>);
+    const {unmount}=render(<Enrollment client={authorizedClient(transport)} superAdmin/>);
     await act(async()=>{await vi.advanceTimersByTimeAsync(0);});expect(screen.getByText('No devices are waiting for approval.')).toBeTruthy();
     items=[review];await act(async()=>{await vi.advanceTimersByTimeAsync(5000);});expect(screen.getByRole('button',{name:'Review device-1'})).toBeTruthy();
     unmount();await vi.advanceTimersByTimeAsync(10000);expect(transport).toHaveBeenCalledTimes(2);
@@ -35,7 +47,7 @@ describe('Endpoint enrollment', () => {
       if(String(url).endsWith('/decision')){items=[review];return new Response(JSON.stringify({...second,state:'APPROVED',connectionExpiresAtUnixMs:JSON.parse(String(options?.body)).connectionExpiresAtUnixMs}));}
       return new Response(JSON.stringify({state:'ACTIVE',reportSequence:0,lastSeenUnixMs:0}));
     });
-    render(<Enrollment client={new ControlClient('test-only-token',vi.fn(),transport)}/>);
+    render(<Enrollment client={authorizedClient(transport)}/>);
     await screen.findByRole('button',{name:'Review device-1'});fireEvent.click(screen.getByRole('button',{name:'Review device-2'}));
     const until=await screen.findByLabelText('Allow connection until');
     fireEvent.change(until,{target:{value:'2030-01-01T18:30'}});fireEvent.click(screen.getByRole('checkbox',{name:/I compared/}));
@@ -59,7 +71,7 @@ describe('Endpoint enrollment', () => {
   it('refreshes requests and clears list failures without approving any device',async()=>{
     const transport=vi.fn<typeof fetch>().mockResolvedValueOnce(new Response('{}',{status:503}))
       .mockResolvedValueOnce(new Response(JSON.stringify({items:[review]})));
-    render(<Enrollment client={new ControlClient('test-only-token',vi.fn(),transport)} superAdmin/>);await screen.findByRole('alert');
+    render(<Enrollment client={authorizedClient(transport)} superAdmin/>);await screen.findByRole('alert');
     fireEvent.click(screen.getByRole('button',{name:'Refresh requests'}));await screen.findByRole('button',{name:'Review device-1'});
     expect(screen.queryByRole('alert')).toBeNull();expect(transport.mock.calls.every(call=>call[1]?.method==='GET')).toBe(true);
   });
@@ -117,8 +129,9 @@ describe('Endpoint enrollment', () => {
       if(String(url).endsWith('/decision'))return new Response(JSON.stringify({...lookup,userCode:'0123456789ABCDEF',state:'APPROVED',connectionExpiresAtUnixMs:JSON.parse(String(options?.body)).connectionExpiresAtUnixMs}));
       return new Response(JSON.stringify({state:'ACTIVE',reportSequence:0,lastSeenUnixMs:0}));
     });
-    render(<Enrollment client={new ControlClient('test-only-token',vi.fn(),transport)}/>);
+    render(<Enrollment client={authorizedClient(transport)}/>);
     expect(screen.queryByRole('heading',{name:'Devices waiting for approval'})).toBeNull();
+    await waitFor(()=>expect((screen.getByRole('button',{name:'Review device'}) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText('Enrollment code'),{target:{value:'0123456789abcdef'}});fireEvent.click(screen.getByRole('button',{name:'Review device'}));
     await screen.findByRole('heading',{name:'Device confirmation'});
     expect(screen.getByText('visitor-laptop')).toBeTruthy();expect(screen.getByText('MACOS')).toBeTruthy();expect(screen.getByText('c'.repeat(64))).toBeTruthy();
@@ -133,6 +146,7 @@ describe('Endpoint enrollment', () => {
   it('reveals nothing for an unknown code and explains rate limiting',async()=>{
     const transport=vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({code:'NOT_FOUND'}),{status:404})).mockResolvedValueOnce(new Response(JSON.stringify({code:'RATE_LIMITED'}),{status:429}));
     render(<Enrollment client={clientFor(transport)}/>);
+    await waitFor(()=>expect((screen.getByRole('button',{name:'Review device'}) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText('Enrollment code'),{target:{value:'FFFFFFFFFFFFFFFF'}});fireEvent.click(screen.getByRole('button',{name:'Review device'}));
     expect((await screen.findByRole('alert')).textContent).toContain('No pending enrollment you can approve matches this code');
     expect(screen.queryByRole('heading',{name:'Device confirmation'})).toBeNull();
@@ -142,11 +156,11 @@ describe('Endpoint enrollment', () => {
   it('shows no pending list to callers without a group rule, and only approvable requests to the rest',async()=>{
     const hidden={...review,userCode:''};let items=[hidden];
     const transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify({items})));
-    const view=render(<Enrollment client={new ControlClient('test-only-token',vi.fn(),transport)}/>);
+    const view=render(<Enrollment client={authorizedClient(transport)}/>);
     await waitFor(()=>expect(transport).toHaveBeenCalled());await act(async()=>{await Promise.resolve();});
     expect(screen.queryByRole('heading',{name:'Devices waiting for approval'})).toBeNull();expect(screen.queryByText('No devices are waiting for approval.')).toBeNull();
     view.unmount();items=[hidden,{...review,enrollmentId:'enrollment-3',deviceId:'device-3'}];
-    render(<Enrollment client={new ControlClient('test-only-token',vi.fn(),transport)}/>);
+    render(<Enrollment client={authorizedClient(transport)}/>);
     await screen.findByRole('button',{name:'Review device-3'});expect(screen.queryByRole('button',{name:'Review device-1'})).toBeNull();
   });
 });
