@@ -27,6 +27,17 @@ def release(run, repo, tag):
         raise
 
 
+def wait_for_release(run, repo, tag):
+    """Allow GitHub's release listing to catch up after draft creation."""
+    for attempt in range(6):
+        current = release(run, repo, tag)
+        if current is not None:
+            return current
+        if attempt < 5:
+            time.sleep(min(2**attempt, 8))
+    return None
+
+
 def assets(run, repo, release_id):
     pages = json.loads(run('gh', 'api', f'repos/{repo}/releases/{release_id}/assets?per_page=100',
                           '--paginate', '--slurp', capture=True).stdout)
@@ -51,11 +62,13 @@ def publish(run, repo, tag, commit, folder, title, notes):
                 '--prerelease', '--latest=false', '--title', title, '--notes-file', str(notes))
         except subprocess.CalledProcessError:
             # A lost HTTP response can leave a successfully created draft.
-            current = release(run, repo, tag)
+            current = wait_for_release(run, repo, tag)
             if current is None:
                 raise
         else:
-            current = release(run, repo, tag)
+            current = wait_for_release(run, repo, tag)
+            if current is None:
+                raise ValueError('Created draft release did not become visible: '+tag)
     if not current or current['target_commitish'] != commit or current['tag_name'] != tag:
         raise ValueError('Existing release commit or tag mismatch')
     remote = assets(run, repo, current['id'])

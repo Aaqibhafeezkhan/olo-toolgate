@@ -168,7 +168,9 @@ impl Config {
             || l.memory_bytes > c.memory_bytes
             || l.max_permit_window_ms > c.max_permit_window_ms
         {
-            return Err("a limit is above the platform ceiling (platform-requirements.md §13.5)".into());
+            return Err(
+                "a limit is above the platform ceiling (platform-requirements.md §13.5)".into(),
+            );
         }
         let url = &self.control.url;
         if !url.starts_with("https://") {

@@ -42,7 +42,10 @@ are shared by both entry points. Automatic CI runs tests before
 publishing; manual disables test and smoke steps and publishes its own build output.
 The common Docker Hub publisher and GitHub draft-release uploader are used by both
 paths. Draft uploads resume matching files after an interrupted response, and
-the complete file set must match before the release becomes public.
+the complete file set must match before the release becomes public. After draft
+creation, discovery polls up to six times with bounded backoff to allow GitHub's
+release listing to catch up. Missing drafts time out without uploading or
+publishing; authentication errors and identity/asset mismatches still fail closed.
 
 The dedicated signing key's public certificate is in `central-signing-key.asc`.
 Fingerprint: `D9B1F04C5F8D5A2F71399FC440366EFD376915A0`; expires October 14, 2028.
