@@ -128,7 +128,8 @@ class CentralReleaseTests(unittest.TestCase):
     def test_central_secrets_and_routing_are_in_one_shared_maven_job(self):
         for workflow in ('development-release', 'manual-development-release'):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{workflow}.yml').read_text())['jobs']
-            self.assertEqual(jobs['publish-maven']['uses'],'./.github/workflows/release-maven.yml')
+            self.assertNotIn('publish-maven',jobs)
+            self.assertFalse(any(job.get('uses')=='./.github/workflows/release-maven.yml' for job in jobs.values()))
             self.assertNotIn('MAVEN_GPG_PRIVATE_KEY',json.dumps(jobs))
         job=yaml.safe_load((ROOT/'.github/workflows/release-maven.yml').read_text())['jobs']['publish']
         step=job['steps'][-1]

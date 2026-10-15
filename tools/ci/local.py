@@ -43,13 +43,11 @@ POLICY = {
     'release-typescript.publish': 'publication',
     'development-release.prepare': 'publication',
     'development-release.publish': 'publication',
-    'development-release.publish-maven': 'publication',
     'development-release.publish-marketplace': 'publication',
     'manual-development-release.native': 'native',
     'manual-development-release.build': 'publication',
     'manual-development-release.publish': 'publication',
     'manual-development-release.publish-typescript': 'publication',
-    'manual-development-release.publish-maven': 'publication',
     'manual-development-release.publish-marketplace': 'publication',
 }
 REASONS = {

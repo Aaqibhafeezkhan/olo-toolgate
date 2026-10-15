@@ -9,13 +9,19 @@ exact run and commit. See [check ownership](ci-check-ownership.md) and
 
 ## Publication channels
 
-Main publishes four tested images to Docker Hub, versioned development Maven
-contracts and an immutable GitHub prerelease. A matching `v<VERSION>` tag publishes
+Main publishes four tested images to Docker Hub and an immutable GitHub prerelease.
+A matching `v<VERSION>` tag publishes
 the same tested image archives to versioned GHCR coordinates, the checked Helm
-chart to OCI, Java contracts to Maven, and native/source/image assets to GitHub
+chart to OCI, and native/source/image assets to GitHub
 Releases. Source and image SBOMs, compatibility metadata, licenses, upgrade notes,
 checksums and provenance remain included. Each tag has its own full validation
 context; identical checks run once within that context.
+
+Maven publication is disconnected from both development workflow entry points,
+including the verified workflow's tag path, to avoid registry publication limits.
+The reusable `release-maven.yml` workflow and publishing implementation remain
+available for the future pipeline that will publish released packages only.
+Java packages continue to be built, checked and included in GitHub release assets.
 
 Both channels use the existing `development-release` environment. Gateway and
 Foundation previously had distinct publication capabilities; those capabilities
@@ -25,20 +31,18 @@ release workflow are retired. The retired `gateway-release` and
 Configure reviewers and branch/tag restrictions on the common environment as needed.
 
 Tag/version drift or a tag resolving to a different commit prevents publication.
-Maven JARs, source/Javadoc classifiers, POM and Gradle module metadata are uploaded
+The retained Maven publisher uploads JARs, source/Javadoc classifiers, POM and Gradle module metadata
 from checked foundation artifacts through an isolated publication project, with
 no Java rebuild or test replay. The exact release-tag lookup rejects an existing
 GitHub release and fails closed on authentication or network errors. Provenance
 for all four image digests and release assets must succeed before the GitHub
-release is created. Registry writes across Maven, GHCR and OCI are not atomic;
+release is created. Registry writes across GHCR and OCI are not atomic;
 inspect partial publication before retrying a failed run. Shared preparation
 collects verified artifacts without invoking Gradle before handing them to
-parallel core release, Maven and Marketplace publish jobs. GitHub development
+the core release publisher. GitHub development
 releases include the checked foundation Java artifacts at their source version.
-Only the Maven job assembles and publishes the unique development Maven version,
-using the Gradle publication-version property without rewriting product versions.
-Each publisher depends only on preparation, so a failure in one cannot skip or
-cancel another. Failures remain visible in the job and overall workflow result.
+Maven version metadata remains available, but development runs do not upload to
+a Maven repository. Failures remain visible in the job and overall workflow result.
 The core publisher still requires image/chart publication and provenance before
 creating the tagged GitHub release.
 
@@ -49,7 +53,7 @@ images. An optional `DOCKERHUB_NAMESPACE` variable selects an organization.
 GitHub Packages and GHCR use the workflow's built-in `GITHUB_TOKEN`; existing
 package access controls must grant the repository permission to publish.
 
-Maven defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`. A custom
+The retained Maven publisher defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`. A custom
 HTTPS Maven repository uses the `MAVEN_REPOSITORY_URL` variable and
 `MAVEN_USERNAME`/`MAVEN_PASSWORD` secrets. Existing repository settings work too;
 they do not need to be duplicated in the environment.
@@ -70,8 +74,7 @@ Both release paths call the same native, image and publishing workflows.
 Automatic CI enables `run_tests` and completes foundation, native and image
 verification before publication. The manual entry point is restricted to main
 and sets `run_tests: false`: it builds and publishes without tests, scans or
-smoke checks. Publisher jobs depend only on preparation, so a failed Maven
-upload does not stop images or npm.
+smoke checks. Its image/GitHub and npm publisher jobs depend only on preparation.
 
 Development GitHub releases are assembled as drafts. Uploads run one file at a
 time and resume existing assets only when their SHA-256 digest and size match

@@ -19,12 +19,11 @@ class SharedReleaseJobTests(unittest.TestCase):
         verified = workflow('development-release')['jobs']
         self.assertEqual(automatic['clients']['uses'],manual['native']['uses'])
         self.assertEqual(automatic['images']['uses'],manual['build']['uses'])
-        for job in ('publish','publish-maven'):
-            self.assertEqual(verified[job]['uses'],manual[job]['uses'])
-            self.assertIs(verified[job]['with']['manual'],False)
-            self.assertIs(manual[job]['with']['manual'],True)
-            self.assertNotIn('steps',verified[job])
-            self.assertNotIn('steps',manual[job])
+        self.assertEqual(verified['publish']['uses'],manual['publish']['uses'])
+        self.assertIs(verified['publish']['with']['manual'],False)
+        self.assertIs(manual['publish']['with']['manual'],True)
+        self.assertNotIn('steps',verified['publish'])
+        self.assertNotIn('steps',manual['publish'])
 
     def test_automatic_tests_cannot_be_bypassed_by_default_inputs_or_dependencies(self):
         automatic = workflow('ci')['jobs']
@@ -41,7 +40,7 @@ class SharedReleaseJobTests(unittest.TestCase):
             self.assertIs(manual[job]['with']['run_tests'],False)
         self.assertNotIn('foundation',manual)
         self.assertNotIn('admission',manual)
-        for job in ('publish','publish-maven','publish-typescript'):
+        for job in ('publish','publish-typescript'):
             self.assertEqual(manual[job]['needs'],'build')
         images = workflow('images')['jobs']['verify']['steps']
         foundation = next(s for s in images if s.get('with',{}).get('name') == 'foundation-evidence')

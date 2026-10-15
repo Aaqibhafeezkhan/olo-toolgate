@@ -64,17 +64,7 @@ jobs:
     secrets: inherit
     with:
       manual: false
-  publish-maven:
-    name: Publish Maven contracts
-    needs: prepare
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      actions: read
-      contents: read
-      packages: write
-    uses: ./.github/workflows/release-maven.yml
-    secrets: inherit
-    with:
-      manual: false
+# Maven publication is disconnected pending the release-only pipeline.
+# The reusable implementation remains in release-maven.yml.
 'on':
   workflow_call: null

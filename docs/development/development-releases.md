@@ -21,8 +21,8 @@ One run publishes:
 - Control, Gateway, Quickstart and Linux device containers to the configured Docker Hub namespace,
   with unique `dev-<12-character-commit>-<run-id>-<attempt>` tags, the commit's
   `dev-<12-character-commit>` alias, and `dev` if that commit is still current main.
-- Java main/source/Javadoc JARs and POM to Maven, and the TypeScript library to GitHub
-  npm Packages with the `dev` distribution tag. Registry versions include the run ID,
+- The TypeScript library to GitHub npm Packages with the `dev` distribution tag.
+  Registry versions include the run ID,
   attempt and commit, so a rerun gets fresh coordinates.
 - The Helm chart to GitHub OCI, and a GitHub prerelease containing raw contracts,
   Rust `.crate`, PHP distribution, TypeScript tarball, Java artifacts, six native
@@ -36,7 +36,7 @@ image tag. Kubernetes deployment credentials and enablement remain installation 
 |----------|---------|----------|
 | Control, Gateway, Quickstart, Linux device containers | Run platform services and endpoint devices | Docker Hub (`dev-<commit>` tags) |
 | Native client installers (`.setup.exe`/`.dmg`/`.run`) | Desktop installation | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
-| Java JARs + POM | JVM integration | Configured Maven repository (GitHub Packages by default) |
+| Java JARs + POM | JVM integration | GitHub prerelease assets; Maven publication is paused |
 | TypeScript library | Node/browser integration | GitHub npm Packages (`dev` dist-tag) |
 | Rust `.crate` / PHP distribution | Rust and PHP integration | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
 | Helm chart | Kubernetes deployment | GitHub OCI registry |
@@ -47,12 +47,11 @@ retain their source version. Release metadata identifies the commit and states
 
 Use the existing `development-release` environment/repository secrets:
 `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and optional `DOCKERHUB_NAMESPACE` variable.
-Maven defaults to GitHub Packages using `GITHUB_TOKEN`; a custom Maven URL requires
-`MAVEN_REPOSITORY_URL`, `MAVEN_USERNAME` and `MAVEN_PASSWORD`. GitHub npm/Helm use the
+GitHub npm/Helm use the
 workflow's Packages write permission. Any configured GitHub environment approval
 still applies. Registry publication is not atomic; inspect a failed run before
 rerunning it. After native packaging and the shared build succeed, the core
-image/Helm/GitHub release, TypeScript, Maven and Marketplace publishers run as
+image/Helm/GitHub release and TypeScript publishers run as
 parallel jobs. They consume the prepared artifacts and have no dependencies on
 each other. A failure still fails its job and the workflow, while the other
 publishers continue. The core publisher retains the ordering needed to include
@@ -68,8 +67,12 @@ commit. Failed, skipped, cancelled or missing prerequisites prevent publication.
 Dispatch `ci.yml` on main to repeat this complete flow. The publisher does not
 wait for its own unfinished job. Legacy five-run preparation remains available
 only for compatibility callers. Shared preparation hands the verified artifacts
-to independent core release and Maven publish jobs. A registry or
-Maven configuration failure cannot skip or cancel a sibling publisher.
+to the core release publisher.
+
+Maven publication is disconnected from both development workflows to avoid
+registry publication limits. Java artifacts are still built and included in
+GitHub prereleases. The reusable Maven workflow and publishing implementation
+are retained for a future pipeline that will publish released packages only.
 
 Automatic CI and development release admission require `TOOLGATE_CI_ENABLED=true`
 and a PR title starting with `RC:`. Push and release events resolve the merged PR
@@ -107,22 +110,13 @@ The native archives retain their tested VERSION; release metadata ties them to
 the exact commit and CI run IDs. The image digests are recorded in the metadata.
 No installer/runtime signing is claimed by this workflow.
 
-The Maven library is `io.github.olo-labs:toolgate-contracts`. Each publishing run
-uses `<core-version>-dev.<publishing-run-id>.g<12-character-commit>`, avoiding reuse
-of the checked-in development coordinate. Java contract tests run in foundation
-before remote publication;
-publication does not run the same suite again. Shared preparation reuses the
-checksummed foundation Java artifacts without running Gradle; these GitHub assets
-retain the checked source coordinate, recorded as `javaAssetVersion`. Only the
-Maven publish job builds its development coordinate using
-`contractsPublicationVersion`, leaving product and wire versions unchanged.
-Its Java setup, compilation or upload failures cannot block other publishers.
-
-Maven defaults to `https://maven.pkg.github.com/olo-labs/olo-toolgate`, authenticated
-with the CI GITHUB_TOKEN. Consumers need GitHub Packages read access. To use another
-repository, set `MAVEN_REPOSITORY_URL`, `MAVEN_USERNAME` and `MAVEN_PASSWORD`. For a
-custom repository use both Maven secrets. Central Portal publishing uses the shared
-Maven job with GPG signing and the verified `io.github.olo-labs` namespace.
+The Maven library coordinate is `io.github.olo-labs:toolgate-contracts`.
+Java contract tests run in foundation. Shared preparation reuses the checksummed
+foundation Java artifacts without running Gradle; these GitHub assets retain the
+checked source coordinate, recorded as `javaAssetVersion`. Existing Maven version
+metadata is retained, but does not indicate that the version was published.
+The retained publisher's configuration is documented in
+[the release tools README](../../tools/release/README.md).
 The automatic and manual entry points share native, image and publication job
 bodies; manual sets `run_tests: false` and automatic CI sets it to true.
 Versioned publication uses the same `ci.yml`
@@ -135,7 +129,7 @@ Docker Hub repository access before the first publication.
 
 If a run fails after one registry succeeds, partial artifacts may exist. Do not
 claim an atomic multi-registry release. Inspect the publishing run before retrying;
-Maven coordinates and GitHub prerelease names are unique per workflow run. A new
+GitHub prerelease names are unique per workflow run. A new
 manual run on main can recover after credentials or registry access are corrected.
 
 Release notes and licenses
