@@ -13,7 +13,13 @@ it('starts at Overview with collapsed groups and restores the last page after di
   const view=render(<App/>);await connect();await screen.findByRole('heading',{name:'Your organization, at a glance'});
   expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].every(group=>!group.open)).toBe(true);
   expect(document.querySelector('nav > details summary')?.textContent).toBe('Administration');
-  expect(document.querySelector('nav a[href="#about"]')?.closest('details')?.querySelector('summary')?.textContent).toBe('Administration');
+  const about=screen.getByRole('link',{name:'About'});
+  expect(about.closest('details')).toBeNull();
+  expect(about.previousElementSibling?.querySelector('summary')?.textContent).toBe('Administration');
+  fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));
+  expect(screen.getByRole('button',{name:'Administration'})).toBeTruthy();
+  expect(screen.getByRole('link',{name:'About'}).previousElementSibling).toBe(screen.getByRole('button',{name:'Administration'}));
+  fireEvent.click(screen.getByRole('button',{name:'Expand navigation'}));
   navigate('#users');await screen.findByRole('heading',{name:'Users'});fireEvent.click(screen.getByRole('button',{name:'Disconnect'}));expect(window.location.hash).toBe('');view.unmount();
   render(<App/>);await connect();await screen.findByRole('heading',{name:'Users'});expect(window.location.hash).toBe('#users');
   expect(JSON.stringify(localStorage)).not.toContain(token());expect(sessionStorage.length).toBe(0);
@@ -34,4 +40,15 @@ it('aligns the username and bell in the sidebar and refreshes green/gray pending
 it('uses a gray bell with an honest message when approval queues are unavailable',async()=>{
   vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/admin-session')?json({role:'ADMINISTRATOR'}):url.includes('approvals?')?json({},503):json({items:[]})));
   render(<App/>);await connect('opaque-token');expect((await screen.findByRole('button',{name:'Approval status unavailable'})).className).not.toContain('pending');
+});
+
+it('keeps About available to approval-only users without Administration in either sidebar mode',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/admin-session')?json({},403):json({items:[]})));
+  render(<App/>);await connect();
+  expect([...document.querySelectorAll('nav summary')].some(summary=>summary.textContent==='Administration')).toBe(false);
+  expect(screen.getByRole('link',{name:'About'}).closest('details')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));
+  expect(screen.queryByRole('button',{name:'Administration'})).toBeNull();
+  fireEvent.click(screen.getByRole('link',{name:'About'}));fireEvent(window,new HashChangeEvent('hashchange'));
+  expect(await screen.findByRole('heading',{name:'About ToolGate'})).toBeTruthy();
 });

@@ -66,11 +66,14 @@ describe('Configuration review banner',()=>{
 });
 
 describe('Administration',()=>{
-  it('is limited to Super Admin: other administrators see only About and no settings request is made',async()=>{
+  it('hides Administration from other administrators while keeping About available and making no settings request',async()=>{
     const transport=vi.fn(async(url:string)=>url.endsWith('/admin-session')?json({role:'ADMINISTRATOR'}):json({items:[]}));
     vi.stubGlobal('fetch',transport);render(<App/>);await connect();
-    const administration=[...document.querySelectorAll('nav details')].find(group=>group.querySelector('summary')?.textContent==='Administration')!;
-    expect([...administration.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['#about']);
+    expect([...document.querySelectorAll('nav summary')].some(summary=>summary.textContent==='Administration')).toBe(false);
+    expect(screen.getByRole('link',{name:'About'}).closest('details')).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));
+    expect(screen.queryByRole('button',{name:'Administration'})).toBeNull();
+    expect(screen.getByRole('link',{name:'About'})).toBeTruthy();
     navigate('#config-server');expect(await screen.findByText('Administration is available to Super Admin accounts only.')).toBeTruthy();
     navigate('#config-backup');expect(screen.getByText('Administration is available to Super Admin accounts only.')).toBeTruthy();
     expect(transport.mock.calls.some(([url])=>url.includes('/settings')||url.includes('/config/export'))).toBe(false);
@@ -80,7 +83,8 @@ describe('Administration',()=>{
     vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/admin-session')?json({role:'SUPER_ADMIN'}):url==='/api/control/v1/settings'?json(settings):json({items:[]})));
     render(<App/>);await connect();
     const administration=[...document.querySelectorAll('nav details')].find(group=>group.querySelector('summary')?.textContent==='Administration')!;
-    expect([...administration.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['#config-server','#config-device','#config-backup','#about']);
+    expect([...administration.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['#config-server','#config-device','#config-backup']);
+    expect(screen.getByRole('link',{name:'About'}).previousElementSibling).toBe(administration);
     navigate('#config-server');expect(((await screen.findByLabelText('Configuration reviews')) as HTMLSelectElement).value).toBe('1');
     navigate('#config-backup');await screen.findByRole('heading',{name:'Backup/Restore'});
     expect(screen.queryByText('Server settings file')).toBeNull();expect(screen.getByRole('button',{name:'Export complete configuration'})).toBeTruthy();
