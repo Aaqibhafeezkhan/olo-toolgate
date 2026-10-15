@@ -52,7 +52,8 @@ jobs:
         cp packages/contracts/java/build/publications/mavenJava/pom-default.xml "build/release/toolgate-contracts-${contracts_version}.pom"
         cp packages/contracts/java/build/publications/mavenJava/module.json "build/release/toolgate-contracts-${contracts_version}.module"
         helm package deploy/helm/olo-toolgate --destination build/release
-        cp CHANGELOG.md docs/development/foundation-upgrades.md build/release/
+        cp CHANGELOG.md build/release/
+        cp docs/architecture/compatibility.md build/release/foundation-upgrades.md
         cp docs/gateway/upgrades.md build/release/gateway-upgrades.md
         cp docs/control-plane/upgrades.md build/release/control-upgrades.md
         docker run --rm -v "$PWD:/repo" aquasec/trivy:0.61.1 fs --no-progress --include-dev-deps --format cyclonedx --scanners vuln --skip-dirs '.dev,**/build,**/node_modules,target,.gradle,.git' --output /repo/build/release/sbom.cdx.json /repo
