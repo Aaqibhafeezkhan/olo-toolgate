@@ -44,7 +44,7 @@ final class EndpointTest {
         try(var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()){statement.execute("CREATE DATABASE "+database);}
         var url=base.replace("/control?","/"+database+"?");
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).target("4").load().migrate();
-        assertEquals(17,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
+        assertEquals(18,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
         var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         return configured(new PostgresStore(source,codec));
     }
@@ -52,6 +52,7 @@ final class EndpointTest {
         var directory=new DirectoryService(store,codec,512,1048576);var admin=TestSupport.seed(store,codec,new Ids.TenantId("endpoint"),"owner");
         for(var user:List.of("other"))directory.mutate(admin,Ids.Kind.USER,user,"CREATE",DomainTest.user(user,1),0,user,"request");
         var clock=new MutableClock();var issuer=issuer();var service=new EndpointService(store,codec,issuer,clock,true,"endpoint","server","Organization","https://control.example.test","https://gateway.example.test");
+        service.checkInPolicy(ClientCheckInPolicy.configure(500L,0,120000L)); // Explicit fast-cycle fixture; production defaults to 2 s.
         service.operations(new EnterpriseOperations(store,codec,null,clock,"control","toolgate-client",60000,256));
         return new Setup(service,directory,admin,store,clock,issuer);
     }
@@ -136,7 +137,7 @@ final class EndpointTest {
         var configured=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured",true).body(),EndpointCheckInAck.class);
         assertEquals(4000L,configured.nextIntervalMs());
         assertEquals(4L,configured.nextIntervalSeconds());
-        s.service.checkInPolicy(ClientCheckInPolicy.QUICKSTART);
+        s.service.checkInPolicy(ClientCheckInPolicy.configure(500L,0,120000L));
         s.clock.time=START+50000000;var renewed=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(4L,report,null,null)),"renew").body(),EndpointCheckInAck.class).identity();assertNotNull(renewed);assertTrue(renewed.expiresAtUnixMs()>identity.expiresAtUnixMs());
         var device=codec.model(s.service.device(s.admin,"device").body(),EndpointDeviceRecord.class);assertEquals(4,device.reportSequence());
         var revoked=s.service.revoke(s.admin,"device",codec.json(new EndpointRevokeRequest(device.revision())),"revoke","request");assertEquals(revoked.body(),s.service.revoke(s.admin,"device",codec.json(new EndpointRevokeRequest(device.revision())),"revoke","request").body());

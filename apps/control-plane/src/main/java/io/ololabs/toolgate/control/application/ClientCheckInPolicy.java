@@ -10,9 +10,9 @@ import io.ololabs.toolgate.contracts.v2.ValueSource;
 public record ClientCheckInPolicy(long checkInMs,int jitterPct,long offlineAfterMs,ValueSource source) {
     /** The sync deadline a client job must fit in, with the margin left for execution (ADR 016). */
     static final long SYNC_DEADLINE_MS=30000,EXECUTION_MARGIN_MS=5000;
-    public static final long QUICKSTART_CHECK_IN_MS=500,ENTERPRISE_CHECK_IN_MS=2000;
+    public static final long QUICKSTART_CHECK_IN_MS=2000,ENTERPRISE_CHECK_IN_MS=2000;
     public static final int ENTERPRISE_JITTER_PCT=20;
-    /** The fixed pre-M1 behaviour: 500 ms, no jitter, offline after two minutes. */
+    /** Quickstart uses 2 seconds, no jitter, and is offline after two minutes. */
     public static final ClientCheckInPolicy QUICKSTART=new ClientCheckInPolicy(QUICKSTART_CHECK_IN_MS,0,120000,ValueSource.DEFAULT);
 
     public ClientCheckInPolicy {

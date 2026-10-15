@@ -3,6 +3,13 @@
 
 **Status:** Accepted (design gate D1), on merge of the PR that adds this file
 
+## Amendment (2026-10-15)
+
+Quickstart now defaults to 2000 ms with no jitter to reduce recurring container
+load. Explicit environment overrides remain supported; the enterprise default is
+unchanged. The 500 ms Quickstart values below describe the original decision.
+See [container performance](../operations/performance.md).
+
 ## Context
 
 Endpoint clients poll Control for jobs. Control returns a fixed check-in interval (500 ms when the client sends `X-ToolGate-Poll-Interval-Unit: milliseconds`, otherwise 2 s, `EndpointService.java:190`), the client obeys `nextIntervalMs` within 500 ms to 1 h, and the WebSocket opens only after a poll delivers a job (ADR [012](012-client-mcp-polling-relay.md), platform-requirements.md §2.1). One value therefore controls liveness, job pickup latency and load: about 20,000 requests/s at 500 ms for 10,000 idle devices. Rahul asked for it to be configurable.

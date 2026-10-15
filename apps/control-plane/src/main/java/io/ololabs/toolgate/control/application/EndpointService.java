@@ -28,7 +28,7 @@ public final class EndpointService {
     private final boolean enabled;
     private ClientCheckInPolicy checkInPolicy=ClientCheckInPolicy.QUICKSTART;
     private EnterpriseOperations operations;
-    /** Env-owned check-in policy; the fixed 500 ms Quickstart behaviour until configured. */
+    /** Env-owned check-in policy; the 2 s Quickstart default applies until configured. */
     public EndpointService checkInPolicy(ClientCheckInPolicy value){checkInPolicy=java.util.Objects.requireNonNull(value);if(operations!=null)operations.checkInPolicy(value);return this;}
     public ClientCheckInPolicy checkInPolicy(){return checkInPolicy;}
     public EndpointService operations(EnterpriseOperations value){operations=java.util.Objects.requireNonNull(value).checkInPolicy(checkInPolicy);return this;}

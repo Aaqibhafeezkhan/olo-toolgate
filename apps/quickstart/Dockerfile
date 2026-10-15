@@ -53,6 +53,6 @@ COPY RELEASE-NOTES.md /usr/share/doc/olo-toolgate/RELEASE-NOTES.md
 USER 65532:65532
 VOLUME ["/data"]
 EXPOSE 8080 8443
-HEALTHCHECK --interval=10s --timeout=4s --start-period=90s --retries=3 CMD ["/opt/quickstart-python/bin/python", "/opt/quickstart/supervisor.py", "--health"]
+HEALTHCHECK --interval=30s --timeout=4s --start-period=90s --retries=3 CMD ["/opt/quickstart-python/bin/python", "-c", "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8080/health/ready',timeout=3); raise SystemExit(0 if r.status==200 else 1)"]
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/opt/quickstart-python/bin/python", "/opt/quickstart/supervisor.py"]

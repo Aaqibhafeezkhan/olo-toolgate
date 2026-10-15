@@ -4,6 +4,9 @@ name: toolgate-gateway-control
 x-runtime: &runtime
   platform: linux/amd64
   restart: unless-stopped
+  logging:
+    driver: local
+    options: {max-size: "10m", max-file: "3"}
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]

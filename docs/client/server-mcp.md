@@ -5,7 +5,7 @@ Managed tool execution uses a trusted registered device, current owner/device en
 
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 
-An enrolled client checks in with Control at the configured check-in interval while connected (500 ms on Quickstart, 2 s with jitter by default elsewhere; see [client check-in](../control-plane/configuration.md#client-check-in)). Each
+An enrolled client checks in with Control at the configured check-in interval while connected (2 s on Quickstart, 2 s with jitter by default elsewhere; see [client check-in](../control-plane/configuration.md#client-check-in)). Each
 poll reports the tools actually installed and ready on that device. Control caches
 the device's effective permissions and their digest. A change sends a complete
 replacement on the next poll; Control repeats it until the client acknowledges the

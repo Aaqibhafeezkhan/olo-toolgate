@@ -17,7 +17,7 @@ class ClientCheckInPolicyTest {
         assertEquals(120000,slow.offlineAfterMs());
         assertEquals(new ClientCheckInPolicy(5000,0,300000,ValueSource.ENVIRONMENT),ClientCheckInPolicy.configure(5000L,0,300000L));
         var effective=ClientCheckInPolicy.QUICKSTART.effective();
-        assertEquals(500L,effective.checkInMs());assertEquals(0L,effective.jitterPct());assertEquals(120000L,effective.offlineAfterMs());
+        assertEquals(2000L,effective.checkInMs());assertEquals(0L,effective.jitterPct());assertEquals(120000L,effective.offlineAfterMs());
     }
     @Test void theCheckInMustLeaveTimeForAJobInsideTheSyncDeadline(){
         // 20000 ms with 25 % jitter is exactly 25 s, which leaves the 5 s execution margin.
@@ -30,8 +30,8 @@ class ClientCheckInPolicyTest {
         assertDoesNotThrow(()->ClientCheckInPolicy.configure(2000L,20,2401L));
     }
     @Test void intervalsStayInsideTheJitterBandAndTheBurstGuardScales(){
-        assertEquals(250,ClientCheckInPolicy.QUICKSTART.burstGuardMs());
-        assertEquals(500,ClientCheckInPolicy.QUICKSTART.nextIntervalMs());
+        assertEquals(1000,ClientCheckInPolicy.QUICKSTART.burstGuardMs());
+        assertEquals(2000,ClientCheckInPolicy.QUICKSTART.nextIntervalMs());
         var enterprise=ClientCheckInPolicy.configure(null,null,null);
         assertEquals(800,enterprise.burstGuardMs());
         for(int i=0;i<500;i++){long next=enterprise.nextIntervalMs();assertTrue(next>=1600&&next<=2400,String.valueOf(next));}

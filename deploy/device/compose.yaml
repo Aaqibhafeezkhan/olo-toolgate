@@ -8,6 +8,9 @@ services:
     pull_policy: always
     hostname: ${TOOLGATE_DEVICE_NAME:-toolgate-device}
     restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     mem_limit: 256m
