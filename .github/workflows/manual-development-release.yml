@@ -47,17 +47,7 @@ jobs:
       actions: read
       contents: read
       packages: write
-  publish-maven:
-    name: Publish Java library to Maven
-    needs: build
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/release-maven.yml
-    secrets: inherit
-    with:
-      manual: true
-    permissions:
-      actions: read
-      contents: read
-      packages: write
+# Maven publication is disconnected pending the release-only pipeline.
+# The reusable implementation remains in release-maven.yml.
 'on':
   workflow_dispatch: null
