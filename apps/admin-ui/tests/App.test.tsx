@@ -50,7 +50,7 @@ describe('Management shell states', () => {
     localStorage.clear();
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
-    expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].map(group=>group.open)).toEqual([false,false,false,false,false,false]);
+    expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].map(group=>group.open)).toEqual([false,false,false,false,false]);
     const resize = screen.getByRole('separator',{name:'Resize navigation'});
     expect(screen.getByRole('region',{name:'Navigation controls'}).contains(resize)).toBe(true);
     fireEvent.keyDown(resize,{key:'End'}); expect(resize.getAttribute('aria-valuenow')).toBe('420');
