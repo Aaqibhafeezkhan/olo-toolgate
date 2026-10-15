@@ -36,7 +36,7 @@ COPY --from=release /usr/share/licenses/olo-toolgate/quickstart-rust/ /usr/share
 COPY RELEASE-NOTES.md /usr/share/doc/olo-toolgate/RELEASE-NOTES.md
 RUN chmod 755 /opt/toolgate/client /usr/bin/systemctl
 ENV PYTHONDONTWRITEBYTECODE=1
-HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import json,time; d=json.load(open('/run/olo-toolgate/device-status.json')); assert time.time()*1000-d['updatedAtUnixMs'] < 120000"
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["python", "-u", "/opt/toolgate/device.py"]

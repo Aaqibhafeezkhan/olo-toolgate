@@ -35,7 +35,7 @@ An unknown device follows `ENROLL` and automatically appears as a pending reques
 Presence alone does not authorize a connection or a tool call.
 Installed clients show connected/offline state from authenticated check-ins;
 the console uses a two-minute freshness window and does not treat approval alone
-as a connection. The current client polls at the configured check-in interval (500 ms on Quickstart); older clients
+as a connection. The current client polls at the configured check-in interval (2 s on Quickstart); older clients
 retain their seconds-based interval.
 
 System name is the protected client's reported OS hostname, separate from its

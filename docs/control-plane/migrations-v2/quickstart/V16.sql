@@ -1,7 +1,7 @@
 -- Copyright 2026 OLO Labs
 -- SPDX-License-Identifier: Apache-2.0
--- SPECIFICATION (gate D2). Ships unchanged as db/quickstart/V15.sql with the kill switch, with the
--- runner cap in SqliteState raised to 15. Same state as Flyway V22__kill_switch.sql.
+-- SPECIFICATION (gate D2). Ships unchanged as db/quickstart/V16.sql with the kill switch, with the
+-- runner cap in SqliteState raised to 16. Same state as Flyway V23__kill_switch.sql.
 CREATE TABLE control_kill_events(tenant_id TEXT NOT NULL,event_id TEXT NOT NULL,issuer TEXT NOT NULL CHECK(issuer IN('control','control-breakglass')),issuer_counter INTEGER NOT NULL CHECK(issuer_counter BETWEEN 1 AND 9999999999999999),event_kind TEXT NOT NULL CHECK(event_kind IN('KILL','RECOVERY')),scope_kind TEXT CHECK(scope_kind IN('PACKAGE','PACKAGE_DIGEST','PUBLISHER','TOOL','POOL','RUNTIME_IMAGE','TENANT')),scope_value TEXT CHECK(length(scope_value) BETWEEN 1 AND 256),mode TEXT CHECK(mode IN('STOP_NEW','TERMINATE')),authorization_epoch INTEGER NOT NULL CHECK(authorization_epoch BETWEEN 1 AND 9007199254740991),issued_at INTEGER NOT NULL CHECK(issued_at BETWEEN 0 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=65536),PRIMARY KEY(tenant_id,event_id),UNIQUE(tenant_id,issuer,issuer_counter),CHECK(event_id=issuer||':'||issuer_counter),CHECK(event_kind='KILL' OR issuer='control'),CHECK((event_kind='KILL')=(scope_kind IS NOT NULL)),CHECK((event_kind='KILL')=(mode IS NOT NULL)),CHECK(scope_kind IS NULL OR (scope_kind='TENANT')=(scope_value IS NULL)));
 -- statement
 CREATE INDEX control_kill_event_epoch ON control_kill_events(tenant_id,authorization_epoch);

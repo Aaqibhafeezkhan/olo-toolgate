@@ -16,6 +16,8 @@ public interface Store {
         default McpStore mcp() { throw Failure.unavailable(); }
         default PackageStore packages() { throw Failure.unavailable(); }
         Directory load();
+        /** Digest of this tenant's current directory; adapters may reuse a version-checked immutable snapshot. */
+        default String adoptionDigest(TenantId tenant, Codec codec) { return EndpointAdoptions.digest(codec, tenant, load()); }
         /** Immutable setup identity, separate from editable roles and identity bindings. */
         default String bootstrapAdminUserId() { return null; }
         default void protectBootstrapAdmin(String userId) { throw Failure.unavailable(); }

@@ -8,6 +8,7 @@ permission to execute.
 |---|---|
 | Run and verify services | [Execution guide](execution-guide.md) |
 | Diagnose a failure | [Debugging](debugging.md) and [device states](../control-plane/device-registry.md) |
+| Tune container load and understand caching | [Container performance](performance.md) |
 | Prepare external services and TLS | [Production deployment](../deployment/production.md) |
 | Monitor authority, decisions and device adoption | [Enterprise operations](../enterprise-access-control/operations.md) |
 | Back up, restore or migrate | [Reviewed recovery](../enterprise-access-control/operations.md) and [Quickstart persistence](../deployment/quickstart.md) |

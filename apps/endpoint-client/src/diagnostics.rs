@@ -3,10 +3,17 @@
 //! Bounded protocol diagnostics. Values outside the metadata allowlist never enter logs.
 use crate::{storage::ProtectedStore, Failure, Result};
 use serde_json::{json, Value};
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::PathBuf,
+    sync::{Arc, Mutex, OnceLock, Weak},
+    time::Duration,
+};
 
-static LOG_LOCK: Mutex<()> = Mutex::new(());
 const LIMIT: usize = 65536;
+const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
+const BATCH_SIZE: usize = 32;
+static LOGS: OnceLock<Mutex<HashMap<PathBuf, Weak<SharedLog>>>> = OnceLock::new();
 
 pub fn summary(value: &Value) -> Value {
     summarize(value, 0)
@@ -83,13 +90,95 @@ fn summarize(value: &Value, depth: usize) -> Value {
 }
 
 pub struct PacketLog {
+    shared: Arc<SharedLog>,
+}
+impl Drop for PacketLog {
+    fn drop(&mut self) {
+        if self.shared.flush().is_err() {
+            tracing::warn!(event = "packet_log", result = "close_flush_failed");
+        }
+    }
+}
+struct Buffer {
+    lines: VecDeque<Vec<u8>>,
+    bytes: usize,
+    pending: usize,
+}
+struct SharedLog {
     store: ProtectedStore,
+    buffer: Mutex<Buffer>,
+}
+impl SharedLog {
+    fn flush(&self) -> Result<()> {
+        let mut buffer = self.buffer.lock().map_err(|_| Failure::Unavailable)?;
+        if buffer.pending == 0 {
+            return Ok(());
+        }
+        let mut content = Vec::with_capacity(buffer.bytes);
+        for line in &buffer.lines {
+            content.extend_from_slice(line);
+            content.push(b'\n');
+        }
+        self.store.write("packets.jsonl", &content)?;
+        buffer.pending = 0;
+        Ok(())
+    }
+}
+impl Drop for SharedLog {
+    fn drop(&mut self) {
+        if self.flush().is_err() {
+            tracing::warn!(event = "packet_log", result = "shutdown_flush_failed");
+        }
+    }
 }
 impl PacketLog {
     pub fn open(directory: PathBuf) -> Result<Self> {
-        Ok(Self {
-            store: ProtectedStore::open(directory)?,
-        })
+        // The transport and read-log built-in share one buffer for each protected directory.
+        let store = ProtectedStore::open(directory.clone())?;
+        let directory = std::fs::canonicalize(directory).map_err(|_| Failure::Unavailable)?;
+        let mut logs = LOGS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .map_err(|_| Failure::Unavailable)?;
+        logs.retain(|_, value| value.strong_count() > 0);
+        if let Some(shared) = logs.get(&directory).and_then(Weak::upgrade) {
+            return Ok(Self { shared });
+        }
+        let previous = store.read("packets.jsonl")?.unwrap_or_default();
+        let mut lines: VecDeque<Vec<u8>> = previous
+            .split(|b| *b == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(<[u8]>::to_vec)
+            .collect();
+        let mut bytes: usize = lines.iter().map(|line| line.len() + 1).sum();
+        while lines.len() > 100 || bytes > LIMIT {
+            if let Some(line) = lines.pop_front() {
+                bytes = bytes.saturating_sub(line.len() + 1);
+            }
+        }
+        let shared = Arc::new(SharedLog {
+            store,
+            buffer: Mutex::new(Buffer {
+                lines,
+                bytes,
+                pending: 0,
+            }),
+        });
+        let weak = Arc::downgrade(&shared);
+        std::thread::Builder::new()
+            .name("packet-log".into())
+            .spawn(move || loop {
+                std::thread::sleep(FLUSH_INTERVAL);
+                let Some(shared) = weak.upgrade() else {
+                    break;
+                };
+                if shared.flush().is_err() {
+                    tracing::warn!(event = "packet_log", result = "flush_failed");
+                }
+            })
+            .map_err(|_| Failure::Unavailable)?;
+        logs.insert(directory, Arc::downgrade(&shared));
+        Ok(Self { shared })
     }
     pub fn record(
         &self,
@@ -108,42 +197,38 @@ impl PacketLog {
         }
     }
     fn save(&self, event: Value) -> Result<()> {
-        let _guard = LOG_LOCK.lock().map_err(|_| Failure::Unavailable)?;
-        let previous = self.store.read("packets.jsonl")?.unwrap_or_default();
         let line = serde_json::to_vec(&event).map_err(|_| Failure::Validation)?;
         if line.len() + 1 > LIMIT {
             return Err(Failure::Validation);
         }
-        let mut lines: std::collections::VecDeque<&[u8]> = previous
-            .split(|b| *b == b'\n')
-            .filter(|line| !line.is_empty())
-            .collect();
-        let mut size = previous.len() + line.len() + 1;
-        while lines.len() >= 100 || size > LIMIT {
-            let Some(first) = lines.pop_front() else {
+        let mut buffer = self
+            .shared
+            .buffer
+            .lock()
+            .map_err(|_| Failure::Unavailable)?;
+        while buffer.lines.len() >= 100 || buffer.bytes + line.len() + 1 > LIMIT {
+            let Some(first) = buffer.lines.pop_front() else {
                 break;
             };
-            size = size.saturating_sub(first.len() + 1);
+            buffer.bytes = buffer.bytes.saturating_sub(first.len() + 1);
         }
-        let mut content = Vec::new();
-        for old in lines {
-            content.extend_from_slice(old);
-            content.push(b'\n');
+        buffer.bytes += line.len() + 1;
+        buffer.lines.push_back(line);
+        buffer.pending = buffer.pending.saturating_add(1);
+        let flush = buffer.pending >= BATCH_SIZE;
+        drop(buffer);
+        if flush {
+            self.shared.flush()?;
         }
-        content.extend_from_slice(&line);
-        content.push(b'\n');
-        self.store.write("packets.jsonl", &content)
+        Ok(())
     }
     pub fn latest(&self) -> Result<Value> {
-        let _guard = LOG_LOCK.lock().map_err(|_| Failure::Unavailable)?;
-        let bytes = self
-            .store
-            .read("packets.jsonl")?
-            .ok_or(Failure::Unavailable)?;
-        let line = bytes
-            .split(|b| *b == b'\n')
-            .rfind(|line| !line.is_empty())
-            .ok_or(Failure::Unavailable)?;
+        let buffer = self
+            .shared
+            .buffer
+            .lock()
+            .map_err(|_| Failure::Unavailable)?;
+        let line = buffer.lines.back().ok_or(Failure::Unavailable)?;
         serde_json::from_slice(line).map_err(|_| Failure::Validation)
     }
 }
@@ -169,7 +254,8 @@ mod tests {
             log.save(json!({"sequence":sequence})).unwrap();
         }
         assert_eq!(log.latest().unwrap(), json!({"sequence":104}));
-        let content = log.store.read("packets.jsonl").unwrap().unwrap();
+        log.shared.flush().unwrap();
+        let content = log.shared.store.read("packets.jsonl").unwrap().unwrap();
         assert_eq!(
             content
                 .split(|b| *b == b'\n')
@@ -178,6 +264,52 @@ mod tests {
             100
         );
         drop(log);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn batching_shares_live_entries_and_flushes_on_last_close() {
+        let directory = crate::storage::test_directory("packet-batch");
+        let writer = PacketLog::open(directory.clone()).unwrap();
+        let reader = PacketLog::open(directory.clone()).unwrap();
+        writer.save(json!({"sequence":1})).unwrap();
+        assert_eq!(reader.latest().unwrap(), json!({"sequence":1}));
+        assert!(writer.shared.store.read("packets.jsonl").unwrap().is_none());
+        for sequence in 2..=32 {
+            writer.save(json!({"sequence":sequence})).unwrap();
+        }
+        let persisted = writer.shared.store.read("packets.jsonl").unwrap().unwrap();
+        writer.save(json!({"sequence":33})).unwrap();
+        assert_eq!(
+            writer.shared.store.read("packets.jsonl").unwrap().unwrap(),
+            persisted
+        );
+        drop(writer);
+        drop(reader);
+        let reopened = PacketLog::open(directory.clone()).unwrap();
+        assert_eq!(reopened.latest().unwrap(), json!({"sequence":33}));
+        drop(reopened);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn periodic_flush_persists_even_when_no_more_packets_arrive() {
+        let directory = crate::storage::test_directory("packet-periodic");
+        let log = PacketLog::open(directory.clone()).unwrap();
+        log.save(json!({"sequence":1})).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(8);
+        loop {
+            if log.shared.store.read("packets.jsonl").unwrap().is_some() {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "periodic flush timed out"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        drop(log);
+        let reopened = PacketLog::open(directory.clone()).unwrap();
+        assert_eq!(reopened.latest().unwrap(), json!({"sequence":1}));
+        drop(reopened);
         std::fs::remove_dir_all(directory).unwrap();
     }
 }

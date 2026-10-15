@@ -106,7 +106,7 @@ Phase A makes the interval configurable and works with clients already deployed.
 
 | Environment variable | Meaning | Quickstart | Enterprise default |
 |---|---|---|---|
-| `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS` | Value sent as `nextIntervalMs`; must be 500 to 3600000 | 500 | 2000 |
+| `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS` | Value sent as `nextIntervalMs`; must be 500 to 3600000 | 2000 | 2000 |
 | `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` | Random spread added to each interval, in percent | 0 | 20 |
 | `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS` | Time without a check-in before a device counts as offline | 120000 | max(120000, 6 × check-in) |
 
@@ -115,7 +115,7 @@ value is the job pickup latency.
 
 Each reply picks an interval at random within check-in ± jitter. A check-in that
 arrives sooner than half the shortest such interval is rejected with 409 as a request
-burst (250 ms at the Quickstart default, 800 ms at the enterprise default). A device
+burst (1000 ms at the Quickstart default, 800 ms at the enterprise default). A device
 with no check-in for the offline threshold gets no local tools in discovery and no
 new client tool jobs.
 
