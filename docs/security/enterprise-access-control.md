@@ -838,7 +838,7 @@ stage is implemented. At minimum, verify:
 ## Related documentation and design references
 
 - [Device registry and tool-call controls](../control-plane/device-registry.md)
-- [Managed Roles](../development/managed-roles.md)
+- [Managed Roles](user-roles.md)
 - [User roles and fixed templates](user-roles.md)
 - [Signed policy bundles](../control-plane/policy-bundles.md)
 - [ASK approvals](../adr/006-ask-approvals.md)

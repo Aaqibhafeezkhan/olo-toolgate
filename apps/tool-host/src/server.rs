@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Gateway dispatch (plan.md §11.3). `POST /v1/dispatch` takes a `Dispatch` and answers NDJSON:
+//! Gateway dispatch (platform-requirements.md §11.3). `POST /v1/dispatch` takes a `Dispatch` and answers NDJSON:
 //! one `AdmissionResponse` line, definitive, and after `ADMITTED` one `ResultMessage` line. The
 //! tool starts only after the admission line is written. `GET /v1/health` reports readiness.
 //!

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This is the normative authoring contract for the ToolGate Tool SDK. Every SDK, in every language and in both runtime modes, **must** implement exactly what these files say. The design rationale is in [plan.md](../../docs/sdk-plan/plan.md); where wording differs, these files win for the SDK.
+This is the normative authoring contract for the ToolGate Tool SDK. Every SDK, in every language and in both runtime modes, **must** implement exactly what these files say. The design rationale is in [platform-requirements.md](../../docs/contracts/platform-requirements.md); where wording differs, these files win for the SDK.
 
 ## Rules
 

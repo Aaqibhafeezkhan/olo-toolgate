@@ -38,7 +38,7 @@ paths:
   /api/control/v1/packages/{packageId}/versions/{version}/review:
     get:
       operationId: getPackageReview
-      description: Requires toolgate-admin. API-compatibility diff, security delta and the binding draft (plan.md §8.3).
+      description: Requires toolgate-admin. API-compatibility diff, security delta and the binding draft (platform-requirements.md §8.3).
       parameters:
       - name: packageId
         in: path
@@ -152,7 +152,7 @@ paths:
     put:
       operationId: updateDeploymentBinding
       description: Requires toolgate-admin. Creates a new binding revision. Values above a higher layer are rejected naming
-        the limiting layer (plan.md §8.5).
+        the limiting layer (platform-requirements.md §8.5).
       parameters:
       - name: bindingId
         in: path
@@ -266,7 +266,7 @@ paths:
       security:
       - workloadCertificate: []
       description: Extends the existing endpoint to Tool Host identities and v2 permits. Moves the invocation RESERVED to
-        EXECUTING once and returns the fencing token (plan.md §11.3, §12.8). The served v1 body stays accepted.
+        EXECUTING once and returns the fencing token (platform-requirements.md §11.3, §12.8). The served v1 body stays accepted.
       requestBody:
         required: true
         content:
@@ -485,7 +485,7 @@ paths:
       operationId: createBreakGlassKill
       security:
       - operatorCertificate: []
-      description: 'Emergency path: 2-of-3 operator signatures, no maker/checker review, adds kills only, always audited (plan.md
+      description: 'Emergency path: 2-of-3 operator signatures, no maker/checker review, adds kills only, always audited (platform-requirements.md
         §15.4).'
       parameters:
       - *id004

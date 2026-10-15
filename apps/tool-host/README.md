@@ -5,7 +5,7 @@
 
 ## Responsibility
 
-The Tool Host runs server tools (plan.md §11, §13.1). It admits a dispatch only with a permit Control signed for this host, claims the permit with Control, and runs the tool from the exact package, service profile and globals the permit pins. The tool reaches the network only through the host's broker, which builds every upstream request from the approved service profile and adds credentials itself.
+The Tool Host runs server tools (platform-requirements.md §11, §13.1). It admits a dispatch only with a permit Control signed for this host, claims the permit with Control, and runs the tool from the exact package, service profile and globals the permit pins. The tool reaches the network only through the host's broker, which builds every upstream request from the approved service profile and adds credentials itself.
 
 ```text
 Gateway ── POST /v1/dispatch {permit, arguments} ──▶ Tool Host
@@ -44,7 +44,7 @@ One JSON file, refused at startup if anything is wrong.
 | `control` | `{url, clientCertificatePath?, clientKeyPath?, caCertificatePath?, developmentLoopbackHttp?}`. `url` is https, or http to loopback with `developmentLoopbackHttp`. The certificate and key are the host's workload identity; leave them out with `enrollment`. |
 | `enrollment` | `{identityDir, poolId?}`: enroll with Control as a device and fetch assignments (below). `identityDir` holds the device key, its certificate and the check-in sequence. |
 | `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). A bare name is looked up on the host's `PATH` at startup, because tool processes start with an empty environment. |
-| `limits` | `maxConcurrent`, `maxInputBytes`, `maxOutputBytes`, `syncDeadlineMs`, `memoryBytes`, `maxPermitWindowMs`. Each may only be lowered below the platform ceiling (plan.md §13.5). |
+| `limits` | `maxConcurrent`, `maxInputBytes`, `maxOutputBytes`, `syncDeadlineMs`, `memoryBytes`, `maxPermitWindowMs`. Each may only be lowered below the platform ceiling (platform-requirements.md §13.5). |
 | `developmentLoopbackHttp` | Lets the broker send plain http to loopback destinations. For development and tests only. |
 
 ## Dispatch
@@ -145,5 +145,5 @@ Control takes these only from a registered Tool Host whose device id is the perm
 
 - Kill pushes, and the mTLS dispatch listener for Gateways on other machines (pull mode covers hosts the Gateway cannot reach).
 - A result outbox: a report Control does not take is logged, not retried.
-- Sandbox isolation beyond a clean environment and its own directory: the network namespace, firewall and container tiers of plan.md §11.5 and §11.6.
+- Sandbox isolation beyond a clean environment and its own directory: the network namespace, firewall and container tiers of platform-requirements.md §11.5 and §11.6.
 - Tunnel destinations, TCP, OAuth 2.0, token exchange and connection auth, streaming routes.

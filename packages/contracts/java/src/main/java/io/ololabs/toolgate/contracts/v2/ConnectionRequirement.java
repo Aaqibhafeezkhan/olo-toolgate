@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** SaaS connection the package needs (plan.md §14.3).
+/** SaaS connection the package needs (platform-requirements.md §14.3).
  *
  * @param id canonical id value
  * @param provider canonical provider value

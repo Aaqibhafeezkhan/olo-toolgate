@@ -1,92 +1,32 @@
-# OLO ToolGate Documentation
+# ToolGate documentation
 
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding.
+Choose the guide for the task you are doing. Current operating instructions live
+with their component; unfinished features live in the [planning backlog](planning/README.md).
 
-See [Device registry and tool-call controls](control-plane/device-registry.md).
+| Audience | Start here | Continue with |
+|---|---|---|
+| Users evaluating ToolGate | [Quickstart](getting-started/one-minute-quickstart.md) | [First login](getting-started/first-login.md), [first tool](getting-started/first-tool.md) |
+| Tool authors | [Tool SDK guide](../TOOL-SDK-GUIDE.md) | [Java SDK](../tool-sdk/java-sdk/README.md), [CLI](../tool-sdk/cli/README.md), [examples](../examples/README.md) |
+| Contributors | [Contributing](../CONTRIBUTING.md) | [Development](development/README.md), [testing](testing/README.md) |
+| Enterprise evaluators | [Scope and readiness](enterprise-access-control/README.md) | [Security](security/README.md), [implementation evidence](enterprise-access-control/implementation-status.md) |
+| Operators | [Deployment](deployment/README.md) | [Operations](operations/README.md), [recovery](enterprise-access-control/operations.md) |
 
-**Repository:** `https://github.com/olo-labs/olo-toolgate`
+## Component guides
 
-OLO ToolGate is a self-hosted platform to **build, distribute, authorize, and govern AI tools across users, agents, devices, and resources**.
+- [Architecture and trust boundaries](architecture/README.md)
+- [Gateway](gateway/README.md)
+- [Control Plane and console](control-plane/README.md)
+- [Endpoint clients](client/README.md)
+- [Tool Host](../apps/tool-host/README.md)
+- [Tool SDK and specification](../tool-sdk/README.md)
+- [APIs and contracts](api/README.md)
+- [Marketplace status](marketplace/README.md)
 
-This documentation is designed for two goals:
+## Project references
 
-1. **A new user can run ToolGate in about one minute.**
-2. **A new contributor can understand where to work in about one minute.**
-
-## Start Here
-
-- [Run and configure the implemented system](operations/execution-guide.md)
-- [Debug local and production execution](operations/debugging.md)
-
-### I just want to run it
-
-Read:
-
-- [`getting-started/one-minute-quickstart.md`](getting-started/one-minute-quickstart.md)
-- [`getting-started/first-login.md`](getting-started/first-login.md)
-- [`getting-started/first-tool.md`](getting-started/first-tool.md)
-
-### I want to contribute
-
-Read:
-
-- [`getting-started/contributor-60-seconds.md`](getting-started/contributor-60-seconds.md)
-- [`development/local-development.md`](development/local-development.md)
-- [`architecture/component-map.md`](architecture/component-map.md)
-
-### I want to understand the architecture
-
-Read:
-
-- [`architecture/overview.md`](architecture/overview.md)
-- [`architecture/trust-boundaries.md`](architecture/trust-boundaries.md)
-- [`architecture/data-flows.md`](architecture/data-flows.md)
-
-### I want to build one component
-
-- Gateway: [`gateway/README.md`](gateway/README.md)
-- Control Plane: [`control-plane/README.md`](control-plane/README.md)
-- Endpoint Client: [`client/README.md`](client/README.md)
-- Marketplace: [`marketplace/README.md`](marketplace/README.md)
-
-### I want the full original specifications
-
-- [`reference/architecture-master.md`](reference/architecture-master.md)
-- [`reference/marketplace-api-master.md`](reference/marketplace-api-master.md)
-
-## Product Artifacts
-
-Customer/runtime releases:
-
-```text
-olo-toolgate-quickstart
-olo-toolgate-gateway
-olo-toolgate-control
-olo-toolgate-client
-```
-
-Public Marketplace infrastructure:
-
-```text
-marketplace-drupal
-marketplace-api
-marketplace-worker
-```
-
-## Core Authorization Model
-
-```text
-User + Team + Agent + Device + Tool + Action + Arguments + Resource + Context
-                                      |
-                                      v
-                              ALLOW / ASK / BLOCK
-```
-
-## Documentation Rule
-
-Keep files short and focused. If a document grows beyond what a contributor can scan quickly, split it and link the parts from the section README.
-
-## Shared Contracts
-
-- [`architecture/shared-contracts.md`](architecture/shared-contracts.md)
-- [`development/contracts-release.md`](development/contracts-release.md)
+- [Repository layout](architecture/monorepo-layout.md)
+- [Architecture decisions](adr/README.md)
+- [Release process](development/release-process.md)
+- [Documentation contributions](contributors/documentation-guide.md)
+- [Glossary](GLOSSARY.md)
+- [Pending and planned features](planning/README.md)

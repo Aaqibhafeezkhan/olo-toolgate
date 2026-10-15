@@ -5,7 +5,7 @@
   "title": "Sandbox and supervisor isolation",
   "sources": [
     "docs/security/threat-models/tool-host.md §4.2",
-    "plan.md §11.5, §13.4, §13.5",
+    "platform-requirements.md §11.5, §13.4, §13.5",
     "ADR 009"
   ],
   "cases": [
@@ -32,7 +32,7 @@
       "title": "A tool allowed only OCI_SANDBOX never falls back to another tier",
       "requirements": [
         "T-SB-1",
-        "plan.md §13.4"
+        "platform-requirements.md §13.4"
       ],
       "level": "component",
       "targets": [
@@ -50,7 +50,7 @@
       "title": "A reused sandbox carries nothing between invocations",
       "requirements": [
         "T-SB-2",
-        "plan.md §11.5"
+        "platform-requirements.md §11.5"
       ],
       "level": "integration",
       "targets": [
@@ -104,7 +104,7 @@
       "title": "Oversized frames and outputs are cut off at the caps",
       "requirements": [
         "T-SB-4",
-        "plan.md §13.5"
+        "platform-requirements.md §13.5"
       ],
       "level": "component",
       "targets": [

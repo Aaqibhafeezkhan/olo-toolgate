@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Dispatch to Tool Hosts (plan.md §11.3). Control places every call on a device; when that
+//! Dispatch to Tool Hosts (platform-requirements.md §11.3). Control places every call on a device; when that
 //! device is a Tool Host named here, the Gateway gets a permit for it from Control and posts a
 //! `Dispatch`. The host answers NDJSON: one `AdmissionResponse` line, then after `ADMITTED` one
 //! `ResultMessage` line. The permit, not this Gateway, is what lets the host run the tool.

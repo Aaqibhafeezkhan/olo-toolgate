@@ -4,7 +4,7 @@
   "area": "kill-delivery",
   "title": "Kill delivery and break-glass propagation",
   "sources": [
-    "plan.md §15",
+    "platform-requirements.md §15",
     "ADR 017"
   ],
   "cases": [
@@ -12,7 +12,7 @@
       "id": "kill/terminate-running",
       "title": "TERMINATE stops running work everywhere",
       "requirements": [
-        "plan.md §15.5",
+        "platform-requirements.md §15.5",
         "T-AD-5"
       ],
       "level": "integration",
@@ -35,7 +35,7 @@
       "id": "kill/stop-new",
       "title": "STOP_NEW hides and refuses new work",
       "requirements": [
-        "plan.md §15.5"
+        "platform-requirements.md §15.5"
       ],
       "level": "integration",
       "targets": [
@@ -53,7 +53,7 @@
       "id": "kill/partitioned-host",
       "title": "A partitioned host cannot start new work",
       "requirements": [
-        "plan.md §15.5",
+        "platform-requirements.md §15.5",
         "T-AD-5"
       ],
       "level": "integration",
@@ -73,8 +73,8 @@
       "id": "kill/breakglass-control-down",
       "title": "Break-glass and Control down",
       "requirements": [
-        "plan.md §15.4",
-        "plan.md §21 integration"
+        "platform-requirements.md §15.4",
+        "platform-requirements.md §21 integration"
       ],
       "level": "integration",
       "targets": [
@@ -111,7 +111,7 @@
       "id": "kill/fencing",
       "title": "A kill invalidates the fencing token on every check",
       "requirements": [
-        "plan.md §15.2"
+        "platform-requirements.md §15.2"
       ],
       "level": "integration",
       "targets": [
@@ -144,7 +144,7 @@
       "id": "kill/suspended-lifecycle",
       "title": "A kill suspends the package version",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [

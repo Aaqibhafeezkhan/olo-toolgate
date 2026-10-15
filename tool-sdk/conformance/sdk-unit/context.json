@@ -5,7 +5,7 @@
   "title": "ToolContext accessors",
   "sources": [
     "tool-sdk/spec/authoring/README.md §8",
-    "plan.md §5.3"
+    "platform-requirements.md §5.3"
   ],
   "cases": [
     {
@@ -200,7 +200,7 @@
       "requirements": [
         "java.md",
         "dotnet.md",
-        "plan.md §5.2"
+        "platform-requirements.md §5.2"
       ],
       "level": "unit",
       "targets": [

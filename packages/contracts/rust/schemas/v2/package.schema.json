@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Tool package manifest v2",
-  "description": "toolgate-package.json in a .tgpkg (plan.md §7). Credential values are forbidden.",
+  "description": "toolgate-package.json in a .tgpkg (platform-requirements.md §7). Credential values are forbidden.",
   "$ref": "#/$defs/PackageManifest",
   "$defs": {
     "PackageKind": {
@@ -162,7 +162,7 @@
     },
     "ToolLimits": {
       "type": "object",
-      "description": "Tool resource requests; each at most the platform ceiling (plan.md §13.5).",
+      "description": "Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5).",
       "additionalProperties": false,
       "properties": {
         "memoryBytes": {
@@ -313,7 +313,7 @@
     },
     "ConnectionRequirement": {
       "type": "object",
-      "description": "SaaS connection the package needs (plan.md §14.3).",
+      "description": "SaaS connection the package needs (platform-requirements.md §14.3).",
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -474,7 +474,7 @@
         "REJECTED",
         "SUSPENDED"
       ],
-      "description": "Package version lifecycle state (plan.md §8.4)."
+      "description": "Package version lifecycle state (platform-requirements.md §8.4)."
     },
     "ApiChange": {
       "type": "string",
@@ -484,7 +484,7 @@
         "MINOR",
         "MAJOR"
       ],
-      "description": "Minimum SemVer bump the API diff requires (plan.md §8.3)."
+      "description": "Minimum SemVer bump the API diff requires (platform-requirements.md §8.3)."
     },
     "SecurityDeltaKind": {
       "type": "string",
@@ -503,7 +503,7 @@
         "BUSINESS_KEY_NAMESPACE",
         "UNCLASSIFIED"
       ],
-      "description": "Security delta item kind (plan.md §8.3)."
+      "description": "Security delta item kind (platform-requirements.md §8.3)."
     },
     "SecurityDeltaItem": {
       "type": "object",

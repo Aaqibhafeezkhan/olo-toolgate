@@ -4,7 +4,7 @@
   "area": "legacy",
   "title": "Legacy MCP versions",
   "sources": [
-    "plan.md §10.2",
+    "platform-requirements.md §10.2",
     "ADR 018 (amended in M1)"
   ],
   "cases": [
@@ -12,7 +12,7 @@
       "id": "legacy/2025-11-25-flow",
       "title": "The 2025-11-25 flow works in a standalone SDK runtime",
       "requirements": [
-        "plan.md §10.2"
+        "platform-requirements.md §10.2"
       ],
       "level": "component",
       "targets": [
@@ -32,7 +32,7 @@
       "id": "legacy/2025-06-18-flow",
       "title": "The 2025-06-18 flow works in a standalone SDK runtime",
       "requirements": [
-        "plan.md §10.2"
+        "platform-requirements.md §10.2"
       ],
       "level": "component",
       "targets": [
@@ -87,7 +87,7 @@
       "id": "legacy/stdio-era-lock",
       "title": "A stdio connection locks to the first version",
       "requirements": [
-        "plan.md §5.10",
+        "platform-requirements.md §5.10",
         "tool-sdk/spec/sdk-compat/2026-10-10/results.md gap 8"
       ],
       "level": "component",

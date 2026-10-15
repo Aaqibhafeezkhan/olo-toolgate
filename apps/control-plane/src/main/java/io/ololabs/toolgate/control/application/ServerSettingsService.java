@@ -13,7 +13,7 @@ import io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch;
 import io.ololabs.toolgate.contracts.v2.DeviceApproval;
 import io.ololabs.toolgate.contracts.v2.GatewaySettings;
 
-/** Tenant control-plane settings (formatVersion 2, plan.md §18), Super Admin only. Auto-approval is off until an administrator,
+/** Tenant control-plane settings (formatVersion 2, platform-requirements.md §18), Super Admin only. Auto-approval is off until an administrator,
  *  an imported snapshot or the startup environment enables it. Client check-in is env-owned: always the running policy, never stored or imported.
  *  A change of configuration.requiredReviews needs the reviews of the threshold in force, with no Super Admin bypass. */
 public final class ServerSettingsService {

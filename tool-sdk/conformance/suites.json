@@ -1,6 +1,6 @@
 {
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
-  "source": "docs/sdk-plan/plan.md §21",
+  "source": "docs/contracts/platform-requirements.md §21",
   "suites": [
     {
       "id": "contract-descriptor",

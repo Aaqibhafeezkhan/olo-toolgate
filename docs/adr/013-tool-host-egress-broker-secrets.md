@@ -5,7 +5,7 @@
 
 ## Context
 
-Server tools (SDK, `OPENAPI`, `MCP_PROXY` and `CONTAINER` packages, ADR [014](014-tool-package-format-v2.md)) need an execution path outside the endpoint client. The path must run untrusted package code, reach upstream services with tenant credentials, and keep today's invariant: every effect needs current Control authority, and there is no offline ALLOW (plan.md §11).
+Server tools (SDK, `OPENAPI`, `MCP_PROXY` and `CONTAINER` packages, ADR [014](014-tool-package-format-v2.md)) need an execution path outside the endpoint client. The path must run untrusted package code, reach upstream services with tenant credentials, and keep today's invariant: every effect needs current Control authority, and there is no offline ALLOW (platform-requirements.md §11).
 
 ADR 006 had the Gateway sign execution permits with its own private key. The enterprise cutover since moved permit signing into Control (`RsaEffectSigner`, `typ: toolgate-effect-permit+jws`), and the Gateway evaluates no policy. Plan revision 10 (decision A) keeps it that way for server tools.
 
@@ -13,7 +13,7 @@ The [Tool Host threat model](../security/threat-models/tool-host.md) lists the t
 
 ## Decision
 
-1. **Tool Host.** `apps/tool-host` is a stateless Rust supervisor, horizontally scaled, registered as system executor `TOOL_HOST`. Admins group hosts into per-tenant pools (Device Groups). A host runs the SDK harness, `OPENAPI`, `MCP_PROXY` and `CONTAINER` executors, and admits work as in plan.md §11.3. It has **no database role**: every state change goes through Control ([invocation-state-v2.md](../control-plane/invocation-state-v2.md) §3).
+1. **Tool Host.** `apps/tool-host` is a stateless Rust supervisor, horizontally scaled, registered as system executor `TOOL_HOST`. Admins group hosts into per-tenant pools (Device Groups). A host runs the SDK harness, `OPENAPI`, `MCP_PROXY` and `CONTAINER` executors, and admits work as in platform-requirements.md §11.3. It has **no database role**: every state change goes through Control ([invocation-state-v2.md](../control-plane/invocation-state-v2.md) §3).
 2. **Control signs permits.**
    - Permits are compact JWS RS256 with protected header `{alg, typ: "toolgate-invocation-permit+jws", kid}` over `InvocationPermitClaims` (`permit.schema.json`).
    - They are signed in Control's existing **effect-signing key domain** (`toolgate.control.effect.*`, the key behind `RsaEffectSigner`). Verifiers distinguish v2 permits from enterprise v1 permits by `typ`.
@@ -28,21 +28,21 @@ The [Tool Host threat model](../security/threat-models/tool-host.md) lists the t
    - The Tool Host accepts dispatch only from the Gateway SAN pattern.
 4. **Sandbox and isolation.**
    - `OCI_SANDBOX` (the ADR [009](009-managed-local-runtime-sandbox.md) boundary) is the release-1 tier for server tools, and there is never a fallback to a weaker tier.
-   - Sandboxes are single-use by default. Reuse is opt-in for `stateless` tools only, within one tenant and identity class (plan.md §11.5).
+   - Sandboxes are single-use by default. Reuse is opt-in for `stateless` tools only, within one tenant and identity class (platform-requirements.md §11.5).
    - Pools are never shared across tenants.
-5. **Egress** (plan.md §11.6):
+5. **Egress** (platform-requirements.md §11.6):
    - one network namespace per sandbox, whose only routes reach its own listeners;
    - a host firewall that drops raw DNS, other UDP, QUIC and ICMP;
    - two exclusive modes per approved destination. **Brokered** means the broker does TLS and injects credentials. **Tunnel** means CONNECT, the sandbox does TLS end to end, and the SNI must equal the CONNECT host;
    - address checks at connect time and on every redirect;
    - broker and proxy in their own namespace, which can't reach the platform.
-6. **Broker request channel** (plan.md §11.8):
+6. **Broker request channel** (platform-requirements.md §11.8):
    - a per-sandbox Unix socket and a MAC'd capability bound to the invocation, fencing token, sandbox, service profile and expiry;
    - the sandbox selects a route id and never sends a URL;
    - the broker loads the service profile by the permit's digest, strips client auth headers and injects credentials last;
    - it never retries for `NON_IDEMPOTENT` or `UNKNOWN` tools;
    - every decision is audited without bodies or credentials.
-7. **Transport matrix** (plan.md §11.9): release 1 supports brokered HTTP(S), HTTP(S) through a CONNECT tunnel, and TCP through a CONNECT tunnel to an approved `(host, port)`. Everything else is **unavailable**, and the packager or enable step says so. Brokered database adapters, gRPC routes and client egress are deferred to a later ADR.
+7. **Transport matrix** (platform-requirements.md §11.9): release 1 supports brokered HTTP(S), HTTP(S) through a CONNECT tunnel, and TCP through a CONNECT tunnel to an approved `(host, port)`. Everything else is **unavailable**, and the packager or enable step says so. Brokered database adapters, gRPC routes and client egress are deferred to a later ADR.
 8. **Secrets.**
    - `ToolInput` carries handles bound by Control to `(tenant, invocation, name, tool group, pool)`.
    - Handles are redeemed through the extended `POST access/secrets/deliver` with the Tool Host certificate and the fencing token, under the same `EXECUTING` and grant checks devices get today.
@@ -53,12 +53,12 @@ The [Tool Host threat model](../security/threat-models/tool-host.md) lists the t
    - **Where it comes from:** for an ASK outcome to an MRTR client, Control returns `requestState` in `InvocationAdmission`. The Gateway returns it unchanged in the retry's `InvocationSubmission.requestState`, and Control verifies it in the transaction that consumes the approval.
    - **Format:** compact JWS HS256 under a dedicated Control key (`toolgate.control.request-state.key`, at least 256 bits, with `kid`, current plus previous). The payload is `{toolId, argumentsDigest, ownerDigest, approvalId, exp, nonce}`, with `exp` at most the approval's expiry and at most 10 minutes. The nonce is single-use.
    - **Who holds keys:** the Gateway holds no signing or MAC key of any kind. Standalone SDK runtimes keep their per-process key (adapter A3, `tool-sdk/spec/protocol-layer.md`).
-   - **Supersedes:** this replaces plan.md §5.10's "Gateway key in governed mode", which contradicted decision 2.
+   - **Supersedes:** this replaces platform-requirements.md §5.10's "Gateway key in governed mode", which contradicted decision 2.
 
 ## Alternatives Considered
 
 - **Gateway signs permits (ADR 006 as written).** Rejected: a compromised Gateway replica would hold execution authority. With Control signing, the Gateway holds nothing that authorises an effect.
-- **Tool Host with a database role.** Rejected (plan.md §12.8): it would bypass Control's invariants and tenant lock.
+- **Tool Host with a database role.** Rejected (platform-requirements.md §12.8): it would bypass Control's invariants and tenant lock.
 - **Device enrollment CA for Tool Hosts.** Rejected: a stolen device certificate must never act as a server executor, and server identities come from the platform's workload CA, not from browser enrollment.
 - **Transparent egress interception.** Rejected: an interception CA in every sandbox, and no guarantee for clients that pin certificates. Explicit brokered and tunnel modes are auditable and honest about what is inspected.
 - **A new kill or permit key per feature.** Rejected for permits: the effect domain already exists, is rotated, and `typ` separates the formats. A new domain is used only for `requestState` (symmetric) and break-glass operators (ADR [017](017-kill-switch.md)), where reuse would mix purposes.
@@ -73,7 +73,7 @@ The [Tool Host threat model](../security/threat-models/tool-host.md) lists the t
 
 ## Operational Impact
 
-Operators deploy Tool Host pools, a workload CA (cert-manager or SPIFFE), and NetworkPolicy for the broker and proxy. Control must be sized for 2–3 round trips per server-tool call, as today's calls make (plan.md §12.8). New configuration: the workload CA pin, the effect key `kid` set, and the `requestState` key. Startup fails if the `requestState` key equals any other configured key.
+Operators deploy Tool Host pools, a workload CA (cert-manager or SPIFFE), and NetworkPolicy for the broker and proxy. Control must be sized for 2–3 round trips per server-tool call, as today's calls make (platform-requirements.md §12.8). New configuration: the workload CA pin, the effect key `kid` set, and the `requestState` key. Startup fails if the `requestState` key equals any other configured key.
 
 ## Compatibility Impact
 
@@ -92,4 +92,4 @@ Additive. Enterprise v1 permits (`toolgate-effect-permit+jws`) and device flows 
 - Admission cases: forged permit, wrong `aud`, replay on the same and another host, argument and digest swaps.
 - Egress and broker cases: no route, UDP dropped, tunnel to a brokered destination, SNI mismatch, rebinding, redirect out, path traversal, auth header refused, credential echo filtered.
 - Identity and secret cases: device as host, SAN mismatch, disabled host, redemption after a terminal state or from another host, handle replay.
-- `requestState` cases: tampering, expiry, another identity, other arguments, replay (plan.md §21).
+- `requestState` cases: tampering, expiry, another identity, other arguments, replay (platform-requirements.md §21).

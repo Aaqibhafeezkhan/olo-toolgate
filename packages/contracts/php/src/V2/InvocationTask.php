@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** Task fields added to a Control invocation when a task record exists (plan.md §12.1). */
+/** Task fields added to a Control invocation when a task record exists (platform-requirements.md §12.1). */
 final readonly class InvocationTask implements \JsonSerializable {
     public function __construct(
         public string $taskId,

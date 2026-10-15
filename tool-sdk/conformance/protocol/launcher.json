@@ -4,15 +4,15 @@
   "area": "launcher",
   "title": "Launcher and protocol-range handshake",
   "sources": [
-    "plan.md §5.6",
-    "plan.md §7.4"
+    "platform-requirements.md §5.6",
+    "platform-requirements.md §7.4"
   ],
   "cases": [
     {
       "id": "launcher/range-check-at-enable",
       "title": "Enable rejects non-overlapping protocol ranges",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "component",
       "targets": [
@@ -45,7 +45,7 @@
       "id": "launcher/digest-reverify",
       "title": "The launcher re-verifies the artifact digest",
       "requirements": [
-        "plan.md §7.4"
+        "platform-requirements.md §7.4"
       ],
       "level": "component",
       "targets": [
@@ -61,7 +61,7 @@
       "id": "launcher/clean-environment",
       "title": "The entry point starts with a cleared environment and fixed argv",
       "requirements": [
-        "plan.md §7.4"
+        "platform-requirements.md §7.4"
       ],
       "level": "component",
       "targets": [
@@ -77,7 +77,7 @@
       "id": "launcher/pass-through",
       "title": "Frames pass through unchanged",
       "requirements": [
-        "plan.md §7.4"
+        "platform-requirements.md §7.4"
       ],
       "level": "component",
       "targets": [
@@ -93,7 +93,7 @@
       "id": "launcher/frame-size-deadline",
       "title": "The launcher enforces frame size and deadline",
       "requirements": [
-        "plan.md §7.4"
+        "platform-requirements.md §7.4"
       ],
       "level": "component",
       "targets": [
@@ -109,7 +109,7 @@
       "id": "launcher/oldest-supported",
       "title": "New packages run on the oldest supported host and client",
       "requirements": [
-        "plan.md §21 protocol"
+        "platform-requirements.md §21 protocol"
       ],
       "level": "integration",
       "targets": [
@@ -127,7 +127,7 @@
       "id": "launcher/container-launcher",
       "title": "CONTAINER packages include a compatible launcher or speak v2",
       "requirements": [
-        "plan.md §7.4"
+        "platform-requirements.md §7.4"
       ],
       "level": "component",
       "targets": [

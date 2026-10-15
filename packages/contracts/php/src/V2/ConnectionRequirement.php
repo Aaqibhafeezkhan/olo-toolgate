@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** SaaS connection the package needs (plan.md §14.3). */
+/** SaaS connection the package needs (platform-requirements.md §14.3). */
 final readonly class ConnectionRequirement implements \JsonSerializable {
     public function __construct(
         public string $id,

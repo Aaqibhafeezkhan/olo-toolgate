@@ -3,7 +3,7 @@
 
 ## Purpose
 
-These `.tgpkg` files exercise the archive rules of plan.md §7.6, used by `contract-descriptor/packages.json`. `valid.tgpkg` must be accepted at every hop, and every other file must be rejected. [`expected.json`](expected.json) lists each file's expected result, and the package digest of `valid.tgpkg`.
+These `.tgpkg` files exercise the archive rules of platform-requirements.md §7.6, used by `contract-descriptor/packages.json`. `valid.tgpkg` must be accepted at every hop, and every other file must be rejected. [`expected.json`](expected.json) lists each file's expected result, and the package digest of `valid.tgpkg`.
 
 ## Regenerating
 

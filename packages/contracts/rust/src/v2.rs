@@ -240,7 +240,7 @@ pub enum ConfigLayer {
 pub struct ConfigurationSettings {
     pub required_reviews: u64,
 }
-/// SaaS connection the package needs (plan.md §14.3).
+/// SaaS connection the package needs (platform-requirements.md §14.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConnectionRequirement {
@@ -610,7 +610,7 @@ pub struct InvocationSubmission {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_state: Option<String>,
 }
-/// Task fields added to a Control invocation when a task record exists (plan.md §12.1).
+/// Task fields added to a Control invocation when a task record exists (platform-requirements.md §12.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InvocationTask {
@@ -1683,7 +1683,7 @@ pub enum ToolKind {
     #[serde(rename = "CLIENT")]
     Client,
 }
-/// Tool resource requests; each at most the platform ceiling (plan.md §13.5).
+/// Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ToolLimits {

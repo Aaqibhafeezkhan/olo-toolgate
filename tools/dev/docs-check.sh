@@ -7,11 +7,10 @@ required="
 README.md
 CONTRIBUTING.md
 ARCHITECTURE.md
-VISION.md
-ROADMAP.md
 SECURITY.md
 docs/README.md
-docs/INDEX.md
+docs/planning/README.md
+docs/enterprise-access-control/README.md
 docs/architecture/overview.md
 docs/control-plane/device-registry.md
 docs/security/security-invariants.md

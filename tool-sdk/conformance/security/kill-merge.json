@@ -4,7 +4,7 @@
   "area": "kill-merge",
   "title": "Kill event merge and break-glass",
   "sources": [
-    "plan.md §15",
+    "platform-requirements.md §15",
     "ADR 017",
     "docs/control-plane/kill-switch.md"
   ],
@@ -13,7 +13,7 @@
       "id": "kill-merge/older-snapshot",
       "title": "An older snapshot never removes a kill",
       "requirements": [
-        "plan.md §15.1",
+        "platform-requirements.md §15.1",
         "§21 security"
       ],
       "level": "component",

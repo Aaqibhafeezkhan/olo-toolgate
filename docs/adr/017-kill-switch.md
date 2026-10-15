@@ -5,7 +5,7 @@
 
 ## Context
 
-A malicious or broken package, publisher, runtime image or pool must be stoppable at once, across Gateways, Tool Hosts and clients, including work already running (plan.md §15). Earlier plan revisions gave the Gateway a freshness grace and its own break-glass list. Since every new invocation needs Control (a decision, a permit, and nonce consumption), a kill recorded in Control is effective for all new work as soon as it commits. Only work already running needs delivery.
+A malicious or broken package, publisher, runtime image or pool must be stoppable at once, across Gateways, Tool Hosts and clients, including work already running (platform-requirements.md §15). Earlier plan revisions gave the Gateway a freshness grace and its own break-glass list. Since every new invocation needs Control (a decision, a permit, and nonce consumption), a kill recorded in Control is effective for all new work as soon as it commits. Only work already running needs delivery.
 
 Control already has the pieces this needs: an authorization epoch, bumped on every directory revision with an outbox row; epoch checks on reserve, consume, secret delivery and effect report; and a signed fleet document domain that endpoint clients pin.
 
@@ -29,7 +29,7 @@ Control already has the pieces this needs: an authorization epoch, bumped on eve
 ## Alternatives Considered
 
 - **A single mutable kill list or sequence.** Rejected: a lost or reordered update could remove a kill. Grow-only events with supersession make replays harmless.
-- **A Gateway-side kill list with a freshness grace.** Rejected (plan.md §15.3): it can go stale, and Control already gates every start.
+- **A Gateway-side kill list with a freshness grace.** Rejected (platform-requirements.md §15.3): it can go stale, and Control already gates every start.
 - **Break-glass that can also lift kills.** Rejected: emergency access must only reduce what runs.
 - **A new signing key for kill events.** Rejected: clients already pin the fleet key, and `typ` separation stops cross-use. Break-glass operator keys are new, because they authenticate people, not Control.
 

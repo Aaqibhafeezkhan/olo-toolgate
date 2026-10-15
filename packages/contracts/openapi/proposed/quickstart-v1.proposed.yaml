@@ -13,7 +13,7 @@ paths:
   /api/quickstart/v1/packages:
     post:
       operationId: uploadQuickstartPackage
-      description: Uploads a .tgpkg and auto-enables it for the uploading admin's own agents and devices (plan.md §8.1). Every
+      description: Uploads a .tgpkg and auto-enables it for the uploading admin's own agents and devices (platform-requirements.md §8.1). Every
         call still goes through policy, ASK, permits and audit.
       requestBody:
         required: true

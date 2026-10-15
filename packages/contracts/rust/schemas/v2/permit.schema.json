@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/permit.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Invocation permit v2",
-  "description": "Control-issued, single-use, audience-bound permit for one attempt on one Tool Host or device (plan.md §11.2).",
+  "description": "Control-issued, single-use, audience-bound permit for one attempt on one Tool Host or device (platform-requirements.md §11.2).",
   "$ref": "#/$defs/InvocationPermitClaims",
   "$defs": {
     "PermitHeader": {

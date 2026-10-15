@@ -5,8 +5,8 @@
   "title": "Cross-SDK descriptor fixtures and digests",
   "sources": [
     "tool-sdk/spec/descriptor/README.md",
-    "plan.md §7.2",
-    "plan.md §21"
+    "platform-requirements.md §7.2",
+    "platform-requirements.md §21"
   ],
   "cases": [
     {
@@ -14,7 +14,7 @@
       "title": "Each SDK reproduces the vector canonical bytes",
       "requirements": [
         "descriptor/README.md §3",
-        "plan.md §21"
+        "platform-requirements.md §21"
       ],
       "level": "unit",
       "targets": [
@@ -70,7 +70,7 @@
       "id": "descriptors/equivalence",
       "title": "The closed rewrite set decides equivalence",
       "requirements": [
-        "plan.md §5.6",
+        "platform-requirements.md §5.6",
         "descriptor/README.md §4"
       ],
       "level": "unit",
@@ -95,8 +95,8 @@
       "id": "descriptors/excludes-deployment",
       "title": "The descriptor digest excludes deployment and runtime values",
       "requirements": [
-        "plan.md §7.2",
-        "plan.md §21"
+        "platform-requirements.md §7.2",
+        "platform-requirements.md §21"
       ],
       "level": "unit",
       "targets": [
@@ -117,7 +117,7 @@
       "id": "descriptors/includes-semantics",
       "title": "Every semantic member changes the digest",
       "requirements": [
-        "plan.md §7.2"
+        "platform-requirements.md §7.2"
       ],
       "level": "unit",
       "targets": [
@@ -134,7 +134,7 @@
       "id": "descriptors/package-digest-exact-bytes",
       "title": "packageDigest is SHA-256 of the canonical CHECKSUMS bytes",
       "requirements": [
-        "plan.md §7.2"
+        "platform-requirements.md §7.2"
       ],
       "level": "unit",
       "targets": [
@@ -156,7 +156,7 @@
       "id": "descriptors/artifact-digest",
       "title": "artifactDigest covers one artifact's exact bytes",
       "requirements": [
-        "plan.md §7.2"
+        "platform-requirements.md §7.2"
       ],
       "level": "unit",
       "targets": [
@@ -173,7 +173,7 @@
       "id": "descriptors/reproducibility",
       "title": "Same inputs give identical bytes",
       "requirements": [
-        "plan.md §21 SDK descriptor tests"
+        "platform-requirements.md §21 SDK descriptor tests"
       ],
       "level": "component",
       "targets": [
@@ -194,8 +194,8 @@
       "id": "descriptors/upgrade-compatibility",
       "title": "Minor and patch SDK upgrades keep descriptors equivalent",
       "requirements": [
-        "plan.md §21 SDK descriptor tests",
-        "plan.md §5.6"
+        "platform-requirements.md §21 SDK descriptor tests",
+        "platform-requirements.md §5.6"
       ],
       "level": "component",
       "targets": [
@@ -215,8 +215,8 @@
       "id": "descriptors/generation-migration",
       "title": "Moving the generation pin gives a classified diff",
       "requirements": [
-        "plan.md §21 SDK descriptor tests",
-        "plan.md §5.6"
+        "platform-requirements.md §21 SDK descriptor tests",
+        "platform-requirements.md §5.6"
       ],
       "level": "component",
       "targets": [
@@ -258,7 +258,7 @@
       "id": "descriptors/mandatory-generation",
       "title": "A mandatory security generation refuses the old pin after its date",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "unit",
       "targets": [

@@ -1266,7 +1266,7 @@
         "clientCheckIn": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Env-owned Phase A client check-in (plan.md \u00a717.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
+          "description": "Env-owned Phase A client check-in (platform-requirements.md \u00a717.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
           "required": [
             "checkInMs",
             "jitterPct",

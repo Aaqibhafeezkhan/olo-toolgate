@@ -37,7 +37,7 @@ An offline or incorrectly configured client cannot produce a successful test.
 The service runs without an interactive login when its OS service and system OCI
 engine run at boot. Linux service execution is tested. Windows/macOS system engine
 lifetime across logout/boot and ARM execution remain uncertified; cross-built
-binaries do not establish that guarantee. Follow [runtime support](runtime-support.md).
+binaries do not establish that guarantee. Follow [runtime support](local-runtimes.md).
 
 ## Create, test, version and deploy
 

@@ -1,5 +1,9 @@
 # ADR 002: Stateless gateway with explicit static trust inputs
 
+> Historical decision. Runtime authority and permit-signing details are superseded
+> by [Control online authorization](../architecture/overview.md) and
+> [ADR 013](013-tool-host-egress-broker-secrets.md). This is not a current deployment guide.
+
 Date: 2026-10-02. Status: accepted for Module 01.
 
 The gateway must provide a safe authorization path before Control Plane bundle

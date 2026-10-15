@@ -54,4 +54,4 @@ There is no key to add a route, widen a path pattern or weaken an effect class.
 ## Related Docs
 
 - [Descriptor](descriptor/README.md)
-- plan.md §7.7
+- platform-requirements.md §7.7

@@ -108,7 +108,7 @@ export type ConfigLayer = "PLATFORM_CEILING" | "ENVIRONMENT" | "TENANT_POLICY" |
 export interface ConfigurationSettings {
   readonly requiredReviews: number;
 }
-/** SaaS connection the package needs (plan.md §14.3). */
+/** SaaS connection the package needs (platform-requirements.md §14.3). */
 export interface ConnectionRequirement {
   readonly id: string;
   readonly provider: string;
@@ -322,7 +322,7 @@ export interface InvocationSubmission {
   readonly tasks: TaskCapability;
   readonly requestState?: string;
 }
-/** Task fields added to a Control invocation when a task record exists (plan.md §12.1). */
+/** Task fields added to a Control invocation when a task record exists (platform-requirements.md §12.1). */
 export interface InvocationTask {
   readonly taskId: string;
   readonly state: TaskState;
@@ -880,7 +880,7 @@ export interface ToolInput {
   readonly fencingToken?: string;
 }
 export type ToolKind = "SERVER" | "CLIENT";
-/** Tool resource requests; each at most the platform ceiling (plan.md §13.5). */
+/** Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5). */
 export interface ToolLimits {
   readonly memoryBytes?: number;
   readonly maxInputBytes?: number;

@@ -13,7 +13,7 @@ paths:
   /mcp/agent/{agent}:
     post:
       operationId: mcpAgentScope
-      description: CatalogScope AGENT. The caller is the agent or holds an issuer-approved delegation for it (plan.md §9.4).
+      description: CatalogScope AGENT. The caller is the agent or holds an issuer-approved delegation for it (platform-requirements.md §9.4).
       parameters:
       - name: agent
         in: path
@@ -32,7 +32,7 @@ paths:
       - name: Idempotency-Key
         in: header
         required: false
-        description: Business key for tools that use one (plan.md §11.7)
+        description: Business key for tools that use one (platform-requirements.md §11.7)
         schema:
           type: string
           minLength: 1
@@ -90,7 +90,7 @@ paths:
       - name: Idempotency-Key
         in: header
         required: false
-        description: Business key for tools that use one (plan.md §11.7)
+        description: Business key for tools that use one (platform-requirements.md §11.7)
         schema:
           type: string
           minLength: 1
@@ -152,7 +152,7 @@ paths:
       - name: Idempotency-Key
         in: header
         required: false
-        description: Business key for tools that use one (plan.md §11.7)
+        description: Business key for tools that use one (platform-requirements.md §11.7)
         schema:
           type: string
           minLength: 1
@@ -202,7 +202,7 @@ components:
     bearer:
       type: http
       scheme: bearer
-      description: Static token (tg_ prefix), JWT access token (typ at+jwt) or introspected opaque token, classified per plan.md
+      description: Static token (tg_ prefix), JWT access token (typ at+jwt) or introspected opaque token, classified per platform-requirements.md
         §9.2
   responses:
     Error:

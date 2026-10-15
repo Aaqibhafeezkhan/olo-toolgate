@@ -111,7 +111,7 @@ final class Egress {
             String id = d.path("id").asText();
             if (tcpTargets.containsKey(id)) continue;
             if (config.mode == Config.Mode.GOVERNED) {
-                // TCP under a Tool Host goes through its CONNECT tunnel (plan.md §11.9), which is not built yet.
+                // TCP under a Tool Host goes through its CONNECT tunnel (platform-requirements.md §11.9), which is not built yet.
                 tcpTargets.put(id, new TcpTarget(id, null, -1, "TCP destination " + id + " is not available under a Tool Host yet"));
                 continue;
             }

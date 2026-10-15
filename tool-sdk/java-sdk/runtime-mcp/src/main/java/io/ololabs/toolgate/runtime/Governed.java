@@ -17,14 +17,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Governed mode: one invocation under a Tool Host, over tool protocol v2 (plan.md §13.3, protocol.schema.json). The
+ * Governed mode: one invocation under a Tool Host, over tool protocol v2 (platform-requirements.md §13.3, protocol.schema.json). The
  * host writes one {@code ToolInput} line to stdin; the runtime answers with one {@code ResultFrame} line on stdout and
  * exits. Globals and claims come from the input, secrets are redeemed by handle, and every route call goes to the
  * host's broker. The descriptors, validation and error handling are the standalone runtime's, so a tool behaves the
  * same in both modes (runtime-modes.md §3).
  */
 final class Governed {
-    /** Maximum size of the input line (plan.md §13.5: 1 MiB of arguments, plus the envelope). */
+    /** Maximum size of the input line (platform-requirements.md §13.5: 1 MiB of arguments, plus the envelope). */
     static final int MAX_INPUT = 2 * 1024 * 1024;
 
     private static final ObjectMapper JSON = new ObjectMapper();

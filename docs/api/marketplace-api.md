@@ -120,7 +120,7 @@ Reachable only on the internal network. Every request carries `Authorization: Be
 ```
 
 - `fileRef` is `s3://<MARKETPLACE_S3_BUCKET>/<key>`, read with the helper's own object-storage credentials, so any replica serves any request. Another bucket is refused. `file:<relative path>` exists only when `MARKETPLACE_HELPER_FILE_ROOT` is set (tests and the seed check).
-- `previousVersion` is the previous `AVAILABLE` version of the same package: its version and its stored file. The helper diffs the two packages and their descriptors. Before 1.0 a breaking change needs a minor bump and an addition a patch (`docs/development/foundation-upgrades.md`); from 1.0, major and minor. A smaller bump gives `valid: false` with a `SEMVER` error that lists `apiChanges`.
+- `previousVersion` is the previous `AVAILABLE` version of the same package: its version and its stored file. The helper diffs the two packages and their descriptors. Before 1.0 a breaking change needs a minor bump and an addition a patch; from 1.0, major and minor. A smaller bump gives `valid: false` with a `SEMVER` error that lists `apiChanges`. See [compatibility](../architecture/compatibility.md) for the contract review rules.
 - An invalid package is `200` with `valid: false` and its errors. `4xx` means the request itself was refused: `400 INVALID_REQUEST`, `401 UNAUTHORIZED`, `404 NOT_FOUND` for the `fileRef`, `503 UNAVAILABLE` when all validation slots are busy.
 - Error codes in `errors`: `ARCHIVE`, `ARCHIVE_PATH`, `CHECKSUM`, `SIZE`, `MANIFEST`, `DESCRIPTOR`, `RUNTIME`, `SEMVER`, `TIMEOUT`.
 

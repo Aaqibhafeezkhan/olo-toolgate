@@ -53,7 +53,7 @@ Rules that hold in every language:
 **Used in:** all four languages. The .NET Tasks package is not used, so semantics are identical.
 
 - Methods: `CreateTaskResult` from `tools/call`, `tasks/get`, `tasks/update`, `tasks/cancel`, and `notifications/tasks` (status push over `subscriptions/listen`).
-- State mapping, ownership and TTL as in plan.md §12.4 and §12.6. A task is visible only to the identity that created it; any other identity gets not-found, never forbidden.
+- State mapping, ownership and TTL as in platform-requirements.md §12.4 and §12.6. A task is visible only to the identity that created it; any other identity gets not-found, never forbidden.
 - Storage through the port `TaskStore { create, get, transition, submitInput, requestCancel, purgeExpired }`; memory and SQLite implementations in standalone mode; Control in governed mode.
 - **Acceptance:** ToolGate Tasks cases: capability per request, foreign identity not-found, TTL purge, state mapping, cancellation with and without `cancelIfAbandoned`, status push.
 

@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Package archive
 
-The `.tgpkg` validator Control runs on every package upload (plan.md §7.2, §7.6), as a library with no dependencies
+The `.tgpkg` validator Control runs on every package upload (platform-requirements.md §7.2, §7.6), as a library with no dependencies
 beyond the JDK. Control uses it through `apps/control-plane/.../application/PackageArchive.java`, and the OLO Orgs
 Marketplace helper compiles the same sources with plain `javac --release 17`, so both apply exactly the same rules.
 

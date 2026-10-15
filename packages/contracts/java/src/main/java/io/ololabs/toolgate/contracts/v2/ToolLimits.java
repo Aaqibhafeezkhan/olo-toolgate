@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** Tool resource requests; each at most the platform ceiling (plan.md §13.5).
+/** Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5).
  *
  * @param memoryBytes canonical memoryBytes value
  * @param maxInputBytes canonical maxInputBytes value

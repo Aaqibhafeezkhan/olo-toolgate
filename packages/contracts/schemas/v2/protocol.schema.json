@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Tool protocol v2",
-  "description": "Launcher stdin/stdout frames and Tool Host admission messages (plan.md §11.3, §13.3). v1 stays accepted.",
+  "description": "Launcher stdin/stdout frames and Tool Host admission messages (platform-requirements.md §11.3, §13.3). v1 stays accepted.",
   "$ref": "#/$defs/ToolInput",
   "$defs": {
     "SecretHandle": {

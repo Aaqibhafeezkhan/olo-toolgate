@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The ToolGate Tool Host (plan.md §11, §13.1): admits a dispatch only with a Control-signed
+//! The ToolGate Tool Host (platform-requirements.md §11, §13.1): admits a dispatch only with a Control-signed
 //! invocation permit, claims it with Control, and runs the tool from the exact package, service
 //! profile and globals the permit pins, with every route call going through its broker.
 
