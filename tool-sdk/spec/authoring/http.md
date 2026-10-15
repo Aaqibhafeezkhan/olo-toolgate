@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the only ways tool code reaches a network, identically in every SDK: named HTTP routes (normative), a statically proven URL-style convenience, and TCP to approved destinations. The broker enforces the same declarations at runtime in governed mode (plan.md §11.8, §11.9).
+Defines the only ways tool code reaches a network, identically in every SDK: named HTTP routes (normative), a statically proven URL-style convenience, and TCP to approved destinations. The broker enforces the same declarations at runtime in governed mode (platform-requirements.md §11.8, §11.9).
 
 ## 1. Declarations
 
@@ -78,7 +78,7 @@ In governed mode `secret().get…` for a secret bound only to brokered auth thro
 
 ## 6. TCP and the tool's own HTTP client
 
-Release 1 transports (plan.md §11.9):
+Release 1 transports (platform-requirements.md §11.9):
 
 | Transport | Status |
 |---|---|

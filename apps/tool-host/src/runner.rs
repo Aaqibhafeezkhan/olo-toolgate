@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Runs one invocation's process over tool protocol v2 (plan.md §13.3): one `ToolInput` line on
+//! Runs one invocation's process over tool protocol v2 (platform-requirements.md §13.3): one `ToolInput` line on
 //! stdin, one `ResultFrame` line on stdout. The process gets a clean environment, its own
 //! directory, the broker socket and capability, and nothing else of the host's; it is killed at
 //! the invocation deadline.

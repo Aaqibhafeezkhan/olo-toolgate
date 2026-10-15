@@ -1,5 +1,12 @@
 # Architecture Decision Records
 
+ADRs preserve decision history; an accepted design is not proof of implementation.
+The current runtime model is described in [the overview](../architecture/overview.md).
+Older Gateway static evaluation, bundle authority and Gateway permit-signing
+descriptions in ADRs 002, 005 and 006 are superseded by Control's online authority
+and [ADR 013](013-tool-host-egress-broker-secrets.md). Read amendments before applying
+a historical decision. Remaining implementation is tracked in [planning](../planning/README.md).
+
 Create an ADR when changing:
 
 - component responsibility.
@@ -39,3 +46,6 @@ Use `000-template.md`.
 - [021: Client check-in settings and the Configuration menu](021-client-checkin-configuration-menu.md)
 - [022: Super Administrator review exception](022-super-administrator-review-exception.md)
 - [023: Server-directed device presence and reenrollment](023-server-directed-device-presence.md)
+
+- [024: Single CI gate ownership](024-single-ci-gate-ownership.md)
+- [025: Unified tagged and development publication](025-unified-tagged-and-development-publication.md)

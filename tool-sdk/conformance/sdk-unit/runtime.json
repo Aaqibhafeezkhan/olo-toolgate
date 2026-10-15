@@ -5,7 +5,7 @@
   "title": "SDK runtime execution semantics",
   "sources": [
     "tool-sdk/spec/authoring/execution.md",
-    "plan.md §5.7"
+    "platform-requirements.md §5.7"
   ],
   "cases": [
     {
@@ -53,7 +53,7 @@
       "title": "Input and output limits are enforced",
       "requirements": [
         "execution.md §1",
-        "plan.md §13.5"
+        "platform-requirements.md §13.5"
       ],
       "level": "unit",
       "targets": [
@@ -135,7 +135,7 @@
       "id": "runtime/no-state",
       "title": "No state survives between invocations",
       "requirements": [
-        "plan.md §5.7"
+        "platform-requirements.md §5.7"
       ],
       "level": "unit",
       "targets": [

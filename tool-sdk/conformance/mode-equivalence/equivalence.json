@@ -5,8 +5,8 @@
   "title": "Standalone and governed equivalence",
   "sources": [
     "tool-sdk/spec/runtime-modes.md §3",
-    "plan.md §5.8",
-    "plan.md §21"
+    "platform-requirements.md §5.8",
+    "platform-requirements.md §21"
   ],
   "cases": [
     {
@@ -14,7 +14,7 @@
       "title": "Descriptor digests are equal in both modes",
       "requirements": [
         "tool-sdk/spec/runtime-modes.md §3 rule 1",
-        "plan.md §7.2"
+        "platform-requirements.md §7.2"
       ],
       "level": "integration",
       "targets": [

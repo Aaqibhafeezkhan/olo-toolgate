@@ -4,14 +4,14 @@
   "area": "delegation",
   "title": "Delegation double approval",
   "sources": [
-    "plan.md §9.3"
+    "platform-requirements.md §9.3"
   ],
   "cases": [
     {
       "id": "delegation/both-approvals-required",
       "title": "Delegation needs the issuer and Control to agree",
       "requirements": [
-        "plan.md §9.3",
+        "platform-requirements.md §9.3",
         "§21 security"
       ],
       "level": "component",
@@ -30,7 +30,7 @@
       "id": "delegation/rule-covers-user",
       "title": "A delegation rule or delegatedUserId covers the user",
       "requirements": [
-        "plan.md §9.3"
+        "platform-requirements.md §9.3"
       ],
       "level": "component",
       "targets": [
@@ -46,7 +46,7 @@
       "id": "delegation/service-no-user",
       "title": "SERVICE mode has no user",
       "requirements": [
-        "plan.md §9.3"
+        "platform-requirements.md §9.3"
       ],
       "level": "component",
       "targets": [

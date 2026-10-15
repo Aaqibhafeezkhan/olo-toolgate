@@ -4,14 +4,14 @@
   "area": "openapi-import",
   "title": "OpenAPI import",
   "sources": [
-    "plan.md §14.2"
+    "platform-requirements.md §14.2"
   ],
   "cases": [
     {
       "id": "openapi/versions",
       "title": "3.1, 3.0 and Swagger 2.0 are imported",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -27,7 +27,7 @@
       "id": "openapi/serialisation",
       "title": "Supported parameter styles serialise exactly",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -44,7 +44,7 @@
       "id": "openapi/not-importable",
       "title": "Unfaithful combinations are not importable",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -60,7 +60,7 @@
       "id": "openapi/content-type",
       "title": "Exactly one request content type per tool",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -77,7 +77,7 @@
       "id": "openapi/responses",
       "title": "Responses map to output and errors",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -96,7 +96,7 @@
       "id": "openapi/no-auto-pagination",
       "title": "Pagination is never followed automatically",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -112,7 +112,7 @@
       "id": "openapi/auth-alternative",
       "title": "Exactly one auth alternative per operation",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -128,7 +128,7 @@
       "id": "openapi/effect-unknown",
       "title": "Imported operations default to UNKNOWN",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -145,7 +145,7 @@
       "id": "openapi/provenance",
       "title": "The source and transformation report are stored",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -162,7 +162,7 @@
       "id": "openapi/curl",
       "title": "cURL import produces the same package shape",
       "requirements": [
-        "plan.md §14.2"
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [

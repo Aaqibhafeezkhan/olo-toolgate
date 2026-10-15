@@ -6,7 +6,7 @@ How a handler is invoked, cancelled and retried; how effects, business keys, rec
 
 ## 1. Invocation
 
-- **One handler call per invocation.** The SDK never re-invokes a handler. Retries are decided outside the tool (plan.md §11.4), and only for tools whose effect is `READ_ONLY` or `IDEMPOTENT`.
+- **One handler call per invocation.** The SDK never re-invokes a handler. Retries are decided outside the tool (platform-requirements.md §11.4), and only for tools whose effect is `READ_ONLY` or `IDEMPOTENT`.
 - **Input validation** against `inputSchema` happens before the handler runs; **output validation** against `outputSchema` happens after. A non-conforming output becomes `INTERNAL_TOOL_ERROR`.
 - **Size ceilings:** input 1 MiB and output 4 MiB on Tool Host and in standalone mode; on endpoint clients the existing v1 limits (64 KiB, 32 properties) apply until a client release raises them.
 - **No state across invocations.** Tools must not rely on process state between calls. Governed mode uses single-use sandboxes; standalone mode may reuse a process.

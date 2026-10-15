@@ -4,15 +4,15 @@
   "area": "client-delivery",
   "title": "Client delivery, check-in and permissions",
   "sources": [
-    "plan.md §2.1",
-    "plan.md §17"
+    "platform-requirements.md §2.1",
+    "platform-requirements.md §17"
   ],
   "cases": [
     {
       "id": "client/fleet-conversion",
       "title": "Control converts client-tool uploads to the fleet format",
       "requirements": [
-        "plan.md §2.1",
+        "platform-requirements.md §2.1",
         "ADR 014"
       ],
       "level": "integration",
@@ -30,7 +30,7 @@
       "id": "client/fleet-limits",
       "title": "Client-tool packages keep release-1 client limits",
       "requirements": [
-        "plan.md §2.1"
+        "platform-requirements.md §2.1"
       ],
       "level": "component",
       "targets": [
@@ -46,7 +46,7 @@
       "id": "client/checkin-config",
       "title": "Check-in values come from env and are validated",
       "requirements": [
-        "plan.md §17.2",
+        "platform-requirements.md §17.2",
         "ADR 021"
       ],
       "level": "component",
@@ -64,7 +64,7 @@
       "id": "client/socket-drop",
       "title": "A socket drop is DEGRADED, not unavailable",
       "requirements": [
-        "plan.md §17.1"
+        "platform-requirements.md §17.1"
       ],
       "level": "integration",
       "targets": [
@@ -97,8 +97,8 @@
       "id": "delta/corruption-recovery",
       "title": "A corrupt permission delta falls back to a snapshot",
       "requirements": [
-        "plan.md §17.4",
-        "plan.md §21 integration"
+        "platform-requirements.md §17.4",
+        "platform-requirements.md §21 integration"
       ],
       "level": "integration",
       "targets": [

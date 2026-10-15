@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Generates the package archive fixtures for contract-descriptor/packages.json (plan.md §7.6).
+"""Generates the package archive fixtures for contract-descriptor/packages.json (platform-requirements.md §7.6).
 
 Usage: python3 generate.py          write every fixture and expected.json
        python3 generate.py --check  fail if any committed fixture differs from a fresh build

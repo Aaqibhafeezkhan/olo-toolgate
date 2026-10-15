@@ -122,7 +122,7 @@ Adapter A4 of [protocol-layer.md](../spec/protocol-layer.md) §3, configured as 
 
 ## Tasks
 
-The runtime serves the Tasks extension `io.modelcontextprotocol/tasks` (SEP-2663) as [plan.md](../../docs/sdk-plan/plan.md) §12.4 to §12.6 and [execution.md](../spec/authoring/execution.md) §6 describe it, and advertises it in `server/discover`.
+The runtime serves the Tasks extension `io.modelcontextprotocol/tasks` (SEP-2663) as [platform-requirements.md](../../docs/contracts/platform-requirements.md) §12.4 to §12.6 and [execution.md](../spec/authoring/execution.md) §6 describe it, and advertises it in `server/discover`.
 
 - An `async` tool is listed, with `execution.taskSupport: "required"`, only to a request that declares the extension in its own `_meta`; without it a call gets `-32021` naming the extension. Bounded sync mode, an admin opt-in, is not offered standalone.
 - With the extension, `tools/call` validates the arguments, creates the task and returns a flat `CreateTaskResult` (`resultType: "task"`, `taskId`, `status`, `createdAt`, `lastUpdatedAt`, `ttlMs`, `pollIntervalMs`). Invalid arguments are refused before any task exists. The deadline is `maxDurationMs`, capped at 15 minutes.
@@ -208,7 +208,7 @@ Globals, secrets and claims on the `@ToolPackage` class apply to every tool; on 
 
 ## Business keys
 
-A tool that requires a business key (by default `NON_IDEMPOTENT` and destructive) or declares `businessKeyArgument` runs only after the runtime reserves its key in a local SQLite store (execution.md §4, plan.md §11.7). The key comes from that argument or from the `Idempotency-Key` header over HTTP; when both are present they must agree.
+A tool that requires a business key (by default `NON_IDEMPOTENT` and destructive) or declares `businessKeyArgument` runs only after the runtime reserves its key in a local SQLite store (execution.md §4, platform-requirements.md §11.7). The key comes from that argument or from the `Idempotency-Key` header over HTTP; when both are present they must agree.
 
 - **No key.** A tool that requires one gets `INVALID_ARGUMENT` naming the argument and the header, and nothing runs. Standalone mode has only the default `REJECT` policy.
 - **Namespaces.** `AGENT` keys belong to the caller, `TENANT` keys to the whole runtime, and `DELEGATED_USER` keys to the verified user. A `DELEGATED_USER` call without one gets `BUSINESS_KEY_NAMESPACE_MISMATCH`. The caller is the verified identity (in development, the fixture `sub`), or the single local caller when there is none. Identities never come from arguments.

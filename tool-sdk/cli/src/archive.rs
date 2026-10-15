@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Strict `.tgpkg` archive reading and deterministic writing (plan.md §7.2 and §7.6).
+//! Strict `.tgpkg` archive reading and deterministic writing (platform-requirements.md §7.2 and §7.6).
 //!
 //! The reader accepts only what the packager itself could have written: regular file entries,
 //! stored or deflated, laid out back to back from offset 0, followed by the central directory and

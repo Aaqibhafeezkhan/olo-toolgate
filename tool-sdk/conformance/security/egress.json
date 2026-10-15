@@ -5,7 +5,7 @@
   "title": "Egress isolation and the release-1 transport matrix",
   "sources": [
     "docs/security/threat-models/tool-host.md §4.4",
-    "plan.md §11.6, §11.9",
+    "platform-requirements.md §11.6, §11.9",
     "ADR 013 decisions 5 and 7"
   ],
   "cases": [
@@ -78,7 +78,7 @@
       "title": "TCP tunnels reach only approved (host, port) entries",
       "requirements": [
         "T-EG-4",
-        "plan.md §11.9"
+        "platform-requirements.md §11.9"
       ],
       "level": "component",
       "targets": [
@@ -95,7 +95,7 @@
       "title": "Every resolved address is checked at connect time",
       "requirements": [
         "T-BR-5",
-        "plan.md §11.6"
+        "platform-requirements.md §11.6"
       ],
       "level": "component",
       "targets": [
@@ -161,7 +161,7 @@
       "id": "egress/kill-drops-connections",
       "title": "TERMINATE drops open brokered and tunnel connections",
       "requirements": [
-        "plan.md §11.6 item 6",
+        "platform-requirements.md §11.6 item 6",
         "kill-switch.md §5"
       ],
       "level": "integration",
@@ -181,7 +181,7 @@
       "title": "Unavailable transports fail at packaging and at runtime",
       "requirements": [
         "T-EG-5",
-        "plan.md §11.9"
+        "platform-requirements.md §11.9"
       ],
       "level": "component",
       "targets": [
@@ -199,7 +199,7 @@
       "id": "transport/driver-warning",
       "title": "The packager warns on a database driver without a declared TCP destination",
       "requirements": [
-        "plan.md §11.9"
+        "platform-requirements.md §11.9"
       ],
       "level": "unit",
       "targets": [

@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The host's calls to Control under its workload certificate. Per invocation (plan.md §11.3,
+//! The host's calls to Control under its workload certificate. Per invocation (platform-requirements.md §11.3,
 //! §12.8): claim the permit's nonce, fetch a secret for a running invocation, and report the
 //! outcome. As an enrolled device (`device`): enroll, check in, register and fetch content. The
 //! certificate is either configured or the one enrollment issued, swapped in as it renews.

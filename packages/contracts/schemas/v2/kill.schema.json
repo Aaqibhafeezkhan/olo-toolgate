@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/kill.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Kill switch events",
-  "description": "Grow-only signed kill and recovery events (plan.md §15).",
+  "description": "Grow-only signed kill and recovery events (platform-requirements.md §15).",
   "$ref": "#/$defs/KillEvent",
   "$defs": {
     "KillMode": {

@@ -4,15 +4,15 @@
   "area": "persistence-failures",
   "title": "Persistence failures and hand-offs",
   "sources": [
-    "plan.md §12.7",
-    "plan.md §12.8"
+    "platform-requirements.md §12.7",
+    "platform-requirements.md §12.8"
   ],
   "cases": [
     {
       "id": "persistence/row01-spool-fails",
       "title": "Gateway spool failure rejects before any state",
       "requirements": [
-        "plan.md §12.7 row 1"
+        "platform-requirements.md §12.7 row 1"
       ],
       "level": "integration",
       "targets": [
@@ -28,7 +28,7 @@
       "id": "persistence/row02-commit-unknown",
       "title": "A lost commit acknowledgement is resolved by re-read",
       "requirements": [
-        "plan.md §12.7 row 2"
+        "platform-requirements.md §12.7 row 2"
       ],
       "level": "integration",
       "targets": [
@@ -46,7 +46,7 @@
       "id": "persistence/row02-unique-violation",
       "title": "A unique-constraint loss returns the winner",
       "requirements": [
-        "plan.md §12.7 row 2"
+        "platform-requirements.md §12.7 row 2"
       ],
       "level": "integration",
       "targets": [
@@ -62,7 +62,7 @@
       "id": "persistence/row03-control-down",
       "title": "ASK waits while Control is down, then expires",
       "requirements": [
-        "plan.md §12.7 row 3"
+        "platform-requirements.md §12.7 row 3"
       ],
       "level": "integration",
       "targets": [
@@ -79,7 +79,7 @@
       "id": "persistence/row04-swap-lost",
       "title": "A lost approval swap reuses the same attempt's state",
       "requirements": [
-        "plan.md §12.7 row 4"
+        "platform-requirements.md §12.7 row 4"
       ],
       "level": "integration",
       "targets": [
@@ -96,8 +96,8 @@
       "id": "persistence/row05-spool-full",
       "title": "No permit while the Gateway spool is full",
       "requirements": [
-        "plan.md §12.7 row 5",
-        "plan.md §12.7 row 11"
+        "platform-requirements.md §12.7 row 5",
+        "platform-requirements.md §12.7 row 11"
       ],
       "level": "integration",
       "targets": [
@@ -113,7 +113,7 @@
       "id": "persistence/row06-store-down",
       "title": "Ledger admission is refused while the store is down",
       "requirements": [
-        "plan.md §12.7 row 6"
+        "platform-requirements.md §12.7 row 6"
       ],
       "level": "integration",
       "targets": [
@@ -130,8 +130,8 @@
       "id": "persistence/row06-admitted-lost",
       "title": "A lost ADMITTED is resolved through the ledger",
       "requirements": [
-        "plan.md §12.7 row 6",
-        "plan.md §11.4"
+        "platform-requirements.md §12.7 row 6",
+        "platform-requirements.md §11.4"
       ],
       "level": "integration",
       "targets": [
@@ -149,7 +149,7 @@
       "id": "persistence/row06-host-spool-after-cas",
       "title": "A host spool failure after the claim becomes notStarted",
       "requirements": [
-        "plan.md §12.7 row 6"
+        "platform-requirements.md §12.7 row 6"
       ],
       "level": "integration",
       "targets": [
@@ -167,7 +167,7 @@
       "id": "persistence/row07-heartbeat-fails",
       "title": "A heartbeat that cannot commit ends the work at lease end",
       "requirements": [
-        "plan.md §12.7 row 7"
+        "platform-requirements.md §12.7 row 7"
       ],
       "level": "integration",
       "targets": [
@@ -184,8 +184,8 @@
       "id": "persistence/row08-outbox",
       "title": "Results wait in the host outbox while the store is down",
       "requirements": [
-        "plan.md §12.7 row 8",
-        "plan.md §12.8"
+        "platform-requirements.md §12.7 row 8",
+        "platform-requirements.md §12.8"
       ],
       "level": "integration",
       "targets": [
@@ -202,7 +202,7 @@
       "id": "persistence/row08-stale-token",
       "title": "A result with a stale fencing token is evidence only",
       "requirements": [
-        "plan.md §12.7 row 8"
+        "platform-requirements.md §12.7 row 8"
       ],
       "level": "integration",
       "targets": [
@@ -219,7 +219,7 @@
       "id": "persistence/row09-purge-resumable",
       "title": "The purge job is idempotent and resumable",
       "requirements": [
-        "plan.md §12.7 row 9"
+        "platform-requirements.md §12.7 row 9"
       ],
       "level": "integration",
       "targets": [
@@ -235,7 +235,7 @@
       "id": "persistence/row10-audit-at-least-once",
       "title": "Audit ships at least once with dedupe ids",
       "requirements": [
-        "plan.md §12.7 row 10"
+        "platform-requirements.md §12.7 row 10"
       ],
       "level": "integration",
       "targets": [
@@ -253,7 +253,7 @@
       "id": "persistence/row11-soft-limit",
       "title": "Above the soft limit an alert is raised",
       "requirements": [
-        "plan.md §12.7 row 11"
+        "platform-requirements.md §12.7 row 11"
       ],
       "level": "integration",
       "targets": [
@@ -269,8 +269,8 @@
       "id": "persistence/primary-failover",
       "title": "Primary failover after an acknowledged commit loses nothing",
       "requirements": [
-        "plan.md §12.8",
-        "plan.md §21 integration"
+        "platform-requirements.md §12.8",
+        "platform-requirements.md §21 integration"
       ],
       "level": "system",
       "targets": [
@@ -286,7 +286,7 @@
       "id": "persistence/plain-sync-spools-only",
       "title": "Plain synchronous calls touch only the spools",
       "requirements": [
-        "plan.md §12.7"
+        "platform-requirements.md §12.7"
       ],
       "level": "integration",
       "targets": [

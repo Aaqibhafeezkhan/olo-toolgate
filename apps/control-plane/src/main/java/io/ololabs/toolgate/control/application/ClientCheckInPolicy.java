@@ -5,7 +5,7 @@ package io.ololabs.toolgate.control.application;
 import io.ololabs.toolgate.contracts.v2.ClientCheckIn;
 import io.ololabs.toolgate.contracts.v2.ValueSource;
 
-/** Phase A client check-in (plan.md §17.2). Env-owned: read from the environment at startup, never from the database.
+/** Phase A client check-in (platform-requirements.md §17.2). Env-owned: read from the environment at startup, never from the database.
  *  An idle device learns of a job only at its next check-in, so the check-in is the job pickup latency. */
 public record ClientCheckInPolicy(long checkInMs,int jitterPct,long offlineAfterMs,ValueSource source) {
     /** The sync deadline a client job must fit in, with the margin left for execution (ADR 016). */

@@ -5,7 +5,7 @@
 
 ## Context
 
-ToolGate will ship a Tool SDK in Java, Python, TypeScript and .NET so that anyone can write MCP tools that run either as a plain MCP server (standalone) or under ToolGate governance (Tool Host and managed endpoints). Publishing an SDK freezes an API that outside authors depend on, and the governed platform will enforce what the SDK declares. Reviews of the plan ([docs/sdk-plan/plan.md](../sdk-plan/plan.md), revision 10) required that, before any SDK code:
+ToolGate will ship a Tool SDK in Java, Python, TypeScript and .NET so that anyone can write MCP tools that run either as a plain MCP server (standalone) or under ToolGate governance (Tool Host and managed endpoints). Publishing an SDK freezes an API that outside authors depend on, and the governed platform will enforce what the SDK declares. Reviews of the plan ([docs/contracts/platform-requirements.md](../contracts/platform-requirements.md), revision 10) required that, before any SDK code:
 
 - the entire authoring contract is frozen, including the parts only governed mode exercises;
 - standalone and governed mode are defined so that a tool cannot silently gain permissions or change its external effects when moved between them;
@@ -42,7 +42,7 @@ Any change to these files is an amendment to this ADR and reopens gate D0.
 
 ## Operational Impact
 
-None for existing deployments: this ADR adds specification files and no product code. Later milestones (plan.md §22.2) implement it.
+None for existing deployments: this ADR adds specification files and no product code. Later milestones (platform-requirements.md §22.2) implement it.
 
 ## Compatibility Impact
 
@@ -59,4 +59,4 @@ Defines the public SDK API that SDK 0.1 will publish, and descriptor generation 
 - Descriptor vectors: `python3 tool-sdk/spec/descriptor/vectors/verify.py` (also cross-checked with an independent Node implementation).
 - Composition fixtures in `tool-sdk/spec/composition/cases.json` become packager tests in every SDK.
 - Adapter acceptance cases in `protocol-layer.md` and the official conformance suite version in the compatibility record.
-- The mode-equivalence suite (plan.md §21) runs every example in both modes.
+- The mode-equivalence suite (platform-requirements.md §21) runs every example in both modes.

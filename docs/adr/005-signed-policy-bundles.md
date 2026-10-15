@@ -1,5 +1,9 @@
 # ADR 005: Transactional signed policy publication and verified snapshots
 
+> Historical decision. Runtime authority and permit-signing details are superseded
+> by [Control online authorization](../architecture/overview.md) and
+> [ADR 013](013-tool-host-egress-broker-secrets.md). This is not a current deployment guide.
+
 Status: accepted for Module 04. Date: 2026-10-02.
 
 Control owns policy compilation and immutable publication. Gateway owns runtime

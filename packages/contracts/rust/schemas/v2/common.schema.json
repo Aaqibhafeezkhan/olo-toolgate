@@ -30,7 +30,7 @@
         "DELEGATED",
         "SERVICE"
       ],
-      "description": "Authenticated call mode (plan.md §9.3)."
+      "description": "Authenticated call mode (platform-requirements.md §9.3)."
     },
     "CredentialKind": {
       "type": "string",
@@ -39,7 +39,7 @@
         "JWT",
         "INTROSPECTION"
       ],
-      "description": "Which validator accepted the credential (plan.md §9.2)."
+      "description": "Which validator accepted the credential (platform-requirements.md §9.2)."
     },
     "ActorHop": {
       "type": "object",

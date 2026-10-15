@@ -5,7 +5,7 @@
   "title": "Error model mapping",
   "sources": [
     "tool-sdk/spec/authoring/errors.md",
-    "plan.md §21"
+    "platform-requirements.md §21"
   ],
   "cases": [
     {

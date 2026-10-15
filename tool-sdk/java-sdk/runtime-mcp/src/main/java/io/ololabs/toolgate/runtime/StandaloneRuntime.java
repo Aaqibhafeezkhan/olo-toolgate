@@ -200,7 +200,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         List<JsonNode> tcpDestinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("tcp").forEach(tcpDestinations::add);
         runtime.egress.resolveTcp(config, tcpDestinations, diagnostics);
-        // Under a Tool Host, Control reserves business keys (plan.md §12.3), so the local store is not used.
+        // Under a Tool Host, Control reserves business keys (platform-requirements.md §12.3), so the local store is not used.
         if (config.mode == Config.Mode.GOVERNED) runtime.byMcpName.values().forEach(t -> t.reserves = false);
         if (runtime.byMcpName.values().stream().anyMatch(t -> t.reserves)) runtime.reservations = openReservations(env, workingDirectory);
         Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
@@ -562,7 +562,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     public JsonNode tools(RequestMeta meta) {
         ArrayNode tools = JSON.arrayNode();
         for (Tool t : byMcpName.values()) {
-            if (t.async && !meta.declares(RequestMeta.TASKS)) continue; // never offer work the client cannot collect (plan.md §12.5)
+            if (t.async && !meta.declares(RequestMeta.TASKS)) continue; // never offer work the client cannot collect (platform-requirements.md §12.5)
             JsonNode d = t.descriptor;
             ObjectNode tool = tools.addObject();
             tool.put("name", t.mcpName);
@@ -606,7 +606,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     }
 
     /**
-     * Reserves the call's business key (execution.md §4, plan.md §11.7). Returns the answer when the call must not run
+     * Reserves the call's business key (execution.md §4, platform-requirements.md §11.7). Returns the answer when the call must not run
      * (a refusal, or the existing invocation's result or task), or null when this call may run.
      */
     private ObjectNode reserve(Tool tool, Prepared prepared, RequestMeta meta) {

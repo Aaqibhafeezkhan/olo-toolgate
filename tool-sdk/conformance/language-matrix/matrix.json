@@ -4,15 +4,15 @@
   "area": "matrix",
   "title": "Full language matrix",
   "sources": [
-    "plan.md §5.6",
-    "plan.md §21"
+    "platform-requirements.md §5.6",
+    "platform-requirements.md §21"
   ],
   "cases": [
     {
       "id": "matrix/java",
       "title": "Java 17 and later",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "system",
       "targets": [
@@ -28,7 +28,7 @@
       "id": "matrix/python",
       "title": "Python 3.10 and later",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "system",
       "targets": [
@@ -44,7 +44,7 @@
       "id": "matrix/typescript",
       "title": "Node 20 and later with TypeScript 5",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "system",
       "targets": [
@@ -60,7 +60,7 @@
       "id": "matrix/dotnet",
       "title": ".NET 8 and later",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "system",
       "targets": [
@@ -76,7 +76,7 @@
       "id": "matrix/operating-systems",
       "title": "Supported operating systems",
       "requirements": [
-        "plan.md §21 matrix"
+        "platform-requirements.md §21 matrix"
       ],
       "level": "system",
       "targets": [
@@ -96,8 +96,8 @@
       "id": "matrix/host-client-versions",
       "title": "Tool Host and client versions in the compatibility matrix",
       "requirements": [
-        "plan.md §5.6",
-        "plan.md §21 matrix"
+        "platform-requirements.md §5.6",
+        "platform-requirements.md §21 matrix"
       ],
       "level": "system",
       "targets": [
@@ -114,7 +114,7 @@
       "id": "matrix/cli-distribution",
       "title": "The CLI installs from each ecosystem registry",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "system",
       "targets": [
@@ -134,7 +134,7 @@
       "id": "matrix/release-statement",
       "title": "Release pages state conformance, protocol and contracts versions",
       "requirements": [
-        "plan.md §5.6"
+        "platform-requirements.md §5.6"
       ],
       "level": "unit",
       "targets": [

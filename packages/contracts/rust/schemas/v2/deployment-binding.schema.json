@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/deployment-binding.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Deployment binding",
-  "description": "Where and how one tenant runs one package version (plan.md §8.5). Own format version and revisions.",
+  "description": "Where and how one tenant runs one package version (platform-requirements.md §8.5). Own format version and revisions.",
   "$ref": "#/$defs/DeploymentBinding",
   "$defs": {
     "TargetKind": {
@@ -102,7 +102,7 @@
         "ALL_AT_ONCE",
         "COHORT"
       ],
-      "description": "Rollout strategy (plan.md §8.4)."
+      "description": "Rollout strategy (platform-requirements.md §8.4)."
     },
     "RolloutStep": {
       "type": "object",
@@ -267,7 +267,7 @@
         "DEPLOYMENT_BINDING",
         "PACKAGE_DEFAULT"
       ],
-      "description": "Precedence layer, highest first (plan.md §8.5)."
+      "description": "Precedence layer, highest first (platform-requirements.md §8.5)."
     },
     "EffectiveValue": {
       "type": "object",

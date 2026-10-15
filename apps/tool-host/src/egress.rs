@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The broker's upstream connections (plan.md §11.6): names are resolved here and every
+//! The broker's upstream connections (platform-requirements.md §11.6): names are resolved here and every
 //! resolved address is checked at connect time, and TLS is verified against the system roots,
 //! the destination's CA bundle, or its SPKI pins.
 

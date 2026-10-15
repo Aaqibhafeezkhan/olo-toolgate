@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Runs {@code toolgate pack} on a staging directory. The CLI is the single packager behind every SDK (plan.md §4), so
+ * Runs {@code toolgate pack} on a staging directory. The CLI is the single packager behind every SDK (platform-requirements.md §4), so
  * the build integrations never write a {@code .tgpkg} themselves. It is {@code TOOLGATE_CLI} when set, else
  * {@code toolgate} on the {@code PATH}.
  */

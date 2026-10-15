@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The broker request channel (plan.md §11.8): one Unix socket per invocation. The tool selects
+//! The broker request channel (platform-requirements.md §11.8): one Unix socket per invocation. The tool selects
 //! among the routes its permit grants; the broker builds the upstream request from the approved
 //! service profile, injects credentials last, and never returns them.
 //!

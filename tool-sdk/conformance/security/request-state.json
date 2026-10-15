@@ -6,7 +6,7 @@
   "sources": [
     "ADR 013 decision 9",
     "tool-sdk/spec/protocol-layer.md A3",
-    "plan.md §12.5"
+    "platform-requirements.md §12.5"
   ],
   "cases": [
     {
@@ -30,7 +30,7 @@
       "id": "request-state/tampered",
       "title": "A modified requestState is refused",
       "requirements": [
-        "plan.md §5.10 A3",
+        "platform-requirements.md §5.10 A3",
         "ADR 013 decision 9"
       ],
       "level": "component",
@@ -47,7 +47,7 @@
       "id": "request-state/expired",
       "title": "An expired requestState is refused",
       "requirements": [
-        "plan.md §5.10 A3"
+        "platform-requirements.md §5.10 A3"
       ],
       "level": "component",
       "targets": [
@@ -63,7 +63,7 @@
       "id": "request-state/other-identity",
       "title": "A requestState presented by another identity or scope is refused",
       "requirements": [
-        "plan.md §5.10 A3"
+        "platform-requirements.md §5.10 A3"
       ],
       "level": "component",
       "targets": [
@@ -80,7 +80,7 @@
       "id": "request-state/other-arguments",
       "title": "A requestState presented with different arguments is refused",
       "requirements": [
-        "plan.md §5.10 A3"
+        "platform-requirements.md §5.10 A3"
       ],
       "level": "component",
       "targets": [
@@ -96,7 +96,7 @@
       "id": "request-state/replay",
       "title": "A requestState is accepted once",
       "requirements": [
-        "plan.md §5.10 A3"
+        "platform-requirements.md §5.10 A3"
       ],
       "level": "component",
       "targets": [

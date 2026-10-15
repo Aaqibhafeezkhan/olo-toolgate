@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/settings.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Control server settings v2",
-  "description": "ControlServerSettings formatVersion 2 and client check-in values (plan.md §17, §18).",
+  "description": "ControlServerSettings formatVersion 2 and client check-in values (platform-requirements.md §17, §18).",
   "$ref": "#/$defs/ControlServerSettings",
   "$defs": {
     "ValueSource": {

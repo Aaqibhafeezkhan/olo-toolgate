@@ -4,8 +4,8 @@
   "area": "packages",
   "title": "Package archive verification",
   "sources": [
-    "plan.md §7.2",
-    "plan.md §7.6",
+    "platform-requirements.md §7.2",
+    "platform-requirements.md §7.6",
     "tool-sdk/conformance/fixtures/packages/README.md"
   ],
   "cases": [
@@ -13,7 +13,7 @@
       "id": "packages/valid-accepted",
       "title": "The baseline package passes at every hop",
       "requirements": [
-        "plan.md §7.6"
+        "platform-requirements.md §7.6"
       ],
       "level": "component",
       "targets": [
@@ -37,8 +37,8 @@
       "id": "packages/zip-slip",
       "title": "A package with an entry named ../evil is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -62,8 +62,8 @@
       "id": "packages/absolute-path",
       "title": "A package with an entry named /etc/evil is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -87,8 +87,8 @@
       "id": "packages/backslash",
       "title": "A package with an entry named tools\\\\a.json is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -112,8 +112,8 @@
       "id": "packages/drive-letter",
       "title": "A package with an entry named C:/evil is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -137,8 +137,8 @@
       "id": "packages/duplicate-entry",
       "title": "A package with two entries with the same name is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -162,8 +162,8 @@
       "id": "packages/case-collision",
       "title": "A package with tools/A.json and tools/a.json is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -187,8 +187,8 @@
       "id": "packages/nfc-collision",
       "title": "A package with NFC and NFD spellings of one name is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -212,8 +212,8 @@
       "id": "packages/symlink",
       "title": "A package with a symlink entry is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -237,8 +237,8 @@
       "id": "packages/encrypted-entry",
       "title": "A package with an entry with the encryption flag is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -262,8 +262,8 @@
       "id": "packages/zip-bomb-ratio",
       "title": "A package with an entry over the compression ratio ceiling is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -287,8 +287,8 @@
       "id": "packages/data-outside-central-directory",
       "title": "A package with bytes before the first local header is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -312,8 +312,8 @@
       "id": "packages/unlisted-file",
       "title": "A package with a file absent from CHECKSUMS is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -337,8 +337,8 @@
       "id": "packages/missing-listed-file",
       "title": "A package with a CHECKSUMS line without a file is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -362,8 +362,8 @@
       "id": "packages/checksums-crlf",
       "title": "A package with CRLF line endings in CHECKSUMS is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -387,8 +387,8 @@
       "id": "packages/checksums-unsorted",
       "title": "A package with CHECKSUMS not sorted bytewise is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -412,8 +412,8 @@
       "id": "packages/checksums-uppercase-hex",
       "title": "A package with uppercase hex in CHECKSUMS is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -437,8 +437,8 @@
       "id": "packages/checksums-comment",
       "title": "A package with a comment line in CHECKSUMS is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -462,8 +462,8 @@
       "id": "packages/checksums-blank-line",
       "title": "A package with a blank line in CHECKSUMS is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -487,8 +487,8 @@
       "id": "packages/manifest-digest-mismatch",
       "title": "A package with a manifest artifact digest that differs from CHECKSUMS is rejected",
       "requirements": [
-        "plan.md §7.6",
-        "plan.md §21"
+        "platform-requirements.md §7.6",
+        "platform-requirements.md §21"
       ],
       "level": "component",
       "targets": [
@@ -512,7 +512,7 @@
       "id": "packages/content-addressed-mount",
       "title": "Sandboxes mount only from the content-addressed store",
       "requirements": [
-        "plan.md §7.6"
+        "platform-requirements.md §7.6"
       ],
       "level": "integration",
       "targets": [
@@ -529,7 +529,7 @@
       "id": "packages/image-signature",
       "title": "Base images must be signed by a trusted image signer",
       "requirements": [
-        "plan.md §7.6"
+        "platform-requirements.md §7.6"
       ],
       "level": "component",
       "targets": [
@@ -546,7 +546,7 @@
       "id": "packages/signature-not-a-substitute",
       "title": "A valid signature never replaces digest checks",
       "requirements": [
-        "plan.md §7.6"
+        "platform-requirements.md §7.6"
       ],
       "level": "component",
       "targets": [

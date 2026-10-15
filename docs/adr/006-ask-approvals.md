@@ -1,5 +1,9 @@
 # ADR 006: Durable exact-operation approval and single-use permits
 
+> Historical decision. Runtime authority and permit-signing details are superseded
+> by [Control online authorization](../architecture/overview.md) and
+> [ADR 013](013-tool-host-egress-broker-secrets.md). This is not a current deployment guide.
+
 Status: accepted for Module 05. Date: 2026-10-03.
 
 Control owns human decisions and durable request/permit consumption. Gateway

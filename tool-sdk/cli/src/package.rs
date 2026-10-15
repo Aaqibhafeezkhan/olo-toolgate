@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! `.tgpkg` verification, validation and packing (plan.md §7.2 and §7.6).
+//! `.tgpkg` verification, validation and packing (platform-requirements.md §7.2 and §7.6).
 //!
 //! - [`verify`] applies the archive rules every hop runs: the zip rules, the exact file set
 //!   against a canonical `CHECKSUMS.sha256`, and manifest artifact digests.
@@ -19,7 +19,7 @@ use std::path::Path;
 pub const CHECKSUMS: &str = "CHECKSUMS.sha256";
 pub const MANIFEST: &str = "toolgate-package.json";
 const SIGNATURES: &str = "signatures/";
-/// Platform ceilings (plan.md §13.5): tools per package and canonical descriptor size.
+/// Platform ceilings (platform-requirements.md §13.5): tools per package and canonical descriptor size.
 pub const MAX_TOOLS: u64 = 64;
 pub const MAX_DESCRIPTOR_BYTES: u64 = 1024 * 1024;
 /// Optional files `pack` copies from the staging directory when present.
@@ -102,7 +102,7 @@ pub fn render_checksums(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
         .into_bytes()
 }
 
-/// The archive rules run at every hop (plan.md §7.6).
+/// The archive rules run at every hop (platform-requirements.md §7.6).
 pub fn verify(data: &[u8]) -> Result<Verified, Error> {
     let archive = archive::read(data)?;
     let checksums = archive

@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Adapter A2: the Tasks extension {@code io.modelcontextprotocol/tasks} over a {@link TaskStore} (protocol-layer.md
- * §3, plan.md §12.4 and §12.6). The runtime creates tasks and reports their progress, input requests and outcome;
+ * §3, platform-requirements.md §12.4 and §12.6). The runtime creates tasks and reports their progress, input requests and outcome;
  * the protocol core routes {@code tasks/get}, {@code tasks/update} and {@code tasks/cancel} here.
  */
 public final class Tasks implements AutoCloseable {

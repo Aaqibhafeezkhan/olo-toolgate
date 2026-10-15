@@ -24,7 +24,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * The local business-key reservation store of standalone mode (execution.md §4, plan.md §11.7), in SQLite. One row per
+ * The local business-key reservation store of standalone mode (execution.md §4, platform-requirements.md §11.7), in SQLite. One row per
  * {@code (toolId, namespace, namespaceIdentity, keyHash)}: the first caller wins and every repeat is answered from that
  * row. A row is kept with its result for the retention period, then tombstoned, and a tombstone answers
  * {@code EXPIRED_KEY} from then on. One runtime process owns a state file at a time.

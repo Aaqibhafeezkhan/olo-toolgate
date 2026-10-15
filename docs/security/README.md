@@ -1,16 +1,31 @@
 # Security
 
-Security is a product feature, not an implementation detail.
+Control is the authority for runtime decisions and effect permits. Default
+membership, tool installation, device approval and management roles do not grant
+runtime access. Protected effects require current authorization; unavailable or
+invalid authority fails closed.
 
-For the target relationship model and enterprise use cases, see
-[Enterprise access control](enterprise-access-control.md).
+## Review the model
 
-Start with:
+- [Security invariants](security-invariants.md)
+- [Enterprise access control](enterprise-access-control.md) and [user roles](user-roles.md)
+- [Trust boundaries](../architecture/trust-boundaries.md)
+- [Threat model](threat-model.md) and [Tool Host threat model](threat-models/tool-host.md)
+- [Device enforcement](endpoint-enforcement.md) and [key management](key-management.md)
+- [Enterprise evidence and limitations](../enterprise-access-control/README.md)
 
-1. `threat-model.md`
-2. `security-invariants.md`
-3. `authorization.md`
-4. `credentials-and-vaults.md`
-5. `endpoint-enforcement.md`
-6. `supply-chain.md`
-7. `threat-models/tool-host.md`: Tool Host, broker, egress and secrets (design gate D2)
+## Audit and secrets
+
+Record administrative mutations, approval decisions, deployments, revocation,
+permit consumption and runtime correlation. Administrative retries are idempotent.
+Redact passwords, bearer tokens, cookies, private keys, sensitive arguments and
+credential values. Public device details and configuration exports must exclude
+private custody. Preserve audit, nonce and retirement history during recovery.
+
+Quickstart has local encrypted custody. Production requires separately provisioned
+identity and keys; a planned vault adapter is not an available integration.
+See [production setup](../deployment/production.md),
+[release supply-chain checks](../development/release-process.md) and
+[incident/recovery guides](../operations/README.md).
+
+Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md).

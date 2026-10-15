@@ -3,7 +3,7 @@
 
 ## Purpose
 
-`toolgate` is the single packager behind every Tool SDK (plan.md §4), and the one command line a tool author needs in any language. Language SDKs turn annotations and types into semantic descriptors; this crate turns descriptors into canonical bytes and digests, builds and checks `.tgpkg` packages, creates tool projects from starters and drives their builds. It works offline: the canonical schemas come from the contracts crate and the starters are embedded.
+`toolgate` is the single packager behind every Tool SDK (platform-requirements.md §4), and the one command line a tool author needs in any language. Language SDKs turn annotations and types into semantic descriptors; this crate turns descriptors into canonical bytes and digests, builds and checks `.tgpkg` packages, creates tool projects from starters and drives their builds. It works offline: the canonical schemas come from the contracts crate and the starters are embedded.
 
 `sign`, `upload`, `publish`, `import-openapi` and `add-mcp` arrive in later parts.
 
@@ -26,7 +26,7 @@
 |---|---|
 | `toolgate pack <staging-dir> [-o file.tgpkg]` | Builds a package from a directory holding `toolgate-package.json`, and prints its digests (below) |
 | `toolgate validate <file.tgpkg>` | The archive rules, then the manifest against `PackageManifest` v2, every `toolDescriptorDigest`, `descriptorSetDigest`, the `tools/` files, artifact and runtime references, and the ceilings |
-| `toolgate verify <file.tgpkg>` | The archive rules only, as every hop runs them (plan.md §7.6); prints `packageDigest` |
+| `toolgate verify <file.tgpkg>` | The archive rules only, as every hop runs them (platform-requirements.md §7.6); prints `packageDigest` |
 | `toolgate digest <descriptor.json>...` | `toolDescriptorDigest` of each descriptor, and their `descriptorSetDigest` |
 | `toolgate canonical <descriptor.json>` | The canonical bytes (NFC, then RFC 8785) |
 | `toolgate equivalent <a.json> <b.json>` | Compares two descriptors under rewrite list 1; exits 1 when they differ |

@@ -183,7 +183,7 @@ The project follows semantic versioning once stable versioning begins.
   computes canonical descriptor bytes and the `toolDescriptorDigest`,
   `descriptorSetDigest` and `packageDigest`, compares descriptors under the equivalence
   rewrites, and packs, validates and verifies `.tgpkg` archives offline under the
-  archive rules of plan.md §7.6. It passes the descriptor vectors, all 20 package
+  archive rules of platform-requirements.md §7.6. It passes the descriptor vectors, all 20 package
   archive fixtures and the v2 schema fixtures. The archive fixtures' stub manifest now
   names the artifact digest `artifactDigest`, as `PackagedArtifact` v2 does.
 
@@ -208,7 +208,7 @@ The project follows semantic versioning once stable versioning begins.
   device. Mounted Gateway credentials drop `deviceId` and must carry
   `credentialKind: "STATIC_TOKEN"`; the Gateway fills in `expiresAtUnixMs`.
 
-- The console has a **Configuration** menu (plan.md §18): Server (gateway name), Device
+- The console has a **Configuration** menu (platform-requirements.md §18): Server (gateway name), Device
   (device approval and the read-only check-in values) and Backup/Restore (configuration
   import/export and the server settings file). Each page saves only its own group with
   `PATCH /api/control/v1/settings`; a stale revision reloads the current values. Audit >
@@ -217,7 +217,7 @@ The project follows semantic versioning once stable versioning begins.
   `clientCheckIn`); formatVersion 1 documents and files are no longer accepted, and
   saved v1 settings reset to the defaults.
 
-- Client check-in is configurable (plan.md §17.2): `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS`,
+- Client check-in is configurable (platform-requirements.md §17.2): `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS`,
   `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` and `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS`,
   set by Helm `control.clientCheckIn.*`. Quickstart keeps 500 ms; other deployments now
   default to 2 s with 20 % jitter. The burst guard and the offline threshold follow the

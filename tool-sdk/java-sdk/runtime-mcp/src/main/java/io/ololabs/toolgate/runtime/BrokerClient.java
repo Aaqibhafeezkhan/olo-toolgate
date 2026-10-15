@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
 /**
- * The Tool Host's broker, over the Unix socket it made for this invocation (plan.md §11.8): {@code POST /v1/call}
+ * The Tool Host's broker, over the Unix socket it made for this invocation (platform-requirements.md §11.8): {@code POST /v1/call}
  * sends a route call, in the request shape of {@link TestExchanges}, and {@code POST /v1/secrets} redeems a secret
  * handle. Every request carries the invocation's capability; the broker decides everything else.
  */

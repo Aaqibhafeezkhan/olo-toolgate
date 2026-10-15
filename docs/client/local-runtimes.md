@@ -44,7 +44,7 @@ service through the supported local socket/pipe. User-session Docker Desktop
 alone does not establish that guarantee. Batch/CMD execution is currently
 UNSUPPORTED; no secure Windows-native sandbox backend is delivered. WASM is an
 explicit future capability. These limitations prevent claiming all Module 08
-deliverables complete; see [verification status](../codex/modules/08-completion.md).
+deliverables complete; see [verification requirements](../testing/README.md).
 
 The real seven-adapter image gate currently runs on Linux x64; its pinned
 PowerShell Debian fixture is x64. ARM and native Windows/macOS runtime lifecycle
@@ -123,7 +123,7 @@ not authenticate to private registries.
 
 Local protected registration is an explicit organization deployment decision.
 Downloading a client, Marketplace metadata or an image by itself grants nothing.
-Module 09 fleet assignment/distribution is not implemented. Review image contents,
+Signed fleet assignment/distribution is implemented; see [package deployment](package-deployment.md). Review image contents,
 dependencies, provenance/signatures and SBOM before registering its immutable
 digest; the configured digest pins the tool and its runtime together.
 
@@ -237,4 +237,4 @@ Shell/PowerShell/Java/.NET fixture images and verifies malformed output, injecti
 timeout/memory/output limits, child/network restriction, environment leakage,
 version mismatch, missing image and online-grant failure. Fixtures are test code,
 never production registrations. See [execution/debugging](../operations/debugging.md)
-and the completion report for executed evidence and remaining platform gates.
+and [the planning backlog](../planning/README.md) for remaining platform qualification.

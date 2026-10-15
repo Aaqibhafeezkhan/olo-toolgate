@@ -158,7 +158,7 @@ control:
   developmentMode: false
   clientDownloads:
     enabled: false
-  # Env-owned client check-in (plan.md §17.2), shown read-only in the console. The check-in is
+  # Env-owned client check-in (platform-requirements.md §17.2), shown read-only in the console. The check-in is
   # the job pickup latency for an idle device. offlineAfterMs 0 means max(120000, 6 x checkInMs).
   clientCheckIn:
     checkInMs: 2000

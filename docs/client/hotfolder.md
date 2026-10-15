@@ -180,5 +180,5 @@ approval deadline or bypass disablement. See the
 [device registry flow](../control-plane/device-registry.md). Partial installer
 repair can still require administrator action.
 
-See [Module 07 verification](../codex/modules/07-completion.md) for executed gates
+See [testing and verification](../testing/README.md) for required gates
 and the distinction between local evidence and native CI evidence.

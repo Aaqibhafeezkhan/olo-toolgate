@@ -5,8 +5,8 @@
   "title": "Route analysis",
   "sources": [
     "tool-sdk/spec/authoring/http.md",
-    "plan.md §5.4",
-    "plan.md §21"
+    "platform-requirements.md §5.4",
+    "platform-requirements.md §21"
   ],
   "cases": [
     {
@@ -35,7 +35,7 @@
       "title": "A concatenated template fails packaging",
       "requirements": [
         "http.md §3",
-        "plan.md §21"
+        "platform-requirements.md §21"
       ],
       "level": "unit",
       "targets": [
@@ -141,7 +141,7 @@
       "title": "No free-form URL API exists",
       "requirements": [
         "http.md §3",
-        "plan.md §5.4"
+        "platform-requirements.md §5.4"
       ],
       "level": "unit",
       "targets": [
@@ -223,7 +223,7 @@
       "id": "route-analysis/transport-unavailable",
       "title": "Unavailable transports fail at packaging",
       "requirements": [
-        "plan.md §11.9"
+        "platform-requirements.md §11.9"
       ],
       "level": "unit",
       "targets": [

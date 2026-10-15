@@ -17,7 +17,7 @@ import java.time.Clock;
 import java.util.*;
 import java.util.function.Function;
 
-/** Server packages and the Tool Hosts that run them (plan.md §7, §8, §11).
+/** Server packages and the Tool Hosts that run them (platform-requirements.md §7, §8, §11).
  *
  *  An administrator uploads a `.tgpkg`; Control applies the packager's checks and seals it by digest. Deploying it builds
  *  the service profile (each destination's host is the global its hostSetting names) and the globals document, and

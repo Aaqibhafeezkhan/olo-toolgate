@@ -11,7 +11,7 @@ import java.util.zip.CRC32;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-/** The `.tgpkg` rules Control applies on upload, the same as the CLI's `package::validate` (plan.md §7.2, §7.6): only
+/** The `.tgpkg` rules Control applies on upload, the same as the CLI's `package::validate` (platform-requirements.md §7.2, §7.6): only
  *  what the packager could have written (regular stored or deflated entries back to back, then the central directory and
  *  an end record with no comment), the exact file set against a canonical CHECKSUMS.sha256, artifact digests, every
  *  descriptor digest, the canonical `tools/` files and the descriptor set digest. Everything is checked from the central
