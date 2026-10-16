@@ -426,7 +426,7 @@ const GATEWAY_STATE: [&str; 7] = [
 /// These settings contain gateway destinations, pins and credentials from the old site.
 #[cfg(windows)]
 fn clear_gateway_settings(settings: &mut Config) {
-    settings.tools = None;
+    settings.gateway = None;
     settings.execution = None;
     settings.deployment = None;
     settings.ca_certificate_path = None;
