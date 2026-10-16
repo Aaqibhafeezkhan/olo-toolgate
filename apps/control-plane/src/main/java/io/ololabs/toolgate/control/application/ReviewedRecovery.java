@@ -15,6 +15,12 @@ public final class ReviewedRecovery {
     private final Store store;private final Codec codec;private final Clock clock;
     public ReviewedRecovery(Store store,Codec codec,Clock clock){this.store=store;this.codec=codec;this.clock=clock;}
     public void apply(String document,List<FleetTrustKey> trust){
+        // A committed receipt is an exact no-op, not permission-rule compatibility.
+        // Old signed installation packets must not be decoded or re-applied after a schema upgrade.
+        var envelope=(com.fasterxml.jackson.databind.JsonNode)codec.value(document);
+        var receiptTenant=new Ids.TenantId(envelope.path("authorization").path("tenantId").asText());
+        var receiptDigest=DirectoryService.digest(codec.json(envelope));
+        if(store.transaction(receiptTenant,false,tx->tx.enterprise().recoveryApplied(receiptDigest)))return;
         var packet=codec.model(document,EnterpriseReviewedRecovery.class);var authorization=packet.authorization();
         var tenant=new Ids.TenantId(authorization.tenantId());
         var digest=DirectoryService.digest(codec.json(packet));

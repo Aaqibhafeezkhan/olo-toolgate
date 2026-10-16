@@ -63,4 +63,14 @@ class EnterpriseRecoveryTest {
         fresh.transaction(new Ids.TenantId(value.authorization().tenantId()),false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());assertTrue(new ManagementAccess(graph.codec).superAdministrator(tx.load(),tx.bootstrapAdminUserId()));return null;});
         fresh.transaction(new Ids.TenantId(value.authorization().tenantId()),false,tx->{assertEquals(1L,tx.load().revision());assertTrue(tx.load().entries().values().stream().filter(e->e.id().kind()==Ids.Kind.GRANT).allMatch(e->e.id().value().startsWith("standard-")));for(var e:tx.load().entries().values())if(GroupGraph.group(e.id().kind())&&e.id().value().matches("(ReadOnly|ReadAndWrite|Admin).*"))assertTrue(GroupGraph.members(e,graph.codec).isEmpty());return null;});
     }
+    @Test void consumedHistoricalInstallationPacketIsAnExactNoOpWithoutLegacyRuleDecoding(){
+        var oldPacket="{\"authorization\":{\"tenantId\":\""+EnterpriseConformanceTest.TENANT.value()+"\",\"snapshot\":{\"roles\":[{\"managementRules\":[{\"actions\":[\"read\"]}]}]}},\"proofs\":[]}";
+        assertThrows(Failure.class,()->service(EnterpriseConformanceTest.NOW).apply(oldPacket,List.of()));
+        var digest=DirectoryService.digest(graph.codec.json(graph.codec.value(oldPacket)));
+        store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.enterprise().rememberRecovery(digest);return null;});
+        service(EnterpriseConformanceTest.NOW).apply(oldPacket,List.of());
+        assertEquals(7L,store.<Long>transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.load().revision()));
+        assertThrows(Failure.class,()->service(EnterpriseConformanceTest.NOW).apply(oldPacket.replace("read","update"),List.of()));
+    }
+
 }

@@ -12,6 +12,20 @@ The approvals queue supports approve once, temporary approval and denial for
 Gateway-created ASK requests. It shows the exact operation binding, authoritative
 state, revision and deadlines, with explicit human confirmation before a decision.
 
+## Quickstart login links
+
+A demo link can prefill the username with `/console/#login?username=public`.
+External integrations can also supply a URL-encoded `password`, in either the
+login fragment or query string. The console copies valid values into the login
+fields and removes credential parameters with `history.replaceState` before
+mounting the UI or starting its requests. Sign-in still requires a click, and
+an explicit login link does not restore a different existing session.
+
+Prefer username-only links. A password in a query string reaches the initial
+HTTP request and may already be recorded by infrastructure; clearing the address
+bar cannot undo that. Fragments avoid that request exposure, but should still
+not be generated or shared with passwords. Values are not saved in browser storage.
+
 ## Human approval
 
 Connect using an organization-issued token with a verified tenant and stable
