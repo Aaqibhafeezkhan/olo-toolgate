@@ -72,7 +72,8 @@ to the core release publisher.
 Maven publication is disconnected from both development workflows to avoid
 registry publication limits. Java artifacts are still built and included in
 GitHub prereleases. The reusable Maven workflow and publishing implementation
-are retained for a future pipeline that will publish released packages only.
+are retained for compatibility callers; the new product release workflow publishes
+Maven artifacts only for prepared product releases.
 
 Automatic CI and development release admission require `TOOLGATE_CI_ENABLED=true`
 and a PR title starting with `RC:`. Push and release events resolve the merged PR
@@ -119,8 +120,8 @@ The retained publisher's configuration is documented in
 [the release tools README](../../tools/release/README.md).
 The automatic and manual entry points share native, image and publication job
 bodies; manual sets `run_tests: false` and automatic CI sets it to true.
-Versioned publication uses the same `ci.yml`
-workflow and environment; see [release process](release-process.md).
+Versioned product publication uses the two manual release jobs and the
+`production-release` environment; see [how to release](how-to-release.md).
 
 Publishing requires GitHub Actions write access for repository contents/packages.
 Existing package access controls must allow this repository's GITHUB_TOKEN. Keep

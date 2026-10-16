@@ -4,6 +4,7 @@ import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
+import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
@@ -57,6 +58,10 @@ subprojects {
 
         tasks.withType<Test>().configureEach {
             useJUnitPlatform()
+        }
+
+        tasks.withType<Jar>().configureEach {
+            manifest.attributes["Implementation-Version"] = project.version.toString()
         }
     }
 }

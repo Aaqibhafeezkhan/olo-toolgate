@@ -14,6 +14,11 @@ SOURCE = ROOT / 'apps/browser-extension'
 
 def package(output, build=0):
     version = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
+    release = json.loads((ROOT/'release.json').read_text()) if (ROOT/'release.json').is_file() else None
+    if release:
+        if release['version'] != version:
+            raise ValueError('Extension release identity differs from product version')
+        build = release['build']
     core = version.split('-')[0].split('.')
     if len(core) != 3 or any(not x.isdigit() or int(x)>65535 for x in core) or not 0<=build<=65535:
         raise ValueError('Chrome version components must fit 0..65535')
@@ -47,6 +52,6 @@ def package(output, build=0):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,default=ROOT/'deploy/client-assets/release')
-    build=int(subprocess.check_output(['git','rev-list','--count','HEAD'],cwd=ROOT)) if os.environ.get('GITHUB_ACTIONS')=='true' else 0
+    build=0 if (ROOT/'release.json').is_file() else int(subprocess.check_output(['git','rev-list','--count','HEAD'],cwd=ROOT)) if os.environ.get('GITHUB_ACTIONS')=='true' else 0
     parser.add_argument('--build',type=int,default=build)
     args=parser.parse_args();package(args.output,args.build)

@@ -28,6 +28,10 @@ IMAGE = 'olo-toolgate-local-ci:runner'
 
 # Coverage policy, NOT a second list of commands. New jobs require a decision.
 POLICY = {
+    'create-release-branch.prepare': 'publication',
+    'build-release.select': 'publication',
+    'build-release.collect': 'artifacts',
+    'build-release.publish': 'publication',
     'admission.admit': 'admission',
     'preflight.metadata': 'replay',
     'foundation.check': 'replay',
@@ -149,6 +153,14 @@ def inventory(workflows):
 
 def replay_body(key, document, job):
     body = copy.deepcopy(job)
+    if key == 'foundation.check':
+        if body.get('env', {}).get('TOOLGATE_BUILD') == "${{ inputs.build_number || 'local' }}":
+            body['env']['TOOLGATE_BUILD'] = 'local'
+        # A local foundation replay always validates the current checkout.
+        for step in body.get('steps', []):
+            if step.get('uses', '').startswith('actions/checkout@'):
+                if step.get('with', {}).get('ref') == '${{ inputs.source_sha || github.sha }}':
+                    del step['with']['ref']
     # A standalone preflight replay includes the browser gate. Main delegates
     # it to foundation; resolve only this reviewed boolean with its safe default.
     for step in body.get('steps', []):

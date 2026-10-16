@@ -50,7 +50,7 @@ def assets(run, repo, release_id):
     return result
 
 
-def publish(run, repo, tag, commit, folder, title, notes):
+def publish(run, repo, tag, commit, folder, title, notes, prerelease=True):
     files = sorted(path for path in folder.iterdir() if path.is_file())
     expected = {path.name:('sha256:'+hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size) for path in files}
     if not expected or 'SHA256SUMS' not in expected:
@@ -59,7 +59,7 @@ def publish(run, repo, tag, commit, folder, title, notes):
     if current is None:
         try:
             run('gh', 'release', 'create', tag, '--repo', repo, '--target', commit, '--draft',
-                '--prerelease', '--latest=false', '--title', title, '--notes-file', str(notes))
+                '--prerelease='+str(prerelease).lower(), '--latest=false', '--title', title, '--notes-file', str(notes))
         except subprocess.CalledProcessError:
             # A lost HTTP response can leave a successfully created draft.
             current = wait_for_release(run, repo, tag)
@@ -71,6 +71,8 @@ def publish(run, repo, tag, commit, folder, title, notes):
                 raise ValueError('Created draft release did not become visible: '+tag)
     if not current or current['target_commitish'] != commit or current['tag_name'] != tag:
         raise ValueError('Existing release commit or tag mismatch')
+    if not current['draft'] and current.get('prerelease', prerelease) != prerelease:
+        raise ValueError('Published release channel differs from the prepared channel')
     remote = assets(run, repo, current['id'])
 
     def verify(remote):
@@ -107,5 +109,5 @@ def publish(run, repo, tag, commit, folder, title, notes):
             raise ValueError('Uploaded release asset is missing: '+path.name)
     if set(remote) != set(expected):
         raise ValueError('Draft release has an incomplete asset set')
-    run('gh', 'release', 'edit', tag, '--repo', repo, '--draft=false', '--prerelease',
+    run('gh', 'release', 'edit', tag, '--repo', repo, '--draft=false', '--prerelease='+str(prerelease).lower(),
         '--latest=false', '--title', title, '--notes-file', str(notes))

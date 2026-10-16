@@ -91,6 +91,13 @@ class GithubReleaseTests(unittest.TestCase):
         self.publish()
         self.assertTrue(all(call[:2] == ('gh','api') for call in self.calls))
 
+    def test_stable_release_is_not_marked_as_a_prerelease(self):
+        github_release.publish(self.command,'olo-labs/olo-toolgate','dev-test','a'*40,
+                               self.folder,'stable','notes.md',prerelease=False)
+        create=next(call for call in self.calls if call[:3] == ('gh','release','create'))
+        self.assertIn('--prerelease=false',create)
+        self.assertIn('--prerelease=false',self.calls[-1])
+
     def test_conflicting_asset_or_commit_stops_before_writes(self):
         self.publish()
         for change in ('digest','commit'):

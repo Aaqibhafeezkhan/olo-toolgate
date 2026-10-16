@@ -1,14 +1,23 @@
 # Release
 
+For product releases, use the two manual jobs documented in
+[How to release ToolGate](../../docs/development/how-to-release.md):
+`create-release-branch.yml` prepares an immutable source/version, and
+`build-release.yml` builds/tests or publishes its retained bundle. All first-party
+release artifacts share one SemVer such as `1.0.0-beta.42`. Product publication uses
+the `production-release` environment; development publication remains separate.
+
 Release automation, checksums, signing/provenance and GitHub release helpers.
 
 Maven publication is disconnected from both development workflows to avoid
 registry publication limits. The reusable `release-maven.yml` workflow and all
-publishing code are retained for a future pipeline that publishes released
-packages only. Java artifacts remain part of the builds and GitHub releases.
+publishing code are retained for compatibility callers. The new product release
+pipeline publishes prepared contracts to Maven and resumes partial uploads safely.
+Java artifacts remain part of the builds and GitHub releases.
 
 The retained Maven publisher supports GitHub Packages, standard HTTPS Maven repositories,
-and Sonatype Central. For Central, set the `development-release` environment variable
+and Sonatype Central. For product releases, configure `production-release`; legacy
+development/compatibility callers use `development-release`. For Central, set the environment variable
 `MAVEN_REPOSITORY_URL` to `https://central.sonatype.com/api/v1/publisher/upload`.
 Set these environment secrets:
 

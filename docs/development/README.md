@@ -38,7 +38,7 @@ images. Missing tooling is a failure, not a silently skipped check.
 - [Repository layout](../architecture/monorepo-layout.md) and [component ownership](../architecture/component-map.md)
 - [Gradle build](gradle.md), [schema workflow](schema-workflow.md) and [contract release](contracts-release.md)
 - [Testing](../testing/README.md) and [debugging](../operations/debugging.md)
-- [Release process](release-process.md) and [development releases](development-releases.md)
+- [How to release: two manual jobs](how-to-release.md), [release process](release-process.md) and [development releases](development-releases.md)
 - [CI ownership](ci-check-ownership.md) and [CI admission](ci-admission.md)
 - [Directory membership](../security/enterprise-access-control.md) and [managed roles](../security/user-roles.md)
 - [Planned contributor improvements](../planning/README.md)
