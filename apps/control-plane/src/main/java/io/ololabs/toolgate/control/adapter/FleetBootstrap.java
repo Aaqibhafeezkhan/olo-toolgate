@@ -20,7 +20,7 @@ import java.util.*;
 @ApplicationScoped
 public class FleetBootstrap {
     @Inject Config config; @Inject ContractCodec codec; @Inject PostgresStore store; @Inject EndpointService endpoints;
-    private FleetService service; private ArtifactStore artifacts; private BuilderService builder;
+    private FleetService service; private ArtifactStore artifacts;
     private String setting(String name){return config.getValue("toolgate.control.fleet."+name,String.class);}
     private byte[] read(Path path,int max)throws java.io.IOException{return ProtectedCustody.read(path,max);}
     private String pem(Path path)throws java.io.IOException{return new String(read(path,16384),java.nio.charset.StandardCharsets.US_ASCII);}
@@ -63,10 +63,8 @@ public class FleetBootstrap {
             tenant=config.getValue("toolgate.control.endpoint.tenant-id",String.class);server=config.getValue("toolgate.control.endpoint.server-id",String.class);
         }catch(Exception failure){throw new IllegalStateException("Fleet deployment requires dedicated external trust keys, endpoint identity and fixed HTTPS artifact store");}
         service=new FleetService(store,codec,crypto,endpoints,java.time.Clock.systemUTC(),enabled,tenant,server);
-        builder=new BuilderService(store,codec,crypto,service,endpoints,java.time.Clock.systemUTC(),enabled,tenant,server);
     }
     void start(@Observes StartupEvent event){if(service==null)load();}
     @Produces @ApplicationScoped FleetService fleet(){if(service==null)load();return service;}
     @Produces @ApplicationScoped ArtifactStore artifacts(){if(service==null)load();return artifacts;}
-    @Produces @ApplicationScoped BuilderService builder(){if(service==null)load();return builder;}
 }

@@ -6,53 +6,120 @@
   "$ref": "#/$defs/ClientHealth",
   "$defs": {
     "ConsoleDeviceLookup": {
-      "type":"object", "description":"Exactly one enrollment code or existing device identifier for establishing console device context.", "additionalProperties":false,
+      "type": "object",
+      "description": "Exactly one enrollment code or existing device identifier for establishing console device context.",
+      "additionalProperties": false,
       "properties": {
-        "userCode":{"type":"string","pattern":"^[A-F0-9]{16}$"},
-        "deviceId":{"$ref":"identifiers.schema.json#/$defs/Identifier"}
+        "userCode": {
+          "type": "string",
+          "pattern": "^[A-F0-9]{16}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
       },
-      "required":[]
+      "required": []
     },
     "ConsoleDeviceChallenge": {
       "description": "A short-lived server challenge bound to a verified console session and device key.",
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "nonce": {"type":"string","pattern":"^[a-f0-9]{64}$"},
-        "deviceId": {"$ref":"identifiers.schema.json#/$defs/Identifier"},
-        "keyFingerprint": {"type":"string","pattern":"^[a-f0-9]{64}$"},
-        "expiresAtUnixMs": {"type":"integer","minimum":0,"maximum":9007199254740991}
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
       },
-      "required": ["nonce","deviceId","keyFingerprint","expiresAtUnixMs"]
+      "required": [
+        "nonce",
+        "deviceId",
+        "keyFingerprint",
+        "expiresAtUnixMs"
+      ]
     },
     "ConsoleDeviceProofRequest": {
       "description": "Bounded local native-client proof request for the selected console origin.",
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "kind": {"type":"string","const":"console-device-proof"},
-        "consoleUrl": {"type":"string","minLength":1,"maxLength":2048},
-        "nonce": {"type":"string","pattern":"^[a-f0-9]{64}$"}
+        "kind": {
+          "type": "string",
+          "const": "console-device-proof"
+        },
+        "consoleUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
       },
-      "required": ["kind","consoleUrl","nonce"]
+      "required": [
+        "kind",
+        "consoleUrl",
+        "nonce"
+      ]
     },
     "ConsoleDeviceProof": {
       "description": "Device-key signature over the domain-separated console challenge nonce.",
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "nonce": {"type":"string","pattern":"^[a-f0-9]{64}$"},
-        "deviceId": {"$ref":"identifiers.schema.json#/$defs/Identifier"},
-        "keyFingerprint": {"type":"string","pattern":"^[a-f0-9]{64}$"},
-        "signature": {"type":"string","pattern":"^[A-Za-z0-9_-]{1,256}$"}
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,256}$"
+        }
       },
-      "required": ["nonce","deviceId","keyFingerprint","signature"]
+      "required": [
+        "nonce",
+        "deviceId",
+        "keyFingerprint",
+        "signature"
+      ]
     },
     "ConsoleDeviceVerified": {
       "description": "Current-device context accepted for the authenticated console session.",
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "deviceId": {"$ref":"identifiers.schema.json#/$defs/Identifier"},
-        "expiresAtUnixMs": {"type":"integer","minimum":0,"maximum":9007199254740991}
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
       },
-      "required": ["deviceId","expiresAtUnixMs"]
+      "required": [
+        "deviceId",
+        "expiresAtUnixMs"
+      ]
     },
     "EndpointPresencePing": {
       "type": "object",
@@ -711,7 +778,10 @@
         },
         "permissions": {
           "type": "array",
-          "items": {"type": "string", "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$"},
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$"
+          },
           "maxItems": 32,
           "uniqueItems": true,
           "description": "Current target-specific feature actions resolved by Control; never inferred from displayed enrollment metadata."
@@ -1202,9 +1272,7 @@
       "enum": [
         "CHECK_IN",
         "AUTHORIZE",
-        "RESULT",
-        "BUILDER_POLL",
-        "BUILDER_RESULT"
+        "RESULT"
       ],
       "description": "Fixed authenticated operations on the active-job channel."
     },

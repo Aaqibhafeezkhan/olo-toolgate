@@ -87,6 +87,7 @@ public final class JsonProject {
                 if (spec.has("default")) {
                     if (!spec.get("default").isTextual()) throw invalid("default type");
                     value = spec.get("default").textValue();
+                    unicode(value);
                     if (value.isEmpty() || value.length() > max || value.indexOf('\0') >= 0) throw invalid("default bounds");
                 }
                 inputs.add(new Input(key, text(spec, "description", 1024), value, max));
@@ -139,7 +140,9 @@ public final class JsonProject {
             tools.add(new Tool(name, kind, text(t, "title", 100), text(t, "description", 2048),
                     List.copyOf(inputs), List.copyOf(outputs), List.copyOf(events)));
         }
-        return new JsonProject(root, tools);
+        var project = new JsonProject(root, tools);
+        project.source(); // Every accepted source export must itself remain a valid bounded project.
+        return project;
     }
 
     static void fields(JsonNode object, Set<String> allowed) {
@@ -149,7 +152,16 @@ public final class JsonProject {
     private static String textAllowEmpty(JsonNode object, String key, int max) {
         JsonNode value = object.get(key);
         if (value == null || !value.isTextual() || value.textValue().length() > max || value.textValue().indexOf('\0') >= 0) throw invalid(key);
+        unicode(value.textValue());
         return value.textValue();
+    }
+    private static void unicode(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (Character.isHighSurrogate(character)) {
+                if (++index >= value.length() || !Character.isLowSurrogate(value.charAt(index))) throw invalid("Unicode string");
+            } else if (Character.isLowSurrogate(character)) throw invalid("Unicode string");
+        }
     }
     private static String text(JsonNode object, String key, int max) {
         String value = textAllowEmpty(object, key, max);
@@ -158,5 +170,9 @@ public final class JsonProject {
     }
     private static void id(String value, String pattern, String what) { if (!value.matches(pattern)) throw invalid(what); }
     static IllegalArgumentException invalid(String what) { return new IllegalArgumentException("Invalid JSON SDK " + what); }
-    public byte[] source() throws IOException { return (JSON.writerWithDefaultPrettyPrinter().writeValueAsString(document) + "\n").getBytes(StandardCharsets.UTF_8); }
+    public byte[] source() throws IOException {
+        byte[] source = (JSON.writerWithDefaultPrettyPrinter().writeValueAsString(document) + "\n").getBytes(StandardCharsets.UTF_8);
+        if (source.length > MAX_BYTES) throw invalid("canonical project size");
+        return source;
+    }
 }

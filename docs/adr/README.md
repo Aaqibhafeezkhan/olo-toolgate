@@ -32,7 +32,7 @@ Use `000-template.md`.
 - [008: Capability-scoped built-ins and anonymous client distribution](008-hotfolder-builtins.md)
 - [009: Managed runtimes execute in a disposable OCI sandbox](009-managed-local-runtime-sandbox.md)
 - [010: Signed fleet generations and immutable OCI package descriptors](010-signed-fleet-reconciliation.md)
-- [011: Signed source authoring and designated-client sandbox tests](011-designated-client-tool-authoring.md)
+- [011: SDK package authoring and isolated builds](011-designated-client-tool-authoring.md)
 - [012: Client MCP requests delivered by polling](012-client-mcp-polling-relay.md)
 - [012a: Single-node Quickstart composition](012a-single-node-quickstart.md)
 - [013: Tool Host, permits, egress broker, secrets and transports](013-tool-host-egress-broker-secrets.md)

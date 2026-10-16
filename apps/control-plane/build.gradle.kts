@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.bouncycastle.pkix)
     implementation(project(":package-archive"))
     implementation(project(":sdk-java-api"))
+    implementation(project(":sdk-json"))
     if (usePublishedContracts.get()) {
         implementation("io.github.olo-labs:toolgate-contracts:$contractsVersion")
     } else {
@@ -39,6 +40,22 @@ tasks.test {
     systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
     systemProperty("toolgate.productVersion", rootProject.file("VERSION").readText().trim())
     // A fresh PostgreSQL boundary is supplied for each verification invocation.
+    outputs.upToDateWhen { false }
+}
+
+// Worker proof has separate reports so the full regression evidence remains intact.
+tasks.register<Test>("sdkWorkerTest") {
+    description = "Builds real JSON SDK packages through the isolated worker and checks byte equality and cleanup"
+    dependsOn("testClasses", ":sdk-json:installDist")
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter { includeTestsMatching("io.ololabs.toolgate.control.JsonSdkWorkerTest") }
+    val cli = providers.environmentVariable("TOOLGATE_CLI").getOrElse("")
+    doFirst { require(cli.isNotBlank()) { "sdkWorkerTest requires TOOLGATE_CLI pointing to the verified native package CLI" } }
+    systemProperty("toolgate.cli", cli)
+    systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
+    systemProperty("toolgate.sdkLibraries", rootProject.file("tool-sdk/json-sdk/build/install/toolgate-json-sdk/lib").absolutePath)
+    systemProperty("toolgate.workerWorkRoot", rootProject.file("build/sdk-worker-e2e").absolutePath)
     outputs.upToDateWhen { false }
 }
 

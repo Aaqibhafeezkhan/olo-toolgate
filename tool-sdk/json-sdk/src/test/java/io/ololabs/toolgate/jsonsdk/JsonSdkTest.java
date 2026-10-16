@@ -61,6 +61,7 @@ class JsonSdkTest {
                 source.replace("\"maxLength\": 128", "\"maxLength\": 4294967424"),
                 source.replace("\"sdkVersion\": \"0.10.0-dev\"", "\"sdkVersion\": \"9.9.9\""),
                 source.replace("\"default\": \"World\"", "\"default\": 5"),
+                source.replace("\"default\": \"World\"", "\"default\": \"\\ud800\""),
                 source.replace("\"input\": \"text\"", "\"input\": \"secret\""),
                 source.replace("\"concat\"", "\"eval\""), source + " {}")) {
             assertThrows(Exception.class, () -> JsonProject.parse(invalid.getBytes(StandardCharsets.UTF_8)));
@@ -87,5 +88,21 @@ class JsonSdkTest {
             var second = JsonSdk.stage(example(), directory.resolve("india"));
             assertArrayEquals(Files.readAllBytes(first.staging().resolve("artifacts/tool.jar")), Files.readAllBytes(second.staging().resolve("artifacts/tool.jar")));
         } finally { java.util.TimeZone.setDefault(original); }
+    }
+    @Test void acceptedProjectsCannotExportSourceBeyondTheParserLimit() throws Exception {
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode)JsonProject.JSON.readTree(example());
+        var template = (com.fasterxml.jackson.databind.node.ObjectNode)root.path("tools").get(0).deepCopy();
+        var output = template.putObject("output");
+        for (int field = 0; field < 16; field++) {
+            var parts = output.putObject("field" + field).putArray("concat");
+            for (int part = 0; part < 32; part++) parts.addObject().put("literal", "");
+        }
+        var tools = root.putArray("tools");
+        for (int index = 0; index < 4; index++) tools.add(template.deepCopy().put("name", "bulk" + index));
+        byte[] compact = JsonProject.JSON.writeValueAsBytes(root);
+        assertTrue(compact.length < JsonProject.MAX_BYTES);
+        assertThrows(IllegalArgumentException.class, () -> JsonProject.parse(compact));
+        var project = JsonProject.parse(example());
+        assertArrayEquals(project.source(), JsonProject.parse(project.source()).source());
     }
 }

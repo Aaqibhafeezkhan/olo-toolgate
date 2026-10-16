@@ -3,7 +3,6 @@
 //! Managed interpreter provisioning and organization-reviewed, online-authorized execution.
 pub mod adapters;
 pub mod engine;
-pub mod source;
 use crate::{builtins::AuthorizationPort, contracts::Contracts, Failure, Result};
 use olo_toolgate_contracts::*;
 use serde::{Deserialize, Serialize};
@@ -12,6 +11,21 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
+
+/// One invocation frame. Executable behavior belongs to the installed package, never to this input.
+fn framed_input(
+    tool: &LocalToolRegistration,
+    invocation: &[u8],
+) -> Result<(Vec<u8>, LocalRuntimeLimits)> {
+    let mut limits = tool.limits.clone();
+    limits.max_input_bytes = limits
+        .max_input_bytes
+        .checked_add(1)
+        .ok_or(Failure::Validation)?;
+    let mut bytes = invocation.to_vec();
+    bytes.push(b'\n');
+    Ok((bytes, limits))
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -76,7 +90,6 @@ impl Settings {
                 .ok_or(Failure::Validation)?
                 .kind;
             if !matches!(kind, LocalRuntimeKind::Batch | LocalRuntimeKind::Wasm) {
-                source::validate(kind, tool)?;
                 adapters::invocation_arguments(kind, tool)?;
             }
             closed_schema(&tool.input_schema)?;
@@ -314,7 +327,7 @@ impl Manager {
         {
             return Err(Failure::Validation);
         }
-        let (input, limits) = source::input(&tool, &input)?;
+        let (input, limits) = framed_input(&tool, &input)?;
         let command = adapters::invocation_arguments(&runtime.kind, &tool)?;
         let output = self
             .engine
@@ -400,7 +413,7 @@ impl Manager {
             return Err(Failure::Expired);
         }
         let command = adapters::invocation_arguments(&runtime.kind, &tool)?;
-        let (input, limits) = source::input(&tool, &input)?;
+        let (input, limits) = framed_input(&tool, &input)?;
         let data = tokio::time::timeout(
             std::time::Duration::from_millis(deadline.saturating_sub(crate::now())),
             self.engine.run(&runtime.image, &command, &input, &limits),

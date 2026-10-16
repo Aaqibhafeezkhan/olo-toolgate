@@ -28,6 +28,9 @@ import javax.tools.ToolProvider;
 public final class JsonSdk {
     private static final java.time.LocalDateTime ZIP_TIME = java.time.LocalDateTime.of(1980, 1, 2, 0, 0);
     public record Build(Path jar, Path staging, JsonProject project) {}
+    /** Immutable build outputs consumed by CLI and Builder workers. A receipt is written only after verification. */
+    public record Bundle(Path packageFile, Path sourceFile, String artifactDigest, String packageDigest,
+                         String descriptorSetDigest, String sourceDigest, String sourceArchiveDigest) {}
     private JsonSdk() {}
 
     public static Build stage(byte[] source, Path work) throws IOException {
@@ -74,7 +77,35 @@ public final class JsonSdk {
     public static Path pack(Build build, Path output, Map<String, String> environment) throws IOException, InterruptedException {
         check(build);
         Packer.pack(build.staging(), output, environment);
+        io.ololabs.toolgate.packagearchive.PackageArchive.validate(Files.readAllBytes(output));
         return output;
+    }
+
+    /** One build, one package, one canonical source export. Control delegates this operation to its build worker. */
+    public static Bundle bundle(byte[] source, Path work, Path output, Map<String, String> environment) throws IOException, InterruptedException {
+        if (Files.exists(output, LinkOption.NOFOLLOW_LINKS)) throw new IllegalArgumentException("Export directory must be new");
+        var build = stage(source, work);
+        Files.createDirectories(output);
+        Path packageFile = output.resolve("package.tgpkg"), sourceFile = output.resolve("source.zip");
+        pack(build, packageFile, environment);
+        var verified = io.ololabs.toolgate.packagearchive.PackageArchive.validate(Files.readAllBytes(packageFile));
+        byte[] archive = sourceArchive(source);
+        Files.write(sourceFile, archive, StandardOpenOption.CREATE_NEW);
+        var result = new Bundle(packageFile, sourceFile, digest(Files.readAllBytes(packageFile)), verified.packageDigest(),
+                verified.descriptorSetDigest(), digest(build.project().source()), digest(archive));
+        var receipt = JsonProject.JSON.createObjectNode().put("schemaVersion", 1).put("sdkVersion", JsonProject.sdkVersion())
+                .put("packageId", build.project().id()).put("version", build.project().version())
+                .put("packageFile", "package.tgpkg").put("sourceFile", "source.zip")
+                .put("artifactDigest", result.artifactDigest()).put("packageDigest", result.packageDigest())
+                .put("descriptorSetDigest", result.descriptorSetDigest()).put("sourceDigest", result.sourceDigest())
+                .put("sourceArchiveDigest", result.sourceArchiveDigest());
+        Files.write(output.resolve("build.json"), JsonProject.JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(receipt), StandardOpenOption.CREATE_NEW);
+        return result;
+    }
+
+    private static String digest(byte[] value) {
+        try { return "sha256:" + java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(value)); }
+        catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
 
     /** Exactly one source export. ZIP bytes contain no build timestamps, machine paths or job identity. */
@@ -85,7 +116,8 @@ public final class JsonSdk {
         files.put(".gitignore", "build/\ntoolgate.dev.json\n".getBytes(StandardCharsets.UTF_8));
         files.put("README.md", ("# " + project.name() + "\n\nBuild with the matching ToolGate JSON SDK distribution (JDK 17+).\n\n"
                 + "    toolgate-json-sdk check .\n    toolgate-json-sdk pack .\n\n"
-                + "Commit this project under core-mcp/<package> and select sdk=json in its build inventory.\n"
+                + "Commit this canonical project to your repository to edit and rebuild it.\n"
+                + "To include it in ToolGate's core inventory, place it under core-mcp/<package> and select sdk=json.\n"
                 + "The built .tgpkg uses the same package and execution contract as the Java SDK.\n").getBytes(StandardCharsets.UTF_8));
         var bytes = new ByteArrayOutputStream();
         try (var zip = new ZipOutputStream(bytes, StandardCharsets.UTF_8)) {

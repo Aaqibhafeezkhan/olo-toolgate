@@ -188,6 +188,19 @@ pub(crate) struct Job {
     cancel: tokio::sync::watch::Sender<bool>,
 }
 impl Job {
+    #[cfg(test)]
+    pub(crate) fn waiting(task: RemoteToolTask) -> Self {
+        let (cancel, mut receiver) = tokio::sync::watch::channel(false);
+        let handle = tokio::spawn(async move {
+            let _ = receiver.changed().await;
+            Err(Failure::Revoked)
+        });
+        Self {
+            task,
+            handle: Some(handle),
+            cancel,
+        }
+    }
     pub fn start(
         config: Config,
         settings: Option<execution::Settings>,

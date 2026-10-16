@@ -8,6 +8,7 @@ def outputs():
  defs={n:s for p in (ROOT/'packages/contracts/schemas/v1').glob('*.json') for n,s in json.loads(p.read_text(encoding='utf-8'))['$defs'].items()}
  p=ROOT/'tests/fixtures/contracts/v1/valid.json';fixtures={n:v for n,v in json.loads(p.read_text(encoding='utf-8')).items() if n in defs}
  def sample(s):
+  if 'const' in s:return s['const']
   if '$ref' in s:
    n=s['$ref'].split('/')[-1];return fixtures[n] if n in fixtures else sample(defs[n])
   if 'enum' in s:return s['enum'][0]

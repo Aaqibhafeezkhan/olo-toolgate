@@ -3,7 +3,6 @@
 //! Protected endpoint identity, enrollment and batched health reporting.
 pub mod activity;
 pub mod browser;
-pub mod builder;
 pub mod builtins;
 pub mod config;
 pub mod connections;

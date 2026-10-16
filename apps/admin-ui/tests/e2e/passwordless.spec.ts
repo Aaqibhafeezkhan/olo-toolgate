@@ -7,7 +7,7 @@ test('explicit local password-free mode enters the console and still uses protec
   await page.goto('/console/');
   await expect(page.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
   await expect(page.getByLabel('Password',{exact:true})).toHaveCount(0);
-  for (const path of ['/api/control/v1/users/admin', '/api/control/v1/builder/drafts', '/api/control/v1/builder/tests', '/api/control/v1/fleet/releases', '/api/control/v1/fleet/rollouts']) {
+  for (const path of ['/api/control/v1/users/admin', '/api/control/v1/builder/drafts', '/api/control/v1/builder/builds', '/api/control/v1/fleet/releases', '/api/control/v1/fleet/rollouts']) {
     const result = await page.evaluate(async (path) => {
       const login = await fetch('/api/quickstart/v1/login', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json());
       const response = await fetch(path,{headers:{Authorization:`Bearer ${login.accessToken}`}});

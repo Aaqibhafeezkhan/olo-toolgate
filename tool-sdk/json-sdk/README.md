@@ -20,6 +20,7 @@ through its worker, without its own source generator or packager.
 toolgate-json-sdk check ./my-tool
 toolgate-json-sdk pack ./my-tool
 toolgate-json-sdk source ./my-tool
+toolgate-json-sdk bundle ./my-tool ./build/exports
 ```
 
 The `toolgate check` and `toolgate pack` project commands also recognize
@@ -66,6 +67,9 @@ target when the runtime and invocation authority allow it. Eligibility never
 grants runtime access.
 
 The single source ZIP contains `toolgate.json`, README and `.gitignore`.
+`bundle` creates both exports and a verified digest receipt in a fresh output
+directory. Builder's worker invokes that same operation; the receipt is written
+only after package verification succeeds.
 Generated Java is an internal build artifact. The CLI and Builder worker use
 the same compiler, exact runtime dependency set and canonical Rust packager.
 Byte-for-byte reproducibility requires the same pinned SDK distribution,

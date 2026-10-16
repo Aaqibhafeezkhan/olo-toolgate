@@ -51,8 +51,6 @@ pub struct ClientService {
     remote_job: Option<crate::remote::Job>,
     remote_result: Option<RemoteToolResult>,
     adoption: Option<EndpointAdoption>,
-    builder_job: Option<crate::builder::Job>,
-    builder_result: Option<BuilderTestResult>,
     deployment: crate::deployment::State,
     execution: Option<crate::execution::Manager>,
     tools: Option<crate::builtins::Executor>,
@@ -158,8 +156,6 @@ impl ClientService {
                 }
                 None => None,
             },
-            builder_job: None,
-            builder_result: None,
             deployment,
             execution,
             tools,
@@ -301,15 +297,10 @@ impl ClientService {
         } else {
             Ok(())
         };
-        let job_cleanup = if let Some(mut job) = self.builder_job.take() {
-            job.shutdown().await
-        } else {
-            Ok(())
-        };
         if let Some(manager) = &self.execution {
             manager.shutdown().await?;
         }
-        job_cleanup.and(remote_cleanup)
+        remote_cleanup
     }
     pub async fn invoke_runtime(&mut self, input: LocalToolInput) -> Result<LocalToolOutput> {
         if self.remote_job.is_some() {
@@ -604,57 +595,6 @@ impl ClientService {
         ));
         Ok(())
     }
-    async fn builder_test(&mut self, identity: &DeviceIdentity) -> Result<()> {
-        let Some(settings) = self.config.deployment.clone() else {
-            return Ok(());
-        };
-        if let Some(job) = &mut self.builder_job {
-            let Some(result) = job.completed().await else {
-                return Ok(());
-            };
-            self.builder_job = None;
-            self.builder_result = Some(result);
-        }
-        if let Some(result) = self.builder_result.clone() {
-            let response = self
-                .control
-                .builder_result(identity.clone(), result.clone())
-                .await;
-            if matches!(response, Err(Failure::Conflict | Failure::Expired)) {
-                // An expired/replaced lease must not fence the next queued job forever.
-                self.builder_result = None;
-            }
-            let response = response?;
-            if response.id != result.job_id
-                || response.definition_digest != result.definition_digest
-            {
-                return Err(Failure::Unauthorized);
-            }
-            tracing::info!(event="builder_test",job_id=%result.job_id,result=if result.success {"passed"} else {"failed"});
-            self.builder_result = None;
-        }
-        if self.config.execution.is_none() || self.config.tools.is_none() {
-            return Ok(());
-        }
-        let poll = self.control.builder_poll(identity.clone()).await?;
-        let Some(signed) = poll.task else {
-            return Ok(());
-        };
-        let server = self
-            .journal
-            .manifest
-            .as_ref()
-            .ok_or(Failure::Unauthorized)?
-            .server_id
-            .clone();
-        let task = crate::builder::verify(&settings, &signed, identity, &server, self.clock()?)?;
-        self.builder_job = Some(crate::builder::Job::start(
-            self.config.clone(),
-            task,
-            self.activity.clone(),
-        ));
-        Ok(())
-    }
     pub fn health(&self) -> ClientHealth {
         let now = crate::now().max(
             self.boot_time.saturating_add(
@@ -807,8 +747,6 @@ impl ClientService {
         self.journal.reenrollment = true;
         self.remote_job = None;
         self.remote_result = None;
-        self.builder_job = None;
-        self.builder_result = None;
         self.state = EndpointState::Unenrolled;
     }
     fn follow_enrollment(&mut self, directive: &EndpointConnectionDirective) -> Result<()> {
@@ -827,9 +765,6 @@ impl ClientService {
         let result = self.tick_inner().await;
         if let Err(failure) = result {
             if let Some(job) = &self.remote_job {
-                job.cancel();
-            }
-            if let Some(job) = &self.builder_job {
                 job.cancel();
             }
             self.failures = self.failures.saturating_add(1);
@@ -860,9 +795,6 @@ impl ClientService {
         match directive.action {
             EndpointConnectionAction::Wait => {
                 if let Some(job) = &self.remote_job {
-                    job.cancel();
-                }
-                if let Some(job) = &self.builder_job {
                     job.cancel();
                 }
                 self.journal.revoked = directive.state == EndpointState::Revoked;
@@ -1097,12 +1029,6 @@ impl ClientService {
             {
                 self.deployment.failed(Failure::Expired);
             }
-            if failure == Failure::Revoked {
-                return Err(failure);
-            }
-        }
-        if let Err(failure) = self.builder_test(&identity).await {
-            tracing::warn!(event="builder_test",result="rejected",error=?failure);
             if failure == Failure::Revoked {
                 return Err(failure);
             }
@@ -1989,8 +1915,8 @@ mod tests {
             organization_keys: vec![],
             release_keys: vec![],
         });
-        service.builder_job = Some(crate::builder::Job::waiting(
-            serde_json::from_value(fixtures["BuilderTestTask"].clone()).unwrap(),
+        service.remote_job = Some(crate::remote::Job::waiting(
+            serde_json::from_value(fixtures["RemoteToolTask"].clone()).unwrap(),
         ));
         tokio::time::timeout(std::time::Duration::from_secs(1), service.tick())
             .await
@@ -2010,7 +1936,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(550)).await;
         assert_eq!(service.tick().await, Err(Failure::Revoked));
         assert_eq!(service.health().state, EndpointState::Revoked);
-        let mut job = service.builder_job.take().unwrap();
+        let mut job = service.remote_job.take().unwrap();
         let result = tokio::time::timeout(std::time::Duration::from_secs(1), async {
             loop {
                 if let Some(result) = job.completed().await {
@@ -2021,7 +1947,7 @@ mod tests {
         })
         .await
         .unwrap();
-        assert!(!result.success);
+        assert!(result.output.is_none());
         assert_eq!(result.error, Some(ErrorCode::Forbidden));
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();

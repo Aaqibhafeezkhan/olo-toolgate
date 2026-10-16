@@ -21,99 +21,6 @@ export interface AuthorizationRequest {
   readonly action: string;
   readonly arguments: Record<string, unknown>;
 }
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDefinition {
-  readonly packageId: string;
-  readonly version: string;
-  readonly name: string;
-  readonly description: string;
-  readonly useWhen: string;
-  readonly doNotUseWhen: string;
-  readonly runtime: ManagedRuntime;
-  readonly tool: LocalToolRegistration;
-  readonly platforms: ReadonlyArray<ClientPlatform>;
-  readonly architectures: ReadonlyArray<FleetArchitecture>;
-  readonly examples: ReadonlyArray<FleetSelfTest>;
-  readonly permissions: ReadonlyArray<BuilderPermission>;
-  readonly resource: ResourceDescriptor;
-  readonly credentialRequirements: ReadonlyArray<string>;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDraft {
-  readonly id: string;
-  readonly revision: number;
-  readonly definition: BuilderDefinition;
-  readonly definitionDigest: string;
-  readonly sealed: boolean;
-  readonly packageDocument: FleetPackageDocument;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDraftPage {
-  readonly items: ReadonlyArray<BuilderDraft>;
-  readonly nextCursor?: string;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDraftRequest {
-  readonly id: string;
-  readonly expectedRevision: number;
-  readonly definition: BuilderDefinition;
-}
-export type BuilderPermission = "COMPUTE" | "FILE_READ" | "FILE_WRITE" | "NETWORK" | "CREDENTIALS";
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderRevisionRequest {
-  readonly expectedRevision: number;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestPage {
-  readonly items: ReadonlyArray<BuilderTestRecord>;
-  readonly nextCursor?: string;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestPoll {
-  readonly task?: FleetSignedDocument;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestRecord {
-  readonly id: string;
-  readonly draftId: string;
-  readonly definitionDigest: string;
-  readonly deviceId: string;
-  readonly state: BuilderTestState;
-  readonly revision: number;
-  readonly createdAtUnixMs: number;
-  readonly expiresAtUnixMs: number;
-  readonly attempt: number;
-  readonly leaseId: string;
-  readonly exampleIndex: number;
-  readonly error?: ErrorCode;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestRequest {
-  readonly id: string;
-  readonly draftId: string;
-  readonly expectedRevision: number;
-  readonly deviceId: string;
-  readonly exampleIndex: number;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestResult {
-  readonly jobId: string;
-  readonly leaseId: string;
-  readonly definitionDigest: string;
-  readonly success: boolean;
-  readonly error?: ErrorCode;
-}
-export type BuilderTestState = "QUEUED" | "RUNNING" | "PASSED" | "FAILED" | "EXPIRED";
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestTask {
-  readonly formatVersion: number;
-  readonly tenantId: string;
-  readonly serverId: string;
-  readonly deviceId: string;
-  readonly job: BuilderTestRecord;
-  readonly definition: BuilderDefinition;
-  readonly expiresAtUnixMs: number;
-}
 /** Fixed service tool boundary; validate schema before use. */
 export interface BuiltinInvocation {
   readonly toolId: string;
@@ -273,7 +180,7 @@ export interface ClientReport {
   readonly packages: ReadonlyArray<ReportedPackage>;
   readonly power?: DevicePower;
 }
-export type ClientSocketOperation = "CHECK_IN" | "AUTHORIZE" | "RESULT" | "BUILDER_POLL" | "BUILDER_RESULT";
+export type ClientSocketOperation = "CHECK_IN" | "AUTHORIZE" | "RESULT";
 /** Correlated status and response; body is validated again as the expected response contract. */
 export interface ClientSocketReply {
   readonly requestId: string;
@@ -1623,13 +1530,7 @@ export interface LocalToolRegistration {
   readonly inputSchema: Record<string, unknown>;
   readonly outputSchema: Record<string, unknown>;
   readonly limits: LocalRuntimeLimits;
-  readonly source?: LocalToolSource;
   readonly authorizationProfile: InstalledAuthorizationProfile;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface LocalToolSource {
-  readonly code: string;
-  readonly sha256: string;
 }
 /** Administrator-selected immutable tool/runtime image; runtime provisioning is not execution authorization. */
 export interface ManagedRuntime {
@@ -1736,6 +1637,71 @@ export interface ResourceDescriptor {
   readonly locator: string;
 }
 export type ResourceKind = "FILE" | "URL" | "DATABASE" | "DEVICE" | "CUSTOM";
+/** Pinned package build and fenced worker lease; artifacts confer no runtime authority. */
+export interface SdkBuilderBuild {
+  readonly id: string;
+  readonly draftId: string;
+  readonly draftRevision: number;
+  readonly toolGroupId: string;
+  readonly source: string;
+  readonly sourceDigest: string;
+  readonly creatorUserId: string;
+  readonly state: SdkBuilderState;
+  readonly revision: number;
+  readonly createdAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly leaseId: string;
+  readonly artifactDigest?: string;
+  readonly sourceArchiveDigest?: string;
+  readonly packageDigest?: string;
+  readonly error?: SdkBuilderError;
+}
+/** Authorized immutable SDK package builds. */
+export interface SdkBuilderBuildPage {
+  readonly items: ReadonlyArray<SdkBuilderBuild>;
+  readonly nextCursor?: string;
+}
+/** Queue an immutable project revision for the shared SDK worker. */
+export interface SdkBuilderBuildRequest {
+  readonly id: string;
+  readonly draftId: string;
+  readonly expectedRevision: number;
+}
+/** Canonical JSON SDK source project at an optimistic revision; no executable registration. */
+export interface SdkBuilderDraft {
+  readonly id: string;
+  readonly revision: number;
+  readonly toolGroupId: string;
+  readonly source: string;
+  readonly sourceDigest: string;
+}
+/** Authorized SDK source projects. */
+export interface SdkBuilderDraftPage {
+  readonly items: ReadonlyArray<SdkBuilderDraft>;
+  readonly nextCursor?: string;
+}
+export type SdkBuilderError = "BUILD_FAILED" | "AUTHORITY_REVOKED" | "EXPIRED" | "VERSION_CONFLICT";
+/** Minimal authoring context filtered by current Builder permissions, without Tool Group membership data. */
+export interface SdkBuilderGroup {
+  readonly id: string;
+  readonly name: string;
+  readonly canBuild: boolean;
+}
+/** Save a canonical SDK source revision in an authorized Tool Group. */
+export interface SdkBuilderSave {
+  readonly id: string;
+  readonly expectedRevision: number;
+  readonly toolGroupId: string;
+  readonly source: string;
+}
+export type SdkBuilderState = "QUEUED" | "RUNNING" | "READY" | "FAILED";
+/** Configured SDK and current authorized authoring contexts; availability grants no authority. */
+export interface SdkBuilderStatus {
+  readonly sdkVersion: string;
+  readonly configured: boolean;
+  readonly maxSourceCharacters: number;
+  readonly groups: ReadonlyArray<SdkBuilderGroup>;
+}
 export type SecretReference = string;
 export type SemanticVersion = string;
 export type Sha256 = string;

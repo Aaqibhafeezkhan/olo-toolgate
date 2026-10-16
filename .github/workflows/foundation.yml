@@ -37,6 +37,7 @@ jobs:
         cargo build --locked -p toolgate-cli
         python core-mcp/test_build.py
         python core-mcp/build.py --cli target/debug/toolgate
+        TOOLGATE_CLI="$PWD/target/debug/toolgate" ./gradlew --no-daemon :control-plane:sdkWorkerTest -PprebuiltAdminUi=true
     - name: Dependency, license and secret scan hooks
       run: |
         python tools/check.py --scans --ci-common

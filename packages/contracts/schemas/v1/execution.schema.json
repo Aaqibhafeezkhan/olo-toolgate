@@ -126,9 +126,6 @@
         "limits": {
           "$ref": "#/$defs/LocalRuntimeLimits"
         },
-        "source": {
-          "$ref": "builder.schema.json#/$defs/LocalToolSource"
-        },
         "authorizationProfile": {
           "$ref": "enterprise.schema.json#/$defs/InstalledAuthorizationProfile"
         }
