@@ -4,7 +4,6 @@ FROM rust:1.94.1-bookworm@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
-COPY packages/contracts/tools packages/contracts/tools
 COPY apps/gateway/Cargo.toml apps/gateway/Cargo.toml
 COPY apps/gateway/src apps/gateway/src
 COPY apps/gateway/benches apps/gateway/benches
