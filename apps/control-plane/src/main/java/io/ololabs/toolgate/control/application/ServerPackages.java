@@ -36,7 +36,7 @@ public final class ServerPackages {
     private JsonNode node(String document) { return (JsonNode) codec.value(document); }
     private Store.Reply reply(int status, Object value) { return new Store.Reply(status, codec.json(value), 0); }
     private static Failure notFound() { return new Failure(ErrorCode.NOT_FOUND, 404, "Package not found"); }
-    private void superAdmin(Store.Session tx, DirectoryService.Actor actor) { actor.requireAdmin(); if (!new ManagementAccess(codec).superAdministrator(tx.load(), actor.userId())) throw ManagementAccess.denied(); }
+    private void writer(Store.Session tx, DirectoryService.Actor actor, String action) { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package." + action, clock.millis()); }
     private void reader(Store.Session tx, DirectoryService.Actor actor) { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package.read", clock.millis()); }
     private static String hex(String digest) { if (digest == null || !digest.matches("sha256:[a-f0-9]{64}")) throw Failure.validation(); return digest.substring(7); }
 
@@ -47,13 +47,13 @@ public final class ServerPackages {
 
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId) { return upload(actor, data, requestId, null); }
 
-    /** The existing upload: the package rules, then what this ToolGate can run, under Super Admin. */
+    /** Package verification never confers authority; import permission is resolved against current roles. */
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId, Origin origin) {
         var verified = PackageArchive.validate(data, this::node); var manifest = verified.manifest();
         PackageCompatibility.require(PackageCompatibility.problems(manifest));
         String digest = verified.packageDigest(), id = manifest.get("id").asText(), version = manifest.get("version").asText();
         return store.transaction(actor.tenant(), true, tx -> {
-            superAdmin(tx, actor);
+            writer(tx, actor, "import");
             if (origin != null) tx.audit(actor.id(), "PACKAGE_MARKETPLACE_IMPORT", origin.target(), 1, requestId, hex(digest));
             var existing = tx.packages().version(digest);
             if (existing != null) return new Store.Reply(200, existing.document(), 0);
@@ -86,7 +86,7 @@ public final class ServerPackages {
     public Store.Reply deploy(DirectoryService.Actor actor, String body, String requestId) {
         var request = codec.model(body, PackageDeploymentRequest.class);
         return store.transaction(actor.tenant(), true, tx -> {
-            superAdmin(tx, actor);
+            writer(tx, actor, "deploy");
             var version = tx.packages().version(request.packageDigest());
             if (version == null) throw notFound();
             var manifest = node(version.document()).get("manifest");

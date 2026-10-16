@@ -34,6 +34,7 @@ class InventoryTest(unittest.TestCase):
         repeated = json.loads(json.dumps(initial))
         repeated["packages"].append(repeated["packages"][0].copy())
         invalid.append(repeated)
+        invalid.append(dict(schemaVersion=1, packages=[initial["packages"][0]] * 33))
         for document in invalid:
             with self.subTest(document=document), self.assertRaises(ValueError):
                 self.read(document)

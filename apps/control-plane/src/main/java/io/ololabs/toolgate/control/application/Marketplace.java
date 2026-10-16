@@ -174,7 +174,7 @@ public final class Marketplace {
 
     // ---- Import (design §8.3) ------------------------------------------------------------------------------------
 
-    /** Imports one version after every check of design §8.3, then runs the existing upload. Super Admin only. */
+    /** Imports one version after every check of design §8.3 through the shared package import authority. */
     public Store.Reply install(DirectoryService.Actor actor, String body, String requestId) {
         var request = (JsonNode) codec.value(body);
         if (!request.isObject() || request.size() != 2 || !request.path("packageId").isTextual() || !request.path("version").isTextual()) throw Failure.validation();
@@ -182,7 +182,7 @@ public final class Marketplace {
         packageId(packageId); version(version);
         enabled();
         // The same check the upload makes, first, so nobody else makes Control download anything.
-        store.transaction(actor.tenant(), false, tx -> { actor.requireAdmin(); if (!new ManagementAccess(codec).superAdministrator(tx.load(), actor.userId())) throw ManagementAccess.denied(); return null; });
+        store.transaction(actor.tenant(), false, tx -> { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package.import", clock.millis()); return null; });
 
         String base = API + "/tools/" + packageId + "/" + version;
         var detail = json(base, MAX_JSON_BYTES);

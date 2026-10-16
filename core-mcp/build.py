@@ -30,8 +30,8 @@ def inventory(path):
     document = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=strict_object)
     if not isinstance(document, dict) or set(document) != {"schemaVersion", "packages"} or type(document["schemaVersion"]) is not int or document["schemaVersion"] != 1:
         raise ValueError("Invalid core package inventory")
-    if not isinstance(document["packages"], list) or not document["packages"]:
-        raise ValueError("Declare at least one core package")
+    if not isinstance(document["packages"], list) or not 1 <= len(document["packages"]) <= 32:
+        raise ValueError("Declare between one and 32 core packages")
     seen = set()
     projects = set()
     for package in document["packages"]:

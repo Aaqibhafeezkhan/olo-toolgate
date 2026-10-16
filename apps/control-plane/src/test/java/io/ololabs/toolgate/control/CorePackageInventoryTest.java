@@ -46,6 +46,7 @@ class CorePackageInventoryTest {
         loaded.getFirst().bytes()[0] = 0;
         assertArrayEquals(bytes, loaded.getFirst().bytes());
         Files.write(directory.resolve("example.tgpkg"), new byte[]{1, 2});
+        assertThrows(IOException.class, loaded.getFirst()::bytes);
         assertThrows(IOException.class, () -> CorePackageInventory.load(lock));
     }
     @Test void rejectsSubstitutionDuplicatesUnknownFieldsAndPathEscape() throws Exception {
