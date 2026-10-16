@@ -50,13 +50,50 @@ class GovernedTest {
     }
 
     private static JsonNode run(ClassLoader loader, Map<String, String> env, JsonNode input) throws IOException {
+        var responses = frames(loader, env, input);
+        return responses.get(responses.size() - 1);
+    }
+
+    private static List<JsonNode> frames(ClassLoader loader, Map<String, String> env, JsonNode input) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         Governed.run(loader, env, new ByteArrayInputStream((input + "\n").getBytes(StandardCharsets.UTF_8)), out,
                 new PrintStream(err, true, StandardCharsets.UTF_8));
         String text = out.toString(StandardCharsets.UTF_8);
-        assertTrue(text.endsWith("\n") && text.indexOf('\n') == text.length() - 1, "exactly one frame line: " + text + err);
-        return Fixtures.JSON.readTree(text);
+        assertTrue(text.endsWith("\n"), "newline-terminated response frames: " + text + err);
+        var result = new java.util.ArrayList<JsonNode>();
+        for (String line : text.lines().toList()) result.add(Fixtures.JSON.readTree(line));
+        assertEquals(1, result.stream().filter(frame -> frame.path("kind").asText().equals("RESULT")).count());
+        assertEquals("RESULT", result.get(result.size() - 1).path("kind").asText(), "terminal result is last");
+        return List.copyOf(result);
+    }
+
+    @Test void governedResponsesPreserveRealOrderAndRedactBeforeWriting() throws IOException {
+        var input = input("acme.demo/demo.events", "{\"token\":\"private-input\"}");
+        input.put("deadlineUnixMs", System.currentTimeMillis() + 10000);
+        var frames = frames(demo, Map.of(), input);
+        assertEquals(List.of("LOG", "PROGRESS", "PROGRESS", "RESULT"), frames.stream().map(frame -> frame.path("kind").asText()).toList());
+        assertEquals("received [REDACTED]", frames.get(0).path("message").asText());
+        assertEquals("processing [REDACTED]", frames.get(1).path("message").asText());
+        assertEquals(0.5, frames.get(1).path("fraction").asDouble());
+        assertEquals(1.0, frames.get(2).path("fraction").asDouble());
+        assertFalse(frames.toString().contains("private-input"));
+        assertTrue(frames.get(frames.size() - 1).path("structuredContent").path("done").asBoolean());
+        var result = frames.get(frames.size() - 1).path("structuredContent");
+        assertEquals("inv-1", result.path("invocation").asText());
+        assertEquals("GOVERNED", result.path("mode").asText());
+        assertEquals(input.path("deadlineUnixMs").asLong(), result.path("deadline").asLong());
+        var monotonic = frames(demo, Map.of(), input("acme.demo/demo.tick", "{}"));
+        assertEquals(List.of(0.25, 1.0), monotonic.stream().filter(frame -> frame.path("kind").asText().equals("PROGRESS")).map(frame -> frame.path("fraction").asDouble()).toList());
+    }
+
+    @Test void missingBindingAndExpiredInputsCannotStartTools() throws IOException {
+        var missing = input("acme.demo/demo.events", "{\"token\":\"private\"}"); missing.remove("invocationId");
+        var rejected = frames(demo, Map.of(), missing);
+        assertEquals(1, rejected.size()); assertEquals("INVALID_INPUT", rejected.get(0).path("error").path("code").asText());
+        var expired = input("acme.demo/demo.events", "{\"token\":\"private\"}"); expired.put("deadlineUnixMs", 1);
+        var timedOut = frames(demo, Map.of(), expired);
+        assertEquals(1, timedOut.size()); assertEquals("DEADLINE_EXCEEDED", timedOut.get(0).path("error").path("code").asText());
     }
 
     @Test

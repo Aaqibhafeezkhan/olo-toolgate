@@ -75,7 +75,6 @@ ARG CLIENT_ASSETS_DIR=deploy/client-assets/empty
 ARG CLIENT_DOWNLOADS_DIRECTORY=""
 COPY --chown=65532:65532 ${CLIENT_ASSETS_DIR}/ /opt/toolgate/client-downloads/
 ENV TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY=$CLIENT_DOWNLOADS_DIRECTORY
-ENV TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH=/opt/toolgate/core-mcp/core-packages.lock.json
 COPY --from=build --chown=65532:65532 /workspace/apps/control-plane/build/quarkus-app/ /app/
 COPY --from=build /workspace/tool-sdk/json-sdk/build/install/toolgate-json-sdk/ /opt/toolgate/json-sdk/
 COPY --from=build /workspace/build/core-mcp/ /opt/toolgate/core-mcp/

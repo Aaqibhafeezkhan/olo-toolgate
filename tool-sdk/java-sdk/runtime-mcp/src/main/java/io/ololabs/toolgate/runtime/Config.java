@@ -39,6 +39,9 @@ final class Config {
     final Map<String, String> env;
     final JsonNode devJson;
     io.ololabs.toolgate.sdk.ExecutionLocation location = io.ololabs.toolgate.sdk.ExecutionLocation.SERVER;
+    java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> responses;
+    String governedInvocationId;
+    java.time.Instant governedDeadline;
     final List<String> warnings = new ArrayList<>();
 
     private Config(Mode mode, Map<String, String> env, JsonNode devJson) {

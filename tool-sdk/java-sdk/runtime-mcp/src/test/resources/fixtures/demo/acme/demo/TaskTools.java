@@ -15,6 +15,14 @@ import java.util.Map;
 public class TaskTools {
     public record Answer(String name) {}
 
+    @ServerTool(name = "demo.events", title = "Events", description = "Reports redacted execution responses.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> events(@Param(description = "Sensitive input", sensitive = true) String token, ToolContext context) {
+        context.log().info("received " + token);
+        context.progress(0.5, "processing " + token);
+        context.progress(1.0, "done");
+        return Map.of("done", true, "invocation", context.invocation().invocationId(), "mode", context.invocation().mode().name(), "deadline", context.invocation().deadline().toEpochMilli());
+    }
+
     @ServerTool(name = "demo.report", title = "Report", description = "Works for a while.", effect = EffectSafety.READ_ONLY, async = true)
     public Map<String, Object> report(@Param(description = "Milliseconds") long ms,
             @Param(description = "Keep going when cancelled", defaultValue = "false") boolean stubborn, ToolContext context) {

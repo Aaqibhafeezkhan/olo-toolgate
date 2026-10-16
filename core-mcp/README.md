@@ -31,8 +31,11 @@ Deployment provisioning and Marketplace publication consume these sealed
 artifacts separately. The inventory is not a deployment profile.
 
 The Control image runs this same build and copies only its sealed output into
-`/opt/toolgate/core-mcp`. At deployment, its
-`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH` selects that immutable lock. Control
+`/opt/toolgate/core-mcp`. At deployment,
+`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH` selects that immutable lock. Quickstart
+selects it for its configured tenant; Helm selects it when enrollment is enabled.
+Other Control deployments explicitly select the lock and configure the tenant
+with `TOOLGATE_CONTROL_ENDPOINT_TENANT_ID`. Control
 verifies every artifact and identity before uploading through the ordinary
 package service using the current installation Super Admin. Repeating startup
 reuses the same digest; invalid or missing artifacts fail startup. The upload

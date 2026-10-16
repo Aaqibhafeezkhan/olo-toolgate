@@ -73,6 +73,7 @@ data:
   {{- end }}
   TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY: {{ ternary "/opt/toolgate/client-downloads" "" $g.clientDownloads.enabled | quote }}
   {{- if $g.endpoint.enabled }}
+  TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: /opt/toolgate/core-mcp/core-packages.lock.json
   TOOLGATE_CONTROL_ENDPOINT_TENANT_ID: {{ required "control.endpoint.tenantId required" $g.endpoint.tenantId | quote }}
   TOOLGATE_CONTROL_ENDPOINT_SERVER_ID: {{ required "control.endpoint.serverId required" $g.endpoint.serverId | quote }}
   TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION: {{ required "control.endpoint.organization required" $g.endpoint.organization | quote }}

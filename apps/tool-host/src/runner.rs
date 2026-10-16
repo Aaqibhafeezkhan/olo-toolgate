@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //! Runs one invocation's process over tool protocol v2 (platform-requirements.md §13.3): one `ToolInput` line on
-//! stdin, one `ResultFrame` line on stdout. The process gets a clean environment, its own
+//! stdin, response frames ending with one `ResultFrame` on stdout. The process gets a clean environment, its own
 //! directory, the broker socket and capability, and nothing else of the host's; it is killed at
 //! the invocation deadline.
 //!
@@ -101,8 +101,9 @@ pub async fn run(launch: &Launch<'_>, input: &ToolInput, deadline_unix_ms: u64) 
     let mut stdin = child.stdin.take().expect("piped");
     let stdout = child.stdout.take().expect("piped");
     let stderr = child.stderr.take().expect("piped");
-    // The frame carries up to maxOutputBytes of content plus its envelope.
-    let out_cap = launch.max_output_bytes + 64 * 1024;
+    // The terminal frame carries maxOutputBytes plus its envelope. Reserve a bounded
+    // additional budget for SDK response frames; exceeding it fails the run explicitly.
+    let out_cap = launch.max_output_bytes + 576 * 1024;
     let work = async {
         let _ = stdin.write_all(&line).await;
         drop(stdin);
@@ -119,8 +120,8 @@ pub async fn run(launch: &Launch<'_>, input: &ToolInput, deadline_unix_ms: u64) 
     if !err.0.is_empty() {
         tracing::debug!(
             bytes = err.0.len(),
-            "tool stderr: {}",
-            String::from_utf8_lossy(&err.0)
+            truncated = err.1,
+            "tool diagnostics received"
         );
     }
     if out.1 {

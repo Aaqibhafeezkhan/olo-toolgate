@@ -25,6 +25,7 @@ class ExecutionLocationTest {
 
     private String call(String target, String name) throws Exception {
         var input = Fixtures.JSON.createObjectNode().put("protocolVersion", 2).put("toolId", "acme.mixed/" + name);
+        input.put("invocationId", "location-test").put("deadlineUnixMs", System.currentTimeMillis() + 30000);
         input.putObject("arguments"); input.putObject("globals"); input.putObject("claims"); input.putArray("secretHandles");
         var output = new ByteArrayOutputStream();
         Governed.run(tools, Map.of("TOOLGATE_EXECUTION_TARGET", target),

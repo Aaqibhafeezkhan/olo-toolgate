@@ -54,6 +54,8 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     private volatile Tasks tasks;
     private volatile JsonNode progressToken;
     private volatile java.util.function.Consumer<ObjectNode> notifications;
+    private volatile java.util.function.Consumer<ObjectNode> responseFrames;
+    private InvocationMode invocationMode = InvocationMode.STANDALONE;
     private volatile String taskId;
     private volatile ObjectNode responses;
     private volatile ObjectNode pendingInput;
@@ -154,6 +156,10 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
         this.notifications = sink;
     }
 
+    /** The governed supervisor receives the same canonical frames for sync calls and tasks. */
+    void attachResponses(java.util.function.Consumer<ObjectNode> sink) { responseFrames = sink; }
+    void attachMode(InvocationMode mode) { invocationMode = mode; }
+
     /**
      * Bounded and monotonic (case {@code context/progress}): a fraction outside 0..1, or lower than the last one, is
      * ignored. A task reports it as its status message; a sync call as {@code notifications/progress} when the request
@@ -165,6 +171,12 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
         double bounded = fraction;
         progressed = bounded;
         String safe = message == null || message.isBlank() ? null : Redactor.cap(redactor.apply(message), 256);
+        var sink = responseFrames;
+        if (sink != null) {
+            ObjectNode frame = JsonNodeFactory.instance.objectNode().put("kind", "PROGRESS").put("fraction", bounded);
+            if (safe != null && !safe.isEmpty()) frame.put("message", safe);
+            sink.accept(frame);
+        }
         if (tasks != null) {
             tasks.progress(taskId, Math.round(bounded * 100) + "%" + (safe == null ? "" : " " + safe));
         } else if (progressToken != null && notifications != null) {
@@ -281,7 +293,7 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     @Override public Instant deadline() { return deadline; }
     @Override public Optional<String> businessKey() { return Optional.ofNullable(businessKey); }
     @Override public int attempt() { return 1; }
-    @Override public InvocationMode mode() { return InvocationMode.STANDALONE; }
+    @Override public InvocationMode mode() { return invocationMode; }
 
     // ToolLogger: redacted, 4 KiB per entry, 256 KiB per invocation, kept as local diagnostics
     @Override public void debug(String message) { write("debug", message); }
@@ -293,6 +305,8 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
         String entry = Redactor.cap(redactor.apply(String.valueOf(message)), LOG_ENTRY_BYTES);
         long size = entry.getBytes(StandardCharsets.UTF_8).length;
         if (logged.addAndGet(size) > LOG_INVOCATION_BYTES) return;
+        var sink = responseFrames;
+        if (sink != null && !entry.isEmpty()) sink.accept(JsonNodeFactory.instance.objectNode().put("kind", "LOG").put("level", level).put("message", entry));
         diagnostics.println("[" + level + "] " + toolId + " " + invocationId + ": " + entry);
     }
 }

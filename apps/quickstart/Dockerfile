@@ -47,6 +47,7 @@ LABEL org.opencontainers.image.title="OLO ToolGate Quickstart" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$REVISION
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=55 -Djava.io.tmpdir=/tmp -Dorg.sqlite.lib.path=/usr/local/lib/toolgate" \
+    TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH=/opt/toolgate/core-mcp/core-packages.lock.json \
     PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY LICENSE NOTICE.md /usr/share/licenses/olo-toolgate/
 COPY apps/quickstart/NOTICE.md /usr/share/licenses/olo-toolgate/quickstart-python-NOTICE.md
