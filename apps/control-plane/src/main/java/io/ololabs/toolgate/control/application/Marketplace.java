@@ -266,7 +266,7 @@ public final class Marketplace {
     }
 
     private void reader(DirectoryService.Actor actor) {
-        store.transaction(actor.tenant(), false, tx -> { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "read", clock.millis()); return null; });
+        store.transaction(actor.tenant(), false, tx -> { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package.read", clock.millis()); return null; });
     }
     private void enabled() { if (!settings.enabled()) throw new Failure(ErrorCode.NOT_FOUND, 404, "Marketplace is not enabled"); }
     private Store.Reply reply(Object value) { return new Store.Reply(200, codec.json(value), 0); }

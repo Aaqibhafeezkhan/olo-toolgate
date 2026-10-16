@@ -134,6 +134,15 @@ export interface ControlServerSettingsPatch {
   readonly deviceApproval?: DeviceApproval;
   readonly configuration?: ConfigurationSettings;
 }
+/** Settings visible to the current actor. Unreadable feature groups are omitted. */
+export interface ControlSettingsView {
+  readonly formatVersion: 2;
+  readonly revision: number;
+  readonly gateway?: GatewaySettings;
+  readonly deviceApproval?: DeviceApproval;
+  readonly clientCheckIn?: ClientCheckIn;
+  readonly configuration?: ConfigurationSettings;
+}
 export type CredentialKind = "STATIC_TOKEN" | "JWT" | "INTROSPECTION";
 export type DeclarationId = string;
 /** Deployment binding. */

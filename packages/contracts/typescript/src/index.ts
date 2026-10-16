@@ -4,6 +4,7 @@
 import type * as V2 from "./v2/index.js";
 /** Server-verified administrator portal session. */
 export interface AdminSession {
+  readonly permissions?: ReadonlyArray<string>;
   readonly role: UserRole;
   readonly bootstrapAdminUserId?: string;
   readonly tenantId?: string;
@@ -284,6 +285,36 @@ export interface ClientSocketRequest {
   readonly requestId: string;
   readonly operation: ClientSocketOperation;
   readonly body?: Record<string, unknown>;
+}
+/** A short-lived server challenge bound to a verified console session and device key. */
+export interface ConsoleDeviceChallenge {
+  readonly nonce: string;
+  readonly deviceId: string;
+  readonly keyFingerprint: string;
+  readonly expiresAtUnixMs: number;
+}
+/** Exactly one enrollment code or existing device identifier for establishing console device context. */
+export interface ConsoleDeviceLookup {
+  readonly userCode?: string;
+  readonly deviceId?: string;
+}
+/** Device-key signature over the domain-separated console challenge nonce. */
+export interface ConsoleDeviceProof {
+  readonly nonce: string;
+  readonly deviceId: string;
+  readonly keyFingerprint: string;
+  readonly signature: string;
+}
+/** Bounded local native-client proof request for the selected console origin. */
+export interface ConsoleDeviceProofRequest {
+  readonly kind: string;
+  readonly consoleUrl: string;
+  readonly nonce: string;
+}
+/** Current-device context accepted for the authenticated console session. */
+export interface ConsoleDeviceVerified {
+  readonly deviceId: string;
+  readonly expiresAtUnixMs: number;
 }
 /** Identifies the shared contract set, independently of product versions. */
 export interface ContractSet {
@@ -875,7 +906,7 @@ export interface EndpointEnrollmentStart {
   readonly csrPem: string;
   readonly capabilities: ReadonlyArray<string>;
 }
-/** Directory identity, enrolled approval and pending request combined for administrative management. */
+/** Directory identity, enrolled approval and pending request with server-resolved target permissions. */
 export interface EndpointManagedDevice {
   readonly deviceId: string;
   readonly systemExecutor: boolean;
@@ -887,6 +918,7 @@ export interface EndpointManagedDevice {
   readonly systemAvailable?: boolean;
   readonly systemName?: string;
   readonly ipAddress?: string;
+  readonly permissions?: ReadonlyArray<string>;
 }
 /** Opt-in administrative deployment view. Default device responses retain their existing closed schema. */
 export interface EndpointManagedDeviceDeploymentPage {
@@ -1151,14 +1183,14 @@ export interface EnterpriseInvocationRequest {
   readonly downstreamIdempotencyKey?: string;
 }
 export type EnterpriseInvocationState = "PENDING_APPROVAL" | "QUEUED" | "RESERVED" | "DISPATCHED" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "PARTIAL" | "OUTCOME_UNKNOWN";
-/** Management grants belong to group-assigned Management Roles only. */
+/** Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected. */
 export interface EnterpriseManagementRule {
   readonly actions: ReadonlyArray<string>;
   readonly groupType: EnterpriseGroupType;
   readonly groups: GroupSelection;
   readonly grantableScopes: ReadonlyArray<EnterpriseScope>;
   readonly conditions: EnterpriseConditions;
-  readonly ownDevices?: boolean;
+  readonly deviceScope?: string;
 }
 export type EnterpriseMemberType = "USER" | "AGENT" | "TOOL" | "DEVICE";
 /** Scoped operational health and configured hard bounds. Snapshot lag never authorizes a cached effect. */

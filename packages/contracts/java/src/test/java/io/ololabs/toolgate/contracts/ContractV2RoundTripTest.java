@@ -43,6 +43,7 @@ final class ContractV2RoundTripTest {
         "ContractSet",
         "ControlServerSettings",
         "ControlServerSettingsPatch",
+        "ControlSettingsView",
         "CredentialKind",
         "DeploymentBinding",
         "DeploymentGrant",

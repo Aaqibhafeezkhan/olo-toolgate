@@ -297,15 +297,17 @@
     },
     "EnterpriseManagementRule": {
       "type": "object",
-      "description": "Management grants belong to group-assigned Management Roles only.",
+      "description": "Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected.",
       "additionalProperties": false,
       "properties": {
         "actions": {
           "type": "array",
           "items": {
-            "$ref": "identifiers.schema.json#/$defs/Identifier"
+            "type": "string",
+            "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$",
+            "maxLength": 128
           },
-          "maxItems": 64,
+          "maxItems": 256,
           "uniqueItems": true
         },
         "groupType": {
@@ -325,9 +327,10 @@
         "conditions": {
           "$ref": "enterprise.schema.json#/$defs/EnterpriseConditions"
         },
-        "ownDevices": {
-          "type": "boolean",
-          "description": "approve-device for devices the caller owns and pending enrollments the caller submits by code; DEVICE_GROUP only, with exactly one group that approved devices are placed in."
+        "deviceScope": {
+          "type": "string",
+          "pattern": "^(OWNED|CURRENT)$",
+          "description": "OWNED limits device grants to the authenticated owner's devices; CURRENT additionally requires server-verified current-device context. DEVICE_GROUP only, with one enrollment placement group."
         }
       },
       "required": [

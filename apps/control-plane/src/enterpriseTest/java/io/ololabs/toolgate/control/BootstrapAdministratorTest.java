@@ -34,7 +34,7 @@ class BootstrapAdministratorTest {
         for(var actor:List.of(owner,second))for(var operation:List.of("DELETE","UPDATE")) {
             var body=operation.equals("DELETE")?null:codec.json(new ControlUser("admin","Admin",false,1L));
             var failure=assertThrows(Failure.class,()->directory.mutate(actor,Kind.USER,"admin",operation,body,1,UUID.randomUUID().toString(),"request"));
-            assertEquals(409,failure.status());assertTrue(failure.getMessage().contains("setup administrator"));
+            assertEquals(409,failure.status());assertTrue(failure.getMessage().contains("login created during setup"));
             assertEquals(before,fixture.store.transaction(owner.tenant(),false,tx->tx.load()));
         }
     }
@@ -47,7 +47,7 @@ class BootstrapAdministratorTest {
             var snapshot=(com.fasterxml.jackson.databind.node.ObjectNode)codec.value(exported.body());assertTrue(snapshot.get("users").isEmpty());((com.fasterxml.jackson.databind.node.ArrayNode)snapshot.get("users")).add(admin);
             var body=codec.json(Map.of("snapshot",snapshot,"mode","REPLACE","dryRun",dryRun));
             var failure=assertThrows(Failure.class,()->directory.importConfig(second,body,false,exported.revision(),UUID.randomUUID().toString(),"request"));
-            assertEquals(409,failure.status());assertTrue(failure.getMessage().contains("setup administrator"));
+            assertEquals(409,failure.status());assertTrue(failure.getMessage().contains("login created during setup"));
         }
         var replace=codec.json(Map.of("snapshot",codec.value(exported.body()),"mode","REPLACE","dryRun",true));assertEquals(200,directory.importConfig(second,replace,false,exported.revision(),"replace-keeps-admin","request").status());
         var changes=new ConfigurationChanges(fixture.store,codec,Clock.systemUTC(),512,1048576);
@@ -74,17 +74,15 @@ class BootstrapAdministratorTest {
         assertEquals(201,directory.mutate(cached,Kind.USER,"created-by-second","CREATE",codec.json(new ControlUser("created-by-second","Created",false,1L)),0,"second-create","request").status());
         // Move the protected account out of the privileged Team. Protection is not a bypass.
         var membership=new GroupMembership(EnterpriseMemberType.USER,"admin",List.of("team-default"),directory.export(second,false).revision());
-        directory.setMemberships(second,Kind.USER,"admin",codec.json(membership),membership.revision(),"remove-role","request");
-        assertFalse(directory.portalSuper(owner,"admin"));
-        assertEquals(403,assertThrows(Failure.class,()->directory.requirePortal(owner,"admin")).status());
-        assertEquals(403,assertThrows(Failure.class,()->directory.mutate(owner,Kind.USER,"forged","CREATE",codec.json(new ControlUser("forged","Forged",false,1L)),0,"cached-owner","request")).status());
-        assertEquals(409,assertThrows(Failure.class,()->directory.mutate(second,Kind.USER,"admin","UPDATE",codec.json(new ControlUser("admin","Admin",false,1L)),1,"disable-demoted-owner","request")).status());
+        assertEquals(409,assertThrows(Failure.class,()->directory.setMemberships(second,Kind.USER,"admin",codec.json(membership),membership.revision(),"remove-role","request")).status());
+        assertTrue(directory.portalSuper(owner,"admin"));
+
     }
 
     @Test void identityBindingRemovalAndRestartCannotRemoveAccountProtection() {
         var identity=new ControlIdentityBinding("installed-admin","Reviewed identity",true,1L,"admin","https://quickstart.local","admin",1L,1L,1L,1L,"REVIEWED_INSTALLATION",0L);
         directory.mutate(second,Kind.IDENTITY_BINDING,identity.id(),"CREATE",codec.json(identity),0,"create-identity","request");
-        directory.mutate(second,Kind.IDENTITY_BINDING,identity.id(),"DELETE",null,1,"remove-identity","request");
+        assertEquals(409,assertThrows(Failure.class,()->directory.mutate(second,Kind.IDENTITY_BINDING,identity.id(),"DELETE",null,1,"remove-identity","request")).status());
         var reopened=new PostgresStore(SqliteState.open(temp.resolve("state.sqlite")),codec);
         reopened.transaction(owner.tenant(),false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());return null;});
         reopened.transaction(owner.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Kind.USER.id("admin"));assertThrows(Failure.class,()->tx.save(before,new Directory(before.revision()+1,entries)));return null;});

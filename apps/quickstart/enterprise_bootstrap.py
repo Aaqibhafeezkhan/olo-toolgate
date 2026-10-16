@@ -17,9 +17,6 @@ COLLECTIONS = ('users', 'teams', 'agents', 'tools', 'policies', 'devices', 'role
                'identityBindings', 'deviceEvidence')
 # File-level fields read only here; they never become directory records.
 FILE_FIELDS = {'formatVersion', 'tenantId', 'revision', 'settings', 'requiredIdentities', 'visitorPool', 'reservedRecords'}
-# The installation's own management identities, team and role: a configuration file never replaces them.
-PROTECTED = dict(users={'admin', 'reviewer-1', 'reviewer-2'}, teams={'installation-administrators'},
-                 roles={'installation-management'})
 TOOL_HOST = 'tool-host-local'  # Enrolls on first start; its device record counts against the directory.
 PER_ACCOUNT = 5  # Pool account: user, agent, workload binding, identity binding and one owned device.
 YEAR_MS = 365 * 86400000
@@ -130,10 +127,10 @@ def initialize(snapshot, tenant, issuer, now):
     """
     document = read_initialize()
     values = environment(document.get('settings'))
+    installed_users={user['id'] for user in snapshot['users']}
     for name in COLLECTIONS:
         rows = {row['id']: row for row in snapshot[name]}
         for row in document.get(name, []):
-            if row['id'] in PROTECTED.get(name, ()): continue
             row = dict(row)
             if name == 'teams': row['userIds'] = sorted(set(rows.get(row['id'], {}).get('userIds', [])) | set(row.get('userIds', [])))
             rows[row['id']] = row
@@ -158,7 +155,7 @@ def initialize(snapshot, tenant, issuer, now):
     identities = {binding['id'] for binding in snapshot['identityBindings']}
     logins = []
     for user in document.get('users', []):
-        if user['id'] in PROTECTED['users'] or user.get('enabled') is not True: continue
+        if user['id'] in installed_users or user.get('enabled') is not True: continue
         if not re.fullmatch(LOCAL_ID, user['id']): raise Refused('User id '+user['id']+' cannot be a local login')
         if 'installed-'+user['id'] not in identities: snapshot['identityBindings'].append(installed_identity(user['id'], issuer, now))
         logins.append(dict(id=user['id'], showOnLogin=user.get('showOnLogin') is True))
@@ -255,9 +252,10 @@ def prepare(data, tenant, issuer, key, atomic, profiles):
     ceiling = dict(toolGroups=all_groups, deviceGroups=all_groups, actions=[], allActions=True,
                    resources=[dict(kind=kind, locator='', match='ANY') for kind in ['FILE','URL','DATABASE','CUSTOM']],
                    conditions=conditions)
-    actions = ['read','create','update','delete','enable','disable','recover','manage-role','grant','import','export',
-               'audit','simulate','publish','policy','attest','rotate-credential','approve-configuration',
-               'approve-operation','cancel-operation','approve-device','revoke','build','deploy','vault-read','vault-write']
+    catalog_path=Path(__file__).with_name('management-permissions.json')
+    if not catalog_path.is_file():catalog_path=Path(__file__).resolve().parents[2]/'packages/contracts/management-permissions.json'
+    catalog=json.loads(catalog_path.read_text(encoding='utf-8'))
+    actions=sorted(f"{resource['id']}.{action}" for resource in catalog['resources'] for action in resource['actions'])
     snapshot['roles'] = [dict(id='installation-management', name='Super Admin', enabled=True,
                              revision=1, portalRole='SUPER_ADMIN', roleType='MANAGEMENT',
                              managementRules=[dict(actions=actions, groupType=kind, groups=all_groups,

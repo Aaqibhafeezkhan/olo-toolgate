@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** Directory identity, enrolled approval and pending request combined for administrative management.
+/** Directory identity, enrolled approval and pending request with server-resolved target permissions.
  *
  * @param deviceId canonical deviceId value
  * @param systemExecutor canonical systemExecutor value
@@ -15,6 +15,7 @@ package io.ololabs.toolgate.contracts;
  * @param systemAvailable canonical systemAvailable value
  * @param systemName canonical systemName value
  * @param ipAddress canonical ipAddress value
+ * @param permissions canonical permissions value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EndpointManagedDevice(
@@ -27,7 +28,8 @@ public record EndpointManagedDevice(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "systemExecutorKind", required = false) SystemExecutorKind systemExecutorKind,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "systemAvailable", required = false) Boolean systemAvailable,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "systemName", required = false) String systemName,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "ipAddress", required = false) String ipAddress
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "ipAddress", required = false) String ipAddress,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "permissions", required = false) java.util.List<String> permissions
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -41,9 +43,11 @@ public record EndpointManagedDevice(
      * @param systemAvailable canonical systemAvailable value
      * @param systemName canonical systemName value
      * @param ipAddress canonical ipAddress value
+     * @param permissions canonical permissions value
      */
     public EndpointManagedDevice {
         java.util.Objects.requireNonNull(deviceId, "deviceId");
         java.util.Objects.requireNonNull(systemExecutor, "systemExecutor");
+        permissions = permissions == null ? null : java.util.List.copyOf(permissions);
     }
 }

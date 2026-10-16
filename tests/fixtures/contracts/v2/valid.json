@@ -1826,5 +1826,26 @@
   "UnixMs": 1791676800000,
   "ValueSource": "ENVIRONMENT",
   "ValueType": "INT",
-  "VariableName": "TimeoutSeconds"
+  "VariableName": "TimeoutSeconds",
+  "ControlSettingsView": {
+    "formatVersion": 2,
+    "revision": 5,
+    "gateway": {
+      "gatewayName": "ToolGate EU"
+    },
+    "deviceApproval": {
+      "autoApprove": true,
+      "durationMs": 86400000,
+      "ownerUserId": "admin-1"
+    },
+    "clientCheckIn": {
+      "checkInMs": 2000,
+      "jitterPct": 20,
+      "offlineAfterMs": 120000,
+      "source": "ENVIRONMENT"
+    },
+    "configuration": {
+      "requiredReviews": 2
+    }
+  }
 }

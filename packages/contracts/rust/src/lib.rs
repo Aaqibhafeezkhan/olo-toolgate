@@ -10,6 +10,8 @@ pub mod v2;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdminSession {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Vec<String>>,
     pub role: UserRole,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bootstrap_admin_user_id: Option<String>,
@@ -469,6 +471,48 @@ pub struct ClientSocketRequest {
     pub operation: ClientSocketOperation,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// A short-lived server challenge bound to a verified console session and device key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceChallenge {
+    pub nonce: String,
+    pub device_id: String,
+    pub key_fingerprint: String,
+    pub expires_at_unix_ms: u64,
+}
+/// Exactly one enrollment code or existing device identifier for establishing console device context.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceLookup {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
+}
+/// Device-key signature over the domain-separated console challenge nonce.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceProof {
+    pub nonce: String,
+    pub device_id: String,
+    pub key_fingerprint: String,
+    pub signature: String,
+}
+/// Bounded local native-client proof request for the selected console origin.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceProofRequest {
+    pub kind: String,
+    pub console_url: String,
+    pub nonce: String,
+}
+/// Current-device context accepted for the authenticated console session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceVerified {
+    pub device_id: String,
+    pub expires_at_unix_ms: u64,
 }
 /// Identifies the shared contract set, independently of product versions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1388,7 +1432,7 @@ pub struct EndpointEnrollmentStart {
     pub csr_pem: String,
     pub capabilities: Vec<String>,
 }
-/// Directory identity, enrolled approval and pending request combined for administrative management.
+/// Directory identity, enrolled approval and pending request with server-resolved target permissions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointManagedDevice {
@@ -1410,6 +1454,8 @@ pub struct EndpointManagedDevice {
     pub system_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip_address: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Vec<String>>,
 }
 /// Opt-in administrative deployment view. Default device responses retain their existing closed schema.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1966,7 +2012,7 @@ pub enum EnterpriseInvocationState {
     #[serde(rename = "OUTCOME_UNKNOWN")]
     OutcomeUnknown,
 }
-/// Management grants belong to group-assigned Management Roles only.
+/// Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseManagementRule {
@@ -1976,7 +2022,7 @@ pub struct EnterpriseManagementRule {
     pub grantable_scopes: Vec<EnterpriseScope>,
     pub conditions: EnterpriseConditions,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub own_devices: Option<bool>,
+    pub device_scope: Option<String>,
 }
 /// Canonical EnterpriseMemberType wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

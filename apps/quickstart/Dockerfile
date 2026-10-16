@@ -36,6 +36,7 @@ COPY --from=rust-build /licenses /usr/share/licenses/olo-toolgate/quickstart-rus
 COPY tools/enterprise/restore.py /opt/quickstart/enterprise_restore.py
 COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py VERSION /opt/quickstart/
 COPY packages/contracts/tools/builtins.json /opt/quickstart/builtins.json
+COPY packages/contracts/management-permissions.json /opt/quickstart/management-permissions.json
 COPY docs/getting-started/one-minute-quickstart.md docs/deployment/quickstart.md /usr/share/doc/toolgate-quickstart/
 ARG VERSION
 ARG REVISION

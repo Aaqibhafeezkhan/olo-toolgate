@@ -279,6 +279,22 @@ pub struct ControlServerSettingsPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration: Option<ConfigurationSettings>,
 }
+/// Settings visible to the current actor. Unreadable feature groups are omitted.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlSettingsView {
+    #[serde(deserialize_with = "const_control_settings_view_format_version")]
+    pub format_version: u64,
+    pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gateway: Option<GatewaySettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_approval: Option<DeviceApproval>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_check_in: Option<ClientCheckIn>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<ConfigurationSettings>,
+}
 /// Canonical CredentialKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CredentialKind {
@@ -1760,6 +1776,7 @@ pub enum ValueType {
 }
 const_field!(const_contract_set_name, String, "olo-toolgate-contracts");
 const_field!(const_control_server_settings_format_version, u64, 2);
+const_field!(const_control_settings_view_format_version, u64, 2);
 const_field!(const_deployment_binding_binding_format_version, u64, 1);
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
 const_field!(const_log_frame_kind, String, "LOG");

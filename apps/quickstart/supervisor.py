@@ -491,9 +491,9 @@ def claim_account(requester, signal_gateway):
 
 
 def reauthorize(binding_id, actor, signal_gateway):
-    """A Super Admin issues a fresh token for one workload binding; it is returned once and never stored."""
+    """An authorized administrator issues a fresh token for one workload binding; it is returned once and never stored."""
     status, raw, _ = call('/api/control/v1/admin-session', actor)
-    if status != 200 or strict(raw).get('role') != 'SUPER_ADMIN': raise Forbidden()
+    if status != 200 or 'workload_binding.rotate_credential' not in strict(raw).get('permissions', []): raise Forbidden()
     stored = workload_credentials().get(binding_id)
     execution = stored['context'].get('bindingId') if stored else None
     if execution is None:

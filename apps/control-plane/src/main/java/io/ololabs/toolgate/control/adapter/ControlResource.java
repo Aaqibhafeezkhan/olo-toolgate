@@ -40,8 +40,8 @@ public class ControlResource {
     }
     @Inject io.ololabs.toolgate.control.application.ServerSettingsService settings;
     @GET @Path("settings")
-    public Response settings() {
-        return Response.fromResponse(response(settings.get(actor()), "READ", "settings")).header("Cache-Control", "no-store").build();
+    public Response settings(@QueryParam("section") String section) {
+        return Response.fromResponse(response(settings.get(actor(),section), "READ", "settings")).header("Cache-Control", "no-store").build();
     }
     @PUT @Path("settings") @Consumes("application/json")
     public Response updateSettings(@HeaderParam("Idempotency-Key") String key, @HeaderParam("If-Match") String revision, String document) {
@@ -69,7 +69,7 @@ public class ControlResource {
     @GET @Path("admin-session") @io.quarkus.security.Authenticated
     public String adminSession() {
         var identity=actor();
-        return codec.json(store.transaction(identity.tenant(),false,tx->new io.ololabs.toolgate.contracts.AdminSession(identity.superAdmin()?io.ololabs.toolgate.contracts.UserRole.SUPER_ADMIN:io.ololabs.toolgate.contracts.UserRole.ADMINISTRATOR,tx.bootstrapAdminUserId(),identity.tenant().value())));
+        return codec.json(store.transaction(identity.tenant(),false,tx->{var access=new io.ololabs.toolgate.control.application.ManagementAccess(codec);var directory=tx.load();return new io.ololabs.toolgate.contracts.AdminSession(access.capabilities(directory,identity.userId(),System.currentTimeMillis(),io.ololabs.toolgate.control.application.ConsoleDeviceSessions.current(tx,codec,identity.sessionId(),identity.userId(),System.currentTimeMillis())).stream().sorted().toList(),access.access(directory,identity.userId()).portalRole(),tx.bootstrapAdminUserId(),identity.tenant().value());}));
     }
     @GET @Path("bundles/current") @io.quarkus.security.Authenticated
     public Response currentBundle() {

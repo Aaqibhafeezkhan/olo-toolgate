@@ -235,6 +235,19 @@ async fn handle<S: AsyncWrite + Unpin>(
     if bytes.len() > 4096 {
         return Err(Failure::Validation);
     }
+    if serde_json::from_slice::<serde_json::Value>(bytes)
+        .ok()
+        .is_some_and(|value| {
+            value.get("kind").and_then(serde_json::Value::as_str) == Some("console-device-proof")
+        })
+    {
+        let request: ConsoleDeviceProofRequest =
+            contracts.decode("ConsoleDeviceProofRequest", bytes)?;
+        let state = service.try_lock().map_err(|_| Failure::Conflict)?;
+        let proof = state.console_device_proof(&request.console_url, &request.nonce)?;
+        drop(state);
+        return write(stream, &contracts.encode("ConsoleDeviceProof", &proof)?).await;
+    }
     let request: ClientIpcRequest = contracts.decode("ClientIpcRequest", bytes)?;
     let mut response = ClientIpcResponse {
         request_id: request.request_id,
@@ -449,6 +462,21 @@ pub async fn call(endpoint: &str, operation: ClientIpcOperation) -> Result<Clien
         return Err(Failure::Unauthorized);
     }
     Ok(response)
+}
+pub async fn console_proof(
+    endpoint: &str,
+    console_url: &str,
+    nonce: &str,
+) -> Result<ConsoleDeviceProof> {
+    let contracts = Contracts::new()?;
+    let request = ConsoleDeviceProofRequest {
+        kind: "console-device-proof".to_owned(),
+        console_url: console_url.to_owned(),
+        nonce: nonce.to_owned(),
+    };
+    let bytes = contracts.encode("ConsoleDeviceProofRequest", &request)?;
+    let response = exchange(endpoint, &bytes, 16384).await?;
+    contracts.decode("ConsoleDeviceProof", &response)
 }
 pub async fn call_tool(
     endpoint: &str,

@@ -484,6 +484,31 @@ impl ClientService {
     fn device(&self) -> String {
         format!("device-{}", &self.key.fingerprint()[..32])
     }
+    pub fn console_device_proof(
+        &self,
+        console_url: &str,
+        nonce: &str,
+    ) -> Result<ConsoleDeviceProof> {
+        let origin = crate::browser::console_origin(console_url)?;
+        let local = self
+            .config
+            .local_console_url
+            .as_ref()
+            .map(|url| url.trim_end_matches('/').to_owned());
+        let verified =
+            self.journal.manifest.as_ref().and_then(|manifest| {
+                crate::browser::console_origin(&manifest.verification_uri).ok()
+            });
+        if local.as_ref() != Some(&origin) && verified.as_ref() != Some(&origin) {
+            return Err(Failure::Unauthorized);
+        }
+        Ok(ConsoleDeviceProof {
+            nonce: nonce.to_owned(),
+            device_id: self.device(),
+            key_fingerprint: self.key.fingerprint(),
+            signature: self.key.console_proof(nonce)?,
+        })
+    }
     async fn collect_remote(&mut self, identity: &DeviceIdentity) -> Result<()> {
         if let Some(job) = &mut self.remote_job {
             if let Some(result) = job.completed().await {
@@ -1346,6 +1371,29 @@ mod tests {
         });
         let service = ClientService::open(config, store, key, gateway.clone()).unwrap();
         (service, gateway, directory)
+    }
+    #[test]
+    fn console_proof_requires_the_current_console_origin_and_does_not_enroll() {
+        let (mut service, gateway, directory) = test_service();
+        let nonce = "a".repeat(64);
+        assert!(service
+            .console_device_proof("https://untrusted.example/console/", &nonce)
+            .is_err());
+        service.config.local_console_url = Some("http://127.0.0.1:18103".into());
+        let proof = service
+            .console_device_proof("http://127.0.0.1:18103/console/#enroll", &nonce)
+            .unwrap();
+        assert_eq!(proof.nonce, nonce);
+        assert_eq!(proof.device_id, service.device());
+        assert!(service
+            .console_device_proof("http://127.0.0.1:18104/console/", &nonce)
+            .is_err());
+        assert!(service
+            .console_device_proof("http://localhost:18103/console/", &nonce)
+            .is_err());
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
     }
     fn fixtures() -> serde_json::Value {
         serde_json::from_str(include_str!(

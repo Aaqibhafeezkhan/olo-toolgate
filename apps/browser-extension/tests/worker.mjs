@@ -81,3 +81,15 @@ test('a cancelled gateway change is not retried automatically while a client exi
   assert.equal(state[origin].waitForInstallation,false);
   assert.equal((await request('status')).phase,'setup-required');
 });
+
+test('device proof requires Connect, an exact nonce, and the requesting console origin',async()=>{
+  const nonce='a'.repeat(64);
+  const proofRequest=(value,url=origin+'/console/#enroll')=>new Promise(resolve=>listener({operation:'proof',nonce:value},{tab:{id:2,url}},resolve));
+  assert.equal((await proofRequest(nonce)).error,'CONNECT_REQUIRED');assert.equal(nativeCalls.length,0);
+  state[origin]={approved:true,phase:'ready',serverUrl:origin};
+  assert.equal((await proofRequest('bad')).error,'CONNECT_REQUIRED');assert.equal(nativeCalls.length,0);
+  nativeResponse={proof:{nonce,deviceId:'device-1',keyFingerprint:'b'.repeat(64),signature:'signature'}};
+  const response=await proofRequest(nonce);assert.equal(response.proof.nonce,nonce);
+  assert.deepEqual(nativeCalls,[{operation:'proof',consoleUrl:origin+'/console/#enroll',nonce}]);
+  assert.equal((await proofRequest(nonce,'https://other.example/console/')).error,'CONNECT_REQUIRED');
+});

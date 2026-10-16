@@ -1,5 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {managementCatalog} from '../src/managementPermissions.generated';
+const allPermissions=managementCatalog.resources.flatMap(r=>r.actions.map(a=>`${r.id}.${a}`));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from '../src/App';
@@ -32,6 +34,7 @@ describe('Quickstart',()=>{
     const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);
     let saved=false;
     const transport=vi.fn(async(input:string)=>{
+      if(input.endsWith('/admin-session'))return response({role:'ADMINISTRATOR',permissions:allPermissions});
       if(input.endsWith('/session'))return saved?response({accessToken:'restored-session'}):response({},401);
       if(input.endsWith('/login')){saved=true;return response({accessToken:'restored-session'});}
       if(input.endsWith('/logout')){saved=false;return response({});}

@@ -13,7 +13,7 @@ final class TestSupport {
             put(entries,codec,Ids.Kind.USER,new ControlUser(user,"Reviewed administrator",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,user);
             var all=new GroupSelection(List.of(),true);var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
             var ceiling=new EnterpriseScope(all,all,List.of(),true,Arrays.stream(ResourceKind.values()).map(kind->new EnterpriseResourceRule(kind,"",EnterpriseResourceMatch.ANY)).toList(),conditions);
-            var actions=List.of("read","create","update","delete","enable","disable","recover","manage-role","grant","import","export","audit","simulate","publish","policy","attest","rotate-credential","approve-operation","approve-device","revoke-device","deploy","build","approve-configuration");
+            var actions=ManagementPermissionCatalog.ALL.stream().sorted().toList();
             var rules=Arrays.stream(EnterpriseGroupType.values()).map(kind->new EnterpriseManagementRule(actions,kind,all,List.of(ceiling),conditions,null)).toList();
             put(entries,codec,Ids.Kind.ROLE,new ControlRole("test-recovery-role","Reviewed recovery role",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,rules));
             put(entries,codec,Ids.Kind.TEAM,new ControlTeam("test-recovery-team","Reviewed administrators",true,1L,List.of(user),List.of("test-recovery-role")));

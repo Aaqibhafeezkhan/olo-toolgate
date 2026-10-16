@@ -1,5 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {managementCatalog} from '../src/managementPermissions.generated';
+const allPermissions=managementCatalog.resources.flatMap(r=>r.actions.map(a=>`${r.id}.${a}`));
 import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {DirectoryEditor} from '../src/DirectoryEditor';
@@ -12,7 +14,7 @@ it('edits typed management roles through the same canonical guided and advanced 
   const role={id:'cloud',name:'Cloud operator',enabled:true,revision:2,portalRole:'ADMINISTRATOR' as const,roleType:'MANAGEMENT' as const,managementRules:[]};
   const saved=vi.fn();const transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify(role)));
   render(<DirectoryEditor client={new ControlClient('token',vi.fn(),transport)} kind="roles" record={role} saved={saved} close={vi.fn()}/>);
-  expect((screen.getByLabelText('Role type') as HTMLSelectElement).value).toBe('MANAGEMENT');fireEvent.click(screen.getByRole('button',{name:'Add management rule'}));
+  expect((screen.getByLabelText('Role type') as HTMLSelectElement).value).toBe('MANAGEMENT');fireEvent.click(screen.getByRole('button',{name:'Add permission scope'}));
   const config=JSON.parse((screen.getByLabelText('Configuration (JSON)') as HTMLTextAreaElement).value);expect(config.managementRules).toHaveLength(1);expect(config.managementRules[0].groups).toEqual({ids:[],all:false});
   fireEvent.click(screen.getByRole('button',{name:'Save role'}));await waitFor(()=>expect(saved).toHaveBeenCalled());
   const body=JSON.parse(transport.mock.calls[0][1]?.body as string);expect(body.roleType).toBe('MANAGEMENT');expect(body).not.toHaveProperty('rules');
@@ -22,7 +24,7 @@ it('malformed advanced JSON disables guided fields and saving',()=>{
   fireEvent.change(screen.getByLabelText('Configuration (JSON)'),{target:{value:'[]'}});expect(screen.getByRole('alert')).toBeTruthy();expect(screen.getByRole('button',{name:'Save role'}).hasAttribute('disabled')).toBe(true);expect(transport).not.toHaveBeenCalled();
 });
 it('groups Super Admin navigation into six expandable submenus and exposes Roles',async()=>{
-  vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>new Response(JSON.stringify(url.endsWith('/admin-session')?{role:'SUPER_ADMIN'}:{items:[]}))));render(<App/>);
+  vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>new Response(JSON.stringify(url.endsWith('/admin-session')?{role:'SUPER_ADMIN',permissions:allPermissions}:{items:[]}))));render(<App/>);
   fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'token'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
   await screen.findByRole('navigation');expect(document.querySelectorAll('nav details')).toHaveLength(6);
   expect([...document.querySelectorAll('nav summary')].map(element=>element.textContent)).toEqual(['Audit','Tools','Devices','Users','Agents','Administration']);

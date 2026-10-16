@@ -19,6 +19,8 @@ export const operations = {
   reviewEndpointEnrollment: { method: 'GET', path: '/api/control/v1/endpoint/enrollments/review' },
   decideEndpointEnrollment: { method: 'POST', path: '/api/control/v1/endpoint/enrollments/decision' },
   lookupEndpointEnrollment: { method: 'POST', path: '/api/control/v1/endpoint/enrollments/lookup' },
+  challengeConsoleDevice: { method: 'POST', path: '/api/control/v1/endpoint/console-device/challenge' },
+  verifyConsoleDevice: { method: 'POST', path: '/api/control/v1/endpoint/console-device/verify' },
   endpointJobSocket: { method: 'GET', path: '/api/control/v1/endpoint/socket' },
   endpointCheckIn: { method: 'POST', path: '/api/control/v1/endpoint/check-in' },
   listEndpointDevices: { method: 'GET', path: '/api/control/v1/endpoint/devices' },

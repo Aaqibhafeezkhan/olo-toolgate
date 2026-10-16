@@ -9,7 +9,7 @@
  * Nothing here is authoritative: Control validates every field.
  */
 import type {ClientPlatform,ControlSnapshot,ControlWorkloadBinding,EnterpriseManagementRule} from '@olo-labs/toolgate-contracts';
-import type {ControlServerSettings,ControlServerSettingsPatch,DeviceApproval,GatewaySettings} from '@olo-labs/toolgate-contracts/v2';
+import type {ControlSettingsView,ControlServerSettingsPatch,DeviceApproval,GatewaySettings} from '@olo-labs/toolgate-contracts/v2';
 
 /** Operations not yet in control-v1.yaml (Control) or the Quickstart supervisor API. */
 export const pendingOperations={
@@ -24,7 +24,7 @@ export type RequiredReviews=0|1|2;
 export interface ReviewPolicy {readonly requiredReviews:RequiredReviews}
 /** The settings group that holds the configuration review threshold. */
 export interface ConfigurationSettings {readonly requiredReviews:RequiredReviews}
-export type PendingServerSettings=ControlServerSettings&{readonly configuration?:ConfigurationSettings};
+export type PendingServerSettings=ControlSettingsView&{readonly configuration?:ConfigurationSettings};
 export type PendingServerSettingsPatch=ControlServerSettingsPatch&{readonly configuration?:ConfigurationSettings};
 
 /** A user id referenced by exported records, with the team ids that user belonged to. IDs only. */
@@ -50,7 +50,7 @@ export interface EnrollmentLookup {readonly enrollmentId:string;readonly deviceI
 /** Workload binding fields for claims and reauthorization after an identity-mapped import. */
 export type PendingWorkloadBinding=ControlWorkloadBinding&{readonly needsReauthorization?:boolean;readonly passClaims?:Readonly<Record<string,readonly string[]>>};
 /** Management rule scope: approve-device on devices the caller owns, placed in the rule's one device group. */
-export type PendingManagementRule=EnterpriseManagementRule&{readonly ownDevices?:boolean};
+export type PendingManagementRule=EnterpriseManagementRule;
 
 /** Quickstart: POST /api/quickstart/v1/workloads/{id}/reauthorize returns the new agent token once. */
 export interface ReauthorizedWorkload {readonly token:string}

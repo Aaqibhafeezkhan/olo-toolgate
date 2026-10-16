@@ -24,7 +24,7 @@ it('guides an incompatible extension upgrade and cancels polling',async()=>{
 it('detects a client but requires separately verified enrollment',async()=>{
   chrome();bridge({protocol:1,chromeVersion:release.chromeVersion,version:release.version,phase:'approved',client:{health:{ready:true}},userCode:'ABCDEF0123456789'});
   const code=vi.fn();render(<Connect onCode={code}/>);fireEvent.click(screen.getByRole('button',{name:'Connect'}));
-  await screen.findByText(/Client detected/);expect(code).toHaveBeenCalledWith('ABCDEF0123456789');expect(screen.queryByText(/^Connected:/)).toBeNull();
+  await screen.findByText(/Client detected/);expect(code).not.toHaveBeenCalled();expect(screen.queryByText(/^Connected:/)).toBeNull();
 });
 it('does not claim an offline client has checked in or connected',async()=>{
   chrome();bridge({protocol:1,chromeVersion:release.chromeVersion,version:release.version,phase:'ready',serverUrl:'https://localhost:18450',client:{health:{ready:false,state:'OFFLINE'}}});

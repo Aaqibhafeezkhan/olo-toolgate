@@ -1,5 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {managementCatalog} from '../src/managementPermissions.generated';
+const allPermissions=managementCatalog.resources.flatMap(r=>r.actions.map(a=>`${r.id}.${a}`));
 import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {App} from '../src/App';
@@ -13,7 +15,7 @@ async function setup(status=200,bootstrapAdminUserId?:string){
       const id=decodeURIComponent(url.split('/').at(-1)!);if(options.method==='DELETE'){users.splice(users.findIndex(user=>user.id===id),1);return new Response(null,{status:204});}
       const body=JSON.parse(String(options.body));Object.assign(users.find(user=>user.id===id)!,body,{revision:body.revision+1});return json(body);
     }
-    return json(url.endsWith('/admin-session')?{role:bootstrapAdminUserId?'SUPER_ADMIN':'ADMINISTRATOR',bootstrapAdminUserId}:{items:url.startsWith('/api/control/v1/users?')?users:[]});
+    return json(url.endsWith('/admin-session')?{role:bootstrapAdminUserId?'SUPER_ADMIN':'ADMINISTRATOR',bootstrapAdminUserId,permissions:allPermissions}:{items:url.startsWith('/api/control/v1/users?')?users:[]});
   });vi.stubGlobal('fetch',fetcher);window.location.hash='#users';render(<App/>);fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-token'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));await screen.findByRole('switch',{name:'Disable alice'});return fetcher;
 }
 it('opens editing only from the action icon and keeps the row read-only',async()=>{

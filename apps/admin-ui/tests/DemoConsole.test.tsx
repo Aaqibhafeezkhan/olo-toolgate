@@ -1,5 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {managementCatalog} from '../src/managementPermissions.generated';
+const allPermissions=managementCatalog.resources.flatMap(r=>r.actions.map(a=>`${r.id}.${a}`));
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {App} from '../src/App';
@@ -49,7 +51,7 @@ describe('Login page',()=>{
 describe('Configuration review banner',()=>{
   it('is shown on every page while reviews are set to 0 and disappears when they are raised',async()=>{
     let required=0;
-    vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/review-policy')?json({requiredReviews:required}):url.endsWith('/admin-session')?json({role:'ADMINISTRATOR'}):json({items:[]})));
+    vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/review-policy')?json({requiredReviews:required}):url.endsWith('/admin-session')?json({role:'ADMINISTRATOR',permissions:allPermissions}):json({items:[]})));
     render(<App/>);await connect();
     expect((await screen.findByText(NO_REVIEWS_BANNER)).getAttribute('role')).toBe('status');
     navigate('#teams');await screen.findByRole('heading',{name:'Teams'});expect(screen.getByText(NO_REVIEWS_BANNER)).toBeTruthy();
@@ -74,13 +76,13 @@ describe('Administration',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));
     expect(screen.queryByRole('button',{name:'Administration'})).toBeNull();
     expect(screen.getByRole('link',{name:'About'})).toBeTruthy();
-    navigate('#config-server');expect(await screen.findByText('Administration is available to Super Admin accounts only.')).toBeTruthy();
-    navigate('#config-backup');expect(screen.getByText('Administration is available to Super Admin accounts only.')).toBeTruthy();
+    navigate('#config-server');expect(await screen.findByText('Your role does not grant access to this feature.')).toBeTruthy();
+    navigate('#config-backup');expect(screen.getByText('Your role does not grant access to this feature.')).toBeTruthy();
     expect(transport.mock.calls.some(([url])=>url.includes('/settings')||url.includes('/config/export'))).toBe(false);
   });
   it('shows Server, Device and Backup/Restore with the review threshold to Super Admin',async()=>{
     const settings={formatVersion:2,revision:1,gateway:{gatewayName:'ToolGate'},deviceApproval:{autoApprove:false,durationMs:2592000000},configuration:{requiredReviews:1},clientCheckIn:{checkInMs:2000,jitterPct:20,offlineAfterMs:120000,source:'DEFAULT'}};
-    vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/admin-session')?json({role:'SUPER_ADMIN'}):url==='/api/control/v1/settings'?json(settings):json({items:[]})));
+    vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/admin-session')?json({role:'SUPER_ADMIN',permissions:allPermissions}):url.startsWith('/api/control/v1/settings')?json(settings):json({items:[]})));
     render(<App/>);await connect();
     const administration=[...document.querySelectorAll('nav details')].find(group=>group.querySelector('summary')?.textContent==='Administration')!;
     expect([...administration.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['#config-server','#config-device','#config-backup']);
@@ -95,7 +97,7 @@ describe('Workload reauthorization',()=>{
   const binding={id:'visitor-001-binding',name:'Visitor 001 agent',enabled:false,revision:2,agentId:'visitor-001-agent',mode:'DELEGATED',needsReauthorization:true};
   it('badges bindings that need reauthorization and lets Super Admin issue the new token exactly once',async()=>{
     quickstartMode();
-    const transport=vi.fn(async(url:string,_init?:RequestInit)=>url.endsWith('/session')?json({accessToken:token('admin')}):url.endsWith('/admin-session')?json({role:'SUPER_ADMIN'})
+    const transport=vi.fn(async(url:string,_init?:RequestInit)=>url.endsWith('/session')?json({accessToken:token('admin')}):url.endsWith('/admin-session')?json({role:'SUPER_ADMIN',permissions:allPermissions})
       :url.endsWith('/reauthorize')?json({token:'tg_new_agent_token_once'}):url.startsWith('/api/control/v1/workload-bindings?')?json({items:[binding,{...binding,id:'ready',name:'Ready agent',enabled:true,needsReauthorization:false}]})
       :url.includes('/api/public/')?json({},503):json({items:[]}));
     vi.stubGlobal('fetch',transport);window.location.hash='#workloadBindings';render(<App/>);
@@ -115,7 +117,7 @@ describe('Workload reauthorization',()=>{
   });
   it('shows the badge without a Reauthorize button to other administrators',async()=>{
     quickstartMode();
-    vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/session')?json({accessToken:token('operator')}):url.endsWith('/admin-session')?json({role:'ADMINISTRATOR'})
+    vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/session')?json({accessToken:token('operator')}):url.endsWith('/admin-session')?json({role:'ADMINISTRATOR',permissions:['workload_binding.read']})
       :url.startsWith('/api/control/v1/workload-bindings?')?json({items:[binding]}):url.includes('/api/public/')?json({},503):json({items:[]})));
     window.location.hash='#workloadBindings';render(<App/>);
     await screen.findByText('Needs reauthorization');expect(screen.queryByRole('button',{name:/^Reauthorize/})).toBeNull();

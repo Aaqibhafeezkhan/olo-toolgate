@@ -415,6 +415,54 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentLookup
+  /api/control/v1/endpoint/console-device/challenge:
+    post:
+      operationId: challengeConsoleDevice
+      description: Issues a single-use two-minute challenge bound to the verified console session and owned device key. Does not approve device access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceLookup
+      responses:
+        '200':
+          description: Bounded challenge; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceChallenge
+        '400':
+          description: Exactly one code or device identifier is required
+        '403':
+          description: Device context is not allowed for this session
+        '404':
+          description: No eligible device or enrollment
+        '429':
+          description: Too many failed attempts
+  /api/control/v1/endpoint/console-device/verify:
+    post:
+      operationId: verifyConsoleDevice
+      description: Verifies a device-key signature and records current-device context for this console token session. Never issues a certificate or approves access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceProof
+      responses:
+        '200':
+          description: Current-device context; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceVerified
+        '403':
+          description: Invalid device proof or revoked authority
+        '409':
+          description: Expired, replayed or mismatched challenge
+        '429':
+          description: Too many failed attempts
   /api/control/v1/endpoint/socket:
     get:
       operationId: endpointJobSocket
@@ -2641,12 +2689,20 @@ paths:
   /api/control/v1/settings:
     get:
       operationId: getServerSettings
-      description: Super Admin only. A write that changes configuration.requiredReviews
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
         while it is above 0 returns 202 with a SETTINGS configuration change that needs the
         current number of reviews, with no Super Admin bypass. Returns the tenant's control-plane settings
         (formatVersion 2), grouped by Configuration page. clientCheckIn is read-only and
         always shows the running deployment's values. The document is also the export
         format.
+      parameters:
+      - in: query
+        name: section
+        required: false
+        schema:
+          type: string
+          enum: [server, device]
+        description: Read one feature. Unreadable groups are omitted from the response.
       responses:
         '200':
           description: Success; no-store
@@ -2662,7 +2718,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2674,7 +2730,7 @@ paths:
         '503': *id010
     put:
       operationId: updateServerSettings
-      description: Super Admin only. A write that changes configuration.requiredReviews
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
         while it is above 0 returns 202 with a SETTINGS configuration change that needs the
         current number of reviews, with no Super Admin bypass. Replaces the editable settings with a full
         formatVersion 2 record; used to restore an exported settings document. The
@@ -2704,7 +2760,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2716,7 +2772,7 @@ paths:
         '503': *id010
     patch:
       operationId: patchServerSettings
-      description: Super Admin only. A write that changes configuration.requiredReviews
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
         while it is above 0 returns 202 with a SETTINGS configuration change that needs the
         current number of reviews, with no Super Admin bypass. Merge patch (RFC 7396) of the editable settings
         groups; each Configuration page sends only its own fields. clientCheckIn is
@@ -2745,7 +2801,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004

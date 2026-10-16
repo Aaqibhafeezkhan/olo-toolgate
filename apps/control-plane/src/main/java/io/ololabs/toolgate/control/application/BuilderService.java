@@ -17,7 +17,7 @@ public final class BuilderService {
     private void admin(DirectoryService.Actor actor){available();actor.requireAdmin();if(!actor.tenant().equals(tenant))throw forbidden();}
     private static Failure forbidden(){return new Failure(ErrorCode.FORBIDDEN,403,"Builder request rejected");}
     private long now(Store.Session tx){long now=clock.millis();if(now<0||now>9007199254740991L-600000||tx.approvalClock(now)>now)throw Failure.unavailable();return now;}
-    private void permission(Store.Session tx,DirectoryService.Actor actor,String action,BuilderDefinition definition){new ManagementAccess(codec).requireEntry(tx.load(),actor.userId(),action,codec.entry(Ids.Kind.TOOL,codec.json(definition.tool().authorizationProfile().tool())),clock.millis());}
+    private void permission(Store.Session tx,DirectoryService.Actor actor,String action,BuilderDefinition definition){new ManagementAccess(codec).requireEntry(tx.load(),actor.userId(),"tool_builder."+action,codec.entry(Ids.Kind.TOOL,codec.json(definition.tool().authorizationProfile().tool())),clock.millis());}
     private boolean visible(Store.Session tx,DirectoryService.Actor actor,BuilderDefinition definition){try{permission(tx,actor,"read",definition);return true;}catch(Failure denied){if(denied.status()!=403)throw denied;return false;}}
     private Store.Reply reply(Object document,long revision){return new Store.Reply(200,codec.json(document),revision);}
     private BuilderDraft draft(Store.Session tx,String id){var row=tx.builder().get(DRAFT,Ids.valid(id));if(row==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Draft not found");return codec.model(row.document(),BuilderDraft.class);}
@@ -33,7 +33,7 @@ public final class BuilderService {
     }
     public Store.Reply test(DirectoryService.Actor actor,String body,String key,String requestId){
         admin(actor);Ids.valid(key);Ids.valid(requestId);var request=codec.model(body,BuilderTestRequest.class);var digest=DirectoryService.digest("builder.test\n"+body);
-        return store.transaction(tenant,true,tx->{long now=now(tx);permission(tx,actor,"build",draft(tx,request.draftId()).definition());endpoints.management(tx,actor,"build",request.deviceId());var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;tx.builder().prune(Math.max(0,now-604800000));
+        return store.transaction(tenant,true,tx->{long now=now(tx);permission(tx,actor,"build",draft(tx,request.draftId()).definition());endpoints.management(tx,actor,"tool_builder.build",request.deviceId());var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;tx.builder().prune(Math.max(0,now-604800000));
             var draft=draft(tx,request.draftId());if(!java.util.Objects.equals(draft.revision(),request.expectedRevision())||request.exampleIndex()>=draft.definition().examples().size())throw Failure.conflict();BuilderValidation.validate(codec,draft.definition(),true);
             var device=tx.endpoint(request.deviceId());if(device==null)throw forbidden();endpoints.active(tx,codec.model(device.document(),EndpointDeviceRecord.class));if(tx.builder().count(TEST)>=256)throw Failure.conflict();
             var job=new BuilderTestRecord(request.id(),draft.id(),draft.definitionDigest(),request.deviceId(),BuilderTestState.QUEUED,1L,now,now+600000,0L,UUID.randomUUID().toString(),request.exampleIndex(),null);
@@ -45,7 +45,7 @@ public final class BuilderService {
     private void currentCreator(Store.Session tx,BuilderTestRecord job){
         String user=tx.enterprise().creator("BUILDER",job.id());if(user==null)throw forbidden();
         var actor=new DirectoryService.Actor(tenant,DirectoryService.digest("queued\n"+user),true,false,user);
-        permission(tx,actor,"build",draft(tx,job.draftId()).definition());endpoints.management(tx,actor,"build",job.deviceId());
+        permission(tx,actor,"build",draft(tx,job.draftId()).definition());endpoints.management(tx,actor,"tool_builder.build",job.deviceId());
     }
     public Store.Reply poll(X509Certificate peer,String requestId){available();Ids.valid(requestId);return store.transaction(tenant,true,tx->{long now=now(tx);var device=endpoints.authenticate(tx,peer,now);
         for(var row:jobs(tx)){var job=codec.model(row.document(),BuilderTestRecord.class);if(!job.deviceId().equals(device.deviceId())||job.state()!=BuilderTestState.QUEUED&&job.state()!=BuilderTestState.RUNNING)continue;
