@@ -184,6 +184,8 @@ export const operations = {
   humanToolCatalog: { method: 'POST', path: '/api/control/v1/access/human/catalog' },
   invokeHumanTool: { method: 'POST', path: '/api/control/v1/access/human/invocations' },
   humanToolResult: { method: 'GET', path: '/api/control/v1/access/human/invocations/{id}/result' },
+  invocationRunEvents: { method: 'GET', path: '/api/control/v1/access/invocations/{id}/events' },
+  submitInvocationRunEvents: { method: 'POST', path: '/api/control/v1/access/invocations/{id}/events' },
   listVaultReferences: { method: 'GET', path: '/api/control/v1/vault' },
   storeVaultSecret: { method: 'POST', path: '/api/control/v1/vault' },
   effectiveUsers: { method: 'GET', path: '/api/control/v1/users/{id}/effective-access' },

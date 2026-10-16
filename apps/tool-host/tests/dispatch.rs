@@ -45,6 +45,8 @@ if mode == 3:
     capability = "guess"
 if mode == 4:
     call["route"] = "orders.delete"
+print(json.dumps({"kind": "LOG", "level": "info", "message": "calling the order API"}), flush=True)
+print(json.dumps({"kind": "PROGRESS", "fraction": 0.5}), flush=True)
 c = Unix("broker")
 c.request("POST", "/v1/call", json.dumps(call), {"Toolgate-Capability": capability, "Content-Type": "application/json"})
 reply = json.loads(c.getresponse().read())
@@ -95,6 +97,9 @@ fn put(dir: &Path, kind: &str, value: &Value) -> String {
 
 #[derive(Default)]
 struct Seen {
+    /// Run-event batches, and the order in which events and reports reached Control.
+    events: Vec<Value>,
+    order: Vec<&'static str>,
     reports: Vec<Value>,
     consumed: Vec<Value>,
     upstream: Vec<Value>,
@@ -121,8 +126,24 @@ async fn control(seen: Shared) -> u16 {
         )
     }
     async fn report(State(seen): State<Shared>, Json(body): Json<Value>) -> impl IntoResponse {
-        seen.lock().unwrap().reports.push(body);
+        let mut seen = seen.lock().unwrap();
+        seen.order.push("report");
+        seen.reports.push(body);
         Json(json!({}))
+    }
+    async fn events(
+        State(seen): State<Shared>,
+        AxumPath(id): AxumPath<String>,
+        Json(body): Json<Value>,
+    ) -> impl IntoResponse {
+        assert_eq!(body["invocationId"], id);
+        let mut seen = seen.lock().unwrap();
+        seen.order.push("events");
+        let through = body["events"].as_array().map_or(0, |e| e.len());
+        seen.events.push(body.clone());
+        Json(
+            json!({"invocationId": id, "attempt": body["attempt"], "acceptedThrough": through, "duplicates": 0, "refused": 0}),
+        )
     }
     async fn secret(headers: HeaderMap, Json(body): Json<Value>) -> axum::response::Response {
         if headers
@@ -172,6 +193,10 @@ async fn control(seen: Shared) -> u16 {
             )
             .route("/api/control/v1/access/permits/consume", post(consume))
             .route("/api/control/v1/access/effects/report", post(report))
+            .route(
+                "/api/control/v1/access/invocations/{id}/events",
+                post(events),
+            )
             .route("/api/control/v1/access/secrets/deliver", post(secret))
             .with_state(seen),
     )
@@ -433,6 +458,25 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
     );
     assert_eq!(seen.reports[0]["outcome"], "COMPLETED");
     assert_eq!(seen.reports[0]["fencingToken"], FENCE);
+    // The SDK frames reached Control in order, bound to the fencing token, before the result report.
+    let frames: Vec<&Value> = seen
+        .events
+        .iter()
+        .flat_map(|b| b["events"].as_array().unwrap())
+        .collect();
+    assert_eq!(seen.events[0]["fencingToken"], FENCE);
+    assert_eq!(seen.events[0]["attempt"], 1);
+    assert_eq!(frames.len(), 2, "{:?}", seen.events);
+    assert_eq!(frames[0]["kind"], "LOG");
+    assert_eq!(frames[0]["sequence"], 1);
+    assert_eq!(frames[0]["message"], "calling the order API");
+    assert_eq!(frames[1]["kind"], "PROGRESS");
+    assert_eq!(frames[1]["sequence"], 2);
+    assert_eq!(seen.order.last(), Some(&"report"));
+    assert!(
+        seen.order.iter().position(|o| *o == "events")
+            < seen.order.iter().position(|o| *o == "report")
+    );
     drop(seen);
     // The invocation's directory and socket are gone.
     assert_eq!(

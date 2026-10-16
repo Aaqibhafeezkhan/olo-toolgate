@@ -401,7 +401,23 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 memory_bytes: memory,
                 max_output_bytes: output,
             };
-            let ran = runner::run(&launch, &input, deadline).await;
+            let (sink, source) = crate::events::channel();
+            let forwarder = tokio::spawn(crate::events::forward(
+                host.control.clone(),
+                id.clone(),
+                fencing_token.clone(),
+                claims.attempt,
+                source,
+            ));
+            let ran = runner::run(&launch, &input, deadline, Some(&sink)).await;
+            // Frames reach Control before the result, so the stream's terminal event follows them.
+            drop(sink);
+            if tokio::time::timeout(std::time::Duration::from_secs(5), forwarder)
+                .await
+                .is_err()
+            {
+                tracing::warn!(invocation_id = %id, "run events still pending at the result report");
+            }
             invocation.closed.store(true, Ordering::SeqCst);
             let _ = stop.send(());
             let _ = broker.await;

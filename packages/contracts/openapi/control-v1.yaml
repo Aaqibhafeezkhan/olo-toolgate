@@ -7621,6 +7621,70 @@ paths:
                 $ref: ../schemas/v1/endpoint.schema.json#/$defs/RemoteToolResponse
         '403':
           description: Current group grant or target trust denied
+  /api/control/v1/access/invocations/{id}/events:
+    get:
+      operationId: invocationRunEvents
+      summary: Authorized cursor replay of an invocation's retained run-response events
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Retained events after the cursor, with explicit gaps, truncation and expiry
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventPage
+        '403':
+          description: The invocation's owner no longer holds current access, or the reader lacks operation.read
+        '404':
+          description: Invocation not found
+    post:
+      operationId: submitInvocationRunEvents
+      summary: Executor frames of the admitted attempt, bound by device certificate and fencing token
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventBatch
+      responses:
+        '200':
+          description: Highest contiguous sequence retained, duplicates and refusals
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventAck
+        '400':
+          description: Invalid frame or invocation binding
+        '401':
+          description: Direct device certificate required
+        '403':
+          description: Not the admitting executor or a stale fencing token
   /api/control/v1/vault:
     get:
       operationId: listVaultReferences

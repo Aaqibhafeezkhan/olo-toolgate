@@ -1304,6 +1304,125 @@ pub struct RouteDeclaration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<String>,
 }
+/// One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEvent {
+    pub cursor: u64,
+    pub source: RunEventSource,
+    pub kind: RunEventKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emitted_at_unix_ms: Option<u64>,
+    pub recorded_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<ResultFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<LogLevel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// Control acknowledgement: the highest contiguous sequence stored for the attempt, and how many frames were already present or refused by retention bounds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventAck {
+    pub invocation_id: String,
+    pub attempt: u64,
+    pub accepted_through: u64,
+    pub duplicates: u64,
+    pub refused: u64,
+}
+/// Executor to Control: frames of one admitted attempt, bound to the invocation and the fencing token its permit consumption returned. Redelivery of the same sequence is idempotent. droppedFrames counts frames the executor discarded under its own bounds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventBatch {
+    pub invocation_id: String,
+    pub fencing_token: String,
+    pub attempt: u64,
+    pub events: Vec<RunEventFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_frames: Option<u64>,
+}
+/// One redacted non-terminal SDK frame (LOG, PROGRESS or INPUT_REQUEST) as the executor forwards it. sequence is monotonic per invocation attempt; the executor never renumbers a frame it resends.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventFrame {
+    pub sequence: u64,
+    pub emitted_at_unix_ms: u64,
+    pub kind: RunEventKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<LogLevel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// Sequences of an attempt that never arrived; they are reported, never invented.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventGap {
+    pub attempt: u64,
+    pub from_sequence: u64,
+    pub to_sequence: u64,
+}
+/// Canonical RunEventKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunEventKind {
+    #[serde(rename = "LOG")]
+    Log,
+    #[serde(rename = "PROGRESS")]
+    Progress,
+    #[serde(rename = "INPUT_REQUEST")]
+    InputRequest,
+    #[serde(rename = "STATE")]
+    State,
+    #[serde(rename = "RESULT")]
+    Result,
+}
+/// Authorized replay page after a cursor. terminal is the authoritative ledger state; truncated, droppedFrames, gaps and expired say explicitly what is not shown.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventPage {
+    pub invocation_id: String,
+    pub state: String,
+    pub terminal: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    pub events: Vec<RunEvent>,
+    pub next_cursor: u64,
+    pub more: bool,
+    pub truncated: bool,
+    pub dropped_frames: u64,
+    pub expired: bool,
+    pub gaps: Vec<RunEventGap>,
+}
+/// Canonical RunEventSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunEventSource {
+    #[serde(rename = "EXECUTOR")]
+    Executor,
+    #[serde(rename = "PLATFORM")]
+    Platform,
+}
 /// Language runtime a tool needs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

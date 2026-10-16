@@ -1993,5 +1993,63 @@
       "case": "starts with digit",
       "value": "1Key"
     }
+  ],
+  "RunEventFrame": [
+    {
+      "case": "zero sequence",
+      "value": {
+        "sequence": 0,
+        "emittedAtUnixMs": 1,
+        "kind": "LOG",
+        "level": "info",
+        "message": "x"
+      }
+    },
+    {
+      "case": "unknown frame field",
+      "value": {
+        "sequence": 1,
+        "emittedAtUnixMs": 1,
+        "kind": "LOG",
+        "level": "info",
+        "message": "x",
+        "stdout": "raw"
+      }
+    }
+  ],
+  "RunEventBatch": [
+    {
+      "case": "missing fencing token",
+      "value": {
+        "invocationId": "inv-5",
+        "attempt": 1,
+        "events": []
+      }
+    },
+    {
+      "case": "attempt above the permit bound",
+      "value": {
+        "invocationId": "inv-5",
+        "fencingToken": "nonce-77",
+        "attempt": 17,
+        "events": []
+      }
+    }
+  ],
+  "RunEventPage": [
+    {
+      "case": "silent truncation",
+      "value": {
+        "invocationId": "inv-5",
+        "state": "SUCCEEDED",
+        "terminal": true,
+        "events": [],
+        "nextCursor": 0,
+        "more": false,
+        "droppedFrames": 0,
+        "expired": false,
+        "gaps": []
+      }
+    }
   ]
 }

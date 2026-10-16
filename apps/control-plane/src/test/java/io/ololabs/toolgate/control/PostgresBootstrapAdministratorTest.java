@@ -28,7 +28,7 @@ final class PostgresBootstrapAdministratorTest {
             s.setString(1,"USER");s.setString(2,"admin");s.setString(3,codec.json(user));s.executeUpdate();
             s.setString(1,"IDENTITY_BINDING");s.setString(2,"installed-admin");s.setString(3,codec.json(binding));s.executeUpdate();
         }
-        var latest=Flyway.configure().dataSource(url,"control_migrator",password).load();assertEquals(6,latest.migrate().migrationsExecuted);latest.validate();
+        var latest=Flyway.configure().dataSource(url,"control_migrator",password).load();assertEquals(7,latest.migrate().migrationsExecuted);latest.validate();
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         var store=new PostgresStore(source,codec);var tenant=new Ids.TenantId("upgrade");
         store.transaction(tenant,false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());assertEquals(user,codec.model(tx.load().entries().get(Kind.USER.id("admin")).document(),ControlUser.class));return null;});

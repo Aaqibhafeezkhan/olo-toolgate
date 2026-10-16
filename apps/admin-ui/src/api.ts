@@ -80,6 +80,12 @@ export class ControlClient {
   authorityStatus(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseAuthorityStatus>{return this.send(operations.accessAuthorityStatus,{signal});}
   effectiveAccess(entity:'users'|'agents'|'tools'|'devices',id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseEffectiveAccess>{const op={users:operations.effectiveUsers,agents:operations.effectiveAgents,tools:operations.effectiveTools,devices:operations.effectiveDevices}[entity];return this.send(op,{id,signal});}
   humanToolResult(id:string):Promise<import('@olo-labs/toolgate-contracts').RemoteToolResponse>{return this.send(operations.humanToolResult,{id});}
+  /** Tools the chosen target reports for this binding, each matching its verified definition. */
+  humanCatalog(body:import('@olo-labs/toolgate-contracts').EnterpriseHumanTarget,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').LocalToolCatalog>{return this.send(operations.humanToolCatalog,{body,signal});}
+  /** The person's own governed invocation. The key is kept by the caller for an exact retry; nothing retries automatically. */
+  invokeHumanTool(body:import('@olo-labs/toolgate-contracts').EnterpriseHumanRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseHumanOutcome>{return this.send(operations.invokeHumanTool,{body,key,timeoutMs:45000});}
+  /** Retained run-response events after a cursor, authorized on every page. */
+  runEvents(id:string,after:number,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').RunEventPage>{return this.send(operations.invocationRunEvents,{id,query:new URLSearchParams({after:String(after),limit:'200'}),signal});}
   remoteRequests(signal?:AbortSignal):Promise<RemoteToolPage>{return this.send(operations.listLocalMcpRequests,{signal});}
   remoteRequest(id:string,signal?:AbortSignal):Promise<RemoteToolInspection>{return this.send(operations.inspectLocalMcpRequest,{id,signal});}
   private token: string;

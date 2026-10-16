@@ -62,8 +62,14 @@ fn command(launch: &Launch<'_>) -> Result<tokio::process::Command, String> {
     }
 }
 
-/// Starts the process, hands it `input`, and waits for its frame until `deadline_unix_ms`.
-pub async fn run(launch: &Launch<'_>, input: &ToolInput, deadline_unix_ms: u64) -> Ran {
+/// Starts the process, hands it `input`, and waits for its frame until `deadline_unix_ms`. Each complete stdout line is
+/// offered to `frames` as it arrives, so response frames reach Control while the tool runs.
+pub async fn run(
+    launch: &Launch<'_>,
+    input: &ToolInput,
+    deadline_unix_ms: u64,
+    frames: Option<&crate::events::Sink>,
+) -> Ran {
     let mut command = match command(launch) {
         Ok(c) => c,
         Err(e) => return Ran::Crashed(e),
@@ -107,7 +113,10 @@ pub async fn run(launch: &Launch<'_>, input: &ToolInput, deadline_unix_ms: u64) 
     let work = async {
         let _ = stdin.write_all(&line).await;
         drop(stdin);
-        let (out, err) = tokio::join!(bounded(stdout, out_cap), bounded(stderr, MAX_STDERR));
+        let (out, err) = tokio::join!(
+            bounded(stdout, out_cap, frames),
+            bounded(stderr, MAX_STDERR, None)
+        );
         let status = child.wait().await;
         (out, err, status)
     };
@@ -142,9 +151,14 @@ pub async fn run(launch: &Launch<'_>, input: &ToolInput, deadline_unix_ms: u64) 
     }
 }
 
-/// Reads at most `cap` bytes, and whether there was more.
-async fn bounded<R: AsyncRead + Unpin>(mut reader: R, cap: usize) -> (Vec<u8>, bool) {
+/// Reads at most `cap` bytes, and whether there was more; offers each complete line to `lines`.
+async fn bounded<R: AsyncRead + Unpin>(
+    mut reader: R,
+    cap: usize,
+    lines: Option<&crate::events::Sink>,
+) -> (Vec<u8>, bool) {
     let mut out = Vec::new();
+    let mut scanned = 0;
     let mut chunk = [0u8; 16 * 1024];
     loop {
         match reader.read(&mut chunk).await {
@@ -154,6 +168,12 @@ async fn bounded<R: AsyncRead + Unpin>(mut reader: R, cap: usize) -> (Vec<u8>, b
                     return (out, true);
                 }
                 out.extend_from_slice(&chunk[..n]);
+                if let Some(sink) = lines {
+                    while let Some(end) = out[scanned..].iter().position(|b| *b == b'\n') {
+                        sink.offer(&String::from_utf8_lossy(&out[scanned..scanned + end]));
+                        scanned += end + 1;
+                    }
+                }
             }
         }
     }

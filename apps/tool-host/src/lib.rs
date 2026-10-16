@@ -10,6 +10,7 @@ pub mod control;
 pub mod device;
 pub mod digest;
 pub mod egress;
+pub mod events;
 pub mod permit;
 pub mod runner;
 pub mod server;

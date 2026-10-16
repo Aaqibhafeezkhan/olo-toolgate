@@ -97,6 +97,7 @@ public class PostgresStore implements Store {
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.BuilderStore builder() { return new PostgresBuilderStore(connection, tenant); }
+        public io.ololabs.toolgate.control.application.RunEventStore runEvents() { return new JdbcRunEventStore(connection, tenant); }
         private EnrollmentRecord enrollmentRows(java.sql.PreparedStatement statement) throws SQLException {
             try (statement; var rows=statement.executeQuery()) {
                 return rows.next() ? new EnrollmentRecord(rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),

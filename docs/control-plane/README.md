@@ -19,6 +19,7 @@ ASK approvals remain bound to the exact operation and current authority.
 - [ASK approvals](approvals.md) and [access model](../security/enterprise-access-control.md)
 - [Package deployment](../client/package-deployment.md) and [custom tool builder](../client/tool-builder.md)
 - [API](../api/control-plane-api.md), [upgrades](upgrades.md) and [recovery](../enterprise-access-control/operations.md)
+- [Invocation run events and the Test panel](run-events.md)
 
 ## Design references
 

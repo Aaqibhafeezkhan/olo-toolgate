@@ -1847,5 +1847,116 @@
     "configuration": {
       "requiredReviews": 2
     }
+  },
+  "RunEventKind": "PROGRESS",
+  "RunEventSource": "EXECUTOR",
+  "RunEventFrame": {
+    "sequence": 1,
+    "emittedAtUnixMs": 1700000000000,
+    "kind": "PROGRESS",
+    "fraction": 0.5,
+    "message": "Half way"
+  },
+  "RunEventBatch": {
+    "invocationId": "inv-5",
+    "fencingToken": "nonce-77",
+    "attempt": 1,
+    "events": [
+      {
+        "sequence": 1,
+        "emittedAtUnixMs": 1700000000000,
+        "kind": "PROGRESS",
+        "fraction": 0.5,
+        "message": "Half way"
+      },
+      {
+        "sequence": 2,
+        "emittedAtUnixMs": 1700000000001,
+        "kind": "LOG",
+        "level": "info",
+        "message": "fetched order"
+      }
+    ],
+    "droppedFrames": 0
+  },
+  "RunEventAck": {
+    "invocationId": "inv-5",
+    "attempt": 1,
+    "acceptedThrough": 2,
+    "duplicates": 0,
+    "refused": 0
+  },
+  "RunEvent": {
+    "cursor": 3,
+    "source": "EXECUTOR",
+    "kind": "LOG",
+    "attempt": 1,
+    "sequence": 2,
+    "executorId": "host-1",
+    "emittedAtUnixMs": 1700000000001,
+    "recordedAtUnixMs": 1700000000002,
+    "level": "info",
+    "message": "fetched order"
+  },
+  "RunEventGap": {
+    "attempt": 1,
+    "fromSequence": 3,
+    "toSequence": 4
+  },
+  "RunEventPage": {
+    "invocationId": "inv-5",
+    "state": "SUCCEEDED",
+    "terminal": true,
+    "toolId": "acme.orders/items.get",
+    "executorId": "host-1",
+    "events": [
+      {
+        "cursor": 1,
+        "source": "PLATFORM",
+        "kind": "STATE",
+        "state": "QUEUED",
+        "recordedAtUnixMs": 1700000000000
+      },
+      {
+        "cursor": 3,
+        "source": "EXECUTOR",
+        "kind": "LOG",
+        "attempt": 1,
+        "sequence": 2,
+        "executorId": "host-1",
+        "emittedAtUnixMs": 1700000000001,
+        "recordedAtUnixMs": 1700000000002,
+        "level": "info",
+        "message": "fetched order"
+      },
+      {
+        "cursor": 4,
+        "source": "EXECUTOR",
+        "kind": "RESULT",
+        "attempt": 1,
+        "executorId": "host-1",
+        "recordedAtUnixMs": 1700000000003,
+        "result": {
+          "kind": "RESULT",
+          "resultType": "complete",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello World"
+            }
+          ],
+          "structuredContent": {
+            "message": "Hello World"
+          },
+          "isError": false
+        }
+      }
+    ],
+    "nextCursor": 4,
+    "more": false,
+    "truncated": false,
+    "droppedFrames": 0,
+    "expired": false,
+    "gaps": []
   }
 }

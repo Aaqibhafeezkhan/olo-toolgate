@@ -683,6 +683,74 @@ export interface RouteDeclaration {
   readonly timeoutMs: number;
   readonly auth?: string;
 }
+/** One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only. */
+export interface RunEvent {
+  readonly cursor: number;
+  readonly source: RunEventSource;
+  readonly kind: RunEventKind;
+  readonly attempt?: number;
+  readonly sequence?: number;
+  readonly executorId?: string;
+  readonly emittedAtUnixMs?: number;
+  readonly recordedAtUnixMs: number;
+  readonly state?: string;
+  readonly result?: ResultFrame;
+  readonly level?: LogLevel;
+  readonly message?: string;
+  readonly fraction?: number;
+  readonly requestId?: string;
+  readonly request?: Record<string, unknown>;
+}
+/** Control acknowledgement: the highest contiguous sequence stored for the attempt, and how many frames were already present or refused by retention bounds. */
+export interface RunEventAck {
+  readonly invocationId: string;
+  readonly attempt: number;
+  readonly acceptedThrough: number;
+  readonly duplicates: number;
+  readonly refused: number;
+}
+/** Executor to Control: frames of one admitted attempt, bound to the invocation and the fencing token its permit consumption returned. Redelivery of the same sequence is idempotent. droppedFrames counts frames the executor discarded under its own bounds. */
+export interface RunEventBatch {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly attempt: number;
+  readonly events: ReadonlyArray<RunEventFrame>;
+  readonly droppedFrames?: number;
+}
+/** One redacted non-terminal SDK frame (LOG, PROGRESS or INPUT_REQUEST) as the executor forwards it. sequence is monotonic per invocation attempt; the executor never renumbers a frame it resends. */
+export interface RunEventFrame {
+  readonly sequence: number;
+  readonly emittedAtUnixMs: number;
+  readonly kind: RunEventKind;
+  readonly level?: LogLevel;
+  readonly message?: string;
+  readonly fraction?: number;
+  readonly requestId?: string;
+  readonly request?: Record<string, unknown>;
+}
+/** Sequences of an attempt that never arrived; they are reported, never invented. */
+export interface RunEventGap {
+  readonly attempt: number;
+  readonly fromSequence: number;
+  readonly toSequence: number;
+}
+export type RunEventKind = "LOG" | "PROGRESS" | "INPUT_REQUEST" | "STATE" | "RESULT";
+/** Authorized replay page after a cursor. terminal is the authoritative ledger state; truncated, droppedFrames, gaps and expired say explicitly what is not shown. */
+export interface RunEventPage {
+  readonly invocationId: string;
+  readonly state: string;
+  readonly terminal: boolean;
+  readonly toolId?: string;
+  readonly executorId?: string;
+  readonly events: ReadonlyArray<RunEvent>;
+  readonly nextCursor: number;
+  readonly more: boolean;
+  readonly truncated: boolean;
+  readonly droppedFrames: number;
+  readonly expired: boolean;
+  readonly gaps: ReadonlyArray<RunEventGap>;
+}
+export type RunEventSource = "EXECUTOR" | "PLATFORM";
 /** Language runtime a tool needs. */
 export interface RuntimeDeclaration {
   readonly runtimeId: string;
