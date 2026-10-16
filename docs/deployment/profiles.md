@@ -53,3 +53,25 @@ another file and set that variable to use a different profile with the same imag
 `PENDING` with the target it waits for, or `FAILED` with the reason. A failed profile keeps Control running for repair and
 is retried every minute; nothing falls back to another version or to a built-in tool. Grants, policies and approvals stay
 separate reviewed records: a READY profile has installed tools, not given anyone access to run them.
+
+## Client-tool images
+
+Packages whose exports run on client devices are released as OCI images (ADR 026). Configure the registry Control
+pushes to and the approved JRE base mirrored there:
+
+| Variable | Meaning |
+|---|---|
+| `TOOLGATE_CONTROL_CLIENT_IMAGES_ENABLED` | `true` to allow client releases. |
+| `TOOLGATE_CONTROL_CLIENT_IMAGES_REGISTRY_URL` | `https://registry.example.com` (plain `http` only for a loopback development registry). |
+| `TOOLGATE_CONTROL_CLIENT_IMAGES_REPOSITORY` | Repository for client-tool images, for example `toolgate/client-tools`. |
+| `TOOLGATE_CONTROL_CLIENT_IMAGES_BASE` | The mirrored approved base, `mirror/eclipse-temurin@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c`. |
+| `TOOLGATE_CONTROL_CLIENT_IMAGES_CREDENTIALS_PATH` | Optional protected file holding `user:secret`. |
+| `TOOLGATE_CONTROL_CLIENT_IMAGES_CA_PATH` | Optional PEM bundle for a private registry CA. |
+| `TOOLGATE_CONTROL_CLIENT_IMAGES_PLATFORMS` | Client platforms the release declares (default `LINUX`). |
+| `TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH`, `TOOLGATE_CONTROL_PACKAGE_RELEASE_KEY_ID` | Optional package-release key; it must be a configured release trust key and differ from the organization key. Quickstart supplies its own. |
+
+`POST /api/control/v1/packages/client-releases` with `{"packageDigest": "sha256:..."}` (permission `package.publish`)
+builds the image deterministically, pushes it by digest, writes disabled tool records and returns the
+`FleetPackageDocument` with each export marked supported or not. With the release key, Control signs and records the
+release and mirrors its bytes; otherwise sign `documentBase64` with `tools/builder/sign.py` and publish it through the
+fleet release API. Devices still need a rollout, enrollment, an enabled tool, grants and permits.

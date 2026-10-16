@@ -14,6 +14,7 @@ enum LocalRuntimeKind: string {
     case BATCH = 'BATCH';
     case SHELL = 'SHELL';
     case JAVA_JAR = 'JAVA_JAR';
+    case JAVA_SDK = 'JAVA_SDK';
     case DOTNET = 'DOTNET';
     case WASM = 'WASM';
 }

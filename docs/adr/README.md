@@ -49,3 +49,4 @@ Use `000-template.md`.
 
 - [024: Single CI gate ownership](024-single-ci-gate-ownership.md)
 - [025: Unified tagged and development publication](025-unified-tagged-and-development-publication.md)
+- [026: Client-tool OCI images built and released by Control](026-client-tool-images.md)

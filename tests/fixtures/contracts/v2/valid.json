@@ -2062,5 +2062,36 @@
       }
     ],
     "appliedAtUnixMs": 1700000000000
+  },
+  "ClientReleaseRequest": {
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ClientReleaseTool": {
+    "toolId": "ololabs.hello-world/client_greet",
+    "supported": true
+  },
+  "ClientRelease": {
+    "packageId": "ololabs.hello-world",
+    "version": "1.0.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "image": "registry.example.com/toolgate/client-tools@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "runtimeVersion": "21.0.12+1",
+    "manifestDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "signed": false,
+    "document": {
+      "formatVersion": 1
+    },
+    "documentBase64": "eyJmb3JtYXRWZXJzaW9uIjoxfQ",
+    "tools": [
+      {
+        "toolId": "ololabs.hello-world/client_greet",
+        "supported": true
+      },
+      {
+        "toolId": "acme.orders/items.get",
+        "supported": false,
+        "reason": "needs HTTP routes"
+      }
+    ]
   }
 }

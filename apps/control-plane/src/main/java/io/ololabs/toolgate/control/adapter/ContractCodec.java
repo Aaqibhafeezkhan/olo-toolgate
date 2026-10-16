@@ -75,7 +75,7 @@ public class ContractCodec implements Codec {
     static final java.util.List<java.util.Map.Entry<String, String>> V2_NAMES = java.util.List.of(
         java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
         java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"), java.util.Map.entry("protocol.schema.json", "RunEventBatch"),
-        java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"),
+        java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"), java.util.Map.entry("package.schema.json", "ClientReleaseRequest"), java.util.Map.entry("package.schema.json", "ClientRelease"),
         java.util.Map.entry("protocol.schema.json", "Dispatch"), java.util.Map.entry("protocol.schema.json", "AdmissionResponse"), java.util.Map.entry("protocol.schema.json", "ResultMessage"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();

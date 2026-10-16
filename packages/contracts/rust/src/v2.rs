@@ -190,6 +190,38 @@ pub struct ClientCheckIn {
     pub offline_after_ms: u64,
     pub source: ValueSource,
 }
+/// A client release: the image index pinned by digest, the exact FleetPackageDocument bytes (manifestDigest) and, when Control holds the package-release key, the signed FleetPackageRelease it recorded.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientRelease {
+    pub package_id: String,
+    pub version: String,
+    pub package_digest: String,
+    pub image: String,
+    pub runtime_version: String,
+    pub manifest_digest: String,
+    pub signed: bool,
+    pub document: std::collections::BTreeMap<String, serde_json::Value>,
+    pub document_base64: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub tools: Vec<ClientReleaseTool>,
+}
+/// Builds the client-tool image for one verified upload and issues its fleet release (ADR 026).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientReleaseRequest {
+    pub package_digest: String,
+}
+/// One export and whether a client device can run it; an unsupported export is never weakened to fit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientReleaseTool {
+    pub tool_id: String,
+    pub supported: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
 /// Canonical CompatibilityProfile wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompatibilityProfile {

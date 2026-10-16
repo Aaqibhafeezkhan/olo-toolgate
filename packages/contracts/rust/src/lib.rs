@@ -2490,6 +2490,8 @@ pub enum LocalRuntimeKind {
     Shell,
     #[serde(rename = "JAVA_JAR")]
     JavaJar,
+    #[serde(rename = "JAVA_SDK")]
+    JavaSdk,
     #[serde(rename = "DOTNET")]
     Dotnet,
     #[serde(rename = "WASM")]

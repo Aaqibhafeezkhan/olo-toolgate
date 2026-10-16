@@ -567,6 +567,8 @@ def configure():
                 'TOOLGATE_CONTROL_FLEET_PRIVATE_KEY_PATH': '/data/keys/fleet.pem',
                 'TOOLGATE_CONTROL_FLEET_RELEASE_KEYS_PATH': '/data/keys/release-keys.json',
                 'TOOLGATE_CONTROL_FLEET_ORGANIZATION_KEYS_PATH': '/data/keys/organization-keys.json',
+                # The package-release authority signs client releases (ADR 026); it is never the organization key.
+                'TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH': '/data/keys/package-release.pem', 'TOOLGATE_CONTROL_PACKAGE_RELEASE_KEY_ID': 'package-local',
                 'TOOLGATE_CONTROL_FLEET_ARTIFACT_ORIGIN': env.get('TOOLGATE_CONTROL_FLEET_ARTIFACT_ORIGIN', 'https://localhost:8443/artifacts'),
                 'TOOLGATE_CONTROL_FLEET_ARTIFACT_CA_PATH': env.get('TOOLGATE_CONTROL_FLEET_ARTIFACT_CA_PATH', '/data/keys/device-ca.crt'),
                 'TOOLGATE_CONTROL_EFFECT_ENABLED':'true', 'TOOLGATE_CONTROL_EFFECT_PRIVATE_KEY_PATH':'/data/keys/permit.pem',

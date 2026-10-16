@@ -27,6 +27,78 @@ fn framed_input(
     Ok((bytes, limits))
 }
 
+/// Bytes a v2 ToolInput envelope may add to the arguments the registration bounds.
+const SDK_ENVELOPE_BYTES: u64 = 4096;
+
+/// One v2 `ToolInput` line for a Java SDK package (ADR 026), bound to this invocation and its deadline. The device has no
+/// broker, globals, claims or secrets to hand the tool; an export needing them is never released to devices.
+fn sdk_input(
+    tool: &LocalToolRegistration,
+    request_id: &str,
+    arguments: &BTreeMap<String, serde_json::Value>,
+    deadline_unix_ms: u64,
+) -> Result<(Vec<u8>, LocalRuntimeLimits)> {
+    let input = olo_toolgate_contracts::v2::ToolInput {
+        protocol_version: 2,
+        invocation_id: request_id.to_owned(),
+        task_id: None,
+        tool_id: tool.tool_id.clone(),
+        entry_point: adapters::JAVA_SDK_MAIN.into(),
+        arguments: arguments.clone(),
+        globals: BTreeMap::new(),
+        claims: BTreeMap::new(),
+        secret_handles: Vec::new(),
+        deadline_unix_ms,
+        idempotency_key: None,
+        catalog_revision: "device".into(),
+        traceparent: None,
+        fencing_token: None,
+    };
+    let mut bytes = serde_json::to_vec(&input).map_err(|_| Failure::Validation)?;
+    if bytes.len() as u64
+        > tool
+            .limits
+            .max_input_bytes
+            .saturating_add(SDK_ENVELOPE_BYTES)
+    {
+        return Err(Failure::Validation);
+    }
+    bytes.push(b'\n');
+    let mut limits = tool.limits.clone();
+    limits.max_input_bytes = bytes.len() as u64;
+    Ok((bytes, limits))
+}
+
+/// Response frames on stdout, ending in exactly one RESULT. Diagnostics on stderr are discarded, never reflected. A tool
+/// error, an input request (devices take no interactive input) or anything that is not a protocol frame fails closed.
+fn sdk_output(stdout: &[u8], request_id: &str) -> Result<LocalToolOutput> {
+    let text = std::str::from_utf8(stdout).map_err(|_| Failure::Validation)?;
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    let (last, frames) = lines.split_last().ok_or(Failure::Validation)?;
+    for line in frames {
+        let frame: serde_json::Value =
+            serde_json::from_str(line).map_err(|_| Failure::Validation)?;
+        match frame.get("kind").and_then(|k| k.as_str()) {
+            Some("LOG") | Some("PROGRESS") => {}
+            Some("INPUT_REQUEST") => return Err(Failure::Unsupported),
+            _ => return Err(Failure::Validation),
+        }
+    }
+    let result: olo_toolgate_contracts::v2::ResultFrame =
+        serde_json::from_str(last).map_err(|_| Failure::Validation)?;
+    if result.kind != "RESULT"
+        || result.is_error
+        || result.result_type != olo_toolgate_contracts::v2::ResultType::Complete
+    {
+        return Err(Failure::Validation);
+    }
+    Ok(LocalToolOutput {
+        protocol_version: 1,
+        request_id: request_id.to_owned(),
+        output: result.structured_content.ok_or(Failure::Validation)?,
+    })
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Settings {
@@ -261,7 +333,10 @@ impl Manager {
             .engine
             .probe_version(&runtime.image, &command, &limits)
             .await?;
-        let bytes = if runtime.kind == LocalRuntimeKind::JavaJar {
+        let bytes = if matches!(
+            runtime.kind,
+            LocalRuntimeKind::JavaJar | LocalRuntimeKind::JavaSdk
+        ) {
             &data.stderr
         } else {
             &data.stdout
@@ -327,16 +402,30 @@ impl Manager {
         {
             return Err(Failure::Validation);
         }
-        let (input, limits) = framed_input(&tool, &input)?;
+        let sdk = runtime.kind == LocalRuntimeKind::JavaSdk;
+        let (input, limits) = if sdk {
+            sdk_input(
+                &tool,
+                &invocation.request_id,
+                &invocation.arguments,
+                crate::now().saturating_add(tool.limits.timeout_ms),
+            )?
+        } else {
+            framed_input(&tool, &input)?
+        };
         let command = adapters::invocation_arguments(&runtime.kind, &tool)?;
         let output = self
             .engine
             .run(&runtime.image, &command, &input, &limits)
             .await?;
-        if !output.stderr.is_empty() {
-            return Err(Failure::Validation);
-        }
-        let output: LocalToolOutput = self.contracts.decode("LocalToolOutput", &output.stdout)?;
+        let output: LocalToolOutput = if sdk {
+            sdk_output(&output.stdout, &invocation.request_id)?
+        } else {
+            if !output.stderr.is_empty() {
+                return Err(Failure::Validation);
+            }
+            self.contracts.decode("LocalToolOutput", &output.stdout)?
+        };
         if output.request_id != invocation.request_id
             || output.output != test.expected_output
             || !closed_schema(&tool.output_schema)?
@@ -413,18 +502,32 @@ impl Manager {
             return Err(Failure::Expired);
         }
         let command = adapters::invocation_arguments(&runtime.kind, &tool)?;
-        let (input, limits) = framed_input(&tool, &input)?;
+        let sdk = runtime.kind == LocalRuntimeKind::JavaSdk;
+        let (input, limits) = if sdk {
+            sdk_input(
+                &tool,
+                &invocation.request_id,
+                &invocation.arguments,
+                deadline,
+            )?
+        } else {
+            framed_input(&tool, &input)?
+        };
         let data = tokio::time::timeout(
             std::time::Duration::from_millis(deadline.saturating_sub(crate::now())),
             self.engine.run(&runtime.image, &command, &input, &limits),
         )
         .await
         .map_err(|_| Failure::Expired)??;
-        // Any diagnostic stderr rejects execution; never reflect arbitrary stderr.
-        if !data.stderr.is_empty() {
-            return Err(Failure::Validation);
-        }
-        let output: LocalToolOutput = self.contracts.decode("LocalToolOutput", &data.stdout)?;
+        let output: LocalToolOutput = if sdk {
+            sdk_output(&data.stdout, &invocation.request_id)?
+        } else {
+            // Any diagnostic stderr rejects execution; never reflect arbitrary stderr.
+            if !data.stderr.is_empty() {
+                return Err(Failure::Validation);
+            }
+            self.contracts.decode("LocalToolOutput", &data.stdout)?
+        };
         if output.request_id != invocation.request_id
             || !closed_schema(&tool.output_schema)?
                 .is_valid(&serde_json::to_value(&output.output).map_err(|_| Failure::Validation)?)
@@ -442,5 +545,30 @@ impl Manager {
             )
             .await?;
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod sdk_tests {
+    use super::*;
+
+    #[test]
+    fn sdk_frames_end_in_one_result_and_fail_closed() {
+        let ok = b"{\"kind\":\"LOG\",\"level\":\"info\",\"message\":\"x\"}\n{\"kind\":\"RESULT\",\"resultType\":\"complete\",\"content\":[],\"structuredContent\":{\"message\":\"Hello World\"},\"isError\":false}\n";
+        let output = sdk_output(ok, "inv-1").unwrap();
+        assert_eq!(output.request_id, "inv-1");
+        assert_eq!(output.output["message"], "Hello World");
+        let error = b"{\"kind\":\"RESULT\",\"resultType\":\"complete\",\"content\":[],\"isError\":true,\"error\":{\"code\":\"X\",\"message\":\"y\",\"retryable\":false}}";
+        assert_eq!(sdk_output(error, "inv-1").unwrap_err(), Failure::Validation);
+        let input = b"{\"kind\":\"INPUT_REQUEST\",\"requestId\":\"r\",\"request\":{}}\n{\"kind\":\"RESULT\",\"resultType\":\"complete\",\"content\":[],\"structuredContent\":{},\"isError\":false}";
+        assert_eq!(
+            sdk_output(input, "inv-1").unwrap_err(),
+            Failure::Unsupported
+        );
+        assert_eq!(
+            sdk_output(b"not json\n", "inv-1").unwrap_err(),
+            Failure::Validation
+        );
+        assert_eq!(sdk_output(b"", "inv-1").unwrap_err(), Failure::Validation);
     }
 }

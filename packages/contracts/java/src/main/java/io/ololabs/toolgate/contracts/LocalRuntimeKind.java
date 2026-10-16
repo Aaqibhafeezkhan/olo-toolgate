@@ -19,6 +19,8 @@ public enum LocalRuntimeKind {
     SHELL,
     /** Canonical JAVA_JAR value. */
     JAVA_JAR,
+    /** Canonical JAVA_SDK value. */
+    JAVA_SDK,
     /** Canonical DOTNET value. */
     DOTNET,
     /** Canonical WASM value. */

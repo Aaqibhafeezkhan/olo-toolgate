@@ -15,9 +15,11 @@
         "BATCH",
         "SHELL",
         "JAVA_JAR",
+        "JAVA_SDK",
         "DOTNET",
         "WASM"
-      ]
+      ],
+      "description": "Managed runtime kind. JAVA_SDK runs a Java SDK package artifact over tool protocol v2 as a CLIENT target (ADR 026)."
     },
     "LocalRuntimeState": {
       "type": "string",

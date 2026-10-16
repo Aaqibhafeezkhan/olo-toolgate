@@ -4,6 +4,9 @@
 use crate::{Failure, Result};
 use olo_toolgate_contracts::{LocalRuntimeKind as Kind, LocalToolRegistration};
 
+/// The Java SDK runtime's entry point for governed invocations over tool protocol v2.
+pub const JAVA_SDK_MAIN: &str = "io.ololabs.toolgate.runtime.Main";
+
 /// Interpreter discovery is inside a pinned image, never the host PATH.
 pub fn executable(kind: &Kind) -> Result<&'static str> {
     match kind {
@@ -11,7 +14,7 @@ pub fn executable(kind: &Kind) -> Result<&'static str> {
         Kind::Node => Ok("/usr/local/bin/node"),
         Kind::Powershell => Ok("/usr/bin/pwsh"),
         Kind::Shell => Ok("/bin/bash"),
-        Kind::JavaJar => Ok("/opt/java/openjdk/bin/java"),
+        Kind::JavaJar | Kind::JavaSdk => Ok("/opt/java/openjdk/bin/java"),
         Kind::Dotnet => Ok("/usr/share/dotnet/dotnet"),
         Kind::Native => Ok("/opt/tool/run"),
         Kind::Batch | Kind::Wasm => Err(Failure::Unsupported),
@@ -22,7 +25,7 @@ pub fn executable(kind: &Kind) -> Result<&'static str> {
 /// the same capability contract before being enabled, not fall back to the host.
 pub fn version_arguments(kind: &Kind) -> Result<Vec<String>> {
     let mut args = vec![executable(kind)?.into()];
-    if *kind == Kind::JavaJar {
+    if matches!(kind, Kind::JavaJar | Kind::JavaSdk) {
         args.extend([
             "-XX:ActiveProcessorCount=2".into(),
             "-XX:-UsePerfData".into(),
@@ -93,6 +96,17 @@ pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result
             "-jar".into(),
             entry.clone(),
         ],
+        // A Java SDK package artifact runs the SDK runtime's governed mode (ADR 026); the class is fixed, never the caller's.
+        Kind::JavaSdk if entry.ends_with(".jar") => vec![
+            executable(kind)?.into(),
+            format!("-Xmx{}m", tool.limits.memory_mi_b / 2),
+            "-XX:ActiveProcessorCount=2".into(),
+            "-XX:-UsePerfData".into(),
+            "-XX:+UseSerialGC".into(),
+            "-cp".into(),
+            entry.clone(),
+            JAVA_SDK_MAIN.into(),
+        ],
         Kind::Dotnet if entry.ends_with(".dll") => {
             vec![executable(kind)?.into(), "exec".into(), entry.clone()]
         }
@@ -114,6 +128,10 @@ pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result
         "DOTNET_CLI_TELEMETRY_OPTOUT=1".into(),
         "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1".into(),
     ];
+    if *kind == Kind::JavaSdk {
+        clean.push("TOOLGATE_PROTOCOL=2".into());
+        clean.push("TOOLGATE_EXECUTION_TARGET=CLIENT".into());
+    }
     clean.append(&mut args);
     Ok(clean)
 }

@@ -85,6 +85,30 @@ export interface ClientCheckIn {
   readonly offlineAfterMs: number;
   readonly source: ValueSource;
 }
+/** A client release: the image index pinned by digest, the exact FleetPackageDocument bytes (manifestDigest) and, when Control holds the package-release key, the signed FleetPackageRelease it recorded. */
+export interface ClientRelease {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest: string;
+  readonly image: string;
+  readonly runtimeVersion: string;
+  readonly manifestDigest: string;
+  readonly signed: boolean;
+  readonly document: Record<string, unknown>;
+  readonly documentBase64: string;
+  readonly release?: Record<string, unknown>;
+  readonly tools: ReadonlyArray<ClientReleaseTool>;
+}
+/** Builds the client-tool image for one verified upload and issues its fleet release (ADR 026). */
+export interface ClientReleaseRequest {
+  readonly packageDigest: string;
+}
+/** One export and whether a client device can run it; an unsupported export is never weakened to fit. */
+export interface ClientReleaseTool {
+  readonly toolId: string;
+  readonly supported: boolean;
+  readonly reason?: string;
+}
 export type CompactJws = string;
 export type CompatibilityProfile = "NONE" | "LLM_STRICT";
 /** One applied library mapping. */

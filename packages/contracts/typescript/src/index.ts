@@ -1487,7 +1487,7 @@ export interface LocalRuntimeIpcResponse {
   readonly result?: LocalToolOutput;
   readonly error?: ErrorCode;
 }
-export type LocalRuntimeKind = "NATIVE" | "PYTHON" | "NODE" | "POWERSHELL" | "BATCH" | "SHELL" | "JAVA_JAR" | "DOTNET" | "WASM";
+export type LocalRuntimeKind = "NATIVE" | "PYTHON" | "NODE" | "POWERSHELL" | "BATCH" | "SHELL" | "JAVA_JAR" | "JAVA_SDK" | "DOTNET" | "WASM";
 /** Bounded local sandbox budget; limits never grant host access. */
 export interface LocalRuntimeLimits {
   readonly timeoutMs: number;
