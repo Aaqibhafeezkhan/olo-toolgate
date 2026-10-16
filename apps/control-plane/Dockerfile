@@ -1,6 +1,25 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 ARG ADMIN_UI_SOURCE=console-build
+FROM rust:1.94.1-alpine@sha256:77237dd363a0b127bb5ef532c2d64c0deb380b738e43a9c4bdac73398d6d0a08 AS package-cli
+WORKDIR /src
+COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
+COPY packages/contracts/rust packages/contracts/rust
+COPY packages/contracts/tools packages/contracts/tools
+COPY apps/gateway/Cargo.toml apps/gateway/Cargo.toml
+COPY apps/gateway/src apps/gateway/src
+COPY apps/gateway/benches apps/gateway/benches
+COPY apps/endpoint-client/Cargo.toml apps/endpoint-client/Cargo.toml
+COPY apps/endpoint-client/src apps/endpoint-client/src
+COPY apps/tool-host/Cargo.toml apps/tool-host/Cargo.toml
+COPY apps/tool-host/src apps/tool-host/src
+COPY tool-sdk/cli tool-sdk/cli
+COPY tools/gateway/collect-notices.sh collect-notices.sh
+RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=toolgate-package-cli-musl,target=/src/target,sharing=locked \
+    cargo build --release --locked -p toolgate-cli && cp target/release/toolgate /usr/local/bin/toolgate && \
+    sh collect-notices.sh /licenses
+
 FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS console-build
 WORKDIR /workspace
 COPY package.json package-lock.json VERSION LICENSE ./
@@ -22,7 +41,7 @@ FROM ${ADMIN_UI_SOURCE} AS console
 
 FROM eclipse-temurin:21-jdk-noble@sha256:70898f0f893a6b772a0f29834d8b022e3ac20b6a0c33a922973cf66342ef56be AS build
 WORKDIR /workspace
-RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends unzip python3 && rm -rf /var/lib/apt/lists/*
 COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties VERSION ./
 COPY gradle/ gradle/
 COPY packages/contracts/ packages/contracts/
@@ -35,10 +54,15 @@ COPY apps/marketplace-worker/build.gradle.kts apps/marketplace-worker/build.grad
 # Gradle configures every project included in settings, including the SDK modules.
 COPY tool-sdk/java-sdk/ tool-sdk/java-sdk/
 COPY tool-sdk/json-sdk/ tool-sdk/json-sdk/
+COPY core-mcp/ core-mcp/
+COPY --from=package-cli /usr/local/bin/toolgate /usr/local/bin/toolgate
 ARG QUARKUS_PROFILE=prod
-RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew --no-daemon -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild
+RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && \
+    ./gradlew --no-daemon -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild :sdk-json:installDist && \
+    python3 core-mcp/build.py --cli /usr/local/bin/toolgate
 
-FROM eclipse-temurin:21-jre-noble@sha256:22138efd69393501fccd8176ae16b01791ed71ff801b28f0359415389b17c766
+# Builder compiles canonical SDK projects; its fixed toolchain requires javac.
+FROM eclipse-temurin:21-jdk-noble@sha256:70898f0f893a6b772a0f29834d8b022e3ac20b6a0c33a922973cf66342ef56be
 ARG VERSION
 ARG REVISION
 LABEL org.opencontainers.image.title="OLO ToolGate Control Plane" \
@@ -51,7 +75,12 @@ ARG CLIENT_ASSETS_DIR=deploy/client-assets/empty
 ARG CLIENT_DOWNLOADS_DIRECTORY=""
 COPY --chown=65532:65532 ${CLIENT_ASSETS_DIR}/ /opt/toolgate/client-downloads/
 ENV TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY=$CLIENT_DOWNLOADS_DIRECTORY
+ENV TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH=/opt/toolgate/core-mcp/core-packages.lock.json
 COPY --from=build --chown=65532:65532 /workspace/apps/control-plane/build/quarkus-app/ /app/
+COPY --from=build /workspace/tool-sdk/json-sdk/build/install/toolgate-json-sdk/ /opt/toolgate/json-sdk/
+COPY --from=build /workspace/build/core-mcp/ /opt/toolgate/core-mcp/
+COPY --from=package-cli /usr/local/bin/toolgate /usr/local/bin/toolgate
+COPY --from=package-cli /licenses /usr/share/licenses/olo-toolgate/package-cli/
 COPY LICENSE apps/control-plane/NOTICE.md /usr/share/licenses/olo-toolgate/
 COPY apps/control-plane/gradle.lockfile /usr/share/licenses/olo-toolgate/third-party/gradle.lockfile
 COPY tools/dependency-license-reviews.json /usr/share/licenses/olo-toolgate/third-party/

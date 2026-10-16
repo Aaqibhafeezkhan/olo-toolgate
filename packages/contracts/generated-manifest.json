@@ -11,7 +11,7 @@
     "packages/contracts/schemas/v1/enterprise.schema.json": "f80dc4844c08714b3c90d3ef6cc05b41934f1b924e65112216362e319eeca98b",
     "packages/contracts/schemas/v1/error.schema.json": "83f95933dda63e2ebb0b8bc7ec38a74b2f8252997164882b7c39f9510dd08d64",
     "packages/contracts/schemas/v1/execution.schema.json": "8f82f49858dc8eddb96fcc914e8426991188c0fdba1e6e387c314bf4dac427d9",
-    "packages/contracts/schemas/v1/fleet.schema.json": "a634e4bc4c3cf21332bde4e8192a4fcfe1003e6e5a93cce3d7cf723206b7499a",
+    "packages/contracts/schemas/v1/fleet.schema.json": "e0ab0824a27051ced977c6578a29cc0208ff3c601be75208ddb3598d203c26a5",
     "packages/contracts/schemas/v1/identifiers.schema.json": "fd8b4b562759eb901085f920da4581311cac691d87f9ed5e871d6d81f2430e8f",
     "packages/contracts/schemas/v1/package.schema.json": "b9a17c25e32ac2e6b21d6897bef6019601ce53a2cbfeb24f9fe42d9549967d11",
     "packages/contracts/schemas/v1/policy.schema.json": "d9f4e4e8ebadb65de8b24c0b5cc4c8014820f96e9ca74db30abb4ec8370ae223",

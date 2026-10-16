@@ -59,10 +59,17 @@ toolgate.control.builder.cli-executable=/usr/local/bin/toolgate
 toolgate.control.builder.data-directory=/data/builder
 ```
 
-The Java executable must be a JDK, since compilation runs in the child process.
-Runtime-only Control installations leave the worker disabled until a deployment
-supplies that toolchain. Authors cannot select executables, classpaths, compiler
-options or runtime images in a request.
+The Control image includes the pinned JDK, SDK distribution and canonical CLI.
+The worker is disabled by default. Enable it with
+`TOOLGATE_CONTROL_BUILDER_ENABLED=true`; Quickstart retains its files under
+`/data/builder`, and GatewayControl mounts a dedicated `builder-data` volume.
+For Helm set `control.builder.enabled=true` and
+`control.builder.existingClaim` to an operator-provisioned persistent claim.
+Multiple Control replicas need shared read/write storage for these artifacts.
+Budget an additional 512 MiB heap plus compiler/native overhead for each active
+worker; adjust the container memory limit and Control heap accordingly.
+Authors cannot select executables, classpaths, compiler options or runtime
+images in a request.
 
 The adapter supports the closed JSON SDK language. It launches a new process
 with a clean environment and its own private workspace, fixed entry point,

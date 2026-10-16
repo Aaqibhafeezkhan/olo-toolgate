@@ -16,6 +16,7 @@ services:
     cpus: 2
     stop_grace_period: 35s
     environment:
+      TOOLGATE_CONTROL_BUILDER_ENABLED: ${TOOLGATE_CONTROL_BUILDER_ENABLED:-false}
       # Used only when the setup administrator is first created.
       TOOLGATE_ADMIN_EMAIL: ${TOOLGATE_ADMIN_EMAIL:-admin@admin.com}
       TOOLGATE_DISABLE_ADMIN_PASSWORD: ${TOOLGATE_DISABLE_ADMIN_PASSWORD:-false}

@@ -644,9 +644,20 @@
         "fleet",
         "effect",
         "recovery",
-        "clientCheckIn"
+        "clientCheckIn",
+        "builder"
       ],
       "properties": {
+        "builder": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "existingClaim"],
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "existingClaim": {"type": "string", "maxLength": 253, "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"}
+          },
+          "allOf": [{"if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]}, "then": {"properties": {"existingClaim": {"minLength": 1}}}}]
+        },
         "enabled": {
           "type": "boolean"
         },

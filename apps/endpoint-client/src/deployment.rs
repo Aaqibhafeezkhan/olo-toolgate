@@ -74,9 +74,7 @@ impl Settings {
         }
         let keys = match typ {
             "toolgate-package-release+jws" => &self.release_keys,
-            "toolgate-fleet-desired+jws"
-            | "toolgate-fleet-artifact+jws"
-            | "toolgate-builder-test+jws" => &self.organization_keys,
+            "toolgate-fleet-desired+jws" | "toolgate-fleet-artifact+jws" => &self.organization_keys,
             _ => return Err(Failure::Unauthorized),
         };
         let key = keys

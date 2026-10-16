@@ -29,3 +29,12 @@ the installed distribution built by `:sdk-json:installDist`.
 
 Deployment provisioning and Marketplace publication consume these sealed
 artifacts separately. The inventory is not a deployment profile.
+
+The Control image runs this same build and copies only its sealed output into
+`/opt/toolgate/core-mcp`. At deployment, its
+`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH` selects that immutable lock. Control
+verifies every artifact and identity before uploading through the ordinary
+package service using the current installation Super Admin. Repeating startup
+reuses the same digest; invalid or missing artifacts fail startup. The upload
+does not enable tools, assign targets or create grants. Those operations belong
+to the deployment profile, not to the build inventory or SDK compiler.

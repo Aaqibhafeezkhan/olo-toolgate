@@ -84,6 +84,10 @@ gateway:
     controlPort: 443
 control:
   enabled: false
+  builder:
+    enabled: false
+    # Retain and back up this claim with Control's database. Multiple replicas require shared read/write storage.
+    existingClaim: ''
   approval:
     enabled: false
     pendingTtlMs: 300000
