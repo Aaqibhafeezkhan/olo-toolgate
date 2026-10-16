@@ -15,7 +15,7 @@ import io.vertx.ext.web.RoutingContext;
 @Path("/api/control/v1") @Produces("application/json") @Blocking @PermitAll
 public class PackageResource {
     public static final String PACKAGE_MEDIA_TYPE = "application/vnd.ololabs.toolgate.package+zip";
-    @Inject ServerPackages packages;@Inject VerifiedActors actors;@Inject EndpointService endpoints;@Inject RoutingContext routing;@Inject Correlation correlation;
+    @Inject ServerPackages packages;@Inject PackageProvisioningBootstrap provisioning;@Inject VerifiedActors actors;@Inject EndpointService endpoints;@Inject RoutingContext routing;@Inject Correlation correlation;
 
     private static Response reply(Store.Reply reply){return reply.status()==204?Response.noContent().header("Cache-Control","no-store").build():Response.status(reply.status()).header("Cache-Control","no-store").entity(reply.body()).build();}
     private static String body(String value){if(value==null||value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>65536)throw Failure.validation();return value;}
@@ -40,6 +40,10 @@ public class PackageResource {
     @GET @Path("packages/deployments") @io.quarkus.security.Authenticated public Response deployments(){return reply(packages.deployments(actors.management()));}
     @POST @Path("packages/deployments") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response deploy(String document){return reply(packages.deploy(actors.management(),body(document),correlation.id()));}
+
+    /** The recorded outcome of a deployment profile: READY, PENDING with the target it waits for, or FAILED with why. */
+    @GET @Path("packages/provisioning/{profileId}") @io.quarkus.security.Authenticated
+    public Response provisioning(@PathParam("profileId")String profileId){return reply(provisioning.reader().status(actors.management(),profileId));}
 
     @POST @Path("tool-hosts/registrations") @Consumes("application/json")
     public Response register(String document){return reply(packages.register(tenant(),device(),body(document),correlation.id()));}

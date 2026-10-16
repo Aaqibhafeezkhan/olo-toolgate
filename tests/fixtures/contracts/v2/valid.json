@@ -1958,5 +1958,109 @@
     "droppedFrames": 0,
     "expired": false,
     "gaps": []
+  },
+  "ProfilePackageSource": "MARKETPLACE",
+  "ProfileToolActivation": {
+    "toolId": "examples.loans/evaluate",
+    "toolGroupId": "MockToolGroup"
+  },
+  "ProfilePackage": {
+    "packageId": "examples.loans",
+    "source": "MARKETPLACE",
+    "version": "0.1.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "required": true,
+    "hostIds": [
+      "tool-host-local"
+    ],
+    "globals": {},
+    "tools": [
+      {
+        "toolId": "examples.loans/evaluate",
+        "toolGroupId": "MockToolGroup"
+      }
+    ],
+    "bindingIds": [
+      "mocks-on-tool-host"
+    ]
+  },
+  "ProfileReadinessCase": {
+    "toolId": "examples.loans/evaluate",
+    "agentId": "readiness-agent",
+    "arguments": {
+      "applicantId": "A-1003"
+    },
+    "expected": {
+      "decision": "APPROVE"
+    }
+  },
+  "DeploymentProfile": {
+    "profileVersion": 1,
+    "profileId": "demo3",
+    "packages": [
+      {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true,
+        "hostIds": [
+          "tool-host-local"
+        ],
+        "globals": {},
+        "tools": [
+          {
+            "toolId": "examples.loans/evaluate",
+            "toolGroupId": "MockToolGroup"
+          }
+        ],
+        "bindingIds": [
+          "mocks-on-tool-host"
+        ]
+      }
+    ],
+    "readiness": [
+      {
+        "toolId": "examples.loans/evaluate",
+        "agentId": "readiness-agent",
+        "arguments": {
+          "applicantId": "A-1003"
+        },
+        "expected": {
+          "decision": "APPROVE"
+        }
+      }
+    ]
+  },
+  "ProvisioningState": "PENDING",
+  "ProvisioningStep": "DEPLOY",
+  "ProvisioningPackageStatus": {
+    "packageId": "examples.loans",
+    "version": "0.1.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "required": true,
+    "state": "PENDING",
+    "step": "DEPLOY",
+    "reason": "Tool Host tool-host-local has not registered",
+    "toolIds": []
+  },
+  "ProvisioningStatus": {
+    "profileId": "demo3",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "generation": 1,
+    "state": "PENDING",
+    "packages": [
+      {
+        "packageId": "examples.loans",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true,
+        "state": "PENDING",
+        "step": "DEPLOY",
+        "reason": "Tool Host tool-host-local has not registered",
+        "toolIds": []
+      }
+    ],
+    "appliedAtUnixMs": 1700000000000
   }
 }

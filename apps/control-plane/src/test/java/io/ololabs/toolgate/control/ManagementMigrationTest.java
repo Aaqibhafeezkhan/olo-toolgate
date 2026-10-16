@@ -25,7 +25,7 @@ final class ManagementMigrationTest {
             s.execute("INSERT INTO control_tenants(tenant_id,revision) VALUES('legacy',7)");
             try(var insert=c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES('legacy','ROLE','visitor',2,?::jsonb)")){insert.setString(1,document);insert.executeUpdate();}
         }
-        var migration=org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load();assertEquals(2,migration.migrate().migrationsExecuted);assertEquals(0,migration.migrate().migrationsExecuted);
+        var migration=org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load();assertEquals(3,migration.migrate().migrationsExecuted);assertEquals(0,migration.migrate().migrationsExecuted);
         try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.createStatement();var r=s.executeQuery("SELECT document,revision FROM control_records WHERE record_id='visitor'")){
             assertTrue(r.next());var role=codec.model(r.getString(1),ControlRole.class);assertEquals(3,r.getInt(2));assertEquals(3L,role.revision());
             assertFalse(role.managementRules().getFirst().actions().contains("device.read"));assertTrue(role.managementRules().getFirst().actions().contains("user.read"));

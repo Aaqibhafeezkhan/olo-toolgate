@@ -37,6 +37,8 @@ COPY tools/enterprise/restore.py /opt/quickstart/enterprise_restore.py
 COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py VERSION /opt/quickstart/
 COPY packages/contracts/tools/builtins.json /opt/quickstart/builtins.json
 COPY packages/contracts/management-permissions.json /opt/quickstart/management-permissions.json
+# The default deployment profile; a deployment selects another with TOOLGATE_CONTROL_PROFILE_PATH.
+COPY deploy/profiles/fresh.json /opt/toolgate/profiles/fresh.json
 COPY docs/getting-started/one-minute-quickstart.md docs/deployment/quickstart.md /usr/share/doc/toolgate-quickstart/
 ARG VERSION
 ARG REVISION
@@ -48,6 +50,7 @@ LABEL org.opencontainers.image.title="OLO ToolGate Quickstart" \
       org.opencontainers.image.revision=$REVISION
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=55 -Djava.io.tmpdir=/tmp -Dorg.sqlite.lib.path=/usr/local/lib/toolgate" \
     TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH=/opt/toolgate/core-mcp/core-packages.lock.json \
+    TOOLGATE_CONTROL_PROFILE_PATH=/opt/toolgate/profiles/fresh.json \
     PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY LICENSE NOTICE.md /usr/share/licenses/olo-toolgate/
 COPY apps/quickstart/NOTICE.md /usr/share/licenses/olo-toolgate/quickstart-python-NOTICE.md

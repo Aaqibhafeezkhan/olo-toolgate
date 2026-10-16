@@ -2051,5 +2051,60 @@
         "gaps": []
       }
     }
+  ],
+  "ProfilePackage": [
+    {
+      "case": "floating version",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "latest",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true
+      }
+    },
+    {
+      "case": "required flag missing",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "case": "arbitrary file source",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "FILE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true
+      }
+    }
+  ],
+  "DeploymentProfile": [
+    {
+      "case": "unknown profile version",
+      "value": {
+        "profileVersion": 2,
+        "profileId": "demo3",
+        "packages": []
+      }
+    },
+    {
+      "case": "executable tool definition",
+      "value": {
+        "profileVersion": 1,
+        "profileId": "demo3",
+        "packages": [],
+        "tools": [
+          {
+            "id": "x",
+            "command": "sh"
+          }
+        ]
+      }
+    }
   ]
 }

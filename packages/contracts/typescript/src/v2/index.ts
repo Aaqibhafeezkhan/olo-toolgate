@@ -167,6 +167,13 @@ export interface DeploymentGrant {
   readonly agentGroupId: string;
   readonly toolIds: ReadonlyArray<string>;
 }
+/** Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package. */
+export interface DeploymentProfile {
+  readonly profileVersion: 1;
+  readonly profileId: string;
+  readonly packages: ReadonlyArray<ProfilePackage>;
+  readonly readiness?: ReadonlyArray<ProfileReadinessCase>;
+}
 /** Where the package runs. */
 export interface DeploymentTarget {
   readonly kind: TargetKind;
@@ -592,6 +599,31 @@ export interface PrivateRangeApproval {
   readonly cidr: string;
   readonly ports: ReadonlyArray<number>;
 }
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. bindingIds have their allowed package digests set to exactly the profile packages that name them. */
+export interface ProfilePackage {
+  readonly packageId: string;
+  readonly source: ProfilePackageSource;
+  readonly version: string;
+  readonly packageDigest?: string;
+  readonly required: boolean;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly globals?: Record<string, unknown>;
+  readonly tools?: ReadonlyArray<ProfileToolActivation>;
+  readonly bindingIds?: ReadonlyArray<string>;
+}
+export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE";
+/** A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values. */
+export interface ProfileReadinessCase {
+  readonly toolId: string;
+  readonly agentId: string;
+  readonly arguments: Record<string, unknown>;
+  readonly expected?: Record<string, unknown>;
+}
+/** One installed export to enable, in the reviewed Tool Group named here. The export must exist in the pinned package; nothing is created to satisfy a reference. */
+export interface ProfileToolActivation {
+  readonly toolId: string;
+  readonly toolGroupId: string;
+}
 /** Progress frame. */
 export interface ProgressFrame {
   readonly kind: "PROGRESS";
@@ -603,6 +635,31 @@ export interface ProtocolRange {
   readonly min: number;
   readonly max: number;
 }
+/** One pinned package: where provisioning stands and why it is not ready. hostIds and globalsDigest record the deployment it applied, so an unchanged repeat does not redeploy. */
+export interface ProvisioningPackageStatus {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest?: string;
+  readonly required: boolean;
+  readonly state: ProvisioningState;
+  readonly step: ProvisioningStep;
+  readonly reason?: string;
+  readonly toolIds?: ReadonlyArray<string>;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly globalsDigest?: string;
+}
+export type ProvisioningState = "READY" | "PENDING" | "FAILED";
+/** Persisted outcome of the latest profile application. state is READY only when every required package is READY. */
+export interface ProvisioningStatus {
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly generation: number;
+  readonly state: ProvisioningState;
+  readonly packages: ReadonlyArray<ProvisioningPackageStatus>;
+  readonly appliedAtUnixMs: number;
+  readonly previousProfileDigest?: string;
+}
+export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "ACTIVATE" | "DONE";
 /** Supersedes kills after two-person review. Issuer is always control. */
 export interface RecoveryEvent {
   readonly eventId: string;

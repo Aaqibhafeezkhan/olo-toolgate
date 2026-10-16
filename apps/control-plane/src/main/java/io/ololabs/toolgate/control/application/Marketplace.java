@@ -178,7 +178,12 @@ public final class Marketplace {
     public Store.Reply install(DirectoryService.Actor actor, String body, String requestId) {
         var request = (JsonNode) codec.value(body);
         if (!request.isObject() || request.size() != 2 || !request.path("packageId").isTextual() || !request.path("version").isTextual()) throw Failure.validation();
-        String packageId = request.get("packageId").asText(), version = request.get("version").asText();
+        return install(actor, request.get("packageId").asText(), request.get("version").asText(), null, requestId);
+    }
+
+    /** As {@link #install(DirectoryService.Actor, String, String)}, refusing before any download when the signed release's
+     *  package digest is not {@code expectedDigest}: a deployment profile pins exact releases and never takes another. */
+    public Store.Reply install(DirectoryService.Actor actor, String packageId, String version, String expectedDigest, String requestId) {
         packageId(packageId); version(version);
         enabled();
         // The same check the upload makes, first, so nobody else makes Control download anything.
@@ -212,6 +217,7 @@ public final class Marketplace {
         if (!SLUG.matcher(publisherSlug).matches() || !publisherSlug.equals(detail.path("publisher").path("slug").asText())) throw rejected("6", "the signed publisher differs from the detail record");
         String archiveSha256 = text(release, "archiveSha256"), packageDigest = text(release, "packageDigest"), setDigest = text(release, "descriptorSetDigest");
         if (!HEX64.matcher(archiveSha256).matches() || !DIGEST.matcher(packageDigest).matches() || !DIGEST.matcher(setDigest).matches()) throw rejected("7", "the release digests are malformed");
+        if (expectedDigest != null && !expectedDigest.equals(packageDigest)) throw rejected("lock", "the signed release is not the pinned package digest");
 
         var download = source.get(base + "/package", PACKAGE_MEDIA_TYPE, PackageArchive.MAX_PACKAGE_BYTES);
         if (download.status() == 410) throw rejected("1", "the version is delisted");

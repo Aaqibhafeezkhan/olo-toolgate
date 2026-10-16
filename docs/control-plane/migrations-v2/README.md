@@ -6,7 +6,7 @@ These files are the exact database changes behind [invocation-state-v2.md](../in
 
 The milestone that implements each one copies it unchanged into the product tree:
 - `flyway/V18__invocation_tasks_v2.sql` and `quickstart/V11.sql` with milestone M1 (shipped; the product copies must stay byte-identical);
-- `flyway/V26__kill_switch.sql` and `quickstart/V19.sql` with the kill switch, after the shipped console-device, feature-permission and invocation run-event migrations.
+- `flyway/V27__kill_switch.sql` and `quickstart/V20.sql` with the kill switch, after the shipped console-device, feature-permission, invocation run-event and package-provisioning migrations.
 
 The Quickstart runner cap in `SqliteState` is raised to match. Only a file's version number may change, if another migration lands first, and then both trees move together.
 

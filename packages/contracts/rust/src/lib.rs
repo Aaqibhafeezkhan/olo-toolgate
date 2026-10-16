@@ -3038,6 +3038,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/permit.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/profile.schema.json",
+        include_str!("../schemas/v2/profile.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",
         include_str!("../schemas/v2/protocol.schema.json"),
     ),

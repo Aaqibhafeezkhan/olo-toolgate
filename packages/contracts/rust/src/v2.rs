@@ -332,6 +332,17 @@ pub struct DeploymentGrant {
     pub agent_group_id: String,
     pub tool_ids: Vec<String>,
 }
+/// Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeploymentProfile {
+    #[serde(deserialize_with = "const_deployment_profile_profile_version")]
+    pub profile_version: u64,
+    pub profile_id: String,
+    pub packages: Vec<ProfilePackage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readiness: Option<Vec<ProfileReadinessCase>>,
+}
 /// Where the package runs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1116,6 +1127,50 @@ pub struct PrivateRangeApproval {
     pub cidr: String,
     pub ports: Vec<u64>,
 }
+/// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. bindingIds have their allowed package digests set to exactly the profile packages that name them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfilePackage {
+    pub package_id: String,
+    pub source: ProfilePackageSource,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub globals: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<ProfileToolActivation>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding_ids: Option<Vec<String>>,
+}
+/// Canonical ProfilePackageSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProfilePackageSource {
+    #[serde(rename = "PREBUILT_CORE")]
+    PrebuiltCore,
+    #[serde(rename = "MARKETPLACE")]
+    Marketplace,
+}
+/// A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileReadinessCase {
+    pub tool_id: String,
+    pub agent_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// One installed export to enable, in the reviewed Tool Group named here. The export must exist in the pinned package; nothing is created to satisfy a reference.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileToolActivation {
+    pub tool_id: String,
+    pub tool_group_id: String,
+}
 /// Progress frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1132,6 +1187,63 @@ pub struct ProgressFrame {
 pub struct ProtocolRange {
     pub min: u64,
     pub max: u64,
+}
+/// One pinned package: where provisioning stands and why it is not ready. hostIds and globalsDigest record the deployment it applied, so an unchanged repeat does not redeploy.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningPackageStatus {
+    pub package_id: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+    pub required: bool,
+    pub state: ProvisioningState,
+    pub step: ProvisioningStep,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub globals_digest: Option<String>,
+}
+/// Canonical ProvisioningState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProvisioningState {
+    #[serde(rename = "READY")]
+    Ready,
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "FAILED")]
+    Failed,
+}
+/// Persisted outcome of the latest profile application. state is READY only when every required package is READY.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningStatus {
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub generation: u64,
+    pub state: ProvisioningState,
+    pub packages: Vec<ProvisioningPackageStatus>,
+    pub applied_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_profile_digest: Option<String>,
+}
+/// Canonical ProvisioningStep wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProvisioningStep {
+    #[serde(rename = "VALIDATE")]
+    Validate,
+    #[serde(rename = "IMPORT")]
+    Import,
+    #[serde(rename = "DEPLOY")]
+    Deploy,
+    #[serde(rename = "ACTIVATE")]
+    Activate,
+    #[serde(rename = "DONE")]
+    Done,
 }
 /// Supersedes kills after two-person review. Issuer is always control.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1897,6 +2009,7 @@ const_field!(const_contract_set_name, String, "olo-toolgate-contracts");
 const_field!(const_control_server_settings_format_version, u64, 2);
 const_field!(const_control_settings_view_format_version, u64, 2);
 const_field!(const_deployment_binding_binding_format_version, u64, 1);
+const_field!(const_deployment_profile_profile_version, u64, 1);
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
 const_field!(const_log_frame_kind, String, "LOG");
 const_field!(const_package_manifest_schema_version, u64, 2);
@@ -1948,6 +2061,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/permit.schema.json",
         include_str!("../schemas/v2/permit.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/profile.schema.json",
+        include_str!("../schemas/v2/profile.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",
