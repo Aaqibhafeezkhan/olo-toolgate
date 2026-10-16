@@ -5,8 +5,12 @@ AppId=OLO.ToolGate.Client
 AppName=OLO ToolGate Client
 AppVersion={#ProductVersion}
 #ifdef NumericVersion
+; Windows version resources take four numbers; the SemVer product version (with any
+; pre-release or build suffix) goes in the text fields.
 VersionInfoVersion={#NumericVersion}
-VersionInfoProductVersion={#ProductVersion}
+VersionInfoProductVersion={#NumericVersion}
+VersionInfoTextVersion={#ProductVersion}
+VersionInfoProductTextVersion={#ProductVersion}
 #endif
 AppPublisher=OLO Labs
 LicenseFile={#PayloadDirectory}\LICENSE
