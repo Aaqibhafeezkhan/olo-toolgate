@@ -1,6 +1,6 @@
 # Admin UI
 
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding. The combined list refreshes every two seconds. Tooltip information is available by hover, focus and the details button; unknown availability is not green.
+The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. The combined list refreshes every two seconds. Tooltip information is available by hover, focus and the details button; unknown availability is not green.
 
 See [Device registry and tool-call controls](../../docs/control-plane/device-registry.md).
 

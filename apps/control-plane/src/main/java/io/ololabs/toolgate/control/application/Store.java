@@ -16,6 +16,7 @@ public interface Store {
         default BuilderStore builder() { throw Failure.unavailable(); }
         default McpStore mcp() { throw Failure.unavailable(); }
         default PackageStore packages() { throw Failure.unavailable(); }
+        default RunEventStore runEvents() { throw Failure.unavailable(); }
         Directory load();
         /** Digest of this tenant's current directory; adapters may reuse a version-checked immutable snapshot. */
         default String adoptionDigest(TenantId tenant, Codec codec) { return EndpointAdoptions.digest(codec, tenant, load()); }

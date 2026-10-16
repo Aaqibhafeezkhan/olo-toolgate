@@ -24,6 +24,6 @@ export function FeatureAccess({client,route,children}:{client:ControlClient;rout
  const permissions=usePermissions(client);
  if(!permissions.view(route))return <section><h1>Access unavailable</h1><p>Your role does not grant access to this feature.</p></section>;
  const directory=(managementCatalog.directoryRoutes as readonly string[]).includes(route);
- if(directory||permissions.edit(route)||route==='about'||route==='overview')return <>{children}</>;
+ if(directory||permissions.edit(route)||route==='about'||route==='overview'||route==='builder'||route==='server-packages')return <>{children}</>;
  return <><p role="status">View only. Your role does not grant changes to this feature.</p><fieldset disabled className="readonly-feature">{children}</fieldset></>;
 }

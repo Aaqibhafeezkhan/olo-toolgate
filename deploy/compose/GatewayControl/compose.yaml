@@ -25,6 +25,7 @@ services:
     tmpfs: [/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532]
     volumes:
       - ./custody/control:/custody:ro
+      - builder-data:/data/builder
   gateway:
     <<: *runtime
     image: ${GATEWAY_IMAGE:-ololab/olo-toolgate-gateway:dev}
@@ -53,3 +54,5 @@ services:
       retries: 30
 networks:
   backend:
+volumes:
+  builder-data:

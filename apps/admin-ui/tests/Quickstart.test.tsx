@@ -68,16 +68,15 @@ describe('Quickstart',()=>{
     vi.stubGlobal('fetch',transport);render(<App/>);await screen.findByRole('alert');
     expect(screen.queryByRole('navigation')).toBeNull();expect(transport.mock.calls.some(([url])=>url.endsWith('/logout'))).toBe(true);
   });
-  it('routes protected invocation, ASK and vault writes through the authoritative API',async()=>{
-    const transport=vi.fn(async(input:string,init?:RequestInit)=>input.endsWith('/tools')?response({tools:[{toolId:'calculator.evaluate',enabled:true}]}):input.endsWith('/invoke')?response({invocation:{id:'ask-1',state:'PENDING_APPROVAL'}},202):init?.method==='POST'?response({stored:true},201):response({names:['provider/token']}));
+  it('offers only the encrypted vault and never the fixed built-in executor',async()=>{
+    const transport=vi.fn(async(_input:string,init?:RequestInit)=>init?.method==='POST'?response({stored:true},201):response({names:['provider/token']}));
     vi.stubGlobal('fetch',transport);render(<QuickstartTools client={new ControlClient('test-session',()=>{})}/>);
-    await waitFor(()=>expect((screen.getByRole('button',{name:'Run protected tool'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.click(screen.getByRole('button',{name:'Run protected tool'}));await screen.findByRole('region',{name:'Tool result'});expect(document.body.textContent).toContain('ask-1');
+    await screen.findByText(/provider\/token/);expect(screen.queryByRole('button',{name:'Run protected tool'})).toBeNull();expect(screen.getByRole('link',{name:'Test a tool'}).getAttribute('href')).toBe('#test');
     fireEvent.change(screen.getByLabelText('Secret name'),{target:{value:'provider/token'}});fireEvent.change(screen.getByLabelText('Secret value'),{target:{value:'private-provider-value'}});fireEvent.click(screen.getByRole('button',{name:'Store encrypted secret'}));await waitFor(()=>expect((screen.getByLabelText('Secret value') as HTMLInputElement).value).toBe(''));expect(document.body.textContent).not.toContain('private-provider-value');
+    expect(transport.mock.calls.some(([url])=>url.endsWith('/tools')||url.endsWith('/invoke'))).toBe(false);
   });
-  it('rejects malformed JSON and shows dependency errors',async()=>{
-    vi.stubGlobal('fetch',vi.fn(async(input:string)=>input.endsWith('/tools')?response({tools:[{toolId:'calculator.evaluate',enabled:true}]}):input.endsWith('/vault')?response({names:[]}):response({},503)));
-    render(<QuickstartTools client={new ControlClient('test-session',()=>{})}/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Run protected tool'}) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.change(screen.getByLabelText('Arguments (JSON object)'),{target:{value:'broken'}});fireEvent.click(screen.getByRole('button',{name:'Run protected tool'}));await screen.findByRole('alert');
-    fireEvent.change(screen.getByLabelText('Arguments (JSON object)'),{target:{value:'{}'}});fireEvent.click(screen.getByRole('button',{name:'Run protected tool'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('could not complete'));
+  it('shows vault dependency errors',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>response({},503)));
+    render(<QuickstartTools client={new ControlClient('test-session',()=>{})}/>);await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('could not complete'));
   });
 });

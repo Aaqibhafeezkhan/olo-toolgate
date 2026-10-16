@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Dispatch through a real host: permits signed with a test key, a fake Control, a fake
 //! upstream on loopback, and a stand-in runtime (a Python script in place of `java`) that speaks
-//! tool protocol v2 and calls the broker. The Java runtime itself is covered by the starter
+//! tool protocol v2 and calls the broker over its stdio. The Java runtime itself is covered by the starter
 //! end-to-end test (e2e/run.sh).
 
 use axum::extract::{Path as AxumPath, State};
@@ -23,31 +23,30 @@ use tool_host::config::Config;
 const FENCE: &str = "fence-1";
 const API_KEY: &str = "k-123";
 
-/// A stand-in runtime: reads the ToolInput line, calls the broker as `arguments.since` says,
-/// and prints a ResultFrame holding the broker's reply.
+/// A stand-in runtime speaking tool protocol v2 over stdio: reads the ToolInput line, sends one broker request as
+/// `arguments.since` says, reads the BROKER_RESPONSE on stdin, and prints a ResultFrame holding the broker's answer.
 const RUNTIME: &str = r#"
-import http.client, json, os, socket, sys
+import json, os, sys
 inp = json.loads(sys.stdin.readline())
 args = inp["arguments"]
 mode = args.get("since", 0)
 if mode == 2:
     sys.exit(3)
-class Unix(http.client.HTTPConnection):
-    def connect(self):
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(os.environ["TOOLGATE_BROKER_SOCKET"])
 call = {"route": "orders.get", "method": "GET", "destination": "acme-api",
         "variables": {"orderId": args["orderId"]}, "query": {}, "headers": {"X-On-Behalf-Of": inp["claims"].get("UserName", "")}}
-capability = os.environ["TOOLGATE_BROKER_CAPABILITY"]
+operation, request = "ROUTE_CALL", call
 if mode == 1:
     call["headers"]["Authorization"] = "Bearer stolen"
 if mode == 3:
-    capability = "guess"
+    operation, request = "FILES_READ", {"path": "notes.txt"}
 if mode == 4:
     call["route"] = "orders.delete"
-c = Unix("broker")
-c.request("POST", "/v1/call", json.dumps(call), {"Toolgate-Capability": capability, "Content-Type": "application/json"})
-reply = json.loads(c.getresponse().read())
+print(json.dumps({"kind": "LOG", "level": "info", "message": "calling the order API"}), flush=True)
+print(json.dumps({"kind": "PROGRESS", "fraction": 0.5}), flush=True)
+print(json.dumps({"kind": "BROKER_REQUEST", "requestId": "b-1", "operation": operation, "request": request}), flush=True)
+response = json.loads(sys.stdin.readline())
+assert response["kind"] == "BROKER_RESPONSE" and response["requestId"] == "b-1", response
+reply = response["result"] if "result" in response else {"refused": response["error"]["message"]}
 env = sorted(k for k in os.environ)
 frame = {"kind": "RESULT", "resultType": "complete", "content": [{"type": "text", "text": "ok"}],
          "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"]}, "isError": False}
@@ -95,6 +94,9 @@ fn put(dir: &Path, kind: &str, value: &Value) -> String {
 
 #[derive(Default)]
 struct Seen {
+    /// Run-event batches, and the order in which events and reports reached Control.
+    events: Vec<Value>,
+    order: Vec<&'static str>,
     reports: Vec<Value>,
     consumed: Vec<Value>,
     upstream: Vec<Value>,
@@ -121,8 +123,24 @@ async fn control(seen: Shared) -> u16 {
         )
     }
     async fn report(State(seen): State<Shared>, Json(body): Json<Value>) -> impl IntoResponse {
-        seen.lock().unwrap().reports.push(body);
+        let mut seen = seen.lock().unwrap();
+        seen.order.push("report");
+        seen.reports.push(body);
         Json(json!({}))
+    }
+    async fn events(
+        State(seen): State<Shared>,
+        AxumPath(id): AxumPath<String>,
+        Json(body): Json<Value>,
+    ) -> impl IntoResponse {
+        assert_eq!(body["invocationId"], id);
+        let mut seen = seen.lock().unwrap();
+        seen.order.push("events");
+        let through = body["events"].as_array().map_or(0, |e| e.len());
+        seen.events.push(body.clone());
+        Json(
+            json!({"invocationId": id, "attempt": body["attempt"], "acceptedThrough": through, "duplicates": 0, "refused": 0}),
+        )
     }
     async fn secret(headers: HeaderMap, Json(body): Json<Value>) -> axum::response::Response {
         if headers
@@ -172,6 +190,10 @@ async fn control(seen: Shared) -> u16 {
             )
             .route("/api/control/v1/access/permits/consume", post(consume))
             .route("/api/control/v1/access/effects/report", post(report))
+            .route(
+                "/api/control/v1/access/invocations/{id}/events",
+                post(events),
+            )
             .route("/api/control/v1/access/secrets/deliver", post(secret))
             .with_state(seen),
     )
@@ -413,8 +435,7 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
         json!([
             "HOME",
             "LANG",
-            "TOOLGATE_BROKER_CAPABILITY",
-            "TOOLGATE_BROKER_SOCKET",
+            "TOOLGATE_EXECUTION_TARGET",
             "TOOLGATE_PROTOCOL"
         ])
     );
@@ -432,6 +453,25 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
     );
     assert_eq!(seen.reports[0]["outcome"], "COMPLETED");
     assert_eq!(seen.reports[0]["fencingToken"], FENCE);
+    // The SDK frames reached Control in order, bound to the fencing token, before the result report.
+    let frames: Vec<&Value> = seen
+        .events
+        .iter()
+        .flat_map(|b| b["events"].as_array().unwrap())
+        .collect();
+    assert_eq!(seen.events[0]["fencingToken"], FENCE);
+    assert_eq!(seen.events[0]["attempt"], 1);
+    assert_eq!(frames.len(), 2, "{:?}", seen.events);
+    assert_eq!(frames[0]["kind"], "LOG");
+    assert_eq!(frames[0]["sequence"], 1);
+    assert_eq!(frames[0]["message"], "calling the order API");
+    assert_eq!(frames[1]["kind"], "PROGRESS");
+    assert_eq!(frames[1]["sequence"], 2);
+    assert_eq!(seen.order.last(), Some(&"report"));
+    assert!(
+        seen.order.iter().position(|o| *o == "events")
+            < seen.order.iter().position(|o| *o == "report")
+    );
     drop(seen);
     // The invocation's directory and socket are gone.
     assert_eq!(
@@ -445,7 +485,7 @@ async fn the_broker_refuses_what_the_route_does_not_allow() {
     let rig = rig!();
     for (mode, reason) in [
         (1, "header Authorization may not be set by a tool"),
-        (3, "the broker capability is not valid for this socket"),
+        (3, "device files are not available on a Tool Host"),
         (4, "route orders.delete is not granted to this invocation"),
     ] {
         let arguments = json!({"orderId": "123456", "since": mode});

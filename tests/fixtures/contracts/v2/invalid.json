@@ -1993,5 +1993,166 @@
       "case": "starts with digit",
       "value": "1Key"
     }
+  ],
+  "RunEventFrame": [
+    {
+      "case": "zero sequence",
+      "value": {
+        "sequence": 0,
+        "emittedAtUnixMs": 1,
+        "kind": "LOG",
+        "level": "info",
+        "message": "x"
+      }
+    },
+    {
+      "case": "unknown frame field",
+      "value": {
+        "sequence": 1,
+        "emittedAtUnixMs": 1,
+        "kind": "LOG",
+        "level": "info",
+        "message": "x",
+        "stdout": "raw"
+      }
+    }
+  ],
+  "RunEventBatch": [
+    {
+      "case": "missing fencing token",
+      "value": {
+        "invocationId": "inv-5",
+        "attempt": 1,
+        "events": []
+      }
+    },
+    {
+      "case": "attempt above the permit bound",
+      "value": {
+        "invocationId": "inv-5",
+        "fencingToken": "nonce-77",
+        "attempt": 17,
+        "events": []
+      }
+    }
+  ],
+  "RunEventPage": [
+    {
+      "case": "silent truncation",
+      "value": {
+        "invocationId": "inv-5",
+        "state": "SUCCEEDED",
+        "terminal": true,
+        "events": [],
+        "nextCursor": 0,
+        "more": false,
+        "droppedFrames": 0,
+        "expired": false,
+        "gaps": []
+      }
+    }
+  ],
+  "ProfilePackage": [
+    {
+      "case": "floating version",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "latest",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true
+      }
+    },
+    {
+      "case": "required flag missing",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "case": "arbitrary file source",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "FILE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true
+      }
+    }
+  ],
+  "DeploymentProfile": [
+    {
+      "case": "unknown profile version",
+      "value": {
+        "profileVersion": 2,
+        "profileId": "demo3",
+        "packages": []
+      }
+    },
+    {
+      "case": "executable tool definition",
+      "value": {
+        "profileVersion": 1,
+        "profileId": "demo3",
+        "packages": [],
+        "tools": [
+          {
+            "id": "x",
+            "command": "sh"
+          }
+        ]
+      }
+    }
+  ],
+  "ClientRelease": [
+    {
+      "case": "image by tag",
+      "value": {
+        "packageId": "ololabs.hello-world",
+        "version": "1.0.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "image": "registry.example.com/toolgate/client-tools:latest",
+        "runtimeVersion": "21.0.12+1",
+        "manifestDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "signed": false,
+        "document": {
+          "formatVersion": 1
+        },
+        "documentBase64": "eyJmb3JtYXRWZXJzaW9uIjoxfQ",
+        "tools": [
+          {
+            "toolId": "ololabs.hello-world/client_greet",
+            "supported": true
+          },
+          {
+            "toolId": "acme.orders/items.get",
+            "supported": false,
+            "reason": "needs HTTP routes"
+          }
+        ]
+      }
+    }
+  ],
+  "BrokerRequestFrame": [
+    {
+      "case": "no request payload",
+      "value": {
+        "kind": "BROKER_REQUEST",
+        "requestId": "b-1",
+        "operation": "FILES_READ"
+      }
+    },
+    {
+      "case": "shell operation",
+      "value": {
+        "kind": "BROKER_REQUEST",
+        "requestId": "b-1",
+        "operation": "EXEC",
+        "request": {}
+      }
+    }
   ]
 }

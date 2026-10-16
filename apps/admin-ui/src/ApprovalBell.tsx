@@ -24,7 +24,7 @@ export function ApprovalBell({client,administrator,superAdmin,userId}:{client:Co
             if(page.items.length<100)break;const next=page.items.at(-1)?.id;if(!next||next===after)break;after=next;
           }
         }catch(error){if(!(error instanceof ApiError&&error.status===403))failed=true;}
-        try{const page=await client.managedDevices(abort.signal);if(page.items.some(row=>!row.systemExecutor&&(row.enrollment?.state==='PENDING'&&row.enrollment.expiresAtUnixMs>Date.now()||row.endpointDevice?.state==='ACTIVE'&&(row.endpointDevice.connectionApproved===false||row.endpointDevice.connectionExpiresAtUnixMs!==undefined&&row.endpointDevice.connectionExpiresAtUnixMs<=Date.now()))))queues.push('devices');}
+        try{const page=await client.managedDevices(abort.signal);if(page.items.some(row=>(row.enrollment?.state==='PENDING'&&row.enrollment.expiresAtUnixMs>Date.now()||row.endpointDevice?.state==='ACTIVE'&&(row.endpointDevice.connectionApproved===false||row.endpointDevice.connectionExpiresAtUnixMs!==undefined&&row.endpointDevice.connectionExpiresAtUnixMs<=Date.now()))))queues.push('devices');}
         catch(error){if(!(error instanceof ApiError&&error.status===403))failed=true;}
       }
       if(!abort.signal.aborted){setPending(queues);setUnavailable(failed);}loading=false;

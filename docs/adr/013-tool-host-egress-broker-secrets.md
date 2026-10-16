@@ -47,7 +47,7 @@ The [Tool Host threat model](../security/threat-models/tool-host.md) lists the t
    - `ToolInput` carries handles bound by Control to `(tenant, invocation, name, tool group, pool)`.
    - Handles are redeemed through the extended `POST access/secrets/deliver` with the Tool Host certificate and the fencing token, under the same `EXECUTING` and grant checks devices get today.
    - Brokered credentials stay in broker memory for one invocation.
-   - Only tools approved for `CREDENTIALS_IN_SANDBOX`, a security delta, receive values, through the per-sandbox secret socket.
+   - Only tools approved for `CREDENTIALS_IN_SANDBOX`, a security delta, receive values, through a `SECRET_REDEEM` broker request on the invocation's stdio (amended by ADR 027).
    - Values are redacted from tool log frames before spooling.
 9. **`requestState` in governed mode is minted by Control.**
    - **Where it comes from:** for an ASK outcome to an MRTR client, Control returns `requestState` in `InvocationAdmission`. The Gateway returns it unchanged in the retry's `InvocationSubmission.requestState`, and Control verifies it in the transaction that consumes the approval.

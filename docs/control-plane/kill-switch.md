@@ -23,9 +23,8 @@ It is normative. A change after D2 passes needs an amendment to ADR 017. The eve
 | `TOOL` | its `toolId` equals `value` | `ToolId` |
 | `POOL` | it runs, or would run, in that execution pool | pool id |
 | `RUNTIME_IMAGE` | its runtime digest equals `value` | `sha256:` digest |
-| `TENANT` | it is any non-built-in tool | absent |
+| `TENANT` | it is any tool | absent |
 
-Built-in tools are never killed: they are how operators inspect and recover.
 
 ## 2. Storage
 

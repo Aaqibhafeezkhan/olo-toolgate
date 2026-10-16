@@ -153,7 +153,7 @@ impl RelayPort for Authority {
                 return Err(ErrorCode::DependencyUnavailable);
             }
             Ok(LocalToolCatalog {
-                tools: vec![BuiltinToolInfo {
+                tools: vec![LocalToolInfo {
                     tool_id: "files.read".into(),
                     action: "read".into(),
                     description: "Read".into(),

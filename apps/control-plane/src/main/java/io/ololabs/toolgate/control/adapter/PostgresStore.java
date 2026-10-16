@@ -97,6 +97,7 @@ public class PostgresStore implements Store {
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.BuilderStore builder() { return new PostgresBuilderStore(connection, tenant); }
+        public io.ololabs.toolgate.control.application.RunEventStore runEvents() { return new JdbcRunEventStore(connection, tenant); }
         private EnrollmentRecord enrollmentRows(java.sql.PreparedStatement statement) throws SQLException {
             try (statement; var rows=statement.executeQuery()) {
                 return rows.next() ? new EnrollmentRecord(rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),
@@ -200,6 +201,18 @@ public class PostgresStore implements Store {
                 }
                 public Relayed relayed(String invocationId){return relayedRow("AND invocation_id=?",invocationId);}
                 public Relayed nextRelayed(String hostId,long now){return relayedRow("AND host_id=? AND state='QUEUED' AND expires_at>? ORDER BY created_at,invocation_id LIMIT 1",hostId,now);}
+                public Provisioning provisioning(String profileId){
+                    try(var s=statement("SELECT generation,profile_digest,document FROM control_package_provisioning WHERE tenant_id=? AND profile_id=?",profileId);var rows=s.executeQuery()){
+                        return rows.next()?new Provisioning(profileId,rows.getLong(1),rows.getString(2),rows.getString(3)):null;
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public void saveProvisioning(Provisioning p){
+                    if(p.generation()==1)write("INSERT INTO control_package_provisioning (tenant_id,profile_id,generation,profile_digest,document) VALUES (?,?,?,?,?)",p.profileId(),p.generation(),p.profileDigest(),p.document());
+                    else try(var s=connection.prepareStatement("UPDATE control_package_provisioning SET generation=?,profile_digest=?,document=? WHERE tenant_id=? AND profile_id=? AND generation=?")){
+                        s.setLong(1,p.generation());s.setString(2,p.profileDigest());s.setString(3,p.document());s.setString(4,tenant);s.setString(5,p.profileId());s.setLong(6,p.generation()-1);
+                        if(s.executeUpdate()!=1)throw Failure.conflict();
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
                 public void saveRelayed(Relayed r){
                     // Finished dispatches are kept for an hour after their deadline, for the Gateway's last poll.
                     try(var s=statement("DELETE FROM control_tool_host_dispatches WHERE tenant_id=? AND expires_at<?",System.currentTimeMillis()-3600000L)){s.executeUpdate();}catch(SQLException failure){throw Failure.unavailable();}

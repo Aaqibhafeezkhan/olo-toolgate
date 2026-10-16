@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ControlClient, type MarketplaceItem, type MarketplacePublisher, type MarketplaceDetail } from './api';
 import { Failure } from './Failure';
+import { usePermissions } from './Permissions';
 
 /** Marketplace design §8.1: the text an administrator confirms before Control imports a community package. */
 export const IMPORT_CONFIRMATION = 'Community package, signed by the Marketplace after structural validation. The signature proves where it came from, not that it is safe. Review its settings and permissions before deploying.';
@@ -64,6 +65,7 @@ function Detail({ detail, onPublisher }: { detail: MarketplaceDetail; onPublishe
 /** Browse the OLO Orgs Marketplace and import a version as an uploaded server package. Control fetches, verifies and
  * stores it; deploying, enabling and granting stay with the rest of this page. Hidden when the Marketplace is off. */
 export function Marketplace({ client, onImported }: { client: ControlClient; onImported: () => void }) {
+  const {can}=usePermissions(client),canImport=can('package.import');
   const [enabled, setEnabled] = useState<boolean>(), [items, setItems] = useState<readonly MarketplaceItem[]>(), [query, setQuery] = useState(''), [search, setSearch] = useState('');
   const [error, setError] = useState<unknown>(), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), [attempt, setAttempt] = useState(0);
   const [detail, setDetail] = useState<MarketplaceDetail>(), [publisher, setPublisher] = useState<MarketplacePublisher>(), [confirm, setConfirm] = useState<{ packageId: string; version: string; title: string }>();
@@ -82,12 +84,13 @@ export function Marketplace({ client, onImported }: { client: ControlClient; onI
   const show = (item: MarketplaceItem) => act(async () => { setPublisher(undefined); setDetail(await client.marketplaceDetail(item.packageId, item.version)); });
   const showPublisher = (slug: string) => act(async () => setPublisher(await client.marketplacePublisher(slug)));
   const install = (item: MarketplaceItem) => act(async () => {
+    if (!canImport) return;
     const versions = await client.marketplaceVersions(item.packageId);
     if (!versions.installVersion) { setNotice(`No listed version of ${item.title} is compatible with this ToolGate.`); return; }
     setConfirm({ packageId: item.packageId, version: versions.installVersion, title: item.title });
   });
   const confirmImport = () => act(async () => {
-    if (!confirm) return;
+    if (!confirm || !canImport) return;
     const imported = await client.importMarketplacePackage({ packageId: confirm.packageId, version: confirm.version });
     setConfirm(undefined); setNotice(`Imported ${imported.packageId} ${imported.version}. It is listed with the uploaded versions; deploy it from there.`); onImported();
   });
@@ -100,7 +103,7 @@ export function Marketplace({ client, onImported }: { client: ControlClient; onI
     {confirm && <div className="notice" role="alertdialog" aria-labelledby="marketplace-confirm-title" aria-describedby="marketplace-confirm-text">
       <strong id="marketplace-confirm-title">Import {confirm.title} {confirm.version}?</strong>
       <p id="marketplace-confirm-text">{IMPORT_CONFIRMATION}</p>
-      <button disabled={busy} onClick={confirmImport}>Import</button> <button type="button" disabled={busy} onClick={() => setConfirm(undefined)}>Cancel</button></div>}
+      <button disabled={busy || !canImport} onClick={confirmImport}>Import</button> <button type="button" disabled={busy} onClick={() => setConfirm(undefined)}>Cancel</button></div>}
     <form onSubmit={submit} role="search"><label htmlFor="marketplace-search">Search the Marketplace</label>
       <input id="marketplace-search" type="search" maxLength={200} value={query} onChange={e => setQuery(e.target.value)} />
       <button disabled={busy}>Search</button></form>
@@ -112,7 +115,7 @@ export function Marketplace({ client, onImported }: { client: ControlClient; onI
         <p>{avatar && <img src={avatar} alt="" width={20} height={20} />} {item.publisher?.displayName}</p>
         <Compatibility item={item} />
         <button type="button" disabled={busy} onClick={() => show(item)} aria-label={`Details for ${item.title}`}>Details</button>
-        <button type="button" disabled={busy} onClick={() => install(item)} aria-label={`Install ${item.title}`}>Install</button>
+        <button type="button" disabled={busy || !canImport} onClick={() => install(item)} aria-label={`Install ${item.title}`}>Install</button>
       </li>; })}</ul>}
     {detail && <Detail detail={detail} onPublisher={() => showPublisher(detail.publisher.slug)} />}
     {publisher && <Publisher publisher={publisher} />}

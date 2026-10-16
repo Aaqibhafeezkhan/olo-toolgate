@@ -95,6 +95,9 @@ export const managementCatalog = {
     "builder": [
       "tool_builder.read"
     ],
+    "test": [
+      "tool.read"
+    ],
     "local": [
       "secret.read"
     ],

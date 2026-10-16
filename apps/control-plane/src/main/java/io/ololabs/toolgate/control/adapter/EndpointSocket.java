@@ -17,7 +17,6 @@ import java.util.concurrent.atomic.*;
 @ApplicationScoped
 public class EndpointSocket {
     @Inject EndpointService endpoints;
-    @Inject BuilderService builder;
     @Inject ContractCodec codec;
     private static final String PATH="/api/control/v1/endpoint/socket";
     private static final org.jboss.logging.Logger LOG=org.jboss.logging.Logger.getLogger(EndpointSocket.class);
@@ -90,14 +89,10 @@ public class EndpointSocket {
                         case CHECK_IN -> checkInWithJitter(()->endpoints.checkIn(peer,body,request.requestId(),true,systemName,ipAddress),endpoints.checkInPolicy().burstGuardMs());
                         case AUTHORIZE -> endpoints.relay().authorize(peer,body);
                         case RESULT -> endpoints.relay().result(peer,body,request.requestId());
-                        case BUILDER_POLL -> {if(request.body()!=null)throw Failure.validation();yield builder.poll(peer,request.requestId());}
-                        case BUILDER_RESULT -> builder.result(peer,body,request.requestId());
                     };
                     if(request.operation()==ClientSocketOperation.AUTHORIZE){var result=codec.model(reply.body(),RemoteToolAuthorizationAck.class);jobs.put(request.body().get("requestId").asText(),result.expiresAtUnixMs());lastJob.set(System.nanoTime());}
                     if(request.operation()==ClientSocketOperation.RESULT){jobs.remove(request.body().get("requestId").asText());lastJob.set(System.nanoTime());}
                     if(request.operation()==ClientSocketOperation.CHECK_IN){var ack=codec.model(reply.body(),EndpointCheckInAck.class);if(ack.task()!=null){jobs.put(ack.task().requestId(),ack.task().expiresAtUnixMs());lastJob.set(System.nanoTime());}}
-                    if(request.operation()==ClientSocketOperation.BUILDER_POLL && codec.model(reply.body(),BuilderTestPoll.class).task()!=null){jobs.put("builder",System.currentTimeMillis()+120000);lastJob.set(System.nanoTime());}
-                    if(request.operation()==ClientSocketOperation.BUILDER_RESULT){jobs.remove("builder");lastJob.set(System.nanoTime());}
                 }catch(Failure failure){reply=new Store.Reply(failure.status(),codec.json(java.util.Map.of("code",failure.code())),0);}
                 var json=new com.fasterxml.jackson.databind.ObjectMapper();
                 java.util.Map<String,com.fasterxml.jackson.databind.JsonNode> body=json.convertValue(json.readTree(reply.body()),new com.fasterxml.jackson.core.type.TypeReference<>(){});

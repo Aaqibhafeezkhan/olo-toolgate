@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "project": "hello-world",
+      "sdk": "java-gradle",
+      "id": "ololabs.hello-world",
+      "version": "1.0.0"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRolloutRecord, FleetPackageRelease, EnterpriseApprovalDecisionRequest, EnterpriseApprovalPage, EnterpriseApproval, ControlUser, ErrorEnvelope, EndpointEnrollmentReview, EndpointEnrollmentDecision } from '@olo-labs/toolgate-contracts';
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
-import type { BuilderDraft, BuilderDraftPage, BuilderDraftRequest, BuilderTestPage, BuilderTestRequest, BuilderTestRecord, BuilderDefinition } from '@olo-labs/toolgate-contracts';
+import type {SdkBuilderDraft,SdkBuilderDraftPage,SdkBuilderSave,SdkBuilderBuild,SdkBuilderBuildPage,SdkBuilderBuildRequest,SdkBuilderStatus} from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage,ConsoleDeviceLookup,ConsoleDeviceChallenge,ConsoleDeviceProof,ConsoleDeviceVerified } from '@olo-labs/toolgate-contracts';
 import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
@@ -80,6 +80,12 @@ export class ControlClient {
   authorityStatus(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseAuthorityStatus>{return this.send(operations.accessAuthorityStatus,{signal});}
   effectiveAccess(entity:'users'|'agents'|'tools'|'devices',id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseEffectiveAccess>{const op={users:operations.effectiveUsers,agents:operations.effectiveAgents,tools:operations.effectiveTools,devices:operations.effectiveDevices}[entity];return this.send(op,{id,signal});}
   humanToolResult(id:string):Promise<import('@olo-labs/toolgate-contracts').RemoteToolResponse>{return this.send(operations.humanToolResult,{id});}
+  /** Tools the chosen target reports for this binding, each matching its verified definition. */
+  humanCatalog(body:import('@olo-labs/toolgate-contracts').EnterpriseHumanTarget,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').LocalToolCatalog>{return this.send(operations.humanToolCatalog,{body,signal});}
+  /** The person's own governed invocation. The key is kept by the caller for an exact retry; nothing retries automatically. */
+  invokeHumanTool(body:import('@olo-labs/toolgate-contracts').EnterpriseHumanRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseHumanOutcome>{return this.send(operations.invokeHumanTool,{body,key,timeoutMs:45000});}
+  /** Retained run-response events after a cursor, authorized on every page. */
+  runEvents(id:string,after:number,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').RunEventPage>{return this.send(operations.invocationRunEvents,{id,query:new URLSearchParams({after:String(after),limit:'200'}),signal});}
   remoteRequests(signal?:AbortSignal):Promise<RemoteToolPage>{return this.send(operations.listLocalMcpRequests,{signal});}
   remoteRequest(id:string,signal?:AbortSignal):Promise<RemoteToolInspection>{return this.send(operations.inspectLocalMcpRequest,{id,signal});}
   private token: string;
@@ -87,7 +93,7 @@ export class ControlClient {
   constructor(token: string, private readonly onUnauthorized: () => void, private readonly transport: typeof fetch = (input, init) => fetch(input, init)) {
     this.token = token;
   }
-  quickstart<T>(path: 'tools' | 'invoke' | 'vault', body?: unknown, key?:string): Promise<T> {
+  quickstart<T>(path: 'vault', body?: unknown, key?:string): Promise<T> {
     return this.send<T>({method: body === undefined ? 'GET' : 'POST', path: `/api/quickstart/v1/${path}`}, body === undefined ? {} : {body,key});
   }
   dispose(): void { this.token = ''; this.lifetime.abort(); }
@@ -142,14 +148,28 @@ export class ControlClient {
   configurationChange(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.getConfigurationChange,{id,signal});}
   transitionConfiguration(id:string,body:import('@olo-labs/toolgate-contracts').EnterpriseConfigurationTransition,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.transitionConfigurationChange,{id,body,key});}
   fleetReleases(cursor?:string,signal?:AbortSignal):Promise<FleetReleasePage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listFleetReleases,{query,signal});}
-  builderDrafts(cursor?:string,signal?:AbortSignal):Promise<BuilderDraftPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderDrafts,{query,signal});}
-  builderTests(cursor?:string,signal?:AbortSignal):Promise<BuilderTestPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderTests,{query,signal});}
-  saveDraft(body:BuilderDraftRequest,key:string):Promise<BuilderDraft>{return this.send(operations.saveBuilderDraft,{body,key});}
-  testDraft(body:BuilderTestRequest,key:string):Promise<BuilderTestRecord>{return this.send(operations.createBuilderTest,{body,key});}
-  sealDraft(id:string,expectedRevision:number,key:string):Promise<BuilderDraft>{return this.send(operations.sealBuilderDraft,{id,key,body:{expectedRevision}});}
-  publicationDraft(id:string):Promise<BuilderDefinition>{return this.send(operations.prepareBuilderPublication,{id});}
-  releaseDraft(id:string,body:FleetPackageRelease,key:string):Promise<FleetPackageRelease>{return this.send(operations.publishBuilderRelease,{id,body,key});}
-  deployDraft(id:string,body:FleetRolloutRequest,key:string):Promise<FleetRolloutRecord>{return this.send(operations.deployBuilderDraft,{id,body,key});}
+  builderDrafts(cursor?:string,signal?:AbortSignal):Promise<SdkBuilderDraftPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderDrafts,{query,signal});}
+  sdkBuilderStatus(signal?:AbortSignal):Promise<SdkBuilderStatus>{return this.send(operations.getSdkBuilderStatus,{signal});}
+  builderBuilds(cursor?:string,signal?:AbortSignal):Promise<SdkBuilderBuildPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderBuilds,{query,signal});}
+  saveSdkDraft(body:SdkBuilderSave,key:string):Promise<SdkBuilderDraft>{return this.send(operations.saveBuilderDraft,{body,key});}
+  buildSdkDraft(body:SdkBuilderBuildRequest,key:string):Promise<SdkBuilderBuild>{return this.send(operations.createBuilderBuild,{body,key});}
+  async downloadSdkBuild(id:string,source:boolean):Promise<Blob>{
+    if(this.lifetime.signal.aborted)throw new DOMException('Session ended','AbortError');
+    const timeout=AbortSignal.timeout(120000),signal=AbortSignal.any([this.lifetime.signal,timeout]);
+    const operation=source?operations.downloadBuilderSource:operations.downloadBuilderPackage;
+    const mediaType=source?'application/zip':'application/vnd.ololabs.toolgate.package+zip';
+    try{
+      const response=await this.transport(operation.path.replace('{id}',encodeURIComponent(id)),{headers:{Authorization:`Bearer ${this.token}`,Accept:mediaType},signal,credentials:'omit',cache:'no-store',redirect:'error'});
+      if(response.status===401){this.dispose();this.onUnauthorized();}
+      if(!response.ok){await readBody(response);throw new ApiError(response.status,'HTTP_ERROR',response.headers.get('X-Request-ID')??undefined);}
+      if(!response.headers.get('content-type')?.startsWith(mediaType))throw new ApiError(502,'INVALID_RESPONSE');
+      const reader=response.body?.getReader();if(!reader)throw new ApiError(502,'INVALID_RESPONSE');
+      const chunks:Uint8Array<ArrayBuffer>[]=[];let size=0;
+      try{while(true){const next=await reader.read();if(next.done)break;size+=next.value.byteLength;if(size>64*1024*1024)throw new ApiError(502,'RESPONSE_LIMIT');chunks.push(new Uint8Array(next.value));}}
+      finally{await reader.cancel();}
+      return new Blob(chunks,{type:mediaType});
+    }catch(error){if(error instanceof ApiError)throw error;if(this.lifetime.signal.aborted)throw new DOMException('Session ended','AbortError');throw new ApiError(0,timeout.aborted?'TIMEOUT':'NETWORK');}
+  }
   fleetRollouts(cursor?:string,signal?:AbortSignal):Promise<FleetRolloutPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listFleetRollouts,{query,signal});}
   publishRelease(release:FleetPackageRelease,key:string):Promise<FleetPackageRelease>{return this.send(operations.publishFleetRelease,{body:release,key});}
   assignPackage(request:FleetRolloutRequest,key:string):Promise<FleetRolloutRecord>{return this.send(operations.createFleetRollout,{body:request,key});}

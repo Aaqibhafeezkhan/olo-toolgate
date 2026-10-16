@@ -90,7 +90,7 @@ Startup refuses what this runtime cannot serve honestly: client tools (`CLIENT_T
 
 ## Governed mode
 
-Under a [Tool Host](../../apps/tool-host/README.md) the same `Main` runs one invocation over tool protocol v2. With `TOOLGATE_PROTOCOL=2` it reads one `ToolInput` line from stdin, runs the named tool through the same pipeline as standalone mode, writes one `ResultFrame` line to stdout and exits; an async tool's task is awaited up to the invocation deadline. Globals and claims come from the input, a secret is redeemed through its handle, and every route call goes to the host's broker over `TOOLGATE_BROKER_SOCKET` with `TOOLGATE_BROKER_CAPABILITY`, in the recorded-exchange shape test mode uses. The broker adds credentials, so a tool's own auth never runs here. Business keys are Control's: the runtime reserves nothing. TCP destinations are not available under a Tool Host yet. Input that is not one v2 line exits with 65, a refused startup with 78.
+Under a [Tool Host](../../apps/tool-host/README.md) the same `Main` runs one invocation over tool protocol v2. With `TOOLGATE_PROTOCOL=2` it reads one `ToolInput` line from stdin, runs the named tool through the same pipeline as standalone mode, writes the final `RESULT` frame to stdout and exits; an async tool's task is awaited up to the invocation deadline. Globals and claims come from the input. Everything the tool needs from its executor is a `BROKER_REQUEST` frame on stdout answered by a `BROKER_RESPONSE` line on stdin ([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)): `SECRET_REDEEM` for a secret handle and `ROUTE_CALL` for every route call, in the recorded-exchange shape test mode uses, on a Tool Host; the `FILES_*` operations behind `context.files()` on a device (`TOOLGATE_EXECUTION_TARGET=CLIENT`). The broker adds credentials, so a tool's own auth never runs here. Business keys are Control's: the runtime reserves nothing. TCP destinations are not available under a Tool Host yet. Input that is not one v2 line exits with 65, a refused startup with 78.
 
 ## Streamable HTTP
 
@@ -146,11 +146,11 @@ In a sync call `requestInput()` follows SEP-2322, the stateless multi-round flow
 
 A violation is a compile error at the declaration:
 
-- identifier grammars, the 128-character `toolId`, and the reserved `toolgate.`, `hotfolder.` and `builtin.` prefixes;
+- identifier grammars, the 128-character `toolId`, and the reserved `toolgate.` prefix;
 - exactly one `@ToolPackage`, unique tool names, and route, destination, auth and TCP ids unique per package;
 - `title` and `text` exclusive, required descriptions, length limits, and `maxDurationMs` within the platform ceiling (60 s sync, 15 min async);
 - variable names unique per tool across inputs, globals, secrets and claims, ignoring case, and no tool-level declaration with the name of a package- or class-level one;
-- client tools without routes, TCP, secrets or `@HttpAuth`;
+- client tools without routes, TCP, secrets or `@HttpAuth`, and `@DeviceFileAccess` only on client tools;
 - routes: declared destination and auth, no `Authorization`, `Proxy-Authorization`, `Cookie`, `Host`, `X-Forwarded-*` or auth header in the allowlist, path variables that are variable names with patterns other than `.*` and `.+`;
 - a reachable auth's secret declared by the tool, `businessKeyArgument` naming an input, at most 8 examples;
 - constraint keywords that fit the value type, defaults that parse as the type, and patterns that compile.

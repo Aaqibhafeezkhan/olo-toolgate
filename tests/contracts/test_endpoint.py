@@ -40,7 +40,7 @@ class EndpointContractsTests(unittest.TestCase):
         models['EndpointManagedDevicePage'].validate(page)
         page['items'].append(fixtures['EndpointManagedDevice'])
         with self.assertRaises(ValidationError): models['EndpointManagedDevicePage'].validate(page)
-        for name, field, invalid in [('EndpointApprovalRequest','expectedApprovalRevision',0),('EndpointEnabledRequest','expectedRevision',-1),('EndpointEnrollmentDecision','unlimitedConnection','true'),('EndpointManagedDevice','systemAvailable','true')]:
+        for name, field, invalid in [('EndpointApprovalRequest','expectedApprovalRevision',0),('EndpointEnabledRequest','expectedRevision',-1),('EndpointEnrollmentDecision','unlimitedConnection','true'),('EndpointManagedDevice','systemName','bad name')]:
             sample=copy.deepcopy(fixtures[name]); sample[field]=invalid
             with self.assertRaises(ValidationError): models[name].validate(sample)
         models['EndpointEnabledRequest'].validate({'expectedRevision':0,'enabled':False})

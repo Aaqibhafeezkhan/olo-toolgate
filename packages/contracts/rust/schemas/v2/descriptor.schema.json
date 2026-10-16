@@ -118,7 +118,9 @@
         "CREDENTIALS_IN_SANDBOX",
         "USER_SECRET",
         "TOKEN_EXCHANGE",
-        "CONNECTION"
+        "CONNECTION",
+        "DEVICE_FILES_READ",
+        "DEVICE_FILES_WRITE"
       ],
       "description": "Derived permission (descriptor §2)."
     },

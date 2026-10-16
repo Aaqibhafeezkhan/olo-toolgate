@@ -23,6 +23,21 @@ export interface BreakGlassRequest {
   readonly reason: string;
   readonly operatorSignatures: ReadonlyArray<string>;
 }
+export type BrokerOperation = "ROUTE_CALL" | "SECRET_REDEEM" | "FILES_LIST" | "FILES_READ" | "FILES_INFO" | "FILES_WRITE" | "FILES_APPEND" | "FILES_MKDIR" | "FILES_RENAME";
+/** Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time. */
+export interface BrokerRequestFrame {
+  readonly kind: "BROKER_REQUEST";
+  readonly requestId: string;
+  readonly operation: BrokerOperation;
+  readonly request: Record<string, unknown>;
+}
+/** Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput. */
+export interface BrokerResponseFrame {
+  readonly kind: "BROKER_RESPONSE";
+  readonly requestId: string;
+  readonly result?: Record<string, unknown>;
+  readonly error?: ToolErrorBody;
+}
 /** reserveBusinessOperation input, carried on POST /access/invocations. */
 export interface BusinessKeyReservationRequest {
   readonly toolId: string;
@@ -84,6 +99,30 @@ export interface ClientCheckIn {
   readonly jitterPct: number;
   readonly offlineAfterMs: number;
   readonly source: ValueSource;
+}
+/** A client release: the image index pinned by digest, the exact FleetPackageDocument bytes (manifestDigest) and, when Control holds the package-release key, the signed FleetPackageRelease it recorded. */
+export interface ClientRelease {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest: string;
+  readonly image: string;
+  readonly runtimeVersion: string;
+  readonly manifestDigest: string;
+  readonly signed: boolean;
+  readonly document: Record<string, unknown>;
+  readonly documentBase64: string;
+  readonly release?: Record<string, unknown>;
+  readonly tools: ReadonlyArray<ClientReleaseTool>;
+}
+/** Builds the client-tool image for one verified upload and issues its fleet release (ADR 026). */
+export interface ClientReleaseRequest {
+  readonly packageDigest: string;
+}
+/** One export and whether a client device can run it; an unsupported export is never weakened to fit. */
+export interface ClientReleaseTool {
+  readonly toolId: string;
+  readonly supported: boolean;
+  readonly reason?: string;
 }
 export type CompactJws = string;
 export type CompatibilityProfile = "NONE" | "LLM_STRICT";
@@ -167,6 +206,13 @@ export interface DeploymentGrant {
   readonly agentGroupId: string;
   readonly toolIds: ReadonlyArray<string>;
 }
+/** Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package. */
+export interface DeploymentProfile {
+  readonly profileVersion: 1;
+  readonly profileId: string;
+  readonly packages: ReadonlyArray<ProfilePackage>;
+  readonly readiness?: ReadonlyArray<ProfileReadinessCase>;
+}
 /** Where the package runs. */
 export interface DeploymentTarget {
   readonly kind: TargetKind;
@@ -233,7 +279,7 @@ export interface ExecutionSettings {
   readonly maxConcurrency?: number;
   readonly cancelIfAbandoned: boolean;
 }
-export type FrameKind = "RESULT" | "PROGRESS" | "INPUT_REQUEST" | "LOG";
+export type FrameKind = "RESULT" | "PROGRESS" | "INPUT_REQUEST" | "LOG" | "BROKER_REQUEST" | "BROKER_RESPONSE";
 /** Gateway settings. */
 export interface GatewaySettings {
   readonly gatewayName: string;
@@ -531,7 +577,7 @@ export interface PackagedArtifact {
   readonly mediaType: string;
   readonly runtimeId?: string;
 }
-export type Permission = "HTTP_ROUTE" | "TCP" | "CREDENTIALS_IN_SANDBOX" | "USER_SECRET" | "TOKEN_EXCHANGE" | "CONNECTION";
+export type Permission = "HTTP_ROUTE" | "TCP" | "CREDENTIALS_IN_SANDBOX" | "USER_SECRET" | "TOKEN_EXCHANGE" | "CONNECTION" | "DEVICE_FILES_READ" | "DEVICE_FILES_WRITE";
 /** Successful consumption. */
 export interface PermitConsumed {
   readonly invocationId: string;
@@ -592,6 +638,31 @@ export interface PrivateRangeApproval {
   readonly cidr: string;
   readonly ports: ReadonlyArray<number>;
 }
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. bindingIds have their allowed package digests set to exactly the profile packages that name them. */
+export interface ProfilePackage {
+  readonly packageId: string;
+  readonly source: ProfilePackageSource;
+  readonly version: string;
+  readonly packageDigest?: string;
+  readonly required: boolean;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly globals?: Record<string, unknown>;
+  readonly tools?: ReadonlyArray<ProfileToolActivation>;
+  readonly bindingIds?: ReadonlyArray<string>;
+}
+export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE";
+/** A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values. */
+export interface ProfileReadinessCase {
+  readonly toolId: string;
+  readonly agentId: string;
+  readonly arguments: Record<string, unknown>;
+  readonly expected?: Record<string, unknown>;
+}
+/** One installed export to enable, in the reviewed Tool Group named here. The export must exist in the pinned package; nothing is created to satisfy a reference. */
+export interface ProfileToolActivation {
+  readonly toolId: string;
+  readonly toolGroupId: string;
+}
 /** Progress frame. */
 export interface ProgressFrame {
   readonly kind: "PROGRESS";
@@ -603,6 +674,31 @@ export interface ProtocolRange {
   readonly min: number;
   readonly max: number;
 }
+/** One pinned package: where provisioning stands and why it is not ready. hostIds and globalsDigest record the deployment it applied, so an unchanged repeat does not redeploy. */
+export interface ProvisioningPackageStatus {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest?: string;
+  readonly required: boolean;
+  readonly state: ProvisioningState;
+  readonly step: ProvisioningStep;
+  readonly reason?: string;
+  readonly toolIds?: ReadonlyArray<string>;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly globalsDigest?: string;
+}
+export type ProvisioningState = "READY" | "PENDING" | "FAILED";
+/** Persisted outcome of the latest profile application. state is READY only when every required package is READY. */
+export interface ProvisioningStatus {
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly generation: number;
+  readonly state: ProvisioningState;
+  readonly packages: ReadonlyArray<ProvisioningPackageStatus>;
+  readonly appliedAtUnixMs: number;
+  readonly previousProfileDigest?: string;
+}
+export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "ACTIVATE" | "DONE";
 /** Supersedes kills after two-person review. Issuer is always control. */
 export interface RecoveryEvent {
   readonly eventId: string;
@@ -683,6 +779,74 @@ export interface RouteDeclaration {
   readonly timeoutMs: number;
   readonly auth?: string;
 }
+/** One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only. */
+export interface RunEvent {
+  readonly cursor: number;
+  readonly source: RunEventSource;
+  readonly kind: RunEventKind;
+  readonly attempt?: number;
+  readonly sequence?: number;
+  readonly executorId?: string;
+  readonly emittedAtUnixMs?: number;
+  readonly recordedAtUnixMs: number;
+  readonly state?: string;
+  readonly result?: ResultFrame;
+  readonly level?: LogLevel;
+  readonly message?: string;
+  readonly fraction?: number;
+  readonly requestId?: string;
+  readonly request?: Record<string, unknown>;
+}
+/** Control acknowledgement: the highest contiguous sequence stored for the attempt, and how many frames were already present or refused by retention bounds. */
+export interface RunEventAck {
+  readonly invocationId: string;
+  readonly attempt: number;
+  readonly acceptedThrough: number;
+  readonly duplicates: number;
+  readonly refused: number;
+}
+/** Executor to Control: frames of one admitted attempt, bound to the invocation and the fencing token its permit consumption returned. Redelivery of the same sequence is idempotent. droppedFrames counts frames the executor discarded under its own bounds. */
+export interface RunEventBatch {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly attempt: number;
+  readonly events: ReadonlyArray<RunEventFrame>;
+  readonly droppedFrames?: number;
+}
+/** One redacted non-terminal SDK frame (LOG, PROGRESS or INPUT_REQUEST) as the executor forwards it. sequence is monotonic per invocation attempt; the executor never renumbers a frame it resends. */
+export interface RunEventFrame {
+  readonly sequence: number;
+  readonly emittedAtUnixMs: number;
+  readonly kind: RunEventKind;
+  readonly level?: LogLevel;
+  readonly message?: string;
+  readonly fraction?: number;
+  readonly requestId?: string;
+  readonly request?: Record<string, unknown>;
+}
+/** Sequences of an attempt that never arrived; they are reported, never invented. */
+export interface RunEventGap {
+  readonly attempt: number;
+  readonly fromSequence: number;
+  readonly toSequence: number;
+}
+export type RunEventKind = "LOG" | "PROGRESS" | "INPUT_REQUEST" | "STATE" | "RESULT";
+/** Authorized replay page after a cursor. terminal is the authoritative ledger state; truncated, droppedFrames, gaps and expired say explicitly what is not shown. */
+export interface RunEventPage {
+  readonly invocationId: string;
+  readonly state: string;
+  readonly terminal: boolean;
+  readonly toolId?: string;
+  readonly executorId?: string;
+  readonly events: ReadonlyArray<RunEvent>;
+  readonly nextCursor: number;
+  readonly more: boolean;
+  readonly truncated: boolean;
+  readonly droppedFrames: number;
+  readonly expired: boolean;
+  readonly gaps: ReadonlyArray<RunEventGap>;
+}
+export type RunEventSource = "EXECUTOR" | "PLATFORM";
 /** Language runtime a tool needs. */
 export interface RuntimeDeclaration {
   readonly runtimeId: string;

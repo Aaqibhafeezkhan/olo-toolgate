@@ -128,7 +128,7 @@ public class Orders {
 
 | Member | Meaning |
 |---|---|
-| `name` | Unique in the package. Letters, digits, `.`, `_`, `-`. The prefixes `toolgate.`, `hotfolder.` and `builtin.` are reserved. |
+| `name` | Unique in the package. Letters, digits, `.`, `_`, `-`. The prefix `toolgate.` is reserved. |
 | `title` or `text` | Exactly one: the short label shown to people. |
 | `description` | Required. What the tool does, written for the model that will choose it. |
 | `useWhen` | Optional guidance on when to choose this tool over another. |
@@ -214,6 +214,27 @@ In development, point a destination at a local mock in `toolgate.dev.json`; a lo
 ```json
 { "destinations": { "ItemsApiHost": "http://127.0.0.1:8080" } }
 ```
+
+### Files on a device
+
+A `@ClientTool` runs on the device the caller selects, inside a sandbox with no host files. To read or write files there, declare it with `@DeviceFileAccess` and use `context.files()`: the device performs each operation for the tool, inside its one confined **files area** ([ADR 027](docs/adr/027-one-tool-protocol-device-files.md)).
+
+```java
+@ClientTool(name = "read_text", title = "Read a text file", description = "Reads a text file from the device.",
+        effect = EffectSafety.READ_ONLY)
+@DeviceFileAccess                       // write = true for tools that change files
+public Text readText(@Param(description = "File path", maxLength = 1024) String path, ToolContext context) {
+    var files = context.files();
+    return files.list().contains(path) ? new Text(true, files.readText(path)) : new Text(false, "");
+}
+```
+
+- `@DeviceFileAccess` adds the descriptor permission `DEVICE_FILES_READ`, and `DEVICE_FILES_WRITE` with `write = true`. Administrators see them when reviewing the package; Control signs them into the device's registration. It is a compile error on a `@ServerTool`.
+- `DeviceFiles` offers `list`, `readText`, `info`, `writeText`, `appendText`, `mkdir` and `rename`. Paths are relative, lowercase and portable; the device refuses traversal, links, hidden names and file types it does not allow, and limits sizes and entries. Refusals raise `PlatformError` `FILES_REFUSED`.
+- A path you pass must be one of the call's own string arguments, so a tool touches only the files its caller authorized.
+- Self-tests run your `@Example`s in an empty files area, so write examples that hold in an empty folder (report a missing file as data). `ToolHarness`, `toolgate check` and `toolgate dev` give you an in-memory area with the same rules; `ToolHarness.builder().deviceFiles(new InMemoryDeviceFiles().file("notes.txt", "..."))` seeds one.
+
+The [HotFolder example](examples/java-tools/hotfolder/README.md) is a complete package.
 
 ## 7. Errors
 
@@ -362,7 +383,7 @@ What happens on each call:
 
 1. The Gateway asks Control whether this caller may run this tool now. Control places the call on a Tool Host that holds the exact package and signs a single-use **permit** for that host. The permit pins the package, the descriptor, the globals and the argument digest.
 2. The Tool Host verifies the permit, claims it with Control, and starts your runtime with one input on stdin (`TOOLGATE_PROTOCOL=2`). Your handler runs exactly as in standalone mode.
-3. Every route call goes to the host's **broker**, which builds the request from the approved route and destination and adds the credentials. The tool process has no other way out.
+3. Every route call goes to the host's **broker** as a `BROKER_REQUEST` frame on stdout and comes back as a `BROKER_RESPONSE` line on stdin. The broker builds the request from the approved route and destination and adds the credentials. The tool process has no other way out. A client tool on a device speaks the same protocol; there the broker serves only the device files area.
 4. The result goes back to the Gateway and to Control's audit record. Revoking a grant hides the tool and blocks further calls immediately.
 
 **Where it runs: local or remote.** A Tool Host can sit next to the Gateway or on any other machine, a laptop behind NAT included: an enrolled host also fetches its calls from Control, so it needs no inbound port. When deploying, name the hosts in *Tool Hosts* (blank means every Tool Host). To move your tool to another machine, deploy the same version again naming that host; calls go there as soon as it holds the package. (API: `hostIds` on the deployment request.) Your code does not change.

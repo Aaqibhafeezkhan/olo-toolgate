@@ -195,7 +195,7 @@ fn config(directory: &Directory) -> Config {
     Config {
         deployment: None,
         execution: None,
-        tools: None,
+        gateway: None,
         server_url: "https://control.example.test".into(),
         state_directory: directory.0.clone(),
         ipc_endpoint: {

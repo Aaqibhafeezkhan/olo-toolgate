@@ -10,6 +10,4 @@ enum ClientSocketOperation: string {
     case CHECK_IN = 'CHECK_IN';
     case AUTHORIZE = 'AUTHORIZE';
     case RESULT = 'RESULT';
-    case BUILDER_POLL = 'BUILDER_POLL';
-    case BUILDER_RESULT = 'BUILDER_RESULT';
 }

@@ -10,9 +10,5 @@ public enum ClientSocketOperation {
     /** Canonical AUTHORIZE value. */
     AUTHORIZE,
     /** Canonical RESULT value. */
-    RESULT,
-    /** Canonical BUILDER_POLL value. */
-    BUILDER_POLL,
-    /** Canonical BUILDER_RESULT value. */
-    BUILDER_RESULT
+    RESULT
 }

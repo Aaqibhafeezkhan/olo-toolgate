@@ -23,7 +23,7 @@
         },
         "typ": {
           "type": "string",
-          "pattern": "^toolgate-(package-release|fleet-desired|fleet-artifact|builder-test)\\+jws$",
+          "pattern": "^toolgate-(package-release|fleet-desired|fleet-artifact)\\+jws$",
           "maxLength": 64
         },
         "kid": {

@@ -133,7 +133,7 @@ impl Drop for SharedLog {
 }
 impl PacketLog {
     pub fn open(directory: PathBuf) -> Result<Self> {
-        // The transport and read-log built-in share one buffer for each protected directory.
+        // Every writer in a process shares one buffer for each protected directory.
         let store = ProtectedStore::open(directory.clone())?;
         let directory = std::fs::canonicalize(directory).map_err(|_| Failure::Unavailable)?;
         let mut logs = LOGS

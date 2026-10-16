@@ -11,4 +11,6 @@ enum FrameKind: string {
     case PROGRESS = 'PROGRESS';
     case INPUT_REQUEST = 'INPUT_REQUEST';
     case LOG = 'LOG';
+    case BROKER_REQUEST = 'BROKER_REQUEST';
+    case BROKER_RESPONSE = 'BROKER_RESPONSE';
 }

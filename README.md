@@ -35,7 +35,7 @@ Device approval alone never grants permission to run a tool.
 |---|---|
 | Console, users, teams, groups and reviewed configuration | [Administration](docs/control-plane/README.md) |
 | Current authorization, approvals and single-use permits | [Security model](docs/security/README.md) |
-| Device enrollment, HotFolder and managed local tools | [Endpoint client](docs/client/README.md) |
+| Device enrollment, package tools on devices and the files area | [Endpoint client](docs/client/README.md) |
 | Java tool authoring, packaging and standalone MCP | [Java SDK](tool-sdk/java-sdk/README.md) |
 | Server Java tools, placement and direct or queued dispatch | [Tool Host](apps/tool-host/README.md) |
 | Deployment, recovery and diagnosis | [Operations](docs/operations/README.md) |

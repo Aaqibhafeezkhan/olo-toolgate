@@ -36,7 +36,9 @@ public final class ServerPackages {
     private JsonNode node(String document) { return (JsonNode) codec.value(document); }
     private Store.Reply reply(int status, Object value) { return new Store.Reply(status, codec.json(value), 0); }
     private static Failure notFound() { return new Failure(ErrorCode.NOT_FOUND, 404, "Package not found"); }
-    private void superAdmin(Store.Session tx, DirectoryService.Actor actor) { actor.requireAdmin(); if (!new ManagementAccess(codec).superAdministrator(tx.load(), actor.userId())) throw ManagementAccess.denied(); }
+    /** A declaration whose execution location does not allow this target (plan.md §4). */
+    static Failure locationRefused() { return new Failure(ErrorCode.FORBIDDEN, 403, "Tool execution location does not allow this target"); }
+    private void writer(Store.Session tx, DirectoryService.Actor actor, String action) { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package." + action, clock.millis()); }
     private void reader(Store.Session tx, DirectoryService.Actor actor) { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package.read", clock.millis()); }
     private static String hex(String digest) { if (digest == null || !digest.matches("sha256:[a-f0-9]{64}")) throw Failure.validation(); return digest.substring(7); }
 
@@ -47,13 +49,13 @@ public final class ServerPackages {
 
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId) { return upload(actor, data, requestId, null); }
 
-    /** The existing upload: the package rules, then what this ToolGate can run, under Super Admin. */
+    /** Package verification never confers authority; import permission is resolved against current roles. */
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId, Origin origin) {
         var verified = PackageArchive.validate(data, this::node); var manifest = verified.manifest();
         PackageCompatibility.require(PackageCompatibility.problems(manifest));
         String digest = verified.packageDigest(), id = manifest.get("id").asText(), version = manifest.get("version").asText();
         return store.transaction(actor.tenant(), true, tx -> {
-            superAdmin(tx, actor);
+            writer(tx, actor, "import");
             if (origin != null) tx.audit(actor.id(), "PACKAGE_MARKETPLACE_IMPORT", origin.target(), 1, requestId, hex(digest));
             var existing = tx.packages().version(digest);
             if (existing != null) return new Store.Reply(200, existing.document(), 0);
@@ -86,7 +88,7 @@ public final class ServerPackages {
     public Store.Reply deploy(DirectoryService.Actor actor, String body, String requestId) {
         var request = codec.model(body, PackageDeploymentRequest.class);
         return store.transaction(actor.tenant(), true, tx -> {
-            superAdmin(tx, actor);
+            writer(tx, actor, "deploy");
             var version = tx.packages().version(request.packageDigest());
             if (version == null) throw notFound();
             var manifest = node(version.document()).get("manifest");
@@ -94,6 +96,7 @@ public final class ServerPackages {
             var declared = new TreeMap<String, JsonNode>(); var hosts = new TreeSet<String>();
             var destinations = new TreeMap<String, JsonNode>(); var routes = new TreeMap<String, JsonNode>(); var secrets = new TreeMap<String, Set<String>>();
             for (var tool : manifest.path("tools")) {
+                if (!io.ololabs.toolgate.sdk.ExecutionLocation.SERVER.allows(tool.path("descriptor").path("kind").asText())) continue;
                 var descriptor = tool.get("descriptor"); String toolId = descriptor.get("toolId").asText();
                 for (var global : descriptor.path("variables").path("globals")) same(declared, global.get("name").asText(), global);
                 var names = new TreeSet<String>();
@@ -139,6 +142,7 @@ public final class ServerPackages {
 
             var before = tx.load(); var entries = new HashMap<>(before.entries()); var toolIds = new ArrayList<String>();
             for (var tool : manifest.path("tools")) {
+                if (!io.ololabs.toolgate.sdk.ExecutionLocation.SERVER.allows(tool.path("descriptor").path("kind").asText())) continue;
                 var descriptor = tool.get("descriptor"); String toolId = descriptor.get("toolId").asText(); toolIds.add(toolId);
                 String extractorId = "extract-" + DirectoryService.digest(toolId).substring(0, 32);
                 var fixed = JSON.arrayNode(); fixed.addObject().put("kind", "CUSTOM").put("locator", "tool://" + toolId);
@@ -159,6 +163,7 @@ public final class ServerPackages {
                 // Every tool belongs to exactly one Tool Group; a new one starts in the default group, as when created by hand.
                 if (added) GroupGraph.addDefault(entries, codec, Kind.TOOL, toolId);
             }
+            if (toolIds.isEmpty()) throw PackageCompatibility.incompatible();
             var after = new Directory(before.revision() + 1, entries);
             try { after.validate(512, 1048576); codec.validatePolicies(after); } catch (IllegalArgumentException failure) { throw Failure.conflict(); }
             tx.save(before, after);
@@ -282,7 +287,13 @@ public final class ServerPackages {
         if (actor.admin() || actor.userId() != null) throw ManagementAccess.denied();
         var request = codec.model(body, PermitReservationRequest.class);
         if (request.arguments() == null) throw Failure.validation();
-        return store.transaction(actor.tenant(), true, tx -> {
+        return store.transaction(actor.tenant(), true, tx -> reply(200, permitIn(tx, actor, request)));
+    }
+
+    /** The permit for one attempt on the Tool Host the invocation was placed on. Only a declaration whose execution
+     *  location allows SERVER can be permitted here, whatever the directory, placement or a forged request says. */
+    private io.ololabs.toolgate.contracts.v2.SignedInvocationPermit permitIn(Store.Session tx, DirectoryService.Actor actor, PermitReservationRequest request) {
+        {
             var i = operations.invocationIn(tx, request.invocationId()); var e = i.evaluation(); String device = e.context().deviceId();
             if (!request.audience().equals(device) || tx.packages().toolHost(device) == null) throw Failure.conflict();
             var arguments = node(codec.json(request.arguments()));
@@ -295,6 +306,7 @@ public final class ServerPackages {
             JsonNode tool = null;
             for (var t : manifest.path("tools")) if (t.path("descriptor").path("toolId").asText().equals(e.toolId())) tool = t;
             if (tool == null) throw Failure.conflict();
+            if (!io.ololabs.toolgate.sdk.ExecutionLocation.SERVER.allows(tool.path("descriptor").path("kind").asText())) throw locationRefused();
             JsonNode runtime = null, artifact = null;
             for (var r : manifest.path("runtimes")) if (r.path("runtimeId").asText().equals(tool.path("runtimeId").asText())) runtime = r;
             for (var a : manifest.path("artifacts")) if (a.path("artifactId").asText().equals(tool.path("artifactIds").path(0).asText())) artifact = a;
@@ -325,9 +337,8 @@ public final class ServerPackages {
             claims.put("effectSafety", safety).put("requiresExecutionLedger", !safety.equals("READ_ONLY") && !safety.equals("IDEMPOTENT"));
             var approvals = claims.putArray("approvalIds"); lease.approvalIds().forEach(approvals::add);
             claims.put("deadlineUnixMs", i.expiresAtUnixMs());
-            var signed = operations.signer().signInvocation(codec.model(codec.json(claims), io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class));
-            return reply(200, signed);
-        });
+            return operations.signer().signInvocation(codec.model(codec.json(claims), io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class));
+        }
     }
 
     /** Delegated user claims the workload binding passes to this tool (glob on tool id or MCP name, * suffix only). Nothing else reaches the permit. */
@@ -369,9 +380,31 @@ public final class ServerPackages {
     /** The Gateway hands Control a dispatch for a call placed on a Tool Host; the host fetches it. */
     public Store.Reply relay(DirectoryService.Actor actor, String body) {
         if (actor.admin() || actor.userId() != null) throw ManagementAccess.denied();
-        var dispatch = codec.model(body, io.ololabs.toolgate.contracts.v2.Dispatch.class); var claims = claims(node(body));
-        String invocationId = claims.path("invocationId").asText(), audience = claims.path("aud").asText();
+        var dispatch = codec.model(body, io.ololabs.toolgate.contracts.v2.Dispatch.class);
+        return store.transaction(actor.tenant(), true, tx -> relayIn(tx, dispatch));
+    }
+
+    /** A console Test of a tool placed on a Tool Host: the same permit and relayed dispatch the Gateway would create for
+     *  the person's own admitted invocation. A retry finds the dispatch already queued and never issues a second permit. */
+    public Store.Reply humanDispatch(DirectoryService.Actor actor, String invocationId, Map<String, JsonNode> arguments) {
+        if (actor.userId() == null || arguments == null) throw ManagementAccess.denied();
         return store.transaction(actor.tenant(), true, tx -> {
+            var i = operations.invocationIn(tx, invocationId); var context = i.evaluation().context();
+            if (!actor.userId().equals(context.userId()) || context.mode() != io.ololabs.toolgate.contracts.v2.RequestMode.HUMAN) throw ManagementAccess.denied();
+            var existing = tx.packages().relayed(invocationId);
+            if (existing != null) return reply(200, status(current(existing)));
+            if (i.state() != EnterpriseInvocationState.QUEUED) throw Failure.conflict();
+            var permit = permitIn(tx, actor, new PermitReservationRequest(invocationId, context.deviceId(), 1L, arguments));
+            return relayIn(tx, new io.ololabs.toolgate.contracts.v2.Dispatch(permit, arguments));
+        });
+    }
+
+    public boolean toolHost(Ids.TenantId tenant, String deviceId) { return store.transaction(tenant, false, tx -> tx.packages().toolHost(deviceId) != null); }
+
+    private Store.Reply relayIn(Store.Session tx, io.ololabs.toolgate.contracts.v2.Dispatch dispatch) {
+        var claims = claims(node(codec.json(dispatch)));
+        String invocationId = claims.path("invocationId").asText(), audience = claims.path("aud").asText();
+        {
             var i = operations.invocationIn(tx, invocationId); String device = i.evaluation().context().deviceId();
             if (!audience.equals(device) || tx.packages().toolHost(device) == null) throw Failure.conflict();
             String document = codec.json(dispatch); var existing = tx.packages().relayed(invocationId);
@@ -386,7 +419,7 @@ public final class ServerPackages {
             var relayed = new PackageStore.Relayed(invocationId, device, "QUEUED", expires, codec.json(record));
             tx.packages().saveRelayed(relayed);
             return reply(200, status(relayed));
-        });
+        }
     }
 
     /** Where a relayed dispatch stands, for the Gateway that handed it over. */

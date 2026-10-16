@@ -15,7 +15,7 @@ public record EndpointCheckIn(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "sequence", required = true) Long sequence,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "report", required = true) ClientReport report,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "adoptionDigest", required = false) String adoptionDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "localTools", required = false) java.util.List<BuiltinToolInfo> localTools
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "localTools", required = false) java.util.List<LocalToolInfo> localTools
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *

@@ -48,7 +48,7 @@ final class EndpointTest {
         try(var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()){statement.execute("CREATE DATABASE "+database);}
         var url=base.replace("/control?","/"+database+"?");
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).target("4").load().migrate();
-        assertEquals(20,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
+        assertEquals(22,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
         var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         return configured(new PostgresStore(source,codec));
     }
@@ -72,7 +72,7 @@ final class EndpointTest {
         var discovery=codec.model(payload,ClientDiscovery.class);
         assertEquals(System.getProperty("toolgate.productVersion"),discovery.minimumClientVersion());
     }
-    @Test void queuedBuildAndDeploymentCannotOutliveTheirCreatorsGroupAuthority()throws Exception{
+    @Test void queuedDeploymentCannotOutliveItsCreatorsGroupAuthority()throws Exception{
         var s=setup();
         // This proof exercises a restricted role; an installation owner intentionally retains all management operations.
         s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var role=codec.model(entries.get(Ids.Kind.ROLE.id("test-recovery-role")).document(),ControlRole.class);
@@ -83,12 +83,6 @@ final class EndpointTest {
         var challenge=start(s,"queue-device");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");var peer=certificate(poll(s,challenge).identity());
         var releaseFixture=new FleetTest();var crypto=releaseFixture.crypto();
         var fleet=new FleetService(s.store,codec,crypto,s.service,s.clock,true,"endpoint","server");
-        var builder=new BuilderService(s.store,codec,crypto,fleet,s.service,s.clock,true,"endpoint","server");
-        var fixtures=new com.fasterxml.jackson.databind.ObjectMapper().readTree(java.nio.file.Path.of(System.getProperty("toolgate.fixtures")).toFile());
-        var definition=codec.model(fixtures.get("BuilderDefinition").toString(),BuilderDefinition.class);
-        builder.save(s.admin,codec.json(new BuilderDraftRequest("queued-draft",0L,definition)),"draft","request");
-        var job=codec.model(builder.test(s.admin,codec.json(new BuilderTestRequest("queued-job","queued-draft",1L,"queue-device",0L)),"test","request").body(),BuilderTestRecord.class);
-        assertNotNull(codec.model(builder.poll(peer,"poll").body(),BuilderTestPoll.class).task());
         var release=codec.model(releaseFixture.fixtures().get("release").toString(),FleetPackageRelease.class);
         fleet.publish(s.admin,codec.json(release),"publish","request");
         fleet.rollout(s.admin,codec.json(new FleetRolloutRequest("queued-rollout",release.packageId(),release.version(),List.of("queue-device"),true,100L)),"rollout","request");
@@ -99,11 +93,8 @@ final class EndpointTest {
         var rules=role.managementRules().stream().map(r->new EnterpriseManagementRule(r.actions().stream().filter(a->!Set.of("tool_builder.build","package.deploy").contains(a)).toList(),r.groupType(),r.groups(),r.grantableScopes(),r.conditions(),null)).toList();
         var revoked=new ControlRole(role.id(),role.name(),role.enabled(),role.revision(),role.portalRole(),role.roleType(),rules);
         s.directory.mutate(s.admin,Ids.Kind.ROLE,role.id(),"UPDATE",codec.json(revoked),role.revision(),"revoke-build-deploy","request");
-        assertNull(codec.model(builder.poll(peer,"revoked-poll").body(),BuilderTestPoll.class).task());
-        assertEquals(403,assertThrows(Failure.class,()->builder.result(peer,codec.json(new BuilderTestResult(job.id(),job.leaseId(),job.definitionDigest(),true,null)),"revoked-result")).status());
         assertEquals(403,assertThrows(Failure.class,()->fleet.desired(peer)).status());
         assertEquals(403,assertThrows(Failure.class,()->s.store.transaction(s.admin.tenant(),true,tx->fleet.authorizeDownload(tx,peer,grant))).status());
-        assertTrue(s.store.transaction(s.admin.tenant(),false,tx->tx.auditPage(0,100)).contains("BUILDER_AUTHORITY_REVOKED"));
     }
     @Test void enrollmentBindsOwnerKeyAndDurableSequenceAndRevocation()throws Exception{
         var s=setup();var challenge=start(s,"device");var review=review(s,challenge);assertEquals(EnrollmentState.PENDING,poll(s,challenge).state());

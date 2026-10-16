@@ -28,11 +28,11 @@ public class EnterpriseOperationResource {
     @POST @Path("shadow") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response shadow(String document){return reply(directory.shadow(actors.management(),document));}
     @POST @Path("human/catalog") @Consumes("application/json") @io.quarkus.security.Authenticated
-    public Response humanCatalog(String document){var actor=actors.human();return reply(new HumanRuntime(store,codec,operations,endpoints.relay()).catalog(actor,actors.humanEpoch(),body(document)));}
+    public Response humanCatalog(String document){var actor=actors.human();return reply(new HumanRuntime(store,codec,operations,endpoints.relay(),packages).catalog(actor,actors.humanEpoch(),body(document)));}
     @POST @Path("human/invocations") @Consumes("application/json") @io.quarkus.security.Authenticated
-    public Response humanInvoke(@HeaderParam("Idempotency-Key")String key,String document){var actor=actors.human();return reply(new HumanRuntime(store,codec,operations,endpoints.relay()).invoke(actor,actors.humanEpoch(),body(document),key));}
+    public Response humanInvoke(@HeaderParam("Idempotency-Key")String key,String document){var actor=actors.human();return reply(new HumanRuntime(store,codec,operations,endpoints.relay(),packages).invoke(actor,actors.humanEpoch(),body(document),key));}
     @GET @Path("human/invocations/{id}/result") @io.quarkus.security.Authenticated
-    public Response humanResult(@PathParam("id")String id){var actor=actors.human();return reply(new HumanRuntime(store,codec,operations,endpoints.relay()).result(actor,actors.humanEpoch(),id));}
+    public Response humanResult(@PathParam("id")String id){var actor=actors.human();return reply(new HumanRuntime(store,codec,operations,endpoints.relay(),packages).result(actor,actors.humanEpoch(),id));}
     @GET @Path("status") @io.quarkus.security.Authenticated public Response authorityStatus(){var a=actors.management();return reply(store.transaction(a.tenant(),false,tx->{new io.ololabs.toolgate.control.application.ManagementAccess(codec).requireAll(tx.load(),a.userId(),"access_snapshot.read",System.currentTimeMillis());long seq=tx.bundleSequence();var bundle=seq==0?null:tx.bundle(seq);var value=new io.ololabs.toolgate.contracts.EnterpriseAuthorityStatus(tx.load().revision(),tx.enterprise().authorizationEpoch(),seq,bundle==null?null:bundle.directoryRevision(),tx.enterprise().adoptions());return new Store.Reply(200,codec.json(value),tx.load().revision());}));}
     @GET @Path("operations") @io.quarkus.security.Authenticated public Response operationsStatus(){var a=actors.management();return reply(store.transaction(a.tenant(),false,tx->{new io.ololabs.toolgate.control.application.ManagementAccess(codec).requireAll(tx.load(),a.userId(),"access_snapshot.read",System.currentTimeMillis());return new Store.Reply(200,codec.json(tx.enterprise().operationalStatus(System.currentTimeMillis())),tx.load().revision());}));}
     private DirectoryService.Actor gateway(){return actors.service("toolgate-relay-gateway");}
@@ -73,6 +73,12 @@ public class EnterpriseOperationResource {
         return reply(v2(document,"fencingToken")?operations.reportInvocation(tenant(),device,document,fencingToken==null?"":fencingToken):operations.report(tenant(),device,body(document)));}
     @GET @Path("invocations/{id}/device-outcome") @PermitAll
     public Response deviceOutcome(@PathParam("id")String id){var certificate=peer();return reply(operations.deviceOutcome(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id));}
+    /** Run-response frames from the executor that admitted the invocation; the device certificate and fencing token bind them. */
+    @POST @Path("invocations/{id}/events") @Consumes("application/json") @PermitAll
+    public Response events(@PathParam("id")String id,String document){var certificate=peer();return reply(new RunEvents(store,codec,operations).ingest(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id,body(document)));}
+    /** Authorized cursor replay of an invocation's retained run-response events. */
+    @GET @Path("invocations/{id}/events") @io.quarkus.security.Authenticated
+    public Response eventPage(@PathParam("id")String id,@QueryParam("after")@DefaultValue("0")long after,@QueryParam("limit")@DefaultValue("200")int limit){return reply(new RunEvents(store,codec,operations).page(actors.human(),id,after,limit));}
     @POST @Path("secrets/deliver") @Consumes("application/json") @PermitAll
     public Response secret(String document){var certificate=peer();return reply(vault.service().deliver(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document),operations));}
 }

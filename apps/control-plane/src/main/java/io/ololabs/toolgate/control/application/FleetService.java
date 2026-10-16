@@ -54,7 +54,7 @@ public final class FleetService {
     public static void validatePackage(FleetPackageDocument document){
         var runtimes=new HashSet<String>();for(var runtime:document.runtimes())if(!runtimes.add(runtime.id()))throw Failure.validation();
         var tools=new HashSet<String>();for(var tool:document.tools())if(!tools.add(tool.toolId())||!runtimes.contains(tool.runtimeId()))throw Failure.validation();
-        for(var tool:document.tools()){var runtime=document.runtimes().stream().filter(r->r.id().equals(tool.runtimeId())).findFirst().orElseThrow(Failure::validation);BuilderValidation.source(runtime,tool);InstalledProfiles.validate(tool,runtime);}
+        for(var tool:document.tools()){var runtime=document.runtimes().stream().filter(r->r.id().equals(tool.runtimeId())).findFirst().orElseThrow(Failure::validation);InstalledProfiles.validate(tool,runtime);}
         var tested=new HashSet<String>();for(var test:document.selfTests())if(!tools.contains(test.toolId())||!tested.add(test.toolId()))throw Failure.validation();
         if(!tested.equals(tools)||new HashSet<>(document.platforms()).size()!=document.platforms().size()
             ||new HashSet<>(document.architectures()).size()!=document.architectures().size())throw Failure.validation();

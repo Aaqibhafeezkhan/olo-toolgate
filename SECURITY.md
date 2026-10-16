@@ -11,8 +11,8 @@ the sandbox shares that kernel. [Runtime security](docs/client/local-runtimes.md
 
 Security issues should **not** be reported through a public GitHub issue.
 
-Endpoint built-ins require OS-authenticated IPC, enrolled readiness and a fresh
-online Gateway grant on every call. HotFolder rejects traversal, symlinks,
+Device tools run only from signed packages in a sandbox, with enrolled readiness
+and a fresh online Gateway grant on every call. The device files area rejects traversal, symlinks,
 reparse points and hardlinks, with bounded closed inputs and atomic replacement.
 Delete and arbitrary execution are absent. Downloading an anonymous native client
 does not grant enrollment or runtime permission. See the

@@ -1,12 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //! Administrator-configured HTTPS Gateway. ASK grants are consumed online before execution.
-use crate::{
-    builtins::{AuthorizationPort, Settings},
-    contracts::Contracts,
-    transport::Call,
-    Failure, Result,
-};
+use crate::{contracts::Contracts, execution::AuthorizationPort, transport::Call, Failure, Result};
 use olo_toolgate_contracts::*;
 use std::{path::Path, sync::Arc, time::Duration};
 pub fn secret(path: &Path) -> Result<String> {
@@ -38,54 +33,6 @@ pub fn client(ca: Option<&Path>) -> Result<reqwest::Client> {
     }
     builder.build().map_err(|_| Failure::Unavailable)
 }
-pub(crate) fn public_address(address: std::net::IpAddr) -> bool {
-    match address {
-        std::net::IpAddr::V4(ip) => {
-            let [a, b, c, _] = ip.octets();
-            !(!(1..224).contains(&a)
-                || ip.is_private()
-                || ip.is_loopback()
-                || ip.is_link_local()
-                || a == 100 && (64..128).contains(&b)
-                || a == 192 && (b == 0 || b == 88 && c == 99)
-                || a == 198 && (b == 18 || b == 19 || b == 51 && c == 100)
-                || a == 203 && b == 0 && c == 113)
-        }
-        std::net::IpAddr::V6(ip) => {
-            let words = ip.segments();
-            words[0] & 0xe000 == 0x2000
-                && !(words[0] == 0x2001 && (words[1] < 0x200 || words[1] == 0xdb8))
-                && words[0] != 0x2002
-        }
-    }
-}
-/// Resolve once for this request, reject every non-public answer, then pin sockets while retaining TLS hostname verification.
-pub(crate) async fn public_client(host: &str) -> Result<reqwest::Client> {
-    let addresses: Vec<_> =
-        tokio::time::timeout(Duration::from_secs(3), tokio::net::lookup_host((host, 443)))
-            .await
-            .map_err(|_| Failure::Unavailable)?
-            .map_err(|_| Failure::Unavailable)?
-            .collect();
-    if addresses.is_empty()
-        || addresses.len() > 32
-        || addresses.iter().any(|a| !public_address(a.ip()))
-    {
-        return Err(Failure::Unauthorized);
-    }
-    reqwest::Client::builder()
-        .https_only(true)
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none())
-        .referer(false)
-        .tls_sslkeylogfile(false)
-        .retry(reqwest::retry::never())
-        .timeout(Duration::from_secs(5))
-        .connect_timeout(Duration::from_secs(3))
-        .resolve_to_addrs(host, &addresses)
-        .build()
-        .map_err(|_| Failure::Unavailable)
-}
 pub async fn body(mut response: reqwest::Response) -> Result<Vec<u8>> {
     if response.status() != 200 {
         return Err(if matches!(response.status().as_u16(), 401 | 403) {
@@ -111,6 +58,31 @@ pub async fn body(mut response: reqwest::Response) -> Result<Vec<u8>> {
         bytes.extend_from_slice(&chunk);
     }
     Ok(bytes)
+}
+/// The Gateway this device authorizes local and managed tool calls with.
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Settings {
+    pub gateway_url: String,
+    pub gateway_token_path: std::path::PathBuf,
+    pub gateway_ca_path: Option<std::path::PathBuf>,
+    pub device_id: String,
+}
+impl Settings {
+    pub fn validate(&self) -> Result<()> {
+        crate::config::origin(&self.gateway_url)?;
+        if !self.gateway_token_path.is_absolute()
+            || self.device_id.is_empty()
+            || self.device_id.len() > 128
+            || self
+                .gateway_ca_path
+                .as_ref()
+                .is_some_and(|p| !p.is_absolute())
+        {
+            return Err(Failure::Validation);
+        }
+        Ok(())
+    }
 }
 pub struct HttpsGateway {
     client: reqwest::Client,
@@ -197,64 +169,27 @@ impl HttpsGateway {
             store,
         ))
     }
-    fn installed(&self, request: &AuthorizationRequest) -> Result<BuiltinToolInfo> {
-        if let Some(execution) = &self.config.execution {
-            if let Some(tool) = execution
-                .tools
-                .iter()
-                .find(|t| t.tool_id == request.tool_id && t.action == request.action)
-            {
-                let runtime = execution
-                    .runtimes
-                    .iter()
-                    .find(|r| r.id == tool.runtime_id)
-                    .ok_or(Failure::Validation)?;
-                return crate::authorization_profile::managed_info(tool, runtime);
-            }
-        }
-        let catalog: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../packages/contracts/tools/builtins.json"
-        ))
-        .map_err(|_| Failure::Validation)?;
-        let item = catalog["tools"]
-            .as_array()
-            .and_then(|v| {
-                v.iter()
-                    .find(|t| t["toolId"] == request.tool_id && t["action"] == request.action)
-            })
+    /// The signed managed registration for this request; nothing else is executable on a device.
+    fn installed(&self, request: &AuthorizationRequest) -> Result<LocalToolInfo> {
+        let execution = self
+            .config
+            .execution
+            .as_ref()
             .ok_or(Failure::Unauthorized)?;
-        let profile = self
-            .settings
-            .authorization_profiles
+        let tool = execution
+            .tools
             .iter()
-            .find(|p| p.tool.id == request.tool_id)
+            .find(|t| t.tool_id == request.tool_id && t.action == request.action)
             .ok_or(Failure::Unauthorized)?;
-        crate::authorization_profile::builtin_info(
-            item,
-            profile,
-            &crate::authorization_profile::builtin_package_digest()?,
-        )
+        let runtime = execution
+            .runtimes
+            .iter()
+            .find(|r| r.id == tool.runtime_id)
+            .ok_or(Failure::Validation)?;
+        crate::authorization_profile::managed_info(tool, runtime)
     }
 }
 impl AuthorizationPort for HttpsGateway {
-    fn secret(&self, name: String) -> Call<'_, String> {
-        Box::pin(async move {
-            use crate::transport::ControlPort;
-            let executing = self.executing.lock().await;
-            let invocation = executing.as_ref().ok_or(Failure::Unauthorized)?;
-            let (identity, control, _store) = self.device()?;
-            Ok(control
-                .deliver_secret(
-                    identity,
-                    EnterpriseSecretDeliveryRequest {
-                        invocation_id: invocation.id.clone(),
-                        name,
-                    },
-                )
-                .await?
-                .value)
-        })
-    }
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()> {
         Box::pin(async move { self.authorize_bound(request).await.map(|_| ()) })
     }
@@ -415,57 +350,4 @@ fn recoverable_outcome(previous: &EnterpriseInvocation, current: &EnterpriseInvo
                 | EnterpriseInvocationState::Expired
                 | EnterpriseInvocationState::Cancelled
         )
-}
-
-#[cfg(test)]
-mod address_tests {
-    use super::public_address;
-    #[test]
-    fn destinations_exclude_local_shared_reserved_and_transition_ranges() {
-        for blocked in [
-            "0.0.0.0",
-            "10.1.2.3",
-            "127.0.0.1",
-            "169.254.169.254",
-            "100.64.0.1",
-            "100.127.255.254",
-            "192.0.2.1",
-            "198.18.0.1",
-            "198.51.100.1",
-            "203.0.113.1",
-            "224.0.0.1",
-            "255.255.255.255",
-            "::1",
-            "::ffff:8.8.8.8",
-            "fe80::1",
-            "fc00::1",
-            "2001:db8::1",
-            "2002:0808:0808::1",
-        ] {
-            assert!(!public_address(blocked.parse().unwrap()), "{blocked}");
-        }
-        for allowed in ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"] {
-            assert!(public_address(allowed.parse().unwrap()), "{allowed}");
-        }
-    }
-    #[test]
-    fn own_exact_terminal_outcome_can_release_a_fence_but_unknown_or_substituted_outcomes_cannot() {
-        let mut previous: olo_toolgate_contracts::EnterpriseInvocation = serde_json::from_value(
-            serde_json::from_str::<serde_json::Value>(include_str!(
-                "../../../tests/fixtures/contracts/v1/valid.json"
-            ))
-            .unwrap()["EnterpriseInvocation"]
-                .clone(),
-        )
-        .unwrap();
-        previous.state = olo_toolgate_contracts::EnterpriseInvocationState::Executing;
-        let mut current = previous.clone();
-        current.revision += 1;
-        current.state = olo_toolgate_contracts::EnterpriseInvocationState::OutcomeUnknown;
-        assert!(!super::recoverable_outcome(&previous, &current));
-        current.state = olo_toolgate_contracts::EnterpriseInvocationState::Succeeded;
-        assert!(super::recoverable_outcome(&previous, &current));
-        current.evaluation.context.device_id = "other-device".into();
-        assert!(!super::recoverable_outcome(&previous, &current));
-    }
 }

@@ -14,1147 +14,6 @@
       "path": "workspace/readme.txt"
     }
   },
-  "BuilderDefinition": {
-    "packageId": "custom-echo",
-    "version": "1.0.0",
-    "name": "Echo",
-    "description": "Returns a bounded text value.",
-    "useWhen": "Return a test text value.",
-    "doNotUseWhen": "Reading files or accessing network.",
-    "runtime": {
-      "id": "builder-python",
-      "kind": "PYTHON",
-      "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "version": "3.14.0"
-    },
-    "tool": {
-      "toolId": "custom.echo",
-      "action": "execute",
-      "runtimeId": "builder-python",
-      "entryPoint": "/opt/tool/tool.py",
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "text": {
-            "type": "string",
-            "maxLength": 256
-          }
-        },
-        "required": [
-          "text"
-        ]
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "text": {
-            "type": "string",
-            "maxLength": 256
-          }
-        },
-        "required": [
-          "text"
-        ]
-      },
-      "limits": {
-        "timeoutMs": 2000,
-        "memoryMiB": 128,
-        "maxInputBytes": 4096,
-        "maxOutputBytes": 4096
-      },
-      "source": {
-        "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-        "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
-      },
-      "authorizationProfile": {
-        "tool": {
-          "id": "custom.echo",
-          "name": "custom.echo",
-          "enabled": true,
-          "revision": 1,
-          "version": "1.0.0",
-          "packageDigest": "ef83cd52121214db4e0e9ba218948cfb71ec5d4a04219dedb14f336dc3cde571",
-          "extractorId": "extract-d5f10a3588951e4d33728c61e1973fde",
-          "definition": {
-            "id": "custom.echo",
-            "name": "custom.echo",
-            "description": "Reviewed bounded compute capability.",
-            "actions": [
-              {
-                "name": "execute",
-                "resourceKinds": [
-                  "CUSTOM"
-                ]
-              }
-            ],
-            "inputSchema": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "text": {
-                  "type": "string",
-                  "maxLength": 256
-                }
-              },
-              "required": [
-                "text"
-              ]
-            },
-            "outputSchema": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "text": {
-                  "type": "string",
-                  "maxLength": 256
-                }
-              },
-              "required": [
-                "text"
-              ]
-            }
-          }
-        },
-        "extractor": {
-          "id": "extract-d5f10a3588951e4d33728c61e1973fde",
-          "name": "Resources for custom.echo",
-          "enabled": true,
-          "revision": 1,
-          "extractorKind": "FIELDS",
-          "version": "1.0.0",
-          "fields": [],
-          "fixedResources": [
-            {
-              "kind": "CUSTOM",
-              "locator": "runtime/custom.echo"
-            }
-          ],
-          "maxResources": 1
-        }
-      }
-    },
-    "platforms": [
-      "LINUX"
-    ],
-    "architectures": [
-      "x86_64"
-    ],
-    "examples": [
-      {
-        "toolId": "custom.echo",
-        "arguments": {
-          "text": "hello"
-        },
-        "expectedOutput": {
-          "text": "hello"
-        }
-      }
-    ],
-    "permissions": [
-      "COMPUTE"
-    ],
-    "resource": {
-      "kind": "CUSTOM",
-      "locator": "runtime/custom.echo"
-    },
-    "credentialRequirements": []
-  },
-  "BuilderDraft": {
-    "id": "draft-example",
-    "revision": 1,
-    "definition": {
-      "packageId": "custom-echo",
-      "version": "1.0.0",
-      "name": "Echo",
-      "description": "Returns a bounded text value.",
-      "useWhen": "Return a test text value.",
-      "doNotUseWhen": "Reading files or accessing network.",
-      "runtime": {
-        "id": "builder-python",
-        "kind": "PYTHON",
-        "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "version": "3.14.0"
-      },
-      "tool": {
-        "toolId": "custom.echo",
-        "action": "execute",
-        "runtimeId": "builder-python",
-        "entryPoint": "/opt/tool/tool.py",
-        "inputSchema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "text": {
-              "type": "string",
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "text"
-          ]
-        },
-        "outputSchema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "text": {
-              "type": "string",
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "text"
-          ]
-        },
-        "limits": {
-          "timeoutMs": 2000,
-          "memoryMiB": 128,
-          "maxInputBytes": 4096,
-          "maxOutputBytes": 4096
-        },
-        "source": {
-          "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-          "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
-        },
-        "authorizationProfile": {
-          "tool": {
-            "id": "custom.echo",
-            "name": "custom.echo",
-            "enabled": true,
-            "revision": 1,
-            "version": "1.0.0",
-            "packageDigest": "ef83cd52121214db4e0e9ba218948cfb71ec5d4a04219dedb14f336dc3cde571",
-            "extractorId": "extract-d5f10a3588951e4d33728c61e1973fde",
-            "definition": {
-              "id": "custom.echo",
-              "name": "custom.echo",
-              "description": "Reviewed bounded compute capability.",
-              "actions": [
-                {
-                  "name": "execute",
-                  "resourceKinds": [
-                    "CUSTOM"
-                  ]
-                }
-              ],
-              "inputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              },
-              "outputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              }
-            }
-          },
-          "extractor": {
-            "id": "extract-d5f10a3588951e4d33728c61e1973fde",
-            "name": "Resources for custom.echo",
-            "enabled": true,
-            "revision": 1,
-            "extractorKind": "FIELDS",
-            "version": "1.0.0",
-            "fields": [],
-            "fixedResources": [
-              {
-                "kind": "CUSTOM",
-                "locator": "runtime/custom.echo"
-              }
-            ],
-            "maxResources": 1
-          }
-        }
-      },
-      "platforms": [
-        "LINUX"
-      ],
-      "architectures": [
-        "x86_64"
-      ],
-      "examples": [
-        {
-          "toolId": "custom.echo",
-          "arguments": {
-            "text": "hello"
-          },
-          "expectedOutput": {
-            "text": "hello"
-          }
-        }
-      ],
-      "permissions": [
-        "COMPUTE"
-      ],
-      "resource": {
-        "kind": "CUSTOM",
-        "locator": "runtime/custom.echo"
-      },
-      "credentialRequirements": []
-    },
-    "definitionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "sealed": false,
-    "packageDocument": {
-      "formatVersion": 1,
-      "packageId": "custom-echo",
-      "version": "1.0.0",
-      "platforms": [
-        "LINUX"
-      ],
-      "architectures": [
-        "x86_64"
-      ],
-      "minimumClientVersion": "0.10.0-dev",
-      "runtimes": [
-        {
-          "id": "builder-python",
-          "kind": "PYTHON",
-          "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "version": "3.14.0"
-        }
-      ],
-      "tools": [
-        {
-          "toolId": "custom.echo",
-          "action": "execute",
-          "runtimeId": "builder-python",
-          "entryPoint": "/opt/tool/tool.py",
-          "inputSchema": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "text": {
-                "type": "string",
-                "maxLength": 256
-              }
-            },
-            "required": [
-              "text"
-            ]
-          },
-          "outputSchema": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "text": {
-                "type": "string",
-                "maxLength": 256
-              }
-            },
-            "required": [
-              "text"
-            ]
-          },
-          "limits": {
-            "timeoutMs": 2000,
-            "memoryMiB": 128,
-            "maxInputBytes": 4096,
-            "maxOutputBytes": 4096
-          },
-          "source": {
-            "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-            "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
-          },
-          "authorizationProfile": {
-            "tool": {
-              "id": "custom.echo",
-              "name": "custom.echo",
-              "enabled": true,
-              "revision": 1,
-              "version": "1.0.0",
-              "packageDigest": "ef83cd52121214db4e0e9ba218948cfb71ec5d4a04219dedb14f336dc3cde571",
-              "extractorId": "extract-d5f10a3588951e4d33728c61e1973fde",
-              "definition": {
-                "id": "custom.echo",
-                "name": "custom.echo",
-                "description": "Reviewed bounded compute capability.",
-                "actions": [
-                  {
-                    "name": "execute",
-                    "resourceKinds": [
-                      "CUSTOM"
-                    ]
-                  }
-                ],
-                "inputSchema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "text": {
-                      "type": "string",
-                      "maxLength": 256
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ]
-                },
-                "outputSchema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "text": {
-                      "type": "string",
-                      "maxLength": 256
-                    }
-                  },
-                  "required": [
-                    "text"
-                  ]
-                }
-              }
-            },
-            "extractor": {
-              "id": "extract-d5f10a3588951e4d33728c61e1973fde",
-              "name": "Resources for custom.echo",
-              "enabled": true,
-              "revision": 1,
-              "extractorKind": "FIELDS",
-              "version": "1.0.0",
-              "fields": [],
-              "fixedResources": [
-                {
-                  "kind": "CUSTOM",
-                  "locator": "runtime/custom.echo"
-                }
-              ],
-              "maxResources": 1
-            }
-          }
-        }
-      ],
-      "selfTests": [
-        {
-          "toolId": "custom.echo",
-          "arguments": {
-            "text": "hello"
-          },
-          "expectedOutput": {
-            "text": "hello"
-          }
-        }
-      ]
-    }
-  },
-  "BuilderDraftPage": {
-    "items": [
-      {
-        "id": "draft-example",
-        "revision": 1,
-        "definition": {
-          "packageId": "custom-echo",
-          "version": "1.0.0",
-          "name": "Echo",
-          "description": "Returns a bounded text value.",
-          "useWhen": "Return a test text value.",
-          "doNotUseWhen": "Reading files or accessing network.",
-          "runtime": {
-            "id": "builder-python",
-            "kind": "PYTHON",
-            "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "version": "3.14.0"
-          },
-          "tool": {
-            "toolId": "custom.echo",
-            "action": "execute",
-            "runtimeId": "builder-python",
-            "entryPoint": "/opt/tool/tool.py",
-            "inputSchema": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "text": {
-                  "type": "string",
-                  "maxLength": 256
-                }
-              },
-              "required": [
-                "text"
-              ]
-            },
-            "outputSchema": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "text": {
-                  "type": "string",
-                  "maxLength": 256
-                }
-              },
-              "required": [
-                "text"
-              ]
-            },
-            "limits": {
-              "timeoutMs": 2000,
-              "memoryMiB": 128,
-              "maxInputBytes": 4096,
-              "maxOutputBytes": 4096
-            },
-            "source": {
-              "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-              "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
-            },
-            "authorizationProfile": {
-              "tool": {
-                "id": "custom.echo",
-                "name": "custom.echo",
-                "enabled": true,
-                "revision": 1,
-                "version": "1.0.0",
-                "packageDigest": "ef83cd52121214db4e0e9ba218948cfb71ec5d4a04219dedb14f336dc3cde571",
-                "extractorId": "extract-d5f10a3588951e4d33728c61e1973fde",
-                "definition": {
-                  "id": "custom.echo",
-                  "name": "custom.echo",
-                  "description": "Reviewed bounded compute capability.",
-                  "actions": [
-                    {
-                      "name": "execute",
-                      "resourceKinds": [
-                        "CUSTOM"
-                      ]
-                    }
-                  ],
-                  "inputSchema": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "text": {
-                        "type": "string",
-                        "maxLength": 256
-                      }
-                    },
-                    "required": [
-                      "text"
-                    ]
-                  },
-                  "outputSchema": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "text": {
-                        "type": "string",
-                        "maxLength": 256
-                      }
-                    },
-                    "required": [
-                      "text"
-                    ]
-                  }
-                }
-              },
-              "extractor": {
-                "id": "extract-d5f10a3588951e4d33728c61e1973fde",
-                "name": "Resources for custom.echo",
-                "enabled": true,
-                "revision": 1,
-                "extractorKind": "FIELDS",
-                "version": "1.0.0",
-                "fields": [],
-                "fixedResources": [
-                  {
-                    "kind": "CUSTOM",
-                    "locator": "runtime/custom.echo"
-                  }
-                ],
-                "maxResources": 1
-              }
-            }
-          },
-          "platforms": [
-            "LINUX"
-          ],
-          "architectures": [
-            "x86_64"
-          ],
-          "examples": [
-            {
-              "toolId": "custom.echo",
-              "arguments": {
-                "text": "hello"
-              },
-              "expectedOutput": {
-                "text": "hello"
-              }
-            }
-          ],
-          "permissions": [
-            "COMPUTE"
-          ],
-          "resource": {
-            "kind": "CUSTOM",
-            "locator": "runtime/custom.echo"
-          },
-          "credentialRequirements": []
-        },
-        "definitionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "sealed": false,
-        "packageDocument": {
-          "formatVersion": 1,
-          "packageId": "custom-echo",
-          "version": "1.0.0",
-          "platforms": [
-            "LINUX"
-          ],
-          "architectures": [
-            "x86_64"
-          ],
-          "minimumClientVersion": "0.10.0-dev",
-          "runtimes": [
-            {
-              "id": "builder-python",
-              "kind": "PYTHON",
-              "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "version": "3.14.0"
-            }
-          ],
-          "tools": [
-            {
-              "toolId": "custom.echo",
-              "action": "execute",
-              "runtimeId": "builder-python",
-              "entryPoint": "/opt/tool/tool.py",
-              "inputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              },
-              "outputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              },
-              "limits": {
-                "timeoutMs": 2000,
-                "memoryMiB": 128,
-                "maxInputBytes": 4096,
-                "maxOutputBytes": 4096
-              },
-              "source": {
-                "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-                "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
-              },
-              "authorizationProfile": {
-                "tool": {
-                  "id": "custom.echo",
-                  "name": "custom.echo",
-                  "enabled": true,
-                  "revision": 1,
-                  "version": "1.0.0",
-                  "packageDigest": "ef83cd52121214db4e0e9ba218948cfb71ec5d4a04219dedb14f336dc3cde571",
-                  "extractorId": "extract-d5f10a3588951e4d33728c61e1973fde",
-                  "definition": {
-                    "id": "custom.echo",
-                    "name": "custom.echo",
-                    "description": "Reviewed bounded compute capability.",
-                    "actions": [
-                      {
-                        "name": "execute",
-                        "resourceKinds": [
-                          "CUSTOM"
-                        ]
-                      }
-                    ],
-                    "inputSchema": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "properties": {
-                        "text": {
-                          "type": "string",
-                          "maxLength": 256
-                        }
-                      },
-                      "required": [
-                        "text"
-                      ]
-                    },
-                    "outputSchema": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "properties": {
-                        "text": {
-                          "type": "string",
-                          "maxLength": 256
-                        }
-                      },
-                      "required": [
-                        "text"
-                      ]
-                    }
-                  }
-                },
-                "extractor": {
-                  "id": "extract-d5f10a3588951e4d33728c61e1973fde",
-                  "name": "Resources for custom.echo",
-                  "enabled": true,
-                  "revision": 1,
-                  "extractorKind": "FIELDS",
-                  "version": "1.0.0",
-                  "fields": [],
-                  "fixedResources": [
-                    {
-                      "kind": "CUSTOM",
-                      "locator": "runtime/custom.echo"
-                    }
-                  ],
-                  "maxResources": 1
-                }
-              }
-            }
-          ],
-          "selfTests": [
-            {
-              "toolId": "custom.echo",
-              "arguments": {
-                "text": "hello"
-              },
-              "expectedOutput": {
-                "text": "hello"
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "BuilderDraftRequest": {
-    "id": "draft-example",
-    "expectedRevision": 0,
-    "definition": {
-      "packageId": "custom-echo",
-      "version": "1.0.0",
-      "name": "Echo",
-      "description": "Returns a bounded text value.",
-      "useWhen": "Return a test text value.",
-      "doNotUseWhen": "Reading files or accessing network.",
-      "runtime": {
-        "id": "builder-python",
-        "kind": "PYTHON",
-        "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "version": "3.14.0"
-      },
-      "tool": {
-        "toolId": "custom.echo",
-        "action": "execute",
-        "runtimeId": "builder-python",
-        "entryPoint": "/opt/tool/tool.py",
-        "inputSchema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "text": {
-              "type": "string",
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "text"
-          ]
-        },
-        "outputSchema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "text": {
-              "type": "string",
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "text"
-          ]
-        },
-        "limits": {
-          "timeoutMs": 2000,
-          "memoryMiB": 128,
-          "maxInputBytes": 4096,
-          "maxOutputBytes": 4096
-        },
-        "source": {
-          "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-          "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
-        },
-        "authorizationProfile": {
-          "tool": {
-            "id": "custom.echo",
-            "name": "custom.echo",
-            "enabled": true,
-            "revision": 1,
-            "version": "1.0.0",
-            "packageDigest": "ef83cd52121214db4e0e9ba218948cfb71ec5d4a04219dedb14f336dc3cde571",
-            "extractorId": "extract-d5f10a3588951e4d33728c61e1973fde",
-            "definition": {
-              "id": "custom.echo",
-              "name": "custom.echo",
-              "description": "Reviewed bounded compute capability.",
-              "actions": [
-                {
-                  "name": "execute",
-                  "resourceKinds": [
-                    "CUSTOM"
-                  ]
-                }
-              ],
-              "inputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              },
-              "outputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              }
-            }
-          },
-          "extractor": {
-            "id": "extract-d5f10a3588951e4d33728c61e1973fde",
-            "name": "Resources for custom.echo",
-            "enabled": true,
-            "revision": 1,
-            "extractorKind": "FIELDS",
-            "version": "1.0.0",
-            "fields": [],
-            "fixedResources": [
-              {
-                "kind": "CUSTOM",
-                "locator": "runtime/custom.echo"
-              }
-            ],
-            "maxResources": 1
-          }
-        }
-      },
-      "platforms": [
-        "LINUX"
-      ],
-      "architectures": [
-        "x86_64"
-      ],
-      "examples": [
-        {
-          "toolId": "custom.echo",
-          "arguments": {
-            "text": "hello"
-          },
-          "expectedOutput": {
-            "text": "hello"
-          }
-        }
-      ],
-      "permissions": [
-        "COMPUTE"
-      ],
-      "resource": {
-        "kind": "CUSTOM",
-        "locator": "runtime/custom.echo"
-      },
-      "credentialRequirements": []
-    }
-  },
-  "BuilderPermission": "COMPUTE",
-  "BuilderRevisionRequest": {
-    "expectedRevision": 1
-  },
-  "BuilderTestPage": {
-    "items": [
-      {
-        "id": "test-example",
-        "draftId": "draft-example",
-        "definitionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "deviceId": "device-1",
-        "state": "QUEUED",
-        "revision": 1,
-        "createdAtUnixMs": 1700000000000,
-        "expiresAtUnixMs": 1700000600000,
-        "attempt": 0,
-        "leaseId": "lease-example",
-        "exampleIndex": 0
-      }
-    ]
-  },
-  "BuilderTestPoll": {},
-  "BuilderTestRecord": {
-    "id": "test-example",
-    "draftId": "draft-example",
-    "definitionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "deviceId": "device-1",
-    "state": "QUEUED",
-    "revision": 1,
-    "createdAtUnixMs": 1700000000000,
-    "expiresAtUnixMs": 1700000600000,
-    "attempt": 0,
-    "leaseId": "lease-example",
-    "exampleIndex": 0
-  },
-  "BuilderTestRequest": {
-    "id": "test-example",
-    "draftId": "draft-example",
-    "expectedRevision": 1,
-    "deviceId": "device-1",
-    "exampleIndex": 0
-  },
-  "BuilderTestResult": {
-    "jobId": "test-example",
-    "leaseId": "lease-example",
-    "definitionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "success": true
-  },
-  "BuilderTestState": "QUEUED",
-  "BuilderTestTask": {
-    "formatVersion": 1,
-    "tenantId": "tenant",
-    "serverId": "server",
-    "deviceId": "device-1",
-    "job": {
-      "id": "test-example",
-      "draftId": "draft-example",
-      "definitionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "deviceId": "device-1",
-      "state": "RUNNING",
-      "revision": 2,
-      "createdAtUnixMs": 1700000000000,
-      "expiresAtUnixMs": 1700000600000,
-      "attempt": 1,
-      "leaseId": "lease-example",
-      "exampleIndex": 0
-    },
-    "definition": {
-      "packageId": "custom-echo",
-      "version": "1.0.0",
-      "name": "Echo",
-      "description": "Returns a bounded text value.",
-      "useWhen": "Return a test text value.",
-      "doNotUseWhen": "Reading files or accessing network.",
-      "runtime": {
-        "id": "builder-python",
-        "kind": "PYTHON",
-        "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "version": "3.14.0"
-      },
-      "tool": {
-        "toolId": "custom.echo",
-        "action": "execute",
-        "runtimeId": "builder-python",
-        "entryPoint": "/opt/tool/tool.py",
-        "inputSchema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "text": {
-              "type": "string",
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "text"
-          ]
-        },
-        "outputSchema": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "text": {
-              "type": "string",
-              "maxLength": 256
-            }
-          },
-          "required": [
-            "text"
-          ]
-        },
-        "limits": {
-          "timeoutMs": 2000,
-          "memoryMiB": 128,
-          "maxInputBytes": 4096,
-          "maxOutputBytes": 4096
-        },
-        "source": {
-          "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-          "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
-        },
-        "authorizationProfile": {
-          "tool": {
-            "id": "custom.echo",
-            "name": "custom.echo",
-            "enabled": true,
-            "revision": 1,
-            "version": "1.0.0",
-            "packageDigest": "ef83cd52121214db4e0e9ba218948cfb71ec5d4a04219dedb14f336dc3cde571",
-            "extractorId": "extract-d5f10a3588951e4d33728c61e1973fde",
-            "definition": {
-              "id": "custom.echo",
-              "name": "custom.echo",
-              "description": "Reviewed bounded compute capability.",
-              "actions": [
-                {
-                  "name": "execute",
-                  "resourceKinds": [
-                    "CUSTOM"
-                  ]
-                }
-              ],
-              "inputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              },
-              "outputSchema": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              }
-            }
-          },
-          "extractor": {
-            "id": "extract-d5f10a3588951e4d33728c61e1973fde",
-            "name": "Resources for custom.echo",
-            "enabled": true,
-            "revision": 1,
-            "extractorKind": "FIELDS",
-            "version": "1.0.0",
-            "fields": [],
-            "fixedResources": [
-              {
-                "kind": "CUSTOM",
-                "locator": "runtime/custom.echo"
-              }
-            ],
-            "maxResources": 1
-          }
-        }
-      },
-      "platforms": [
-        "LINUX"
-      ],
-      "architectures": [
-        "x86_64"
-      ],
-      "examples": [
-        {
-          "toolId": "custom.echo",
-          "arguments": {
-            "text": "hello"
-          },
-          "expectedOutput": {
-            "text": "hello"
-          }
-        }
-      ],
-      "permissions": [
-        "COMPUTE"
-      ],
-      "resource": {
-        "kind": "CUSTOM",
-        "locator": "runtime/custom.echo"
-      },
-      "credentialRequirements": []
-    },
-    "expiresAtUnixMs": 1700000600000
-  },
-  "BuiltinInvocation": {
-    "toolId": "hotfolder.read_text",
-    "arguments": {
-      "path": "note.txt"
-    }
-  },
-  "BuiltinIpcRequest": {
-    "protocolVersion": 2,
-    "requestId": "request-07",
-    "operation": "CALL",
-    "invocation": {
-      "toolId": "hotfolder.read_text",
-      "arguments": {
-        "path": "note.txt"
-      }
-    }
-  },
-  "BuiltinIpcResponse": {
-    "requestId": "request-07",
-    "output": {
-      "text": "hello"
-    }
-  },
-  "BuiltinOperation": "CALL",
-  "BuiltinToolInfo": {
-    "toolId": "hotfolder.read_text",
-    "action": "read",
-    "description": "Read bounded UTF-8 content.",
-    "enabled": true,
-    "inputSchema": {
-      "type": "object"
-    },
-    "toolDigest": "0000000000000000000000000000000000000000000000000000000000000000",
-    "packageDigest": "0000000000000000000000000000000000000000000000000000000000000000"
-  },
   "BundleHeader": {
     "alg": "RS256",
     "typ": "toolgate-policy-bundle+jws",
@@ -1356,7 +215,7 @@
     "signature": "example"
   },
   "ConsoleDeviceProofRequest": {
-    "kind": "example",
+    "kind": "console-device-proof",
     "consoleUrl": "example",
     "nonce": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
@@ -2012,7 +871,7 @@
     ]
   },
   "DeviceDeploymentMetadata": {
-    "executionKind": "QUICKSTART_CLIENT",
+    "executionKind": "ENDPOINT_CLIENT",
     "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "containerName": "toolgate-langchain-quickstart-1",
     "systemName": "abc123",
@@ -2023,7 +882,7 @@
   "DeviceDeploymentRecord": {
     "deviceId": "device-test",
     "deployment": {
-      "executionKind": "QUICKSTART_CLIENT",
+      "executionKind": "ENDPOINT_CLIENT",
       "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "containerName": "toolgate-langchain-quickstart-1",
       "systemName": "abc123",
@@ -2032,7 +891,7 @@
       "ipAddress": "172.18.0.2"
     }
   },
-  "DeviceExecutionKind": "QUICKSTART_CLIENT",
+  "DeviceExecutionKind": "ENDPOINT_CLIENT",
   "DeviceIdentity": {
     "deviceId": "device-1",
     "tenantId": "device-1",
@@ -2159,7 +1018,6 @@
   },
   "EndpointManagedDevice": {
     "deviceId": "device-1",
-    "systemExecutor": false,
     "systemName": "test-machine",
     "ipAddress": "2001:db8::1"
   },
@@ -2167,7 +1025,6 @@
     "items": [
       {
         "deviceId": "device-1",
-        "systemExecutor": false,
         "systemName": "test-machine",
         "ipAddress": "2001:db8::1"
       }
@@ -2176,7 +1033,7 @@
       {
         "deviceId": "device-test",
         "deployment": {
-          "executionKind": "QUICKSTART_CLIENT",
+          "executionKind": "ENDPOINT_CLIENT",
           "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "containerName": "toolgate-langchain-quickstart-1",
           "systemName": "abc123",
@@ -2983,18 +1840,18 @@
     "minimumClientVersion": "0.1.0-dev",
     "runtimes": [
       {
-        "id": "python-echo",
-        "kind": "PYTHON",
-        "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "version": "3.14.0"
+        "id": "java-sdk",
+        "kind": "JAVA_SDK",
+        "image": "registry.example.com/toolgate/client-tools@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "21.0.12+1"
       }
     ],
     "tools": [
       {
         "toolId": "local.echo",
         "action": "execute",
-        "runtimeId": "python-echo",
-        "entryPoint": "/opt/tool/tool.py",
+        "runtimeId": "java-sdk",
+        "entryPoint": "/opt/tool/examples.echo/tool.jar",
         "inputSchema": {
           "type": "object"
         },
@@ -3014,7 +1871,7 @@
             "enabled": true,
             "revision": 1,
             "version": "0.1.0-dev",
-            "packageDigest": "1f46d112e15700b76859b52f4541113080c3b734916c682658e09353109422e9",
+            "packageDigest": "9a9ce513bccd3e59712ef04301c725a24ce87f8add9b8577ba7cb84ce6207de7",
             "extractorId": "extract-5a77d536026e311f934cfcc372f60551",
             "definition": {
               "id": "local.echo",
@@ -3052,7 +1909,8 @@
             ],
             "maxResources": 1
           }
-        }
+        },
+        "fileAccess": "NONE"
       }
     ],
     "selfTests": [
@@ -3196,16 +2054,17 @@
       "maxResources": 1
     }
   },
+  "LocalFileAccess": "NONE",
   "LocalRuntimeHealth": {
     "ready": false,
     "successfulExecutions": 0,
     "failedExecutions": 0,
     "runtimes": [
       {
-        "runtimeId": "python-echo",
-        "kind": "PYTHON",
+        "runtimeId": "java-sdk",
+        "kind": "JAVA_SDK",
         "state": "MISSING",
-        "version": "3.14.0"
+        "version": "21.0.12+1"
       }
     ]
   },
@@ -3232,7 +2091,7 @@
       }
     }
   },
-  "LocalRuntimeKind": "PYTHON",
+  "LocalRuntimeKind": "JAVA_SDK",
   "LocalRuntimeLimits": {
     "timeoutMs": 2000,
     "memoryMiB": 128,
@@ -3242,10 +2101,16 @@
   "LocalRuntimeOperation": "INVOKE",
   "LocalRuntimeState": "MISSING",
   "LocalRuntimeStatus": {
-    "runtimeId": "python-echo",
-    "kind": "PYTHON",
+    "runtimeId": "java-sdk",
+    "kind": "JAVA_SDK",
     "state": "MISSING",
-    "version": "3.14.0"
+    "version": "21.0.12+1"
+  },
+  "LocalToolCall": {
+    "toolId": "hotfolder.read_text",
+    "arguments": {
+      "path": "note.txt"
+    }
   },
   "LocalToolCatalog": {
     "tools": [
@@ -3262,6 +2127,17 @@
       }
     ]
   },
+  "LocalToolInfo": {
+    "toolId": "hotfolder.read_text",
+    "action": "read",
+    "description": "Read bounded UTF-8 content.",
+    "enabled": true,
+    "inputSchema": {
+      "type": "object"
+    },
+    "toolDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "packageDigest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
   "LocalToolInput": {
     "protocolVersion": 1,
     "requestId": "request-runtime",
@@ -3270,6 +2146,24 @@
       "text": "hello"
     }
   },
+  "LocalToolIpcRequest": {
+    "protocolVersion": 2,
+    "requestId": "request-07",
+    "operation": "CALL",
+    "invocation": {
+      "toolId": "hotfolder.read_text",
+      "arguments": {
+        "path": "note.txt"
+      }
+    }
+  },
+  "LocalToolIpcResponse": {
+    "requestId": "request-07",
+    "output": {
+      "text": "hello"
+    }
+  },
+  "LocalToolOperation": "CALL",
   "LocalToolOutput": {
     "protocolVersion": 1,
     "requestId": "request-runtime",
@@ -3280,8 +2174,8 @@
   "LocalToolRegistration": {
     "toolId": "local.echo",
     "action": "execute",
-    "runtimeId": "python-echo",
-    "entryPoint": "/opt/tool/tool.py",
+    "runtimeId": "java-sdk",
+    "entryPoint": "/opt/tool/examples.echo/tool.jar",
     "inputSchema": {
       "type": "object"
     },
@@ -3301,7 +2195,7 @@
         "enabled": true,
         "revision": 1,
         "version": "1.0.0",
-        "packageDigest": "1f46d112e15700b76859b52f4541113080c3b734916c682658e09353109422e9",
+        "packageDigest": "9a9ce513bccd3e59712ef04301c725a24ce87f8add9b8577ba7cb84ce6207de7",
         "extractorId": "extract-5a77d536026e311f934cfcc372f60551",
         "definition": {
           "id": "local.echo",
@@ -3339,17 +2233,14 @@
         ],
         "maxResources": 1
       }
-    }
-  },
-  "LocalToolSource": {
-    "code": "def tool(arguments):\n    return {'text': arguments['text']}\n",
-    "sha256": "f9ac9cea83359f08537fcddff8b29026d216f9f2d7685ba96c135643b4ffb6e9"
+    },
+    "fileAccess": "NONE"
   },
   "ManagedRuntime": {
-    "id": "python-echo",
-    "kind": "PYTHON",
-    "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "version": "3.14.0"
+    "id": "java-sdk",
+    "kind": "JAVA_SDK",
+    "image": "registry.example.com/toolgate/client-tools@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "21.0.12+1"
   },
   "MarketplaceRelease": {
     "packageId": "community/calculator",
@@ -3545,6 +2436,80 @@
     "locator": "calculator"
   },
   "ResourceKind": "CUSTOM",
+  "SdkBuilderBuild": {
+    "id": "sdk-build",
+    "draftId": "sdk-draft",
+    "draftRevision": 1,
+    "toolGroupId": "default-tools",
+    "source": "{\n  \"schemaVersion\": 1,\n  \"sdkVersion\": \"0.10.0-dev\",\n  \"id\": \"ololabs.hello-world-json\",\n  \"name\": \"Hello World\",\n  \"publisher\": \"ololabs\",\n  \"version\": \"1.0.0\",\n  \"tools\": [\n    {\n      \"name\": \"client_greet\",\n      \"kind\": \"CLIENT\",\n      \"title\": \"Client Hello World\",\n      \"description\": \"Greets the supplied text on a client device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}},\n      \"events\": [{\"level\": \"info\", \"message\": \"Producing greeting\"}, {\"fraction\": 1, \"message\": \"Greeting complete\"}]\n    },\n    {\n      \"name\": \"server_greet\",\n      \"kind\": \"SERVER\",\n      \"title\": \"Server Hello World\",\n      \"description\": \"Greets the supplied text on the assigned server or device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}}\n    }\n  ]\n}\n",
+    "sourceDigest": "sha256:48a2c5c9827b21a713d36bb2a904dbe47e6a8de3ae769356cff2b7e5a2089cff",
+    "creatorUserId": "owner",
+    "state": "QUEUED",
+    "revision": 1,
+    "createdAtUnixMs": 1700000000000,
+    "expiresAtUnixMs": 1700000300000,
+    "leaseId": "lease-sdk"
+  },
+  "SdkBuilderBuildPage": {
+    "items": [
+      {
+        "id": "sdk-build",
+        "draftId": "sdk-draft",
+        "draftRevision": 1,
+        "toolGroupId": "default-tools",
+        "source": "{\n  \"schemaVersion\": 1,\n  \"sdkVersion\": \"0.10.0-dev\",\n  \"id\": \"ololabs.hello-world-json\",\n  \"name\": \"Hello World\",\n  \"publisher\": \"ololabs\",\n  \"version\": \"1.0.0\",\n  \"tools\": [\n    {\n      \"name\": \"client_greet\",\n      \"kind\": \"CLIENT\",\n      \"title\": \"Client Hello World\",\n      \"description\": \"Greets the supplied text on a client device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}},\n      \"events\": [{\"level\": \"info\", \"message\": \"Producing greeting\"}, {\"fraction\": 1, \"message\": \"Greeting complete\"}]\n    },\n    {\n      \"name\": \"server_greet\",\n      \"kind\": \"SERVER\",\n      \"title\": \"Server Hello World\",\n      \"description\": \"Greets the supplied text on the assigned server or device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}}\n    }\n  ]\n}\n",
+        "sourceDigest": "sha256:48a2c5c9827b21a713d36bb2a904dbe47e6a8de3ae769356cff2b7e5a2089cff",
+        "creatorUserId": "owner",
+        "state": "QUEUED",
+        "revision": 1,
+        "createdAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "leaseId": "lease-sdk"
+      }
+    ]
+  },
+  "SdkBuilderBuildRequest": {
+    "id": "sdk-build",
+    "draftId": "sdk-draft",
+    "expectedRevision": 1
+  },
+  "SdkBuilderDraft": {
+    "id": "sdk-draft",
+    "revision": 1,
+    "toolGroupId": "default-tools",
+    "source": "{\n  \"schemaVersion\": 1,\n  \"sdkVersion\": \"0.10.0-dev\",\n  \"id\": \"ololabs.hello-world-json\",\n  \"name\": \"Hello World\",\n  \"publisher\": \"ololabs\",\n  \"version\": \"1.0.0\",\n  \"tools\": [\n    {\n      \"name\": \"client_greet\",\n      \"kind\": \"CLIENT\",\n      \"title\": \"Client Hello World\",\n      \"description\": \"Greets the supplied text on a client device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}},\n      \"events\": [{\"level\": \"info\", \"message\": \"Producing greeting\"}, {\"fraction\": 1, \"message\": \"Greeting complete\"}]\n    },\n    {\n      \"name\": \"server_greet\",\n      \"kind\": \"SERVER\",\n      \"title\": \"Server Hello World\",\n      \"description\": \"Greets the supplied text on the assigned server or device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}}\n    }\n  ]\n}\n",
+    "sourceDigest": "sha256:48a2c5c9827b21a713d36bb2a904dbe47e6a8de3ae769356cff2b7e5a2089cff"
+  },
+  "SdkBuilderDraftPage": {
+    "items": [
+      {
+        "id": "sdk-draft",
+        "revision": 1,
+        "toolGroupId": "default-tools",
+        "source": "{\n  \"schemaVersion\": 1,\n  \"sdkVersion\": \"0.10.0-dev\",\n  \"id\": \"ololabs.hello-world-json\",\n  \"name\": \"Hello World\",\n  \"publisher\": \"ololabs\",\n  \"version\": \"1.0.0\",\n  \"tools\": [\n    {\n      \"name\": \"client_greet\",\n      \"kind\": \"CLIENT\",\n      \"title\": \"Client Hello World\",\n      \"description\": \"Greets the supplied text on a client device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}},\n      \"events\": [{\"level\": \"info\", \"message\": \"Producing greeting\"}, {\"fraction\": 1, \"message\": \"Greeting complete\"}]\n    },\n    {\n      \"name\": \"server_greet\",\n      \"kind\": \"SERVER\",\n      \"title\": \"Server Hello World\",\n      \"description\": \"Greets the supplied text on the assigned server or device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}}\n    }\n  ]\n}\n",
+        "sourceDigest": "sha256:48a2c5c9827b21a713d36bb2a904dbe47e6a8de3ae769356cff2b7e5a2089cff"
+      }
+    ]
+  },
+  "SdkBuilderError": "BUILD_FAILED",
+  "SdkBuilderGroup": {
+    "id": "device-1",
+    "name": "example",
+    "canBuild": false
+  },
+  "SdkBuilderSave": {
+    "id": "sdk-draft",
+    "expectedRevision": 0,
+    "toolGroupId": "default-tools",
+    "source": "{\n  \"schemaVersion\": 1,\n  \"sdkVersion\": \"0.10.0-dev\",\n  \"id\": \"ololabs.hello-world-json\",\n  \"name\": \"Hello World\",\n  \"publisher\": \"ololabs\",\n  \"version\": \"1.0.0\",\n  \"tools\": [\n    {\n      \"name\": \"client_greet\",\n      \"kind\": \"CLIENT\",\n      \"title\": \"Client Hello World\",\n      \"description\": \"Greets the supplied text on a client device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}},\n      \"events\": [{\"level\": \"info\", \"message\": \"Producing greeting\"}, {\"fraction\": 1, \"message\": \"Greeting complete\"}]\n    },\n    {\n      \"name\": \"server_greet\",\n      \"kind\": \"SERVER\",\n      \"title\": \"Server Hello World\",\n      \"description\": \"Greets the supplied text on the assigned server or device.\",\n      \"inputs\": {\n        \"text\": {\"type\": \"STRING\", \"description\": \"Text to greet\", \"default\": \"World\", \"maxLength\": 128}\n      },\n      \"output\": {\"message\": {\"concat\": [{\"literal\": \"Hello \"}, {\"input\": \"text\"}]}}\n    }\n  ]\n}\n"
+  },
+  "SdkBuilderState": "QUEUED",
+  "SdkBuilderStatus": {
+    "sdkVersion": "example",
+    "configured": false,
+    "maxSourceCharacters": 32768,
+    "groups": []
+  },
   "SecretReference": "secret://example/token",
   "SemanticVersion": "0.1.0-dev",
   "Sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -3555,7 +2520,6 @@
   "SignedPolicyBundle": {
     "jws": "eyJhbGciOiAiUlMyNTYiLCAidHlwIjogInRvb2xnYXRlLXBvbGljeS1idW5kbGUrandzIiwgImtpZCI6ICJidW5kbGUta2V5LTEifQ.eyJmb3JtYXRWZXJzaW9uIjogMSwgImlzc3VlciI6ICJjb250cm9sIiwgImF1ZGllbmNlIjogImdhdGV3YXkiLCAidGVuYW50SWQiOiAiZXhhbXBsZSIsICJzZXF1ZW5jZSI6IDEsICJ2ZXJzaW9uIjogIjEuMC4xIiwgImRpcmVjdG9yeVJldmlzaW9uIjogMCwgImlzc3VlZEF0VW5peE1zIjogMTcwMDAwMDAwMDAwMCwgImV4cGlyZXNBdFVuaXhNcyI6IDE3MDAwMDAwNjAwMDAsICJncmFjZU1zIjogMCwgInBvbGljeVNoYTI1NiI6ICIyYmIxZTUwNDhhMTliZGU5M2MzNDAxNDJiNWQ5YmExZjVlYWQ2MzlkY2U3YWRkNjdiZmQwMmQ2YzNhNDliN2UxIiwgInBvbGljeSI6ICJleUptYjNKdFlYUldaWEp6YVc5dUlqb3hMQ0p5ZFd4bGN5STZXM3NpWVdOMGFXOXVJam9pY21WaFpDSXNJbUZuWlc1MFNXUnpJanBiWFN3aVpHVjJhV05sU1dSeklqcGJYU3dpWldabVpXTjBJam9pUVV4TVQxY2lMQ0puY21GalpVRnNiRzkzWldRaU9uUnlkV1VzSW5CdmJHbGplVWxrSWpvaVlXeHNiM2N0Y21WaFpDSXNJbkpsYzI5MWNtTmxJanA3SW10cGJtUWlPaUpEVlZOVVQwMGlMQ0pzYjJOaGRHOXlJam9pWTJGc1kzVnNZWFJ2Y2lKOUxDSjBiMjlzU1dRaU9pSm1hV3hsY3lJc0luVnpaWEpKWkhNaU9sc2lZV3hwWTJVaVhYMWRmUSJ9.c3RydWN0dXJhbC1vbmx5"
   },
-  "SystemExecutorKind": "HOTFOLDER",
   "ToolAction": {
     "name": "evaluate",
     "resourceKinds": [

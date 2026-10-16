@@ -32,6 +32,16 @@ pub struct Adapter {
 
 pub const ADAPTERS: &[Adapter] = &[
     Adapter {
+        id: "json-sdk",
+        build: "json",
+        markers: &["toolgate.json"],
+        launcher: json_sdk,
+        dev: &["dev"],
+        check: &["check"],
+        package: &["pack"],
+        output: "build/toolgate",
+    },
+    Adapter {
         id: "java-gradle",
         build: "gradle",
         markers: &[
@@ -57,6 +67,14 @@ pub const ADAPTERS: &[Adapter] = &[
         output: "target/toolgate",
     },
 ];
+
+fn json_sdk(_: &Path) -> Command {
+    Command::new(if cfg!(windows) {
+        "toolgate-json-sdk.bat"
+    } else {
+        "toolgate-json-sdk"
+    })
+}
 
 fn gradle(dir: &Path) -> Command {
     let wrapper = dir.join(if cfg!(windows) {

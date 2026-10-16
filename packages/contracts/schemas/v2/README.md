@@ -20,5 +20,6 @@ The v2 set is self-contained: no `$ref` points into `v1`. Since contract set `1.
 | `deployment-binding.schema.json` | `DeploymentBinding`, `EffectiveDeployment` | ADR 020 |
 | `protocol.schema.json` | Tool protocol v2 frames; `Dispatch`, `AdmissionResponse`, `ResultMessage` | ADR 014, ADR 013 (D2) |
 | `settings.schema.json` | `ControlServerSettings` format version 2, `ClientCheckIn` | ADR 021 |
+| `profile.schema.json` | `DeploymentProfile`, `ProvisioningStatus`: pinned deployment-time package provisioning | plan.md §7, §8 |
 
 Definitions owned by a D2 ADR are written here because D1 freezes the wire shapes; D2 reviews their trust and persistence semantics and may amend them before D2 passes.

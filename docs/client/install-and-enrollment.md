@@ -31,11 +31,5 @@ names, registered users, connection status, approval, expiry and detail tooltips
 their protected key and retry so access can resume after reapproval or enablement.
 Permanent API revocation still rejects that key permanently.
 
-Quickstart automatically registers three server-managed devices under **Local
-tool requester**: `local-builtins` (the fixed compute/server executor),
-`local-hotfolder` (HotFolder file operations), and `local-rest-forwarding`
-(the existing gateway forwarding calls to approved client tools). They need no
-client enrollment. Their status is green while the composition is ready and they
-are enabled. Disabling HotFolder blocks its file effects; disabling REST forwarding
-blocks gateway discovery, dispatch and responses. Disabling the fixed executor
-blocks all server built-in effects, including HotFolder.
+Quickstart registers no devices of its own and runs no tools itself: every row is
+an enrolled client or Tool Host, approved the same way.

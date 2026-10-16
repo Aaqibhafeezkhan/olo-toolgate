@@ -82,6 +82,50 @@ pub struct BreakGlassRequest {
     pub reason: String,
     pub operator_signatures: Vec<String>,
 }
+/// Canonical BrokerOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BrokerOperation {
+    #[serde(rename = "ROUTE_CALL")]
+    RouteCall,
+    #[serde(rename = "SECRET_REDEEM")]
+    SecretRedeem,
+    #[serde(rename = "FILES_LIST")]
+    FilesList,
+    #[serde(rename = "FILES_READ")]
+    FilesRead,
+    #[serde(rename = "FILES_INFO")]
+    FilesInfo,
+    #[serde(rename = "FILES_WRITE")]
+    FilesWrite,
+    #[serde(rename = "FILES_APPEND")]
+    FilesAppend,
+    #[serde(rename = "FILES_MKDIR")]
+    FilesMkdir,
+    #[serde(rename = "FILES_RENAME")]
+    FilesRename,
+}
+/// Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrokerRequestFrame {
+    #[serde(deserialize_with = "const_broker_request_frame_kind")]
+    pub kind: String,
+    pub request_id: String,
+    pub operation: BrokerOperation,
+    pub request: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrokerResponseFrame {
+    #[serde(deserialize_with = "const_broker_response_frame_kind")]
+    pub kind: String,
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ToolErrorBody>,
+}
 /// reserveBusinessOperation input, carried on POST /access/invocations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -189,6 +233,38 @@ pub struct ClientCheckIn {
     pub jitter_pct: u64,
     pub offline_after_ms: u64,
     pub source: ValueSource,
+}
+/// A client release: the image index pinned by digest, the exact FleetPackageDocument bytes (manifestDigest) and, when Control holds the package-release key, the signed FleetPackageRelease it recorded.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientRelease {
+    pub package_id: String,
+    pub version: String,
+    pub package_digest: String,
+    pub image: String,
+    pub runtime_version: String,
+    pub manifest_digest: String,
+    pub signed: bool,
+    pub document: std::collections::BTreeMap<String, serde_json::Value>,
+    pub document_base64: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub tools: Vec<ClientReleaseTool>,
+}
+/// Builds the client-tool image for one verified upload and issues its fleet release (ADR 026).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientReleaseRequest {
+    pub package_digest: String,
+}
+/// One export and whether a client device can run it; an unsupported export is never weakened to fit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientReleaseTool {
+    pub tool_id: String,
+    pub supported: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 /// Canonical CompatibilityProfile wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -332,6 +408,17 @@ pub struct DeploymentGrant {
     pub agent_group_id: String,
     pub tool_ids: Vec<String>,
 }
+/// Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeploymentProfile {
+    #[serde(deserialize_with = "const_deployment_profile_profile_version")]
+    pub profile_version: u64,
+    pub profile_id: String,
+    pub packages: Vec<ProfilePackage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readiness: Option<Vec<ProfileReadinessCase>>,
+}
 /// Where the package runs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -454,6 +541,10 @@ pub enum FrameKind {
     InputRequest,
     #[serde(rename = "LOG")]
     Log,
+    #[serde(rename = "BROKER_REQUEST")]
+    BrokerRequest,
+    #[serde(rename = "BROKER_RESPONSE")]
+    BrokerResponse,
 }
 /// Gateway settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1034,6 +1125,10 @@ pub enum Permission {
     TokenExchange,
     #[serde(rename = "CONNECTION")]
     Connection,
+    #[serde(rename = "DEVICE_FILES_READ")]
+    DeviceFilesRead,
+    #[serde(rename = "DEVICE_FILES_WRITE")]
+    DeviceFilesWrite,
 }
 /// Successful consumption.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1116,6 +1211,50 @@ pub struct PrivateRangeApproval {
     pub cidr: String,
     pub ports: Vec<u64>,
 }
+/// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. bindingIds have their allowed package digests set to exactly the profile packages that name them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfilePackage {
+    pub package_id: String,
+    pub source: ProfilePackageSource,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub globals: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<ProfileToolActivation>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding_ids: Option<Vec<String>>,
+}
+/// Canonical ProfilePackageSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProfilePackageSource {
+    #[serde(rename = "PREBUILT_CORE")]
+    PrebuiltCore,
+    #[serde(rename = "MARKETPLACE")]
+    Marketplace,
+}
+/// A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileReadinessCase {
+    pub tool_id: String,
+    pub agent_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// One installed export to enable, in the reviewed Tool Group named here. The export must exist in the pinned package; nothing is created to satisfy a reference.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileToolActivation {
+    pub tool_id: String,
+    pub tool_group_id: String,
+}
 /// Progress frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1132,6 +1271,63 @@ pub struct ProgressFrame {
 pub struct ProtocolRange {
     pub min: u64,
     pub max: u64,
+}
+/// One pinned package: where provisioning stands and why it is not ready. hostIds and globalsDigest record the deployment it applied, so an unchanged repeat does not redeploy.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningPackageStatus {
+    pub package_id: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+    pub required: bool,
+    pub state: ProvisioningState,
+    pub step: ProvisioningStep,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub globals_digest: Option<String>,
+}
+/// Canonical ProvisioningState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProvisioningState {
+    #[serde(rename = "READY")]
+    Ready,
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "FAILED")]
+    Failed,
+}
+/// Persisted outcome of the latest profile application. state is READY only when every required package is READY.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningStatus {
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub generation: u64,
+    pub state: ProvisioningState,
+    pub packages: Vec<ProvisioningPackageStatus>,
+    pub applied_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_profile_digest: Option<String>,
+}
+/// Canonical ProvisioningStep wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProvisioningStep {
+    #[serde(rename = "VALIDATE")]
+    Validate,
+    #[serde(rename = "IMPORT")]
+    Import,
+    #[serde(rename = "DEPLOY")]
+    Deploy,
+    #[serde(rename = "ACTIVATE")]
+    Activate,
+    #[serde(rename = "DONE")]
+    Done,
 }
 /// Supersedes kills after two-person review. Issuer is always control.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1303,6 +1499,125 @@ pub struct RouteDeclaration {
     pub timeout_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<String>,
+}
+/// One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEvent {
+    pub cursor: u64,
+    pub source: RunEventSource,
+    pub kind: RunEventKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emitted_at_unix_ms: Option<u64>,
+    pub recorded_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<ResultFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<LogLevel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// Control acknowledgement: the highest contiguous sequence stored for the attempt, and how many frames were already present or refused by retention bounds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventAck {
+    pub invocation_id: String,
+    pub attempt: u64,
+    pub accepted_through: u64,
+    pub duplicates: u64,
+    pub refused: u64,
+}
+/// Executor to Control: frames of one admitted attempt, bound to the invocation and the fencing token its permit consumption returned. Redelivery of the same sequence is idempotent. droppedFrames counts frames the executor discarded under its own bounds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventBatch {
+    pub invocation_id: String,
+    pub fencing_token: String,
+    pub attempt: u64,
+    pub events: Vec<RunEventFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_frames: Option<u64>,
+}
+/// One redacted non-terminal SDK frame (LOG, PROGRESS or INPUT_REQUEST) as the executor forwards it. sequence is monotonic per invocation attempt; the executor never renumbers a frame it resends.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventFrame {
+    pub sequence: u64,
+    pub emitted_at_unix_ms: u64,
+    pub kind: RunEventKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<LogLevel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// Sequences of an attempt that never arrived; they are reported, never invented.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventGap {
+    pub attempt: u64,
+    pub from_sequence: u64,
+    pub to_sequence: u64,
+}
+/// Canonical RunEventKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunEventKind {
+    #[serde(rename = "LOG")]
+    Log,
+    #[serde(rename = "PROGRESS")]
+    Progress,
+    #[serde(rename = "INPUT_REQUEST")]
+    InputRequest,
+    #[serde(rename = "STATE")]
+    State,
+    #[serde(rename = "RESULT")]
+    Result,
+}
+/// Authorized replay page after a cursor. terminal is the authoritative ledger state; truncated, droppedFrames, gaps and expired say explicitly what is not shown.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventPage {
+    pub invocation_id: String,
+    pub state: String,
+    pub terminal: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    pub events: Vec<RunEvent>,
+    pub next_cursor: u64,
+    pub more: bool,
+    pub truncated: bool,
+    pub dropped_frames: u64,
+    pub expired: bool,
+    pub gaps: Vec<RunEventGap>,
+}
+/// Canonical RunEventSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunEventSource {
+    #[serde(rename = "EXECUTOR")]
+    Executor,
+    #[serde(rename = "PLATFORM")]
+    Platform,
 }
 /// Language runtime a tool needs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1774,10 +2089,13 @@ pub enum ValueType {
     #[serde(rename = "BINARY")]
     Binary,
 }
+const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
+const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");
 const_field!(const_contract_set_name, String, "olo-toolgate-contracts");
 const_field!(const_control_server_settings_format_version, u64, 2);
 const_field!(const_control_settings_view_format_version, u64, 2);
 const_field!(const_deployment_binding_binding_format_version, u64, 1);
+const_field!(const_deployment_profile_profile_version, u64, 1);
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
 const_field!(const_log_frame_kind, String, "LOG");
 const_field!(const_package_manifest_schema_version, u64, 2);
@@ -1829,6 +2147,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/permit.schema.json",
         include_str!("../schemas/v2/permit.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/profile.schema.json",
+        include_str!("../schemas/v2/profile.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",

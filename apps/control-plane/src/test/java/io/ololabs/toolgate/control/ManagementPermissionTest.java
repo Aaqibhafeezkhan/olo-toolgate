@@ -33,6 +33,27 @@ final class ManagementPermissionTest {
    assertThrows(Failure.class,()->access.requireEntry(graph,"viewer","read",graph.entries().get(Ids.Kind.TEAM.id("viewers")),1));
    assertEquals(Set.of("user.read"),access.capabilities(graph,"viewer",1));return null;});
  }
+ @Test void packageImportAndDeploymentUseIndependentLivePermissions() throws Exception {
+  var store=setup("package.read");var packages=new ServerPackages(store,codec,null,java.time.Clock.systemUTC());
+  var actor=new DirectoryService.Actor(tenant,"b".repeat(64),true,false,"viewer");
+  byte[] bytes=ServerPackagesTest.zip(ServerPackagesTest.files());
+  assertEquals(403,assertThrows(Failure.class,()->packages.upload(actor,bytes,"denied")).status());
+  packagePermissions(store,2,"package.read","package.import");
+  var imported=(com.fasterxml.jackson.databind.JsonNode)codec.value(packages.upload(actor,bytes,"import").body());
+  assertEquals(200,packages.upload(actor,bytes,"same-import").status());
+  String deployment=codec.json(java.util.Map.of("packageDigest",imported.path("packageDigest").asText(),"globals",java.util.Map.of("ItemsApiHost","items.example.com")));
+  assertEquals(403,assertThrows(Failure.class,()->packages.deploy(actor,deployment,"denied-deploy")).status());
+  packagePermissions(store,3,"package.read","package.deploy");
+  assertEquals(200,packages.deploy(actor,deployment,"deploy").status());
+  assertEquals(403,assertThrows(Failure.class,()->packages.upload(actor,bytes,"revoked-import")).status());
+  boolean enabled=store.transaction(tenant,false,tx->tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get")).enabled());assertFalse(enabled);
+ }
+ private void packagePermissions(Store store,long revision,String... permissions){
+  store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
+   var rules=Arrays.stream(EnterpriseGroupType.values()).map(group->new EnterpriseManagementRule(List.of(permissions),group,new GroupSelection(List.of(),true),List.of(),conditions(),null)).toList();
+   TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("viewer-role","Package administrator",true,revision,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
+   tx.save(before,new Directory(before.revision()+1,entries));return null;});
+ }
  @Test void superAdminAlwaysHasKnownManagementPermissionsButUnknownPermissionsFailClosed(){
   var store=setup();var access=new ManagementAccess(codec);
   store.transaction(tenant,false,tx->{var graph=tx.load();

@@ -376,11 +376,8 @@ public final class EndpointService {
             for(var entry:entries.values())if(entry.id().kind()==Ids.Kind.DEVICE){
                 if(!access.deviceAllowed(tx.load(),actor.userId(),"device.read",entry.id().value(),codec.model(entry.document(),ControlDevice.class).ownerUserId(),verifiedCurrent,now))continue;
                 var directory=codec.model(entry.document(),ControlDevice.class);var row=tx.endpoint(directory.id());var secrets=groupApprover(tx,actor,directory.id());
-                var kind=tenant.value().equals("quickstart")&&server.equals("quickstart-server")&&directory.ownerUserId().equals("local-tools")?switch(directory.id()){
-                    case "local-builtins"->SystemExecutorKind.BUILTINS;case "local-hotfolder"->SystemExecutorKind.HOTFOLDER;case "local-rest-forwarding"->SystemExecutorKind.REST_FORWARDING;default->null;
-                }:null;
                 var owner=entries.get(Ids.Kind.USER.id(directory.ownerUserId()));
-                items.put(directory.id(),new EndpointManagedDevice(directory.id(),kind!=null,directory,row==null?null:secrets?codec.model(row.document(),EndpointDeviceRecord.class):redacted(codec.model(row.document(),EndpointDeviceRecord.class)),null,owner==null?null:codec.model(owner.document(),ControlUser.class),kind,null,row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).systemName(),row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).ipAddress(),access.deviceCapabilities(tx.load(),actor.userId(),directory.id(),directory.ownerUserId(),currentDevice(tx,actor),now)));
+                items.put(directory.id(),new EndpointManagedDevice(directory.id(),directory,row==null?null:secrets?codec.model(row.document(),EndpointDeviceRecord.class):redacted(codec.model(row.document(),EndpointDeviceRecord.class)),null,owner==null?null:codec.model(owner.document(),ControlUser.class),row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).systemName(),row==null?null:codec.model(row.document(),EndpointDeviceRecord.class).ipAddress(),access.deviceCapabilities(tx.load(),actor.userId(),directory.id(),directory.ownerUserId(),currentDevice(tx,actor),now)));
             }
             for(var row:tx.enrollments(now)){
                 var review=codec.model(row.document(),EndpointEnrollmentReview.class);var endpoint=tx.endpoint(review.deviceId());
@@ -388,7 +385,7 @@ public final class EndpointService {
                 if(!access.deviceAllowed(tx.load(),actor.userId(),"device.read",review.deviceId(),row.userId(),verifiedCurrent,now))continue;
                 var previous=items.get(review.deviceId());
                 var owner=row.userId()==null?null:entries.get(Ids.Kind.USER.id(row.userId()));
-                items.put(review.deviceId(),new EndpointManagedDevice(review.deviceId(),false,previous==null?null:previous.directoryDevice(),null,actor.userId().equals(row.userId())||groupApprover(tx,actor,review.deviceId())?review:redacted(review),owner!=null?codec.model(owner.document(),ControlUser.class):previous==null?null:previous.registeredUser(),null,null,null,null,access.deviceCapabilities(tx.load(),actor.userId(),review.deviceId(),row.userId(),currentDevice(tx,actor),now)));
+                items.put(review.deviceId(),new EndpointManagedDevice(review.deviceId(),previous==null?null:previous.directoryDevice(),null,actor.userId().equals(row.userId())||groupApprover(tx,actor,review.deviceId())?review:redacted(review),owner!=null?codec.model(owner.document(),ControlUser.class):previous==null?null:previous.registeredUser(),null,null,access.deviceCapabilities(tx.load(),actor.userId(),review.deviceId(),row.userId(),currentDevice(tx,actor),now)));
             }
             return reply(new EndpointManagedDevicePage(List.copyOf(items.values())),0);
         });

@@ -4,43 +4,27 @@
 use crate::{Failure, Result};
 use olo_toolgate_contracts::{LocalRuntimeKind as Kind, LocalToolRegistration};
 
-/// Interpreter discovery is inside a pinned image, never the host PATH.
+/// The Java SDK runtime's entry point for governed invocations over tool protocol v2.
+pub const JAVA_SDK_MAIN: &str = "io.ololabs.toolgate.runtime.Main";
+
+/// The runtime's executable inside the pinned image, never the host PATH.
 pub fn executable(kind: &Kind) -> Result<&'static str> {
     match kind {
-        Kind::Python => Ok("/usr/local/bin/python3"),
-        Kind::Node => Ok("/usr/local/bin/node"),
-        Kind::Powershell => Ok("/usr/bin/pwsh"),
-        Kind::Shell => Ok("/bin/bash"),
-        Kind::JavaJar => Ok("/opt/java/openjdk/bin/java"),
-        Kind::Dotnet => Ok("/usr/share/dotnet/dotnet"),
-        Kind::Native => Ok("/opt/tool/run"),
-        Kind::Batch | Kind::Wasm => Err(Failure::Unsupported),
+        Kind::JavaSdk => Ok("/opt/java/openjdk/bin/java"),
     }
 }
 
-/// Native programs expose --version; future WASM/Windows backends must implement
-/// the same capability contract before being enabled, not fall back to the host.
+/// The version probe; the reported version must equal the managed runtime's exactly.
 pub fn version_arguments(kind: &Kind) -> Result<Vec<String>> {
-    let mut args = vec![executable(kind)?.into()];
-    if *kind == Kind::JavaJar {
-        args.extend([
-            "-XX:ActiveProcessorCount=2".into(),
-            "-XX:-UsePerfData".into(),
-            "-version".into(),
-        ]);
-    } else {
-        args.push(
-            if *kind == Kind::Dotnet {
-                "--list-runtimes"
-            } else {
-                "--version"
-            }
-            .into(),
-        );
-    }
-    Ok(args)
+    Ok(vec![
+        executable(kind)?.into(),
+        "-XX:ActiveProcessorCount=2".into(),
+        "-XX:-UsePerfData".into(),
+        "-version".into(),
+    ])
 }
 
+/// The launch vector for a registration: fixed per runtime, never interpolated from input.
 pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result<Vec<String>> {
     let entry = &tool.entry_point;
     if !entry.starts_with("/opt/tool/")
@@ -55,56 +39,21 @@ pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result
     {
         return Err(Failure::Validation);
     }
-    if tool.source.is_some() {
-        super::source::validate(kind, tool)?;
-        return super::source::command(kind);
-    }
     let mut args: Vec<String> = match kind {
-        Kind::Native if entry == "/opt/tool/run" => vec![entry.clone()],
-        Kind::Native => return Err(Failure::Validation),
-        Kind::Python if entry.ends_with(".py") => vec![
-            executable(kind)?.into(),
-            "-I".into(),
-            "-B".into(),
-            entry.clone(),
-        ],
-        Kind::Node if entry.ends_with(".mjs") || entry.ends_with(".js") => vec![
-            executable(kind)?.into(),
-            "--no-addons".into(),
-            "--no-warnings".into(),
-            "--".into(),
-            entry.clone(),
-        ],
-        Kind::Powershell if entry.ends_with(".ps1") => vec![
-            executable(kind)?.into(),
-            "-NoLogo".into(),
-            "-NoProfile".into(),
-            "-NonInteractive".into(),
-            "-File".into(),
-            entry.clone(),
-        ],
-        Kind::Shell if entry.ends_with(".sh") => vec![
-            executable(kind)?.into(),
-            "--noprofile".into(),
-            "--norc".into(),
-            entry.clone(),
-        ],
-        Kind::JavaJar if entry.ends_with(".jar") => vec![
+        // A Java SDK package artifact runs the SDK runtime's governed mode (ADR 026); the class is fixed, never the caller's.
+        Kind::JavaSdk if entry.ends_with(".jar") => vec![
             executable(kind)?.into(),
             format!("-Xmx{}m", tool.limits.memory_mi_b / 2),
             "-XX:ActiveProcessorCount=2".into(),
             "-XX:-UsePerfData".into(),
-            "-jar".into(),
+            "-XX:+UseSerialGC".into(),
+            "-cp".into(),
             entry.clone(),
+            JAVA_SDK_MAIN.into(),
         ],
-        Kind::Dotnet if entry.ends_with(".dll") => {
-            vec![executable(kind)?.into(), "exec".into(), entry.clone()]
-        }
-        Kind::Batch | Kind::Wasm => return Err(Failure::Unsupported),
-        _ => return Err(Failure::Validation),
+        Kind::JavaSdk => return Err(Failure::Validation),
     };
-    // env -i also removes environment baked into a reviewed image. No caller
-    // environment, PYTHONPATH, NODE_OPTIONS, proxy or credential is forwarded.
+    // env -i also removes environment baked into a reviewed image. Nothing of the caller's environment is forwarded.
     let mut clean = vec![
         "/usr/bin/env".into(),
         "-i".into(),
@@ -113,10 +62,8 @@ pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result
         "TMPDIR=/tmp".into(),
         "LANG=C.UTF-8".into(),
         "TZ=UTC".into(),
-        "DOTNET_EnableDiagnostics=0".into(),
-        "DOTNET_PROCESSOR_COUNT=2".into(),
-        "DOTNET_CLI_TELEMETRY_OPTOUT=1".into(),
-        "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1".into(),
+        "TOOLGATE_PROTOCOL=2".into(),
+        "TOOLGATE_EXECUTION_TARGET=CLIENT".into(),
     ];
     clean.append(&mut args);
     Ok(clean)

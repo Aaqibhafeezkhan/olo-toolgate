@@ -216,7 +216,7 @@ fn reconfigure(
             settings.server_url = server.clone();
             match restore_profile(&previous.state_directory, &server, ca, &mut moves)? {
                 Some((saved, snapshot)) => {
-                    settings.tools = saved.tools;
+                    settings.gateway = saved.gateway;
                     settings.execution = saved.execution;
                     settings.deployment = saved.deployment;
                     settings.ca_certificate_path = saved.ca_certificate_path;
@@ -587,7 +587,7 @@ fn adopt_kept_state(
             let parked = Config {
                 deployment: None,
                 execution: None,
-                tools: None,
+                gateway: None,
                 ca_certificate_path: kept_ca(&state, &kept, config_directory),
                 local_console_url: known_gateways()
                     .into_iter()
@@ -606,7 +606,7 @@ fn adopt_kept_state(
         Some(_) => retire_gateway_state(&state, moves, &mut retired)?,
     }
     if let Some((saved, snapshot)) = restore_profile(&state, &settings.server_url, ca, moves)? {
-        settings.tools = saved.tools;
+        settings.gateway = saved.gateway;
         settings.execution = saved.execution;
         settings.deployment = saved.deployment;
         settings.ca_certificate_path = saved.ca_certificate_path;
@@ -799,7 +799,7 @@ fn install_config(
     let mut settings = previous.unwrap_or(Config {
         deployment: None,
         execution: None,
-        tools: None,
+        gateway: None,
         server_url: origin,
         state_directory: state,
         ipc_endpoint: ipc_endpoint(),
@@ -1165,7 +1165,7 @@ mod tests {
         let settings = Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: "https://localhost:18450".into(),
             state_directory: directory.clone(),
             ipc_endpoint: ipc_endpoint(),
@@ -1220,7 +1220,7 @@ mod tests {
         let first = Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: "https://localhost:18450".into(),
             state_directory: directory.clone(),
             ipc_endpoint: ipc_endpoint(),
@@ -1317,7 +1317,7 @@ mod tests {
         let fresh = |ca: Option<PathBuf>| Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: "https://localhost:18450".into(),
             state_directory: directory.clone(),
             ipc_endpoint: ipc_endpoint(),

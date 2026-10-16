@@ -13,4 +13,6 @@ enum Permission: string {
     case USER_SECRET = 'USER_SECRET';
     case TOKEN_EXCHANGE = 'TOKEN_EXCHANGE';
     case CONNECTION = 'CONNECTION';
+    case DEVICE_FILES_READ = 'DEVICE_FILES_READ';
+    case DEVICE_FILES_WRITE = 'DEVICE_FILES_WRITE';
 }

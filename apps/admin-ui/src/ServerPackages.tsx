@@ -6,6 +6,7 @@ import { ControlClient } from './api';
 import { Failure } from './Failure';
 import { Marketplace } from './Marketplace';
 import { Table } from './Table';
+import { usePermissions } from './Permissions';
 
 /** The values a version's tools declare: each global with its default, and each destination's host setting. */
 export function declaredValues(version: PackageVersion): Record<string, unknown> {
@@ -25,6 +26,7 @@ export function runsOn(deployment: PackageDeployment): string {
 /** Control verifies every upload and builds what Tool Hosts run. Deploying adds each new tool disabled: it still needs a
  * reviewed enable, a Tool Group, a binding that allows the package and a grant. */
 export function ServerPackages({ client }: { client: ControlClient }) {
+  const {can}=usePermissions(client),canImport=can('package.import'),canDeploy=can('package.deploy');
   const [versions, setVersions] = useState<readonly PackageVersion[]>(), [deployments, setDeployments] = useState<readonly PackageDeployment[]>([]);
   const [error, setError] = useState<unknown>(), [busy, setBusy] = useState(false), [attempt, setAttempt] = useState(0);
   const [file, setFile] = useState<File>(), [selected, setSelected] = useState(''), [globals, setGlobals] = useState('{}'), [notice, setNotice] = useState(''), [hosts, setHosts] = useState('');
@@ -46,11 +48,12 @@ export function ServerPackages({ client }: { client: ControlClient }) {
     setHosts((deployments.find(d => d.packageId === version?.packageId)?.hostIds ?? []).join(', '));
   }
   function upload(event: FormEvent) {
-    event.preventDefault(); if (!file) return;
+    event.preventDefault(); if (!file || !canImport) return;
     void mutate(async () => { const v = await client.uploadServerPackage(file); choose(v.packageDigest); return `Verified ${v.packageId} ${v.version}.`; });
   }
   function deploy(event: FormEvent) {
     event.preventDefault();
+    if (!canDeploy) return;
     let values: Record<string, unknown>;
     try { values = JSON.parse(globals) as Record<string, unknown>; } catch { setError(new Error('Values must be a JSON object.')); return; }
     const hostIds = hosts.split(',').map(h => h.trim()).filter(Boolean);
@@ -66,16 +69,16 @@ export function ServerPackages({ client }: { client: ControlClient }) {
         <tbody>{versions.map(v => <tr key={v.packageDigest}><th scope="row">{v.packageId}</th><td>{v.version}</td><td>{(v.manifest?.tools ?? []).map(t => t.descriptor.toolId).join(', ')}</td><td><code title={v.packageDigest}>{v.packageDigest.slice(7, 19)}</code></td><td>{running.has(v.packageDigest) ? `Revision ${running.get(v.packageDigest)?.revision} on ${runsOn(running.get(v.packageDigest)!)}` : 'No'}</td></tr>)}</tbody></Table></div>}
     <section className="guidance"><h2>Upload a package</h2><form onSubmit={upload}>
       <label htmlFor="server-package-file">Package file (.tgpkg)</label>
-      <input id="server-package-file" type="file" accept=".tgpkg" required onChange={e => setFile(e.target.files?.[0])} />
-      <button disabled={busy || !file}>Upload and verify</button></form></section>
+      <input id="server-package-file" type="file" accept=".tgpkg" required disabled={!canImport} onChange={e => setFile(e.target.files?.[0])} />
+      <button disabled={busy || !file || !canImport}>Upload and verify</button></form></section>
     <section className="guidance"><h2>Deploy a version</h2><form onSubmit={deploy}>
       <label htmlFor="server-package-version">Version</label>
       <select id="server-package-version" required value={selected} onChange={e => choose(e.target.value)}><option value="">Choose a version</option>{(versions ?? []).map(v => <option key={v.packageDigest} value={v.packageDigest}>{v.packageId} {v.version}</option>)}</select>
       <label htmlFor="server-package-hosts">Tool Hosts (device ids, comma separated; blank runs on every Tool Host)</label>
-      <input id="server-package-hosts" value={hosts} maxLength={2048} onChange={e => setHosts(e.target.value)} />
+      <input id="server-package-hosts" value={hosts} readOnly={!canDeploy} maxLength={2048} onChange={e => setHosts(e.target.value)} />
       <label htmlFor="server-package-globals">Global and host setting values (JSON)</label>
-      <textarea id="server-package-globals" required maxLength={65536} value={globals} onChange={e => setGlobals(e.target.value)} />
-      <button disabled={busy || !selected}>Deploy</button></form></section>
+      <textarea id="server-package-globals" required readOnly={!canDeploy} maxLength={65536} value={globals} onChange={e => setGlobals(e.target.value)} />
+      <button disabled={busy || !selected || !canDeploy}>Deploy</button></form></section>
     <Marketplace client={client} onImported={() => setAttempt(a => a + 1)} />
   </>;
 }

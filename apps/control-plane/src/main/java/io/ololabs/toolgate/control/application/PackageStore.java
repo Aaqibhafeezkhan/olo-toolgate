@@ -28,4 +28,9 @@ public interface PackageStore {
     /** The oldest queued, unexpired dispatch for this host. */
     Relayed nextRelayed(String hostId,long now);
     void saveRelayed(Relayed relayed);
+    /** The latest ProvisioningStatus of a deployment profile; generation grows with every change. */
+    record Provisioning(String profileId,long generation,String profileDigest,String document) {}
+    Provisioning provisioning(String profileId);
+    /** Inserts generation 1, or replaces exactly the expected previous generation. */
+    void saveProvisioning(Provisioning provisioning);
 }

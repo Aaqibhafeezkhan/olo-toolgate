@@ -27,9 +27,10 @@ final class ServerPackagesTest {
     /** A package as `toolgate pack` lays it out: one Java tool with a global and a brokered destination. */
     static Map<String, byte[]> files() throws Exception { return files(false); }
     /** split: the tool also needs a zip of libraries, which a Java tool may not. */
-    static Map<String, byte[]> files(boolean split) throws Exception {
+    static Map<String, byte[]> files(boolean split) throws Exception { return files(split, "SERVER"); }
+    static Map<String, byte[]> files(boolean split, String kind) throws Exception {
         var descriptor = (ObjectNode) JSON.readTree("""
-            {"descriptorGeneration":1,"toolId":"acme.orders/items.get","mcpName":"orders.items.get","kind":"TOOL","title":"Get item",
+            {"descriptorGeneration":1,"toolId":"acme.orders/items.get","mcpName":"orders.items.get","kind":"SERVER","title":"Get item",
              "description":"Gets one item.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},
              "errors":[],"effect":{"safety":"READ_ONLY","destructive":false,"openWorld":true},"businessKey":{"required":false},
              "execution":{"mode":"SYNC"},"routes":[{"id":"items.get","destination":"items-api","method":"GET","path":"/items/{id}",
@@ -37,6 +38,12 @@ final class ServerPackagesTest {
              "destinations":[{"id":"items-api","hostSetting":"ItemsApiHost","port":443,"spkiPins":[]}],"httpAuth":[],"tcp":[],
              "variables":{"globals":[{"name":"Greeting","type":"STRING","required":true,"sensitive":false,"default":"Hello"}],"secrets":[{"name":"ApiKey","type":"STRING","scope":"TENANT"}],"claims":[]},
              "permissions":["HTTP_ROUTE"],"toolsets":[]}""");
+        descriptor.put("kind", kind);
+        if (kind.equals("CLIENT")) {
+            for (var field : List.of("routes", "destinations", "httpAuth", "tcp", "permissions")) descriptor.putArray(field);
+            var variables = descriptor.putObject("variables");
+            variables.putArray("globals"); variables.putArray("secrets"); variables.putArray("claims");
+        }
         byte[] canonical = Canonical.bytes(descriptor), jar = "jar bytes".getBytes(StandardCharsets.UTF_8);
         String digest = Canonical.sha256(canonical);
         var manifest = (ObjectNode) JSON.readTree("""
@@ -53,6 +60,26 @@ final class ServerPackagesTest {
         manifest.put("descriptorSetDigest", Canonical.digest(set));
         var files = new TreeMap<String, byte[]>();
         files.put("artifacts/app.jar", jar); files.put("tools/items.get.json", canonical); if (split) files.put("artifacts/libs.zip", jar); files.put("toolgate-package.json", JSON.writeValueAsBytes(manifest));
+        var checksums = new StringBuilder();
+        for (var e : files.entrySet()) checksums.append(Canonical.sha256(e.getValue()).substring(7)).append("  ").append(e.getKey()).append('\n');
+        files.put("CHECKSUMS.sha256", checksums.toString().getBytes(StandardCharsets.UTF_8));
+        return files;
+    }
+    /** One package with the server tool and a ClientTool beside it, as the Hello World package ships both. */
+    static Map<String, byte[]> mixed() throws Exception {
+        var files = new TreeMap<>(files()); files.remove("CHECKSUMS.sha256");
+        var manifest = (ObjectNode) JSON.readTree(files.get("toolgate-package.json"));
+        var client = (ObjectNode) manifest.get("tools").get(0).get("descriptor").deepCopy();
+        client.put("toolId", "acme.orders/items.local").put("mcpName", "orders.items.local").put("kind", "CLIENT");
+        for (var field : List.of("routes", "destinations", "httpAuth", "tcp", "permissions")) client.putArray(field);
+        var variables = client.putObject("variables"); variables.putArray("globals"); variables.putArray("secrets"); variables.putArray("claims");
+        byte[] canonical = Canonical.bytes(client);
+        var tool = ((com.fasterxml.jackson.databind.node.ArrayNode) manifest.get("tools")).addObject();
+        tool.set("descriptor", client); tool.put("toolDescriptorDigest", Canonical.sha256(canonical)).put("runtimeId", "jvm"); tool.putArray("artifactIds").add("app");
+        var set = JSON.createArrayNode();
+        for (var t : manifest.get("tools")) set.addObject().put("toolId", t.get("descriptor").get("toolId").asText()).put("toolDescriptorDigest", t.get("toolDescriptorDigest").asText());
+        manifest.put("descriptorSetDigest", Canonical.digest(set));
+        files.put("tools/items.local.json", canonical); files.put("toolgate-package.json", JSON.writeValueAsBytes(manifest));
         var checksums = new StringBuilder();
         for (var e : files.entrySet()) checksums.append(Canonical.sha256(e.getValue()).substring(7)).append("  ").append(e.getKey()).append('\n');
         files.put("CHECKSUMS.sha256", checksums.toString().getBytes(StandardCharsets.UTF_8));
@@ -85,6 +112,48 @@ final class ServerPackagesTest {
         assertThrows(Failure.class, () -> PackageArchive.validate(zip(traversal), document -> (JsonNode) codec.value(document)));
         // RFC 8785: ECMAScript numbers, UTF-16 key order; arguments are not NFC-normalised.
         assertEquals("sha256:" + DirectoryService.digest("{\"a\":1e+21,\"b\":[0.5,\"é\"]}"), Canonical.arguments(JSON.readTree("{\"b\":[0.5,\"é\"],\"a\":1e21}")));
+    }
+
+    @Test void aToolHostPermitIsRefusedForAClientToolEvenWhenTheRequestIsForged() throws Exception {
+        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("forged.sqlite")), codec);
+        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var operations = new EnterpriseOperations(store, codec, null, java.time.Clock.systemUTC(), "control", "toolgate-client", 60000, 256);
+        var packages = new ServerPackages(store, codec, operations, java.time.Clock.systemUTC());
+        String digest = node(packages.upload(actor, zip(mixed()), "upload-mixed").body()).get("packageDigest").asText();
+        var host = new EndpointDeviceRecord("host-1", "tenant", "root", "f".repeat(64), EndpointState.ACTIVE, 1L, 0L, 0L, null, null, true, 1L, null, null);
+        packages.register(tenant, tx -> host, "{\"hostId\":\"host-1\",\"poolId\":\"pool\",\"version\":\"0.10.0\",\"protocol\":{\"min\":2,\"max\":2},\"launcherVersion\":\"0.10.0\",\"tiers\":[\"HOST_NATIVE\"]}", "register");
+        var deployed = node(packages.deploy(actor, "{\"packageDigest\":\"" + digest + "\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"},\"hostIds\":[\"host-1\"]}", "deploy").body());
+        // The deployment exposes only the ServerTool.
+        assertEquals("[\"acme.orders/items.get\"]", deployed.get("toolIds").toString());
+        // An invocation naming the ClientTool on the Tool Host, as a forged or misplaced call would.
+        var arguments = node("{\"id\":\"1\"}");
+        String invocation = """
+            {"id":"inv-forged","requestDigest":"%s","evaluation":{"context":{"requestId":"inv-forged","tenantId":"tenant","mode":"SERVICE","agentId":"agent-1","chain":[],"bindingId":"bind-1","deviceId":"host-1"},
+             "toolId":"acme.orders/items.local","action":"invoke","argumentsDigest":"%s","resources":[],"toolDigest":"%s","packageDigest":"%s","nowUnixMs":0,"authorityRevision":0,"online":true},
+             "state":"QUEUED","revision":1,"authorizationEpoch":0,"expiresAtUnixMs":%d,"completedResources":[],"diagnosticId":"diag"}"""
+            .formatted("a".repeat(64), DirectoryService.digest(codec.json(arguments)), "c".repeat(64), digest.substring(7), System.currentTimeMillis() + 60000);
+        store.transaction(tenant, true, tx -> { tx.enterprise().saveInvocation(codec.model(invocation, EnterpriseInvocation.class), System.currentTimeMillis(), 0); return null; });
+        var gateway = new DirectoryService.Actor(tenant, "e".repeat(64), false);
+        var refused = assertThrows(Failure.class, () -> packages.permit(gateway,
+            "{\"invocationId\":\"inv-forged\",\"audience\":\"host-1\",\"attempt\":1,\"arguments\":{\"id\":\"1\"}}", "permit"));
+        assertEquals(403, refused.status()); assertEquals("Tool execution location does not allow this target", refused.getMessage());
+        assertNull(store.transaction(tenant, false, tx -> tx.packages().relayed("inv-forged")));
+        // Control: the same request for the ServerTool passes the location check and is refused only later
+        // (this test has no execution binding or signer), so the refusal above is the execution-location rule.
+        store.transaction(tenant, true, tx -> { tx.enterprise().saveInvocation(codec.model(invocation.replace("inv-forged", "inv-server").replace("acme.orders/items.local", "acme.orders/items.get"), EnterpriseInvocation.class), System.currentTimeMillis(), 0); return null; });
+        var server = assertThrows(RuntimeException.class, () -> packages.permit(gateway,
+            "{\"invocationId\":\"inv-server\",\"audience\":\"host-1\",\"attempt\":1,\"arguments\":{\"id\":\"1\"}}", "permit-server"));
+        assertNotEquals("Tool execution location does not allow this target", server.getMessage());
+    }
+
+    @Test void clientOnlyPackagesCannotBeDeployedToServerHosts() throws Exception {
+        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("client-package.sqlite")), codec);
+        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        String digest = node(packages.upload(actor, zip(files(false, "CLIENT")), "upload-client").body()).get("packageDigest").asText();
+        assertEquals(422, assertThrows(Failure.class, () -> packages.deploy(actor,
+            "{\"packageDigest\":\"" + digest + "\",\"globals\":{}}", "deploy-client")).status());
+        assertNull(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))));
     }
 
     @Test void deploymentWritesDisabledToolsAndTheHostFetchesThem() throws Exception {

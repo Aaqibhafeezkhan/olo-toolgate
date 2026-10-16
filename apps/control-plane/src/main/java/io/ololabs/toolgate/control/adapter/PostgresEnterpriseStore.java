@@ -44,14 +44,17 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
     }
     public EnterpriseInvocation invocation(String id){try(var s=query("SELECT document FROM control_enterprise_invocations WHERE tenant_id=? AND invocation_id=?",id);var rows=s.executeQuery()){return rows.next()?codec.model(rows.getString(1),EnterpriseInvocation.class):null;}catch(SQLException failure){throw Failure.unavailable();}}
     public void saveInvocation(EnterpriseInvocation value,long createdAt,long expectedRevision){
-        String document=checked(value,EnterpriseInvocation.class);int changed;
+        String document=checked(value,EnterpriseInvocation.class);int changed;String previous=null;
         try{
+            // Every ledger transition is recorded as a platform run event in the same transaction.
+            if(expectedRevision!=0)try(var s=query("SELECT state FROM control_enterprise_invocations WHERE tenant_id=? AND invocation_id=? AND revision=?",value.id(),expectedRevision);var rows=s.executeQuery()){if(rows.next())previous=rows.getString(1);}
             if(expectedRevision==0)try(var s=query("INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,authorization_epoch,created_at,expires_at,revision,document) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",value.id(),value.requestDigest(),value.state().name(),value.authorizationEpoch(),createdAt,value.expiresAtUnixMs(),value.revision(),document)){changed=s.executeUpdate();}
             else try(var s=connection.prepareStatement("UPDATE control_enterprise_invocations SET state=?,authorization_epoch=?,expires_at=?,revision=?,document=? WHERE tenant_id=? AND invocation_id=? AND revision=? AND request_digest=?")){
                 s.setString(1,value.state().name());s.setLong(2,value.authorizationEpoch());s.setLong(3,value.expiresAtUnixMs());s.setLong(4,value.revision());s.setString(5,document);s.setString(6,tenant);s.setString(7,value.id());s.setLong(8,expectedRevision);s.setString(9,value.requestDigest());changed=s.executeUpdate();
             }
             if(changed!=1)throw Failure.conflict();
         }catch(SQLException failure){throw Failure.unavailable();}
+        if(!value.state().name().equals(previous))RunEvents.recordState(new JdbcRunEventStore(connection,tenant),value.id(),value.state().name(),System.currentTimeMillis());
     }
     public long invocationsSince(long since){try(var s=query("SELECT count(*) FROM control_enterprise_invocations WHERE tenant_id=? AND created_at>=? AND state NOT IN('CANCELLED','EXPIRED')",since);var rows=s.executeQuery()){rows.next();return rows.getLong(1);}catch(SQLException failure){throw Failure.unavailable();}}
     public EnterpriseApproval approval(String id){try(var s=query("SELECT document FROM control_enterprise_approvals WHERE tenant_id=? AND approval_id=?",id);var rows=s.executeQuery()){return rows.next()?codec.model(rows.getString(1),EnterpriseApproval.class):null;}catch(SQLException failure){throw Failure.unavailable();}}

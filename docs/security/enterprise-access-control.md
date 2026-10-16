@@ -603,7 +603,7 @@ Agents have their own top-level menu, separate from Users and Devices.
 | Left menu | Target child screens |
 |---|---|
 | Audit | Audit log, operation approvals, authorization history |
-| Tools | Tools, Tool Groups, Policies, Tool builder, built-in tools/vault, client tool requests |
+| Tools | Tools, Tool Groups, Policies, Tool builder, local vault, client tool requests |
 | Devices | Clients/Devices, Device Groups, enrollment, packages |
 | Users | Users, Teams, Human/Management Roles, human access review |
 | Agents | Agents, Agent Groups, Actor/Service Roles, group access mappings, delegation, credential lifecycle, agent access review |

@@ -51,11 +51,8 @@ pub struct ClientService {
     remote_job: Option<crate::remote::Job>,
     remote_result: Option<RemoteToolResult>,
     adoption: Option<EndpointAdoption>,
-    builder_job: Option<crate::builder::Job>,
-    builder_result: Option<BuilderTestResult>,
     deployment: crate::deployment::State,
     execution: Option<crate::execution::Manager>,
-    tools: Option<crate::builtins::Executor>,
     store: ProtectedStore,
     _lease: ServiceLease,
     key: Arc<DeviceKey>,
@@ -113,34 +110,19 @@ impl ClientService {
         } else {
             EndpointState::Unenrolled
         };
-        let tools = if let Some(settings) = &config.tools {
-            let contracts = Arc::new(crate::contracts::Contracts::new()?);
-            Some(
-                crate::builtins::Executor::new(
-                    settings,
+        let execution =
+            if let (Some(settings), Some(gateway)) = (&config.execution, &config.gateway) {
+                Some(crate::execution::Manager::new(
+                    settings.clone(),
                     Arc::new(crate::tool_gateway::HttpsGateway::new(
-                        settings, &config, contracts,
+                        gateway,
+                        &config,
+                        Arc::new(crate::contracts::Contracts::new()?),
                     )?),
-                )?
-                .with_packet_log(crate::diagnostics::PacketLog::open(
-                    config.state_directory.clone(),
-                )?),
-            )
-        } else {
-            None
-        };
-        let execution = if let (Some(settings), Some(tools)) = (&config.execution, &config.tools) {
-            Some(crate::execution::Manager::new(
-                settings.clone(),
-                Arc::new(crate::tool_gateway::HttpsGateway::new(
-                    tools,
-                    &config,
-                    Arc::new(crate::contracts::Contracts::new()?),
-                )?),
-            )?)
-        } else {
-            None
-        };
+                )?)
+            } else {
+                None
+            };
         let deployment = if let Some(settings) = &config.deployment {
             crate::deployment::State::open(&store, settings)?
         } else {
@@ -158,11 +140,8 @@ impl ClientService {
                 }
                 None => None,
             },
-            builder_job: None,
-            builder_result: None,
             deployment,
             execution,
-            tools,
             store,
             _lease: lease,
             key,
@@ -202,21 +181,22 @@ impl ClientService {
         self.save()?;
         Ok(now)
     }
-    fn local_catalog(&self) -> Vec<BuiltinToolInfo> {
-        let mut tools = self.tools.as_ref().map(|e| e.catalog()).unwrap_or_default();
-        if let Some(manager) = &self.execution {
-            tools.extend(manager.catalog());
-        }
+    fn local_catalog(&self) -> Vec<LocalToolInfo> {
+        let mut tools = self
+            .execution
+            .as_ref()
+            .map(|m| m.catalog())
+            .unwrap_or_default();
         tools.retain(|tool| tool.enabled);
         tools.sort_by(|a, b| a.tool_id.cmp(&b.tool_id));
         tools.dedup_by(|a, b| a.tool_id == b.tool_id);
         tools
     }
-    pub async fn tool_catalog(&self, agent: Option<&str>) -> Result<Vec<BuiltinToolInfo>> {
+    pub async fn tool_catalog(&self, agent: Option<&str>) -> Result<Vec<LocalToolInfo>> {
         if !self.health().ready {
             return Err(Failure::Unavailable);
         }
-        let settings = self.config.tools.as_ref().ok_or(Failure::Unavailable)?;
+        let settings = self.config.gateway.as_ref().ok_or(Failure::Unavailable)?;
         let gateway = crate::tool_gateway::HttpsGateway::new(
             settings,
             &self.config,
@@ -232,7 +212,7 @@ impl ClientService {
     }
     pub async fn execute_tool(
         &mut self,
-        invocation: BuiltinInvocation,
+        invocation: LocalToolCall,
     ) -> Result<std::collections::BTreeMap<String, serde_json::Value>> {
         if self.remote_job.is_some() {
             return Err(Failure::Conflict);
@@ -248,7 +228,7 @@ impl ClientService {
             .ok_or(Failure::Unauthorized)?;
         if self
             .config
-            .tools
+            .gateway
             .as_ref()
             .is_none_or(|s| s.device_id != identity.device_id)
         {
@@ -263,11 +243,20 @@ impl ClientService {
         if valid_until < now.saturating_add(20000) {
             return Err(Failure::Expired);
         }
-        self.tools
+        // Local callers reach only signed managed registrations, through the same execution path as remote tasks.
+        let input = LocalToolInput {
+            protocol_version: 1,
+            request_id: crate::identity::nonce()?,
+            tool_id: invocation.tool_id,
+            arguments: invocation.arguments,
+        };
+        Ok(self
+            .execution
             .as_mut()
             .ok_or(Failure::Unsupported)?
-            .execute(invocation, valid_until)
-            .await
+            .invoke(input, valid_until)
+            .await?
+            .output)
     }
     fn save(&self) -> Result<()> {
         self.store.write(
@@ -301,15 +290,10 @@ impl ClientService {
         } else {
             Ok(())
         };
-        let job_cleanup = if let Some(mut job) = self.builder_job.take() {
-            job.shutdown().await
-        } else {
-            Ok(())
-        };
         if let Some(manager) = &self.execution {
             manager.shutdown().await?;
         }
-        job_cleanup.and(remote_cleanup)
+        remote_cleanup
     }
     pub async fn invoke_runtime(&mut self, input: LocalToolInput) -> Result<LocalToolOutput> {
         if self.remote_job.is_some() {
@@ -326,7 +310,7 @@ impl ClientService {
             .ok_or(Failure::Unauthorized)?;
         if self
             .config
-            .tools
+            .gateway
             .as_ref()
             .is_none_or(|s| s.device_id != identity.device_id)
         {
@@ -379,7 +363,7 @@ impl ClientService {
             return Ok(());
         }
         let base = self.config.execution.clone().ok_or(Failure::Unsupported)?;
-        let gateway_settings = self.config.tools.as_ref().ok_or(Failure::Unsupported)?;
+        let gateway_settings = self.config.gateway.as_ref().ok_or(Failure::Unsupported)?;
         let authorization = Arc::new(crate::tool_gateway::HttpsGateway::new(
             gateway_settings,
             &self.config,
@@ -604,57 +588,6 @@ impl ClientService {
         ));
         Ok(())
     }
-    async fn builder_test(&mut self, identity: &DeviceIdentity) -> Result<()> {
-        let Some(settings) = self.config.deployment.clone() else {
-            return Ok(());
-        };
-        if let Some(job) = &mut self.builder_job {
-            let Some(result) = job.completed().await else {
-                return Ok(());
-            };
-            self.builder_job = None;
-            self.builder_result = Some(result);
-        }
-        if let Some(result) = self.builder_result.clone() {
-            let response = self
-                .control
-                .builder_result(identity.clone(), result.clone())
-                .await;
-            if matches!(response, Err(Failure::Conflict | Failure::Expired)) {
-                // An expired/replaced lease must not fence the next queued job forever.
-                self.builder_result = None;
-            }
-            let response = response?;
-            if response.id != result.job_id
-                || response.definition_digest != result.definition_digest
-            {
-                return Err(Failure::Unauthorized);
-            }
-            tracing::info!(event="builder_test",job_id=%result.job_id,result=if result.success {"passed"} else {"failed"});
-            self.builder_result = None;
-        }
-        if self.config.execution.is_none() || self.config.tools.is_none() {
-            return Ok(());
-        }
-        let poll = self.control.builder_poll(identity.clone()).await?;
-        let Some(signed) = poll.task else {
-            return Ok(());
-        };
-        let server = self
-            .journal
-            .manifest
-            .as_ref()
-            .ok_or(Failure::Unauthorized)?
-            .server_id
-            .clone();
-        let task = crate::builder::verify(&settings, &signed, identity, &server, self.clock()?)?;
-        self.builder_job = Some(crate::builder::Job::start(
-            self.config.clone(),
-            task,
-            self.activity.clone(),
-        ));
-        Ok(())
-    }
     pub fn health(&self) -> ClientHealth {
         let now = crate::now().max(
             self.boot_time.saturating_add(
@@ -807,8 +740,6 @@ impl ClientService {
         self.journal.reenrollment = true;
         self.remote_job = None;
         self.remote_result = None;
-        self.builder_job = None;
-        self.builder_result = None;
         self.state = EndpointState::Unenrolled;
     }
     fn follow_enrollment(&mut self, directive: &EndpointConnectionDirective) -> Result<()> {
@@ -827,9 +758,6 @@ impl ClientService {
         let result = self.tick_inner().await;
         if let Err(failure) = result {
             if let Some(job) = &self.remote_job {
-                job.cancel();
-            }
-            if let Some(job) = &self.builder_job {
                 job.cancel();
             }
             self.failures = self.failures.saturating_add(1);
@@ -860,9 +788,6 @@ impl ClientService {
         match directive.action {
             EndpointConnectionAction::Wait => {
                 if let Some(job) = &self.remote_job {
-                    job.cancel();
-                }
-                if let Some(job) = &self.builder_job {
                     job.cancel();
                 }
                 self.journal.revoked = directive.state == EndpointState::Revoked;
@@ -1101,12 +1026,6 @@ impl ClientService {
                 return Err(failure);
             }
         }
-        if let Err(failure) = self.builder_test(&identity).await {
-            tracing::warn!(event="builder_test",result="rejected",error=?failure);
-            if failure == Failure::Revoked {
-                return Err(failure);
-            }
-        }
         Ok(())
     }
     /// True when this gateway's last acknowledged report matches the owner's switch.
@@ -1327,7 +1246,7 @@ mod tests {
         let config = Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: "https://control.example.test".into(),
             state_directory: directory.clone(),
             ipc_endpoint: {
@@ -1456,130 +1375,6 @@ mod tests {
         service.receive_remote(&identity, task).unwrap();
         assert!(service.remote_job.is_none());
         assert_eq!(service.remote_result, Some(result));
-        drop(service);
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-    #[tokio::test]
-    async fn relayed_builtin_requires_current_authorization_before_effect() {
-        let (service, gateway, directory) = test_service();
-        let identity: DeviceIdentity =
-            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
-        let mut task = remote_task(&identity, gateway.deadline.load(Ordering::SeqCst));
-        task.request.tool_id = "hotfolder.write_text".into();
-        task.request.action = "write".into();
-        task.request.arguments =
-            serde_json::from_value(serde_json::json!({"path":"test.txt","text":"allowed"}))
-                .unwrap();
-        let mut config = service.config.clone();
-        let mut settings = crate::remote::builtin_settings(&config);
-        settings.authorization_profiles = crate::authorization_profile::builtin_profiles().unwrap();
-        config.tools = Some(settings);
-        let bind = |task: &mut RemoteToolTask| {
-            let settings = config.tools.as_ref().unwrap();
-            let profile = settings
-                .authorization_profiles
-                .iter()
-                .find(|p| p.tool.id == task.request.tool_id)
-                .unwrap();
-            let e = &mut task.invocation.evaluation;
-            e.tool_id = task.request.tool_id.clone();
-            e.action = task.request.action.clone();
-            e.tool_digest = crate::authorization_profile::tool_digest(profile).unwrap();
-            e.package_digest = profile.tool.package_digest.clone();
-            e.arguments_digest =
-                crate::digest(&serde_json::to_vec(&task.request.arguments).unwrap());
-            e.resources = vec![ResourceDescriptor {
-                kind: ResourceKind::File,
-                locator: "test.txt".into(),
-            }];
-            *gateway.consumption.lock().unwrap() = Some(task.invocation.clone());
-        };
-        gateway
-            .deadline
-            .store(crate::now() + 300000, Ordering::SeqCst);
-        task.expires_at_unix_ms = gateway.deadline.load(Ordering::SeqCst);
-        bind(&mut task);
-        let mut job = crate::remote::Job::start(
-            config.clone(),
-            None,
-            gateway.clone(),
-            identity.clone(),
-            task.clone(),
-            service.activity.clone(),
-        );
-        let completed = async |job: &mut crate::remote::Job| {
-            tokio::time::timeout(std::time::Duration::from_secs(90), async {
-                loop {
-                    if let Some(result) = job.completed().await {
-                        break result;
-                    }
-                    tokio::task::yield_now().await;
-                }
-            })
-            .await
-            .unwrap()
-        };
-        let outcome = completed(&mut job).await;
-        assert!(outcome.output.is_some(), "{outcome:?}");
-        assert_eq!(
-            std::fs::read_to_string(directory.join("hotfolder/test.txt")).unwrap(),
-            "allowed"
-        );
-        gateway.revoked.store(true, Ordering::SeqCst);
-        task.request
-            .arguments
-            .insert("text".into(), serde_json::json!("revoked"));
-        bind(&mut task);
-        let mut denied = crate::remote::Job::start(
-            config.clone(),
-            None,
-            gateway.clone(),
-            identity,
-            task.clone(),
-            service.activity.clone(),
-        );
-        assert_eq!(
-            completed(&mut denied).await.error,
-            Some(ErrorCode::Forbidden)
-        );
-        assert_eq!(gateway.authorizations.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            std::fs::read_to_string(directory.join("hotfolder/test.txt")).unwrap(),
-            "allowed"
-        );
-        gateway.revoked.store(false, Ordering::SeqCst);
-        task.request
-            .arguments
-            .insert("text".into(), serde_json::json!("a".repeat(65536)));
-        bind(&mut task);
-        let mut large_write = crate::remote::Job::start(
-            config.clone(),
-            None,
-            gateway.clone(),
-            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap(),
-            task.clone(),
-            service.activity.clone(),
-        );
-        assert!(completed(&mut large_write).await.output.is_some());
-        task.request.tool_id = "hotfolder.read_text".into();
-        task.request.action = "read".into();
-        task.request.arguments.remove("text");
-        bind(&mut task);
-        let mut large_read = crate::remote::Job::start(
-            config.clone(),
-            None,
-            gateway.clone(),
-            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap(),
-            task,
-            service.activity.clone(),
-        );
-        let oversized = completed(&mut large_read).await;
-        assert!(oversized.output.is_none());
-        assert_eq!(oversized.error, Some(ErrorCode::Validation));
-        drop(large_write);
-        drop(large_read);
-        drop(job);
-        drop(denied);
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
     }
@@ -1989,8 +1784,8 @@ mod tests {
             organization_keys: vec![],
             release_keys: vec![],
         });
-        service.builder_job = Some(crate::builder::Job::waiting(
-            serde_json::from_value(fixtures["BuilderTestTask"].clone()).unwrap(),
+        service.remote_job = Some(crate::remote::Job::waiting(
+            serde_json::from_value(fixtures["RemoteToolTask"].clone()).unwrap(),
         ));
         tokio::time::timeout(std::time::Duration::from_secs(1), service.tick())
             .await
@@ -2010,7 +1805,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(550)).await;
         assert_eq!(service.tick().await, Err(Failure::Revoked));
         assert_eq!(service.health().state, EndpointState::Revoked);
-        let mut job = service.builder_job.take().unwrap();
+        let mut job = service.remote_job.take().unwrap();
         let result = tokio::time::timeout(std::time::Duration::from_secs(1), async {
             loop {
                 if let Some(result) = job.completed().await {
@@ -2021,7 +1816,7 @@ mod tests {
         })
         .await
         .unwrap();
-        assert!(!result.success);
+        assert!(result.output.is_none());
         assert_eq!(result.error, Some(ErrorCode::Forbidden));
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();

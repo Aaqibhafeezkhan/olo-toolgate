@@ -13,7 +13,8 @@
 | Permit | Short-lived signed authorization for one protected execution |
 | Desired State | What the Control Plane wants installed/configured on a client |
 | Reported State | What the client reports is actually installed and healthy |
-| HotFolder | Managed local folder used by safe built-in file tools |
+| Files area | The one confined folder a device offers package tools that declare `@DeviceFileAccess` (ADR 027) |
+| HotFolder | The `examples.hotfolder` package: file tools on a device's files area |
 | Vault | Credential provider |
 | ALLOW | Execute |
 | ASK | Require approval |

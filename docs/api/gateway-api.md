@@ -35,8 +35,7 @@ server/discover works and lists `2026-07-28`. Ping is not part of 2026-07-28
 and returns method not found on that path. With the optional `localMcp` relay enabled, tools/list
 returns device-scoped installed definitions applicable to this agent. ALLOW tools/call
 requests are queued in Control for the next client poll and return a bounded result.
-Managed tools use their fixed CUSTOM `runtime/<tool-id>` resource, and builtins use
-registered extraction. ASK blocks. Without relay mode, discovery is empty and execution
+Package tools use their fixed CUSTOM `tool://<tool-id>` resource. ASK blocks. Without relay mode, discovery is empty and execution
 is unsupported. Unknown methods, 2026-07-28 notifications and streaming subscriptions
 reject; GET/DELETE return 405.
 

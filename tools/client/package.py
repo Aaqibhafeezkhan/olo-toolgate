@@ -94,8 +94,8 @@ def package(binary, target, output):
     files['packages/contracts/VERSION']=(ROOT/'packages/contracts/VERSION').read_bytes()
     for example in (ROOT/'examples/local-runtime-python').iterdir():
         if example.is_file(): files['examples/local-runtime-python/'+example.name]=example.read_bytes()
-    for example in (ROOT/'examples/tool-builder-python').iterdir():
-        if example.is_file(): files['examples/tool-builder-python/'+example.name]=example.read_bytes()
+    for example in (ROOT/'examples/tool-builder-json').iterdir():
+        if example.is_file(): files['examples/tool-builder-json/'+example.name]=example.read_bytes()
     for tool in ['tools/builder/sign.py','tools/requirements.txt']:
         files[tool]=(ROOT/tool).read_bytes()
     signature=binary.with_name(binary.name+'.sig')
