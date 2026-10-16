@@ -5,17 +5,16 @@ Product releases use **Prepare release branch** (`create-release-branch.yml`) an
 [step-by-step release guide](how-to-release.md) for inputs, version allocation,
 build-only inspection, publication, credentials and recovery.
 
-**ToolGate CI and release** (`ci.yml`) owns automatic main development
-publication. Its old `v*` trigger is removed so the two manual jobs own product
-releases. Admission and preflight run once, then shared foundation checks and
-six native platform jobs run in parallel. Production image checks consume their
-verified artifacts; the common publisher requires every prerequisite from that
-exact run and commit. See [check ownership](ci-check-ownership.md) and
-[RC admission](ci-admission.md).
+**ToolGate CI** (`ci.yml`) validates main without publishing development builds.
+Admission and preflight run once, then foundation checks and six native platform
+jobs run in parallel. Production image checks consume their verified artifacts.
+Development publication is explicitly manual and accepts any source branch plus
+latest or an ancestor commit: see [development releases](development-releases.md).
+See [check ownership](ci-check-ownership.md) and [RC admission](ci-admission.md).
 
 ## Publication channels
 
-Main publishes tested images to Docker Hub and an immutable GitHub prerelease.
+Manual development release publishes versioned images to Docker Hub and an immutable GitHub prerelease.
 The product release workflow builds an immutable prepared commit and publishes
 its tested image archives to versioned GHCR coordinates, its checked Helm chart
 to OCI, contracts to Maven/GitHub npm Packages, and native/source/library assets
@@ -47,8 +46,8 @@ for all five image digests and release assets must succeed before the GitHub
 release becomes public. Registry writes across Maven, npm, GHCR and OCI are not atomic;
 inspect partial publication before retrying a failed run. Shared preparation
 collects verified artifacts without invoking Gradle before handing them to
-the core release publisher. GitHub development
-releases include the checked foundation Java artifacts at their source version.
+the core release publisher. Manual development releases build Java artifacts
+at the same development version as the binaries.
 Maven version metadata remains available, but development runs do not upload to
 a Maven repository. Failures remain visible in the job and overall workflow result.
 The product publisher requires every registry and provenance step before
@@ -57,7 +56,7 @@ conflicting versions are never replaced.
 
 ## Credentials and Maven Central
 
-`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are required for automatic development
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are required for manual development
 images. An optional `DOCKERHUB_NAMESPACE` variable selects an organization.
 GitHub Packages and GHCR use the workflow's built-in `GITHUB_TOKEN`; existing
 package access controls must grant the repository permission to publish.
@@ -81,10 +80,11 @@ Product release finalization requires Maven, npm, images, chart and provenance t
 succeed. Development publication remains independent of Maven.
 
 Product releases and automatic CI both enable `run_tests` and complete foundation,
-native and image verification before publication. The separate manual development
-entry point is restricted to main
+native and image verification. Only product releases publish afterward. Manual
+development release keeps its workflow controls on main, accepts any source branch,
 and sets `run_tests: false`: it builds and publishes without tests, scans or
-smoke checks. Its image/GitHub and npm publisher jobs depend only on preparation.
+smoke checks. Its image/GitHub and npm publisher jobs depend on source selection
+and the completed build.
 
 Development GitHub releases are assembled as drafts. Uploads run one file at a
 time and resume existing assets only when their SHA-256 digest and size match
@@ -113,6 +113,6 @@ their exact digest, runtime version, license inventory, SBOM, vulnerability scan
 and provenance before deployment. First-use pull requires an approved pinned image
 and system-accessible engine; no engine installer or registry secret is embedded.
 
-The explicitly dispatched [manual development release](development-releases.md#one-manual-trigger-build-and-publish-only)
+The explicitly dispatched [manual development release](development-releases.md#run-a-development-release)
 retains its previously requested build-only exception. It has no automatic
 push/tag/schedule trigger and does not claim CI validation or signing.

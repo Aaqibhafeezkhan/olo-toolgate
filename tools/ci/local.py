@@ -49,6 +49,8 @@ POLICY = {
     'development-release.publish': 'publication',
     'development-release.publish-marketplace': 'publication',
     'manual-development-release.native': 'native',
+    'manual-development-release.select': 'publication',
+    'manual-development-release.prepare': 'artifacts',
     'manual-development-release.build': 'publication',
     'manual-development-release.publish': 'publication',
     'manual-development-release.publish-typescript': 'publication',

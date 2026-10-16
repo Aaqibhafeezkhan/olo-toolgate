@@ -137,6 +137,11 @@ def write_json(path, value):
 def stamp(root, info):
     """Run source-compatible generators without registry credentials or network dependency updates."""
     identity.validate(info)
+    stamp_versions(root, info)
+
+
+def stamp_versions(root, info):
+    """Apply an already validated product or development identity to every package."""
     # Older main/release commits may predate these standalone packaging adapters.
     # Carry the controller's adapters into the prepared commit so its exact tree
     # remains buildable, including the same release number on every platform.

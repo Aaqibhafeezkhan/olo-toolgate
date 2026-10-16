@@ -29,7 +29,7 @@ class SharedReleaseJobTests(unittest.TestCase):
         automatic = workflow('ci')['jobs']
         self.assertIs(automatic['clients']['with']['run_tests'],True)
         self.assertIs(automatic['images']['with']['run_tests'],True)
-        self.assertEqual(set(automatic['release']['needs']),{'foundation','clients','images'})
+        self.assertNotIn('release',automatic)
         self.assertEqual(set(automatic['images']['needs']),{'foundation','clients'})
         for name in ('client','images'):
             self.assertIs(workflow(name)['on']['workflow_call']['inputs']['run_tests']['default'],True)
@@ -41,7 +41,7 @@ class SharedReleaseJobTests(unittest.TestCase):
         self.assertNotIn('foundation',manual)
         self.assertNotIn('admission',manual)
         for job in ('publish','publish-typescript'):
-            self.assertEqual(manual[job]['needs'],'build')
+            self.assertEqual(manual[job]['needs'],['select','build'])
         images = workflow('images')['jobs']['verify']['steps']
         foundation = next(s for s in images if s.get('with',{}).get('name') == 'foundation-evidence')
         self.assertEqual(foundation['if'],'${{ inputs.run_tests }}')
@@ -49,7 +49,7 @@ class SharedReleaseJobTests(unittest.TestCase):
         self.assertEqual(manual_build['if'],'${{ !inputs.run_tests }}')
         self.assertIn('manual_development.py build',manual_build['run'])
         for step in images:
-            if step.get('with',{}).get('name','').startswith('manual-development-'):
+            if step.get('with',{}).get('name','').startswith('manual-development-') and step.get('with',{}).get('name') != 'manual-development-source':
                 self.assertEqual(step['if'],'${{ !inputs.run_tests }}')
 
     def test_nested_reusable_workflows_never_request_more_permissions_than_callers(self):

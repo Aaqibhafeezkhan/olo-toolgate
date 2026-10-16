@@ -1,155 +1,89 @@
-# Copyright 2026 OLO Labs
-# SPDX-License-Identifier: Apache-2.0
-# Development releases from main
+# Development releases
 
-## One manual trigger, build and publish only
+Development packages are published only through **Manual development release
+(build and publish only)**. Main CI runs validation and does not publish development
+images, packages or GitHub releases. Product Beta/RC/stable releases use the
+separate [two-job release guide](how-to-release.md).
 
-Open **Actions → Manual development release (build and publish only) → Run
-workflow**, select **main**, and run it. No inputs or `RC:` comment are required.
-The direct link is
-[manual development release](https://github.com/olo-labs/olo-toolgate/actions/workflows/manual-development-release.yml).
-The CLI equivalent is `gh workflow run manual-development-release.yml --ref main`.
+## Run a development release
 
-This explicit manual workflow works while automatic CI is paused. It builds fresh
-artifacts from the selected main commit without test suites, CI admission/preflight,
-format/lint checks, security scans, smoke tests, signing or waiting for CI evidence.
-Compilation and packaging still need to succeed. Existing packaging tools retain
-their payload format and dependency-download integrity checks.
+1. Open [Manual development release](https://github.com/olo-labs/olo-toolgate/actions/workflows/manual-development-release.yml)
+   in Actions and select **Run workflow**.
+2. Keep **Use workflow from: main**. These are the reviewed workflow controls.
+3. Enter **source_branch**: `main`, a `release/*` branch, or any existing feature
+   branch in this repository. Fork branches must first be pushed to this repository.
+4. Set **source_commit** to `latest` or a full 40-character lowercase commit SHA.
+   A specific SHA must be in the selected branch's history. `latest` is resolved
+   once at the beginning; all builders use that pinned SHA even if the branch moves.
+5. Run the workflow and inspect its version/source summary. Download packages
+   from the resulting GitHub prerelease.
 
-One run publishes:
+CLI examples:
 
-- Control, Gateway, Quickstart and Linux device containers to the configured Docker Hub namespace,
-  with unique `dev-<12-character-commit>-<run-id>-<attempt>` tags, the commit's
-  `dev-<12-character-commit>` alias, and `dev` if that commit is still current main.
-- The TypeScript library to GitHub npm Packages with the `dev` distribution tag.
-  Registry versions include the run ID,
-  attempt and commit, so a rerun gets fresh coordinates.
-- The Helm chart to GitHub OCI, and a GitHub prerelease containing raw contracts,
-  Rust `.crate`, PHP distribution, TypeScript tarball, Java artifacts, six native
-  clients/installers, checksums, licenses and release metadata. Windows ZIPs remain
-  internal build inputs; public Windows installation uses the combined installer.
+```sh
+gh workflow run manual-development-release.yml --ref main -f source_branch=main -f source_commit=latest
 
-The packaged chart points to this run's Docker Hub namespace and unique development
-image tag. Kubernetes deployment credentials and enablement remain installation settings.
+gh workflow run manual-development-release.yml --ref main -f source_branch=feature/my-change -f source_commit=latest
 
-| Artifact | Purpose | Location |
-|----------|---------|----------|
-| Control, Gateway, Quickstart, Linux device containers | Run platform services and endpoint devices | Docker Hub (`dev-<commit>` tags) |
-| Native client installers (`.setup.exe`/`.dmg`/`.run`) | Desktop installation | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
-| Java JARs + POM | JVM integration | GitHub prerelease assets; Maven publication is paused |
-| TypeScript library | Node/browser integration | GitHub npm Packages (`dev` dist-tag) |
-| Rust `.crate` / PHP distribution | Rust and PHP integration | [GitHub Releases](https://github.com/olo-labs/olo-toolgate/releases) prerelease assets |
-| Helm chart | Kubernetes deployment | GitHub OCI registry |
+# Replace this example SHA with an ancestor commit from your source branch.
+gh workflow run manual-development-release.yml --ref main -f source_branch=release/1.0.0-beta.42 -f source_commit=0123456789abcdef0123456789abcdef01234567
+```
 
-The source product/wire version stays unchanged; Rust crate/native binary versions
-retain their source version. Release metadata identifies the commit and states
-`verification: not-run` and `tests: not-run`. Production `latest` is unchanged.
+The workflow builds and publishes without CI admission, lint, tests, smoke tests,
+security scans or installer signing. Compilation, package integrity checks and
+source/version checks still apply. Use it for development evaluation; product
+releases retain their full validation and provenance gates.
 
-Use the existing `development-release` environment/repository secrets:
-`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, and optional `DOCKERHUB_NAMESPACE` variable.
-GitHub npm/Helm use the
-workflow's Packages write permission. Any configured GitHub environment approval
-still applies. Registry publication is not atomic; inspect a failed run before
-rerunning it. After native packaging and the shared build succeed, the core
-image/Helm/GitHub release and TypeScript publishers run as
-parallel jobs. They consume the prepared artifacts and have no dependencies on
-each other. A failure still fails its job and the workflow, while the other
-publishers continue. The core publisher retains the ordering needed to include
-container digests in the GitHub prerelease. This workflow has no automatic
-push/tag/schedule trigger.
+## One version and isolated aliases
 
-## Existing CI-backed development releases
+Every generated first-party binary/package uses one SemVer, for example
+`1.0.0-dev.123456789.1.g0123456789ab`. Its base comes from the selected commit's
+`VERSION`; the suffix contains the workflow run ID, attempt and commit prefix.
+Native clients, CLI/browser host, containers, UI, contracts, Java, Rust, PHP,
+TypeScript and Helm all receive that same version before compilation. Numeric-only
+OS/extension fields are derived from the base version and workflow run number;
+the run number must fit 1..65535. This does not allocate or consume product Beta/RC
+release counters. Preparation does not commit version edits to the source branch.
 
-The release stage of **ToolGate CI and release** publishes after foundation,
-all six native platform jobs, public client packaging and production image checks
-succeed. It verifies and downloads artifacts from that exact workflow run and
-commit. Failed, skipped, cancelled or missing prerequisites prevent publication.
-Dispatch `ci.yml` on main to repeat this complete flow. The publisher does not
-wait for its own unfinished job. Legacy five-run preparation remains available
-only for compatibility callers. Shared preparation hands the verified artifacts
-to the core release publisher.
+Container tags use the full version. The Helm chart uses that version for its
+chart, app version and image tags. GitHub prerelease names also include a branch
+key and run identity. Branch keys use a readable slug plus a hash, so similar
+branch names cannot share an alias.
 
-Maven publication is disconnected from both development workflows to avoid
-registry publication limits. Java artifacts are still built and included in
-GitHub prereleases. The reusable Maven workflow and publishing implementation
-are retained for compatibility callers; the new product release workflow publishes
-Maven artifacts only for prepared product releases.
+Docker and npm expose a `dev-<branch-key>` alias only when the selected SHA is still
+the current head of that branch. The shared `dev` alias is updated only by a manual
+release selecting **main** at its current head. A feature or release branch cannot
+update shared `dev`, even if its SHA equals main. Older commits still publish their
+unique version without advancing branch aliases. Production `latest` is unchanged.
 
-Automatic CI and development release admission require `TOOLGATE_CI_ENABLED=true`
-and a PR title starting with `RC:`. Push and release events resolve the merged PR
-for the exact commit through GitHub's API, so the default `Merge pull request ...`
-commit message is accepted when the PR has an RC title. Manual dispatch checks
-the selected commit's merged PR title and requires no comment input.
+## Outputs and credentials
 
-Configure the `development-release` GitHub environment. Repository secrets also
-work: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are required. The optional repository
-variable `DOCKERHUB_NAMESPACE` overrides the Docker Hub username as the destination.
-The token must have push access to the destination repositories:
+- Docker Hub: Control, Gateway, Quickstart, Linux device and secured Linux device.
+- GitHub npm Packages: `@olo-labs/toolgate-contracts`.
+- GitHub OCI: the Helm chart, pinned to this run's images.
+- GitHub prerelease: six native clients/installers (Windows, macOS and Linux, x64
+  and ARM64), browser extension, contracts, Rust/PHP/TypeScript packages, Java
+  artifacts, release notes, licenses, checksums and development metadata.
 
-- `olo-toolgate-gateway`
-- `olo-toolgate-control`
-- `olo-toolgate-quickstart`
-- `olo-toolgate-device`
+Maven registry publication remains disconnected for development runs. Java JARs
+and POM are included as release assets. Windows ZIPs remain internal installer
+inputs. Development metadata explicitly records `verification: not-run` and
+`tests: not-run`.
 
-Images come from checksummed CI image archives, without rebuilding. Each gets a
-`dev-<12-character-commit>` tag. A successful build of the current main commit also
-updates `dev`. No production `latest` tag is changed.
+Use the existing `development-release` environment with `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN`. Optional repository variable `DOCKERHUB_NAMESPACE` overrides the
+username. The token needs push access to all five image repositories. GitHub
+Packages and OCI use the workflow token's Packages write permission; existing
+package access and environment protection rules apply.
 
-The Linux device image is built and tested in the existing Quickstart job using
-the same native client archives as Quickstart. Its checksummed `device-evidence`
-artifact is published by the same development release job. The manual release
-also builds the device from its just-built Quickstart image and publishes it in
-the existing container loop. See [Linux device deployment](../deployment/device.md)
-for comma-separated gateway URLs, automatic connection retries and enrollment.
+Selection runs separately from source preparation. Native/container builders
+receive the pinned source and stamped files without publishing tokens. Publishing
+jobs execute helpers from the controller commit on main, compare built metadata
+to the original selection artifact pinned by its immutable artifact ID, and publish downloaded packages without
+executing selected source code. Core and TypeScript publishers run independently
+after the build; failure of one does not skip the other.
 
-GitHub Releases receives an immutable prerelease named
-`dev-<full-commit>-<publishing-run-id>`, including six native client archives
-(Windows, macOS and Linux; x64 and ARM64), checksums, embedded client SBOMs, image
-SBOMs, raw contracts, checked Java JAR/source/Javadoc/POM/module and
-development-release.json.
-The native archives retain their tested VERSION; release metadata ties them to
-the exact commit and CI run IDs. The image digests are recorded in the metadata.
-No installer/runtime signing is claimed by this workflow.
-
-The Maven library coordinate is `io.github.olo-labs:toolgate-contracts`.
-Java contract tests run in foundation. Shared preparation reuses the checksummed
-foundation Java artifacts without running Gradle; these GitHub assets retain the
-checked source coordinate, recorded as `javaAssetVersion`. Existing Maven version
-metadata is retained, but does not indicate that the version was published.
-The retained publisher's configuration is documented in
-[the release tools README](../../tools/release/README.md).
-The automatic and manual entry points share native, image and publication job
-bodies; manual sets `run_tests: false` and automatic CI sets it to true.
-Versioned product publication uses the two manual release jobs and the
-`production-release` environment; see [how to release](how-to-release.md).
-
-Publishing requires GitHub Actions write access for repository contents/packages.
-Existing package access controls must allow this repository's GITHUB_TOKEN. Keep
-credentials in GitHub Secrets, never in files. Review environment protection and
-Docker Hub repository access before the first publication.
-
-If a run fails after one registry succeeds, partial artifacts may exist. Do not
-claim an atomic multi-registry release. Inspect the publishing run before retrying;
-GitHub prerelease names are unique per workflow run. A new
-manual run on main can recover after credentials or registry access are corrected.
-
-Release notes and licenses
--------------------------
-
-`python tools/contracts/version.py` generates `RELEASE-NOTES.md` from canonical
-versions and CHANGELOG.md; `--check` detects drift. Regenerate bindings afterward
-with `python tools/contracts/generate.py` to synchronize library documentation.
-GitHub release creation also generates commit/contributor notes automatically.
-
-Client archives, raw contract bundles and language packages include LICENSE,
-NOTICE.md and RELEASE-NOTES.md. Every Java main/source/Javadoc JAR includes them
-under META-INF. Container images expose notes at
-`/usr/share/doc/olo-toolgate/RELEASE-NOTES.md` and license notices under
-`/usr/share/licenses/olo-toolgate/`. Existing dependency notices and SBOMs are
-preserved. Release notes and notices are included in asset checksums.
-
-Native CI now also builds six unsigned interactive installers. The public bundle
-contains `installers.json`, `.setup.exe`/`.dmg`/`.run` files and their checksums.
-The anonymous Control home page links to these verified installers. See
-[installation and debugging](../client/installers.md) for permissions, initial
-installation limits and signing deferred by request.
+Registry publication is not atomic. Inspect partial publication on failure; use a
+new manual run for fresh package coordinates after fixing the cause. Runs for the
+same source branch are serialized. GitHub concurrency may replace an older pending
+run with a newer pending run; it is not a FIFO release queue.

@@ -47,8 +47,9 @@ names remain unchanged. Update Maven/Gradle dependency declarations from the old
 `io.ololabs.toolgate` group ID.
 
 Reusable workflows `client.yml`, `images.yml` and `release-images.yml`
-are shared by both entry points. Automatic CI runs tests before
-publishing; manual disables test and smoke steps and publishes its own build output.
+are shared by both entry points. Automatic CI runs tests without publishing; manual disables test and smoke steps
+and publishes its own build output from any selected branch/ancestor commit.
+See [development release instructions](../../docs/development/development-releases.md).
 The common Docker Hub publisher and GitHub draft-release uploader are used by both
 paths. Draft uploads resume matching files after an interrupted response, and
 the complete file set must match before the release becomes public. After draft

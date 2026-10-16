@@ -68,7 +68,7 @@ class PolicyContractsTests(unittest.TestCase):
             self.assertEqual('./.github/workflows/policy.yml',workflow['jobs']['policy-compatibility']['uses'])
             self.assertIn('policy-compatibility',workflow['jobs']['container-and-replicas']['needs'])
         pipeline=yaml.safe_load((ROOT/'.github/workflows/ci.yml').read_text())
-        self.assertEqual({'foundation','clients','images'},set(pipeline['jobs']['release']['needs']))
+        self.assertNotIn('release',pipeline['jobs'])
         # Canonical policy/custody checks remain in the shared foundation owner;
         # production delegated effects and restore proof remain in images.
         foundation=(ROOT/'tools/check.py').read_text()

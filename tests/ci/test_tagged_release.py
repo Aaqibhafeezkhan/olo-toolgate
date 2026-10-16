@@ -262,12 +262,12 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
             self.assertEqual(publishers,expected)
             for failed in publishers:
                 # GitHub only considers each job's needs when a sibling fails.
-                outcomes={prerequisite:'success',failed:'failure'}
+                outcomes={prerequisite:'success', 'select':'success', failed:'failure'}
                 for sibling in publishers-{failed}:
                     with self.subTest(workflow=name,failed=failed,sibling=sibling):
                         needs=jobs[sibling]['needs']
                         if isinstance(needs,str):needs=[needs]
-                        self.assertEqual(needs,[prerequisite])
+                        self.assertEqual(needs, ['select',prerequisite] if name == 'manual-development-release' else [prerequisite])
                         self.assertTrue(all(outcomes.get(parent)=='success' for parent in needs))
                         self.assertNotIn('needs.',jobs[sibling]['if'])
                         body=yaml.safe_load((ROOT/jobs[sibling]['uses'][2:]).read_text())['jobs']['publish']
@@ -302,7 +302,7 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         self.assertNotIn('needs',maven)
         for name,prerequisite in (('development-release','prepare'),('manual-development-release','build')):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
-            self.assertEqual(jobs['publish']['needs'],prerequisite)
+            self.assertEqual(jobs['publish']['needs'], ['select',prerequisite] if name == 'manual-development-release' else prerequisite)
             self.assertNotIn('publish-maven',jobs['publish']['if'])
 
     def test_retained_publishers_can_consume_prepared_packages_and_images(self):
@@ -318,6 +318,7 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
                 body=yaml.safe_load((ROOT/'.github/workflows'/f'{publisher}.yml').read_text())['jobs']['publish']
                 for step in body['steps']:
                     if not step.get('uses','').startswith('actions/download-artifact@'):continue
+                    if 'artifact-ids' in step.get('with',{}):continue
                     download=dict(step['with'])
                     for field in ('name','path'):
                         if download[field].startswith('${{ inputs.manual'):

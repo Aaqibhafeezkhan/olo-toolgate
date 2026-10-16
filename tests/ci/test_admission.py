@@ -112,7 +112,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertIn("startsWith(github.ref, 'refs/tags/v')",document['jobs']['publish']['if'])
         pipeline=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         self.assertNotIn('main_only',pipeline['jobs']['admission'].get('with',{}))
-        self.assertEqual(set(pipeline['jobs']['release']['needs']),{'foundation','clients','images'})
+        self.assertNotIn('release',pipeline['jobs'])
 
     def test_no_workflow_is_triggered_by_pull_requests(self):
         root=Path(__file__).resolve().parents[2]
@@ -160,16 +160,16 @@ class AdmissionTests(unittest.TestCase):
     def test_manual_development_release_has_no_test_or_ci_dependencies(self):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/manual-development-release.yml').read_text(encoding='utf-8'))
-        self.assertEqual(set(document['jobs']),{'native','build','publish','publish-typescript'})
-        self.assertNotIn('needs',document['jobs']['native'])
+        self.assertEqual(set(document['jobs']),{'select','prepare','native','build','publish','publish-typescript'})
+        self.assertEqual(document['jobs']['native']['needs'],['select','prepare'])
         self.assertEqual(document['jobs']['native']['uses'],'./.github/workflows/client.yml')
         self.assertIs(document['jobs']['native']['with']['run_tests'],False)
         self.assertEqual(document['jobs']['build']['uses'],'./.github/workflows/images.yml')
         self.assertIs(document['jobs']['build']['with']['run_tests'],False)
-        self.assertEqual(document['jobs']['build']['needs'],'native')
+        self.assertEqual(document['jobs']['build']['needs'],['select','native'])
         for name,job in document['jobs'].items():
             if name.startswith('publish'):
-                self.assertEqual(job['needs'],'build')
+                self.assertEqual(job['needs'],['select','build'])
         # Reusable build jobs explicitly disable every test/smoke step for manual runs.
         for name in ('client','images'):
             shared=yaml.safe_load((root/'.github/workflows'/f'{name}.yml').read_text())

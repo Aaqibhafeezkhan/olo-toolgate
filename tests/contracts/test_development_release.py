@@ -50,6 +50,7 @@ class DevelopmentReleaseTests(unittest.TestCase):
             publication=contracts/'java/build/publications/mavenJava';publication.mkdir(parents=True)
             (publication/'pom-default.xml').write_bytes(b'prepared pom')
             (root/'target/package').mkdir(parents=True)
+            (root/'RELEASE-NOTES.md').write_text('source notes',encoding='utf-8')
             chart=root/'deploy/helm/olo-toolgate';chart.mkdir(parents=True)
             (chart/'values.yaml').write_text('global:\n  imageRegistry: fixture\n',encoding='utf-8')
             info={'commit':'a'*40,'binaryVersion':'1.0.0','libraryVersion':'1.0.0-dev.fixture','dockerTag':'dev-fixture'}
@@ -66,8 +67,8 @@ class DevelopmentReleaseTests(unittest.TestCase):
             root=Path(directory)
             output=root/'build/manual-development'
             assets=output/'assets';assets.mkdir(parents=True)
-            (root/'RELEASE-NOTES.md').write_text('release notes',encoding='utf-8')
-            info={'commit':sha,'dockerTag':'dev-fixture','libraryVersion':'1.0.0-dev.fixture','releaseTag':'dev-fixture'}
+            (assets/'RELEASE-NOTES.md').write_text('release notes',encoding='utf-8')
+            info={'commit':sha,'dockerTag':'dev-fixture','libraryVersion':'1.0.0-dev.fixture','releaseTag':'dev-fixture','sourceBranch':'main','branchKey':'main-fixture'}
             (assets/'development-release.json').write_text(json.dumps(info),encoding='utf-8')
             (assets/'compatibility.json').write_text('{}',encoding='utf-8')
             pom=assets/'toolgate-contracts-1.0.0-dev.fixture.pom';pom.write_bytes(b'prepared pom')
@@ -79,6 +80,7 @@ class DevelopmentReleaseTests(unittest.TestCase):
             with patch.object(manual_development,'ROOT',root),patch.object(manual_development,'OUTPUT',output), \
                  patch.object(manual_development,'ASSETS',assets),patch.object(manual_development,'run',side_effect=command) as run, \
                  patch.object(manual_development.github_release,'publish') as publish_release, \
+                 patch.object(manual_development.development_source,'verify'), \
                  patch.dict(os.environ,{'GITHUB_REPOSITORY':'olo-labs/olo-toolgate','DOCKERHUB_NAMESPACE':'fixture',
                                         'DOCKERHUB_TOKEN':'fixture','DOCKERHUB_USERNAME':'fixture'}):
                 manual_development.publish()

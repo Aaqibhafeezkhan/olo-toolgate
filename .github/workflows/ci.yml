@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-name: ToolGate CI and release
+name: ToolGate CI
 'on':
   push:
     branches:
@@ -37,17 +37,3 @@ jobs:
     uses: ./.github/workflows/images.yml
     with:
       run_tests: true
-  release:
-    needs:
-    - foundation
-    - clients
-    - images
-    uses: ./.github/workflows/development-release.yml
-    permissions:
-      actions: read
-      contents: write
-      packages: write
-      pull-requests: read
-      id-token: write
-      attestations: write
-    secrets: inherit

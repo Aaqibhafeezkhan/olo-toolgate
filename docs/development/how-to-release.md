@@ -1,6 +1,9 @@
 # How to release ToolGate
 
-There are two manual GitHub Actions jobs:
+Product releases use two manual GitHub Actions jobs. For a development package
+from any branch, use [Manual development release](development-releases.md).
+
+The product jobs are:
 
 1. **Prepare release branch** creates a versioned source snapshot. It does not build or publish.
 2. **Build and release binaries** builds/tests that snapshot, or publishes an existing verified build.
