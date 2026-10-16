@@ -82,6 +82,50 @@ pub struct BreakGlassRequest {
     pub reason: String,
     pub operator_signatures: Vec<String>,
 }
+/// Canonical BrokerOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BrokerOperation {
+    #[serde(rename = "ROUTE_CALL")]
+    RouteCall,
+    #[serde(rename = "SECRET_REDEEM")]
+    SecretRedeem,
+    #[serde(rename = "FILES_LIST")]
+    FilesList,
+    #[serde(rename = "FILES_READ")]
+    FilesRead,
+    #[serde(rename = "FILES_INFO")]
+    FilesInfo,
+    #[serde(rename = "FILES_WRITE")]
+    FilesWrite,
+    #[serde(rename = "FILES_APPEND")]
+    FilesAppend,
+    #[serde(rename = "FILES_MKDIR")]
+    FilesMkdir,
+    #[serde(rename = "FILES_RENAME")]
+    FilesRename,
+}
+/// Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrokerRequestFrame {
+    #[serde(deserialize_with = "const_broker_request_frame_kind")]
+    pub kind: String,
+    pub request_id: String,
+    pub operation: BrokerOperation,
+    pub request: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrokerResponseFrame {
+    #[serde(deserialize_with = "const_broker_response_frame_kind")]
+    pub kind: String,
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ToolErrorBody>,
+}
 /// reserveBusinessOperation input, carried on POST /access/invocations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -497,6 +541,10 @@ pub enum FrameKind {
     InputRequest,
     #[serde(rename = "LOG")]
     Log,
+    #[serde(rename = "BROKER_REQUEST")]
+    BrokerRequest,
+    #[serde(rename = "BROKER_RESPONSE")]
+    BrokerResponse,
 }
 /// Gateway settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1077,6 +1125,10 @@ pub enum Permission {
     TokenExchange,
     #[serde(rename = "CONNECTION")]
     Connection,
+    #[serde(rename = "DEVICE_FILES_READ")]
+    DeviceFilesRead,
+    #[serde(rename = "DEVICE_FILES_WRITE")]
+    DeviceFilesWrite,
 }
 /// Successful consumption.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2037,6 +2089,8 @@ pub enum ValueType {
     #[serde(rename = "BINARY")]
     Binary,
 }
+const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
+const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");
 const_field!(const_contract_set_name, String, "olo-toolgate-contracts");
 const_field!(const_control_server_settings_format_version, u64, 2);
 const_field!(const_control_settings_view_format_version, u64, 2);

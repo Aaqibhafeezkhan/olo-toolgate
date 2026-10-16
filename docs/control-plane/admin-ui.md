@@ -60,12 +60,6 @@ enablement nor approval alone grants tool access. Connection status reflects fre
 authenticated reports, not just approval. Temporary suspension preserves the key;
 permanent key revocation remains a separate API operation.
 
-Quickstart separately lists `local-builtins`, `local-hotfolder` and
-`local-rest-forwarding` under **Local tool requester**. These server-managed
-devices need no client approval and appear green while ready and enabled.
-Their disable controls gate real execution paths; existing tool/resource filters
-and target-client approval still apply.
-
 User create/edit/delete uses server validation and optimistic revisions. Conflict
 preserves inputs and offers Reload current record before resubmission. No policy
 or reference rules duplicate the backend. An exact retry retains its idempotency

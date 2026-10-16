@@ -40,6 +40,9 @@ artifacts/
 quarantine/
 hotfolder/
 HotFolder/
+# The HotFolder example package is code, not a local files area.
+!examples/java-tools/hotfolder/
+!**/src/**/hotfolder/
 logs/
 # Java source packages named logs are code, not local log output.
 !**/src/**/logs/

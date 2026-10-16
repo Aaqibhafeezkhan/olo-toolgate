@@ -1,6 +1,6 @@
 # Unsigned client installers
 
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding. Download or installation is not enrollment approval; the current protected client retains identity during temporary suspension and recovers a certificate only for the same still-approved key.
+The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Download or installation is not enrollment approval; the current protected client retains identity during temporary suspension and recovers a certificate only for the same still-approved key.
 
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 

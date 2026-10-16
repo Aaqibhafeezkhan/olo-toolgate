@@ -22,7 +22,7 @@ most 32 KiB, with packageId, immutable SemVer version, target platforms/architec
 minimumClientVersion, digest-pinned OCI runtimes, tool registrations and a confined
 JSON self-test for every tool. No ZIP/TAR extraction, install scripts or host hooks
 exist. Native/Python/Node/PowerShell/Shell/Java/.NET follow Module 08 confinement;
-Batch/CMD and WASM cannot activate.
+Only `JAVA_SDK` runtimes activate.
 
 An approved external release authority signs **exact descriptor bytes** using
 RFC 7515 RS256 compact JWS. Header alg=RS256, typ=toolgate-package-release+jws,

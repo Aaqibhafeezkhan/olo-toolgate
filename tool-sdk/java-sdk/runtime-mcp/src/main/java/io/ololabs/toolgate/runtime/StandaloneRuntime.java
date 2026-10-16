@@ -166,6 +166,14 @@ public final class StandaloneRuntime implements ToolCatalog {
         return start(loader, Config.test(fixtures), exchanges, workingDirectory, diagnostics, null);
     }
 
+    /** Test mode with a device files double, for ClientTools declared with {@code @DeviceFileAccess}. */
+    public static StandaloneRuntime startTest(ClassLoader loader, JsonNode fixtures, TestExchanges exchanges, Path workingDirectory,
+            PrintStream diagnostics, io.ololabs.toolgate.sdk.context.DeviceFiles files) {
+        Config config = Config.test(fixtures);
+        if (files != null) config.deviceFiles = files;
+        return start(loader, config, exchanges, workingDirectory, diagnostics, null);
+    }
+
     /**
      * Governed mode (Governed): one invocation under a Tool Host, with the host's values and claims in {@code config}
      * and every route call sent to the host's broker through {@code broker}.
@@ -845,6 +853,9 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (!idempotencyHeader.isEmpty()) routes.idempotency(idempotencyHeader, "i." + invocationId);
         context.attachHttp(routes);
         context.attachTcp(new TcpClient(egress, tool.tcp, context, deadline));
+        boolean readFiles = false, writeFiles = false;
+        for (JsonNode p : tool.descriptor.path("permissions")) { readFiles |= p.asText().equals("DEVICE_FILES_READ"); writeFiles |= p.asText().equals("DEVICE_FILES_WRITE"); }
+        if (config.deviceFiles != null && readFiles) context.attachFiles(writeFiles ? config.deviceFiles : StdioBroker.readOnly(config.deviceFiles));
         prepared.routes = routes;
         prepared.filled = filled;
         prepared.context = context;

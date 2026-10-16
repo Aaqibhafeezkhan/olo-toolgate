@@ -6,9 +6,8 @@ import {Devices} from '../src/Devices';
 import {ControlClient} from '../src/api';
 import type {EndpointManagedDevice} from '@olo-labs/toolgate-contracts';
 afterEach(cleanup);
-const active:EndpointManagedDevice={permissions:['device.read','device.approve','device.manage_groups','device.update','device.delete','device.enable','device.disable'],deviceId:'device-1',systemExecutor:false,directoryDevice:{id:'device-1',name:'Trading workstation',ownerUserId:'alice',enabled:true,revision:4},registeredUser:{id:'alice',name:'Alice Smith',enabled:true,revision:1},endpointDevice:{deviceId:'device-1',tenantId:'test',userId:'alice',keyFingerprint:'a'.repeat(64),state:'ACTIVE',revision:10,approvalRevision:3,connectionApproved:true,reportSequence:2,lastSeenUnixMs:Date.now()}};
-const pending:EndpointManagedDevice={permissions:['device.read','device.approve','device.manage_groups'],deviceId:'device-2',systemExecutor:false,enrollment:{enrollmentId:'enroll-2',deviceId:'device-2',userCode:'ABCDEF0123456789',platform:'WINDOWS',keyFingerprint:'b'.repeat(64),state:'PENDING',expiresAtUnixMs:Date.now()+600000}};
-const system:EndpointManagedDevice={deviceId:'local-builtins',systemExecutor:true,systemExecutorKind:'BUILTINS',systemAvailable:true,directoryDevice:{id:'local-builtins',name:'Quickstart fixed executor',ownerUserId:'local-tools',enabled:true,revision:1},registeredUser:{id:'local-tools',name:'Local tool requester',enabled:true,revision:1}};
+const active:EndpointManagedDevice={permissions:['device.read','device.approve','device.manage_groups','device.update','device.delete','device.enable','device.disable'],deviceId:'device-1',directoryDevice:{id:'device-1',name:'Trading workstation',ownerUserId:'alice',enabled:true,revision:4},registeredUser:{id:'alice',name:'Alice Smith',enabled:true,revision:1},endpointDevice:{deviceId:'device-1',tenantId:'test',userId:'alice',keyFingerprint:'a'.repeat(64),state:'ACTIVE',revision:10,approvalRevision:3,connectionApproved:true,reportSequence:2,lastSeenUnixMs:Date.now()}};
+const pending:EndpointManagedDevice={permissions:['device.read','device.approve','device.manage_groups'],deviceId:'device-2',enrollment:{enrollmentId:'enroll-2',deviceId:'device-2',userCode:'ABCDEF0123456789',platform:'WINDOWS',keyFingerprint:'b'.repeat(64),state:'PENDING',expiresAtUnixMs:Date.now()+600000}};
 function setup(items:EndpointManagedDevice[],mutationStatus=200){const transport=vi.fn<typeof fetch>().mockImplementation(async(path,options)=>new Response(JSON.stringify(String(path).endsWith('/groups')?{entityType:'DEVICE',entityId:String(path).split('/').at(-2),groupIds:['default-devices'],revision:1}:options?.method==='POST'?{}:{items}),{status:options?.method==='POST'?mutationStatus:200}));render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);return transport;}
 describe('Device management',()=>{
   it('approves a code-verified owned pending request without changing group memberships',async()=>{
@@ -25,11 +24,11 @@ describe('Device management',()=>{
     expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/groups'))).toBe(false);
   });
   it('shows shared deployment hosts, distinct execution roles and actual network details',async()=>{
-    const deployment={executionKind:'QUICKSTART_CLIENT' as const,containerId:'a'.repeat(64),containerName:'toolgate-langchain-quickstart-1',systemName:'quickstart-container',networkId:'b'.repeat(64),networkName:'toolgate-langchain_default',ipAddress:'172.18.0.2'};
+    const deployment={executionKind:'ENDPOINT_CLIENT' as const,containerId:'a'.repeat(64),containerName:'toolgate-langchain-quickstart-1',systemName:'quickstart-container',networkId:'b'.repeat(64),networkName:'toolgate-langchain_default',ipAddress:'172.18.0.2'};
     const local={...active,deviceId:'tool-host-local',directoryDevice:{...active.directoryDevice!,id:'tool-host-local',name:'Local host'},systemName:undefined,ipAddress:'::1'};
     const transport=vi.fn<typeof fetch>().mockImplementation(async()=>new Response(JSON.stringify({items:[{...active,systemName:'quickstart-container',ipAddress:'127.0.0.1'},local],deployments:[{deviceId:active.deviceId,deployment},{deviceId:local.deviceId,deployment:{...deployment,executionKind:'TOOL_HOST_DIRECT'}}]}),{status:200}));
     render(<Devices client={new ControlClient('test-token',vi.fn(),transport)}/>);
-    await screen.findByText('Tool Host · direct dispatch');
+    await screen.findByText('Tool Host · direct dispatch');expect(screen.getByText('Endpoint client')).toBeTruthy();
     expect(screen.getByText(/Docker deployment: 1 containers/)).toBeTruthy();
     expect(screen.getAllByText('toolgate-langchain-quickstart-1')).toHaveLength(2);
     const row=screen.getByRole('row',{name:/Local host/});
@@ -70,15 +69,12 @@ describe('Device management',()=>{
     const state=await screen.findByText('Powered off by owner');expect(state.className).toContain('offline');expect(screen.queryByText('Offline')).toBeNull();
     fireEvent.focus(screen.getByRole('button',{name:'Details for device-1'}));expect(screen.getByRole('tooltip').textContent).toContain('Connection: Powered off by owner');
   });
-  it('lists approved, pending and system devices with names, users and accessible details',async()=>{
-    setup([active,pending,system]);await screen.findByText('Trading workstation');
+  it('lists approved and pending devices with names, users and accessible details',async()=>{
+    setup([active,pending]);await screen.findByText('Trading workstation');
     expect(screen.getByRole('columnheader',{name:'Owner'})).toBeTruthy();expect(screen.getByText('Alice Smith')).toBeTruthy();expect(screen.getByText('Awaiting registration')).toBeTruthy();
-    expect(screen.getByText('Available').className).toContain('online');
-    expect(screen.queryByRole('button',{name:'Approve local-builtins'})).toBeNull();
     fireEvent.focus(screen.getByRole('button',{name:'Details for device-1'}));expect(screen.getByRole('tooltip').textContent).toContain('Alice Smith (alice)');expect(screen.getByRole('tooltip').textContent).toContain('protected device key');
     fireEvent.keyDown(screen.getByRole('button',{name:'Details for device-1'}),{key:'Escape'});expect(screen.queryByRole('tooltip')).toBeNull();
   });
-  it('does not show unavailable server executors green',async()=>{setup([{...system,systemAvailable:false}]);expect((await screen.findByText('Unavailable')).className).toContain('offline');});
   it('keeps expired approvals listed as approval required with an approve action',async()=>{
     setup([{...active,endpointDevice:{...active.endpointDevice!,connectionExpiresAtUnixMs:Date.now()-1000}}]);
     expect(await screen.findByText('Approval required')).toBeTruthy();

@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Tool protocol v2",
-  "description": "Launcher stdin/stdout frames and Tool Host admission messages (platform-requirements.md §11.3, §13.3). v1 stays accepted.",
+  "description": "Tool protocol v2, the one protocol between every tool process and its executor (ADR 027): one ToolInput line and then only BROKER_RESPONSE lines on stdin; LOG, PROGRESS, INPUT_REQUEST and BROKER_REQUEST frames and exactly one final RESULT on stdout. Also the Tool Host admission messages.",
   "$ref": "#/$defs/ToolInput",
   "$defs": {
     "SecretHandle": {
@@ -107,7 +107,9 @@
         "RESULT",
         "PROGRESS",
         "INPUT_REQUEST",
-        "LOG"
+        "LOG",
+        "BROKER_REQUEST",
+        "BROKER_RESPONSE"
       ],
       "description": "Output frame kind."
     },
@@ -774,6 +776,73 @@
         "droppedFrames",
         "expired",
         "gaps"
+      ]
+    },
+    "BrokerOperation": {
+      "type": "string",
+      "enum": [
+        "ROUTE_CALL",
+        "SECRET_REDEEM",
+        "FILES_LIST",
+        "FILES_READ",
+        "FILES_INFO",
+        "FILES_WRITE",
+        "FILES_APPEND",
+        "FILES_MKDIR",
+        "FILES_RENAME"
+      ],
+      "description": "Brokered operations. Every executor reads and answers the same frames; an operation its target does not provide is refused with a canonical error. ROUTE_CALL and SECRET_REDEEM: Tool Hosts, for the routes and secrets the permit grants. FILES_*: devices, for tools whose signed registration grants device file access (READ for LIST/READ/INFO, WRITE for the rest)."
+    },
+    "BrokerRequestFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "BROKER_REQUEST"
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "operation": {
+          "$ref": "protocol.schema.json#/$defs/BrokerOperation"
+        },
+        "request": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "kind",
+        "requestId",
+        "operation",
+        "request"
+      ]
+    },
+    "BrokerResponseFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "BROKER_RESPONSE"
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "result": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "error": {
+          "$ref": "protocol.schema.json#/$defs/ToolErrorBody"
+        }
+      },
+      "required": [
+        "kind",
+        "requestId"
       ]
     }
   }

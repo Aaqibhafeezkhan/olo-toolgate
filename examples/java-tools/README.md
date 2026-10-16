@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Example tools for the Java Tool SDK
 
-Eleven small, working tool packages for everyday operations and enterprise work, built with the ToolGate Java Tool SDK. Read them to see how a real tool is put together, run them as they are, or copy one as the start of your own.
+Twelve small, working tool packages for everyday operations and enterprise work, built with the ToolGate Java Tool SDK. Read them to see how a real tool is put together, run them as they are, or copy one as the start of your own.
 
 Every example is a complete package: one `@ToolPackage`, its tools, unit tests with `ToolHarness`, `@Example` self-tests, and a `.tgpkg` whose `artifacts/tool.jar` is one self-contained fat jar. Each runs as a plain MCP server (standalone) or under ToolGate (governed) without changes. New to the SDK? Start with the [Tool SDK guide](../../TOOL-SDK-GUIDE.md).
 
@@ -18,6 +18,7 @@ Every example is a complete package: one `@ToolPackage`, its tools, unit tests w
 | [webhook-notify](webhook-notify/README.md) | `notify.send` | Sends an alert to a JSON webhook, at most once per reference | Route auth with a secret, business keys, `Idempotency-Key` |
 | [file-cleanup](file-cleanup/README.md) | `cleanup.old-files` | Lists, and when asked deletes, files older than N days | A destructive tool done carefully: off until configured, dry run by default, caps |
 | [db-query](db-query/README.md) | `db.tables`, `db.row`, `db.query` | Lists tables and runs read-only, parameterised queries on a database (an embedded H2 file) | Read-only enforced by connection, account and statement checks; a third-party driver in the fat jar |
+| [hotfolder](hotfolder/README.md) | `hotfolder.list`, `hotfolder.read_text`, `hotfolder.write_text`, `hotfolder.move`, `hotfolder.copy` and five more | Reads and writes text files in a protected folder on the selected device | A `@ClientTool` package using `@DeviceFileAccess` and the device's confined files area; no device-side code for the package |
 
 For fixed, fictional data in business scenarios (loan approval, a clinic, a server crash, support, HR, fraud, insurance claims), see the [mocked tool examples](../mocked-tools/README.md).
 

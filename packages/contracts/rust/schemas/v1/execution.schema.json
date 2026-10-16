@@ -8,18 +8,9 @@
     "LocalRuntimeKind": {
       "type": "string",
       "enum": [
-        "NATIVE",
-        "PYTHON",
-        "NODE",
-        "POWERSHELL",
-        "BATCH",
-        "SHELL",
-        "JAVA_JAR",
-        "JAVA_SDK",
-        "DOTNET",
-        "WASM"
+        "JAVA_SDK"
       ],
-      "description": "Managed runtime kind. JAVA_SDK runs a Java SDK package artifact over tool protocol v2 as a CLIENT target (ADR 026)."
+      "description": "Managed runtime kind. Every managed tool speaks tool protocol v2; JAVA_SDK runs a Java SDK package artifact as a CLIENT target (ADR 026, ADR 027). Other SDKs are added only with their runtime adapter."
     },
     "LocalRuntimeState": {
       "type": "string",
@@ -130,6 +121,9 @@
         },
         "authorizationProfile": {
           "$ref": "enterprise.schema.json#/$defs/InstalledAuthorizationProfile"
+        },
+        "fileAccess": {
+          "$ref": "#/$defs/LocalFileAccess"
         }
       },
       "required": [
@@ -299,6 +293,15 @@
       "required": [
         "requestId"
       ]
+    },
+    "LocalFileAccess": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "READ",
+        "WRITE"
+      ],
+      "description": "Device files access a signed managed tool registration grants through the executor broker (ADR 027); never a host path."
     }
   }
 }

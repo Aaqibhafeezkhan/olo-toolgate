@@ -586,7 +586,7 @@
           "type": "array",
           "maxItems": 50,
           "items": {
-            "$ref": "builtins.schema.json#/$defs/BuiltinToolInfo"
+            "$ref": "local-tools.schema.json#/$defs/LocalToolInfo"
           }
         }
       },
@@ -724,14 +724,6 @@
         "reportSequence"
       ]
     },
-    "SystemExecutorKind": {
-      "type": "string",
-      "enum": [
-        "BUILTINS",
-        "HOTFOLDER",
-        "REST_FORWARDING"
-      ]
-    },
     "EndpointManagedDevice": {
       "type": "object",
       "description": "Directory identity, enrolled approval and pending request with server-resolved target permissions.",
@@ -739,9 +731,6 @@
       "properties": {
         "deviceId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
-        },
-        "systemExecutor": {
-          "type": "boolean"
         },
         "directoryDevice": {
           "$ref": "control.schema.json#/$defs/ControlDevice"
@@ -754,13 +743,6 @@
         },
         "registeredUser": {
           "$ref": "control.schema.json#/$defs/ControlUser"
-        },
-        "systemExecutorKind": {
-          "$ref": "endpoint.schema.json#/$defs/SystemExecutorKind"
-        },
-        "systemAvailable": {
-          "type": "boolean",
-          "description": "Composition readiness for a server executor; absent when availability is unknown."
         },
         "systemName": {
           "type": "string",
@@ -788,8 +770,7 @@
         }
       },
       "required": [
-        "deviceId",
-        "systemExecutor"
+        "deviceId"
       ]
     },
     "EndpointManagedDevicePage": {
@@ -1259,7 +1240,7 @@
           "type": "array",
           "maxItems": 50,
           "items": {
-            "$ref": "builtins.schema.json#/$defs/BuiltinToolInfo"
+            "$ref": "local-tools.schema.json#/$defs/LocalToolInfo"
           }
         }
       },
@@ -1572,7 +1553,6 @@
     "DeviceExecutionKind": {
       "type": "string",
       "enum": [
-        "QUICKSTART_CLIENT",
         "ENDPOINT_CLIENT",
         "TOOL_HOST_DIRECT",
         "TOOL_HOST_PULL"

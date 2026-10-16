@@ -23,7 +23,7 @@ final readonly class EndpointCheckIn implements \JsonSerializable {
             $data['sequence'],
             ClientReport::fromArray($data['report']),
             array_key_exists('adoptionDigest', $data) ? $data['adoptionDigest'] : null,
-            array_key_exists('localTools', $data) ? array_map(static fn ($item) => BuiltinToolInfo::fromArray($item), $data['localTools']) : null
+            array_key_exists('localTools', $data) ? array_map(static fn ($item) => LocalToolInfo::fromArray($item), $data['localTools']) : null
         );
     }
 

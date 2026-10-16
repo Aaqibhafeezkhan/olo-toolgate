@@ -17,7 +17,7 @@ final readonly class LocalToolCatalog implements \JsonSerializable {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
-            array_map(static fn ($item) => BuiltinToolInfo::fromArray($item), $data['tools'])
+            array_map(static fn ($item) => LocalToolInfo::fromArray($item), $data['tools'])
         );
     }
 

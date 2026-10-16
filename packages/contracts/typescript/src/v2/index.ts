@@ -23,6 +23,21 @@ export interface BreakGlassRequest {
   readonly reason: string;
   readonly operatorSignatures: ReadonlyArray<string>;
 }
+export type BrokerOperation = "ROUTE_CALL" | "SECRET_REDEEM" | "FILES_LIST" | "FILES_READ" | "FILES_INFO" | "FILES_WRITE" | "FILES_APPEND" | "FILES_MKDIR" | "FILES_RENAME";
+/** Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time. */
+export interface BrokerRequestFrame {
+  readonly kind: "BROKER_REQUEST";
+  readonly requestId: string;
+  readonly operation: BrokerOperation;
+  readonly request: Record<string, unknown>;
+}
+/** Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput. */
+export interface BrokerResponseFrame {
+  readonly kind: "BROKER_RESPONSE";
+  readonly requestId: string;
+  readonly result?: Record<string, unknown>;
+  readonly error?: ToolErrorBody;
+}
 /** reserveBusinessOperation input, carried on POST /access/invocations. */
 export interface BusinessKeyReservationRequest {
   readonly toolId: string;
@@ -264,7 +279,7 @@ export interface ExecutionSettings {
   readonly maxConcurrency?: number;
   readonly cancelIfAbandoned: boolean;
 }
-export type FrameKind = "RESULT" | "PROGRESS" | "INPUT_REQUEST" | "LOG";
+export type FrameKind = "RESULT" | "PROGRESS" | "INPUT_REQUEST" | "LOG" | "BROKER_REQUEST" | "BROKER_RESPONSE";
 /** Gateway settings. */
 export interface GatewaySettings {
   readonly gatewayName: string;
@@ -562,7 +577,7 @@ export interface PackagedArtifact {
   readonly mediaType: string;
   readonly runtimeId?: string;
 }
-export type Permission = "HTTP_ROUTE" | "TCP" | "CREDENTIALS_IN_SANDBOX" | "USER_SECRET" | "TOKEN_EXCHANGE" | "CONNECTION";
+export type Permission = "HTTP_ROUTE" | "TCP" | "CREDENTIALS_IN_SANDBOX" | "USER_SECRET" | "TOKEN_EXCHANGE" | "CONNECTION" | "DEVICE_FILES_READ" | "DEVICE_FILES_WRITE";
 /** Successful consumption. */
 export interface PermitConsumed {
   readonly invocationId: string;

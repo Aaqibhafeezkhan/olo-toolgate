@@ -54,8 +54,12 @@ final class Governed {
             write(out, failure("DEADLINE_EXCEEDED", "The invocation deadline passed before the tool started"));
             return 0;
         }
-        String socket = env.get("TOOLGATE_BROKER_SOCKET");
-        BrokerClient broker = socket == null ? null : new BrokerClient(JSON, Path.of(socket), env.getOrDefault("TOOLGATE_BROKER_CAPABILITY", ""));
+        // Everything after the ToolInput line travels over the same stdio channel: frames out, broker answers in.
+        java.util.function.Consumer<ObjectNode> frames = frame -> {
+            try { write(out, frame); }
+            catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
+        };
+        StdioBroker broker = new StdioBroker(in, frames);
         Map<String, String> handles = new HashMap<>();
         input.path("secretHandles").forEach(h -> handles.put(h.path("name").asText(), h.path("handle").asText()));
         ObjectNode values = JSON.createObjectNode();
@@ -63,21 +67,20 @@ final class Governed {
         values.set("claims", input.path("claims").isObject() ? input.get("claims") : JSON.createObjectNode());
         Config config = Config.governed(values, name -> {
             String handle = handles.get(name);
-            return handle == null || broker == null ? null : broker.redeem(handle);
+            return handle == null ? null : broker.redeem(handle);
         });
         config.governedInvocationId = input.path("invocationId").asText();
         config.governedDeadline = java.time.Instant.ofEpochMilli(input.path("deadlineUnixMs").asLong());
-        config.responses = frame -> {
-            try { write(out, frame); }
-            catch (IOException failed) { throw new java.io.UncheckedIOException(failed); }
-        };
+        config.responses = frames;
         try {
             config.location = io.ololabs.toolgate.sdk.ExecutionLocation.valueOf(env.getOrDefault("TOOLGATE_EXECUTION_TARGET", "SERVER"));
         } catch (IllegalArgumentException invalid) {
             write(out, failure("INVALID_TARGET", "Execution target must be SERVER or CLIENT"));
             return 78;
         }
-        TestExchanges routes = broker != null ? broker : request -> JSON.createObjectNode().put("refused", "this invocation has no broker");
+        // A device brokers its files area; a Tool Host refuses those operations, as a device refuses routes and secrets.
+        if (config.location == io.ololabs.toolgate.sdk.ExecutionLocation.CLIENT) config.deviceFiles = broker;
+        TestExchanges routes = broker;
         StandaloneRuntime runtime;
         try {
             runtime = StandaloneRuntime.startGoverned(loader, config, routes, Path.of(""), diagnostics);

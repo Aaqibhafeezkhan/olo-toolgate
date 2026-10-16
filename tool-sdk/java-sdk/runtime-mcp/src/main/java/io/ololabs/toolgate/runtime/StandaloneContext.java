@@ -58,6 +58,7 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     private InvocationMode invocationMode = InvocationMode.STANDALONE;
     private volatile String taskId;
     private volatile ObjectNode responses;
+    private io.ololabs.toolgate.sdk.context.DeviceFiles files;
     private volatile ObjectNode pendingInput;
     volatile Thread worker;
     private HttpClient http;
@@ -103,6 +104,17 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     public TcpConnector tcp() {
         if (tcp == null) throw new ToolConfigurationError("The TCP connector is not available here");
         return tcp;
+    }
+
+    @Override
+    public io.ololabs.toolgate.sdk.context.DeviceFiles files() {
+        if (files == null) throw new ToolConfigurationError("The device files area is available only to a ClientTool declared with @DeviceFileAccess on a device");
+        return files;
+    }
+
+    /** Attaches the device files area this tool declared. */
+    void attachFiles(io.ololabs.toolgate.sdk.context.DeviceFiles files) {
+        this.files = files;
     }
 
     /** Attaches the TCP connector for the tool's declared destinations. */

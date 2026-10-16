@@ -25,7 +25,7 @@ impl Contracts {
                 "/endpoint.schema.json",
                 "/control.schema.json",
                 "/client.schema.json",
-                "/builtins.schema.json",
+                "/local-tools.schema.json",
                 "/execution.schema.json",
                 "/fleet.schema.json",
                 "/builder.schema.json",

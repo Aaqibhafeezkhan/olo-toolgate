@@ -34,57 +34,6 @@ pub struct AuthorizationRequest {
     pub action: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
 }
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinInvocation {
-    pub tool_id: String,
-    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
-}
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinIpcRequest {
-    pub protocol_version: u64,
-    pub request_id: String,
-    pub operation: BuiltinOperation,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub invocation: Option<BuiltinInvocation>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-}
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinIpcResponse {
-    pub request_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<BuiltinToolInfo>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub output: Option<std::collections::BTreeMap<String, serde_json::Value>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<ErrorCode>,
-}
-/// Canonical BuiltinOperation wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BuiltinOperation {
-    #[serde(rename = "CATALOG")]
-    Catalog,
-    #[serde(rename = "CALL")]
-    Call,
-}
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinToolInfo {
-    pub tool_id: String,
-    pub action: String,
-    pub description: String,
-    pub enabled: bool,
-    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
-    pub tool_digest: String,
-    pub package_digest: String,
-}
 /// Strict JWS protected header; no remote or embedded keys and no algorithm negotiation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -165,7 +114,7 @@ pub struct ClientDiscovery {
     pub expires_at_unix_ms: u64,
     pub issuer_certificate_pem: String,
 }
-/// Fixed service tool boundary; validate schema before use.
+/// Local tool boundary for signed managed registrations; validate schema before use.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientDownloadArtifact {
@@ -175,7 +124,7 @@ pub struct ClientDownloadArtifact {
     pub sha256: String,
     pub bytes: u64,
 }
-/// Fixed service tool boundary; validate schema before use.
+/// Local tool boundary for signed managed registrations; validate schema before use.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientDownloadManifest {
@@ -225,7 +174,7 @@ pub struct ClientInstallerArtifact {
     pub sha256: String,
     pub bytes: u64,
 }
-/// Fixed service tool boundary; validate schema before use.
+/// Local tool boundary for signed managed registrations; validate schema before use.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientInstallerManifest {
@@ -1048,8 +997,6 @@ pub struct DeviceDeploymentRecord {
 /// Canonical DeviceExecutionKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeviceExecutionKind {
-    #[serde(rename = "QUICKSTART_CLIENT")]
-    QuickstartClient,
     #[serde(rename = "ENDPOINT_CLIENT")]
     EndpointClient,
     #[serde(rename = "TOOL_HOST_DIRECT")]
@@ -1107,7 +1054,7 @@ pub struct EndpointCheckIn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adoption_digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub local_tools: Option<Vec<BuiltinToolInfo>>,
+    pub local_tools: Option<Vec<LocalToolInfo>>,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1287,7 +1234,6 @@ pub struct EndpointEnrollmentStart {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointManagedDevice {
     pub device_id: String,
-    pub system_executor: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory_device: Option<ControlDevice>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1296,10 +1242,6 @@ pub struct EndpointManagedDevice {
     pub enrollment: Option<EndpointEnrollmentReview>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registered_user: Option<ControlUser>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system_executor_kind: Option<SystemExecutorKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system_available: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2442,6 +2384,16 @@ pub struct InstalledAuthorizationProfile {
     pub tool: ControlTool,
     pub extractor: ControlResourceExtractor,
 }
+/// Canonical LocalFileAccess wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocalFileAccess {
+    #[serde(rename = "NONE")]
+    None,
+    #[serde(rename = "READ")]
+    Read,
+    #[serde(rename = "WRITE")]
+    Write,
+}
 /// Bounded per-service execution counters and sandbox state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2476,26 +2428,8 @@ pub struct LocalRuntimeIpcResponse {
 /// Canonical LocalRuntimeKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LocalRuntimeKind {
-    #[serde(rename = "NATIVE")]
-    Native,
-    #[serde(rename = "PYTHON")]
-    Python,
-    #[serde(rename = "NODE")]
-    Node,
-    #[serde(rename = "POWERSHELL")]
-    Powershell,
-    #[serde(rename = "BATCH")]
-    Batch,
-    #[serde(rename = "SHELL")]
-    Shell,
-    #[serde(rename = "JAVA_JAR")]
-    JavaJar,
     #[serde(rename = "JAVA_SDK")]
     JavaSdk,
-    #[serde(rename = "DOTNET")]
-    Dotnet,
-    #[serde(rename = "WASM")]
-    Wasm,
 }
 /// Bounded local sandbox budget; limits never grant host access.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2537,11 +2471,30 @@ pub struct LocalRuntimeStatus {
     pub state: LocalRuntimeState,
     pub version: String,
 }
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolCall {
+    pub tool_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+}
 /// Only enabled local definitions applicable to this verified agent and device.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LocalToolCatalog {
-    pub tools: Vec<BuiltinToolInfo>,
+    pub tools: Vec<LocalToolInfo>,
+}
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolInfo {
+    pub tool_id: String,
+    pub action: String,
+    pub description: String,
+    pub enabled: bool,
+    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    pub tool_digest: String,
+    pub package_digest: String,
 }
 /// One JSON stdin document; arguments never become process command strings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2551,6 +2504,38 @@ pub struct LocalToolInput {
     pub request_id: String,
     pub tool_id: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolIpcRequest {
+    pub protocol_version: u64,
+    pub request_id: String,
+    pub operation: LocalToolOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invocation: Option<LocalToolCall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+}
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolIpcResponse {
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<LocalToolInfo>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ErrorCode>,
+}
+/// Canonical LocalToolOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocalToolOperation {
+    #[serde(rename = "CATALOG")]
+    Catalog,
+    #[serde(rename = "CALL")]
+    Call,
 }
 /// One bounded JSON stdout document; request binding and output schema are verified.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2572,6 +2557,8 @@ pub struct LocalToolRegistration {
     pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub limits: LocalRuntimeLimits,
     pub authorization_profile: InstalledAuthorizationProfile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_access: Option<LocalFileAccess>,
 }
 /// Administrator-selected immutable tool/runtime image; runtime provisioning is not execution authorization.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2882,16 +2869,6 @@ pub struct SignedClientDiscovery {
 pub struct SignedPolicyBundle {
     pub jws: String,
 }
-/// Canonical SystemExecutorKind wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SystemExecutorKind {
-    #[serde(rename = "BUILTINS")]
-    Builtins,
-    #[serde(rename = "HOTFOLDER")]
-    Hotfolder,
-    #[serde(rename = "REST_FORWARDING")]
-    RestForwarding,
-}
 /// Named operation and declared resource kinds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2931,10 +2908,6 @@ impl ContractSet {
 }
 /// Embedded canonical schemas for offline boundary validation.
 pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
-    (
-        "https://schemas.ololabs.io/toolgate/v1/builtins.schema.json",
-        include_str!("../schemas/v1/builtins.schema.json"),
-    ),
     (
         "https://schemas.ololabs.io/toolgate/v1/bundle.schema.json",
         include_str!("../schemas/v1/bundle.schema.json"),
@@ -2978,6 +2951,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v1/identifiers.schema.json",
         include_str!("../schemas/v1/identifiers.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v1/local-tools.schema.json",
+        include_str!("../schemas/v1/local-tools.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v1/package.schema.json",

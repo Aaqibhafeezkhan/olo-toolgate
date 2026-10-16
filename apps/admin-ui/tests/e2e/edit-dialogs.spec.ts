@@ -14,7 +14,7 @@ async function fixture(page:Page){
     const reply=(body:unknown)=>route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
     if(path.endsWith('/admin-session'))return reply({role:'SUPER_ADMIN'});
     if(path.endsWith('/users/signed-user'))return reply({id:'signed-user',name:'Test Administrator',enabled:true,revision:1});
-    if(path.endsWith('/endpoint/devices'))return reply({items:[{deviceId:device.id,systemExecutor:false,directoryDevice:device}]});
+    if(path.endsWith('/endpoint/devices'))return reply({items:[{deviceId:device.id,directoryDevice:device}]});
     if(path.endsWith('/groups'))return reply({entityType:path.includes('/users/')?'USER':'DEVICE',entityId:path.split('/').at(-2),groupIds:['default-devices'],revision:1});
     if(path.includes('/effective-access'))return reply({entityId:path.split('/').at(-2),kind:'USER',directoryRevision:1,authorizationEpoch:1,memberships:[],bindings:[],managementRoles:[]});
     if(path.endsWith('/users'))return reply({items:users});

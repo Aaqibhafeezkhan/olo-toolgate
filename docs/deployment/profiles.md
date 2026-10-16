@@ -28,7 +28,7 @@ another file and set that variable to use a different profile with the same imag
 | Field | Meaning |
 |---|---|
 | `source` | `PREBUILT_CORE` resolves only to the sealed artifact in the image's core lock (`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH`); its digest comes from that lock and a declared `packageDigest` must equal it. `MARKETPLACE` downloads the exact signed release from the configured Marketplace and requires `packageDigest`; a release with another digest is refused before download. |
-| `hostIds` | Tool Hosts that receive the package's eligible ServerTool exports. ClientTool exports are never deployed to a Tool Host. |
+| `hostIds` | Tool Hosts that receive the package's eligible ServerTool exports. ClientTool exports are never deployed to a Tool Host, and a profile cannot yet release them to devices: an entry that activates exports needs `hostIds`, so a ClientTool-only package (such as `examples.hotfolder`) is reported `FAILED` until device targets exist. Release and roll out client packages with the client-release and fleet APIs below. |
 | `globals` | Package global values for the deployment. |
 | `tools` | Installed exports to enable, each in a reviewed Tool Group that must already exist. |
 | `bindingIds` | Existing execution bindings whose allowed package digests become exactly the profile packages that name them. |
@@ -51,7 +51,7 @@ another file and set that variable to use a different profile with the same imag
 
 `GET /api/control/v1/packages/provisioning/{profileId}` (requires `package.read`) returns the latest status: `READY`,
 `PENDING` with the target it waits for, or `FAILED` with the reason. A failed profile keeps Control running for repair and
-is retried every minute; nothing falls back to another version or to a built-in tool. Grants, policies and approvals stay
+is retried every minute; nothing falls back to another version. Grants, policies and approvals stay
 separate reviewed records: a READY profile has installed tools, not given anyone access to run them.
 
 ## Client-tool images

@@ -12,5 +12,9 @@ public enum FrameKind {
     /** Canonical INPUT_REQUEST value. */
     INPUT_REQUEST,
     /** Canonical LOG value. */
-    LOG
+    LOG,
+    /** Canonical BROKER_REQUEST value. */
+    BROKER_REQUEST,
+    /** Canonical BROKER_RESPONSE value. */
+    BROKER_RESPONSE
 }

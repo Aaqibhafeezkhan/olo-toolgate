@@ -12,14 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.net.StandardProtocolFamily;
-import java.net.UnixDomainSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -132,77 +125,100 @@ class GovernedTest {
         assertEquals("UNSUPPORTED_PROTOCOL", run(demo, Map.of(), v1).path("error").path("code").asText());
     }
 
-    @Test
-    void routeCallsGoToTheBrokerWithTheCapability() throws Exception {
-        List<String> seen = new CopyOnWriteArrayList<>();
-        Path socket = Files.createTempDirectory("broker").resolve("broker.sock");
-        Broker broker = new Broker(socket, request -> {
-            seen.add(request);
-            if (request.contains("\"424242\"")) return "{\"refused\":\"route orders.get is not in this permit\"}";
-            return "{\"status\":200,\"headers\":{\"Content-Type\":\"application/json\"},\"body\":{\"id\":\"123456\",\"expand\":\"lines\",\"trace\":\"t-1\",\"keyed\":true}}";
+    /** Runs one invocation, answering each BROKER_REQUEST on stdin as the executor would; returns every frame. */
+    private static List<JsonNode> converse(ClassLoader loader, Map<String, String> env, JsonNode input, Function<JsonNode, JsonNode> executor) throws Exception {
+        var toTool = new java.io.PipedOutputStream(); var toolIn = new java.io.PipedInputStream(toTool, 1 << 20);
+        var fromTool = new java.io.PipedInputStream(1 << 20); var toolOut = new java.io.PipedOutputStream(fromTool);
+        toTool.write((input + "\n").getBytes(StandardCharsets.UTF_8)); toTool.flush();
+        var tool = new Thread(() -> {
+            try { Governed.run(loader, env, toolIn, toolOut, new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8)); toolOut.close(); }
+            catch (IOException e) { throw new java.io.UncheckedIOException(e); }
         });
-        try {
-            Map<String, String> env = Map.of("TOOLGATE_BROKER_SOCKET", socket.toString(), "TOOLGATE_BROKER_CAPABILITY", "cap-1");
-            JsonNode frame = run(shop, env, input("acme.shop/shop.order", "{\"id\":\"123456\",\"how\":\"plain\"}"));
-            assertFalse(frame.path("isError").asBoolean(), frame.toString());
-            assertEquals("123456", frame.path("structuredContent").path("order").path("id").asText());
-            String request = seen.get(0);
-            assertTrue(request.startsWith("POST /v1/call HTTP/1.1\r\n"), request);
-            assertTrue(request.contains("Toolgate-Capability: cap-1\r\n"), request);
-            JsonNode body = Fixtures.JSON.readTree(request.substring(request.indexOf("\r\n\r\n") + 4));
-            assertEquals("orders.get", body.path("route").asText());
-            assertEquals("shop-key", body.path("auth").asText(), "the broker injects the credential the route names");
-            assertEquals("123456", body.path("variables").path("orderId").asText());
-            JsonNode refused = run(shop, env, input("acme.shop/shop.order", "{\"id\":\"424242\",\"how\":\"plain\"}"));
-            assertEquals("ROUTE_REFUSED", refused.path("error").path("code").asText(), refused.toString());
-            assertTrue(refused.path("error").path("message").asText().contains("not in this permit"), refused.toString());
-        } finally {
-            broker.close();
+        tool.start();
+        var frames = new java.util.ArrayList<JsonNode>();
+        var reader = new java.io.BufferedReader(new java.io.InputStreamReader(fromTool, StandardCharsets.UTF_8));
+        for (String line; (line = reader.readLine()) != null; ) {
+            JsonNode frame = Fixtures.JSON.readTree(line); frames.add(frame);
+            if (frame.path("kind").asText().equals("BROKER_REQUEST")) {
+                ObjectNode response = Fixtures.JSON.createObjectNode().put("kind", "BROKER_RESPONSE").put("requestId", frame.path("requestId").asText());
+                JsonNode answer = executor.apply(frame);
+                if (answer.has("error")) response.set("error", answer.get("error")); else response.set("result", answer);
+                toTool.write((response + "\n").getBytes(StandardCharsets.UTF_8)); toTool.flush();
+            }
         }
-        JsonNode gone = run(shop, Map.of("TOOLGATE_BROKER_SOCKET", socket.toString()), input("acme.shop/shop.order", "{\"id\":\"123456\",\"how\":\"plain\"}"));
+        tool.join(30_000);
+        assertEquals("RESULT", frames.get(frames.size() - 1).path("kind").asText(), "terminal result is last: " + frames);
+        return frames;
+    }
+    private static JsonNode refusal(String message) {
+        ObjectNode error = Fixtures.JSON.createObjectNode(); error.putObject("error").put("code", "BROKER_REFUSED").put("message", message).put("retryable", false); return error;
+    }
+
+    @Test
+    void routeCallsAndSecretsGoThroughTheOneStdioBroker() throws Exception {
+        List<JsonNode> seen = new CopyOnWriteArrayList<>();
+        Function<JsonNode, JsonNode> host = frame -> {
+            seen.add(frame);
+            if (!frame.path("operation").asText().equals("ROUTE_CALL")) return refusal("not a route call");
+            if (frame.path("request").toString().contains("\"424242\"")) return refusal("route orders.get is not in this permit");
+            try { return Fixtures.JSON.readTree("{\"status\":200,\"headers\":{\"Content-Type\":\"application/json\"},\"body\":{\"id\":\"123456\",\"expand\":\"lines\",\"trace\":\"t-1\",\"keyed\":true}}"); }
+            catch (IOException e) { throw new java.io.UncheckedIOException(e); }
+        };
+        var frames = converse(shop, Map.of(), input("acme.shop/shop.order", "{\"id\":\"123456\",\"how\":\"plain\"}"), host);
+        JsonNode result = frames.get(frames.size() - 1);
+        assertFalse(result.path("isError").asBoolean(), result.toString());
+        assertEquals("123456", result.path("structuredContent").path("order").path("id").asText());
+        JsonNode call = seen.get(0).path("request");
+        assertEquals("ROUTE_CALL", seen.get(0).path("operation").asText());
+        assertEquals("orders.get", call.path("route").asText());
+        assertEquals("shop-key", call.path("auth").asText(), "the executor injects the credential the route names");
+        assertEquals("123456", call.path("variables").path("orderId").asText());
+        var refused = converse(shop, Map.of(), input("acme.shop/shop.order", "{\"id\":\"424242\",\"how\":\"plain\"}"), host);
+        JsonNode error = refused.get(refused.size() - 1).path("error");
+        assertEquals("ROUTE_REFUSED", error.path("code").asText(), refused.toString());
+        assertTrue(error.path("message").asText().contains("not in this permit"), refused.toString());
+        // With no executor answering, the call is refused, never left hanging or retried.
+        JsonNode gone = run(shop, Map.of(), input("acme.shop/shop.order", "{\"id\":\"123456\",\"how\":\"plain\"}"));
         assertEquals("ROUTE_REFUSED", gone.path("error").path("code").asText(), gone.toString());
     }
 
-    /** A one-request-per-connection HTTP/1.1 server on a Unix socket, standing in for the Tool Host broker. */
-    static final class Broker implements AutoCloseable {
-        private final ServerSocketChannel server;
-        private final Thread thread;
-        private final Path socket;
-
-        Broker(Path socket, Function<String, String> answer) throws IOException {
-            this.socket = socket;
-            server = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
-            server.bind(UnixDomainSocketAddress.of(socket));
-            thread = new Thread(() -> {
-                while (server.isOpen()) {
-                    try (SocketChannel c = server.accept()) {
-                        ByteBuffer in = ByteBuffer.allocate(64 * 1024);
-                        String request = "";
-                        while (true) {
-                            if (c.read(in) < 0) break;
-                            request = new String(in.array(), 0, in.position(), StandardCharsets.UTF_8);
-                            int end = request.indexOf("\r\n\r\n");
-                            if (end < 0) continue;
-                            int length = Integer.parseInt(request.replaceAll("(?s).*Content-Length: (\\d+).*", "$1"));
-                            if (in.position() >= end + 4 + length) break;
-                        }
-                        byte[] body = answer.apply(request).getBytes(StandardCharsets.UTF_8);
-                        String head = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
-                        c.write(ByteBuffer.wrap(head.getBytes(StandardCharsets.US_ASCII)));
-                        c.write(ByteBuffer.wrap(body));
-                    } catch (IOException e) {
-                        return;
-                    }
-                }
-            });
-            thread.setDaemon(true);
-            thread.start();
-        }
-
-        @Override
-        public void close() throws IOException {
-            server.close();
-            Files.deleteIfExists(socket);
-        }
+    @Test
+    void deviceFilesAreBrokeredOnlyForDeclaredClientToolsWithTheDeclaredAccess() throws Exception {
+        ClassLoader notes = Fixtures.fixture("files");
+        List<JsonNode> seen = new CopyOnWriteArrayList<>();
+        Function<JsonNode, JsonNode> device = frame -> {
+            seen.add(frame);
+            var result = Fixtures.JSON.createObjectNode();
+            switch (frame.path("operation").asText()) {
+                case "FILES_READ" -> result.put("text", "hello");
+                case "FILES_LIST" -> result.putArray("paths").add("a.txt");
+                case "FILES_WRITE" -> { }
+                default -> { return refusal("not provided on a device"); }
+            }
+            return result;
+        };
+        Map<String, String> client = Map.of("TOOLGATE_EXECUTION_TARGET", "CLIENT");
+        var read = converse(notes, client, input("acme.notes/notes.read", "{\"path\":\"a.txt\"}"), device);
+        JsonNode result = read.get(read.size() - 1);
+        assertFalse(result.path("isError").asBoolean(), result.toString());
+        assertEquals("hello", result.path("structuredContent").path("text").asText());
+        assertEquals(List.of("FILES_READ", "FILES_LIST"), seen.stream().map(f -> f.path("operation").asText()).toList());
+        assertEquals("a.txt", seen.get(0).path("request").path("path").asText());
+        seen.clear();
+        var save = converse(notes, client, input("acme.notes/notes.save", "{\"path\":\"b.txt\",\"text\":\"hi\"}"), device);
+        assertFalse(save.get(save.size() - 1).path("isError").asBoolean(), save.toString());
+        assertEquals("hi", seen.get(0).path("request").path("text").asText());
+        seen.clear();
+        // Read-only declaration: the write never reaches the executor.
+        var sneak = converse(notes, client, input("acme.notes/notes.sneak", "{\"path\":\"b.txt\"}"), device);
+        assertEquals("FILES_REFUSED", sneak.get(sneak.size() - 1).path("error").path("code").asText(), sneak.toString());
+        assertTrue(seen.isEmpty());
+        // Undeclared: no files area at all.
+        var peek = converse(notes, client, input("acme.notes/notes.peek", "{}"), device);
+        assertTrue(peek.get(peek.size() - 1).path("isError").asBoolean(), peek.toString());
+        assertTrue(seen.isEmpty());
+        // A Tool Host has no device files: the same declared tool there gets none.
+        var server = converse(notes, Map.of(), input("acme.notes/notes.read", "{\"path\":\"a.txt\"}"), device);
+        assertTrue(server.get(server.size() - 1).path("isError").asBoolean(), server.toString());
     }
 }

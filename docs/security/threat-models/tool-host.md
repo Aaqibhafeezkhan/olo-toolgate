@@ -15,11 +15,12 @@ It extends the platform [threat model](../threat-model.md) and does not repeat i
                                                 │           secrets/deliver, effects/report      signing keys)
                                                 │ (B2) launcher: namespaces, seccomp, cgroups
                                                 ▼
-                                   ┌──────── sandbox (untrusted tool code) ────────┐
-                                   │ /run/toolgate/broker.sock   /run/toolgate/secret.sock │
-                                   └──────┬───────────────────────────┬─────────────┘
-                                          │ (B4) per-sandbox UDS       │ (B5) per-sandbox UDS
-                                          ▼                            ▼
+                                   ┌──── sandbox (untrusted tool code) ────┐
+                                   │ stdin: ToolInput, BROKER_RESPONSE     │
+                                   │ stdout: BROKER_REQUEST, frames, RESULT│
+                                   └──────────────┬────────────────────────┘
+                                                  │ (B4) the invocation's own stdio
+                                                  ▼
                                    broker / egress proxy  ◄── credentials (memory only)
                                    (own netns, NetworkPolicy)
                                           │ (B6) TLS to approved destinations only
@@ -30,16 +31,15 @@ It extends the platform [threat model](../threat-model.md) and does not repeat i
 | Boundary | Between | What crosses it | Who is trusted on each side |
 |---|---|---|---|
 | B1 | Gateway → Tool Host | Permit, canonical arguments, progress, results | Both are ToolGate components. Neither trusts the other's authority: the Tool Host trusts only Control's signature on the permit. |
-| B2 | Supervisor → sandbox | stdin `ToolInput` v2, frames on stdout | The sandbox runs **untrusted** code: the published package, and anything it was tricked into running. |
+| B2 | Supervisor → sandbox | stdin `ToolInput` v2 and `BROKER_RESPONSE` lines, frames on stdout | The sandbox runs **untrusted** code: the published package, and anything it was tricked into running. |
 | B3 | Tool Host → Control | Nonce consumption, lease, secrets, results | Control is the authority. The Tool Host is trusted to enforce what Control decides, nothing more. |
-| B4 | Sandbox → broker | Route-selected HTTP requests with a capability | The broker trusts the socket it accepted on, never request content. |
-| B5 | Sandbox → secret socket | Handle redemption, only for `CREDENTIALS_IN_SANDBOX` tools | Same as B4 |
+| B4 | Sandbox → broker | `BROKER_REQUEST` frames on the invocation's stdout: `ROUTE_CALL` (route-selected HTTP requests) and `SECRET_REDEEM` (handle redemption, only for `CREDENTIALS_IN_SANDBOX` tools) | The broker trusts the invocation whose process it reads, never request content ([ADR 027](../../adr/027-one-tool-protocol-device-files.md)). |
 | B6 | Broker or proxy → upstream | TLS to an approved destination | The upstream is outside ToolGate. It may be malicious or compromised. |
 
 ## 2. Assets
 
 - **A1 Tenant credentials:** upstream API keys, OAuth tokens, database passwords (`control_secrets`, broker memory).
-- **A2 Execution authority:** Control-signed permits, single-use nonces, fencing tokens, broker capabilities.
+- **A2 Execution authority:** Control-signed permits, single-use nonces, fencing tokens.
 - **A3 Tenant data in flight:** arguments, results, upstream responses.
 - **A4 Effect integrity:** at most one execution per ledger invocation, and honest outcomes (`OUTCOME_UNKNOWN` instead of a guess).
 - **A5 Isolation:** one tenant's or invocation's code, data and credentials are never reachable from another's.
@@ -90,7 +90,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 | T-BR-1 | Using the broker as an open proxy to internal targets, SSRF (E1, E2) | The sandbox selects a **route id**. It never sends a URL. The destination comes from the approved service profile, loaded by the permit's digest (platform-requirements.md §11.8). | None at the broker. A mis-approved route is a review failure. | `broker/url-not-accepted`, `broker/unknown-route` |
 | T-BR-2 | Path, query or header injection to reach other upstream resources (E1, E2) | Typed path variables checked against patterns, then percent-encoded. `/`, `..` and encoded traversal are refused. Query names and headers are allowlisted, and the method is fixed per route. | Upstream-side authorization bugs | `broker/path-traversal`, `broker/header-smuggle` |
 | T-BR-3 | Credential theft through the broker (E1) | The broker injects credentials last and strips client `Authorization`, `Cookie`, `Proxy-Authorization`, `Host` and `X-Forwarded-*`. It filters `Set-Cookie` and auth challenges from responses, and never returns credentials. | An upstream that echoes the credential in a response body. Review checks routes against known echo endpoints. | `broker/credential-echo-filter`, `broker/auth-header-refused` |
-| T-BR-4 | Another sandbox's socket or capability is used (E1, E6) | One socket per sandbox, attribution by accepting socket, and a MAC'd capability bound to the invocation, fencing token, sandbox id, profile id and expiry | E6 holds all of a host's live capabilities until they expire | `broker/foreign-capability` |
+| T-BR-4 | Another sandbox's broker is used (E1, E6) | There is no socket or capability to steal: each invocation's broker reads only that process's stdout and answers on its stdin, for the permit, fencing token and profile of that invocation, until it ends | E6 controls every live invocation on its host | `broker/foreign-capability` |
 | T-BR-5 | Redirect or DNS rebinding to a blocked address (E3) | Every resolved address is checked at connect time; link-local, metadata, loopback and cluster CIDRs are always blocked. Redirects are followed only within approved routes, and never for ledger tools (platform-requirements.md §11.6). | None | `egress/rebinding`, `egress/redirect-out` |
 | T-BR-6 | Upstream TLS interception (E4) | The broker verifies the upstream certificate against the system store or an admin-pinned CA or SPKI | A compromised public CA, which pinning mitigates | `egress/bad-cert` |
 
@@ -125,7 +125,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 - **Handles:** `ToolInput.secrets[]` carries handles, never values. A handle is opaque and bound by Control to `(tenant, invocationId, secret name, tool group, pool)`.
 - **Redemption:** the extended `POST access/secrets/deliver` with the Tool Host certificate and the fencing token. Control checks `EXECUTING`, the token, the lease holder, the current epoch and grants, as it does for devices today (`EnterpriseOperations.secretAuthority`).
 - **Brokered credentials** are redeemed by the broker and held only in its memory for that invocation.
-- **`CREDENTIALS_IN_SANDBOX` tools** redeem through the per-sandbox secret socket. The supervisor performs the Control call and returns the value to that sandbox only. The permission is a security delta at review.
+- **`CREDENTIALS_IN_SANDBOX` tools** redeem with a `SECRET_REDEEM` broker request on their own stdio. The supervisor performs the Control call and returns the value to that sandbox only. The permission is a security delta at review.
 - Each redemption appends to the host spool first (platform-requirements.md §12.7 row 7).
 
 | Id | Threat | Mitigation | Residual risk | D3 case |

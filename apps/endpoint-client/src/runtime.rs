@@ -32,32 +32,13 @@ pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -
         key.clone(),
         contracts.clone(),
     )?);
-    let (primary_healed, healing) = healed(&config, &config.state_directory);
-    let primary = config.clone();
-    let service = match ClientService::open(primary_healed, store, key.clone(), control) {
-        Ok(service) => service,
-        // Never let self-healing stop a service that would otherwise start.
-        Err(failure) if healing.is_some() => {
-            tracing::warn!(event="local_tools",result="ignored",error=?failure);
-            let store = ProtectedStore::open(primary.state_directory.clone())?;
-            let control = Arc::new(HttpsControl::new(
-                primary.clone(),
-                key.clone(),
-                contracts.clone(),
-            )?);
-            ClientService::open(primary, store, key.clone(), control)?
-        }
-        Err(failure) => return Err(failure),
-    };
+    let service = ClientService::open(config.clone(), store, key.clone(), control)?;
     // One owner switch for the focused gateway and every background connection.
     let power = crate::power::Power::open(config.state_directory.clone())?;
     let service = Arc::new(tokio::sync::Mutex::new(service.with_power(power.clone())));
     let activity = service.lock().await.activity.clone();
     if !power.is_on() {
         activity.event("Power", "OFF");
-    }
-    if let Some(summary) = healing {
-        activity.event("Tools", &summary);
     }
     let connections = Arc::new(Connections::default());
     let focused = Connection::new(&*service.lock().await, true);
@@ -76,14 +57,7 @@ pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -
             ClientService::open(background, store, key.clone(), control)
                 .map(|state| state.with_power(power.clone()))
         };
-        let (background_healed, healing) = healed(&background, &config.state_directory);
-        let opened = match open(background_healed) {
-            Err(failure) if healing.is_some() => {
-                tracing::warn!(event="local_tools",server=%server,result="ignored",error=?failure);
-                open(background)
-            }
-            opened => opened,
-        };
+        let opened = open(background);
         match opened {
             Ok(state) => {
                 let connection = Connection::new(&state, false);
@@ -135,33 +109,6 @@ pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -
     }
     activity.event("Service", "STOPPED");
     result.and(cleanup)
-}
-/// The configuration with the device's built-in tool selection healed, and a summary when
-/// anything changed. A healing failure leaves the configuration as it was.
-fn healed(config: &Config, device_root: &std::path::Path) -> (Config, Option<String>) {
-    let mut healed = config.clone();
-    match crate::local_tools::heal(&mut healed, device_root) {
-        Ok(result) if result.restored || result.refreshed > 0 => {
-            tracing::info!(event="local_tools",server=%config.server_url,restored=result.restored,refreshed=result.refreshed);
-            let summary = if result.restored {
-                format!(
-                    "Restored the built-in tool selection for {}",
-                    config.server_url
-                )
-            } else {
-                format!(
-                    "Refreshed {} built-in tool profiles for this client build",
-                    result.refreshed
-                )
-            };
-            (healed, Some(summary))
-        }
-        Ok(_) => (healed, None),
-        Err(failure) => {
-            tracing::warn!(event="local_tools",result="unavailable",error=?failure);
-            (config.clone(), None)
-        }
-    }
 }
 /// One serialized check-in loop per gateway connection. While the owner's switch is off the
 /// loop sends one final report and then stays silent until the owner switches it on.

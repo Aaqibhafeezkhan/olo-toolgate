@@ -14,41 +14,6 @@
       "path": "workspace/readme.txt"
     }
   },
-  "BuiltinInvocation": {
-    "toolId": "hotfolder.read_text",
-    "arguments": {
-      "path": "note.txt"
-    }
-  },
-  "BuiltinIpcRequest": {
-    "protocolVersion": 2,
-    "requestId": "request-07",
-    "operation": "CALL",
-    "invocation": {
-      "toolId": "hotfolder.read_text",
-      "arguments": {
-        "path": "note.txt"
-      }
-    }
-  },
-  "BuiltinIpcResponse": {
-    "requestId": "request-07",
-    "output": {
-      "text": "hello"
-    }
-  },
-  "BuiltinOperation": "CALL",
-  "BuiltinToolInfo": {
-    "toolId": "hotfolder.read_text",
-    "action": "read",
-    "description": "Read bounded UTF-8 content.",
-    "enabled": true,
-    "inputSchema": {
-      "type": "object"
-    },
-    "toolDigest": "0000000000000000000000000000000000000000000000000000000000000000",
-    "packageDigest": "0000000000000000000000000000000000000000000000000000000000000000"
-  },
   "BundleHeader": {
     "alg": "RS256",
     "typ": "toolgate-policy-bundle+jws",
@@ -906,7 +871,7 @@
     ]
   },
   "DeviceDeploymentMetadata": {
-    "executionKind": "QUICKSTART_CLIENT",
+    "executionKind": "ENDPOINT_CLIENT",
     "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "containerName": "toolgate-langchain-quickstart-1",
     "systemName": "abc123",
@@ -917,7 +882,7 @@
   "DeviceDeploymentRecord": {
     "deviceId": "device-test",
     "deployment": {
-      "executionKind": "QUICKSTART_CLIENT",
+      "executionKind": "ENDPOINT_CLIENT",
       "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "containerName": "toolgate-langchain-quickstart-1",
       "systemName": "abc123",
@@ -926,7 +891,7 @@
       "ipAddress": "172.18.0.2"
     }
   },
-  "DeviceExecutionKind": "QUICKSTART_CLIENT",
+  "DeviceExecutionKind": "ENDPOINT_CLIENT",
   "DeviceIdentity": {
     "deviceId": "device-1",
     "tenantId": "device-1",
@@ -1053,7 +1018,6 @@
   },
   "EndpointManagedDevice": {
     "deviceId": "device-1",
-    "systemExecutor": false,
     "systemName": "test-machine",
     "ipAddress": "2001:db8::1"
   },
@@ -1061,7 +1025,6 @@
     "items": [
       {
         "deviceId": "device-1",
-        "systemExecutor": false,
         "systemName": "test-machine",
         "ipAddress": "2001:db8::1"
       }
@@ -1070,7 +1033,7 @@
       {
         "deviceId": "device-test",
         "deployment": {
-          "executionKind": "QUICKSTART_CLIENT",
+          "executionKind": "ENDPOINT_CLIENT",
           "containerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "containerName": "toolgate-langchain-quickstart-1",
           "systemName": "abc123",
@@ -1877,18 +1840,18 @@
     "minimumClientVersion": "0.1.0-dev",
     "runtimes": [
       {
-        "id": "python-echo",
-        "kind": "PYTHON",
-        "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "version": "3.14.0"
+        "id": "java-sdk",
+        "kind": "JAVA_SDK",
+        "image": "registry.example.com/toolgate/client-tools@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "21.0.12+1"
       }
     ],
     "tools": [
       {
         "toolId": "local.echo",
         "action": "execute",
-        "runtimeId": "python-echo",
-        "entryPoint": "/opt/tool/tool.py",
+        "runtimeId": "java-sdk",
+        "entryPoint": "/opt/tool/examples.echo/tool.jar",
         "inputSchema": {
           "type": "object"
         },
@@ -1908,7 +1871,7 @@
             "enabled": true,
             "revision": 1,
             "version": "0.1.0-dev",
-            "packageDigest": "1f46d112e15700b76859b52f4541113080c3b734916c682658e09353109422e9",
+            "packageDigest": "9a9ce513bccd3e59712ef04301c725a24ce87f8add9b8577ba7cb84ce6207de7",
             "extractorId": "extract-5a77d536026e311f934cfcc372f60551",
             "definition": {
               "id": "local.echo",
@@ -1946,7 +1909,8 @@
             ],
             "maxResources": 1
           }
-        }
+        },
+        "fileAccess": "NONE"
       }
     ],
     "selfTests": [
@@ -2090,16 +2054,17 @@
       "maxResources": 1
     }
   },
+  "LocalFileAccess": "NONE",
   "LocalRuntimeHealth": {
     "ready": false,
     "successfulExecutions": 0,
     "failedExecutions": 0,
     "runtimes": [
       {
-        "runtimeId": "python-echo",
-        "kind": "PYTHON",
+        "runtimeId": "java-sdk",
+        "kind": "JAVA_SDK",
         "state": "MISSING",
-        "version": "3.14.0"
+        "version": "21.0.12+1"
       }
     ]
   },
@@ -2126,7 +2091,7 @@
       }
     }
   },
-  "LocalRuntimeKind": "PYTHON",
+  "LocalRuntimeKind": "JAVA_SDK",
   "LocalRuntimeLimits": {
     "timeoutMs": 2000,
     "memoryMiB": 128,
@@ -2136,10 +2101,16 @@
   "LocalRuntimeOperation": "INVOKE",
   "LocalRuntimeState": "MISSING",
   "LocalRuntimeStatus": {
-    "runtimeId": "python-echo",
-    "kind": "PYTHON",
+    "runtimeId": "java-sdk",
+    "kind": "JAVA_SDK",
     "state": "MISSING",
-    "version": "3.14.0"
+    "version": "21.0.12+1"
+  },
+  "LocalToolCall": {
+    "toolId": "hotfolder.read_text",
+    "arguments": {
+      "path": "note.txt"
+    }
   },
   "LocalToolCatalog": {
     "tools": [
@@ -2156,6 +2127,17 @@
       }
     ]
   },
+  "LocalToolInfo": {
+    "toolId": "hotfolder.read_text",
+    "action": "read",
+    "description": "Read bounded UTF-8 content.",
+    "enabled": true,
+    "inputSchema": {
+      "type": "object"
+    },
+    "toolDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "packageDigest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
   "LocalToolInput": {
     "protocolVersion": 1,
     "requestId": "request-runtime",
@@ -2164,6 +2146,24 @@
       "text": "hello"
     }
   },
+  "LocalToolIpcRequest": {
+    "protocolVersion": 2,
+    "requestId": "request-07",
+    "operation": "CALL",
+    "invocation": {
+      "toolId": "hotfolder.read_text",
+      "arguments": {
+        "path": "note.txt"
+      }
+    }
+  },
+  "LocalToolIpcResponse": {
+    "requestId": "request-07",
+    "output": {
+      "text": "hello"
+    }
+  },
+  "LocalToolOperation": "CALL",
   "LocalToolOutput": {
     "protocolVersion": 1,
     "requestId": "request-runtime",
@@ -2174,8 +2174,8 @@
   "LocalToolRegistration": {
     "toolId": "local.echo",
     "action": "execute",
-    "runtimeId": "python-echo",
-    "entryPoint": "/opt/tool/tool.py",
+    "runtimeId": "java-sdk",
+    "entryPoint": "/opt/tool/examples.echo/tool.jar",
     "inputSchema": {
       "type": "object"
     },
@@ -2195,7 +2195,7 @@
         "enabled": true,
         "revision": 1,
         "version": "1.0.0",
-        "packageDigest": "1f46d112e15700b76859b52f4541113080c3b734916c682658e09353109422e9",
+        "packageDigest": "9a9ce513bccd3e59712ef04301c725a24ce87f8add9b8577ba7cb84ce6207de7",
         "extractorId": "extract-5a77d536026e311f934cfcc372f60551",
         "definition": {
           "id": "local.echo",
@@ -2233,13 +2233,14 @@
         ],
         "maxResources": 1
       }
-    }
+    },
+    "fileAccess": "NONE"
   },
   "ManagedRuntime": {
-    "id": "python-echo",
-    "kind": "PYTHON",
-    "image": "registry.example.com/toolgate/python-echo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "version": "3.14.0"
+    "id": "java-sdk",
+    "kind": "JAVA_SDK",
+    "image": "registry.example.com/toolgate/client-tools@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "21.0.12+1"
   },
   "MarketplaceRelease": {
     "packageId": "community/calculator",
@@ -2519,7 +2520,6 @@
   "SignedPolicyBundle": {
     "jws": "eyJhbGciOiAiUlMyNTYiLCAidHlwIjogInRvb2xnYXRlLXBvbGljeS1idW5kbGUrandzIiwgImtpZCI6ICJidW5kbGUta2V5LTEifQ.eyJmb3JtYXRWZXJzaW9uIjogMSwgImlzc3VlciI6ICJjb250cm9sIiwgImF1ZGllbmNlIjogImdhdGV3YXkiLCAidGVuYW50SWQiOiAiZXhhbXBsZSIsICJzZXF1ZW5jZSI6IDEsICJ2ZXJzaW9uIjogIjEuMC4xIiwgImRpcmVjdG9yeVJldmlzaW9uIjogMCwgImlzc3VlZEF0VW5peE1zIjogMTcwMDAwMDAwMDAwMCwgImV4cGlyZXNBdFVuaXhNcyI6IDE3MDAwMDAwNjAwMDAsICJncmFjZU1zIjogMCwgInBvbGljeVNoYTI1NiI6ICIyYmIxZTUwNDhhMTliZGU5M2MzNDAxNDJiNWQ5YmExZjVlYWQ2MzlkY2U3YWRkNjdiZmQwMmQ2YzNhNDliN2UxIiwgInBvbGljeSI6ICJleUptYjNKdFlYUldaWEp6YVc5dUlqb3hMQ0p5ZFd4bGN5STZXM3NpWVdOMGFXOXVJam9pY21WaFpDSXNJbUZuWlc1MFNXUnpJanBiWFN3aVpHVjJhV05sU1dSeklqcGJYU3dpWldabVpXTjBJam9pUVV4TVQxY2lMQ0puY21GalpVRnNiRzkzWldRaU9uUnlkV1VzSW5CdmJHbGplVWxrSWpvaVlXeHNiM2N0Y21WaFpDSXNJbkpsYzI5MWNtTmxJanA3SW10cGJtUWlPaUpEVlZOVVQwMGlMQ0pzYjJOaGRHOXlJam9pWTJGc1kzVnNZWFJ2Y2lKOUxDSjBiMjlzU1dRaU9pSm1hV3hsY3lJc0luVnpaWEpKWkhNaU9sc2lZV3hwWTJVaVhYMWRmUSJ9.c3RydWN0dXJhbC1vbmx5"
   },
-  "SystemExecutorKind": "HOTFOLDER",
   "ToolAction": {
     "name": "evaluate",
     "resourceKinds": [

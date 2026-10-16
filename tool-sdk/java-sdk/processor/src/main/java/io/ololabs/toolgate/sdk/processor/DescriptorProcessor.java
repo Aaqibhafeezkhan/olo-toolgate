@@ -78,13 +78,13 @@ public final class DescriptorProcessor extends AbstractProcessor {
     static final Pattern DECLARATION_ID = Pattern.compile("^[a-z][a-z0-9_.-]{0,63}$");
     static final Pattern ERROR_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{2,63}$");
     static final Pattern HEADER = Pattern.compile("^[A-Za-z0-9-]{1,128}$");
-    static final List<String> RESERVED = List.of("toolgate.", "hotfolder.", "builtin.");
+    static final List<String> RESERVED = List.of("toolgate.");
     static final Set<String> FORBIDDEN_HEADERS = Set.of("authorization", "proxy-authorization", "cookie", "host");
     static final String CONTEXT = "io.ololabs.toolgate.sdk.context.ToolContext";
     static final String TOOL_RESULT = "io.ololabs.toolgate.sdk.context.ToolResult";
 
     private static final List<Class<? extends Annotation>> ANNOTATIONS = List.of(ToolPackage.class, ServerTool.class,
-            ClientTool.class, Destination.class, HttpAuth.class, HttpRoute.class,
+            ClientTool.class, io.ololabs.toolgate.sdk.annotations.DeviceFileAccess.class, Destination.class, HttpAuth.class, HttpRoute.class,
             TcpDestination.class);
 
     private boolean done;
@@ -558,6 +558,13 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 if (type == AuthType.CONNECTION) permissions.add("CONNECTION");
             }
             if (vars.secrets.stream().anyMatch(s -> s.scope() == SecretScope.USER)) permissions.add("USER_SECRET");
+            // The device files area exists only on devices, so only a ClientTool may declare it (ADR 027).
+            io.ololabs.toolgate.sdk.annotations.DeviceFileAccess files = method.getAnnotation(io.ololabs.toolgate.sdk.annotations.DeviceFileAccess.class);
+            if (files != null) {
+                if (!isClient) throw new Problem(method, "@DeviceFileAccess is only for a @ClientTool; Tool Hosts have no device files");
+                permissions.add("DEVICE_FILES_READ");
+                if (files.write()) permissions.add("DEVICE_FILES_WRITE");
+            }
             d.put("permissions", Jcs.sorted(permissions));
 
             for (String set : t.toolsets) length(set, 1, 64, "toolset", method);

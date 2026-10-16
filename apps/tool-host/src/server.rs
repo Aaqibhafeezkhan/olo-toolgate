@@ -7,7 +7,7 @@
 //! Pull mode ([`pull`]) takes the same dispatches from Control over the host's own connection,
 //! for a host the Gateway cannot reach: a laptop behind NAT runs tools exactly as a server does.
 
-use crate::broker::{self, Invocation};
+use crate::broker::Invocation;
 use crate::config::{Config, CEILING};
 use crate::control::{Control, ControlError};
 use crate::permit::{PermitError, Verifier};
@@ -308,8 +308,6 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
         .deadline_unix_ms
         .min(now_ms() + limits.sync_deadline_ms.min(CEILING.sync_deadline_ms));
     let sandbox = host.config.work_dir.join("i").join(random_hex(8));
-    let socket = sandbox.join("broker.sock");
-    let capability = random_hex(32);
     let descriptor = &prepared.tool.descriptor;
     let in_sandbox = descriptor
         .permissions
@@ -329,7 +327,6 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
     let invocation = Arc::new(Invocation::new(
         id.clone(),
         fencing_token.clone(),
-        capability.clone(),
         deadline,
         prepared.routes.clone(),
         prepared.profile.destinations.clone(),
@@ -341,9 +338,7 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
         host.control.clone(),
     ));
 
-    let (outcome, result, not_started) = match std::fs::create_dir_all(&sandbox)
-        .and_then(|()| tokio::net::UnixListener::bind(&socket))
-    {
+    let (outcome, result, not_started) = match std::fs::create_dir_all(&sandbox) {
         Err(e) => {
             tracing::warn!(invocation_id = %id, error = %e, "cannot prepare the sandbox");
             let frame = error_frame(
@@ -357,9 +352,7 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 Some(RefusalReason::StoreUnavailable),
             )
         }
-        Ok(listener) => {
-            let (stop, stopped) = tokio::sync::oneshot::channel();
-            let broker = tokio::spawn(broker::serve(listener, invocation.clone(), stopped));
+        Ok(()) => {
             let input = ToolInput {
                 protocol_version: 2,
                 invocation_id: id.clone(),
@@ -395,8 +388,6 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 executable: &prepared.executable,
                 entry_point: &input.entry_point,
                 sandbox_dir: &sandbox,
-                broker_socket: &socket,
-                capability: &capability,
                 java_path: &host.config.runtimes.java_path,
                 memory_bytes: memory,
                 max_output_bytes: output,
@@ -409,7 +400,7 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 claims.attempt,
                 source,
             ));
-            let ran = runner::run(&launch, &input, deadline, Some(&sink)).await;
+            let ran = runner::run(&launch, &input, deadline, Some(&sink), &invocation).await;
             // Frames reach Control before the result, so the stream's terminal event follows them.
             drop(sink);
             if tokio::time::timeout(std::time::Duration::from_secs(5), forwarder)
@@ -419,8 +410,6 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 tracing::warn!(invocation_id = %id, "run events still pending at the result report");
             }
             invocation.closed.store(true, Ordering::SeqCst);
-            let _ = stop.send(());
-            let _ = broker.await;
             let unknown = claims.requires_execution_ledger;
             match ran {
                 Ran::Frame(frame) if frame.is_error => (InvocationOutcome::Failed, frame, None),

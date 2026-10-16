@@ -44,14 +44,13 @@ header on authenticated HTTPS check-ins and WebSocket handshakes. Control record
 the actual transport peer IP, ignoring forwarded-IP headers. These are display
 metadata and never identity or authorization inputs. Missing metadata shows
 **Not reported**; older clients need the current client build to report their name.
-An observed IP may be a NAT/proxy address. Quickstart server-managed rows show
-the composition host/container name and address.
+An observed IP may be a NAT/proxy address.
 
 ### Docker deployment and execution identities
 
 The LangChain composition has two Docker containers and four enrolled execution
-identities. Quickstart contains its native built-in endpoint, the direct-dispatch
-Tool Host and a pull-mode Tool Host. `tool-host-remote` is the pull-mode example
+identities. Quickstart contains the direct-dispatch Tool Host and a pull-mode
+Tool Host. `tool-host-remote` is the pull-mode example
 inside Quickstart; its name does not imply another physical machine. The separate
 `langchain-linux-device` container runs the managed endpoint client.
 
@@ -167,27 +166,11 @@ Unknown or unavailable identity, dependency, filter or permit fails closed.
 
 Client calls use Gateway → Control's durable relay → the approved client. Discovery,
 dispatch, authorization immediately before effects and result delivery all check
-current registry and permission state. Local fixed tools use their registered
-server device, current directory gates and fresh Gateway authorization before
-each effect. HotFolder copy/move checks both paths. These shared device gates
+current registry and permission state. A device file operation must name a path
+the authorized call was given; `move` and `copy` name both. These shared device gates
 do not replace resource confinement, ASK permits, package signatures or runtime
 sandboxing. Standalone policy-only authorization APIs remain compatible; a policy
 decision by itself cannot enroll a device or execute a client tool.
-
-Quickstart registers these server-managed devices under **Local tool requester**:
-
-| Device name | Identifier | Routing and control |
-|---|---|---|
-| Quickstart fixed executor | `local-builtins` | Fixed compute/server tools. Disabling it blocks all fixed server effects, including the HotFolder adapter. |
-| HotFolder | `local-hotfolder` | Confined file tools. Authorization uses its own device-bound runtime credential so device-specific filters match this record. Disabling it leaves compute available. |
-| REST call forwarding | `local-rest-forwarding` | The existing Gateway's forwarding of client tool calls, with registered-client permissions still checked downstream. Disabling it blocks discovery, dispatch and result delivery through that path. It is not an arbitrary external HTTP proxy. |
-
-These are internal execution devices, not installed clients. They use server-managed
-identity and need no human client enrollment, so Approve/Deapprove is not applicable.
-They appear green while the Quickstart composition is ready and the device and
-registered user are enabled. Unknown or failed readiness is never displayed green.
-Readiness is availability, not a promise that a particular tool/filter will allow
-an operation. Their runtime credentials still expire and rotate privately.
 
 ## Administrative API and concurrency
 
@@ -206,33 +189,27 @@ an operation. Their runtime credentials still expire and rotate privately.
 Use `Idempotency-Key` for each administrative mutation. Exact retries replay the
 transactional result; changed payloads or stale revisions fail with 409. Approval
 revision is separate from heartbeat/report revision, so a check-in cannot make an
-approval decision stale. Legacy records without `connectionApproved` or
-`approvalRevision` retain approval and revision one until administratively changed.
+approval decision stale.
 
 `unlimitedConnection: true` omits the access deadline. Sending it together with
-`connectionExpiresAtUnixMs` on an approval is invalid. Omitting both retains the
-24-hour default for older callers. Neither duration is inferred from the UI alone.
+`connectionExpiresAtUnixMs` on an approval is invalid. Omitting both gives the
+24-hour default. Neither duration is inferred from the UI alone.
 
 PostgreSQL migration V11 allows the new approve/deapprove, enable/disable and
 identity-recovery audit events. Quickstart SQLite stores the same transactions
 without a destructive state reset. Redeployment preserves existing identities,
 owners, approvals, names and enablement and seeds only missing server records.
-Existing policies explicitly scoped to `local-builtins` do not automatically
-expand to `local-hotfolder`. Review and update the intended HotFolder device
-scope after this routing change; default unscoped Quickstart policies keep working.
+
 
 ## Verification and troubleshooting
 
 Boundary checks cover finite/unlimited decisions, stale revisions, idempotency,
 same-tenant ownership, pending-device disablement, permanent revocation, deadline
 expiry, certificate recovery and exact report replay on PostgreSQL and SQLite.
-The composed smoke test proves HotFolder and fixed-executor gating independently,
-REST forwarding disable/reenable, and installed-client disable/deapprove/reapprove
+The composed smoke test proves installed-client disable/deapprove/reapprove
 using real TLS, CSR and certificate authentication. UI checks cover pending and
 approved rows, owner/name columns, accessible tooltips and unlimited forms.
 
-For HTTP 423, inspect both device enablement and approval and its deadline. For
-server tool denials also inspect the registered `local-tools` user and fixed
-executor dependency. Keep the key and protected state; fix the registry or filter
+For HTTP 423, inspect both device enablement and approval and its deadline. Keep the key and protected state; fix the registry or filter
 that blocks access. Never relax TLS, owner binding, resource confinement or logging
 redaction to work around a denied tool call.

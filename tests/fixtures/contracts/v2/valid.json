@@ -2093,5 +2093,21 @@
         "reason": "needs HTTP routes"
       }
     ]
+  },
+  "BrokerOperation": "FILES_READ",
+  "BrokerRequestFrame": {
+    "kind": "BROKER_REQUEST",
+    "requestId": "b-1",
+    "operation": "FILES_READ",
+    "request": {
+      "path": "notes/today.txt"
+    }
+  },
+  "BrokerResponseFrame": {
+    "kind": "BROKER_RESPONSE",
+    "requestId": "b-1",
+    "result": {
+      "text": "hello"
+    }
   }
 }

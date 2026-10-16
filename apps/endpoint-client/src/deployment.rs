@@ -302,13 +302,6 @@ impl State {
                 {
                     return Err(Failure::Unsupported);
                 }
-                if document
-                    .runtimes
-                    .iter()
-                    .any(|r| matches!(r.kind, LocalRuntimeKind::Batch | LocalRuntimeKind::Wasm))
-                {
-                    return Err(Failure::Unsupported);
-                }
                 candidate.runtimes.extend(document.runtimes.clone());
                 candidate.tools.extend(document.tools.clone());
                 documents.push(document);

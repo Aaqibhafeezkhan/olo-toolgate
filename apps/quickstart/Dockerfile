@@ -6,7 +6,6 @@ FROM rust:1.94.1-alpine@sha256:77237dd363a0b127bb5ef532c2d64c0deb380b738e43a9c4b
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
-COPY packages/contracts/tools packages/contracts/tools
 COPY apps/gateway apps/gateway
 COPY apps/endpoint-client apps/endpoint-client
 COPY apps/tool-host apps/tool-host
@@ -17,8 +16,8 @@ COPY tools/gateway/collect-notices.sh /src/collect-notices.sh
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-quickstart-musl,target=/src/target,sharing=locked \
     find apps/gateway/src apps/endpoint-client/src apps/tool-host/src tool-sdk/cli/src packages/contracts/rust/src -type f -exec touch {} + && \
-    cargo build --release --locked -p olo-toolgate-gateway --bin olo-toolgate-gateway -p olo-toolgate-client --bin quickstart-tools -p olo-toolgate-tool-host --bin olo-toolgate-tool-host && \
-    cp target/release/olo-toolgate-gateway target/release/quickstart-tools target/release/olo-toolgate-tool-host /usr/local/bin/ && \
+    cargo build --release --locked -p olo-toolgate-gateway --bin olo-toolgate-gateway -p olo-toolgate-tool-host --bin olo-toolgate-tool-host && \
+    cp target/release/olo-toolgate-gateway target/release/olo-toolgate-tool-host /usr/local/bin/ && \
     sh /src/collect-notices.sh /licenses
 
 FROM ${CONTROL_IMAGE}
@@ -31,11 +30,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 python3
 RUN /opt/quickstart-python/bin/python -c "import glob,platform,zipfile; p=glob.glob('/app/lib/main/org.xerial.sqlite-jdbc-*.jar')[0]; z=zipfile.ZipFile(p); a={'x86_64':'x86_64','aarch64':'aarch64'}[platform.machine()]; open('/usr/local/lib/toolgate/libsqlitejdbc.so','wb').write(z.read('org/sqlite/native/Linux/'+a+'/libsqlitejdbc.so'))"
 COPY tools/quickstart/python_notices.py /opt/quickstart-python-notices.py
 RUN /opt/quickstart-python/bin/python /opt/quickstart-python-notices.py
-COPY --from=rust-build /usr/local/bin/olo-toolgate-gateway /usr/local/bin/quickstart-tools /usr/local/bin/olo-toolgate-tool-host /usr/local/bin/
+COPY --from=rust-build /usr/local/bin/olo-toolgate-gateway /usr/local/bin/olo-toolgate-tool-host /usr/local/bin/
 COPY --from=rust-build /licenses /usr/share/licenses/olo-toolgate/quickstart-rust/
 COPY tools/enterprise/restore.py /opt/quickstart/enterprise_restore.py
 COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py VERSION /opt/quickstart/
-COPY packages/contracts/tools/builtins.json /opt/quickstart/builtins.json
 COPY packages/contracts/management-permissions.json /opt/quickstart/management-permissions.json
 # The default deployment profile; a deployment selects another with TOOLGATE_CONTROL_PROFILE_PATH.
 COPY deploy/profiles/fresh.json /opt/toolgate/profiles/fresh.json

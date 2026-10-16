@@ -5,7 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 test('request page fills its parent canvas and shows a completed response safely',async({page})=>{
   test.skip(!process.env.QUICKSTART_PASSWORD,'Requires actual composed Quickstart fixture');
-  const record={requestId:'canvas-request',toolId:'client.read_log_entry',agentId:'test-agent',deviceId:'test-client',state:'DONE',receivedAtUnixMs:1,expiresAtUnixMs:30001,completedAtUnixMs:4};
+  const record={requestId:'canvas-request',toolId:'examples.hotfolder/read_text',agentId:'test-agent',deviceId:'test-client',state:'DONE',receivedAtUnixMs:1,expiresAtUnixMs:30001,completedAtUnixMs:4};
   await page.route('**/api/control/v1/mcp/requests',route=>route.fulfill({json:{items:[record]}}));
   await page.route('**/api/control/v1/mcp/requests/canvas-request',route=>route.fulfill({json:{record,output:{text:'<script>display this as text</script>'}}}));
   await page.goto('/console/');await page.getByLabel('Password',{exact:true}).fill(process.env.QUICKSTART_PASSWORD!);
@@ -19,7 +19,7 @@ test('request page fills its parent canvas and shows a completed response safely
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
-test('real Quickstart password, non-HA status, protected compute and vault names',async({page,request})=>{
+test('real Quickstart password, non-HA status, devices and vault names',async({page,request})=>{
   test.skip(!process.env.QUICKSTART_PASSWORD,'Requires actual composed Quickstart fixture');
   await page.goto('/console/');await expect(page.getByRole('status')).toContainText('Non-HA');
   const configuration=await request.get('/api/public/v1/clients/configuration');expect(configuration.status()).toBe(200);
@@ -35,16 +35,11 @@ test('real Quickstart password, non-HA status, protected compute and vault names
   await expect(checkedInClient.locator('.client-connection.online')).toHaveText('Connected');
   await expect(page.getByRole('columnheader',{name:'Device name',exact:true})).toBeVisible();
   await expect(page.getByRole('columnheader',{name:'Owner',exact:true})).toBeVisible();
-  for(const id of ['local-builtins','local-hotfolder','local-rest-forwarding']){
-    const row=page.getByRole('row').filter({hasText:id});await expect(row.locator('.client-connection.online')).toHaveText('Available');await expect(row).toContainText('Local tool requester');
-  }
-  await page.getByRole('button',{name:'Details for local-hotfolder',exact:true}).focus();await expect(page.getByRole('tooltip')).toContainText('HotFolder');
-  await page.keyboard.press('Escape');await expect(page.getByRole('tooltip')).toHaveCount(0);
+  // Quickstart runs no tools itself: every row is an enrolled client or Tool Host.
+  await expect(page.getByRole('row').filter({hasText:'Local tool requester'})).toHaveCount(0);
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   await page.locator('nav summary').filter({hasText:'Tools'}).click();
-  await page.getByRole('link',{name:'Built-in tools and vault'}).click();
-  await page.getByRole('button',{name:'Run protected tool'}).click();
-  await expect(page.getByRole('region',{name:'Tool result'})).toContainText('14');
+  await page.getByRole('link',{name:'Local vault'}).click();
   await expect(page.getByText('Stored references: demo/token')).toBeVisible();
   const result=await new AxeBuilder({page}).analyze();expect(result.violations).toEqual([]);
   expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>!key.startsWith('toolgate.')).length+sessionStorage.length)).toBe(0);

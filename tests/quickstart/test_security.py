@@ -36,7 +36,7 @@ class SecurityTests(unittest.TestCase):
                     systemName=quickstart.socket.gethostname(),networkId='b'*64,networkName='example_default',ipAddress='172.18.0.2')
         document=dict(gatewaySystemName=quickstart.socket.gethostname(),devices={'tool-host-local':record,'invisible-device':record})
         path=quickstart.DATA/'run/deployment-metadata.json';path.write_text(json.dumps(document))
-        original=dict(deviceId='tool-host-local',systemExecutor=False,ipAddress='::1')
+        original=dict(deviceId='tool-host-local',ipAddress='::1')
         page=quickstart.deployment_details(dict(items=[dict(original)]))
         self.assertEqual(page['items'],[original])
         self.assertEqual(page['deployments'],[dict(deviceId='tool-host-local',deployment=record)])
@@ -65,13 +65,13 @@ class SecurityTests(unittest.TestCase):
         gateway='https://127.0.0.1:18450'
         with patch.dict(os.environ,{'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL':control,
                                     'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL':gateway},clear=True):
-            with patch.object(quickstart,'prepare',return_value=('device-test',quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
-                settings,_=quickstart.configure()
+            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
+                settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],control)
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],gateway)
         with patch.dict(os.environ,{},clear=True):
-            with patch.object(quickstart,'prepare',return_value=('device-test',quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
-                settings,_=quickstart.configure()
+            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
+                settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],'https://localhost:8443')
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],'https://localhost:8443')
     def test_fleet_keys_are_persistent_and_disjoint(self):
@@ -127,7 +127,7 @@ class SecurityTests(unittest.TestCase):
                 request=urllib.request.Request(url+'/api/quickstart/v1/login',data=b'{}',headers={'Content-Type':'application/json'})
                 with urllib.request.urlopen(request) as response: token=json.load(response)['accessToken']
                 self.assertEqual(quickstart.session('Bearer '+token)['sub'],'admin')
-                with self.assertRaises(urllib.error.HTTPError) as denied:urllib.request.urlopen(url+'/api/quickstart/v1/tools')
+                with self.assertRaises(urllib.error.HTTPError) as denied:urllib.request.urlopen(url+'/api/quickstart/v1/vault')
                 self.assertEqual(denied.exception.code,401)
                 for path in ('/api/control/v1/builder/drafts','/api/control/v1/fleet/releases'):
                     with self.assertRaises(urllib.error.HTTPError) as denied: urllib.request.urlopen(url+path)
@@ -161,7 +161,7 @@ class SecurityTests(unittest.TestCase):
                 self.assertEqual(json.load(response)['accessToken'],token)
                 self.assertEqual(response.headers['Cache-Control'],'no-store')
             # The cookie cannot authorize protected operations by itself.
-            with self.assertRaises(urllib.error.HTTPError) as denied:opener.open(url+'/api/quickstart/v1/tools')
+            with self.assertRaises(urllib.error.HTTPError) as denied:opener.open(url+'/api/quickstart/v1/vault')
             self.assertEqual(denied.exception.code,401)
             # Browsers share host cookies across ports; one stack must not restore another's session.
             wrong_port=urllib.request.Request(url+'/api/quickstart/v1/session',headers={'Host':'127.0.0.1:1'})

@@ -13,6 +13,7 @@ package io.ololabs.toolgate.contracts;
  * @param outputSchema canonical outputSchema value
  * @param limits canonical limits value
  * @param authorizationProfile canonical authorizationProfile value
+ * @param fileAccess canonical fileAccess value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record LocalToolRegistration(
@@ -23,7 +24,8 @@ public record LocalToolRegistration(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "inputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> inputSchema,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "outputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> outputSchema,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "limits", required = true) LocalRuntimeLimits limits,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationProfile", required = true) InstalledAuthorizationProfile authorizationProfile
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationProfile", required = true) InstalledAuthorizationProfile authorizationProfile,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "fileAccess", required = false) LocalFileAccess fileAccess
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -35,6 +37,7 @@ public record LocalToolRegistration(
      * @param outputSchema canonical outputSchema value
      * @param limits canonical limits value
      * @param authorizationProfile canonical authorizationProfile value
+     * @param fileAccess canonical fileAccess value
      */
     public LocalToolRegistration {
         java.util.Objects.requireNonNull(toolId, "toolId");

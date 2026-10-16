@@ -21,37 +21,6 @@ export interface AuthorizationRequest {
   readonly action: string;
   readonly arguments: Record<string, unknown>;
 }
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinInvocation {
-  readonly toolId: string;
-  readonly arguments: Record<string, unknown>;
-}
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinIpcRequest {
-  readonly protocolVersion: number;
-  readonly requestId: string;
-  readonly operation: BuiltinOperation;
-  readonly invocation?: BuiltinInvocation;
-  readonly agentId?: string;
-}
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinIpcResponse {
-  readonly requestId: string;
-  readonly tools?: ReadonlyArray<BuiltinToolInfo>;
-  readonly output?: Record<string, unknown>;
-  readonly error?: ErrorCode;
-}
-export type BuiltinOperation = "CATALOG" | "CALL";
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinToolInfo {
-  readonly toolId: string;
-  readonly action: string;
-  readonly description: string;
-  readonly enabled: boolean;
-  readonly inputSchema: Record<string, unknown>;
-  readonly toolDigest: string;
-  readonly packageDigest: string;
-}
 /** Strict JWS protected header; no remote or embedded keys and no algorithm negotiation. */
 export interface BundleHeader {
   readonly alg: string;
@@ -104,7 +73,7 @@ export interface ClientDiscovery {
   readonly expiresAtUnixMs: number;
   readonly issuerCertificatePem: string;
 }
-/** Fixed service tool boundary; validate schema before use. */
+/** Local tool boundary for signed managed registrations; validate schema before use. */
 export interface ClientDownloadArtifact {
   readonly platform: ClientPlatform;
   readonly target: string;
@@ -112,7 +81,7 @@ export interface ClientDownloadArtifact {
   readonly sha256: string;
   readonly bytes: number;
 }
-/** Fixed service tool boundary; validate schema before use. */
+/** Local tool boundary for signed managed registrations; validate schema before use. */
 export interface ClientDownloadManifest {
   readonly version: string;
   readonly artifacts: ReadonlyArray<ClientDownloadArtifact>;
@@ -149,7 +118,7 @@ export interface ClientInstallerArtifact {
   readonly sha256: string;
   readonly bytes: number;
 }
-/** Fixed service tool boundary; validate schema before use. */
+/** Local tool boundary for signed managed registrations; validate schema before use. */
 export interface ClientInstallerManifest {
   readonly version: string;
   readonly artifacts: ReadonlyArray<ClientInstallerArtifact>;
@@ -663,7 +632,7 @@ export interface DeviceDeploymentRecord {
   readonly deviceId: string;
   readonly deployment: DeviceDeploymentMetadata;
 }
-export type DeviceExecutionKind = "QUICKSTART_CLIENT" | "ENDPOINT_CLIENT" | "TOOL_HOST_DIRECT" | "TOOL_HOST_PULL";
+export type DeviceExecutionKind = "ENDPOINT_CLIENT" | "TOOL_HOST_DIRECT" | "TOOL_HOST_PULL";
 /** Endpoint identity foundation wire model. */
 export interface DeviceIdentity {
   readonly deviceId: string;
@@ -695,7 +664,7 @@ export interface EndpointCheckIn {
   readonly sequence: number;
   readonly report: ClientReport;
   readonly adoptionDigest?: string;
-  readonly localTools?: ReadonlyArray<BuiltinToolInfo>;
+  readonly localTools?: ReadonlyArray<LocalToolInfo>;
 }
 /** Endpoint identity foundation wire model. */
 export interface EndpointCheckInAck {
@@ -816,13 +785,10 @@ export interface EndpointEnrollmentStart {
 /** Directory identity, enrolled approval and pending request with server-resolved target permissions. */
 export interface EndpointManagedDevice {
   readonly deviceId: string;
-  readonly systemExecutor: boolean;
   readonly directoryDevice?: ControlDevice;
   readonly endpointDevice?: EndpointDeviceRecord;
   readonly enrollment?: EndpointEnrollmentReview;
   readonly registeredUser?: ControlUser;
-  readonly systemExecutorKind?: SystemExecutorKind;
-  readonly systemAvailable?: boolean;
   readonly systemName?: string;
   readonly ipAddress?: string;
   readonly permissions?: ReadonlyArray<string>;
@@ -1466,6 +1432,7 @@ export interface InstalledAuthorizationProfile {
   readonly tool: ControlTool;
   readonly extractor: ControlResourceExtractor;
 }
+export type LocalFileAccess = "NONE" | "READ" | "WRITE";
 /** Bounded per-service execution counters and sandbox state. */
 export interface LocalRuntimeHealth {
   readonly ready: boolean;
@@ -1487,7 +1454,7 @@ export interface LocalRuntimeIpcResponse {
   readonly result?: LocalToolOutput;
   readonly error?: ErrorCode;
 }
-export type LocalRuntimeKind = "NATIVE" | "PYTHON" | "NODE" | "POWERSHELL" | "BATCH" | "SHELL" | "JAVA_JAR" | "JAVA_SDK" | "DOTNET" | "WASM";
+export type LocalRuntimeKind = "JAVA_SDK";
 /** Bounded local sandbox budget; limits never grant host access. */
 export interface LocalRuntimeLimits {
   readonly timeoutMs: number;
@@ -1504,9 +1471,24 @@ export interface LocalRuntimeStatus {
   readonly state: LocalRuntimeState;
   readonly version: string;
 }
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolCall {
+  readonly toolId: string;
+  readonly arguments: Record<string, unknown>;
+}
 /** Only enabled local definitions applicable to this verified agent and device. */
 export interface LocalToolCatalog {
-  readonly tools: ReadonlyArray<BuiltinToolInfo>;
+  readonly tools: ReadonlyArray<LocalToolInfo>;
+}
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolInfo {
+  readonly toolId: string;
+  readonly action: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly inputSchema: Record<string, unknown>;
+  readonly toolDigest: string;
+  readonly packageDigest: string;
 }
 /** One JSON stdin document; arguments never become process command strings. */
 export interface LocalToolInput {
@@ -1515,6 +1497,22 @@ export interface LocalToolInput {
   readonly toolId: string;
   readonly arguments: Record<string, unknown>;
 }
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolIpcRequest {
+  readonly protocolVersion: number;
+  readonly requestId: string;
+  readonly operation: LocalToolOperation;
+  readonly invocation?: LocalToolCall;
+  readonly agentId?: string;
+}
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolIpcResponse {
+  readonly requestId: string;
+  readonly tools?: ReadonlyArray<LocalToolInfo>;
+  readonly output?: Record<string, unknown>;
+  readonly error?: ErrorCode;
+}
+export type LocalToolOperation = "CATALOG" | "CALL";
 /** One bounded JSON stdout document; request binding and output schema are verified. */
 export interface LocalToolOutput {
   readonly protocolVersion: number;
@@ -1531,6 +1529,7 @@ export interface LocalToolRegistration {
   readonly outputSchema: Record<string, unknown>;
   readonly limits: LocalRuntimeLimits;
   readonly authorizationProfile: InstalledAuthorizationProfile;
+  readonly fileAccess?: LocalFileAccess;
 }
 /** Administrator-selected immutable tool/runtime image; runtime provisioning is not execution authorization. */
 export interface ManagedRuntime {
@@ -1714,7 +1713,6 @@ export interface SignedClientDiscovery {
 export interface SignedPolicyBundle {
   readonly jws: string;
 }
-export type SystemExecutorKind = "BUILTINS" | "HOTFOLDER" | "REST_FORWARDING";
 /** Named operation and declared resource kinds. */
 export interface ToolAction {
   readonly name: string;

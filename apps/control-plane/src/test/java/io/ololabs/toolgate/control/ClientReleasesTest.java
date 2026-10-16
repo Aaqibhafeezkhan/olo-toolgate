@@ -150,6 +150,7 @@ final class ClientReleasesTest {
             var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"acme.greet/" + spec[0] + "\",\"mcpName\":\"greet." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","
                 + "\"inputSchema\":" + schema + ",\"outputSchema\":" + output + ",\"errors\":[],\"effect\":{\"safety\":\"READ_ONLY\",\"destructive\":false,\"openWorld\":false},\"businessKey\":{\"required\":false},"
                 + "\"execution\":{\"async\":false,\"maxDurationMs\":30000},\"routes\":[],\"destinations\":[],\"httpAuth\":[],\"tcp\":[],\"variables\":{\"globals\":[],\"secrets\":[],\"claims\":[]},\"permissions\":[],\"toolsets\":[]}");
+            if (spec[0].equals("client_greet")) d.putArray("permissions").add("DEVICE_FILES_READ").add("DEVICE_FILES_WRITE");
             if (spec[0].equals("fetch")) {
                 d.set("routes", JSON.readTree("[{\"id\":\"items.get\",\"destination\":\"api\",\"method\":\"GET\",\"path\":\"/items\",\"query\":[],\"headers\":[],\"requestContentTypes\":[],\"maxRequestBytes\":0,\"maxResponseBytes\":65536,\"streaming\":\"NONE\",\"timeoutMs\":5000}]"));
                 d.set("destinations", JSON.readTree("[{\"id\":\"api\",\"hostSetting\":\"ApiHost\",\"port\":443,\"spkiPins\":[]}]"));
@@ -229,6 +230,9 @@ final class ClientReleasesTest {
         assertEquals(image, document.runtimes().getFirst().image());
         assertEquals(List.of("acme.greet/client_greet", "acme.greet/server_greet"), document.tools().stream().map(LocalToolRegistration::toolId).toList());
         assertEquals("/opt/tool/acme.greet/tool.jar", document.tools().getFirst().entryPoint());
+        // Device file access is signed into the registration; the route-free ServerTool gets none.
+        assertEquals(LocalFileAccess.WRITE, document.tools().getFirst().fileAccess());
+        assertEquals(LocalFileAccess.NONE, document.tools().get(1).fileAccess());
         for (var tool : document.tools()) InstalledProfiles.validate(tool, document.runtimes().getFirst());
         assertEquals("Hello Ada", document.selfTests().stream().filter(t -> t.toolId().equals("acme.greet/server_greet")).findFirst().orElseThrow().expectedOutput().get("message").asText());
 

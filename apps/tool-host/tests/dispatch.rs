@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Dispatch through a real host: permits signed with a test key, a fake Control, a fake
 //! upstream on loopback, and a stand-in runtime (a Python script in place of `java`) that speaks
-//! tool protocol v2 and calls the broker. The Java runtime itself is covered by the starter
+//! tool protocol v2 and calls the broker over its stdio. The Java runtime itself is covered by the starter
 //! end-to-end test (e2e/run.sh).
 
 use axum::extract::{Path as AxumPath, State};
@@ -23,33 +23,30 @@ use tool_host::config::Config;
 const FENCE: &str = "fence-1";
 const API_KEY: &str = "k-123";
 
-/// A stand-in runtime: reads the ToolInput line, calls the broker as `arguments.since` says,
-/// and prints a ResultFrame holding the broker's reply.
+/// A stand-in runtime speaking tool protocol v2 over stdio: reads the ToolInput line, sends one broker request as
+/// `arguments.since` says, reads the BROKER_RESPONSE on stdin, and prints a ResultFrame holding the broker's answer.
 const RUNTIME: &str = r#"
-import http.client, json, os, socket, sys
+import json, os, sys
 inp = json.loads(sys.stdin.readline())
 args = inp["arguments"]
 mode = args.get("since", 0)
 if mode == 2:
     sys.exit(3)
-class Unix(http.client.HTTPConnection):
-    def connect(self):
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(os.environ["TOOLGATE_BROKER_SOCKET"])
 call = {"route": "orders.get", "method": "GET", "destination": "acme-api",
         "variables": {"orderId": args["orderId"]}, "query": {}, "headers": {"X-On-Behalf-Of": inp["claims"].get("UserName", "")}}
-capability = os.environ["TOOLGATE_BROKER_CAPABILITY"]
+operation, request = "ROUTE_CALL", call
 if mode == 1:
     call["headers"]["Authorization"] = "Bearer stolen"
 if mode == 3:
-    capability = "guess"
+    operation, request = "FILES_READ", {"path": "notes.txt"}
 if mode == 4:
     call["route"] = "orders.delete"
 print(json.dumps({"kind": "LOG", "level": "info", "message": "calling the order API"}), flush=True)
 print(json.dumps({"kind": "PROGRESS", "fraction": 0.5}), flush=True)
-c = Unix("broker")
-c.request("POST", "/v1/call", json.dumps(call), {"Toolgate-Capability": capability, "Content-Type": "application/json"})
-reply = json.loads(c.getresponse().read())
+print(json.dumps({"kind": "BROKER_REQUEST", "requestId": "b-1", "operation": operation, "request": request}), flush=True)
+response = json.loads(sys.stdin.readline())
+assert response["kind"] == "BROKER_RESPONSE" and response["requestId"] == "b-1", response
+reply = response["result"] if "result" in response else {"refused": response["error"]["message"]}
 env = sorted(k for k in os.environ)
 frame = {"kind": "RESULT", "resultType": "complete", "content": [{"type": "text", "text": "ok"}],
          "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"]}, "isError": False}
@@ -438,8 +435,6 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
         json!([
             "HOME",
             "LANG",
-            "TOOLGATE_BROKER_CAPABILITY",
-            "TOOLGATE_BROKER_SOCKET",
             "TOOLGATE_EXECUTION_TARGET",
             "TOOLGATE_PROTOCOL"
         ])
@@ -490,7 +485,7 @@ async fn the_broker_refuses_what_the_route_does_not_allow() {
     let rig = rig!();
     for (mode, reason) in [
         (1, "header Authorization may not be set by a tool"),
-        (3, "the broker capability is not valid for this socket"),
+        (3, "device files are not available on a Tool Host"),
         (4, "route orders.delete is not granted to this invocation"),
     ] {
         let arguments = json!({"orderId": "123456", "since": mode});

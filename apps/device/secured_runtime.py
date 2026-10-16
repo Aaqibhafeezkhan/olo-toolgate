@@ -4,44 +4,12 @@
 import json
 import os
 from pathlib import Path
-import secrets
 import shutil
 import signal
 import threading
 
 import device_entrypoint as device
 from secured_network import settings
-
-
-def configure_tools(path, tools):
-    """Offer the named built-in tools from the client's own profiles; files stay in the device's private HotFolder.
-
-    Enrollment still grants nothing: Control allocates these tools only through its usual groups and bindings.
-    """
-    settings = json.loads(path.read_text())
-    state = Path(settings['stateDirectory'])
-    folder = state/'hotfolder'
-    folder.mkdir(mode=0o700, exist_ok=True)
-    profiles = [item for item in json.loads(device.cli('authorization-profiles')) if item['tool']['id'] in tools]
-    missing = tools - {item['tool']['id'] for item in profiles}
-    if missing:
-        raise ValueError('TOOLGATE_DEVICE_TOOLS names tools this client does not offer: '+', '.join(sorted(missing)))
-    # The service requires a private token file. This inert value grants no local IPC rights; remote tasks
-    # authorize through the enrolled device's mTLS identity and Control permits.
-    token = state/'local-ipc-disabled-token'
-    if not token.exists():
-        with token.open('x', encoding='utf-8') as stream:
-            stream.write(secrets.token_urlsafe(48))
-        token.chmod(0o600)
-    settings['tools'] = dict(hotfolder=dict(root=str(folder), maxFileBytes=65536, maxEntries=256,
-                                            extensions=['txt', 'md', 'json', 'csv']),
-                             gatewayUrl=settings['serverUrl'], gatewayTokenPath=str(token),
-                             gatewayCaPath=settings['caCertificatePath'], deviceId='remote',
-                             authorizationProfiles=profiles, webSearchTokenPath=None, webSearchAllowedDomains=[])
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(settings))
-    temporary.chmod(0o600)
-    temporary.replace(path)
 
 
 def main():
@@ -81,9 +49,6 @@ def main():
         temporary.replace(path)
     shutil.copyfile('/opt/toolgate/client', device.CLIENT)
     Path(device.CLIENT).chmod(0o755)
-    tools = {name.strip() for name in os.environ.get('TOOLGATE_DEVICE_TOOLS', '').split(',') if name.strip()}
-    if tools:
-        configure_tools(path, tools)
     relay = device.Relay(config['port'], config['address'], config['upstream_port'])
     thread = threading.Thread(target=relay.serve_forever, daemon=True)
     thread.start()

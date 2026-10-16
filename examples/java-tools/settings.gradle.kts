@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //
-// Ten example tool packages built with the ToolGate Java Tool SDK. Each directory is one package: one @ToolPackage,
+// Twelve example tool packages built with the ToolGate Java Tool SDK. Each directory is one package: one @ToolPackage,
 // one fat jar, one .tgpkg. They share this build only so `./gradlew check` tests them all at once; copy any one of
 // them out with this file's repositories and it builds on its own.
 //
@@ -37,4 +37,5 @@ include(
     "webhook-notify",
     "file-cleanup",
     "db-query",
+    "hotfolder",
 )

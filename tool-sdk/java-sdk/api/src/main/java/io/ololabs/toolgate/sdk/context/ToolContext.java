@@ -27,6 +27,8 @@ public interface ToolContext {
 
     HttpClient http();
     TcpConnector tcp();
+    /** The device files area, for a ClientTool declared with {@code @DeviceFileAccess} running on a device. */
+    DeviceFiles files();
     Invocation invocation();
 
     /** Fraction 0..1, monotonic; ignored for sync calls without a progress token. */

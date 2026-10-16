@@ -16,7 +16,7 @@ Defines every declaration and runtime accessor a tool author can use, independen
 | Route, destination, auth id | `^[a-z][a-z0-9_.-]{0,63}$`, unique per package | `orders.get` |
 | Error code | `^[A-Z][A-Z0-9_]{2,63}$` | `ORDER_NOT_FOUND` |
 
-`toolgate.*`, `hotfolder.*` and `builtin.*` prefixes are reserved and **must** be rejected by the packager.
+`toolgate.*` prefix is reserved and **must** be rejected by the packager.
 
 ## 2. Package declaration
 

@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts;
 
-/** Fixed service tool boundary; validate schema before use. */
+/** Local tool boundary for signed managed registrations; validate schema before use. */
 final readonly class ClientDownloadArtifact implements \JsonSerializable {
     public function __construct(
         public ClientPlatform $platform,

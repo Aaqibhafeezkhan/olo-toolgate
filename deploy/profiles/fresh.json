@@ -7,9 +7,17 @@
       "source": "PREBUILT_CORE",
       "version": "1.0.0",
       "required": true,
-      "hostIds": ["tool-host-local"],
+      "hostIds": [
+        "tool-host-local"
+      ],
       "tools": [
-        {"toolId": "ololabs.hello-world/server_greet", "toolGroupId": "default-tools"}
+        {
+          "toolId": "ololabs.hello-world/server_greet",
+          "toolGroupId": "default-tools"
+        }
+      ],
+      "bindingIds": [
+        "binding-default"
       ]
     }
   ]

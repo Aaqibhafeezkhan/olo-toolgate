@@ -16,7 +16,6 @@ COPY apps/tool-host/src apps/tool-host/src
 COPY tool-sdk/cli tool-sdk/cli
 # The CLI embeds the community guide for `toolgate guide`.
 COPY TOOL-SDK-GUIDE.md TOOL-SDK-GUIDE.md
-COPY packages/contracts/tools packages/contracts/tools
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-gateway-musl-${TARGETARCH},target=/src/target,sharing=locked \
     test "$VERSION" = "$(cat VERSION)" && cargo build --release --locked -p olo-toolgate-gateway --bin olo-toolgate-gateway && \

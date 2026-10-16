@@ -12,7 +12,7 @@ grant no execution permission.
 
 - device identity.
 - enrollment.
-- HotFolder.
+- The device files area and the HotFolder package.
 - managed package install/update/remove.
 - runtime supervision.
 - local tool invocation.

@@ -14,8 +14,9 @@ Gateway ── POST /v1/dispatch {permit, arguments} ──▶ Tool Host
                                                       │ Control: permits/consume ──▶ fencing token
           ◀── ADMITTED {invocationId, fencingToken} ──┤
                                                       │ start the runtime: ToolInput on stdin
-                                                      │   route calls ──▶ broker (Unix socket) ──▶ upstream
-                                                      │ ResultFrame on stdout
+                                                      │   BROKER_REQUEST (stdout) ──▶ broker ──▶ upstream
+                                                      │   BROKER_RESPONSE (stdin) ◀── broker
+                                                      │ RESULT frame on stdout
                                                       │ Control: effects/report
           ◀── RESULT {invocationId, outcome, result} ─┘
 ```
@@ -40,7 +41,7 @@ One JSON file, refused at startup if anything is wrong.
 | `permitKeys[]` | `{kid, publicKeyPath}`: Control's effect-signing keys, as a PEM `PUBLIC KEY` or certificate. |
 | `permitIssuer` | The `iss` a permit must carry. |
 | `storeDir` | The content store (below). |
-| `workDir` | Unpacked packages and one directory per running invocation. Keep the path short: it holds the broker's Unix sockets. |
+| `workDir` | Unpacked packages and one directory per running invocation. |
 | `control` | `{url, clientCertificatePath?, clientKeyPath?, caCertificatePath?, developmentLoopbackHttp?}`. `url` is https, or http to loopback with `developmentLoopbackHttp`. The certificate and key are the host's workload identity; leave them out with `enrollment`. |
 | `enrollment` | `{identityDir, poolId?}`: enroll with Control as a device and fetch assignments (below). `identityDir` holds the device key, its certificate and the check-in sequence. |
 | `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). A bare name is looked up on the host's `PATH` at startup, because tool processes start with an empty environment. |
@@ -79,15 +80,15 @@ A verified package is unpacked once under `workDir/packages/<hex>/` (each artifa
 
 ## Runtime protocol
 
-The host starts the tool's runtime with a clean environment: `HOME` and the working directory are the invocation's own directory, plus `LANG`, `TOOLGATE_PROTOCOL=2`, `TOOLGATE_BROKER_SOCKET` and `TOOLGATE_BROKER_CAPABILITY`. It writes one `ToolInput` line to stdin and reads one `ResultFrame` line from stdout, killing the process at the deadline. A tool runs from exactly one self-contained artifact, the one its permit pins, and a JVM tool's must be a jar, so the device needs only a JRE. The JVM launcher runs `java -Xmx<memory> -XX:+ExitOnOutOfMemoryError -cp tool.jar <entryPoint>`; the Java SDK's `Main` switches to governed mode on `TOOLGATE_PROTOCOL=2`. Another language needs a launcher in `runner.rs` and its `runtimeId` in `store::RUNTIMES`; admission, the store and the broker stay as they are.
+The host starts the tool's runtime with a clean environment: `HOME` and the working directory are the invocation's own directory, plus `LANG`, `TOOLGATE_PROTOCOL=2` and `TOOLGATE_EXECUTION_TARGET=SERVER`. It speaks tool protocol v2 over stdio, the one protocol every executor uses ([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)): it writes one `ToolInput` line to stdin, answers each `BROKER_REQUEST` frame on stdout with one `BROKER_RESPONSE` line on stdin, and takes the final `RESULT` frame, killing the process at the deadline. A tool runs from exactly one self-contained artifact, the one its permit pins, and a JVM tool's must be a jar, so the device needs only a JRE. The JVM launcher runs `java -Xmx<memory> -XX:+ExitOnOutOfMemoryError -cp tool.jar <entryPoint>`; the Java SDK's `Main` switches to governed mode on `TOOLGATE_PROTOCOL=2`. Another language needs a launcher in `runner.rs` and its `runtimeId` in `store::RUNTIMES`; admission, the store and the broker stay as they are.
 
 `secretHandles` are given only to tools with the `CREDENTIALS_IN_SANDBOX` permission. Other tools never see a secret: the broker adds credentials to their route calls.
 
 ## Broker
 
-Each invocation gets its own Unix socket and a random capability. A request without that capability, or after the invocation ends, is refused.
+The broker answers `BROKER_REQUEST` frames for the running invocation only; there is no socket or capability to leak. A Tool Host provides `ROUTE_CALL` and `SECRET_REDEEM` and refuses every other operation (the device `FILES_*` operations included) with `BROKER_REFUSED`.
 
-`POST /v1/call` takes the route call in the recorded-exchange shape of the SDKs' test mode (`tool-sdk/spec/authoring/testing.md`): `route`, `method`, `destination`, `variables`, `query`, `headers`, `contentType`, and the body as `body` (JSON), `bodyText` or `bodyBase64`. The broker:
+`ROUTE_CALL` takes the route call in the recorded-exchange shape of the SDKs' test mode (`tool-sdk/spec/authoring/testing.md`): `route`, `method`, `destination`, `variables`, `query`, `headers`, `contentType`, and the body as `body` (JSON), `bodyText` or `bodyBase64`. The broker:
 
 - accepts only a route the permit grants, as the service profile approves it, with its method and destination;
 - requires every path variable, checks it against its pattern, rejects `/`, `\`, `.`, `..` and encoded separators or dots, and percent-encodes it;
@@ -99,7 +100,7 @@ Each invocation gets its own Unix socket and a random capability. A request with
 
 It answers `{status, headers, bodyBase64}`, `{failure}` (`CONNECTION_REFUSED`, `TIMEOUT_AFTER_SEND`, `RESET_AFTER_SEND`) when the call failed in flight, or `{refused}` with the reason when it would not send. A response is cut one byte past `maxResponseBytes`, so the SDK reports it as too large.
 
-`POST /v1/secrets` takes `{handle}` and answers `{value}` or `{refused}`.
+`SECRET_REDEEM` takes `{handle}` and answers `{value}` or `{refused}`.
 
 Every decision is logged on the `toolgate::audit` target with the invocation, route, destination, method, status, bytes, duration, upstream request id and refusal reason. Bodies and credentials are never logged.
 

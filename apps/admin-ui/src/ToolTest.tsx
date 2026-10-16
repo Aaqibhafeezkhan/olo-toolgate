@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { BuiltinToolInfo, ControlDevice, ControlExecutionBinding } from '@olo-labs/toolgate-contracts';
+import type { LocalToolInfo, ControlDevice, ControlExecutionBinding } from '@olo-labs/toolgate-contracts';
 import type { RunEvent, RunEventPage } from '@olo-labs/toolgate-contracts/v2';
 import { ApiError, ControlClient } from './api';
 import { Failure } from './Failure';
@@ -36,7 +36,7 @@ function describe(event: RunEvent): string {
 export function ToolTest({ client, deviceId: fixedDevice }: { client: ControlClient; deviceId?: string }) {
   const [bindings, setBindings] = useState<readonly ControlExecutionBinding[]>([]); const [devices, setDevices] = useState<readonly ControlDevice[]>([]);
   const [bindingId, setBindingId] = useState(''); const [deviceId, setDeviceId] = useState(fixedDevice ?? '');
-  const [tools, setTools] = useState<readonly BuiltinToolInfo[]>(); const [toolKey, setToolKey] = useState('');
+  const [tools, setTools] = useState<readonly LocalToolInfo[]>(); const [toolKey, setToolKey] = useState('');
   const [input, setInput] = useState('{}'); const [missing, setMissing] = useState<readonly string[]>([]);
   const [run, setRun] = useState<Run>(); const [error, setError] = useState<unknown>(); const [busy, setBusy] = useState(false);
   const [json, setJson] = useState(false); const [follow, setFollow] = useState(true);

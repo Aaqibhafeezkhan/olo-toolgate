@@ -16,5 +16,9 @@ public enum Permission {
     /** Canonical TOKEN_EXCHANGE value. */
     TOKEN_EXCHANGE,
     /** Canonical CONNECTION value. */
-    CONNECTION
+    CONNECTION,
+    /** Canonical DEVICE_FILES_READ value. */
+    DEVICE_FILES_READ,
+    /** Canonical DEVICE_FILES_WRITE value. */
+    DEVICE_FILES_WRITE
 }

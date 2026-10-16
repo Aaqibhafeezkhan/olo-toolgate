@@ -29,7 +29,7 @@ Use `000-template.md`.
 
 - [006: Durable exact-operation ASK approvals and single-use permits](006-ask-approvals.md)
 - [007: Protected endpoint identity and browser enrollment](007-endpoint-enrollment.md)
-- [008: Capability-scoped built-ins and anonymous client distribution](008-hotfolder-builtins.md)
+- [008: Capability-scoped built-ins and anonymous client distribution](008-hotfolder-builtins.md) (superseded by 027)
 - [009: Managed runtimes execute in a disposable OCI sandbox](009-managed-local-runtime-sandbox.md)
 - [010: Signed fleet generations and immutable OCI package descriptors](010-signed-fleet-reconciliation.md)
 - [011: SDK package authoring and isolated builds](011-designated-client-tool-authoring.md)
@@ -50,3 +50,4 @@ Use `000-template.md`.
 - [024: Single CI gate ownership](024-single-ci-gate-ownership.md)
 - [025: Unified tagged and development publication](025-unified-tagged-and-development-publication.md)
 - [026: Client-tool OCI images built and released by Control](026-client-tool-images.md)
+- [027: One tool protocol, brokered over stdio, with a generic device files area](027-one-tool-protocol-device-files.md)

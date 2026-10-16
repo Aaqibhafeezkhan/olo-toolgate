@@ -32,7 +32,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builtins.schema.json#/$defs/ClientInstallerManifest
+                $ref: ../schemas/v1/local-tools.schema.json#/$defs/ClientInstallerManifest
         '503':
           description: Installers unavailable
   /api/public/v1/clients:
@@ -45,7 +45,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builtins.schema.json#/$defs/ClientDownloadManifest
+                $ref: ../schemas/v1/local-tools.schema.json#/$defs/ClientDownloadManifest
         '503':
           description: No published release bundle
   /api/public/v1/clients/{filename}:

@@ -86,6 +86,15 @@ The pending response-stream integration in the package-first plan must retain
 and deliver these frames through the supervisor and Control before the Test UI
 can show them; SDK emission alone does not provide durable replay.
 
+Everything else a governed tool needs from its executor travels the same stdio:
+a `BROKER_REQUEST` frame on stdout (`ROUTE_CALL` and `SECRET_REDEEM` on a Tool
+Host, the `FILES_*` operations on a device) answered by one `BROKER_RESPONSE` line
+on stdin. This is the only protocol and the only channel; an executor refuses an
+operation it does not provide with `BROKER_REFUSED`
+([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)). Standalone mode
+has no broker: routes go to the network through the SDK client, and device files
+are an in-memory area that starts empty.
+
 ## Related Docs
 
 - [Authoring contract](authoring/README.md)

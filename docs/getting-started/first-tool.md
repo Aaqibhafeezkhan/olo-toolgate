@@ -18,7 +18,7 @@ Fresh installations do not grant access automatically.
    pending operation before retrying it unchanged.
 6. Disable a required grant or target and confirm a subsequent call is denied.
 
-For local files, use the enrolled client's configured HotFolder and exact allowed
+For local files, install the HotFolder package on an enrolled device with a files area and grant exact allowed
 paths. Do not grant arbitrary filesystem or shell access as a shortcut.
 
 Use [device controls](../control-plane/device-registry.md),

@@ -2135,5 +2135,24 @@
         ]
       }
     }
+  ],
+  "BrokerRequestFrame": [
+    {
+      "case": "no request payload",
+      "value": {
+        "kind": "BROKER_REQUEST",
+        "requestId": "b-1",
+        "operation": "FILES_READ"
+      }
+    },
+    {
+      "case": "shell operation",
+      "value": {
+        "kind": "BROKER_REQUEST",
+        "requestId": "b-1",
+        "operation": "EXEC",
+        "request": {}
+      }
+    }
   ]
 }

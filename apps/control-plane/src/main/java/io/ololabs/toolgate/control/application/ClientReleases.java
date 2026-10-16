@@ -96,6 +96,13 @@ public final class ClientReleases {
             var registration = JSON.objectNode().put("toolId", toolId).put("action", ServerPackages.ACTION).put("runtimeId", RUNTIME_ID)
                 .put("entryPoint", "/opt/tool/" + packageId + "/tool.jar");
             registration.set("inputSchema", d.get("inputSchema")); registration.set("outputSchema", d.get("outputSchema"));
+            // The device brokers its files area only as the signed registration grants (ADR 027).
+            String access = "NONE";
+            for (var permission : d.path("permissions")) {
+                if (permission.asText().equals("DEVICE_FILES_WRITE")) access = "WRITE";
+                else if (permission.asText().equals("DEVICE_FILES_READ") && access.equals("NONE")) access = "READ";
+            }
+            registration.put("fileAccess", access);
             registration.putObject("limits").put("timeoutMs", Math.min(10000, Math.max(1000, d.path("execution").path("maxDurationMs").asLong(10000))))
                 .put("memoryMiB", 512).put("maxInputBytes", 65536).put("maxOutputBytes", 65536);
             String managed = InstalledProfiles.packageDigest(registration, runtime);
@@ -144,7 +151,8 @@ public final class ClientReleases {
     private static String unsupported(JsonNode tool, JsonNode d, Set<String> server, JsonNode[] example) {
         if (!JAVA_SDK_MAIN.equals(tool.path("entryPoint").asText())) return "The entry point is not the Java SDK runtime";
         if (!io.ololabs.toolgate.sdk.ExecutionLocation.CLIENT.allows(d.path("kind").asText())) return "The declaration does not allow client devices";
-        for (var field : List.of("routes", "destinations", "httpAuth", "tcp", "permissions")) if (!d.path(field).isEmpty()) return "Needs Tool Host network capabilities devices do not provide";
+        for (var field : List.of("routes", "destinations", "httpAuth", "tcp")) if (!d.path(field).isEmpty()) return "Needs Tool Host network capabilities devices do not provide";
+        for (var permission : d.path("permissions")) if (!permission.asText().startsWith("DEVICE_FILES_")) return "Needs Tool Host network capabilities devices do not provide";
         for (var field : List.of("globals", "secrets", "claims")) if (!d.path("variables").path(field).isEmpty()) return "Needs globals, secrets or claims devices do not provide";
         if (d.path("execution").path("async").asBoolean()) return "Asynchronous tools are not supported on devices";
         if (server.contains(d.path("toolId").asText())) return "Deployed to Tool Hosts; one directory record per export";

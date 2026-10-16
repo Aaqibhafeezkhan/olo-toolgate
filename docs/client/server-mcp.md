@@ -50,12 +50,11 @@ agent, user and device. Managed runtime definitions come from approved packages 
 the client. Discovery without call arguments conservatively hides tools with an
 applicable BLOCK. The client IPC catalog also accepts an optional `agentId`; an
 unscoped query cannot expose permissions restricted to a particular agent.
-Use `olo-toolgate-client tools --agent <agent-id>` for scoped local discovery.
 
 An ALLOW tools/call is audited by the Gateway and queued durably in Control. The
 next client poll delivers its exact request and lease. The client rechecks current
 authorization with its device certificate immediately before a protected effect,
-executes the existing bounded builtin or approved runtime, and posts the result.
+runs the signed package tool in its managed sandbox, and posts the result.
 Control checks the agent scope and current permission again before returning the
 result. ASK remains blocked on MCP; approvals use the existing permit flow.
 
@@ -92,21 +91,14 @@ messages with request correlation, poll/configuration metadata and job state.
 Control emits matching messages for enrollment, check-ins and MCP relay APIs.
 Credentials, certificates, enrollment/lease codes, tool arguments and outputs
 are redacted. The client retains a bounded `packets.jsonl` in its protected state
-directory (100 entries, at most 64 KiB). `client.read_log_entry` returns exactly
-one latest entry after fresh device authorization; its default resource is
-`CUSTOM:hotfolder`, and the normal agent/user/device permission rules apply.
-It cannot read arbitrary files. The Windows tray offers a live packet viewer.
+directory (100 entries, at most 64 KiB), readable by device administrators; no
+tool exposes it. The Windows tray offers a live packet viewer.
 
 Quickstart exposes the same stateless `/mcp` ingress on its direct HTTPS
 listener, forwarding MCP protocol headers and allowing time for the next client
 poll. Only its fixed runtime proxy routes delegate opaque bearer validation to
 Gateway; Control administrator JWT and client mTLS routes retain their existing
-authentication. See `debug/agent-mimic.bat` for a sequential write/log
-example and `debug/README.md` for existing-configuration usage. The compatibility
-entry point `debug/setup-agent-mimic.bat` runs the same two tool calls;
-it performs no installation, enrollment, approval, policy or credential setup.
-Both commands print responses and keep timestamped console logs under
-`.dev/debug/logs/`.
+authentication.
 
 Current clients request millisecond intervals with `X-ToolGate-Poll-Interval-Unit: milliseconds`. Control replies with `nextIntervalMs` set to the configured check-in; that value takes precedence over the legacy `nextIntervalSeconds`. Older clients receive the interval in whole seconds (at least two), and current clients fall back to seconds against an older server.
 

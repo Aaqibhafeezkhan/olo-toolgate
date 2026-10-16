@@ -90,7 +90,7 @@ class AccountTests(unittest.TestCase):
                                          'TOOLGATE_DEMO_REFRESH_AT':'2026-10-15T03:00:00Z'});self.env.start()
     def tearDown(self):self.env.stop();self.temp.cleanup()
     def prepare(self):
-        return bootstrap.prepare(quickstart.DATA,quickstart.TENANT,quickstart.ISSUER,quickstart.key,quickstart.atomic,[])
+        return bootstrap.prepare(quickstart.DATA,quickstart.TENANT,quickstart.ISSUER,quickstart.key,quickstart.atomic)
     def install(self):
         """A prepared installation with its directory identities, the admin login and generated accounts."""
         self.prepare()
