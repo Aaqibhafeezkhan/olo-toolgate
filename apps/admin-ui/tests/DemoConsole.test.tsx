@@ -1,11 +1,13 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {StrictMode} from 'react';
 import {managementCatalog} from '../src/managementPermissions.generated';
 const allPermissions=managementCatalog.resources.flatMap(r=>r.actions.map(a=>`${r.id}.${a}`));
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {App} from '../src/App';
 import {parseLoginHints} from '../src/LoginHints';
+import {readLoginLink,clearLoginLink} from '../src/LoginLink';
 import {NO_REVIEWS_BANNER} from '../src/ReviewPolicyBanner';
 import {REVIEW_POLICY_CHANGE} from '../src/ServerSettings';
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status});
@@ -13,9 +15,39 @@ const token=(user='alice')=>`header.${btoa(JSON.stringify({iss:'test',tenant_id:
 async function connect(){fireEvent.change(screen.getByLabelText('Access token'),{target:{value:token()}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));await screen.findByRole('navigation');}
 function navigate(hash:string){window.location.hash=hash;fireEvent(window,new HashChangeEvent('hashchange'));}
 function quickstartMode(){const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);}
-afterEach(()=>{cleanup();document.querySelector('meta[name=toolgate-mode]')?.remove();vi.unstubAllGlobals();localStorage.clear();window.location.hash='';});
+afterEach(()=>{cleanup();document.querySelector('meta[name=toolgate-mode]')?.remove();vi.unstubAllGlobals();localStorage.clear();window.history.replaceState(null,'',window.location.pathname);});
 
 describe('Login page',()=>{
+  it.each([
+    ['#login?username=public','public',''],
+    ['#login?username=visitor-007&password='+encodeURIComponent('demo+password&=/ value'),'visitor-007','demo+password&=/ value'],
+  ])('prefills external login fields from %s and clears the fragment without signing in',async(hash,username,password)=>{
+    quickstartMode();window.location.hash=hash;
+    const transport=vi.fn(async(input:string)=>input.endsWith('/session')?json({},401):input.endsWith('/status')?json({passwordRequired:true}):input.endsWith('/login-hints')?json({accounts:[]}):json({},503));
+    vi.stubGlobal('fetch',transport);render(<StrictMode><App/></StrictMode>);
+    await waitFor(()=>expect((screen.getByRole('button',{name:'Connect to workspace'}) as HTMLButtonElement).disabled).toBe(false));
+    expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe(username);
+    expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe(password);
+    expect(window.location.hash).toBe('');expect(JSON.stringify(localStorage)).not.toContain(username);
+    expect(transport.mock.calls.some(([url])=>url.endsWith('/login')||url.endsWith('/session'))).toBe(false);
+    expect(transport.mock.calls.some(([url])=>url.includes('username=')||url.includes('password='))).toBe(false);
+  });
+  it('prefills an external query link and removes both parameters',()=>{
+    quickstartMode();window.history.replaceState(null,'','?username=public&password=external-password');
+    const initialLogin=readLoginLink();clearLoginLink();
+    expect(window.location.search).toBe('');
+    vi.stubGlobal('fetch',vi.fn(async()=>json({},503)));render(<App initialLogin={initialLogin}/>);
+    expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('public');
+    expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('external-password');
+    expect(window.location.search).toBe('');expect(window.location.hash).toBe('');
+  });
+  it('ignores malformed demo credentials and clears the fragment',async()=>{
+    quickstartMode();window.location.hash='#login?username='+encodeURIComponent('<admin>')+'&password=secret';
+    vi.stubGlobal('fetch',vi.fn(async(input:string)=>input.endsWith('/session')?json({},401):input.endsWith('/status')?json({passwordRequired:true}):json({},503)));
+    render(<App/>);expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('admin');
+    expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('');expect(window.location.hash).toBe('');
+  });
+
   it('lists showOnLogin accounts with copy buttons and the next demo reset, and signs in without a new-password step',async()=>{
     quickstartMode();
     const refreshAt='2030-01-02T03:00:00Z';const writeText=vi.fn(async()=>{});vi.stubGlobal('navigator',{...navigator,clipboard:{writeText}});

@@ -11,6 +11,7 @@ import {ConfigurationRequests} from './ConfigurationRequests';
 import {ConfigurationTransfer} from './ConfigurationTransfer';
 import {ServerConfiguration,DeviceConfiguration} from './ServerSettings';
 import {LoginHints} from './LoginHints';
+import {readLoginLink,clearLoginLink,type LoginLink} from './LoginLink';
 import {ReviewPolicyBanner} from './ReviewPolicyBanner';
 import {WorkloadReauthorization} from './WorkloadReauthorization';
 import type {PendingWorkloadBinding} from './pendingContracts';
@@ -54,7 +55,7 @@ const routeFromHash = (): Route => { redirectLegacyHash(); return sections.find(
 const safeOrigin = () => window.location.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
 
 /** Authenticated shell; identities/roles are verified only by Control. */
-export function App() {
+export function App({initialLogin}:{initialLogin?:LoginLink}={}) {
   const quickstart = document.querySelector('meta[name=toolgate-mode]')?.getAttribute('content') === 'quickstart';
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [presentation,setPresentation]=useState<ReturnType<typeof sessionPresentation>>();
@@ -75,13 +76,15 @@ export function App() {
     setSidebarCollapsed(!sidebarCollapsed);
     try { localStorage.setItem('toolgate.sidebar.collapsed', String(!sidebarCollapsed)); } catch { /* Preferences are optional. */ }
   };
-  const [username,setUsername]=useState('admin');
+  const [prefill]=useState(()=>quickstart&&safeOrigin()?(initialLogin??readLoginLink()):undefined);
+  const [username,setUsername]=useState(prefill?.username??'admin');
+  useEffect(clearLoginLink,[]);
   const [passwordDisabled, setPasswordDisabled] = useState(false);
   const [client, setClient] = useState<ControlClient>();
   const permissions=usePermissions(client);
   useEffect(()=>{if(!client)return;const refresh=()=>{void client.adminSession().catch(()=>{});};const timer=setInterval(refresh,15000);window.addEventListener('focus',refresh);window.addEventListener('toolgate:permissions-change',refresh);return()=>{clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('toolgate:permissions-change',refresh);};},[client]);
   const [administrator,setAdministrator]=useState(false);
-  const [credential, setCredential] = useState(''); const [connecting, setConnecting] = useState(false);
+  const [credential, setCredential] = useState(prefill?.password??''); const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<unknown>(); const [route, setRoute] = useState<Route>(routeFromHash);
   const active = useRef<ControlClient | undefined>(undefined);
   useEffect(() => { const update = () => setRoute(routeFromHash()); window.addEventListener('hashchange', update); return () => { window.removeEventListener('hashchange', update); active.current?.dispose(); }; }, []);
@@ -100,8 +103,8 @@ export function App() {
     const status = fetch('/api/quickstart/v1/status', {credentials:'omit',redirect:'error',signal:abort.signal})
       .then(response => response.ok ? response.json() : undefined).catch(() => undefined);
     void (async () => {
-      let noSession = false;
-      try {
+      let noSession = Boolean(prefill);
+      if(!prefill) try {
         const response = await fetch('/api/quickstart/v1/session', {credentials:'same-origin',cache:'no-store',redirect:'error',signal:abort.signal});
         if (response.status === 401) noSession = true;
         else {
@@ -117,7 +120,7 @@ export function App() {
       if (typeof body?.tenant === 'string') setTenant(body.tenant);
       if (body?.passwordRequired === false) {
         setPasswordDisabled(true);
-        if (noSession) void connect(null, true);
+        if (noSession&&!prefill) void connect(null, true);
       }
     })();
     return () => { abort.abort(); };
