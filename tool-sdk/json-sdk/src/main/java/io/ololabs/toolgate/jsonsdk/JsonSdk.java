@@ -1,0 +1,127 @@
+// Copyright 2026 OLO Labs
+// SPDX-License-Identifier: Apache-2.0
+package io.ololabs.toolgate.jsonsdk;
+
+import io.ololabs.toolgate.sdkbuild.Packer;
+import io.ololabs.toolgate.sdkbuild.Staging;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+import java.util.zip.CRC32;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import javax.tools.ToolProvider;
+
+/** The single compiler/stager used by CLI and Builder. All tool behavior is compiled by the Java SDK. */
+public final class JsonSdk {
+    private static final java.time.LocalDateTime ZIP_TIME = java.time.LocalDateTime.of(1980, 1, 2, 0, 0);
+    public record Build(Path jar, Path staging, JsonProject project) {}
+    private JsonSdk() {}
+
+    public static Build stage(byte[] source, Path work) throws IOException {
+        JsonProject project = JsonProject.parse(source);
+        if (Files.exists(work, LinkOption.NOFOLLOW_LINKS)) throw new IllegalArgumentException("Build directory must be new");
+        Files.createDirectories(work);
+        Path sourceFile = work.resolve("source/io/ololabs/toolgate/generated/JsonTools.java");
+        Files.createDirectories(sourceFile.getParent());
+        Files.writeString(sourceFile, JavaSource.generate(project), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+        Path classes = work.resolve("classes"), generated = work.resolve("generated");
+        Files.createDirectories(classes); Files.createDirectories(generated);
+        var compiler = ToolProvider.getSystemJavaCompiler();
+        if (compiler == null) throw new IllegalStateException("JSON SDK builds require JDK 17 or later");
+        var diagnostics = new javax.tools.DiagnosticCollector<javax.tools.JavaFileObject>();
+        try (var files = compiler.getStandardFileManager(diagnostics, java.util.Locale.ROOT, StandardCharsets.UTF_8)) {
+            var options = List.of("--release", "17", "-encoding", "UTF-8", "-parameters", "-classpath", compilerClasspath(),
+                    "-processor", "io.ololabs.toolgate.sdk.processor.DescriptorProcessor", "-Atoolgate.descriptorGeneration=1",
+                    "-d", classes.toString(), "-s", generated.toString());
+            if (!Boolean.TRUE.equals(compiler.getTask(null, files, diagnostics, options, null, files.getJavaFileObjects(sourceFile)).call())) {
+                throw new IllegalArgumentException("JSON SDK compilation rejected: " + diagnostics.getDiagnostics().stream()
+                        .map(d -> d.getCode() + ": " + d.getMessage(java.util.Locale.ROOT)).toList());
+            }
+        }
+        Path jar = work.resolve("tool.jar");
+        try (var out = new JarOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(jar))); var walk = Files.walk(classes)) {
+            for (Path file : walk.filter(Files::isRegularFile).sorted(Comparator.comparing(p -> classes.relativize(p).toString())).toList()) {
+                var entry = new JarEntry(classes.relativize(file).toString().replace('\\', '/'));
+                entry.setTimeLocal(ZIP_TIME); out.putNextEntry(entry); Files.copy(file, out); out.closeEntry();
+            }
+        }
+        var libraries = runtimeLibraries();
+        return new Build(jar, Staging.stage(jar, libraries, project.version(), work.resolve("staging")), project);
+    }
+
+    /** SDK tests use the generated package's descriptors and handler, never an alternative JSON interpreter. */
+    public static void check(Build build) throws IOException {
+        try (var loader = new URLClassLoader(new URL[]{build.jar().toUri().toURL()}, JsonSdk.class.getClassLoader())) {
+            // Pure CLIENT handlers can be tested without granting device resources.
+            var report = io.ololabs.toolgate.sdkbuild.Checks.run(loader, build.jar().getParent());
+            if (!report.passed()) throw new IllegalArgumentException("JSON SDK examples failed: " + report.problems());
+        }
+    }
+
+    public static Path pack(Build build, Path output, Map<String, String> environment) throws IOException, InterruptedException {
+        check(build);
+        Packer.pack(build.staging(), output, environment);
+        return output;
+    }
+
+    /** Exactly one source export. ZIP bytes contain no build timestamps, machine paths or job identity. */
+    public static byte[] sourceArchive(byte[] source) throws IOException {
+        JsonProject project = JsonProject.parse(source);
+        Map<String, byte[]> files = new TreeMap<>();
+        files.put(JsonProject.FILE, project.source());
+        files.put(".gitignore", "build/\ntoolgate.dev.json\n".getBytes(StandardCharsets.UTF_8));
+        files.put("README.md", ("# " + project.name() + "\n\nBuild with the matching ToolGate JSON SDK distribution (JDK 17+).\n\n"
+                + "    toolgate-json-sdk check .\n    toolgate-json-sdk pack .\n\n"
+                + "Commit this project under core-mcp/<package> and select sdk=json in its build inventory.\n"
+                + "The built .tgpkg uses the same package and execution contract as the Java SDK.\n").getBytes(StandardCharsets.UTF_8));
+        var bytes = new ByteArrayOutputStream();
+        try (var zip = new ZipOutputStream(bytes, StandardCharsets.UTF_8)) {
+            for (var file : files.entrySet()) {
+                var entry = new ZipEntry(file.getKey());
+                entry.setTimeLocal(ZIP_TIME); entry.setMethod(ZipEntry.STORED);
+                var crc = new CRC32(); crc.update(file.getValue());
+                entry.setSize(file.getValue().length); entry.setCompressedSize(file.getValue().length); entry.setCrc(crc.getValue());
+                zip.putNextEntry(entry); zip.write(file.getValue()); zip.closeEntry();
+            }
+        }
+        return bytes.toByteArray();
+    }
+
+    private static final List<Class<?>> RUNTIME = List.of(
+            io.ololabs.toolgate.runtime.StandaloneRuntime.class, io.ololabs.toolgate.protocol.ProtocolCore.class,
+            io.ololabs.toolgate.sdk.context.ToolContext.class, com.fasterxml.jackson.databind.ObjectMapper.class,
+            com.fasterxml.jackson.core.JsonFactory.class, com.fasterxml.jackson.annotation.JsonProperty.class, org.sqlite.JDBC.class);
+
+    private static Path location(Class<?> type) {
+        try { return Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI()).toAbsolutePath().normalize(); }
+        catch (java.net.URISyntaxException | NullPointerException failure) { throw new IllegalStateException("Missing SDK artifact: " + type.getName(), failure); }
+    }
+
+    private static String compilerClasspath() {
+        var paths = new java.util.LinkedHashSet<Path>();
+        for (Class<?> type : RUNTIME) paths.add(location(type));
+        paths.add(location(io.ololabs.toolgate.sdk.processor.DescriptorProcessor.class));
+        return paths.stream().map(Path::toString).collect(java.util.stream.Collectors.joining(java.io.File.pathSeparator));
+    }
+
+    private static List<Path> runtimeLibraries() {
+        return RUNTIME.stream().map(JsonSdk::location).distinct().map(path -> {
+            if (!Files.isRegularFile(path) || !path.toString().endsWith(".jar"))
+                throw new IllegalStateException("Install the SDK distribution before packing: " + path);
+            return path;
+        }).toList();
+    }
+}

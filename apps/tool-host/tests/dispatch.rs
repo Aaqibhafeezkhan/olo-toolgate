@@ -415,6 +415,7 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
             "LANG",
             "TOOLGATE_BROKER_CAPABILITY",
             "TOOLGATE_BROKER_SOCKET",
+            "TOOLGATE_EXECUTION_TARGET",
             "TOOLGATE_PROTOCOL"
         ])
     );

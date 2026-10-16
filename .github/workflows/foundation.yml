@@ -32,6 +32,11 @@ jobs:
     - name: Required foundation gates
       run: |
         python tools/check.py --ci-common
+    - name: Build configured core MCP packages
+      run: |
+        cargo build --locked -p toolgate-cli
+        python core-mcp/test_build.py
+        python core-mcp/build.py --cli target/debug/toolgate
     - name: Dependency, license and secret scan hooks
       run: |
         python tools/check.py --scans --ci-common
@@ -63,6 +68,7 @@ jobs:
         name: foundation-evidence
         path: |
           build/release/
+          build/core-mcp/
           build/ui/
           packages/contracts/java/build/reports/tests/
           apps/*/build/reports/tests/

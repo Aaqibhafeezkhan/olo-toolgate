@@ -27,9 +27,10 @@ final class ServerPackagesTest {
     /** A package as `toolgate pack` lays it out: one Java tool with a global and a brokered destination. */
     static Map<String, byte[]> files() throws Exception { return files(false); }
     /** split: the tool also needs a zip of libraries, which a Java tool may not. */
-    static Map<String, byte[]> files(boolean split) throws Exception {
+    static Map<String, byte[]> files(boolean split) throws Exception { return files(split, "SERVER"); }
+    static Map<String, byte[]> files(boolean split, String kind) throws Exception {
         var descriptor = (ObjectNode) JSON.readTree("""
-            {"descriptorGeneration":1,"toolId":"acme.orders/items.get","mcpName":"orders.items.get","kind":"TOOL","title":"Get item",
+            {"descriptorGeneration":1,"toolId":"acme.orders/items.get","mcpName":"orders.items.get","kind":"SERVER","title":"Get item",
              "description":"Gets one item.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},
              "errors":[],"effect":{"safety":"READ_ONLY","destructive":false,"openWorld":true},"businessKey":{"required":false},
              "execution":{"mode":"SYNC"},"routes":[{"id":"items.get","destination":"items-api","method":"GET","path":"/items/{id}",
@@ -37,6 +38,12 @@ final class ServerPackagesTest {
              "destinations":[{"id":"items-api","hostSetting":"ItemsApiHost","port":443,"spkiPins":[]}],"httpAuth":[],"tcp":[],
              "variables":{"globals":[{"name":"Greeting","type":"STRING","required":true,"sensitive":false,"default":"Hello"}],"secrets":[{"name":"ApiKey","type":"STRING","scope":"TENANT"}],"claims":[]},
              "permissions":["HTTP_ROUTE"],"toolsets":[]}""");
+        descriptor.put("kind", kind);
+        if (kind.equals("CLIENT")) {
+            for (var field : List.of("routes", "destinations", "httpAuth", "tcp", "permissions")) descriptor.putArray(field);
+            var variables = descriptor.putObject("variables");
+            variables.putArray("globals"); variables.putArray("secrets"); variables.putArray("claims");
+        }
         byte[] canonical = Canonical.bytes(descriptor), jar = "jar bytes".getBytes(StandardCharsets.UTF_8);
         String digest = Canonical.sha256(canonical);
         var manifest = (ObjectNode) JSON.readTree("""
@@ -85,6 +92,16 @@ final class ServerPackagesTest {
         assertThrows(Failure.class, () -> PackageArchive.validate(zip(traversal), document -> (JsonNode) codec.value(document)));
         // RFC 8785: ECMAScript numbers, UTF-16 key order; arguments are not NFC-normalised.
         assertEquals("sha256:" + DirectoryService.digest("{\"a\":1e+21,\"b\":[0.5,\"é\"]}"), Canonical.arguments(JSON.readTree("{\"b\":[0.5,\"é\"],\"a\":1e21}")));
+    }
+
+    @Test void clientOnlyPackagesCannotBeDeployedToServerHosts() throws Exception {
+        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("client-package.sqlite")), codec);
+        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        String digest = node(packages.upload(actor, zip(files(false, "CLIENT")), "upload-client").body()).get("packageDigest").asText();
+        assertEquals(422, assertThrows(Failure.class, () -> packages.deploy(actor,
+            "{\"packageDigest\":\"" + digest + "\",\"globals\":{}}", "deploy-client")).status());
+        assertNull(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))));
     }
 
     @Test void deploymentWritesDisabledToolsAndTheHostFetchesThem() throws Exception {

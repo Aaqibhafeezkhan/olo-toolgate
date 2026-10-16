@@ -38,6 +38,7 @@ final class Config {
     final Mode mode;
     final Map<String, String> env;
     final JsonNode devJson;
+    io.ololabs.toolgate.sdk.ExecutionLocation location = io.ololabs.toolgate.sdk.ExecutionLocation.SERVER;
     final List<String> warnings = new ArrayList<>();
 
     private Config(Mode mode, Map<String, String> env, JsonNode devJson) {

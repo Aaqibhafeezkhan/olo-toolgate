@@ -94,6 +94,7 @@ public final class ServerPackages {
             var declared = new TreeMap<String, JsonNode>(); var hosts = new TreeSet<String>();
             var destinations = new TreeMap<String, JsonNode>(); var routes = new TreeMap<String, JsonNode>(); var secrets = new TreeMap<String, Set<String>>();
             for (var tool : manifest.path("tools")) {
+                if (!io.ololabs.toolgate.sdk.ExecutionLocation.SERVER.allows(tool.path("descriptor").path("kind").asText())) continue;
                 var descriptor = tool.get("descriptor"); String toolId = descriptor.get("toolId").asText();
                 for (var global : descriptor.path("variables").path("globals")) same(declared, global.get("name").asText(), global);
                 var names = new TreeSet<String>();
@@ -139,6 +140,7 @@ public final class ServerPackages {
 
             var before = tx.load(); var entries = new HashMap<>(before.entries()); var toolIds = new ArrayList<String>();
             for (var tool : manifest.path("tools")) {
+                if (!io.ololabs.toolgate.sdk.ExecutionLocation.SERVER.allows(tool.path("descriptor").path("kind").asText())) continue;
                 var descriptor = tool.get("descriptor"); String toolId = descriptor.get("toolId").asText(); toolIds.add(toolId);
                 String extractorId = "extract-" + DirectoryService.digest(toolId).substring(0, 32);
                 var fixed = JSON.arrayNode(); fixed.addObject().put("kind", "CUSTOM").put("locator", "tool://" + toolId);
@@ -159,6 +161,7 @@ public final class ServerPackages {
                 // Every tool belongs to exactly one Tool Group; a new one starts in the default group, as when created by hand.
                 if (added) GroupGraph.addDefault(entries, codec, Kind.TOOL, toolId);
             }
+            if (toolIds.isEmpty()) throw PackageCompatibility.incompatible();
             var after = new Directory(before.revision() + 1, entries);
             try { after.validate(512, 1048576); codec.validatePolicies(after); } catch (IllegalArgumentException failure) { throw Failure.conflict(); }
             tx.save(before, after);

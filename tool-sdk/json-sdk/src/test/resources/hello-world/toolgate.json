@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "sdkVersion": "0.10.0-dev",
+  "id": "ololabs.hello-world-json",
+  "name": "Hello World",
+  "publisher": "ololabs",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "client_greet",
+      "kind": "CLIENT",
+      "title": "Client Hello World",
+      "description": "Greets the supplied text on a client device.",
+      "inputs": {
+        "text": {"type": "STRING", "description": "Text to greet", "default": "World", "maxLength": 128}
+      },
+      "output": {"message": {"concat": [{"literal": "Hello "}, {"input": "text"}]}},
+      "events": [{"level": "info", "message": "Producing greeting"}, {"fraction": 1, "message": "Greeting complete"}]
+    },
+    {
+      "name": "server_greet",
+      "kind": "SERVER",
+      "title": "Server Hello World",
+      "description": "Greets the supplied text on the assigned server or device.",
+      "inputs": {
+        "text": {"type": "STRING", "description": "Text to greet", "default": "World", "maxLength": 128}
+      },
+      "output": {"message": {"concat": [{"literal": "Hello "}, {"input": "text"}]}}
+    }
+  ]
+}

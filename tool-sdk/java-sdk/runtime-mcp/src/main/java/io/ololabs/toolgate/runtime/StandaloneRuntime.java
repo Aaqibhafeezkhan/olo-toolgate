@@ -188,11 +188,13 @@ public final class StandaloneRuntime implements ToolCatalog {
         Map<String, JsonNode> globalDeclarations = new TreeMap<>();
         for (JsonNode entry : index.path("tools")) {
             Tool tool = runtime.load(loader, entry);
+            if (tool == null) continue;
             for (JsonNode g : tool.descriptor.path("variables").path("globals")) globalDeclarations.putIfAbsent(g.path("name").asText(), g);
             if (runtime.byMcpName.put(tool.mcpName, tool) != null) {
                 throw new StartupRefused("CONFIGURATION", "two tools share the MCP name " + tool.mcpName);
             }
         }
+        if (runtime.byMcpName.isEmpty()) throw new StartupRefused("CLIENT_TOOLS_UNAVAILABLE", "The package has no tools eligible for this execution target");
         List<JsonNode> destinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("destinations").forEach(destinations::add);
         runtime.egress = Egress.resolve(config, destinations, diagnostics);
@@ -343,9 +345,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         JsonNode d = tool.descriptor;
         tool.toolId = d.path("toolId").asText();
         tool.mcpName = d.path("mcpName").asText();
-        if (d.path("kind").asText().equals("CLIENT")) {
-            throw new StartupRefused("CLIENT_TOOLS_UNAVAILABLE", "client tool " + tool.toolId + " needs endpoint device services, which this standalone runtime does not have");
-        }
+        if (config.mode != Config.Mode.TEST && !config.location.allows(d.path("kind").asText())) return null;
         tool.businessKey = d.path("businessKey");
         tool.reserves = tool.businessKey.path("required").asBoolean() || tool.businessKey.hasNonNull("argument");
         if (config.mode == Config.Mode.PRODUCTION && verifier == null && needsIdentity(d)) {

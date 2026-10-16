@@ -55,6 +55,12 @@ final class Governed {
             String handle = handles.get(name);
             return handle == null || broker == null ? null : broker.redeem(handle);
         });
+        try {
+            config.location = io.ololabs.toolgate.sdk.ExecutionLocation.valueOf(env.getOrDefault("TOOLGATE_EXECUTION_TARGET", "SERVER"));
+        } catch (IllegalArgumentException invalid) {
+            write(out, failure("INVALID_TARGET", "Execution target must be SERVER or CLIENT"));
+            return 78;
+        }
         TestExchanges routes = broker != null ? broker : request -> JSON.createObjectNode().put("refused", "this invocation has no broker");
         StandaloneRuntime runtime;
         try {

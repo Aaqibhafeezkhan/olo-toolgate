@@ -34,6 +34,7 @@ COPY apps/marketplace-api/build.gradle.kts apps/marketplace-api/build.gradle.kts
 COPY apps/marketplace-worker/build.gradle.kts apps/marketplace-worker/build.gradle.kts
 # Gradle configures every project included in settings, including the SDK modules.
 COPY tool-sdk/java-sdk/ tool-sdk/java-sdk/
+COPY tool-sdk/json-sdk/ tool-sdk/json-sdk/
 ARG QUARKUS_PROFILE=prod
 RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && ./gradlew --no-daemon -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild
 

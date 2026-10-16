@@ -7,6 +7,16 @@ use common::scratch;
 use std::path::Path;
 use std::process::Command;
 
+#[test]
+fn json_project_selects_the_shared_sdk_distribution() {
+    let dir = scratch("json-project");
+    std::fs::write(dir.join("toolgate.json"), "{}").unwrap();
+    let adapter = toolgate_cli::project::detect(&dir, None).unwrap();
+    assert_eq!("json-sdk", adapter.id);
+    assert_eq!("json", adapter.build);
+    assert_eq!("build/toolgate", adapter.output);
+}
+
 fn toolgate(dir: &Path, args: &[&str]) -> (i32, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_toolgate"))
         .args(args)
@@ -172,7 +182,7 @@ fn project_commands_say_what_is_missing() {
     let (code, out) = toolgate(&dir, &["dev"]);
     assert_eq!(1, code);
     assert!(
-        out.contains("is not a tool project: no settings.gradle.kts"),
+        out.contains("is not a tool project: no toolgate.json, settings.gradle.kts"),
         "{out}"
     );
     std::fs::write(dir.join("pom.xml"), "<project/>").unwrap();

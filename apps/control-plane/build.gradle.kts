@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.json.schema)
     implementation(libs.bouncycastle.pkix)
     implementation(project(":package-archive"))
+    implementation(project(":sdk-java-api"))
     if (usePublishedContracts.get()) {
         implementation("io.github.olo-labs:toolgate-contracts:$contractsVersion")
     } else {
