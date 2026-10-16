@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -50,7 +51,7 @@ def linux_bytes(files):
     import gzip
     with gzip.GzipFile(fileobj=buffer,mode='wb',mtime=0,filename='') as stream, tarfile.open(fileobj=stream,mode='w') as writer:
         for name,data in sorted(files.items()):
-            info=tarfile.TarInfo(name);info.size=len(data);info.mode=0o755 if name=='olo-toolgate-client' else 0o644;info.mtime=0
+            info=tarfile.TarInfo(name);info.size=len(data);info.mode=0o755 if name in ('olo-toolgate-client','toolgate','olo-toolgate-tool-host') else 0o644;info.mtime=0
             writer.addfile(info,io.BytesIO(data))
     data=buffer.getvalue()
     template=(ROOT/'apps/endpoint-client/packaging/linux-setup.sh').read_text(encoding='utf-8').replace('@SHA256@',hashlib.sha256(data).hexdigest())
@@ -65,6 +66,8 @@ def linux_bytes(files):
 
 def build(target,output):
     version=(ROOT/'VERSION').read_text().strip()
+    release=json.loads((ROOT/'release.json').read_text()) if (ROOT/'release.json').is_file() else None
+    if release and release['version'] != version:raise ValueError('Installer release identity differs from product version')
     platform='WINDOWS' if 'windows' in target else 'MACOS' if 'apple' in target else 'LINUX'
     base=f'olo-toolgate-client-{version}-{target}'
     files=payload(output/(base+('.zip' if platform=='WINDOWS' else '.tar.gz')))
@@ -84,10 +87,10 @@ def build(target,output):
             directory=Path(temporary);directory_payload=directory/'payload';directory_payload.mkdir()
             for name,data in files.items():
                 path=directory_payload/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
-                if name==executable:path.chmod(0o755)
+                if name in (executable,'toolgate','olo-toolgate-tool-host'):path.chmod(0o755)
             if platform=='WINDOWS':
                 # Ship the unpacked extension inside the EXE, never a second ZIP download.
-                build_number=int(subprocess.check_output(['git','rev-list','--count','HEAD'],cwd=ROOT)) if os.environ.get('GITHUB_ACTIONS')=='true' else 0
+                build_number=release['build'] if release else int(subprocess.check_output(['git','rev-list','--count','HEAD'],cwd=ROOT)) if os.environ.get('GITHUB_ACTIONS')=='true' else 0
                 embed_chrome(directory_payload,build_number)
                 (directory_payload/'packaging').mkdir(exist_ok=True)
                 shutil.copyfile(ROOT/'apps/endpoint-client/packaging/toolgate-tray.ps1',directory_payload/'packaging/toolgate-tray.ps1')
@@ -102,13 +105,20 @@ def build(target,output):
                 destination=directory_payload/'third-party/inno-setup/License.txt'
                 destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(notice,destination)
                 architecture='arm64' if target.startswith('aarch64') else 'x64compatible'
-                subprocess.run([compiler,'/Qp','/DProductVersion='+version,'/DNativeArchitecture='+architecture,
+                subprocess.run([compiler,'/Qp','/DProductVersion='+version,
+                    *(['/DNumericVersion='+release['numericVersion']] if release else []),'/DNativeArchitecture='+architecture,
                     '/DChromeStoreUrl='+os.environ.get('TOOLGATE_CHROME_STORE_URL',''),
                     '/DPayloadDirectory='+str(directory_payload.resolve()),'/DOutputDirectory='+str(output.resolve()),
                     '/DOutputName='+base+'.setup',str(ROOT/'apps/endpoint-client/packaging/windows-setup.iss')],check=True)
             else:
                 app=directory/'Install ToolGate.app'
                 subprocess.run(['/usr/bin/osacompile','-o',str(app),str(ROOT/'apps/endpoint-client/packaging/macos-setup.applescript')],check=True)
+                if release:
+                    import plistlib
+                    plist=app/'Contents/Info.plist'
+                    properties=plistlib.loads(plist.read_bytes())
+                    properties.update(CFBundleShortVersionString=release['baseVersion'],CFBundleVersion=release['macosBuild'])
+                    plist.write_bytes(plistlib.dumps(properties))
                 shutil.copytree(directory_payload,app/'Contents/Resources/payload')
                 shutil.copyfile(ROOT/'docs/client/installers.md',directory/'README.md')
                 subprocess.run(['/usr/bin/hdiutil','create','-volname','Install OLO ToolGate','-srcfolder',str(directory),

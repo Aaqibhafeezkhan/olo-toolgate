@@ -41,7 +41,11 @@ def package(binary, target, output):
     metadata = json.loads(subprocess.check_output(command, cwd=ROOT))
     nodes = {n['id']: n for n in metadata['resolve']['nodes']}
     root = next(p['id'] for p in metadata['packages'] if p['name'] == 'olo-toolgate-client')
-    reachable, pending = set(), [root]
+    extra_packages=[]
+    for executable_name,package_name in (('toolgate','toolgate-cli'),('olo-toolgate-tool-host','olo-toolgate-tool-host')):
+        if binary.with_name(executable_name+('.exe' if 'windows' in target else '')).is_file():
+            extra_packages.append(next(p['id'] for p in metadata['packages'] if p['name']==package_name))
+    reachable, pending = set(), [root,*extra_packages]
     while pending:
         node = pending.pop()
         if node not in reachable:
@@ -59,6 +63,17 @@ def package(binary, target, output):
              'NOTICE.md':(ROOT/'NOTICE.md').read_bytes(),
              'README.md':(ROOT/'apps/endpoint-client/README.md').read_text().replace('../../docs/','docs/').encode(),
              'sbom.cdx.json':(json.dumps(sbom,sort_keys=True,indent=2)+'\n').encode()}
+    if (ROOT/'release.json').is_file():
+        release=json.loads((ROOT/'release.json').read_text())
+        if release['version']!=version:raise ValueError('Native release identity differs from product version')
+        files['release.json']=(ROOT/'release.json').read_bytes()
+    # Native distributions also carry the authoring CLI and server Tool Host when built.
+    for name in ('toolgate','olo-toolgate-tool-host'):
+        name += '.exe' if 'windows' in target else ''
+        extra=binary.with_name(name)
+        if extra.is_file():
+            verify_binary(extra.read_bytes(),target)
+            files[name]=extra.read_bytes()
     if 'windows' in target:
         files['packaging/olo.png']=(ROOT/'apps/admin-ui/src/assets/olo.png').read_bytes()
         host=binary.with_name('olo-toolgate-browser-host.exe')
@@ -108,13 +123,13 @@ def package(binary, target, output):
         with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as writer:
             for name,data in sorted(files.items()):
                 info = zipfile.ZipInfo(name, (1980,1,1,0,0,0)); info.compress_type = zipfile.ZIP_DEFLATED
-                info.external_attr = (0o755 if name == executable else 0o644) << 16
+                info.external_attr = (0o755 if name in (executable,'toolgate.exe','olo-toolgate-tool-host.exe') else 0o644) << 16
                 writer.writestr(info,data)
     else:
         import gzip
         with archive.open('wb') as stream, gzip.GzipFile(fileobj=stream,mode='wb',filename='',mtime=0) as compressed, tarfile.open(fileobj=compressed,mode='w') as writer:
             for name,data in sorted(files.items()):
-                info = tarfile.TarInfo(name); info.size = len(data); info.mtime = 0; info.mode = 0o755 if name == executable else 0o644
+                info = tarfile.TarInfo(name); info.size = len(data); info.mtime = 0; info.mode = 0o755 if name in (executable,'toolgate','olo-toolgate-tool-host') else 0o644
                 writer.addfile(info,io.BytesIO(data))
     (output/(archive.name+'.sha256')).write_text(hashlib.sha256(archive.read_bytes()).hexdigest()+'  '+archive.name+'\n')
     print(archive)

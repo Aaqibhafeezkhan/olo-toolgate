@@ -56,7 +56,7 @@ class EarlyGateTests(unittest.TestCase):
         self.assertEqual({'push', 'workflow_dispatch'}, set(ci['on']))
         self.assertEqual(['main'], ci['on']['push']['branches'])
         self.assertEqual('./.github/workflows/admission.yml', ci['jobs']['admission']['uses'])
-        self.assertEqual(['v*'], ci['on']['push']['tags'])
+        self.assertNotIn('tags', ci['on']['push'])
         self.assertNotIn('main_only', ci['jobs']['admission'].get('with',{}))
         self.assertEqual("needs.admission.outputs.allow == 'true'", ci['jobs']['preflight']['if'])
         self.assertEqual('./.github/workflows/foundation.yml', ci['jobs']['foundation']['uses'])

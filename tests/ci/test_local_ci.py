@@ -54,7 +54,10 @@ class LocalCiTests(unittest.TestCase):
         source['steps'][1]['with']['java-version'] = '25'
         source['steps'].append({'name': 'New gate', 'run': 'python tools/new_gate.py'})
         body = local.replay_document('foundation.check', self.workflows)['jobs']['replay']
-        self.assertEqual(body['steps'][1:], source['steps'])
+        expected=copy.deepcopy(source['steps'])
+        del expected[0]['with']['ref']
+        self.assertEqual(body['steps'][1:], expected)
+        self.assertEqual(source['steps'][0]['with']['ref'],'${{ inputs.source_sha || github.sha }}')
         self.assertNotIn('needs', body)
         self.assertIn('needs', source)
         body['steps'].clear()
@@ -118,7 +121,7 @@ class LocalCiTests(unittest.TestCase):
                 self.assertEqual(set(self.workflows[name]['on']), {'workflow_call'})
                 self.assertNotIn('pull_request', self.workflows[name]['on'])
         self.assertNotIn('release-foundation', self.workflows)
-        self.assertEqual(self.workflows['ci']['on']['push'], {'branches': ['main'], 'tags': ['v*']})
+        self.assertEqual(self.workflows['ci']['on']['push'], {'branches': ['main']})
         self.assertEqual(set(self.workflows['development-release']['on']), {'workflow_call'})
         self.assertEqual(set(self.workflows['manual-development-release']['on']), {'workflow_dispatch'})
 

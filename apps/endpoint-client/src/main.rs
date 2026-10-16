@@ -335,6 +335,9 @@ async fn command(arguments: Vec<String>) -> Result<()> {
 }
 /// CI run number and short commit captured at compile time; "local" otherwise.
 fn build_label() -> String {
+    if let Some(build) = option_env!("TOOLGATE_RELEASE_BUILD").filter(|value| !value.is_empty()) {
+        return build.into();
+    }
     match (option_env!("GITHUB_RUN_NUMBER"), option_env!("GITHUB_SHA")) {
         (Some(run), Some(sha)) => format!("{run} ({})", &sha[..sha.len().min(7)]),
         _ => "local".into(),

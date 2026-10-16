@@ -3,13 +3,16 @@
 import {test,expect,type Page} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import {mkdirSync} from 'node:fs';
+import {managementCatalog} from '../../src/managementPermissions.generated';
+
+const allPermissions=managementCatalog.resources.flatMap(resource=>resource.actions.map(action=>`${resource.id}.${action}`));
 test.skip(process.env.UI_TEST_EXPERIENCE!=='true','Requires the inert production UI fixture server');
 async function fixture(page:Page,count=2){
   const users=Array.from({length:count},(_,index)=>({id:`user-${index}`,name:index===0?'Zulu User':index===1?'Alpha User':`User ${index}`,enabled:index%2===0,revision:1}));let pending=true;
   await page.route('**/api/control/v1/**',async route=>{
     const request=route.request(),url=new URL(request.url()),path=url.pathname;
     const reply=(body:unknown,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
-    if(path.endsWith('/admin-session'))return reply({role:'SUPER_ADMIN'});
+    if(path.endsWith('/admin-session'))return reply({role:'SUPER_ADMIN',permissions:allPermissions});
     if(path.endsWith('/users/signed-user'))return reply({id:'signed-user',name:'Test Administrator',enabled:true,revision:1});
     if(path.includes('/users/')&&['PUT','DELETE'].includes(request.method())){
       const id=decodeURIComponent(path.split('/').at(-1)!);const index=users.findIndex(user=>user.id===id);

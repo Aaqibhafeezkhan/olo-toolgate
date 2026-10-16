@@ -4,6 +4,10 @@
 AppId=OLO.ToolGate.Client
 AppName=OLO ToolGate Client
 AppVersion={#ProductVersion}
+#ifdef NumericVersion
+VersionInfoVersion={#NumericVersion}
+VersionInfoProductVersion={#ProductVersion}
+#endif
 AppPublisher=OLO Labs
 LicenseFile={#PayloadDirectory}\LICENSE
 DefaultDirName={autopf}\OLO\ToolGateSetup

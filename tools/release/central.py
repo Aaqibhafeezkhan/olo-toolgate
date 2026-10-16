@@ -101,7 +101,7 @@ def request(endpoint, token, data=b'', content_type=None):
         raise ValueError(f'Central API {endpoint.split("?")[0]} returned HTTP {error.code}; check Portal token and namespace access') from None
 
 
-def publish(assets, version, pom_path=None):
+def publish(assets, version, pom_path=None, deployment_id=None, on_deployment=None):
     if os.environ.get('MAVEN_REPOSITORY_URL') != UPLOAD_URL:
         raise ValueError('Central publication requires '+UPLOAD_URL)
     username = os.environ.get('MAVEN_USERNAME', '')
@@ -110,17 +110,22 @@ def publish(assets, version, pom_path=None):
         raise ValueError('Central requires MAVEN_USERNAME and MAVEN_PASSWORD from a Portal user token')
     token = base64.b64encode((username+':'+password).encode()).decode('ascii')
     with tempfile.TemporaryDirectory(prefix='toolgate-central-') as temporary:
-        archive = bundle(Path(assets), version, Path(temporary), pom_path)
-        boundary = 'toolgate-'+uuid.uuid4().hex
-        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="bundle"; filename="central-bundle.zip"\r\n'
-                'Content-Type: application/octet-stream\r\n\r\n').encode()+archive.read_bytes()+f'\r\n--{boundary}--\r\n'.encode()
-        deployment = str(uuid.UUID(request('upload?publishingType=AUTOMATIC', token, body,
-                                          'multipart/form-data; boundary='+boundary).strip()))
+        if deployment_id is None:
+            archive = bundle(Path(assets), version, Path(temporary), pom_path)
+            boundary = 'toolgate-'+uuid.uuid4().hex
+            body = (f'--{boundary}\r\nContent-Disposition: form-data; name="bundle"; filename="central-bundle.zip"\r\n'
+                    'Content-Type: application/octet-stream\r\n\r\n').encode()+archive.read_bytes()+f'\r\n--{boundary}--\r\n'.encode()
+            deployment = str(uuid.UUID(request('upload?publishingType=AUTOMATIC', token, body,
+                                              'multipart/form-data; boundary='+boundary).strip()))
+        else:
+            deployment = str(uuid.UUID(deployment_id))
         print('Central deployment: '+deployment, flush=True)
         summary = os.environ.get('GITHUB_STEP_SUMMARY')
         if summary:
             with open(summary, 'a', encoding='utf-8') as output:
                 output.write(f'Central deployment `{deployment}` for `io.github.olo-labs:toolgate-contracts:{version}`\n')
+        if deployment_id is None and on_deployment:
+            on_deployment(deployment)
         deadline = time.monotonic()+1200
         previous = None
         while time.monotonic() < deadline:
