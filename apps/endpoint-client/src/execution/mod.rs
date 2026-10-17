@@ -213,6 +213,52 @@ fn sdk_input(
     Ok((bytes, limits))
 }
 
+/// At most this many response frames per run reach Control from a device; the rest are counted as dropped.
+const MAX_RUN_FRAMES: usize = 64;
+
+/// The LOG and PROGRESS frames of one run, in order and numbered from 1, for Control's run-event stream (ADR 027).
+/// Broker requests are not responses, and an INPUT_REQUEST fails the run on a device anyway.
+pub(crate) fn run_frames(stdout: &[u8]) -> (Vec<olo_toolgate_contracts::v2::RunEventFrame>, u64) {
+    use olo_toolgate_contracts::v2::{LogFrame, ProgressFrame, RunEventFrame, RunEventKind};
+    let (mut frames, mut dropped) = (Vec::new(), 0u64);
+    let now = crate::now();
+    for line in String::from_utf8_lossy(stdout).lines() {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line.trim()) else {
+            continue;
+        };
+        let frame = match value.get("kind").and_then(|k| k.as_str()) {
+            Some("LOG") => serde_json::from_value::<LogFrame>(value)
+                .ok()
+                .map(|f| (RunEventKind::Log, Some(f.level), Some(f.message), None)),
+            Some("PROGRESS") => serde_json::from_value::<ProgressFrame>(value)
+                .ok()
+                .map(|f| (RunEventKind::Progress, None, f.message, Some(f.fraction))),
+            _ => continue,
+        };
+        let Some((kind, level, message, fraction)) = frame else {
+            dropped += 1;
+            continue;
+        };
+        if frames.len() == MAX_RUN_FRAMES {
+            dropped += 1;
+            continue;
+        }
+        frames.push(RunEventFrame {
+            sequence: frames.len() as u64 + 1,
+            emitted_at_unix_ms: now,
+            kind,
+            level,
+            message: message
+                .filter(|m| !m.is_empty())
+                .map(|m| m.chars().take(8192).collect()),
+            fraction,
+            request_id: None,
+            request: None,
+        });
+    }
+    (frames, dropped)
+}
+
 /// Response frames on stdout, ending in exactly one RESULT. Diagnostics on stderr are discarded, never reflected. A tool
 /// error, an input request (devices take no interactive input) or anything that is not a protocol frame fails closed;
 /// broker requests were answered while the tool ran.
@@ -344,6 +390,8 @@ pub struct Manager {
     settings: Settings,
     engine: Arc<dyn engine::SandboxPort>,
     authorization: Arc<dyn AuthorizationPort>,
+    /// The last run's response frames and how many were dropped, until taken.
+    frames: (Vec<olo_toolgate_contracts::v2::RunEventFrame>, u64),
     states: BTreeMap<String, LocalRuntimeState>,
     successes: u64,
     failures: u64,
@@ -393,12 +441,17 @@ impl Manager {
             settings,
             engine,
             authorization,
+            frames: (Vec::new(), 0),
             states,
             successes: 0,
             failures: 0,
             recovered: false,
             files,
         })
+    }
+    /// The response frames of the last run (in order, numbered from 1) and how many were dropped.
+    pub fn take_frames(&mut self) -> (Vec<olo_toolgate_contracts::v2::RunEventFrame>, u64) {
+        std::mem::take(&mut self.frames)
     }
     pub fn health(&self) -> LocalRuntimeHealth {
         LocalRuntimeHealth {
@@ -652,6 +705,7 @@ impl Manager {
         )
         .await
         .map_err(|_| Failure::Expired)??;
+        self.frames = run_frames(&data.stdout);
         let output = sdk_output(&data.stdout, &invocation.request_id)?;
         if output.request_id != invocation.request_id
             || !closed_schema(&tool.output_schema)?
@@ -726,5 +780,44 @@ mod self_test_files {
             "the device's own area is never touched"
         );
         std::fs::remove_dir_all(&base).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod run_events {
+    use super::run_frames;
+
+    #[test]
+    fn devices_keep_log_and_progress_frames_in_order_within_bounds() {
+        let mut stdout = String::new();
+        stdout.push_str("{\"kind\":\"LOG\",\"level\":\"info\",\"message\":\"start\"}\n");
+        stdout.push_str("{\"kind\":\"BROKER_REQUEST\",\"requestId\":\"b-1\",\"operation\":\"FILES_LIST\",\"request\":{}}\n");
+        stdout.push_str("{\"kind\":\"PROGRESS\",\"fraction\":0.5}\n");
+        stdout.push_str("not a frame\n");
+        stdout.push_str(
+            "{\"kind\":\"RESULT\",\"resultType\":\"complete\",\"content\":[],\"isError\":false}\n",
+        );
+        let (frames, dropped) = run_frames(stdout.as_bytes());
+        assert_eq!(dropped, 0);
+        assert_eq!(frames.len(), 2);
+        assert_eq!((frames[0].sequence, frames[1].sequence), (1, 2));
+        assert_eq!(frames[0].message.as_deref(), Some("start"));
+        assert_eq!(frames[1].fraction, Some(0.5));
+        let batch = olo_toolgate_contracts::v2::RunEventBatch {
+            invocation_id: "inv-1".into(),
+            fencing_token: "fence-1".into(),
+            attempt: 1,
+            events: frames,
+            dropped_frames: None,
+        };
+        crate::contracts::Contracts::new()
+            .unwrap()
+            .encode("RunEventBatch", &batch)
+            .unwrap();
+
+        let many = "{\"kind\":\"PROGRESS\",\"fraction\":0.1}\n".repeat(70);
+        let (frames, dropped) = run_frames(many.as_bytes());
+        assert_eq!((frames.len(), dropped), (64, 6));
+        assert_eq!(frames.last().unwrap().sequence, 64);
     }
 }

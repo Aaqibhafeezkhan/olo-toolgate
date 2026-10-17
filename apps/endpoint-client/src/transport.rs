@@ -42,6 +42,14 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, RemoteToolAuthorizationAck> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
+    /// Run-response frames of an attempt this device admitted, bound to its fencing token.
+    fn run_events(
+        &self,
+        _identity: DeviceIdentity,
+        _batch: olo_toolgate_contracts::v2::RunEventBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::RunEventAck> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn remote_result(
         &self,
         _identity: DeviceIdentity,
@@ -327,6 +335,29 @@ impl ControlPort for HttpsControl {
                         .encode("EnterprisePermitConsumption", &request)?,
                 ),
                 "EnterpriseInvocation",
+            )
+            .await
+        })
+    }
+    fn run_events(
+        &self,
+        identity: DeviceIdentity,
+        batch: olo_toolgate_contracts::v2::RunEventBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::RunEventAck> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            let path = format!(
+                "/api/control/v1/access/invocations/{}/events",
+                batch.invocation_id
+            );
+            self.request(
+                &client,
+                &path,
+                Some(self.contracts.encode("RunEventBatch", &batch)?),
+                "RunEventAck",
             )
             .await
         })
