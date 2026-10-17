@@ -939,9 +939,7 @@ impl ClientService {
         {
             return Err(Failure::Unauthorized);
         }
-        let interval_ms = ack
-            .next_interval_ms
-            .unwrap_or_else(|| ack.next_interval_seconds.saturating_mul(1000));
+        let interval_ms = ack.next_interval_ms;
         if !(500..=3600000).contains(&interval_ms) {
             return Err(Failure::Validation);
         }
@@ -1199,11 +1197,7 @@ mod tests {
                     device_id: report.report.device_id,
                     sequence: report.sequence,
                     server_time_unix_ms: crate::now(),
-                    next_interval_seconds: 2,
-                    next_interval_ms: match self.interval_ms.load(Ordering::SeqCst) {
-                        0 => None,
-                        interval => Some(interval),
-                    },
+                    next_interval_ms: self.interval_ms.load(Ordering::SeqCst),
                     identity: None,
                     adoption: None,
                     task: None,
@@ -1749,7 +1743,7 @@ mod tests {
         std::fs::remove_dir_all(directory).unwrap();
     }
     #[tokio::test]
-    async fn millisecond_interval_falls_back_to_legacy_seconds_and_rejects_invalid_values() {
+    async fn the_interval_follows_control_and_invalid_values_are_rejected() {
         let (mut service, gateway, directory) = test_service();
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
@@ -1760,7 +1754,7 @@ mod tests {
         service.journal.last_success = Some(crate::now());
         service.tick().await.unwrap();
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 1);
-        gateway.interval_ms.store(0, Ordering::SeqCst);
+        gateway.interval_ms.store(2000, Ordering::SeqCst);
         service.journal.last_success = Some(crate::now() - 2000);
         service.tick().await.unwrap();
         assert_eq!(service.next_delay_millis(), 2000);

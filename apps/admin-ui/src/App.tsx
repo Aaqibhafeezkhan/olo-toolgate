@@ -281,8 +281,10 @@ function Directory({ client, kind, reauthorize=false }: { client: ControlClient;
     return () => {abort.abort();clearInterval(timer);};
   },[client,kind,cursor,attempt]);
   const permissions=usePermissions(client);const feature=permissions.resource(kind);
+  // Tools and extractors come only from installed packages: they can be enabled or disabled here, never created or edited.
+  const packaged=kind==='tools'||kind==='extractors';
   const refresh = () => setAttempt(attempt+1);
-  return <><div className="page-heading"><div><p className="eyebrow">Organization directory</p><h1>{label}</h1></div><div className="actions"><button onClick={refresh}>Refresh</button>{permissions.can(`${feature}.create`)&&<button className="primary" onClick={() => { setSelected(undefined); setCreating(true); }}>Add {kind==='users'?'user':kind==='devices'?'client':entityTitles[kind]}</button>}</div></div>
+  return <><div className="page-heading"><div><p className="eyebrow">Organization directory</p><h1>{label}</h1></div><div className="actions"><button onClick={refresh}>Refresh</button>{permissions.can(`${feature}.create`)&&!packaged&&<button className="primary" onClick={() => { setSelected(undefined); setCreating(true); }}>Add {kind==='users'?'user':kind==='devices'?'client':entityTitles[kind]}</button>}</div></div>
     <p className="intro">{kind === 'users' ? 'Users inherit access through Teams. Verified new identities appear disabled for administrator review.' : kind === 'policies' ? 'Policies constrain complete grants through current online authority. Snapshot publication and device adoption are separate states.' : kind === 'devices' ? 'Manage registered clients. Directory activation and device enrollment are separate approvals.' : `Browse registered ${label.toLowerCase()} in your organization.`}</p>
     {kind==='devices'&&<p className="hint">Green means an active client checked in within the last two minutes. Red means the client is offline or unavailable; the status label explains why. The client list and connection status refresh every two seconds.</p>}
     {error ? <Failure error={error} retry={refresh} /> : !page ? <p role="status">Loading {label.toLowerCase()}…</p> : <>
@@ -293,7 +295,7 @@ function Directory({ client, kind, reauthorize=false }: { client: ControlClient;
     {actions.feedback}
     {['teams','agentGroups','toolGroups','deviceGroups'].includes(kind)&&<StandardPresets client={client}/>}
     {kind==='deviceGroups'&&<><p className="hint">Device groups contain devices. Complete group grants and Tool Group execution bindings determine access. Disabled groups grant no access.</p><PublishAccess client={client}/></>}
-    {(creating || selected) && (kind === 'users' ? <UserEditor key={selected?.id ?? 'new'} readOnly={!permissions.can(`${feature}.${selected ? "update" : "create"}`)} client={client} user={selected as ControlUser | undefined} close={() => { setCreating(false); setSelected(undefined); }} saved={refresh} /> : <DirectoryEditor key={selected?.id??'new'} readOnly={!permissions.can(`${feature}.${selected ? "update" : "create"}`)} client={client} kind={kind} record={selected as DirectoryRecords[Exclude<DirectoryKind,'users'>] | undefined} close={()=>{setCreating(false);setSelected(undefined);}} saved={refresh}/>)}
+    {(creating || selected) && (kind === 'users' ? <UserEditor key={selected?.id ?? 'new'} readOnly={!permissions.can(`${feature}.${selected ? "update" : "create"}`)} client={client} user={selected as ControlUser | undefined} close={() => { setCreating(false); setSelected(undefined); }} saved={refresh} /> : <DirectoryEditor key={selected?.id??'new'} readOnly={packaged||!permissions.can(`${feature}.${selected ? "update" : "create"}`)} client={client} kind={kind} record={selected as DirectoryRecords[Exclude<DirectoryKind,'users'>] | undefined} close={()=>{setCreating(false);setSelected(undefined);}} saved={refresh}/>)}
   </>;
 }
 

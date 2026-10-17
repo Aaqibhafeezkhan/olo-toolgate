@@ -8,7 +8,6 @@ package io.ololabs.toolgate.contracts;
  * @param deviceId canonical deviceId value
  * @param sequence canonical sequence value
  * @param serverTimeUnixMs canonical serverTimeUnixMs value
- * @param nextIntervalSeconds canonical nextIntervalSeconds value
  * @param nextIntervalMs canonical nextIntervalMs value
  * @param identity canonical identity value
  * @param adoption canonical adoption value
@@ -20,8 +19,7 @@ public record EndpointCheckInAck(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceId", required = true) String deviceId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "sequence", required = true) Long sequence,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "serverTimeUnixMs", required = true) Long serverTimeUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "nextIntervalSeconds", required = true) Long nextIntervalSeconds,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "nextIntervalMs", required = false) Long nextIntervalMs,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "nextIntervalMs", required = true) Long nextIntervalMs,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "identity", required = false) DeviceIdentity identity,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "adoption", required = false) EndpointAdoption adoption,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "task", required = false) RemoteToolTask task,
@@ -32,7 +30,6 @@ public record EndpointCheckInAck(
      * @param deviceId canonical deviceId value
      * @param sequence canonical sequence value
      * @param serverTimeUnixMs canonical serverTimeUnixMs value
-     * @param nextIntervalSeconds canonical nextIntervalSeconds value
      * @param nextIntervalMs canonical nextIntervalMs value
      * @param identity canonical identity value
      * @param adoption canonical adoption value
@@ -43,6 +40,6 @@ public record EndpointCheckInAck(
         java.util.Objects.requireNonNull(deviceId, "deviceId");
         java.util.Objects.requireNonNull(sequence, "sequence");
         java.util.Objects.requireNonNull(serverTimeUnixMs, "serverTimeUnixMs");
-        java.util.Objects.requireNonNull(nextIntervalSeconds, "nextIntervalSeconds");
+        java.util.Objects.requireNonNull(nextIntervalMs, "nextIntervalMs");
     }
 }

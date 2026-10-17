@@ -179,7 +179,7 @@
       "deviceId": "device-1",
       "sequence": 1,
       "serverTimeUnixMs": 1,
-      "nextIntervalSeconds": 10
+      "nextIntervalMs": 10000
     }
   },
   "ClientSocketRequest": {
@@ -933,7 +933,7 @@
     "deviceId": "device-1",
     "sequence": 1,
     "serverTimeUnixMs": 1,
-    "nextIntervalSeconds": 10
+    "nextIntervalMs": 10000
   },
   "EndpointConnectionAction": "ENROLL",
   "EndpointConnectionDirective": {

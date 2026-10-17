@@ -130,6 +130,8 @@ final class ContractV2RoundTripTest {
         "ProvisioningState",
         "ProvisioningStatus",
         "ProvisioningStep",
+        "ProfileChange",
+        "ProfileChangeKind",
         "RecoveryEvent",
         "RecoveryRequest",
         "RefusalReason",

@@ -28,7 +28,8 @@ another file and set that variable to use a different profile with the same imag
 | Field | Meaning |
 |---|---|
 | `source` | `PREBUILT_CORE` resolves only to the sealed artifact in the image's core lock (`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH`); its digest comes from that lock and a declared `packageDigest` must equal it. `MARKETPLACE` downloads the exact signed release from the configured Marketplace and requires `packageDigest`; a release with another digest is refused before download. |
-| `hostIds` | Tool Hosts that receive the package's eligible ServerTool exports. ClientTool exports are never deployed to a Tool Host, and a profile cannot yet release them to devices: an entry that activates exports needs `hostIds`, so a ClientTool-only package (such as `examples.hotfolder`) is reported `FAILED` until device targets exist. Release and roll out client packages with the client-release and fleet APIs below. |
+| `hostIds` | Tool Hosts that receive the package's eligible ServerTool exports. ClientTool exports are never deployed to a Tool Host. |
+| `deviceGroupIds` | Device groups whose active, approved devices receive the package's device-runnable exports (every ClientTool, and a ServerTool that needs no routes, secrets, globals or claims) as a signed client release. Devices that join a group later receive it too. An entry that activates exports needs `hostIds` or `deviceGroupIds`. |
 | `globals` | Package global values for the deployment. |
 | `tools` | Installed exports to enable, each in a reviewed Tool Group that must already exist. |
 | `bindingIds` | Existing execution bindings whose allowed package digests become exactly the profile packages that name them. |
@@ -42,10 +43,15 @@ another file and set that variable to use a different profile with the same imag
    the central role resolver. Importing never grants execution.
 3. Packages with `hostIds` are deployed once every named Tool Host has registered; until then the package and the
    profile are `PENDING` and Control retries every 15 seconds.
-4. Declared exports are enabled in their Tool Groups and declared bindings are updated in reviewed directory changes,
-   each audited. An export that is not installed from the pinned package blocks the profile; nothing is created to
-   satisfy a reference.
-5. The outcome is recorded with the profile digest and a generation. An identical repeat changes nothing. A changed
+4. Packages with `deviceGroupIds` get one client release (below), which needs client images and the package-release
+   key; without them the package is `FAILED` with that reason. The release is rolled out to every active, approved
+   device of those groups that does not hold it yet, and the status lists those devices. With no such device the
+   package is `PENDING`. A profile that names device groups is reapplied every minute even when `READY`, so a device
+   approved later receives the release; the reapplication changes nothing else.
+5. Declared exports are enabled in their Tool Groups and declared bindings are updated in reviewed directory changes,
+   each audited. A device export's binding digest is its managed digest from the release. An export that is not
+   installed from the pinned package blocks the profile; nothing is created to satisfy a reference.
+6. The outcome is recorded with the profile digest and a generation. An identical repeat changes nothing. A changed
    profile records the digest it replaced. Removing an entry never uninstalls a package; uninstalling is an explicit
    operation.
 
@@ -75,3 +81,12 @@ builds the image deterministically, pushes it by digest, writes disabled tool re
 `FleetPackageDocument` with each export marked supported or not. With the release key, Control signs and records the
 release and mirrors its bytes; otherwise sign `documentBase64` with `tools/builder/sign.py` and publish it through the
 fleet release API. Devices still need a rollout, enrollment, an enabled tool, grants and permits.
+
+## Helm
+
+The chart sets the same variables from `control.profile.configMap` (a ConfigMap holding `profile.json`),
+`control.clientImages.*` (registry URL, repository, approved base by digest, platforms, and optional
+`credentialsSecret` with `credentials` and `caSecret` with `ca.pem`), and `control.packageRelease.*` (a Secret with
+`private.pem` and its key id; the key must also be in the fleet release trust keys). `control.networkPolicy.registryTo`
+opens egress to the registry on the port its URL names.
+

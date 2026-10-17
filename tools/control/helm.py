@@ -25,6 +25,11 @@ def checks(lint=True):
                 'marketplace':['--set','control.marketplace.enabled=true','--set','control.marketplace.id=olo-orgs','--set','control.marketplace.baseUrl=https://marketplace.example.com',
                                '--set','control.marketplace.keys=olo-orgs-2026:'+'A'*43+'=','--set','control.marketplace.caSecret=marketplace-ca',
                                '--set','control.networkPolicy.marketplaceTo[0].ipBlock.cidr=203.0.113.0/24'],
+                'packages':['--set','control.profile.configMap=control-profile','--set','control.clientImages.enabled=true',
+                            '--set','control.clientImages.registryUrl=https://registry.example.com:5443','--set','control.clientImages.repository=toolgate/client-tools',
+                            '--set','control.clientImages.base=mirror/eclipse-temurin@sha256:'+'0'*64,'--set','control.clientImages.caSecret=registry-ca',
+                            '--set','control.clientImages.credentialsSecret=registry-credentials','--set','control.packageRelease.signingSecret=package-release',
+                            '--set','control.packageRelease.keyId=package-1','--set','control.networkPolicy.registryTo[0].ipBlock.cidr=198.51.100.0/24'],
                 'selectors':['--set','control.networkPolicy.databaseTo[0].podSelector.matchLabels.app=postgres',
                              '--set',r'control.networkPolicy.dnsTo[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=kube-system']}
     folder = ROOT/'build/control/render'; folder.mkdir(parents=True,exist_ok=True)

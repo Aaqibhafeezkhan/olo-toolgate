@@ -214,11 +214,7 @@ impl Device {
         };
         let ack: EndpointCheckInAck = self
             .control
-            .post_json(
-                &format!("{ENDPOINT}/check-in"),
-                &request,
-                &[("X-ToolGate-Poll-Interval-Unit", "milliseconds")],
-            )
+            .post_json(&format!("{ENDPOINT}/check-in"), &request, &[])
             .await?;
         if ack.device_id != self.host_id || ack.sequence != request.sequence {
             return Err(Failure::Local(
@@ -230,9 +226,7 @@ impl Device {
             self.accept(identity).map_err(Failure::Local)?;
         }
         self.save().map_err(Failure::Local)?;
-        Ok(ack
-            .next_interval_ms
-            .unwrap_or(ack.next_interval_seconds.saturating_mul(1000)))
+        Ok(ack.next_interval_ms)
     }
 
     /// Puts a deployment's package, service profile and globals into the store, each checked

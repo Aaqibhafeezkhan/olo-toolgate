@@ -1211,6 +1211,31 @@ pub struct PrivateRangeApproval {
     pub cidr: String,
     pub ports: Vec<u64>,
 }
+/// One package difference from the previously applied profile, recorded for review.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileChange {
+    pub package_id: String,
+    pub change: ProfileChangeKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_package_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+}
+/// Canonical ProfileChangeKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProfileChangeKind {
+    #[serde(rename = "ADDED")]
+    Added,
+    #[serde(rename = "CHANGED")]
+    Changed,
+    #[serde(rename = "REMOVED")]
+    Removed,
+}
 /// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1320,6 +1345,8 @@ pub struct ProvisioningStatus {
     pub applied_at_unix_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_profile_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changes: Option<Vec<ProfileChange>>,
 }
 /// Canonical ProvisioningStep wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -92,7 +92,9 @@ directory that is removed afterwards, so they never read or change user files.
 `examples.hotfolder` provides `hotfolder.list`, `read_text`, `file_info`, `hash`
 and `search_text` (read access) and `write_text`, `append_text`, `mkdir`, `move`
 and `copy` (write access). A missing file is reported as data (`exists: false`,
-`moved: false`); `move` and `copy` refuse an existing destination. Grant it to
+`moved: false`); `move` and `copy` refuse an existing destination. A deployment
+profile installs it on devices with `deviceGroupIds` ([profiles](../deployment/profiles.md));
+the demo lab devices get theirs this way. Grant it to
 callers per tool, for example `tool://examples.hotfolder/` with match `PREFIX`, or
 one `EXACT` locator per read tool for read-only access.
 

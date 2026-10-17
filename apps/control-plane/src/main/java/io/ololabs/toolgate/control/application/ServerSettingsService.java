@@ -40,11 +40,8 @@ public final class ServerSettingsService {
     }
     /** The saved record with the running check-in values. Revision 1 is the unsaved default. */
     public ControlServerSettings current(Store.Session tx){var document=tx.serverSettings();if(document==null)return defaults(checkIn);
-        // Nothing is in production, so a record from before formatVersion 2 is reset to the defaults, keeping its revision.
-        var node=(com.fasterxml.jackson.databind.node.ObjectNode)codec.value(document);
-        if(node.path("formatVersion").asLong()!=2){var reset=defaults(checkIn);return new ControlServerSettings(2L,Math.max(1,node.path("revision").asLong()),reset.gateway(),reset.deviceApproval(),reset.clientCheckIn(),reset.configuration());}
-        if(!node.has("configuration"))node.set("configuration",(com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(new ConfigurationSettings((long)DEFAULT_REQUIRED_REVIEWS))));
-        var saved=codec.model(codec.json(node),ControlServerSettings.class);
+        // Installations are fresh: the stored record is the current format exactly, never reset or filled in.
+        var saved=codec.model(document,ControlServerSettings.class);
         return new ControlServerSettings(2L,saved.revision(),saved.gateway(),saved.deviceApproval(),checkIn.effective(),saved.configuration());}
     /** Review threshold in force for new configuration changes. */
     public static int requiredReviews(Store.Session tx,Codec codec){return new ServerSettingsService(null,codec,ClientCheckInPolicy.QUICKSTART).current(tx).configuration().requiredReviews().intValue();}

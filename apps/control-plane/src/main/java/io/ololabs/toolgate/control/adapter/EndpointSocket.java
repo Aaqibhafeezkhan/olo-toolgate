@@ -86,7 +86,7 @@ public class EndpointSocket {
                     endpoints.verifySocketPeer(peer);
                     String body=codec.json(request.body());
                     reply=switch(request.operation()){
-                        case CHECK_IN -> checkInWithJitter(()->endpoints.checkIn(peer,body,request.requestId(),true,systemName,ipAddress),endpoints.checkInPolicy().burstGuardMs());
+                        case CHECK_IN -> checkInWithJitter(()->endpoints.checkIn(peer,body,request.requestId(),systemName,ipAddress),endpoints.checkInPolicy().burstGuardMs());
                         case AUTHORIZE -> endpoints.relay().authorize(peer,body);
                         case RESULT -> endpoints.relay().result(peer,body,request.requestId());
                     };

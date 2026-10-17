@@ -2061,7 +2061,18 @@
         "toolIds": []
       }
     ],
-    "appliedAtUnixMs": 1700000000000
+    "appliedAtUnixMs": 1700000000000,
+    "changes": [
+      {
+        "packageId": "examples.hotfolder",
+        "change": "CHANGED",
+        "previousVersion": "0.1.0",
+        "previousPackageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "0.2.0",
+        "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "previousProfileDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   },
   "ClientReleaseRequest": {
     "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -2109,5 +2120,14 @@
     "result": {
       "text": "hello"
     }
+  },
+  "ProfileChangeKind": "CHANGED",
+  "ProfileChange": {
+    "packageId": "examples.hotfolder",
+    "change": "CHANGED",
+    "previousVersion": "0.1.0",
+    "previousPackageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "0.2.0",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   }
 }

@@ -131,6 +131,8 @@ fn v2_fixture_round_trips() {
         ProvisioningState,
         ProvisioningStatus,
         ProvisioningStep,
+        ProfileChange,
+        ProfileChangeKind,
         RecoveryEvent,
         RecoveryRequest,
         RefusalReason,

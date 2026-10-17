@@ -224,8 +224,14 @@ public final class ServerPackages {
     }
 
     /** A Tool Host's host id is its device id, so a permit addressed to the host is addressed to the device placement picked. */
+    /** The one tool protocol every executor speaks. */
+    public static final long PROTOCOL = 2;
+
     public Store.Reply register(Ids.TenantId tenant, Function<Store.Session, EndpointDeviceRecord> device, String body, String requestId) {
         var registration = codec.model(body, ToolHostRegistration.class);
+        // Preflight: tool protocol v2 is the only protocol (ADR 027); a host that cannot speak it is refused, never adapted to.
+        if (registration.protocol().min() > PROTOCOL || registration.protocol().max() < PROTOCOL)
+            throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.VALIDATION, 409, "This Tool Host does not speak tool protocol " + PROTOCOL + "; deploy a matching version");
         return store.transaction(tenant, true, tx -> {
             var d = device.apply(tx);
             if (!registration.hostId().equals(d.deviceId())) throw ManagementAccess.denied();

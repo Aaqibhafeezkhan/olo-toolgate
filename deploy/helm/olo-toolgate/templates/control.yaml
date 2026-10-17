@@ -53,6 +53,26 @@ data:
   TOOLGATE_CONTROL_MARKETPLACE_CA_PATH: /etc/toolgate/marketplace-ca/ca.pem
   {{- end }}
   {{- end }}
+  {{- if $g.profile.configMap }}
+  TOOLGATE_CONTROL_PROFILE_PATH: /etc/toolgate/profile/profile.json
+  {{- end }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_ENABLED: {{ $g.clientImages.enabled | quote }}
+  {{- if $g.clientImages.enabled }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_REGISTRY_URL: {{ required "control.clientImages.registryUrl required" $g.clientImages.registryUrl | quote }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_REPOSITORY: {{ required "control.clientImages.repository required" $g.clientImages.repository | quote }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_BASE: {{ required "control.clientImages.base required" $g.clientImages.base | quote }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_PLATFORMS: {{ $g.clientImages.platforms | quote }}
+  {{- if $g.clientImages.credentialsSecret }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_CREDENTIALS_PATH: /etc/toolgate/client-images-credentials/credentials
+  {{- end }}
+  {{- if $g.clientImages.caSecret }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_CA_PATH: /etc/toolgate/client-images-ca/ca.pem
+  {{- end }}
+  {{- end }}
+  {{- if $g.packageRelease.signingSecret }}
+  TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH: /etc/toolgate/package-release/private.pem
+  TOOLGATE_CONTROL_PACKAGE_RELEASE_KEY_ID: {{ required "control.packageRelease.keyId required" $g.packageRelease.keyId | quote }}
+  {{- end }}
   TOOLGATE_CONTROL_FLEET_ENABLED: {{ $g.fleet.enabled | quote }}
   {{- if $g.fleet.enabled }}
   TOOLGATE_CONTROL_FLEET_KEY_ID: {{ required "control.fleet.keyId required" $g.fleet.keyId | quote }}
@@ -212,6 +232,18 @@ spec:
             {{- if and $g.marketplace.enabled $g.marketplace.caSecret }}
             - {name: marketplace-ca, mountPath: /etc/toolgate/marketplace-ca, readOnly: true}
             {{- end }}
+            {{- if $g.profile.configMap }}
+            - {name: profile, mountPath: /etc/toolgate/profile, readOnly: true}
+            {{- end }}
+            {{- if and $g.clientImages.enabled $g.clientImages.credentialsSecret }}
+            - {name: client-images-credentials, mountPath: /etc/toolgate/client-images-credentials, readOnly: true}
+            {{- end }}
+            {{- if and $g.clientImages.enabled $g.clientImages.caSecret }}
+            - {name: client-images-ca, mountPath: /etc/toolgate/client-images-ca, readOnly: true}
+            {{- end }}
+            {{- if $g.packageRelease.signingSecret }}
+            - {name: package-release, mountPath: /etc/toolgate/package-release, readOnly: true}
+            {{- end }}
             {{- if $g.fleet.enabled }}
             - {name: fleet-signing, mountPath: /etc/toolgate/fleet-signing, readOnly: true}
             - {name: fleet-trust, mountPath: /etc/toolgate/fleet-trust, readOnly: true}
@@ -263,6 +295,34 @@ spec:
             secretName: {{ $g.marketplace.caSecret | quote }}
             defaultMode: 0440
             items: [{key: ca.pem, path: ca.pem}]
+        {{- end }}
+        {{- if $g.profile.configMap }}
+        - name: profile
+          configMap:
+            name: {{ $g.profile.configMap | quote }}
+            defaultMode: 0444
+            items: [{key: profile.json, path: profile.json}]
+        {{- end }}
+        {{- if and $g.clientImages.enabled $g.clientImages.credentialsSecret }}
+        - name: client-images-credentials
+          secret:
+            secretName: {{ $g.clientImages.credentialsSecret | quote }}
+            defaultMode: 0440
+            items: [{key: credentials, path: credentials}]
+        {{- end }}
+        {{- if and $g.clientImages.enabled $g.clientImages.caSecret }}
+        - name: client-images-ca
+          secret:
+            secretName: {{ $g.clientImages.caSecret | quote }}
+            defaultMode: 0440
+            items: [{key: ca.pem, path: ca.pem}]
+        {{- end }}
+        {{- if $g.packageRelease.signingSecret }}
+        - name: package-release
+          secret:
+            secretName: {{ $g.packageRelease.signingSecret | quote }}
+            defaultMode: 0440
+            items: [{key: private.pem, path: private.pem}]
         {{- end }}
         {{- if $g.fleet.enabled }}
         - name: fleet-signing
@@ -359,8 +419,15 @@ spec:
     matchLabels:
       {{- include "olo-toolgate.controlSelector" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
-  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) (and $g.marketplace.enabled $g.networkPolicy.marketplaceTo) }}
+  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) (and $g.marketplace.enabled $g.networkPolicy.marketplaceTo) (and $g.clientImages.enabled $g.networkPolicy.registryTo) }}
   egress:
+    {{- if and $g.clientImages.enabled $g.networkPolicy.registryTo }}
+    {{- $registry := urlParse $g.clientImages.registryUrl }}
+    {{- $hostPort := splitList ":" $registry.host }}
+    - ports: [{protocol: TCP, port: {{ if gt (len $hostPort) 1 }}{{ index $hostPort 1 }}{{ else }}443{{ end }}}]
+      to:
+        {{- toYaml $g.networkPolicy.registryTo | nindent 8 }}
+    {{- end }}
     {{- if and $g.marketplace.enabled $g.networkPolicy.marketplaceTo }}
     - ports: [{protocol: TCP, port: 443}]
       to:

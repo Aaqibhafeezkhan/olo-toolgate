@@ -1063,9 +1063,7 @@ pub struct EndpointCheckInAck {
     pub device_id: String,
     pub sequence: u64,
     pub server_time_unix_ms: u64,
-    pub next_interval_seconds: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub next_interval_ms: Option<u64>,
+    pub next_interval_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity: Option<DeviceIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -50,6 +50,18 @@ describe('Management shell states', () => {
     localStorage.clear();
   });
 
+  it('offers no way to create or edit tools and extractors, which come only from installed packages', async () => {
+    const tool={id:'examples.hotfolder/list',name:'examples.hotfolder/list',enabled:true,revision:1,extractorId:'extract-1',version:'0.1.0',packageDigest:'a'.repeat(64),
+      definition:{id:'examples.hotfolder/list',name:'examples.hotfolder/list',description:'Lists files',actions:[{name:'invoke',resourceKinds:['CUSTOM']}],inputSchema:{type:'object'},outputSchema:{type:'object'}}};
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response([tool])));
+    for(const route of ['tools','extractors']){
+      window.location.hash='#'+route;render(<App/>);await connect();
+      await screen.findByRole('heading',{level:1});
+      expect(screen.queryByRole('button',{name:/^Add /})).toBeNull();
+      cleanup();
+    }
+  });
+
   it('defaults to all groups collapsed and supports bounded keyboard resizing and collapse', async () => {
     localStorage.clear();
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));

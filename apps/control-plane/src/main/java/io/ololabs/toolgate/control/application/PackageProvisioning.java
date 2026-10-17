@@ -99,11 +99,16 @@ public final class PackageProvisioning {
             if (current != null) {
                 var old = (ObjectNode) node(current.document());
                 // An identical outcome of an identical profile is the same generation: nothing to record.
-                var comparable = old.deepCopy(); comparable.remove("appliedAtUnixMs"); comparable.remove("previousProfileDigest");
+                var comparable = old.deepCopy(); comparable.remove("appliedAtUnixMs"); comparable.remove("previousProfileDigest"); comparable.remove("changes");
                 if (Canonical.digest(comparable).equals(Canonical.digest(result)) && current.profileDigest().equals(profileDigest)) return new Store.Reply(200, current.document(), current.generation());
                 result.put("generation", current.generation() + 1);
-                if (!current.profileDigest().equals(profileDigest)) result.put("previousProfileDigest", current.profileDigest());
-                else if (old.has("previousProfileDigest")) result.set("previousProfileDigest", old.get("previousProfileDigest"));
+                if (!current.profileDigest().equals(profileDigest)) {
+                    result.put("previousProfileDigest", current.profileDigest());
+                    var changes = changes(before, statuses); if (!changes.isEmpty()) result.set("changes", changes);
+                } else {
+                    if (old.has("previousProfileDigest")) result.set("previousProfileDigest", old.get("previousProfileDigest"));
+                    if (old.has("changes")) result.set("changes", old.get("changes"));
+                }
             }
             result.put("appliedAtUnixMs", clock.millis());
             codec.model(codec.json(result), io.ololabs.toolgate.contracts.v2.ProvisioningStatus.class);
@@ -112,6 +117,27 @@ public final class PackageProvisioning {
             tx.audit(actor.id(), "PROFILE_PROVISION", "profile:" + profile.profileId(), generation, "profile-" + hex(profileDigest).substring(0, 32) + "-" + generation, hex(profileDigest));
             return new Store.Reply(200, json, generation);
         });
+    }
+
+    /** What a changed profile changes, package by package, for review: added, re-pinned, or dropped (and still installed). */
+    private static ArrayNode changes(Map<String, JsonNode> before, List<ObjectNode> statuses) {
+        var changes = JSON.arrayNode(); var seen = new HashSet<String>();
+        for (var now : statuses) {
+            String id = now.path("packageId").asText(); seen.add(id); var was = before.get(id);
+            if (was == null) {
+                var change = changes.addObject().put("packageId", id).put("change", "ADDED").put("version", now.path("version").asText());
+                if (now.has("packageDigest")) change.put("packageDigest", now.path("packageDigest").asText());
+            } else if (!was.path("version").asText().equals(now.path("version").asText()) || !was.path("packageDigest").asText().equals(now.path("packageDigest").asText())) {
+                var change = changes.addObject().put("packageId", id).put("change", "CHANGED").put("previousVersion", was.path("version").asText()).put("version", now.path("version").asText());
+                if (was.has("packageDigest")) change.put("previousPackageDigest", was.path("packageDigest").asText());
+                if (now.has("packageDigest")) change.put("packageDigest", now.path("packageDigest").asText());
+            }
+        }
+        for (var e : new TreeMap<>(before).entrySet()) if (!seen.contains(e.getKey())) {
+            var change = changes.addObject().put("packageId", e.getKey()).put("change", "REMOVED").put("previousVersion", e.getValue().path("version").asText());
+            if (e.getValue().has("packageDigest")) change.put("previousPackageDigest", e.getValue().path("packageDigest").asText());
+        }
+        return changes;
     }
 
     private void provision(DirectoryService.Actor actor, ProfilePackage p, ObjectNode status, JsonNode before, Map<String, Set<String>> digests) {

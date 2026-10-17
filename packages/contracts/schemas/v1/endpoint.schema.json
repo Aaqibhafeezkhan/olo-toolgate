@@ -613,16 +613,11 @@
           "minimum": 0,
           "maximum": 9007199254740991
         },
-        "nextIntervalSeconds": {
-          "type": "integer",
-          "minimum": 2,
-          "maximum": 3600
-        },
         "nextIntervalMs": {
           "type": "integer",
           "minimum": 500,
           "maximum": 3600000,
-          "description": "Negotiated check-in interval for clients requesting milliseconds; takes precedence over nextIntervalSeconds."
+          "description": "The next check-in interval, spread by the configured jitter."
         },
         "identity": {
           "$ref": "endpoint.schema.json#/$defs/DeviceIdentity"
@@ -641,7 +636,7 @@
         "deviceId",
         "sequence",
         "serverTimeUnixMs",
-        "nextIntervalSeconds"
+        "nextIntervalMs"
       ]
     },
     "EndpointDeviceRecord": {

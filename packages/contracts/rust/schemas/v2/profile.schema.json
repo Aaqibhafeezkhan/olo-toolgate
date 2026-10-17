@@ -269,6 +269,14 @@
         },
         "previousProfileDigest": {
           "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProfileChange"
+          },
+          "maxItems": 128,
+          "description": "Package differences from the profile that previousProfileDigest names; absent for the first profile and for a repeat."
         }
       },
       "required": [
@@ -278,6 +286,44 @@
         "state",
         "packages",
         "appliedAtUnixMs"
+      ]
+    },
+    "ProfileChangeKind": {
+      "type": "string",
+      "enum": [
+        "ADDED",
+        "CHANGED",
+        "REMOVED"
+      ],
+      "description": "How a package differs from the previously applied profile. REMOVED packages stay installed: removing an entry never uninstalls."
+    },
+    "ProfileChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One package difference from the previously applied profile, recorded for review.",
+      "properties": {
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "change": {
+          "$ref": "profile.schema.json#/$defs/ProfileChangeKind"
+        },
+        "previousVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "previousPackageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "packageId",
+        "change"
       ]
     }
   }
