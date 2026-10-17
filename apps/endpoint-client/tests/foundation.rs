@@ -238,7 +238,7 @@ fn execution_and_releases_do_not_require_local_gateway_settings() {
     let directory = Directory::new();
     let mut config = config(&directory);
     config.execution = Some(olo_toolgate_client::execution::Settings {
-        engine_path: "/usr/bin/docker".into(),
+        engine_path: directory.0.join("docker"),
         engine_endpoint: "unix:///var/run/docker.sock".into(),
         state_directory: directory.0.join("runtimes"),
         allow_first_use_pull: true,

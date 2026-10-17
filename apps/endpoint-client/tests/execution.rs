@@ -31,6 +31,13 @@ impl AuthorizationPort for Policy {
         })
     }
 }
+/// A temporary directory protected storage accepts: on macOS the temporary directory is under the /var symbolic link,
+/// and protected storage refuses links among its parents.
+#[cfg(unix)]
+fn custody_base() -> PathBuf {
+    std::env::temp_dir().canonicalize().unwrap()
+}
+
 fn tool(access: Option<LocalFileAccess>) -> LocalToolRegistration {
     let mut value = json!({"toolId":"acme.notes/notes.read","action":"invoke","runtimeId":"java-sdk","entryPoint":"/opt/tool/acme.notes/tool.jar",
         "inputSchema":{"type":"object","additionalProperties":false,"properties":{"path":{"type":"string","maxLength":128}},"required":["path"]},
@@ -182,7 +189,7 @@ async fn tool_protocol_v2_brokers_only_the_signed_file_access_for_authorized_pat
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
-    let dir = Directory(std::env::temp_dir().join(format!(
+    let dir = Directory(custody_base().join(format!(
         "toolgate-protocol-{}",
         olo_toolgate_client::identity::nonce().unwrap()
     )));
@@ -298,7 +305,7 @@ async fn without_a_local_gateway_credential_local_calls_are_refused() {
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
-    let dir = Directory(std::env::temp_dir().join(format!(
+    let dir = Directory(custody_base().join(format!(
         "toolgate-relay-only-{}",
         olo_toolgate_client::identity::nonce().unwrap()
     )));
