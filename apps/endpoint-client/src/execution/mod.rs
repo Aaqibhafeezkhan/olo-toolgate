@@ -761,7 +761,8 @@ mod self_test_files {
 
     #[test]
     fn a_self_test_gets_an_empty_area_that_is_removed_afterwards() {
-        let base = std::env::temp_dir().join(format!(
+        // The canonical temporary directory: on macOS /var is a symbolic link, which protected storage refuses.
+        let base = std::env::temp_dir().canonicalize().unwrap().join(format!(
             "toolgate-scratch-{}",
             crate::identity::nonce().unwrap()
         ));
