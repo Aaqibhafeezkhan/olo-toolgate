@@ -57,7 +57,9 @@ another file and set that variable to use a different profile with the same imag
 
 `GET /api/control/v1/packages/provisioning/{profileId}` (requires `package.read`) returns the latest status: `READY`,
 `PENDING` with the target it waits for, or `FAILED` with the reason. A failed profile keeps Control running for repair and
-is retried every minute; nothing falls back to another version. Grants, policies and approvals stay
+is retried every minute; nothing falls back to another version. `GET /api/control/v1/packages/provisioning` returns
+every applied profile's status, and the console shows them under **Server packages → Deployment profiles**: each
+package's state, step, targets and reason, and the ADDED/CHANGED/REMOVED changes from the profile applied before. Grants, policies and approvals stay
 separate reviewed records: a READY profile has installed tools, not given anyone access to run them.
 
 ## Client-tool images

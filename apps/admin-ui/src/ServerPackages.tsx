@@ -5,6 +5,7 @@ import type { PackageDeployment, PackageVersion } from '@olo-labs/toolgate-contr
 import { ControlClient } from './api';
 import { Failure } from './Failure';
 import { Marketplace } from './Marketplace';
+import { Provisioning } from './Provisioning';
 import { Table } from './Table';
 import { usePermissions } from './Permissions';
 
@@ -79,6 +80,7 @@ export function ServerPackages({ client }: { client: ControlClient }) {
       <label htmlFor="server-package-globals">Global and host setting values (JSON)</label>
       <textarea id="server-package-globals" required readOnly={!canDeploy} maxLength={65536} value={globals} onChange={e => setGlobals(e.target.value)} />
       <button disabled={busy || !selected || !canDeploy}>Deploy</button></form></section>
+    {can('package.read') && <Provisioning client={client} refresh={attempt} />}
     <Marketplace client={client} onImported={() => setAttempt(a => a + 1)} />
   </>;
 }

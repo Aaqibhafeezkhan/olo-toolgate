@@ -46,6 +46,8 @@ public class PackageResource {
     public Response clientRelease(String document){return reply(clientReleases.release(actors.management(),body(document),correlation.id()));}
 
     /** The recorded outcome of a deployment profile: READY, PENDING with the target it waits for, or FAILED with why. */
+    @GET @Path("packages/provisioning") @io.quarkus.security.Authenticated
+    public Response provisioningStatuses(){return reply(provisioning.reader().statuses(actors.management()));}
     @GET @Path("packages/provisioning/{profileId}") @io.quarkus.security.Authenticated
     public Response provisioning(@PathParam("profileId")String profileId){return reply(provisioning.reader().status(actors.management(),profileId));}
 

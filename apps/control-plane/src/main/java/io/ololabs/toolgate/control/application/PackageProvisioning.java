@@ -278,6 +278,17 @@ public final class PackageProvisioning {
     private static TreeSet<String> hostSet(JsonNode deployment) { var set = new TreeSet<String>(); deployment.path("hostIds").forEach(h -> set.add(h.asText())); return set; }
     private PackageStore.Version version(DirectoryService.Actor actor, String digest) { return store.transaction(actor.tenant(), false, tx -> tx.packages().version(digest)); }
 
+    /** The latest recorded status of every applied profile (ProvisioningStatusPage), for readers with package.read. */
+    public Store.Reply statuses(DirectoryService.Actor actor) {
+        return store.transaction(actor.tenant(), false, tx -> {
+            actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package.read", clock.millis());
+            var page = new StringBuilder("{\"items\":[");
+            var all = tx.packages().provisionings();
+            for (int i = 0; i < all.size(); i++) page.append(i == 0 ? "" : ",").append(all.get(i).document());
+            return new Store.Reply(200, page.append("]}").toString(), 0);
+        });
+    }
+
     /** The latest recorded status of a profile, for readers with package.read. */
     public Store.Reply status(DirectoryService.Actor actor, String profileId) {
         return store.transaction(actor.tenant(), false, tx -> {

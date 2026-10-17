@@ -203,6 +203,8 @@ export const operations = {
   listServerPackageVersions: { method: 'GET', path: '/api/control/v1/packages' },
   listServerPackageDeployments: { method: 'GET', path: '/api/control/v1/packages/deployments' },
   deployServerPackage: { method: 'POST', path: '/api/control/v1/packages/deployments' },
+  listProvisioningStatuses: { method: 'GET', path: '/api/control/v1/packages/provisioning' },
+  getProvisioningStatus: { method: 'GET', path: '/api/control/v1/packages/provisioning/{profileId}' },
   getMarketplaceStatus: { method: 'GET', path: '/api/control/v1/marketplace' },
   listMarketplaceCatalog: { method: 'GET', path: '/api/control/v1/marketplace/catalog' },
   listMarketplacePackageVersions: { method: 'GET', path: '/api/control/v1/marketplace/packages/{packageId}' },

@@ -59,6 +59,7 @@ final class PackageProvisioningTest {
             assertEquals(400, assertThrows(Failure.class, () -> rig.provisioning.apply(rig.admin, invalid), invalid).status(), invalid);
         assertTrue(rig.store.transaction(rig.tenant, false, tx -> tx.packages().versions(10)).isEmpty());
         assertEquals(404, assertThrows(Failure.class, () -> rig.provisioning.status(rig.admin, "orders")).status());
+        assertEquals("{\"items\":[]}", rig.provisioning.statuses(rig.admin).body());
     }
 
     @Test void aProfileImportsWaitsForItsHostThenDeploysActivatesAndRepeatsAsANoOp() throws Exception {
@@ -95,6 +96,8 @@ final class PackageProvisioningTest {
         assertEquals(directoryRevision, (long) rig.store.transaction(rig.tenant, false, tx -> tx.load().revision()));
         assertEquals(deployment.get("revision"), deployment(rig).get("revision"));
         assertEquals("READY", node(rig.provisioning.status(rig.admin, "orders")).get("state").asText());
+        var listed = node(rig.provisioning.statuses(rig.admin)).get("items");
+        assertEquals(1, listed.size()); assertEquals("orders", listed.get(0).get("profileId").asText()); assertEquals(2, listed.get(0).get("generation").asLong());
 
         // Removing the entry never uninstalls: the deployment and enabled tool stay.
         var emptied = node(rig.provisioning.apply(rig.admin, profile("")));
@@ -145,5 +148,6 @@ final class PackageProvisioningTest {
         var rig = rig(); rig.provisioning.apply(rig.admin, profile(ORDERS));
         var reader = new DirectoryService.Actor(rig.tenant, "b".repeat(64), true, false, "mallory");
         assertThrows(Failure.class, () -> rig.provisioning.status(reader, "orders"));
+        assertThrows(Failure.class, () -> rig.provisioning.statuses(reader));
     }
 }
