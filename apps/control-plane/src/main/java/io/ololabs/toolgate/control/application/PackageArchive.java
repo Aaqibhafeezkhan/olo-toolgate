@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.function.Function;
 
-/** Control's view of the shared `.tgpkg` validator in backend-libs/package-archive (plan.md §7.2, §7.6). A rejected
+/** Control's view of the shared `.tgpkg` validator in backend-libs/package-archive (platform-requirements.md §7.2, §7.6). A rejected
  *  package is a validation failure (413 when it is too large), and the manifest is read again with Control's codec so
  *  the rest of Control keeps working with Jackson. */
 public final class PackageArchive {

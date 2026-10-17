@@ -44,9 +44,10 @@ for this additional gate, and all source changes must be staged. Other subjects
 keep only the existing smaller checks. See the
 [local CI tools README](../../tools/ci/README.md#commit-checks) for setup and usage.
 
-Module 00 provides contracts, builds and verification. Modules 01/02 add the Gateway
-and Control Plane runtimes; Marketplace modules remain buildable markers. `make dev` and the quickstart remain
-future product work; `make check` is implemented and never silently skips a gate.
+The workspace includes working Gateway, Control, Quickstart, console, client and
+Java Tool SDK implementations; Marketplace applications remain scaffolds.
+`make dev` remains a scaffold. Use the [development guide](README.md) for current
+startup commands. `make check` is implemented and never silently skips a gate.
 
 Install Java 21, Python 3.12+, Node 22, PHP 8.2+, Rust (the repository pins a stable
 toolchain with fmt/clippy), Helm 3.17.3 and GNU Make. Gradle bootstraps its pinned,
@@ -161,8 +162,8 @@ opt-in service values and external secret/DB references must satisfy its schema.
 be reached, repair network access and rerun; do not suppress the gate.
 
 See [ADR 001](../adr/001-foundation-contract-generation.md),
-[upgrade policy](foundation-upgrades.md) and
-[Module 00 coverage](../codex/modules/00-coverage.md).
+[upgrade policy](../architecture/compatibility.md) and
+[testing and evidence guide](../testing/README.md).
 
 Module 02 uses reviewed Jakarta/Parsson EPL-2.0 dependencies without modifying them,
 retaining upstream JAR notices and documenting matching source artifacts in
@@ -177,11 +178,7 @@ Vert.x/JNA alternative licenses retain OR expressions, selecting Apache-2.0.
 Public-domain declarations require an explicit CC0 source URL. Unknown metadata
 and unreviewed runtime copyleft expressions still fail the gate.
 
-Module 04 extends contracts to 12 schema groups/52 models and adds signed policy
-compiler/verification tests to `make check`. `make policy-e2e` builds real images
-and verifies the entire distribution flow; `make benchmark` records signed
-512-rule evaluation separately from the existing core baseline. See
-[bundle development and operations](../control-plane/policy-bundles.md).
+Current Gateway checks exercise online Control authority. The benchmark measures ingress validation, not offline policy evaluation. See [performance methodology](../gateway/performance.md).
 
 The locked same-file 1.0.6/walkdir 2.5.0 published README and LICENSE-MIT
 explicitly offer MIT or Unlicense. The audit normalizes their historical

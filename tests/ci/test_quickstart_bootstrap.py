@@ -55,10 +55,10 @@ class QuickstartBootstrapTests(unittest.TestCase):
 
     def prepare(self):
         return bootstrap.prepare(self.data, 'quickstart', 'https://quickstart.local',
-                                 lambda name: self.key, self.atomic, [])
+                                 lambda name: self.key, self.atomic)
 
     def test_signed_installation_contains_no_workload_bindings_or_runtime_authority(self):
-        _, path, _ = self.prepare()
+        path, _ = self.prepare()
         packet = json.loads(path.read_text(encoding='utf-8'))
         authorization = packet['authorization']
         snapshot = authorization['snapshot']
@@ -80,7 +80,7 @@ class QuickstartBootstrapTests(unittest.TestCase):
 
     def test_first_admin_has_default_email_and_super_admin_role(self):
         with patch.dict(os.environ, {}, clear=True):
-            _, path, _ = self.prepare()
+            path, _ = self.prepare()
         snapshot = json.loads(path.read_text(encoding='utf-8'))['authorization']['snapshot']
         self.assertEqual('admin@admin.com', snapshot['users'][0]['email'])
         admin = snapshot['users'][0]['id']
@@ -91,12 +91,12 @@ class QuickstartBootstrapTests(unittest.TestCase):
     def test_email_override_is_applied_only_on_first_creation(self):
         with patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': 'owner@example.com'}):
             first = self.prepare()
-        original = first[1].read_bytes()
+        original = first[0].read_bytes()
         self.assertEqual('owner@example.com', json.loads(original)['authorization']['snapshot']['users'][0]['email'])
         (self.data/'state/control.sqlite').touch()
         with patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': 'invalid-on-restart'}):
             self.assertEqual(first, self.prepare())
-        self.assertEqual(original, first[1].read_bytes())
+        self.assertEqual(original, first[0].read_bytes())
 
     def test_invalid_email_is_rejected_before_signing_the_installation(self):
         for value in ('', 'admin', 'admin@localhost', 'admin @example.com', 'a'*250+'@example.com'):

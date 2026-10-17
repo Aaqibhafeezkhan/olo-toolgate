@@ -37,9 +37,9 @@ class InitialConfigurationTests(unittest.TestCase):
 
     def test_direct_super_admin_mutations_do_not_submit_an_entity_as_a_change(self):
         config=object.__new__(module.Configuration)
-        for status,document in [(200,dict(id='client.read_log_entry')), (201,dict(id='agent')), (204,None)]:
+        for status,document in [(200,dict(id='examples.hotfolder/write_text')), (201,dict(id='agent')), (204,None)]:
             with self.subTest(status=status), patch.object(config,'api',return_value=(status,document)),patch.object(config,'apply_change') as review:
-                config.mutate('/api/control/v1/tools',dict(id='client.read_log_entry'))
+                config.mutate('/api/control/v1/agents',dict(id='agent'))
                 review.assert_not_called()
 
     def test_scoped_administrator_still_completes_independent_review(self):
@@ -49,7 +49,7 @@ class InitialConfigurationTests(unittest.TestCase):
         with patch.object(config,'api',side_effect=[(202,draft),
                 {**draft,'revision':2,'state':'PENDING'}, {**draft,'revision':3,'state':'APPROVED'},
                 {**draft,'revision':4,'state':'APPLIED'}]) as api:
-            config.mutate('/api/control/v1/tools',dict(id='tool'))
+            config.mutate('/api/control/v1/agents',dict(id='agent'))
         self.assertEqual([call.args[1]['action'] for call in api.call_args_list[1:]],['SUBMIT','APPROVE','APPLY'])
         self.assertEqual(api.call_args_list[2].kwargs['user'],'reviewer-1')
 
@@ -63,10 +63,19 @@ class InitialConfigurationTests(unittest.TestCase):
         config.opener.open.return_value=response
         config.origin='http://127.0.0.1:18090'
         with patch.object(config,'apply_change') as review:
-            config.mutate('/api/control/v1/tools/tool',method='DELETE',revision=1)
+            config.mutate('/api/control/v1/agents/agent',method='DELETE',revision=1)
             review.assert_not_called()
 
     def test_configured_membership_does_not_create_another_change(self):
         config=object.__new__(module.Configuration)
         with patch.object(config,'api',return_value=dict(groupIds=['ReadAndWriteAgentGroup'])) as api,patch.object(config,'apply_change') as review:
             config.memberships('agents','agent',['ReadAndWriteAgentGroup']);self.assertEqual(api.call_count,1);review.assert_not_called()
+
+
+class PackageToolTests(unittest.TestCase):
+    def test_the_debug_agent_is_never_configured_with_tools_a_package_did_not_install(self):
+        config=object.__new__(module.Configuration)
+        with patch.object(module,'private_file'),patch.object(module,'Configuration',return_value=config),             patch.object(config,'api',side_effect=[{'role':'SUPER_ADMIN'},{'state':'ACTIVE','lastSeenUnixMs':10**15}]),             patch.object(config,'presets'),patch.object(config,'all',return_value=[{'id':'examples.hotfolder/write_text','packageDigest':'a'*64}]),             patch.object(config,'upsert') as upsert,patch.object(module.time,'time',return_value=10**12):
+            with self.assertRaisesRegex(ValueError,'Install the examples.hotfolder package'):
+                module.configure('device-1')
+            upsert.assert_not_called()

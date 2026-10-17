@@ -5,6 +5,122 @@
   "title": "Endpoint identity foundation",
   "$ref": "#/$defs/ClientHealth",
   "$defs": {
+    "ConsoleDeviceLookup": {
+      "type": "object",
+      "description": "Exactly one enrollment code or existing device identifier for establishing console device context.",
+      "additionalProperties": false,
+      "properties": {
+        "userCode": {
+          "type": "string",
+          "pattern": "^[A-F0-9]{16}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": []
+    },
+    "ConsoleDeviceChallenge": {
+      "description": "A short-lived server challenge bound to a verified console session and device key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "nonce",
+        "deviceId",
+        "keyFingerprint",
+        "expiresAtUnixMs"
+      ]
+    },
+    "ConsoleDeviceProofRequest": {
+      "description": "Bounded local native-client proof request for the selected console origin.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "console-device-proof"
+        },
+        "consoleUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "consoleUrl",
+        "nonce"
+      ]
+    },
+    "ConsoleDeviceProof": {
+      "description": "Device-key signature over the domain-separated console challenge nonce.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,256}$"
+        }
+      },
+      "required": [
+        "nonce",
+        "deviceId",
+        "keyFingerprint",
+        "signature"
+      ]
+    },
+    "ConsoleDeviceVerified": {
+      "description": "Current-device context accepted for the authenticated console session.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "deviceId",
+        "expiresAtUnixMs"
+      ]
+    },
     "EndpointPresencePing": {
       "type": "object",
       "description": "Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling.",
@@ -470,7 +586,7 @@
           "type": "array",
           "maxItems": 50,
           "items": {
-            "$ref": "builtins.schema.json#/$defs/BuiltinToolInfo"
+            "$ref": "local-tools.schema.json#/$defs/LocalToolInfo"
           }
         }
       },
@@ -497,16 +613,11 @@
           "minimum": 0,
           "maximum": 9007199254740991
         },
-        "nextIntervalSeconds": {
-          "type": "integer",
-          "minimum": 2,
-          "maximum": 3600
-        },
         "nextIntervalMs": {
           "type": "integer",
           "minimum": 500,
           "maximum": 3600000,
-          "description": "Negotiated check-in interval for clients requesting milliseconds; takes precedence over nextIntervalSeconds."
+          "description": "The next check-in interval, spread by the configured jitter."
         },
         "identity": {
           "$ref": "endpoint.schema.json#/$defs/DeviceIdentity"
@@ -525,7 +636,7 @@
         "deviceId",
         "sequence",
         "serverTimeUnixMs",
-        "nextIntervalSeconds"
+        "nextIntervalMs"
       ]
     },
     "EndpointDeviceRecord": {
@@ -608,24 +719,13 @@
         "reportSequence"
       ]
     },
-    "SystemExecutorKind": {
-      "type": "string",
-      "enum": [
-        "BUILTINS",
-        "HOTFOLDER",
-        "REST_FORWARDING"
-      ]
-    },
     "EndpointManagedDevice": {
       "type": "object",
-      "description": "Directory identity, enrolled approval and pending request combined for administrative management.",
+      "description": "Directory identity, enrolled approval and pending request with server-resolved target permissions.",
       "additionalProperties": false,
       "properties": {
         "deviceId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
-        },
-        "systemExecutor": {
-          "type": "boolean"
         },
         "directoryDevice": {
           "$ref": "control.schema.json#/$defs/ControlDevice"
@@ -638,13 +738,6 @@
         },
         "registeredUser": {
           "$ref": "control.schema.json#/$defs/ControlUser"
-        },
-        "systemExecutorKind": {
-          "$ref": "endpoint.schema.json#/$defs/SystemExecutorKind"
-        },
-        "systemAvailable": {
-          "type": "boolean",
-          "description": "Composition readiness for a server executor; absent when availability is unknown."
         },
         "systemName": {
           "type": "string",
@@ -659,11 +752,20 @@
           "maxLength": 45,
           "pattern": "^[0-9a-fA-F:.]+$",
           "description": "Server-observed transport IP address; may represent NAT or a proxy."
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$"
+          },
+          "maxItems": 32,
+          "uniqueItems": true,
+          "description": "Current target-specific feature actions resolved by Control; never inferred from displayed enrollment metadata."
         }
       },
       "required": [
-        "deviceId",
-        "systemExecutor"
+        "deviceId"
       ]
     },
     "EndpointManagedDevicePage": {
@@ -1133,7 +1235,7 @@
           "type": "array",
           "maxItems": 50,
           "items": {
-            "$ref": "builtins.schema.json#/$defs/BuiltinToolInfo"
+            "$ref": "local-tools.schema.json#/$defs/LocalToolInfo"
           }
         }
       },
@@ -1146,9 +1248,7 @@
       "enum": [
         "CHECK_IN",
         "AUTHORIZE",
-        "RESULT",
-        "BUILDER_POLL",
-        "BUILDER_RESULT"
+        "RESULT"
       ],
       "description": "Fixed authenticated operations on the active-job channel."
     },
@@ -1448,7 +1548,6 @@
     "DeviceExecutionKind": {
       "type": "string",
       "enum": [
-        "QUICKSTART_CLIENT",
         "ENDPOINT_CLIENT",
         "TOOL_HOST_DIRECT",
         "TOOL_HOST_PULL"

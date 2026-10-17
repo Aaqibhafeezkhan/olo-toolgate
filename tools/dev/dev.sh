@@ -4,23 +4,11 @@
 set -eu
 
 cat <<'EOF'
-OLO ToolGate development scaffold
+The make dev full-stack bootstrap is not implemented.
 
-The architecture/documentation repository is ready, but the runtime
-implementation has not been bootstrapped yet.
+For working source-build and startup commands, read:
+  docs/development/README.md
 
-Next implementation milestone:
-  1. create apps/gateway
-  2. create apps/control-plane
-  3. create apps/admin-ui
-  4. add compose.dev.yml
-  5. make this command start the full local stack
-
-Useful now:
-  make docs
-  make tree
-
-Read:
-  docs/getting-started/contributor-60-seconds.md
-  ROADMAP.md
+For pending contributor improvements, read:
+  docs/planning/README.md
 EOF

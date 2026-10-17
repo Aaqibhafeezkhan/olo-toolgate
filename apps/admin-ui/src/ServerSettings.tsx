@@ -11,16 +11,16 @@ export const CHANGED_ELSEWHERE='These settings changed elsewhere. The current va
 const days=(value:string)=>/^[0-9]{1,4}$/.test(value)&&Number(value)>=1&&Number(value)<=3650?Number(value):undefined;
 const identifier=(value:string)=>/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(value);
 const gatewayName=(value:string)=>/^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,63}$/.test(value);
-const durationDays=(settings:ControlServerSettings)=>String(Math.round((settings.deviceApproval.durationMs??DEFAULT_AUTO_APPROVE_DAYS*DAY_MS)/DAY_MS));
+const durationDays=(settings:ControlServerSettings)=>String(Math.round((settings.deviceApproval!.durationMs??DEFAULT_AUTO_APPROVE_DAYS*DAY_MS)/DAY_MS));
 
 /** Loads the settings record and saves one page's groups with the loaded revision. A 409 reloads the current values. */
-function useSettings(client:ControlClient){
+function useSettings(client:ControlClient,section:'server'|'device'){
   const [saved,setSaved]=useState<ControlServerSettings>();const [error,setError]=useState<unknown>();
   const [busy,setBusy]=useState(false);const [notice,setNotice]=useState('');const [attempt,setAttempt]=useState(0);
   const locked=useRef(false);const pending=useRef<{body:string;key:string}|undefined>(undefined);
   useEffect(()=>{const abort=new AbortController();setError(undefined);
-    client.serverSettings(abort.signal).then(settings=>{if(!abort.signal.aborted)setSaved(settings);},failure=>{if(!abort.signal.aborted)setError(failure);});
-    return()=>abort.abort();},[client,attempt]);
+    client.serverSettings(abort.signal,section).then(settings=>{if(!abort.signal.aborted)setSaved(settings);},failure=>{if(!abort.signal.aborted)setError(failure);});
+    return()=>abort.abort();},[client,section,attempt]);
   const reload=useCallback(()=>setAttempt(value=>value+1),[]);
   const run=useCallback(async(encoded:string,request:(key:string)=>Promise<ControlServerSettings>,done:string):Promise<boolean>=>{
     if(locked.current)return false;if(pending.current?.body!==encoded)pending.current={body:encoded,key:crypto.randomUUID()};
@@ -38,13 +38,13 @@ const reviewChoices:readonly {value:RequiredReviews;label:string}[]=[{value:0,la
 
 /** Administration > Server: the gateway name devices show and the configuration review threshold. */
 export function ServerConfiguration({client}:{client:ControlClient}){
-  const {saved,error,busy,status,patch,setNotice}=useSettings(client);const [name,setName]=useState<string>();
+  const {saved,error,busy,status,patch,setNotice}=useSettings(client,'server');const [name,setName]=useState<string>();
   const [reviews,setReviews]=useState<RequiredReviews>();
-  useEffect(()=>{if(saved){setName(saved.gateway.gatewayName);setReviews(saved.configuration?.requiredReviews);}},[saved]);
+  useEffect(()=>{if(saved?.gateway){setName(saved.gateway.gatewayName);setReviews(saved.configuration?.requiredReviews);}},[saved]);
   const current=saved?.configuration?.requiredReviews;
   function saveReviews(){if(reviews===undefined)return;
     void patch({configuration:{requiredReviews:reviews}},'Configuration reviews saved.').then(ok=>{if(ok)window.dispatchEvent(new Event(REVIEW_POLICY_CHANGE));});}
-  const trimmed=name?.trim()??'';const valid=gatewayName(trimmed);const changed=Boolean(saved)&&trimmed!==saved!.gateway.gatewayName;
+  const trimmed=name?.trim()??'';const valid=gatewayName(trimmed);const changed=Boolean(saved?.gateway)&&trimmed!==saved!.gateway!.gatewayName;
   return <><div className="page-heading"><h1>Server</h1></div>
     <p className="intro">Settings for this ToolGate server. Saving changes only the fields on this page.</p>
     <section className="guidance" aria-label="Server settings">
@@ -67,12 +67,12 @@ export function ServerConfiguration({client}:{client:ControlClient}){
 }
 
 type ApprovalDraft={autoApprove:boolean;days:string;owner:string};
-const approvalDraft=(settings:ControlServerSettings):ApprovalDraft=>({autoApprove:settings.deviceApproval.autoApprove,days:durationDays(settings),owner:settings.deviceApproval.ownerUserId??''});
+const approvalDraft=(settings:ControlServerSettings):ApprovalDraft=>({autoApprove:settings.deviceApproval!.autoApprove,days:durationDays(settings),owner:settings.deviceApproval!.ownerUserId??''});
 
 /** Configuration > Device: bounded device auto-approval and the deployment's read-only check-in values. */
 export function DeviceConfiguration({client}:{client:ControlClient}){
-  const {saved,error,busy,status,patch,setNotice}=useSettings(client);const [draft,setDraft]=useState<ApprovalDraft>();
-  useEffect(()=>{if(saved)setDraft(approvalDraft(saved));},[saved]);
+  const {saved,error,busy,status,patch,setNotice}=useSettings(client,'device');const [draft,setDraft]=useState<ApprovalDraft>();
+  useEffect(()=>{if(saved?.deviceApproval)setDraft(approvalDraft(saved));},[saved]);
   const duration=draft&&days(draft.days);const owner=draft?.owner.trim()??'';
   const valid=Boolean(draft)&&duration!==undefined&&(owner===''?!draft?.autoApprove:identifier(owner));
   const changed=Boolean(saved&&draft)&&JSON.stringify(approvalDraft(saved!))!==JSON.stringify({...draft!,owner});

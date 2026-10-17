@@ -29,25 +29,31 @@ class ReleaseDocumentsTests(unittest.TestCase):
             for name in ('LICENSE','NOTICE.md','RELEASE-NOTES.md'):
                 self.assertEqual(archive.extractfile(name).read(),(bundle.ROOT/name).read_bytes())
 
-    def test_native_archives_embed_documents(self):
+    def test_native_archives_embed_documents_for_all_platforms(self):
         metadata={'packages':[{'id':'client','name':'olo-toolgate-client','version':'0.10.0-dev',
                     'license':'Apache-2.0','source':None}],
                   'resolve':{'nodes':[{'id':'client','dependencies':[]}]}}
         with tempfile.TemporaryDirectory() as directory, patch.object(package.subprocess,'check_output',return_value=json.dumps(metadata).encode()):
             output=Path(directory)
-            for target in ('x86_64-unknown-linux-gnu','x86_64-pc-windows-msvc'):
-                raw=bytearray(128)
-                if 'windows' in target:
-                    raw[:2]=b'MZ';raw[60:64]=(64).to_bytes(4,'little')
-                    raw[64:68]=b'PE\0\0';raw[68:70]=(0x8664).to_bytes(2,'little')
-                else:
-                    raw[:6]=b'\x7fELF\x02\x01';raw[18:20]=(62).to_bytes(2,'little')
-                binary=output/'binary';binary.write_bytes(raw)
-                if 'windows' in target:(output/'olo-toolgate-browser-host.exe').write_bytes(raw)
-                package.package(binary,target,output)
-            for path in list(output.glob('*.zip'))+list(output.glob('*.tar.gz')):
-                archive=zipfile.ZipFile(path) if path.suffix=='.zip' else tarfile.open(path)
-                with archive:
-                    for name in ('LICENSE','NOTICE.md','RELEASE-NOTES.md'):
-                        data=archive.read(name) if path.suffix=='.zip' else archive.extractfile(name).read()
-                        self.assertEqual(data,(package.ROOT/name).read_bytes())
+            for target in sorted(package.TARGETS):
+                with self.subTest(target=target):
+                    arm=target.startswith('aarch64')
+                    raw=bytearray(128)
+                    if 'windows' in target:
+                        raw[:2]=b'MZ';raw[60:64]=(64).to_bytes(4,'little')
+                        raw[64:68]=b'PE\0\0';raw[68:70]=(0xaa64 if arm else 0x8664).to_bytes(2,'little')
+                    elif 'linux' in target:
+                        raw[:6]=b'\x7fELF\x02\x01';raw[18:20]=(183 if arm else 62).to_bytes(2,'little')
+                    else:
+                        raw[:4]=b'\xcf\xfa\xed\xfe';raw[4:8]=(0x100000c if arm else 0x1000007).to_bytes(4,'little')
+                    binary=output/'binary';binary.write_bytes(raw)
+                    if 'windows' in target:(output/'olo-toolgate-browser-host.exe').write_bytes(raw)
+                    package.package(binary,target,output)
+                    version=(package.ROOT/'VERSION').read_text().strip()
+                    path=output/f'olo-toolgate-client-{version}-{target}.{"zip" if "windows" in target else "tar.gz"}'
+                    archive=zipfile.ZipFile(path) if path.suffix=='.zip' else tarfile.open(path)
+                    with archive:
+                        for name in ('LICENSE','NOTICE.md','RELEASE-NOTES.md',
+                                     'docs/client/local-runtimes.md','docs/planning/README.md'):
+                            data=archive.read(name) if path.suffix=='.zip' else archive.extractfile(name).read()
+                            self.assertEqual(data,(package.ROOT/name).read_bytes())

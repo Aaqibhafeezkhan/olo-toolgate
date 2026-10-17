@@ -62,7 +62,7 @@ export function ClientDownloads() {
     </div>
     {failed ? <p aria-live="polite">Client downloads are unavailable. Contact your administrator for a published release.</p>
       : !manifest ? <p aria-live="polite">Loading client downloads…</p> : <><p>Client version {manifest.version}</p><div className="download-grid">{platforms.map(([platform, label]) => <article key={platform}>
-        <h3>{label}</h3>{installers?.artifacts.filter(a => a.platform === platform).map(artifact => <div key={'installer-'+artifact.target}>
+        <h3>{label}</h3>{installers?.artifacts.filter(a => a.platform === platform).sort((a, b) => platform === 'WINDOWS' ? Number(b.target.startsWith('x86_64')) - Number(a.target.startsWith('x86_64')) : 0).map(artifact => <div key={'installer-'+artifact.target}>
           <a href={platform === 'WINDOWS' ? `/api/public/v1/clients/setup/${artifact.target}` : `/api/public/v1/clients/olo-toolgate-client-${artifact.target}.${platform === 'MACOS' ? 'dmg' : 'run'}`} download>{`Install ${label} ${artifact.target.startsWith('aarch64') ? 'ARM64' : 'x64'}`}</a>
           <details><summary>Verify installer SHA-256</summary><code>{artifact.sha256}</code></details>
         </div>)}{manifest.artifacts.filter(a => a.platform === platform && platform !== 'WINDOWS').map(artifact => <div key={artifact.target}>

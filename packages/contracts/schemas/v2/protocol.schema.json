@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Tool protocol v2",
-  "description": "Launcher stdin/stdout frames and Tool Host admission messages (plan.md §11.3, §13.3). v1 stays accepted.",
+  "description": "Tool protocol v2, the one protocol between every tool process and its executor (ADR 027): one ToolInput line and then only BROKER_RESPONSE lines on stdin; LOG, PROGRESS, INPUT_REQUEST and BROKER_REQUEST frames and exactly one final RESULT on stdout. Also the Tool Host admission messages.",
   "$ref": "#/$defs/ToolInput",
   "$defs": {
     "SecretHandle": {
@@ -107,7 +107,9 @@
         "RESULT",
         "PROGRESS",
         "INPUT_REQUEST",
-        "LOG"
+        "LOG",
+        "BROKER_REQUEST",
+        "BROKER_RESPONSE"
       ],
       "description": "Output frame kind."
     },
@@ -466,6 +468,381 @@
         "invocationId",
         "fencingToken",
         "outcome"
+      ]
+    },
+    "RunEventKind": {
+      "type": "string",
+      "enum": [
+        "LOG",
+        "PROGRESS",
+        "INPUT_REQUEST",
+        "STATE",
+        "RESULT"
+      ],
+      "description": "Run-response event kind. LOG, PROGRESS and INPUT_REQUEST carry the SDK frame of the same kind; STATE is an authoritative platform transition; RESULT is the terminal frame the executor reported."
+    },
+    "RunEventSource": {
+      "type": "string",
+      "enum": [
+        "EXECUTOR",
+        "PLATFORM"
+      ],
+      "description": "Tool-emitted content (EXECUTOR) stays distinguishable from Control-recorded state (PLATFORM)."
+    },
+    "RunEventFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One redacted non-terminal SDK frame (LOG, PROGRESS or INPUT_REQUEST) as the executor forwards it. sequence is monotonic per invocation attempt; the executor never renumbers a frame it resends.",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "emittedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "$ref": "protocol.schema.json#/$defs/RunEventKind"
+        },
+        "level": {
+          "$ref": "protocol.schema.json#/$defs/LogLevel"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "request": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "sequence",
+        "emittedAtUnixMs",
+        "kind"
+      ]
+    },
+    "RunEventBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Executor to Control: frames of one admitted attempt, bound to the invocation and the fencing token its permit consumption returned. Redelivery of the same sequence is idempotent. droppedFrames counts frames the executor discarded under its own bounds.",
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "protocol.schema.json#/$defs/RunEventFrame"
+          },
+          "maxItems": 64
+        },
+        "droppedFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "attempt",
+        "events"
+      ]
+    },
+    "RunEventAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Control acknowledgement: the highest contiguous sequence stored for the attempt, and how many frames were already present or refused by retention bounds.",
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "acceptedThrough": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "duplicates": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "refused": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        }
+      },
+      "required": [
+        "invocationId",
+        "attempt",
+        "acceptedThrough",
+        "duplicates",
+        "refused"
+      ]
+    },
+    "RunEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only.",
+      "properties": {
+        "cursor": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "source": {
+          "$ref": "protocol.schema.json#/$defs/RunEventSource"
+        },
+        "kind": {
+          "$ref": "protocol.schema.json#/$defs/RunEventKind"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "executorId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "emittedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "recordedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "result": {
+          "$ref": "protocol.schema.json#/$defs/ResultFrame"
+        },
+        "level": {
+          "$ref": "protocol.schema.json#/$defs/LogLevel"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "request": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "cursor",
+        "source",
+        "kind",
+        "recordedAtUnixMs"
+      ]
+    },
+    "RunEventGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Sequences of an attempt that never arrived; they are reported, never invented.",
+      "properties": {
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "fromSequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "toSequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "attempt",
+        "fromSequence",
+        "toSequence"
+      ]
+    },
+    "RunEventPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authorized replay page after a cursor. terminal is the authoritative ledger state; truncated, droppedFrames, gaps and expired say explicitly what is not shown.",
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "terminal": {
+          "type": "boolean"
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "executorId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "protocol.schema.json#/$defs/RunEvent"
+          },
+          "maxItems": 200
+        },
+        "nextCursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "more": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "droppedFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "expired": {
+          "type": "boolean"
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "$ref": "protocol.schema.json#/$defs/RunEventGap"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "invocationId",
+        "state",
+        "terminal",
+        "events",
+        "nextCursor",
+        "more",
+        "truncated",
+        "droppedFrames",
+        "expired",
+        "gaps"
+      ]
+    },
+    "BrokerOperation": {
+      "type": "string",
+      "enum": [
+        "ROUTE_CALL",
+        "SECRET_REDEEM",
+        "FILES_LIST",
+        "FILES_READ",
+        "FILES_INFO",
+        "FILES_WRITE",
+        "FILES_APPEND",
+        "FILES_MKDIR",
+        "FILES_RENAME"
+      ],
+      "description": "Brokered operations. Every executor reads and answers the same frames; an operation its target does not provide is refused with a canonical error. ROUTE_CALL and SECRET_REDEEM: Tool Hosts, for the routes and secrets the permit grants. FILES_*: devices, for tools whose signed registration grants device file access (READ for LIST/READ/INFO, WRITE for the rest)."
+    },
+    "BrokerRequestFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "BROKER_REQUEST"
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "operation": {
+          "$ref": "protocol.schema.json#/$defs/BrokerOperation"
+        },
+        "request": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "kind",
+        "requestId",
+        "operation",
+        "request"
+      ]
+    },
+    "BrokerResponseFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "BROKER_RESPONSE"
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "result": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "error": {
+          "$ref": "protocol.schema.json#/$defs/ToolErrorBody"
+        }
+      },
+      "required": [
+        "kind",
+        "requestId"
       ]
     }
   }

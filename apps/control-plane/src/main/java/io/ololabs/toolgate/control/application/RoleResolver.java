@@ -12,7 +12,7 @@ public final class RoleResolver {
     private final Codec codec;
     public RoleResolver(Codec codec) { this.codec=codec; }
     public record Access(UserRole portalRole,boolean managed,List<EnterpriseManagementRule> grants) {
-        public boolean approver() { return grants.stream().anyMatch(r->r.actions().contains("approve-operation")); }
+        public boolean approver() { return grants.stream().anyMatch(r->r.actions().contains("operation.approve")); }
     }
     public Access resolve(Directory directory,ControlUser user) {
         var grants=new ArrayList<EnterpriseManagementRule>();var portal=UserRole.BASIC;

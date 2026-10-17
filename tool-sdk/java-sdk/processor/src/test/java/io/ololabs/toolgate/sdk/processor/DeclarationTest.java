@@ -58,6 +58,22 @@ class DeclarationTest {
         fails(tools("", TOOL.formatted(seg + "." + seg + "." + "c".repeat(41)), GENERATION), "longer than 128");
     }
 
+    @Test
+    void deviceFileAccessIsAClientToolDeclarationThatDerivesItsPermissions() {
+        var r = ok(tools("", """
+                @ClientTool(name = "notes.read", title = "T", description = "D")
+                @DeviceFileAccess
+                public Out read(@Param(description = "Path") String path) { return null; }
+                @ClientTool(name = "notes.save", title = "T", description = "D")
+                @DeviceFileAccess(write = true)
+                public Out save(@Param(description = "Path") String path) { return null; }
+                """, GENERATION));
+        assertTrue(r.descriptor("notes.read").contains("DEVICE_FILES_READ"), r.descriptor("notes.read"));
+        assertFalse(r.descriptor("notes.read").contains("DEVICE_FILES_WRITE"), r.descriptor("notes.read"));
+        assertTrue(r.descriptor("notes.save").contains("DEVICE_FILES_WRITE"), r.descriptor("notes.save"));
+        fails(tools("", TOOL.formatted("items.list").replace("@ServerTool", "@DeviceFileAccess @ServerTool"), GENERATION), "@DeviceFileAccess is only for a @ClientTool");
+    }
+
     private static Compilation.Result compileWithPackageId(String id) {
         return Compilation.compile(Map.of("acme/demo/Tools.java", """
                 package acme.demo;
@@ -74,8 +90,6 @@ class DeclarationTest {
     @Test
     void reservedPrefixesAreRejected() {
         fails(compileWithPackageId("toolgate.demo"), "reserved prefix toolgate.");
-        fails(compileWithPackageId("hotfolder.demo"), "reserved prefix hotfolder.");
-        fails(tools("", TOOL.formatted("builtin.items"), GENERATION), "reserved prefix builtin.");
     }
 
     @Test

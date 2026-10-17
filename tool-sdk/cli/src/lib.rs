@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //! The `toolgate` CLI library: canonical JSON, descriptor digests and equivalence, and the
-//! `.tgpkg` packager and verifier (plan.md §4 and §7). Language SDKs produce descriptors; this
+//! `.tgpkg` packager and verifier (platform-requirements.md §4 and §7). Language SDKs produce descriptors; this
 //! crate is the single implementation of canonical bytes, archive rules and digests.
 
 pub mod archive;

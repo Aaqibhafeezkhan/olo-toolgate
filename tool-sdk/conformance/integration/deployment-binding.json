@@ -4,14 +4,14 @@
   "area": "deployment-binding",
   "title": "Deployment binding and configuration precedence",
   "sources": [
-    "plan.md §8.5"
+    "platform-requirements.md §8.5"
   ],
   "cases": [
     {
       "id": "binding/precedence",
       "title": "A higher layer caps a lower one",
       "requirements": [
-        "plan.md §8.5"
+        "platform-requirements.md §8.5"
       ],
       "level": "integration",
       "targets": [
@@ -27,7 +27,7 @@
       "id": "binding/same-layer-conflict",
       "title": "Same-layer conflicts are rejected",
       "requirements": [
-        "plan.md §8.5"
+        "platform-requirements.md §8.5"
       ],
       "level": "unit",
       "targets": [
@@ -43,7 +43,7 @@
       "id": "binding/specificity",
       "title": "Pool beats tool group beats tenant-wide inside a binding",
       "requirements": [
-        "plan.md §8.5"
+        "platform-requirements.md §8.5"
       ],
       "level": "unit",
       "targets": [
@@ -59,7 +59,7 @@
       "id": "binding/lowered-ceiling",
       "title": "Lowering a higher layer caps bindings in a new revision",
       "requirements": [
-        "plan.md §8.5"
+        "platform-requirements.md §8.5"
       ],
       "level": "integration",
       "targets": [
@@ -75,8 +75,8 @@
       "id": "binding/env-owned",
       "title": "Env-owned values are read-only",
       "requirements": [
-        "plan.md §8.5",
-        "plan.md §17.2"
+        "platform-requirements.md §8.5",
+        "platform-requirements.md §17.2"
       ],
       "level": "integration",
       "targets": [
@@ -93,7 +93,7 @@
       "id": "binding/effective-api",
       "title": "The effective value API names the source layer",
       "requirements": [
-        "plan.md §8.5"
+        "platform-requirements.md §8.5"
       ],
       "level": "component",
       "targets": [
@@ -109,7 +109,7 @@
       "id": "binding/digest-in-permit",
       "title": "The binding digest is part of the permit",
       "requirements": [
-        "plan.md §8.5"
+        "platform-requirements.md §8.5"
       ],
       "level": "integration",
       "targets": [

@@ -1,11 +1,12 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import {afterEach,expect,it,vi} from 'vitest';
+import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {Marketplace,IMPORT_CONFIRMATION,mediaUrl,safeLink} from '../src/Marketplace';
 import {ControlClient} from '../src/api';
 import axe from 'axe-core';
-afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+beforeEach(()=>{vi.spyOn(ControlClient.prototype,'can').mockReturnValue(true);});
+afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.restoreAllMocks();});
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status});
 const icon='m_'+'1'.repeat(32),avatar='m_'+'2'.repeat(32),shot='m_'+'3'.repeat(32);
 const publisher={slug:'examples',displayName:'ToolGate Examples',organization:'OLO Labs',avatarMediaId:avatar,profileUrl:'https://marketplace.example.com/publishers/examples'};
@@ -35,6 +36,16 @@ it('shows nothing when the Marketplace is off',async()=>{
  const {container}=render(<Marketplace client={new ControlClient('token',vi.fn())} onImported={vi.fn()}/>);
  await waitFor(()=>expect(fetcher).toHaveBeenCalledTimes(1));
  await waitFor(()=>expect(container.innerHTML).toBe(''));
+});
+it('allows read-only catalog details while disabling imports',async()=>{
+ vi.mocked(ControlClient.prototype.can).mockImplementation(permission=>permission==='package.read');
+ const fetcher=marketplace();vi.stubGlobal('fetch',fetcher);
+ render(<Marketplace client={new ControlClient('token',vi.fn())} onImported={vi.fn()}/>);
+ const install=await screen.findByRole('button',{name:'Install Webhook notify'});
+ expect((install as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.click(screen.getByRole('button',{name:'Details for Webhook notify'}));
+ await screen.findByText('Sends **one** message.');
+ expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false);
 });
 
 it('lists the catalog with images only through the media proxy and Control\'s verdict',async()=>{

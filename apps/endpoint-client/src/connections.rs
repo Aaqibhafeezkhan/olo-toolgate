@@ -127,7 +127,7 @@ mod tests {
         let config = Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: server.into(),
             state_directory: state.to_owned(),
             ipc_endpoint: state.join("client.sock").to_string_lossy().into_owned(),

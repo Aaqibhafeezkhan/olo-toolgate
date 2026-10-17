@@ -14,10 +14,10 @@ use olo_toolgate_contracts::v2::{
     PackageDeployment, ProtocolRange, RuntimeTier, ToolHostAssignments, ToolHostRegistration,
 };
 use olo_toolgate_contracts::{
-    BuiltinToolInfo, ClientPlatform, ClientReport, DeviceIdentity, EndpointCheckIn,
-    EndpointCheckInAck, EndpointConnectionDirective, EndpointEnrollmentChallenge,
-    EndpointEnrollmentPoll, EndpointEnrollmentResult, EndpointEnrollmentStart,
-    EndpointPresencePing, EnrollmentState,
+    ClientPlatform, ClientReport, DeviceIdentity, EndpointCheckIn, EndpointCheckInAck,
+    EndpointConnectionDirective, EndpointEnrollmentChallenge, EndpointEnrollmentPoll,
+    EndpointEnrollmentResult, EndpointEnrollmentStart, EndpointPresencePing, EnrollmentState,
+    LocalToolInfo,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -185,7 +185,7 @@ impl Device {
             .into_iter()
             .filter(|tool| held.contains(&tool.package_digest))
             .filter_map(|tool| {
-                Some(BuiltinToolInfo {
+                Some(LocalToolInfo {
                     package_digest: store::hex(&tool.package_digest)?.to_string(),
                     tool_id: tool.tool_id,
                     action: tool.action,
@@ -199,7 +199,7 @@ impl Device {
         self.check_in(tools).await
     }
 
-    async fn check_in(&mut self, tools: Vec<BuiltinToolInfo>) -> Result<u64, Failure> {
+    async fn check_in(&mut self, tools: Vec<LocalToolInfo>) -> Result<u64, Failure> {
         let request = EndpointCheckIn {
             sequence: self.journal.sequence + 1,
             report: ClientReport {
@@ -214,11 +214,7 @@ impl Device {
         };
         let ack: EndpointCheckInAck = self
             .control
-            .post_json(
-                &format!("{ENDPOINT}/check-in"),
-                &request,
-                &[("X-ToolGate-Poll-Interval-Unit", "milliseconds")],
-            )
+            .post_json(&format!("{ENDPOINT}/check-in"), &request, &[])
             .await?;
         if ack.device_id != self.host_id || ack.sequence != request.sequence {
             return Err(Failure::Local(
@@ -230,9 +226,7 @@ impl Device {
             self.accept(identity).map_err(Failure::Local)?;
         }
         self.save().map_err(Failure::Local)?;
-        Ok(ack
-            .next_interval_ms
-            .unwrap_or(ack.next_interval_seconds.saturating_mul(1000)))
+        Ok(ack.next_interval_ms)
     }
 
     /// Puts a deployment's package, service profile and globals into the store, each checked

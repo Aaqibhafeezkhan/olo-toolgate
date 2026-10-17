@@ -70,17 +70,17 @@ public class ContractCodec implements Codec {
     /** v2 schema files Control already serves, validated by their v2 binding names. v1 definitions that reference v2
      *  (`../v2/...`, such as the request context) pull in those definitions too. Every adopted name must be new or
      *  identical to its v1 definition apart from descriptions, since both share one flat namespace. */
-    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json");
+    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json", "profile.schema.json");
     /** Single v2 definitions Control serves from files whose other names collide with v1 (package, protocol). */
     static final java.util.List<java.util.Map.Entry<String, String>> V2_NAMES = java.util.List.of(
         java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
-        java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"),
-        java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"),
+        java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"), java.util.Map.entry("protocol.schema.json", "RunEventBatch"),
+        java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"), java.util.Map.entry("package.schema.json", "ClientReleaseRequest"), java.util.Map.entry("package.schema.json", "ClientRelease"),
         java.util.Map.entry("protocol.schema.json", "Dispatch"), java.util.Map.entry("protocol.schema.json", "AdmissionResponse"), java.util.Map.entry("protocol.schema.json", "ResultMessage"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",
-                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json")) {
+                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));

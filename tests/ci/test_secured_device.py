@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Reject policy injection and ambiguous Gateway destinations before device startup."""
 import importlib.util
+import json
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -54,3 +56,49 @@ class SecuredDeviceTests(unittest.TestCase):
         config = self.parse(TOOLGATE_GATEWAY_URLS='https://gateway.example:18451/')
         self.assertEqual((config['origin'], config['port'], config['upstream_port'], config['address']),
                          ('https://gateway.example:18451', 18451, 8443, '172.20.0.2'))
+
+
+execution_spec = importlib.util.spec_from_file_location('device_execution', ROOT/'apps/device/device_execution.py')
+execution = importlib.util.module_from_spec(execution_spec)
+execution_spec.loader.exec_module(execution)
+
+
+class DeviceExecutionTests(unittest.TestCase):
+    """The mounted file supplies only execution and release trust; identity and Gateway settings are never taken from it."""
+
+    def write(self, directory, value):
+        path = Path(directory)/'execution.json'
+        path.write_text(value if isinstance(value, str) else json.dumps(value), encoding='utf-8')
+        return {execution.VARIABLE: str(path)}
+
+    def test_without_the_variable_the_configuration_is_kept(self):
+        saved = {'serverUrl': 'https://localhost:18451', 'execution': {'stateDirectory': '/var/lib/olo-toolgate/runtimes'}}
+        self.assertIsNone(execution.load({}))
+        self.assertEqual((saved, False), execution.merge(saved, None))
+
+    def test_mounted_sections_replace_the_devices_own_and_nothing_else(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mounted = {'execution': {'stateDirectory': '/var/lib/olo-toolgate/runtimes', 'files': {'root': '/var/lib/olo-toolgate/hotfolder'}},
+                       'deployment': {'releaseKeys': [], 'organizationKeys': []}}
+            loaded = execution.load(self.write(directory, mounted))
+        saved = {'serverUrl': 'https://localhost:18451', 'stateDirectory': '/var/lib/olo-toolgate', 'gateway': {'deviceId': 'kept'}}
+        merged, changed = execution.merge(saved, loaded)
+        self.assertTrue(changed)
+        self.assertEqual('https://localhost:18451', merged['serverUrl'])
+        self.assertEqual({'deviceId': 'kept'}, merged['gateway'])
+        self.assertEqual(mounted['execution'], merged['execution'])
+        self.assertEqual((merged, False), execution.merge(merged, loaded), 'a repeated start changes nothing')
+        # Dropping the deployment section from the file removes release trust from the device.
+        without = execution.merge(merged, {'execution': mounted['execution']})[0]
+        self.assertNotIn('deployment', without)
+
+    def test_identity_or_unknown_sections_and_wrong_state_are_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for value in ({'execution': {'stateDirectory': '/var/lib/olo-toolgate/runtimes'}, 'serverUrl': 'https://evil.example'},
+                          {'deployment': {}},
+                          {'execution': {'stateDirectory': '/tmp/runtimes'}},
+                          '[]'):
+                with self.assertRaises(ValueError, msg=str(value)):
+                    execution.load(self.write(directory, value))
+        with self.assertRaises(ValueError):
+            execution.load({execution.VARIABLE: 'relative/execution.json'})

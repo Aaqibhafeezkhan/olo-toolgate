@@ -4,6 +4,9 @@ name: toolgate-gateway-control
 x-runtime: &runtime
   platform: linux/amd64
   restart: unless-stopped
+  logging:
+    driver: local
+    options: {max-size: "10m", max-file: "3"}
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
@@ -22,6 +25,7 @@ services:
     tmpfs: [/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532]
     volumes:
       - ./custody/control:/custody:ro
+      - builder-data:/data/builder
   gateway:
     <<: *runtime
     image: ${GATEWAY_IMAGE:-ololab/olo-toolgate-gateway:dev}
@@ -50,3 +54,5 @@ services:
       retries: 30
 networks:
   backend:
+volumes:
+  builder-data:

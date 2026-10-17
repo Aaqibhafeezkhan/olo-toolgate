@@ -4,15 +4,15 @@
   "area": "lifecycle-rollout",
   "title": "Package lifecycle and rollout",
   "sources": [
-    "plan.md §8.4",
-    "plan.md §16"
+    "platform-requirements.md §8.4",
+    "platform-requirements.md §16"
   ],
   "cases": [
     {
       "id": "lifecycle/happy-path",
       "title": "A version moves from UPLOADED to ACTIVE",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -28,7 +28,7 @@
       "id": "lifecycle/rejected",
       "title": "Verification or review can reject",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -44,7 +44,7 @@
       "id": "lifecycle/invalid-transition",
       "title": "Transitions outside the diagram are refused",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "unit",
       "targets": [
@@ -60,7 +60,7 @@
       "id": "lifecycle/self-tests-gate",
       "title": "A host failing self-tests does not serve the version",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -77,7 +77,7 @@
       "id": "lifecycle/health-gate-pause",
       "title": "A failing health gate pauses and rolls back",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -94,7 +94,7 @@
       "id": "lifecycle/manual-controls",
       "title": "Pause, resume, promote and rollback work",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -110,7 +110,7 @@
       "id": "lifecycle/rollback-keeps-version",
       "title": "Rollback never deletes the new version",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -126,7 +126,7 @@
       "id": "lifecycle/coexistence",
       "title": "At most two versions are routable",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -143,7 +143,7 @@
       "id": "lifecycle/draining-retired",
       "title": "Retirement waits for references and retention",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -160,7 +160,7 @@
       "id": "lifecycle/config-revision-pinned",
       "title": "In-flight work keeps its config revision",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [
@@ -178,7 +178,7 @@
       "id": "lifecycle/auto-update-stops-on-delta",
       "title": "Auto-update stops at review on a non-empty delta",
       "requirements": [
-        "plan.md §8.4"
+        "platform-requirements.md §8.4"
       ],
       "level": "integration",
       "targets": [

@@ -95,16 +95,6 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             );
             Ok(())
         }
-        "authorization-profiles" if arguments.len() == 1 => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(
-                    &olo_toolgate_client::authorization_profile::builtin_profiles()?
-                )
-                .map_err(|_| Failure::Validation)?
-            );
-            Ok(())
-        }
         "runtimes"
             if arguments.len() == 2 && ["status", "prepare"].contains(&arguments[1].as_str()) =>
         {
@@ -166,7 +156,7 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             let agent =
                 (arguments.len() == 3 && arguments[1] == "--agent").then(|| arguments[2].clone());
             let invocation = if arguments.len() == 3 && agent.is_none() {
-                Some(olo_toolgate_contracts::BuiltinInvocation {
+                Some(olo_toolgate_contracts::LocalToolCall {
                     tool_id: arguments[1].clone(),
                     arguments: serde_json::from_str(&arguments[2])
                         .map_err(|_| Failure::Validation)?,
@@ -335,6 +325,9 @@ async fn command(arguments: Vec<String>) -> Result<()> {
 }
 /// CI run number and short commit captured at compile time; "local" otherwise.
 fn build_label() -> String {
+    if let Some(build) = option_env!("TOOLGATE_RELEASE_BUILD").filter(|value| !value.is_empty()) {
+        return build.into();
+    }
     match (option_env!("GITHUB_RUN_NUMBER"), option_env!("GITHUB_SHA")) {
         (Some(run), Some(sha)) => format!("{run} ({})", &sha[..sha.len().min(7)]),
         _ => "local".into(),

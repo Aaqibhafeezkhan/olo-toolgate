@@ -834,6 +834,13 @@
       "description": "Server-verified administrator portal session.",
       "additionalProperties": false,
       "properties": {
+        "permissions": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$"},
+          "maxItems": 256,
+          "uniqueItems": true,
+          "description": "Server-derived available feature actions; target-specific authorization is rechecked for each request."
+        },
         "role": {
           "$ref": "control.schema.json#/$defs/UserRole"
         },

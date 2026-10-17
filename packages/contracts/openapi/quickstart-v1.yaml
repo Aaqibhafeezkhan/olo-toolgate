@@ -58,26 +58,6 @@ paths:
         '400': {$ref: '#/components/responses/Validation'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '429': {$ref: '#/components/responses/Limited'}
-  /api/quickstart/v1/tools:
-    get:
-      operationId: quickstartTools
-      responses:
-        '200': {description: Fixed canonical catalog from packages/contracts/tools/builtins.json; web.search disabled until a provider is configured.}
-  /api/quickstart/v1/invoke:
-    post:
-      operationId: quickstartInvoke
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/builtins.schema.json#/$defs/BuiltinInvocation
-      responses:
-        '200': {description: Protected fixed-tool result object.}
-        '202': {description: ASK pending; decision and approvalId returned, no tool effect. Approve in Control then retry identical arguments.}
-        '400': {$ref: '#/components/responses/Validation'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '503': {$ref: '#/components/responses/Unavailable'}
   /api/quickstart/v1/vault:
     get:
       operationId: quickstartVaultNames

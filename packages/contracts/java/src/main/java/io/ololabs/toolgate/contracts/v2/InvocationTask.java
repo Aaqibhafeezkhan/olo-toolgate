@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** Task fields added to a Control invocation when a task record exists (plan.md §12.1).
+/** Task fields added to a Control invocation when a task record exists (platform-requirements.md §12.1).
  *
  * @param taskId canonical taskId value
  * @param state canonical state value

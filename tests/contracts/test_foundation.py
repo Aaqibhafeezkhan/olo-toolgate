@@ -269,7 +269,12 @@ class FoundationTests(unittest.TestCase):
         with self.assertRaises(Exception): licenses.accepted('Unknown-Private-License')
 
     def test_foundation_documentation_local_links(self):
-        paths = [ROOT/'docs/development/foundation.md', ROOT/'docs/development/foundation-upgrades.md', ROOT/'docs/adr/001-foundation-contract-generation.md', ROOT/'deploy/helm/olo-toolgate/README.md']
+        paths = [ROOT/'docs/development/foundation.md', ROOT/'docs/adr/001-foundation-contract-generation.md', ROOT/'deploy/helm/olo-toolgate/README.md']
+        workflow = yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text(encoding='utf-8'))
+        assets = next(step for step in workflow['jobs']['check']['steps']
+                      if step.get('name') == 'Create raw contract release smoke assets')
+        # Validate the guides actually shipped by CI, including renamed release assets.
+        paths += [ROOT/name for name in re.findall(r'\bdocs/[\w./-]+\.md\b', assets['run'])]
         paths += [ROOT/f'packages/contracts/{language}/README.md' for language in ('java','rust','typescript','php','schemas')]
         for path in paths:
             text = path.read_text(encoding='utf-8')

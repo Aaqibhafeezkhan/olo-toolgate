@@ -4,14 +4,14 @@
   "area": "mcp-proxy",
   "title": "MCP proxy",
   "sources": [
-    "plan.md §14.1"
+    "platform-requirements.md §14.1"
   ],
   "cases": [
     {
       "id": "mcp-proxy/snapshot",
       "title": "Approval snapshots server and tool definitions",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -28,7 +28,7 @@
       "id": "mcp-proxy/model-sees-snapshot",
       "title": "The model sees only the approved snapshot",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -44,7 +44,7 @@
       "id": "mcp-proxy/rug-pull",
       "title": "A definition change quarantines the tool",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -61,7 +61,7 @@
       "id": "mcp-proxy/server-swap",
       "title": "A server swap is detected",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -78,7 +78,7 @@
       "id": "mcp-proxy/unapproved-tools",
       "title": "Unapproved upstream tools are never exposed",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -95,7 +95,7 @@
       "id": "mcp-proxy/io-validation",
       "title": "Arguments and results are validated against the snapshot",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -112,7 +112,7 @@
       "id": "mcp-proxy/freshness",
       "title": "Freshness follows min(ttlMs, 60 s) and toolsListChanged",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -128,7 +128,7 @@
       "id": "mcp-proxy/strict-mode",
       "title": "Strict mode fetches tools/list per call",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -144,7 +144,7 @@
       "id": "mcp-proxy/per-user-catalog",
       "title": "CONNECTION profiles intersect approved and live lists",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -160,7 +160,7 @@
       "id": "mcp-proxy/untrusted-marker",
       "title": "Results are marked untrusted",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -176,7 +176,7 @@
       "id": "mcp-proxy/upstream-input-required",
       "title": "Upstream input_required is forwarded only if policy allows",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -194,7 +194,7 @@
       "id": "mcp-proxy/upstream-task",
       "title": "Upstream task handles are wrapped",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [
@@ -211,7 +211,7 @@
       "id": "mcp-proxy/discovery-fallback",
       "title": "Discovery falls back to the legacy probe in the client role",
       "requirements": [
-        "plan.md §14.1"
+        "platform-requirements.md §14.1"
       ],
       "level": "component",
       "targets": [

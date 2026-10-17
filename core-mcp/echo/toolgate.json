@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "sdkVersion": "0.10.0-dev",
+  "id": "ololabs.echo",
+  "name": "Echo",
+  "publisher": "ololabs",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "echo",
+      "kind": "SERVER",
+      "title": "Echo",
+      "description": "Returns the supplied text unchanged; a connectivity check for agents and Tool Hosts.",
+      "inputs": {
+        "text": {"type": "STRING", "description": "Text to return", "default": "ping", "maxLength": 1024}
+      },
+      "output": {"text": {"concat": [{"input": "text"}]}},
+      "events": [{"level": "info", "message": "Echoing"}, {"fraction": 1, "message": "Echo complete"}]
+    }
+  ]
+}

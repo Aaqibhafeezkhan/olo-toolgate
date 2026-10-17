@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.toolgate.control.application;
 
-/** Tenant-transactional server packages (plan.md §7, §8): sealed uploads by digest, the service profile and globals
+/** Tenant-transactional server packages (platform-requirements.md §7, §8): sealed uploads by digest, the service profile and globals
  *  documents Tool Hosts fetch by digest, one current deployment per package id, and registered Tool Hosts. */
 public interface PackageStore {
     /** document is the PackageVersion; content the exact `.tgpkg` bytes. */
@@ -28,4 +28,11 @@ public interface PackageStore {
     /** The oldest queued, unexpired dispatch for this host. */
     Relayed nextRelayed(String hostId,long now);
     void saveRelayed(Relayed relayed);
+    /** The latest ProvisioningStatus of a deployment profile; generation grows with every change. */
+    record Provisioning(String profileId,long generation,String profileDigest,String document) {}
+    Provisioning provisioning(String profileId);
+    /** Every applied profile's latest status, by profile id. */
+    java.util.List<Provisioning> provisionings();
+    /** Inserts generation 1, or replaces exactly the expected previous generation. */
+    void saveProvisioning(Provisioning provisioning);
 }

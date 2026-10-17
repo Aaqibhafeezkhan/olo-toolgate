@@ -105,7 +105,7 @@ pub fn resolve(program: &std::path::Path) -> PathBuf {
         .unwrap_or_else(|| program.to_path_buf())
 }
 
-/// Host limits. Each is capped by the platform ceiling (plan.md §13.5); a configuration can only lower them.
+/// Host limits. Each is capped by the platform ceiling (platform-requirements.md §13.5); a configuration can only lower them.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Limits {
@@ -168,7 +168,9 @@ impl Config {
             || l.memory_bytes > c.memory_bytes
             || l.max_permit_window_ms > c.max_permit_window_ms
         {
-            return Err("a limit is above the platform ceiling (plan.md §13.5)".into());
+            return Err(
+                "a limit is above the platform ceiling (platform-requirements.md §13.5)".into(),
+            );
         }
         let url = &self.control.url;
         if !url.starts_with("https://") {

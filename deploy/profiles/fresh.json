@@ -1,0 +1,24 @@
+{
+  "profileVersion": 1,
+  "profileId": "fresh",
+  "packages": [
+    {
+      "packageId": "ololabs.hello-world",
+      "source": "PREBUILT_CORE",
+      "version": "1.0.0",
+      "required": true,
+      "hostIds": [
+        "tool-host-local"
+      ],
+      "tools": [
+        {
+          "toolId": "ololabs.hello-world/server_greet",
+          "toolGroupId": "default-tools"
+        }
+      ],
+      "bindingIds": [
+        "binding-default"
+      ]
+    }
+  ]
+}

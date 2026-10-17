@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.toolgate.protocol;
 
-/** MCP task statuses (plan.md §12.4). */
+/** MCP task statuses (platform-requirements.md §12.4). */
 public enum TaskStatus {
     WORKING("working"), INPUT_REQUIRED("input_required"), COMPLETED("completed"), FAILED("failed"), CANCELLED("cancelled");
 

@@ -1,26 +1,20 @@
 # ToolGate Tool SDK
 
-## Purpose
+Build tools that can run standalone over MCP or be packaged for governed execution.
+The Java authoring API, descriptor processor, runtime, build integrations and CLI
+are implemented. Java server tools also run through the Tool Host and Gateway;
+host isolation and reliable result retry still have unfinished scope.
+Python, TypeScript and .NET APIs are specified but their SDK implementations remain planned.
 
-`tool-sdk/` holds the ToolGate Tool SDK: one authoring contract for Java, Python, TypeScript and .NET tools that run as plain MCP servers (standalone mode) or under ToolGate governance (governed mode).
+| Task | Guide |
+|---|---|
+| Build your first tool | [Tool SDK guide](../TOOL-SDK-GUIDE.md) |
+| Java API, runtime and tests | [Java SDK](java-sdk/README.md) |
+| Initialize, validate and package | [CLI](cli/README.md) |
+| Run server tools | [Tool Host](../apps/tool-host/README.md) |
+| Understand the authoring contract | [Specification](spec/README.md) |
+| Check required behavior | [Conformance](conformance/README.md) |
+| See remaining work | [Pending features](../docs/planning/README.md) |
 
-**Status:** milestone M0 ([implementation plan](../docs/sdk-plan/implementation-plan.md)). The normative specification (gate D0) and the conformance cases (gate D3) are here, with the `toolgate` CLI packager and the Java authoring API, descriptor processor and standalone runtime. The Java SDK is complete for standalone use, with its Gradle and Maven plugins and a starter that `toolgate init` writes. The Tool Host, the governed path through the Gateway, and the other language SDKs follow.
-
-New to the SDK? Start with the [community guide](../TOOL-SDK-GUIDE.md), from `toolgate init` to a governed MCP call.
-
-## Layout
-
-| Path | Contents | Gate |
-|---|---|---|
-| [`spec/`](spec/README.md) | Normative authoring contract, descriptor rules, runtime modes, composition, protocol layer, official SDK compatibility record | D0 |
-| [`conformance/`](conformance/README.md) | Conformance cases for every suite in plan.md §21, with their fixtures | D3 |
-| [`cli/`](cli/README.md) | The `toolgate` CLI: `init`, `dev`, `check` and `pack` for tool projects in any language, and canonical descriptors and digests, `.tgpkg` pack, validate and verify | M0 |
-| [`java-sdk/`](java-sdk/README.md) | Java authoring API (`toolgate-sdk-api`), the annotation processor that emits descriptors (`toolgate-sdk-processor`), the standalone MCP runtime (`toolgate-sdk-runtime-mcp`), `ToolHarness` (`toolgate-sdk-testing`), and the Gradle and Maven plugins | M0 |
-| `python-sdk/`, `typescript-sdk/`, `dotnet-sdk/`, `examples/`, `docs/` | Implementation (added in later M0 parts) | M0 |
-
-## Related Docs
-
-- [Design plan](../docs/sdk-plan/plan.md)
-- [Publishing plan](../docs/sdk-plan/publishing-plan.md)
-- [Implementation plan](../docs/sdk-plan/implementation-plan.md)
-- [ADR 019](../docs/adr/019-tool-sdk-authoring-contract.md)
+Conformance requirements refer to [platform requirement IDs](../docs/contracts/platform-requirements.md)
+and the component specifications. Requirements are distinct from passing runtime evidence.

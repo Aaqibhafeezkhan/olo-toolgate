@@ -44,6 +44,20 @@ class AdmissionTests(unittest.TestCase):
             if not any(event in events for event in ('push','pull_request','workflow_dispatch','workflow_run','schedule','issue_comment')):
                 continue
             jobs=document['jobs']
+            if path.name in ('create-release-branch.yml','build-release.yml'):
+                # Operator-selected product releases have their own immutable-source
+                # and full-test gates, independent of development RC admission.
+                self.assertEqual(set(events),{'workflow_dispatch'})
+                entry='prepare' if path.name=='create-release-branch.yml' else 'select'
+                self.assertEqual(jobs[entry]['if'],"github.ref == 'refs/heads/main'")
+                self.assertNotIn('admission',jobs)
+                if entry=='select':
+                    for name in ('foundation','clients'):
+                        self.assertEqual(jobs[name]['needs'],'select')
+                    self.assertTrue(jobs['clients']['with']['run_tests'])
+                    self.assertTrue(jobs['images']['with']['run_tests'])
+                    self.assertEqual(jobs['publish']['environment'],'production-release')
+                continue
             if path.name=='manual-development-release.yml':
                 # Explicit operator-only publishing is exempt; automatic workflows stay gated.
                 self.assertEqual(set(events),{'workflow_dispatch'})
@@ -98,7 +112,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertIn("startsWith(github.ref, 'refs/tags/v')",document['jobs']['publish']['if'])
         pipeline=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         self.assertNotIn('main_only',pipeline['jobs']['admission'].get('with',{}))
-        self.assertEqual(set(pipeline['jobs']['release']['needs']),{'foundation','clients','images'})
+        self.assertNotIn('release',pipeline['jobs'])
 
     def test_no_workflow_is_triggered_by_pull_requests(self):
         root=Path(__file__).resolve().parents[2]
@@ -119,7 +133,7 @@ class AdmissionTests(unittest.TestCase):
         document=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         events=document.get('on',document.get(True,{}))
         self.assertEqual(set(events),{'push','workflow_dispatch'})
-        self.assertEqual(events['push'],{'branches':['main'],'tags':['v*']})
+        self.assertEqual(events['push'],{'branches':['main']})
         self.assertNotIn('main_only',document['jobs']['admission'].get('with',{}))
 
     def test_main_only_admission_is_opt_in_for_compatibility_callers(self):
@@ -130,7 +144,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertIs(events['workflow_call']['inputs']['main_only']['default'],False)
         release=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         events=release.get('on',release.get(True,{}))
-        self.assertEqual(events['push'],{'branches':['main'],'tags':['v*']})
+        self.assertEqual(events['push'],{'branches':['main']})
         self.assertNotIn('main_only',release['jobs']['admission'].get('with',{}))
 
     def test_main_entrypoint_requires_exact_enabled_variable(self):
@@ -146,16 +160,16 @@ class AdmissionTests(unittest.TestCase):
     def test_manual_development_release_has_no_test_or_ci_dependencies(self):
         root=Path(__file__).resolve().parents[2]
         document=yaml.safe_load((root/'.github/workflows/manual-development-release.yml').read_text(encoding='utf-8'))
-        self.assertEqual(set(document['jobs']),{'native','build','publish','publish-typescript','publish-maven'})
-        self.assertNotIn('needs',document['jobs']['native'])
+        self.assertEqual(set(document['jobs']),{'select','prepare','native','build','publish','publish-typescript'})
+        self.assertEqual(document['jobs']['native']['needs'],['select','prepare'])
         self.assertEqual(document['jobs']['native']['uses'],'./.github/workflows/client.yml')
         self.assertIs(document['jobs']['native']['with']['run_tests'],False)
         self.assertEqual(document['jobs']['build']['uses'],'./.github/workflows/images.yml')
         self.assertIs(document['jobs']['build']['with']['run_tests'],False)
-        self.assertEqual(document['jobs']['build']['needs'],'native')
+        self.assertEqual(document['jobs']['build']['needs'],['select','native'])
         for name,job in document['jobs'].items():
             if name.startswith('publish'):
-                self.assertEqual(job['needs'],'build')
+                self.assertEqual(job['needs'],['select','build'])
         # Reusable build jobs explicitly disable every test/smoke step for manual runs.
         for name in ('client','images'):
             shared=yaml.safe_load((root/'.github/workflows'/f'{name}.yml').read_text())

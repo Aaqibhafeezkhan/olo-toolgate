@@ -34,6 +34,7 @@ public final class McpService {
         var e=i.evaluation();if(local(tx,d).tools().stream().noneMatch(t->t.enabled()&&t.toolId().equals(request.toolId())&&t.action().equals(request.action())&&t.toolDigest().equals(e.toolDigest())&&t.packageDigest().equals(e.packageDigest())))throw forbidden();
     }
     private void scope(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,String action){
+        action=action.equals("read")?"remote_tool.read":ManagementAccess.permission(Ids.Kind.BINDING,action);
         actor.requireAdmin();if(!actor.tenant().equals(tenant)||actor.userId()==null)throw forbidden();
         var b=codec.model(tx.load().entries().get(Ids.Kind.BINDING.id(i.evaluation().context().bindingId())).document(),ControlExecutionBinding.class);var access=new ManagementAccess(codec);
         access.require(tx.load(),actor.userId(),action,Ids.Kind.TOOL_GROUP,b.toolGroupId(),now(tx));access.require(tx.load(),actor.userId(),action,Ids.Kind.DEVICE_GROUP,b.deviceGroupId(),now(tx));
@@ -45,7 +46,7 @@ public final class McpService {
             if(chosen!=null&&!placement().member(tx,c.bindingId(),chosen))throw forbidden();
             // A Gateway caller sees the tools of every device a call could be placed on: a group may mix client devices and
             // Tool Hosts, and placement sends each call to a member that reports the tool.
-            var devices=chosen!=null?List.of(chosen):placement().candidates(tx,c,now);var usage=new HashMap<String,Long>();var tools=new ArrayList<BuiltinToolInfo>();var listed=new HashSet<String>();
+            var devices=chosen!=null?List.of(chosen):placement().candidates(tx,c,now);var usage=new HashMap<String,Long>();var tools=new ArrayList<LocalToolInfo>();var listed=new HashSet<String>();
             for(var placed:devices){
                 if(tx.endpoint(placed)==null)continue;
                 var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))continue;var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));

@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //! `toolgate`: create, run, check and pack tool projects, and validate, digest and pack ToolGate
-//! tool packages offline (plan.md §4, §5.5).
+//! tool packages offline (platform-requirements.md §4, §5.5).
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

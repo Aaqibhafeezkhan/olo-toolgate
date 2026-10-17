@@ -7,7 +7,6 @@ namespace OloLabs\ToolGate\Contracts;
 
 /** Canonical DeviceExecutionKind wire values. */
 enum DeviceExecutionKind: string {
-    case QUICKSTART_CLIENT = 'QUICKSTART_CLIENT';
     case ENDPOINT_CLIENT = 'ENDPOINT_CLIENT';
     case TOOL_HOST_DIRECT = 'TOOL_HOST_DIRECT';
     case TOOL_HOST_PULL = 'TOOL_HOST_PULL';

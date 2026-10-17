@@ -50,6 +50,8 @@ state="$script_dir/.state/$project"
 mkdir -p -- "$state"
 if [[ -n "$ca_file" ]]; then cp -- "$ca_file" "$state/gateway-ca.crt";
 else docker cp "$gateway_container:/data/keys/device-ca.crt" "$state/gateway-ca.crt"; fi
+# The device starts without CAP_DAC_OVERRIDE, so the public certificate must be world-readable.
+chmod 644 -- "$state/gateway-ca.crt"
 export TOOLGATE_GATEWAY_CA_SOURCE="$state/gateway-ca.crt" TOOLGATE_GATEWAY_URLS="$gateway_url"
 export TOOLGATE_SECURED_GATEWAY_IPV4="$gateway_ip" TOOLGATE_SECURED_GATEWAY_PORT="$gateway_port"
 export TOOLGATE_DEVICE_NETWORK="$network" TOOLGATE_SECURED_DEVICE_IMAGE="$image"

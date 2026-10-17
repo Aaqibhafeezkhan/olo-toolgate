@@ -1,9 +1,23 @@
 # Release
 
+For product releases, use the two manual jobs documented in
+[How to release ToolGate](../../docs/development/how-to-release.md):
+`create-release-branch.yml` prepares an immutable source/version, and
+`build-release.yml` builds/tests or publishes its retained bundle. All first-party
+release artifacts share one SemVer such as `1.0.0-beta.42`. Product publication uses
+the `production-release` environment; development publication remains separate.
+
 Release automation, checksums, signing/provenance and GitHub release helpers.
 
-Both Maven publishing jobs support GitHub Packages, standard HTTPS Maven repositories,
-and Sonatype Central. For Central, set the `development-release` environment variable
+Maven publication is disconnected from both development workflows to avoid
+registry publication limits. The reusable `release-maven.yml` workflow and all
+publishing code are retained for compatibility callers. The new product release
+pipeline publishes prepared contracts to Maven and resumes partial uploads safely.
+Java artifacts remain part of the builds and GitHub releases.
+
+The retained Maven publisher supports GitHub Packages, standard HTTPS Maven repositories,
+and Sonatype Central. For product releases, configure `production-release`; legacy
+development/compatibility callers use `development-release`. For Central, set the environment variable
 `MAVEN_REPOSITORY_URL` to `https://central.sonatype.com/api/v1/publisher/upload`.
 Set these environment secrets:
 
@@ -21,9 +35,9 @@ It waits for `PUBLISHED`, reports validation errors, and records the deployment 
 in the job summary. A timeout retains that ID: inspect its Portal status before
 retrying, since Central versions are immutable.
 
-Manual releases sign the downloaded build artifacts. Tagged releases retain their
-checksum and coordinate checks before signing the exact tested artifacts. Main
-development releases build Java artifacts with their unique publication version.
+The retained manual publishing mode signs downloaded build artifacts. Tagged mode
+checks checksums and coordinates before signing the exact tested artifacts. The
+main development publishing mode builds Java artifacts with a unique publication version.
 The contracts POM includes Central's required license, developer and SCM metadata.
 GitHub Packages and other Maven repositories use an isolated Gradle publisher
 of the prepared bytes; no source build is replayed for manual or tagged artifacts.
@@ -32,12 +46,16 @@ The contracts coordinate is `io.github.olo-labs:toolgate-contracts`. Java packag
 names remain unchanged. Update Maven/Gradle dependency declarations from the old
 `io.ololabs.toolgate` group ID.
 
-Reusable workflows `client.yml`, `images.yml`, `release-images.yml` and
-`release-maven.yml` are shared by both entry points. Automatic CI runs tests before
-publishing; manual disables test and smoke steps and publishes its own build output.
+Reusable workflows `client.yml`, `images.yml` and `release-images.yml`
+are shared by both entry points. Automatic CI runs tests without publishing; manual disables test and smoke steps
+and publishes its own build output from any selected branch/ancestor commit.
+See [development release instructions](../../docs/development/development-releases.md).
 The common Docker Hub publisher and GitHub draft-release uploader are used by both
 paths. Draft uploads resume matching files after an interrupted response, and
-the complete file set must match before the release becomes public.
+the complete file set must match before the release becomes public. After draft
+creation, discovery polls up to six times with bounded backoff to allow GitHub's
+release listing to catch up. Missing drafts time out without uploading or
+publishing; authentication errors and identity/asset mismatches still fail closed.
 
 The dedicated signing key's public certificate is in `central-signing-key.asc`.
 Fingerprint: `D9B1F04C5F8D5A2F71399FC440366EFD376915A0`; expires October 14, 2028.

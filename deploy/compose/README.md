@@ -1,6 +1,6 @@
 # Docker Compose deployments
 
-- [QuickStart](QuickStart/README.md): one container, SQLite, vault, built-ins and UI.
+- [QuickStart](QuickStart/README.md): one container, SQLite, vault, Tool Hosts and UI.
 - [GatewayControl](GatewayControl/README.md): Gateway/Control, PostgreSQL and local HTTPS/identity.
 - [QuickStart-WO-Password](QuickStart-WO-Password/README.md): isolated local demo with automatic admin entry.
 

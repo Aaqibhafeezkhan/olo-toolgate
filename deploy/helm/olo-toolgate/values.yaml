@@ -84,6 +84,10 @@ gateway:
     controlPort: 443
 control:
   enabled: false
+  builder:
+    enabled: false
+    # Retain and back up this claim with Control's database. Multiple replicas require shared read/write storage.
+    existingClaim: ''
   approval:
     enabled: false
     pendingTtlMs: 300000
@@ -145,6 +149,8 @@ control:
     collectorTo: []
     artifactTo: []
     marketplaceTo: []
+    # Egress to the client-tool image registry (clientImages); its port comes from clientImages.registryUrl.
+    registryTo: []
   ingress:
     enabled: false
     className: ''
@@ -158,7 +164,7 @@ control:
   developmentMode: false
   clientDownloads:
     enabled: false
-  # Env-owned client check-in (plan.md §17.2), shown read-only in the console. The check-in is
+  # Env-owned client check-in (platform-requirements.md §17.2), shown read-only in the console. The check-in is
   # the job pickup latency for an idle device. offlineAfterMs 0 means max(120000, 6 x checkInMs).
   clientCheckIn:
     checkInMs: 2000
@@ -204,6 +210,25 @@ control:
     baseUrl: ''
     keys: ''
     caSecret: ''
+  # Deployment profile (docs/deployment/profiles.md): a ConfigMap whose profile.json Control applies at startup through
+  # its provisioning service. Empty means no profile.
+  profile:
+    configMap: ''
+  # Client-tool images (ADR 026): the registry Control pushes images to and the approved JRE base mirrored there by
+  # digest. credentialsSecret holds `credentials` (user:secret); caSecret holds `ca.pem` for a private registry CA.
+  clientImages:
+    enabled: false
+    registryUrl: ''
+    repository: ''
+    base: ''
+    platforms: LINUX
+    credentialsSecret: ''
+    caSecret: ''
+  # The package-release key Control signs client releases with (`private.pem`); never the organization (fleet) key.
+  # Without it Control returns the exact release document for an independent release authority.
+  packageRelease:
+    signingSecret: ''
+    keyId: ''
   fleet:
     enabled: false
     keyId: ''

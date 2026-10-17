@@ -2,7 +2,7 @@
 
 Safe example packages, policies and integrations. Never include real credentials.
 
-- [Java example tools](java-tools/README.md): eleven ready-to-run tool packages built with the
+- [Java example tools](java-tools/README.md): twelve ready-to-run tool packages built with the
   Java Tool SDK for everyday operations: run an allowlisted script and return its last lines
   of output, download a file, system health, CPU and processes, log search and error grouping,
   disk usage, endpoint checks, CSV queries, read-only database queries, webhook alerts and

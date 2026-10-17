@@ -26,6 +26,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     ln -s /usr/local/lib/olo-toolgate/olo-toolgate-client /usr/local/bin/olo-toolgate-client && \
     chmod 700 /var/lib/olo-toolgate
 COPY --from=extract /opt/toolgate/client /opt/toolgate/client
+# The container engine CLI the client drives for signed package tools (ADR 026); the engine itself runs elsewhere and is
+# reached only through the socket a deployment mounts. Root-owned, as the client requires of its engine binary.
+COPY --from=docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87e5b47115e3065c /usr/local/bin/docker /usr/bin/docker
 COPY debug/device-entrypoint.py /opt/toolgate/device_entrypoint.py
 COPY debug/device-systemctl.sh /usr/bin/systemctl
 COPY apps/device/entrypoint.py /opt/toolgate/device.py
@@ -36,7 +39,7 @@ COPY --from=release /usr/share/licenses/olo-toolgate/quickstart-rust/ /usr/share
 COPY RELEASE-NOTES.md /usr/share/doc/olo-toolgate/RELEASE-NOTES.md
 RUN chmod 755 /opt/toolgate/client /usr/bin/systemctl
 ENV PYTHONDONTWRITEBYTECODE=1
-HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import json,time; d=json.load(open('/run/olo-toolgate/device-status.json')); assert time.time()*1000-d['updatedAtUnixMs'] < 120000"
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["python", "-u", "/opt/toolgate/device.py"]

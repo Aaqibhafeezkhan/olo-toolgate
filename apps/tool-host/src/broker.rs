@@ -1,22 +1,18 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The broker request channel (plan.md §11.8): one Unix socket per invocation. The tool selects
-//! among the routes its permit grants; the broker builds the upstream request from the approved
-//! service profile, injects credentials last, and never returns them.
+//! The Tool Host side of the broker in tool protocol v2, the one protocol every executor speaks (ADR 027): the tool
+//! writes a `BROKER_REQUEST` frame on stdout and the host answers with one `BROKER_RESPONSE` line on stdin. The tool
+//! selects among the routes its permit grants; the broker builds the upstream request from the approved service
+//! profile, injects credentials last, and never returns them.
 //!
-//! `POST /v1/call` takes the route call in the recorded-exchange shape of the SDKs' test mode
-//! (spec/authoring/testing.md): `route`, `method`, `destination`, `variables`, `query`,
-//! `headers`, `contentType` and the body as `body` (JSON), `bodyText` or `bodyBase64`. It answers
-//! `{status, headers, bodyBase64}`, `{failure}` when the call failed in flight, or `{refused}`
-//! when the broker would not send it. `POST /v1/secrets` redeems a secret handle.
+//! `ROUTE_CALL` takes the route call in the recorded-exchange shape of the SDKs' test mode (spec/authoring/testing.md):
+//! `route`, `method`, `destination`, `variables`, `query`, `headers`, `contentType` and the body as `body` (JSON),
+//! `bodyText` or `bodyBase64`. Its result is `{status, headers, bodyBase64}`, `{failure}` when the call failed in flight,
+//! or `{refused}` when the broker would not send it. `SECRET_REDEEM` redeems a secret handle. Device-file operations
+//! are refused: a Tool Host has no device files.
 
 use crate::control::Control;
 use crate::egress::{self, AddressPolicy, AddressRefused};
-use axum::extract::State;
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
-use axum::routing::post;
-use axum::{Json, Router};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use olo_toolgate_contracts::v2::PrivateRangeApproval;
@@ -29,10 +25,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use subtle::ConstantTimeEq;
 
-pub const CAPABILITY_HEADER: &str = "toolgate-capability";
-const MAX_REQUEST: usize = 2 * 1024 * 1024;
 /// Request headers a tool may never set, whatever the route allows (§11.8.5).
 const FORBIDDEN: [&str; 10] = [
     "authorization",
@@ -58,7 +51,6 @@ const STRIPPED: [&str; 4] = [
 pub struct Invocation {
     pub invocation_id: String,
     pub fencing_token: String,
-    pub capability: String,
     pub deadline_unix_ms: u64,
     /// The permit's routes as the service profile approves them.
     pub routes: Vec<RouteDeclaration>,
@@ -80,7 +72,6 @@ impl Invocation {
     pub fn new(
         invocation_id: String,
         fencing_token: String,
-        capability: String,
         deadline_unix_ms: u64,
         routes: Vec<RouteDeclaration>,
         destinations: Vec<ServiceDestination>,
@@ -94,7 +85,6 @@ impl Invocation {
         Invocation {
             invocation_id,
             fencing_token,
-            capability,
             deadline_unix_ms,
             routes,
             destinations,
@@ -110,72 +100,52 @@ impl Invocation {
     }
 }
 
-pub fn router(invocation: Arc<Invocation>) -> Router {
-    Router::new()
-        .route("/v1/call", post(call))
-        .route("/v1/secrets", post(secret))
-        .layer(axum::extract::DefaultBodyLimit::max(MAX_REQUEST))
-        .with_state(invocation)
-}
-
-/// Serves the broker on `listener` until the invocation ends.
-pub async fn serve(
-    listener: tokio::net::UnixListener,
-    invocation: Arc<Invocation>,
-    shutdown: tokio::sync::oneshot::Receiver<()>,
-) {
-    let _ = axum::serve(listener, router(invocation))
-        .with_graceful_shutdown(async {
-            let _ = shutdown.await;
-        })
-        .await;
-}
-
 fn refused(reason: impl Into<String>) -> Value {
     json!({ "refused": reason.into() })
 }
 
-/// The capability and invocation checks every request passes first: the refusal, or none.
-fn admit(invocation: &Invocation, headers: &HeaderMap) -> Option<Response> {
-    let presented = headers
-        .get(CAPABILITY_HEADER)
-        .map(|v| v.as_bytes())
+/// The `BROKER_RESPONSE` for one `BROKER_REQUEST` frame of this invocation.
+pub async fn answer(invocation: &Invocation, frame: &Value) -> Value {
+    let id = frame
+        .get("requestId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let empty = json!({});
+    let request = frame.get("request").unwrap_or(&empty);
+    let operation = frame
+        .get("operation")
+        .and_then(Value::as_str)
         .unwrap_or_default();
-    if !bool::from(presented.ct_eq(invocation.capability.as_bytes())) {
-        return Some(
-            (
-                StatusCode::FORBIDDEN,
-                Json(refused(
-                    "the broker capability is not valid for this socket",
-                )),
-            )
-                .into_response(),
-        );
+    let outcome = if invocation.closed.load(Ordering::SeqCst)
+        || crate::now_ms() >= invocation.deadline_unix_ms
+    {
+        Err("the invocation has ended".to_string())
+    } else {
+        match operation {
+            "ROUTE_CALL" => Ok(call(invocation, request).await),
+            "SECRET_REDEEM" => secret(invocation, request).await,
+            o if o.starts_with("FILES_") => {
+                Err("device files are not available on a Tool Host".into())
+            }
+            _ => Err("unknown broker operation".into()),
+        }
+    };
+    match outcome {
+        Ok(result) => json!({"kind": "BROKER_RESPONSE", "requestId": id, "result": result}),
+        Err(message) => json!({"kind": "BROKER_RESPONSE", "requestId": id,
+            "error": {"code": "BROKER_REFUSED", "message": message, "retryable": false}}),
     }
-    if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
-        return Some((StatusCode::OK, Json(refused("the invocation has ended"))).into_response());
-    }
-    None
 }
 
-async fn secret(
-    State(invocation): State<Arc<Invocation>>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Response {
-    if let Some(response) = admit(&invocation, &headers) {
-        return response;
-    }
+async fn secret(invocation: &Invocation, body: &Value) -> Result<Value, String> {
     let handle = body
         .get("handle")
         .and_then(Value::as_str)
         .unwrap_or_default();
     let Some(name) = invocation.secret_handles.get(handle) else {
-        audit_secret(&invocation, "", "refused");
-        return Json(refused(
-            "the secret handle is not valid for this invocation",
-        ))
-        .into_response();
+        audit_secret(invocation, "", "refused");
+        return Err("the secret handle is not valid for this invocation".into());
     };
     match invocation
         .control
@@ -183,20 +153,17 @@ async fn secret(
         .await
     {
         Ok(value) => {
-            audit_secret(&invocation, name, "delivered");
+            audit_secret(invocation, name, "delivered");
             let typed = invocation
                 .secrets
                 .iter()
                 .find(|s| &s.name == name)
                 .map(|s| s.r#type.clone());
-            Json(json!({ "value": typed_secret(value, typed) })).into_response()
+            Ok(json!({ "value": typed_secret(value, typed) }))
         }
         Err(e) => {
-            audit_secret(&invocation, name, "refused");
-            Json(refused(format!(
-                "Control did not deliver secret {name}: {e:?}"
-            )))
-            .into_response()
+            audit_secret(invocation, name, "refused");
+            Err(format!("Control did not deliver secret {name}: {e:?}"))
         }
     }
 }
@@ -215,21 +182,14 @@ fn audit_secret(invocation: &Invocation, name: &str, decision: &str) {
     tracing::info!(target: "toolgate::audit", invocation_id = %invocation.invocation_id, secret = name, decision, "broker secret");
 }
 
-async fn call(
-    State(invocation): State<Arc<Invocation>>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Response {
-    if let Some(response) = admit(&invocation, &headers) {
-        return response;
-    }
+async fn call(invocation: &Invocation, body: &Value) -> Value {
     let started = Instant::now();
     let route_id = body
         .get("route")
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let (reply, status, bytes, upstream_id) = match send(&invocation, &body).await {
+    let (reply, status, bytes, upstream_id) = match send(invocation, body).await {
         Ok(Sent {
             reply,
             status,
@@ -260,7 +220,7 @@ async fn call(
         decision,
         "broker call"
     );
-    Json(reply).into_response()
+    reply
 }
 
 struct Sent {

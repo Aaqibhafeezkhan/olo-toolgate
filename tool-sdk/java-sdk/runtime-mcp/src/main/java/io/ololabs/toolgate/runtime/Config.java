@@ -38,12 +38,19 @@ final class Config {
     final Mode mode;
     final Map<String, String> env;
     final JsonNode devJson;
+    io.ololabs.toolgate.sdk.ExecutionLocation location = io.ololabs.toolgate.sdk.ExecutionLocation.SERVER;
+    java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> responses;
+    String governedInvocationId;
+    java.time.Instant governedDeadline;
+    /** The device files area: the executor broker on a device; outside one, an in-memory area that starts empty. */
+    io.ololabs.toolgate.sdk.context.DeviceFiles deviceFiles;
     final List<String> warnings = new ArrayList<>();
 
     private Config(Mode mode, Map<String, String> env, JsonNode devJson) {
         this.mode = mode;
         this.env = env;
         this.devJson = devJson;
+        if (mode != Mode.GOVERNED) this.deviceFiles = new InMemoryDeviceFiles();
     }
 
     static Config load(Map<String, String> env, Path workingDirectory) {

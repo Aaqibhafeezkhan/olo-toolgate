@@ -255,19 +255,19 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
 
     def test_publishers_can_run_when_any_sibling_publisher_fails(self):
         for name,prerequisite,expected in (
-                ('development-release','prepare',{'publish','publish-maven'}),
-                ('manual-development-release','build',{'publish','publish-typescript','publish-maven'})):
+                ('development-release','prepare',{'publish'}),
+                ('manual-development-release','build',{'publish','publish-typescript'})):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
             publishers={key for key in jobs if key.startswith('publish')}
             self.assertEqual(publishers,expected)
             for failed in publishers:
                 # GitHub only considers each job's needs when a sibling fails.
-                outcomes={prerequisite:'success',failed:'failure'}
+                outcomes={prerequisite:'success', 'select':'success', failed:'failure'}
                 for sibling in publishers-{failed}:
                     with self.subTest(workflow=name,failed=failed,sibling=sibling):
                         needs=jobs[sibling]['needs']
                         if isinstance(needs,str):needs=[needs]
-                        self.assertEqual(needs,[prerequisite])
+                        self.assertEqual(needs, ['select',prerequisite] if name == 'manual-development-release' else [prerequisite])
                         self.assertTrue(all(outcomes.get(parent)=='success' for parent in needs))
                         self.assertNotIn('needs.',jobs[sibling]['if'])
                         body=yaml.safe_load((ROOT/jobs[sibling]['uses'][2:]).read_text())['jobs']['publish']
@@ -287,10 +287,9 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         self.assertIn('maven_version="$(cat build/development/MAVEN_VERSION)"',step['run'])
         self.assertIn('"-PcontractsPublicationVersion=$maven_version"',step['run'])
         self.assertNotIn('version.py --set',step['run'])
-        for name,manual in (('development-release',False),('manual-development-release',True)):
+        for name in ('development-release','manual-development-release'):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
-            self.assertEqual(jobs['publish-maven']['uses'],'./.github/workflows/release-maven.yml')
-            self.assertIs(jobs['publish-maven']['with']['manual'],manual)
+            self.assertNotIn('MAVEN_REPOSITORY_URL',json.dumps(jobs))
         other=yaml.safe_load((ROOT/'.github/workflows/release-images.yml').read_text())['jobs']['publish']
         self.assertNotIn('MAVEN_REPOSITORY_URL',json.dumps(other))
 
@@ -303,10 +302,10 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         self.assertNotIn('needs',maven)
         for name,prerequisite in (('development-release','prepare'),('manual-development-release','build')):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())['jobs']
-            self.assertEqual(jobs['publish']['needs'],prerequisite)
+            self.assertEqual(jobs['publish']['needs'], ['select',prerequisite] if name == 'manual-development-release' else prerequisite)
             self.assertNotIn('publish-maven',jobs['publish']['if'])
 
-    def test_parallel_publishers_receive_prepared_packages_and_images(self):
+    def test_retained_publishers_can_consume_prepared_packages_and_images(self):
         for workflow,preparation,prefix,output in (
                 ('development-release','prepare','verified-release','build/development'),
                 ('manual-development-release','build','manual-development','build/manual-development')):
@@ -315,10 +314,11 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
             if 'uses' in prepared:prepared=yaml.safe_load((ROOT/prepared['uses'][2:]).read_text())['jobs']['verify']
             uploads={s['with']['name']:s['with'] for s in prepared['steps']
                      if s.get('uses','').startswith('actions/upload-artifact@')}
-            for publisher in ('publish','publish-maven'):
-                body=yaml.safe_load((ROOT/jobs[publisher]['uses'][2:]).read_text())['jobs']['publish']
+            for publisher in ('release-images','release-maven'):
+                body=yaml.safe_load((ROOT/'.github/workflows'/f'{publisher}.yml').read_text())['jobs']['publish']
                 for step in body['steps']:
                     if not step.get('uses','').startswith('actions/download-artifact@'):continue
+                    if 'artifact-ids' in step.get('with',{}):continue
                     download=dict(step['with'])
                     for field in ('name','path'):
                         if download[field].startswith('${{ inputs.manual'):
@@ -329,7 +329,7 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
                         self.assertTrue(download['path'].startswith(output))
                         self.assertEqual(uploads[download['name']]['if-no-files-found'],'error')
             image_body=yaml.safe_load((ROOT/jobs['publish']['uses'][2:]).read_text())['jobs']['publish']
-            maven_body=yaml.safe_load((ROOT/jobs['publish-maven']['uses'][2:]).read_text())['jobs']['publish']
+            maven_body=yaml.safe_load((ROOT/'.github/workflows/release-maven.yml').read_text())['jobs']['publish']
             self.assertIn(prefix+'-images',json.dumps(image_body))
             self.assertNotIn(prefix+'-images',json.dumps(maven_body))
 

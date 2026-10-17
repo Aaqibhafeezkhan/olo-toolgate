@@ -29,11 +29,11 @@ public final class FleetService {
     private static String releaseId(String packageId,String version){return DirectoryService.digest(packageId+"\n"+version);}
     private void permission(Store.Session tx,DirectoryService.Actor actor,String action,FleetPackageDocument document){
         var access=new ManagementAccess(codec);var graph=tx.load();
-        for(var tool:document.tools())access.requireEntry(graph,actor.userId(),action,codec.entry(Ids.Kind.TOOL,codec.json(tool.authorizationProfile().tool())),clock.millis());
+        for(var tool:document.tools())access.requireEntry(graph,actor.userId(),"package."+action,codec.entry(Ids.Kind.TOOL,codec.json(tool.authorizationProfile().tool())),clock.millis());
     }
     private void rolloutPermission(Store.Session tx,DirectoryService.Actor actor,String action,FleetRolloutRecord rollout){
         permission(tx,actor,action,crypto.release(release(tx,rollout.packageId(),rollout.version()).release()).model());
-        for(var member:rollout.members())endpoints.management(tx,actor,action,member.deviceId());
+        for(var member:rollout.members())endpoints.management(tx,actor,"package."+action,member.deviceId());
     }
     private FleetPackageRelease release(Store.Session tx,String packageId,String version){var row=tx.fleet().get(RELEASE,releaseId(packageId,version));if(row==null)throw Failure.conflict();return codec.model(row.document(),FleetPackageRelease.class);}
     public Store.Reply publish(DirectoryService.Actor actor,String body,String key,String requestId){
@@ -54,7 +54,7 @@ public final class FleetService {
     public static void validatePackage(FleetPackageDocument document){
         var runtimes=new HashSet<String>();for(var runtime:document.runtimes())if(!runtimes.add(runtime.id()))throw Failure.validation();
         var tools=new HashSet<String>();for(var tool:document.tools())if(!tools.add(tool.toolId())||!runtimes.contains(tool.runtimeId()))throw Failure.validation();
-        for(var tool:document.tools()){var runtime=document.runtimes().stream().filter(r->r.id().equals(tool.runtimeId())).findFirst().orElseThrow(Failure::validation);BuilderValidation.source(runtime,tool);InstalledProfiles.validate(tool,runtime);}
+        for(var tool:document.tools()){var runtime=document.runtimes().stream().filter(r->r.id().equals(tool.runtimeId())).findFirst().orElseThrow(Failure::validation);InstalledProfiles.validate(tool,runtime);}
         var tested=new HashSet<String>();for(var test:document.selfTests())if(!tools.contains(test.toolId())||!tested.add(test.toolId()))throw Failure.validation();
         if(!tested.equals(tools)||new HashSet<>(document.platforms()).size()!=document.platforms().size()
             ||new HashSet<>(document.architectures()).size()!=document.architectures().size())throw Failure.validation();
@@ -97,7 +97,7 @@ public final class FleetService {
         admin(actor);Ids.valid(key);Ids.valid(requestId);var request=codec.model(body,FleetRolloutRequest.class);
         if(new HashSet<>(request.deviceIds()).size()!=request.deviceIds().size())throw Failure.validation();
         var digest=DirectoryService.digest("fleet.rollout\n"+body);
-        return store.transaction(tenant,true,tx->{long now=now(tx);permission(tx,actor,"deploy",crypto.release(release(tx,request.packageId(),request.version()).release()).model());for(var device:request.deviceIds())endpoints.management(tx,actor,"deploy",device);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
+        return store.transaction(tenant,true,tx->{long now=now(tx);permission(tx,actor,"deploy",crypto.release(release(tx,request.packageId(),request.version()).release()).model());for(var device:request.deviceIds())endpoints.management(tx,actor,"package.deploy",device);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
             if(tx.fleet().count(ROLLOUT)>=256)throw Failure.conflict();
             for(var id:request.deviceIds())active(tx,id);
             var members=request.deviceIds().stream().sorted(Comparator.comparing(id->DirectoryService.digest(request.id()+"\n"+id))).map(id->new FleetRolloutMember(id,0L)).toList();
@@ -105,6 +105,24 @@ public final class FleetService {
             tx.fleet().save(ROLLOUT,new FleetStore.Row(rollout.id(),1,codec.json(rollout)),0);
             tx.audit(actor.id(),"PACKAGE_ASSIGN",rollout.id(),1,requestId,digest);var result=reply(rollout,1);tx.remember(actor.id(),key,digest,result);return result;
         });
+    }
+    /** Deployment profiles: the active, approved devices in any of these enabled device groups, and which of them already
+     *  hold this release. Observations only; rollouts still go through {@link #rollout} with the actor's permissions. */
+    public record GroupTargets(List<String> members,List<String> assigned){}
+    public GroupTargets targets(DirectoryService.Actor actor,String packageId,String version,Collection<String> groups){
+        admin(actor);
+        return store.transaction(tenant,false,tx->{var directory=tx.load();var members=new TreeSet<String>();var assigned=new TreeSet<String>();
+            for(var group:groups){var entry=directory.entries().get(Ids.Kind.DEVICE_GROUP.id(group));if(entry==null||!entry.enabled())continue;
+                for(var id:GroupGraph.members(entry,codec)){var row=tx.endpoint(id);if(row==null)continue;
+                    try{endpoints.active(tx,codec.model(row.document(),EndpointDeviceRecord.class));}catch(Failure inactive){continue;}
+                    members.add(id);
+                    if(snapshot(tx,id).assignments().stream().anyMatch(a->a.desiredPresence()&&a.release().packageId().equals(packageId)&&a.release().version().equals(version)))assigned.add(id);}}
+            return new GroupTargets(List.copyOf(members),List.copyOf(assigned));});
+    }
+    /** The verified document of a recorded release, or null when none is recorded. */
+    public FleetPackageDocument document(DirectoryService.Actor actor,String packageId,String version){
+        admin(actor);
+        return store.transaction(tenant,false,tx->{var row=tx.fleet().get(RELEASE,releaseId(packageId,version));return row==null?null:crypto.release(codec.model(row.document(),FleetPackageRelease.class).release()).model();});
     }
     public Store.Reply advance(DirectoryService.Actor actor,String id,String body,String key,String requestId){
         admin(actor);Ids.valid(id);Ids.valid(key);Ids.valid(requestId);var request=codec.model(body,FleetRolloutAdvance.class);var digest=DirectoryService.digest("fleet.advance\n"+id+"\n"+body);
@@ -142,7 +160,7 @@ public final class FleetService {
         if(user==null)throw forbidden();
         var actor=new DirectoryService.Actor(tenant,DirectoryService.digest("queued\n"+user),true,false,user);
         permission(tx,actor,"deploy",crypto.release(assignment.release().release()).model());
-        endpoints.management(tx,actor,"deploy",device);
+        endpoints.management(tx,actor,"package.deploy",device);
     }
     public Store.Reply desired(X509Certificate peer){available();return store.transaction(tenant,true,tx->{long now=now(tx);var device=endpoints.authenticate(tx,peer,now);var row=tx.fleet().get(DESIRED,device.deviceId());
         if(row==null){var initial=snapshot(tx,device.deviceId());tx.fleet().save(DESIRED,new FleetStore.Row(device.deviceId(),1,codec.json(initial)),0);}

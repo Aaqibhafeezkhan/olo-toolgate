@@ -1,167 +1,53 @@
 # Contributing to OLO ToolGate
 
-Thank you for helping build ToolGate.
+Start with the [development guide](docs/development/README.md), the
+[component map](docs/architecture/component-map.md), and your component's README.
+You do not need to understand the entire platform to fix one issue.
 
-You do not need to understand the whole system before contributing.
+## Set up and choose work
 
-## Start in 60 Seconds
-
-```bash
+```sh
 git clone https://github.com/olo-labs/olo-toolgate.git
 cd olo-toolgate
-make dev
 ```
 
-The repository should keep `make dev` working as the single supported contributor bootstrap.
+Follow the [implemented setup and verification commands](docs/development/README.md).
+`make dev` is still a scaffold; it does not start the application.
+Use [good first contributions](docs/contributors/good-first-contributions.md)
+or the [pending-feature backlog](docs/planning/README.md) to choose a focused task.
+Discuss large changes in an issue before implementation.
 
-Then:
+## Design and implementation
 
-```bash
-make check
-```
+- Keep authorization, administration and execution responsibilities within the
+  [documented boundaries](ARCHITECTURE.md). Create an [ADR](docs/adr/README.md)
+  before changing trust, cryptography, package formats, persistence or public compatibility.
+- Put cross-component contracts in `packages/contracts/schemas/` and OpenAPI in
+  `packages/contracts/openapi/`. Regenerate bindings through the
+  [schema workflow](docs/development/schema-workflow.md).
+- Follow the existing component style. Keep changes focused and independently reviewable.
+- Preserve [security invariants](docs/security/security-invariants.md). Policy
+  errors, unavailable authority, malformed input and invalid signatures must not grant access.
+- Keep credentials, private data and local machine state out of examples and logs.
 
-before opening a pull request.
+## Before a pull request
 
-## Pick Your Area
+- Run the relevant [verification commands](docs/testing/README.md), including
+  `python tools/check.py` for the full repository check. Java changes also use
+  `./gradlew javaCheck` (`gradlew.bat javaCheck` on Windows).
+- Add or update tests for changed behavior; cover integration and actual denied
+  effects when crossing a trust boundary.
+- Update generated contracts and document compatibility or migration impact.
+- Update the user/operator guide in the same change. Use the
+  [documentation guide](docs/contributors/documentation-guide.md).
+- Explain what changed, why, and which checks passed. Identify checks not run.
 
-| Area | Primary stack | Start here |
-|---|---|---|
-| Gateway | Rust | `apps/gateway` |
-| Control Plane | Java | `apps/control-plane` |
-| Admin UI | React / TypeScript | `apps/admin-ui` |
-| Endpoint Client | Rust | `apps/endpoint-client` |
-| Marketplace API | Java | `apps/marketplace-api` |
-| Marketplace Worker | Java | `apps/marketplace-worker` |
-| Marketplace Website | Drupal / PHP | `apps/marketplace-drupal` |
-| Shared schemas | JSON Schema/OpenAPI | `packages/contracts/schemas` |
-| Documentation | Markdown | `docs` |
+For security review, examine malformed input, dependency outages, permission
+expansion, credential disclosure and signature bypass. An approval or healthy
+device must never substitute for current runtime permission.
 
-## Before Coding
+## Community
 
-Read:
-
-1. [`ARCHITECTURE.md`](ARCHITECTURE.md)
-2. [`docs/architecture/component-map.md`](docs/architecture/component-map.md)
-3. Relevant component README.
-4. [`docs/security/security-invariants.md`](docs/security/security-invariants.md) for security-sensitive changes.
-
-## Contribution Types
-
-Welcome:
-
-- bug fixes
-- tests
-- performance work
-- security hardening
-- UI/UX improvements
-- documentation
-- new Vault adapters
-- new resource extractors
-- new local runtimes
-- Marketplace improvements
-- deployment tooling
-- example packages
-
-## Architecture Rule
-
-Before moving responsibility between components, changing the trust model, cryptography, package format, policy semantics, or public API compatibility:
-
-> Create an ADR first.
-
-Template:
-
-```text
-docs/adr/000-template.md
-```
-
-## Security Rule
-
-Never make a security failure silently become `ALLOW`.
-
-Examples:
-
-```text
-policy error        -> BLOCK
-approval unavailable -> BLOCK
-credential unavailable -> fail request
-invalid signature   -> reject
-unknown package     -> reject
-```
-
-## Schema Rule
-
-Cross-component contracts live under:
-
-```text
-packages/contracts/schemas/
-```
-
-Do not independently invent equivalent Rust/Java/TypeScript structures.
-
-## Pull Request Checklist
-
-Run:
-
-```bash
-make check
-```
-
-For Java/Gradle changes also run:
-
-```bash
-./gradlew javaCheck
-```
-
-Then verify:
-
-- [ ] tests added or updated
-- [ ] docs updated
-- [ ] security implications reviewed
-- [ ] no credentials or private data in logs/examples
-- [ ] schema changes are versioned
-- [ ] generated bindings are current
-- [ ] compatibility impact documented
-- [ ] cross-component change has integration/E2E coverage
-
-## Pull Requests
-
-Keep PRs:
-
-- focused
-- reviewable
-- documented
-- independently testable
-
-Large features should be split into a sequence of working changes.
-
-## Commit Messages
-
-Prefer:
-
-```text
-gateway: add resource extractor cache
-client: verify deployment generation
-marketplace: add package advisory endpoint
-docs: explain endpoint trust chain
-```
-
-## Discussions Before Large Work
-
-Open a GitHub Discussion or issue before spending significant time on:
-
-- new subsystem
-- major dependency
-- new package runtime
-- new persistent service
-- public API redesign
-- cryptographic change
-
-This avoids parallel incompatible implementations.
-
-## Contributor Conduct
-
-By participating, you agree to [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
-
-## Need Help?
-
-See [`SUPPORT.md`](SUPPORT.md) or open a GitHub Discussion.
+Use descriptive commit subjects such as `gateway: reject stale authority` or
+`docs: explain device enrollment`. Follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+See [Support](SUPPORT.md) for help and [Security](SECURITY.md) for vulnerability reports.

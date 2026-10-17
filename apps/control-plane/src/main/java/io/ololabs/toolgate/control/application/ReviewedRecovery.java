@@ -15,6 +15,12 @@ public final class ReviewedRecovery {
     private final Store store;private final Codec codec;private final Clock clock;
     public ReviewedRecovery(Store store,Codec codec,Clock clock){this.store=store;this.codec=codec;this.clock=clock;}
     public void apply(String document,List<FleetTrustKey> trust){
+        // A committed receipt is an exact no-op, not permission-rule compatibility.
+        // Old signed installation packets must not be decoded or re-applied after a schema upgrade.
+        var envelope=(com.fasterxml.jackson.databind.JsonNode)codec.value(document);
+        var receiptTenant=new Ids.TenantId(envelope.path("authorization").path("tenantId").asText());
+        var receiptDigest=DirectoryService.digest(codec.json(envelope));
+        if(store.transaction(receiptTenant,false,tx->tx.enterprise().recoveryApplied(receiptDigest)))return;
         var packet=codec.model(document,EnterpriseReviewedRecovery.class);var authorization=packet.authorization();
         var tenant=new Ids.TenantId(authorization.tenantId());
         var digest=DirectoryService.digest(codec.json(packet));
@@ -52,7 +58,8 @@ public final class ReviewedRecovery {
             // Fresh installations include dormant presets. Recovery never restores or changes existing runtime rights.
             if(initial)StandardAccessPresets.install(entries,codec);
             var after=new Directory(before.revision()+1,entries);after.validate(512,1048576);codec.validatePolicies(after);
-            boolean recovery=after.entries().values().stream().filter(e->e.id().kind()==Ids.Kind.USER&&e.enabled()).anyMatch(e->{var access=new ManagementAccess(codec).access(after,e.id().value());return access.portalRole()==UserRole.SUPER_ADMIN&&GroupGraph.DEFAULTS.keySet().stream().allMatch(kind->access.grants().stream().anyMatch(rule->rule.groupType().name().equals(kind.name())&&rule.groups().all()&&rule.actions().contains("recover")&&ManagementAccess.current(rule.conditions(),now)));});
+            var access=new ManagementAccess(codec);
+            boolean recovery=after.entries().values().stream().filter(e->e.id().kind()==Ids.Kind.USER&&e.enabled()).anyMatch(e->access.superAdministrator(after,e.id().value()));
             if(!recovery)throw ManagementAccess.denied();
             if(initial){var management=new ManagementAccess(codec);var first=authorization.snapshot().users().stream().filter(ControlUser::enabled).filter(user->management.superAdministrator(after,user.id())).findFirst().orElseThrow(ManagementAccess::denied);tx.protectBootstrapAdmin(first.id());}
             tx.save(before,after);tx.enterprise().rememberRecovery(digest);

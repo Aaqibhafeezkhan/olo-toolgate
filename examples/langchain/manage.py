@@ -382,10 +382,6 @@ def provision(args):
     print(f'Selected {selection["platform"]}: {device} from {DEVICE_GROUP}', flush=True)
     wait_device(config, device)
     check_extractors(config, selection)
-    for profile in selected:
-        config.upsert('extractors', profile['extractor'])
-        config.upsert('tools', profile['tool'])
-        config.memberships('tools', profile['tool']['id'], ['ReadAndWriteToolGroup'])
     name = 'langchain-' + args.target
     agent = name + '-agent'
     workload = name + '-workload'
@@ -455,7 +451,9 @@ def main():
     args = parser.parse_args()
     STATE.mkdir(mode=0o700, exist_ok=True)
     if args.command == 'setup':
-        provision(args)
+        # Tools come only from installed packages (ADR 027); this example has no package-install flow yet.
+        raise ValueError("This example used the client's former built-in tools, which no longer exist. It needs a "
+                         "package-upload and client-release flow for examples.hotfolder before it runs again (README.md).")
     elif args.command == 'verify-deployment':
         verify_deployment(args.target)
         print('Saved deployment matches the current Gateway trust and selected device.')

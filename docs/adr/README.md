@@ -1,5 +1,12 @@
 # Architecture Decision Records
 
+ADRs preserve decision history; an accepted design is not proof of implementation.
+The current runtime model is described in [the overview](../architecture/overview.md).
+Older Gateway static evaluation, bundle authority and Gateway permit-signing
+descriptions in ADRs 002, 005 and 006 are superseded by Control's online authority
+and [ADR 013](013-tool-host-egress-broker-secrets.md). Read amendments before applying
+a historical decision. Remaining implementation is tracked in [planning](../planning/README.md).
+
 Create an ADR when changing:
 
 - component responsibility.
@@ -22,10 +29,10 @@ Use `000-template.md`.
 
 - [006: Durable exact-operation ASK approvals and single-use permits](006-ask-approvals.md)
 - [007: Protected endpoint identity and browser enrollment](007-endpoint-enrollment.md)
-- [008: Capability-scoped built-ins and anonymous client distribution](008-hotfolder-builtins.md)
+- [008: Capability-scoped built-ins and anonymous client distribution](008-hotfolder-builtins.md) (superseded by 027)
 - [009: Managed runtimes execute in a disposable OCI sandbox](009-managed-local-runtime-sandbox.md)
 - [010: Signed fleet generations and immutable OCI package descriptors](010-signed-fleet-reconciliation.md)
-- [011: Signed source authoring and designated-client sandbox tests](011-designated-client-tool-authoring.md)
+- [011: SDK package authoring and isolated builds](011-designated-client-tool-authoring.md)
 - [012: Client MCP requests delivered by polling](012-client-mcp-polling-relay.md)
 - [012a: Single-node Quickstart composition](012a-single-node-quickstart.md)
 - [013: Tool Host, permits, egress broker, secrets and transports](013-tool-host-egress-broker-secrets.md)
@@ -39,3 +46,8 @@ Use `000-template.md`.
 - [021: Client check-in settings and the Configuration menu](021-client-checkin-configuration-menu.md)
 - [022: Super Administrator review exception](022-super-administrator-review-exception.md)
 - [023: Server-directed device presence and reenrollment](023-server-directed-device-presence.md)
+
+- [024: Single CI gate ownership](024-single-ci-gate-ownership.md)
+- [025: Unified tagged and development publication](025-unified-tagged-and-development-publication.md)
+- [026: Client-tool OCI images built and released by Control](026-client-tool-images.md)
+- [027: One tool protocol, brokered over stdio, with a generic device files area](027-one-tool-protocol-device-files.md)

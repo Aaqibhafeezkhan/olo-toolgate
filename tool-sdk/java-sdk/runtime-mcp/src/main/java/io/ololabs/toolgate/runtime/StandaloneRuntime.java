@@ -166,6 +166,14 @@ public final class StandaloneRuntime implements ToolCatalog {
         return start(loader, Config.test(fixtures), exchanges, workingDirectory, diagnostics, null);
     }
 
+    /** Test mode with a device files double, for ClientTools declared with {@code @DeviceFileAccess}. */
+    public static StandaloneRuntime startTest(ClassLoader loader, JsonNode fixtures, TestExchanges exchanges, Path workingDirectory,
+            PrintStream diagnostics, io.ololabs.toolgate.sdk.context.DeviceFiles files) {
+        Config config = Config.test(fixtures);
+        if (files != null) config.deviceFiles = files;
+        return start(loader, config, exchanges, workingDirectory, diagnostics, null);
+    }
+
     /**
      * Governed mode (Governed): one invocation under a Tool Host, with the host's values and claims in {@code config}
      * and every route call sent to the host's broker through {@code broker}.
@@ -188,11 +196,13 @@ public final class StandaloneRuntime implements ToolCatalog {
         Map<String, JsonNode> globalDeclarations = new TreeMap<>();
         for (JsonNode entry : index.path("tools")) {
             Tool tool = runtime.load(loader, entry);
+            if (tool == null) continue;
             for (JsonNode g : tool.descriptor.path("variables").path("globals")) globalDeclarations.putIfAbsent(g.path("name").asText(), g);
             if (runtime.byMcpName.put(tool.mcpName, tool) != null) {
                 throw new StartupRefused("CONFIGURATION", "two tools share the MCP name " + tool.mcpName);
             }
         }
+        if (runtime.byMcpName.isEmpty()) throw new StartupRefused("CLIENT_TOOLS_UNAVAILABLE", "The package has no tools eligible for this execution target");
         List<JsonNode> destinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("destinations").forEach(destinations::add);
         runtime.egress = Egress.resolve(config, destinations, diagnostics);
@@ -200,7 +210,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         List<JsonNode> tcpDestinations = new ArrayList<>();
         for (Tool tool : runtime.byMcpName.values()) tool.descriptor.path("tcp").forEach(tcpDestinations::add);
         runtime.egress.resolveTcp(config, tcpDestinations, diagnostics);
-        // Under a Tool Host, Control reserves business keys (plan.md §12.3), so the local store is not used.
+        // Under a Tool Host, Control reserves business keys (platform-requirements.md §12.3), so the local store is not used.
         if (config.mode == Config.Mode.GOVERNED) runtime.byMcpName.values().forEach(t -> t.reserves = false);
         if (runtime.byMcpName.values().stream().anyMatch(t -> t.reserves)) runtime.reservations = openReservations(env, workingDirectory);
         Map<String, JsonNode> globals = runtime.resolveGlobals(globalDeclarations);
@@ -343,9 +353,7 @@ public final class StandaloneRuntime implements ToolCatalog {
         JsonNode d = tool.descriptor;
         tool.toolId = d.path("toolId").asText();
         tool.mcpName = d.path("mcpName").asText();
-        if (d.path("kind").asText().equals("CLIENT")) {
-            throw new StartupRefused("CLIENT_TOOLS_UNAVAILABLE", "client tool " + tool.toolId + " needs endpoint device services, which this standalone runtime does not have");
-        }
+        if (config.mode != Config.Mode.TEST && !config.location.allows(d.path("kind").asText())) return null;
         tool.businessKey = d.path("businessKey");
         tool.reserves = tool.businessKey.path("required").asBoolean() || tool.businessKey.hasNonNull("argument");
         if (config.mode == Config.Mode.PRODUCTION && verifier == null && needsIdentity(d)) {
@@ -562,7 +570,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     public JsonNode tools(RequestMeta meta) {
         ArrayNode tools = JSON.arrayNode();
         for (Tool t : byMcpName.values()) {
-            if (t.async && !meta.declares(RequestMeta.TASKS)) continue; // never offer work the client cannot collect (plan.md §12.5)
+            if (t.async && !meta.declares(RequestMeta.TASKS)) continue; // never offer work the client cannot collect (platform-requirements.md §12.5)
             JsonNode d = t.descriptor;
             ObjectNode tool = tools.addObject();
             tool.put("name", t.mcpName);
@@ -606,7 +614,7 @@ public final class StandaloneRuntime implements ToolCatalog {
     }
 
     /**
-     * Reserves the call's business key (execution.md §4, plan.md §11.7). Returns the answer when the call must not run
+     * Reserves the call's business key (execution.md §4, platform-requirements.md §11.7). Returns the answer when the call must not run
      * (a refusal, or the existing invocation's result or task), or null when this call may run.
      */
     private ObjectNode reserve(Tool tool, Prepared prepared, RequestMeta meta) {
@@ -823,8 +831,9 @@ public final class StandaloneRuntime implements ToolCatalog {
             inputs.put(p.getKey(), new DeclaredValues.Entry(DeclaredValues.typeOf(p.getValue()), filled.get(p.getKey())));
         }
 
-        String invocationId = UUID.randomUUID().toString();
+        String invocationId = config.governedInvocationId != null ? config.governedInvocationId : UUID.randomUUID().toString();
         Instant deadline = Instant.now().plusMillis(tool.deadlineMs);
+        if (config.governedDeadline != null && config.governedDeadline.isBefore(deadline)) deadline = config.governedDeadline;
         // Claims come from fixtures in development and test, and only from the verified credential otherwise (runtime-modes.md §4).
         JsonNode identity = config.mode.configuredClaims() ? config.claims() : meta.identity() == null ? null : meta.identity().claims();
         DeclaredValues claims = new DeclaredValues("claim", claims(tool, identity),
@@ -835,6 +844,8 @@ public final class StandaloneRuntime implements ToolCatalog {
                 new DeclaredValues("global", tool.globals, n -> new ToolConfigurationError("global " + n + " has no value")),
                 new DeclaredValues("secret", tool.secrets, n -> new ToolConfigurationError("secret " + n + " has no value; set TOOLGATE_SECRET_" + n.toUpperCase(java.util.Locale.ROOT))),
                 claims, invocationId, tool.toolId, deadline, redact, diagnostics);
+        context.attachResponses(config.responses);
+        if (config.mode == Config.Mode.GOVERNED) context.attachMode(io.ololabs.toolgate.sdk.context.InvocationMode.GOVERNED);
 
         RouteClient routes = new RouteClient(egress, tool.routes, tool.auths, tool.secrets, context, deadline, redact);
         String idempotencyHeader = tool.businessKey.path("idempotencyHeader").asText("");
@@ -842,6 +853,9 @@ public final class StandaloneRuntime implements ToolCatalog {
         if (!idempotencyHeader.isEmpty()) routes.idempotency(idempotencyHeader, "i." + invocationId);
         context.attachHttp(routes);
         context.attachTcp(new TcpClient(egress, tool.tcp, context, deadline));
+        boolean readFiles = false, writeFiles = false;
+        for (JsonNode p : tool.descriptor.path("permissions")) { readFiles |= p.asText().equals("DEVICE_FILES_READ"); writeFiles |= p.asText().equals("DEVICE_FILES_WRITE"); }
+        if (config.deviceFiles != null && readFiles) context.attachFiles(writeFiles ? config.deviceFiles : StdioBroker.readOnly(config.deviceFiles));
         prepared.routes = routes;
         prepared.filled = filled;
         prepared.context = context;

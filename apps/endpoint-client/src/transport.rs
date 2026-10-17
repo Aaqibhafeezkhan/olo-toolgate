@@ -42,21 +42,19 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, RemoteToolAuthorizationAck> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
+    /// Run-response frames of an attempt this device admitted, bound to its fencing token.
+    fn run_events(
+        &self,
+        _identity: DeviceIdentity,
+        _batch: olo_toolgate_contracts::v2::RunEventBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::RunEventAck> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn remote_result(
         &self,
         _identity: DeviceIdentity,
         _result: RemoteToolResult,
     ) -> Call<'_, RemoteToolRecord> {
-        Box::pin(async { Err(Failure::Unsupported) })
-    }
-    fn builder_poll(&self, _identity: DeviceIdentity) -> Call<'_, BuilderTestPoll> {
-        Box::pin(async { Err(Failure::Unsupported) })
-    }
-    fn builder_result(
-        &self,
-        _identity: DeviceIdentity,
-        _result: BuilderTestResult,
-    ) -> Call<'_, BuilderTestRecord> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
     fn desired(&self, _identity: DeviceIdentity) -> Call<'_, FleetSignedDocument> {
@@ -168,7 +166,6 @@ impl HttpsControl {
             .header("Accept", "application/json")
             .header("X-Request-ID", &correlation);
         if path == "/api/control/v1/endpoint/check-in" {
-            request = request.header("X-ToolGate-Poll-Interval-Unit", "milliseconds");
             if let Some(name) = crate::platform::system_name() {
                 request = request.header("X-ToolGate-System-Name", name);
             }
@@ -341,6 +338,29 @@ impl ControlPort for HttpsControl {
             .await
         })
     }
+    fn run_events(
+        &self,
+        identity: DeviceIdentity,
+        batch: olo_toolgate_contracts::v2::RunEventBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::RunEventAck> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            let path = format!(
+                "/api/control/v1/access/invocations/{}/events",
+                batch.invocation_id
+            );
+            self.request(
+                &client,
+                &path,
+                Some(self.contracts.encode("RunEventBatch", &batch)?),
+                "RunEventAck",
+            )
+            .await
+        })
+    }
     fn report_effect(
         &self,
         identity: DeviceIdentity,
@@ -447,85 +467,6 @@ impl ControlPort for HttpsControl {
             };
             if response.is_ok() {
                 self.socket.finished(&result.request_id).await;
-            }
-            response
-        })
-    }
-    fn builder_poll(&self, identity: DeviceIdentity) -> Call<'_, BuilderTestPoll> {
-        Box::pin(async move {
-            let client = Self::builder(&self.config)?
-                .identity(self.key.tls_identity(&identity)?)
-                .build()
-                .map_err(|_| Failure::Unavailable)?;
-            let response: BuilderTestPoll = if let Some(response) = self
-                .socket
-                .call(
-                    ClientSocketOperation::BuilderPoll,
-                    None,
-                    "BuilderTestPoll",
-                    &self.contracts,
-                    &self.packets,
-                )
-                .await
-            {
-                response?
-            } else {
-                self.request(
-                    &client,
-                    "/api/control/v1/builder/tests/poll",
-                    None,
-                    "BuilderTestPoll",
-                )
-                .await?
-            };
-            if response.task.is_some() {
-                self.socket
-                    .ensure(
-                        &client,
-                        &self.origin,
-                        identity.expires_at_unix_ms,
-                        Some(("builder".into(), crate::now() + 120000)),
-                        &self.packets,
-                    )
-                    .await;
-            }
-            Ok(response)
-        })
-    }
-    fn builder_result(
-        &self,
-        identity: DeviceIdentity,
-        result: BuilderTestResult,
-    ) -> Call<'_, BuilderTestRecord> {
-        Box::pin(async move {
-            let client = Self::builder(&self.config)?
-                .identity(self.key.tls_identity(&identity)?)
-                .build()
-                .map_err(|_| Failure::Unavailable)?;
-            let body = self.contracts.encode("BuilderTestResult", &result)?;
-            let response = if let Some(response) = self
-                .socket
-                .call(
-                    ClientSocketOperation::BuilderResult,
-                    Some(&body),
-                    "BuilderTestRecord",
-                    &self.contracts,
-                    &self.packets,
-                )
-                .await
-            {
-                response
-            } else {
-                self.request(
-                    &client,
-                    "/api/control/v1/builder/tests/results",
-                    Some(self.contracts.encode("BuilderTestResult", &result)?),
-                    "BuilderTestRecord",
-                )
-                .await
-            };
-            if response.is_ok() {
-                self.socket.finished("builder").await;
             }
             response
         })

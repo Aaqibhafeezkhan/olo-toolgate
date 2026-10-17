@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 rootProject.name = "olo-toolgate"
 
+include(":sdk-json")
+project(":sdk-json").projectDir = file("tool-sdk/json-sdk")
+
 include(":contracts-java")
 project(":contracts-java").projectDir = file("packages/contracts/java")
 

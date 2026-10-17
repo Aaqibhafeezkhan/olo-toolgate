@@ -34,7 +34,7 @@ function formShape(template:unknown,value:unknown):boolean {
 }
 const extra=(record:DirectoryRecords[Kind])=>Object.fromEntries(Object.entries(record).filter(([k])=>!['id','name','enabled','revision'].includes(k)));
 /** All permission edits target group records, typed Roles, grants or bindings. */
-export function DirectoryEditor({client,kind,record,close,saved}:{client:ControlClient;kind:Kind;record?:DirectoryRecords[Kind];close:()=>void;saved:()=>void}) {
+export function DirectoryEditor({client,kind,record,close,saved,readOnly=false}:{client:ControlClient;kind:Kind;record?:DirectoryRecords[Kind];close:()=>void;saved:()=>void;readOnly?:boolean}) {
   const [current,setCurrent]=useState(record);const [id,setId]=useState(record?.id??''),[name,setName]=useState(record?.name??''),[enabled,setEnabled]=useState(record?.enabled??false);
   const [config,setConfig]=useState(JSON.stringify(record?extra(record):defaults[kind],null,2));
   const [error,setError]=useState<unknown>(),[busy,setBusy]=useState(false),[confirm,setConfirm]=useState(false);
@@ -43,7 +43,7 @@ export function DirectoryEditor({client,kind,record,close,saved}:{client:Control
   const update=(field:string,value:unknown)=>{if(draft)setConfig(JSON.stringify({...draft,[field]:value},null,2));};
   const picker=(field:string,target:DirectoryKind,label:string,multiple=false)=><ScopePicker key={field} client={client} kind={target} label={label} single={!multiple} value={multiple?(draft?.[field] as readonly string[]??[]):draft?.[field]?[String(draft[field])]:[]} onChange={ids=>update(field,multiple?ids:ids[0]??'')} disabled={busy||!draft}/>;
   const mutationKey=(body:string)=>{if(pending.current?.body!==body)pending.current={body,key:crypto.randomUUID()};return pending.current.key;};
-  async function save(event:FormEvent){event.preventDefault();if(busy)return;setBusy(true);setError(undefined);try{
+  async function save(event:FormEvent){event.preventDefault();if(busy||readOnly)return;setBusy(true);setError(undefined);try{
     const fields:Record<string,unknown>=JSON.parse(config);if(!fields||typeof fields!=='object'||Array.isArray(fields))throw new Error('Configuration must be an object');
     if(kind==='tools')fields.definition={...(fields.definition as Record<string,unknown>),id,name};
     const body={...fields,id,name,enabled,revision:current?.revision??1} as DirectoryRecords[Kind];await client.saveRecord(kind,body,!!current,mutationKey(JSON.stringify(body)));saved();
@@ -53,7 +53,8 @@ export function DirectoryEditor({client,kind,record,close,saved}:{client:Control
   const title=entityTitles[kind];const protectedDefault=['team-default','default-agents','default-tools','default-devices'].includes(id);
   return <EditorDialog title={current?`Edit ${title}`:`Add ${title}`} close={close} busy={busy}><section aria-label={`${title} editor`}>
     {error!==undefined&&<Failure error={error}/>}
-    <form className="user-form" onSubmit={save}>
+    {readOnly&&<p role="status">View only. Your role cannot edit this record.</p>}
+    <form className="user-form" onSubmit={save}><fieldset disabled={readOnly}>
       <label>Identifier<input required maxLength={128} disabled={busy||!!current} value={id} onChange={e=>setId(e.target.value)}/></label>
       <label>Display name<input required maxLength={128} disabled={busy} value={name} onChange={e=>setName(e.target.value)}/></label>
       <label className="checkbox"><input type="checkbox" checked={enabled} disabled={busy||protectedDefault} onChange={e=>setEnabled(e.target.checked)}/>Enabled</label>
@@ -63,7 +64,7 @@ export function DirectoryEditor({client,kind,record,close,saved}:{client:Control
       {kind==='teams'&&picker('userIds','users','Member users',true)}{kind==='agentGroups'&&picker('agentIds','agents','Member agents',true)}{kind==='toolGroups'&&picker('toolIds','tools','Member tools',true)}{kind==='deviceGroups'&&picker('deviceIds','devices','Member devices',true)}
       {(kind==='teams'||kind==='agentGroups')&&<>{picker('roleIds','roles','Group roles',true)}<p className="hint">Teams accept Human and Management Roles. Agent Groups accept Actor/Service Roles.</p></>}
       {kind==='roles'&&draft&&<><label>Role type<select disabled={busy} value={String(draft.roleType)} onChange={e=>setConfig(JSON.stringify({...draft,roleType:e.target.value,portalRole:'BASIC',managementRules:[]},null,2))}><option value="HUMAN">Human runtime role</option><option value="ACTOR_SERVICE">Actor / Service runtime role</option><option value="MANAGEMENT">Management role</option></select></label>
-        {draft.roleType==='MANAGEMENT'&&<><label>Portal classification<select value={String(draft.portalRole)} onChange={e=>update('portalRole',e.target.value)}><option value="BASIC">No portal administration</option><option value="ADMINISTRATOR">Scoped administrator</option><option value="SUPER_ADMIN">Super Admin</option></select></label><ManagementRulesEditor client={client} value={draft.managementRules as EnterpriseManagementRule[]} change={rules=>update('managementRules',rules)} disabled={busy}/><p className="hint">Super Admin grants all management operations. Other classifications use the configured management rules. Runtime grants remain separate.</p></>}
+        {draft.roleType==='MANAGEMENT'&&<><label>Portal classification<select value={String(draft.portalRole)} onChange={e=>update('portalRole',e.target.value)}><option value="BASIC">No portal administration</option><option value="ADMINISTRATOR">Scoped administrator</option><option value="SUPER_ADMIN">Super Admin</option></select></label><ManagementRulesEditor superAdmin={draft.portalRole==='SUPER_ADMIN'} client={client} value={draft.managementRules as EnterpriseManagementRule[]} change={rules=>update('managementRules',rules)} disabled={busy}/><p className="hint">Super Admin grants all management operations. Other classifications use the configured management rules. Runtime grants remain separate.</p></>}
         <p className="hint">Runtime grants are separate records referencing a Human or Actor/Service Role. Individuals cannot receive Roles directly.</p></>}
       {kind==='grants'&&draft&&<><label>Grant source<select value={String(draft.sourceType)} onChange={e=>setConfig(JSON.stringify({...draft,sourceType:e.target.value,sourceId:'',purpose:e.target.value==='TEAM'?'HUMAN':'CAPABILITY'},null,2))}><option value="TEAM">Team</option><option value="AGENT_GROUP">Agent Group</option><option value="ROLE">Typed Role</option></select></label>
         {picker('sourceId',draft.sourceType==='TEAM'?'teams':draft.sourceType==='AGENT_GROUP'?'agentGroups':'roles','Grant source')}
@@ -77,8 +78,8 @@ export function DirectoryEditor({client,kind,record,close,saved}:{client:Control
       {kind==='workloadBindings'&&picker('agentId','agents','Authenticated Agent')}{kind==='identityBindings'&&picker('userId','users','Verified User')}{kind==='deviceEvidence'&&picker('deviceId','devices','Attested Device')}
       <details><summary>Advanced canonical configuration</summary><label>Configuration (JSON)<textarea rows={18} maxLength={131072} value={config} disabled={busy} onChange={e=>setConfig(e.target.value)}/></label><p className="hint">This is the same record edited above. Control validates references, role types, ceilings and mandatory group membership.</p></details>
       {!draft&&<p role="alert">Complete the JSON object before using guided fields.</p>}<div className="actions"><button className="primary" disabled={busy||!draft}>{busy?'Saving…':`Save ${title}`}</button>{current&&<button type="button" disabled={busy} onClick={()=>void reload()}>Reload current record</button>}</div>
-    </form>
-    {current&&(kind==='agents'||kind==='tools'||kind==='devices')&&<GroupMembershipEditor client={client} entity={kind} id={current.id} saved={saved}/>}
-    {current&&!protectedDefault&&<div className="delete-area">{confirm?<><p>Delete this record? References, required memberships and recovery access must remain valid. Its identifier cannot be reused.</p><button className="danger" disabled={busy} onClick={()=>void remove()}>Confirm delete</button><button disabled={busy} onClick={()=>setConfirm(false)}>Cancel delete</button></>:<button className="danger" disabled={busy} onClick={()=>setConfirm(true)}>Delete {title}</button>}</div>}
+    </fieldset></form>
+    {!readOnly&&current&&(kind==='agents'||kind==='tools'||kind==='devices')&&<GroupMembershipEditor client={client} entity={kind} id={current.id} saved={saved}/>}
+    {!readOnly&&current&&!protectedDefault&&<div className="delete-area">{confirm?<><p>Delete this record? References, required memberships and recovery access must remain valid. Its identifier cannot be reused.</p><button className="danger" disabled={busy} onClick={()=>void remove()}>Confirm delete</button><button disabled={busy} onClick={()=>setConfirm(false)}>Cancel delete</button></>:<button className="danger" disabled={busy} onClick={()=>setConfirm(true)}>Delete {title}</button>}</div>}
   </section></EditorDialog>;
 }

@@ -4,44 +4,13 @@
 import json
 import os
 from pathlib import Path
-import secrets
 import shutil
 import signal
 import threading
 
 import device_entrypoint as device
+import device_execution
 from secured_network import settings
-
-
-def configure_tools(path, tools):
-    """Offer the named built-in tools from the client's own profiles; files stay in the device's private HotFolder.
-
-    Enrollment still grants nothing: Control allocates these tools only through its usual groups and bindings.
-    """
-    settings = json.loads(path.read_text())
-    state = Path(settings['stateDirectory'])
-    folder = state/'hotfolder'
-    folder.mkdir(mode=0o700, exist_ok=True)
-    profiles = [item for item in json.loads(device.cli('authorization-profiles')) if item['tool']['id'] in tools]
-    missing = tools - {item['tool']['id'] for item in profiles}
-    if missing:
-        raise ValueError('TOOLGATE_DEVICE_TOOLS names tools this client does not offer: '+', '.join(sorted(missing)))
-    # The service requires a private token file. This inert value grants no local IPC rights; remote tasks
-    # authorize through the enrolled device's mTLS identity and Control permits.
-    token = state/'local-ipc-disabled-token'
-    if not token.exists():
-        with token.open('x', encoding='utf-8') as stream:
-            stream.write(secrets.token_urlsafe(48))
-        token.chmod(0o600)
-    settings['tools'] = dict(hotfolder=dict(root=str(folder), maxFileBytes=65536, maxEntries=256,
-                                            extensions=['txt', 'md', 'json', 'csv']),
-                             gatewayUrl=settings['serverUrl'], gatewayTokenPath=str(token),
-                             gatewayCaPath=settings['caCertificatePath'], deviceId='remote',
-                             authorizationProfiles=profiles, webSearchTokenPath=None, webSearchAllowedDomains=[])
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(settings))
-    temporary.chmod(0o600)
-    temporary.replace(path)
 
 
 def main():
@@ -50,6 +19,7 @@ def main():
     if any(int(status[key].strip(), 16) for key in ('CapEff', 'CapPrm', 'CapBnd', 'CapInh', 'CapAmb')):
         raise RuntimeError('The device service must have no Linux capabilities')
     config = settings(os.environ)
+    mounted = device_execution.load(os.environ)
     for key in list(os.environ):
         if key.lower() in ('http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'):
             del os.environ[key]
@@ -66,6 +36,12 @@ def main():
             raise ValueError('Existing device belongs to another Gateway; use separate identity volumes')
         if Path(saved['caCertificatePath']).read_bytes() != Path(config['ca']).read_bytes():
             raise ValueError('Gateway CA changed; use separate device volumes and approve a new enrollment')
+        saved, changed = device_execution.merge(saved, mounted)
+        if changed:
+            temporary = path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(saved))
+            temporary.chmod(0o600)
+            temporary.replace(path)
     else:
         # The service uses the same fixed Linux configuration as the native installer.
         # No HTTP trust bootstrap, browser download, or secondary network port is needed.
@@ -75,15 +51,13 @@ def main():
         saved = dict(serverUrl=config['origin'], stateDirectory='/var/lib/olo-toolgate',
                      ipcEndpoint='/run/olo-toolgate/client.sock', authorizedPeers=['0'],
                      caCertificatePath=str(trust), requestTimeoutSeconds=10)
+        saved, _ = device_execution.merge(saved, mounted)
         temporary = path.with_suffix('.tmp')
         temporary.write_text(json.dumps(saved))
         temporary.chmod(0o600)
         temporary.replace(path)
     shutil.copyfile('/opt/toolgate/client', device.CLIENT)
     Path(device.CLIENT).chmod(0o755)
-    tools = {name.strip() for name in os.environ.get('TOOLGATE_DEVICE_TOOLS', '').split(',') if name.strip()}
-    if tools:
-        configure_tools(path, tools)
     relay = device.Relay(config['port'], config['address'], config['upstream_port'])
     thread = threading.Thread(target=relay.serve_forever, daemon=True)
     thread.start()

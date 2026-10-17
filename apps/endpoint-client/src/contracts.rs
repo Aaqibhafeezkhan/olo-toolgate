@@ -25,7 +25,7 @@ impl Contracts {
                 "/endpoint.schema.json",
                 "/control.schema.json",
                 "/client.schema.json",
-                "/builtins.schema.json",
+                "/local-tools.schema.json",
                 "/execution.schema.json",
                 "/fleet.schema.json",
                 "/builder.schema.json",
@@ -41,6 +41,11 @@ impl Contracts {
                     .keys()
                 {
                     definitions.push((name.clone(), uri.to_string()));
+                }
+            } else if uri.ends_with("/v2/protocol.schema.json") {
+                // Devices forward run-response frames like Tool Hosts; only these two v2 messages cross this boundary.
+                for name in ["RunEventBatch", "RunEventAck"] {
+                    definitions.push((name.to_string(), uri.to_string()));
                 }
             }
             registry = registry.add(*uri, value).map_err(|error| {tracing::error!(event="contract_initialization",stage="registry",schema=%uri,error=%error);Failure::Validation})?;

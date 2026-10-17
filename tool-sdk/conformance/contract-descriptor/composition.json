@@ -5,7 +5,7 @@
   "title": "Library composition",
   "sources": [
     "tool-sdk/spec/composition.md",
-    "plan.md §7.7"
+    "platform-requirements.md §7.7"
   ],
   "cases": [
     {
@@ -13,7 +13,7 @@
       "title": "Library declarations are namespaced by prefix",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -38,7 +38,7 @@
       "title": "A mapping shares a secret and excludes a tool",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -63,7 +63,7 @@
       "title": "An incompatible mapping fails",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -88,7 +88,7 @@
       "title": "Two versions of one library fail",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -113,7 +113,7 @@
       "title": "Widening a library route fails",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -138,7 +138,7 @@
       "title": "Weakening a library effect class fails",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -163,7 +163,7 @@
       "title": "A duplicate toolId after prefixing fails",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -188,7 +188,7 @@
       "title": "Discovery order does not change the result",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -213,7 +213,7 @@
       "title": "A mapping to a missing item fails",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -238,7 +238,7 @@
       "title": "Narrowing is allowed and recorded",
       "requirements": [
         "tool-sdk/spec/composition.md",
-        "plan.md §7.7"
+        "platform-requirements.md §7.7"
       ],
       "level": "unit",
       "targets": [
@@ -284,7 +284,7 @@
       "title": "A duplicate mcpName, including after shortening, fails",
       "requirements": [
         "composition.md §6",
-        "plan.md §10.4"
+        "platform-requirements.md §10.4"
       ],
       "level": "unit",
       "targets": [

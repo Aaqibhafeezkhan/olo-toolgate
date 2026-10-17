@@ -32,7 +32,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builtins.schema.json#/$defs/ClientInstallerManifest
+                $ref: ../schemas/v1/local-tools.schema.json#/$defs/ClientInstallerManifest
         '503':
           description: Installers unavailable
   /api/public/v1/clients:
@@ -45,7 +45,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builtins.schema.json#/$defs/ClientDownloadManifest
+                $ref: ../schemas/v1/local-tools.schema.json#/$defs/ClientDownloadManifest
         '503':
           description: No published release bundle
   /api/public/v1/clients/{filename}:
@@ -415,6 +415,54 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentLookup
+  /api/control/v1/endpoint/console-device/challenge:
+    post:
+      operationId: challengeConsoleDevice
+      description: Issues a single-use two-minute challenge bound to the verified console session and owned device key. Does not approve device access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceLookup
+      responses:
+        '200':
+          description: Bounded challenge; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceChallenge
+        '400':
+          description: Exactly one code or device identifier is required
+        '403':
+          description: Device context is not allowed for this session
+        '404':
+          description: No eligible device or enrollment
+        '429':
+          description: Too many failed attempts
+  /api/control/v1/endpoint/console-device/verify:
+    post:
+      operationId: verifyConsoleDevice
+      description: Verifies a device-key signature and records current-device context for this console token session. Never issues a certificate or approves access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceProof
+      responses:
+        '200':
+          description: Current-device context; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceVerified
+        '403':
+          description: Invalid device proof or revoked authority
+        '409':
+          description: Expired, replayed or mismatched challenge
+        '429':
+          description: Too many failed attempts
   /api/control/v1/endpoint/socket:
     get:
       operationId: endpointJobSocket
@@ -443,14 +491,6 @@ paths:
         substitute. Sequence and exact report replay are transactional; certificates
         renew before expiry.
       parameters:
-      - in: header
-        name: X-ToolGate-Poll-Interval-Unit
-        required: false
-        description: Opt in to nextIntervalMs; legacy clients continue receiving nextIntervalSeconds.
-        schema:
-          type: string
-          enum:
-          - milliseconds
       - in: header
         name: X-ToolGate-System-Name
         required: false
@@ -2641,12 +2681,20 @@ paths:
   /api/control/v1/settings:
     get:
       operationId: getServerSettings
-      description: Super Admin only. A write that changes configuration.requiredReviews
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
         while it is above 0 returns 202 with a SETTINGS configuration change that needs the
         current number of reviews, with no Super Admin bypass. Returns the tenant's control-plane settings
         (formatVersion 2), grouped by Configuration page. clientCheckIn is read-only and
         always shows the running deployment's values. The document is also the export
         format.
+      parameters:
+      - in: query
+        name: section
+        required: false
+        schema:
+          type: string
+          enum: [server, device]
+        description: Read one feature. Unreadable groups are omitted from the response.
       responses:
         '200':
           description: Success; no-store
@@ -2662,7 +2710,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2674,7 +2722,7 @@ paths:
         '503': *id010
     put:
       operationId: updateServerSettings
-      description: Super Admin only. A write that changes configuration.requiredReviews
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
         while it is above 0 returns 202 with a SETTINGS configuration change that needs the
         current number of reviews, with no Super Admin bypass. Replaces the editable settings with a full
         formatVersion 2 record; used to restore an exported settings document. The
@@ -2704,7 +2752,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2716,7 +2764,7 @@ paths:
         '503': *id010
     patch:
       operationId: patchServerSettings
-      description: Super Admin only. A write that changes configuration.requiredReviews
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
         while it is above 0 returns 202 with a SETTINGS configuration change that needs the
         current number of reviews, with no Super Admin bypass. Merge patch (RFC 7396) of the editable settings
         groups; each Configuration page sends only its own fields. clientCheckIn is
@@ -2745,7 +2793,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -3172,6 +3220,31 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetSignedDocument
+  /api/control/v1/builder/status:
+    get:
+      operationId: getSdkBuilderStatus
+      summary: getSdkBuilderStatus
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Authorized SDK build result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderStatus
+        '400':
+          description: Invalid SDK project or request
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Current role does not authorize this Tool Group
+        '404':
+          description: Project or build unavailable
+        '409':
+          description: Revision, immutable version or replay conflict
+        '503':
+          description: SDK build worker or artifact unavailable
   /api/control/v1/builder/drafts:
     get:
       operationId: listBuilderDrafts
@@ -3180,23 +3253,23 @@ paths:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraftPage
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderDraftPage
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: cursor
         in: query
@@ -3211,23 +3284,23 @@ paths:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraft
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderDraft
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: Idempotency-Key
         in: header
@@ -3240,32 +3313,32 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraftRequest
-  /api/control/v1/builder/tests:
+              $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderSave
+  /api/control/v1/builder/builds:
     get:
-      operationId: listBuilderTests
-      summary: listBuilderTests
+      operationId: listBuilderBuilds
+      summary: listBuilderBuilds
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestPage
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderBuildPage
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: cursor
         in: query
@@ -3274,29 +3347,29 @@ paths:
           type: string
           maxLength: 128
     post:
-      operationId: createBuilderTest
-      summary: createBuilderTest
+      operationId: createBuilderBuild
+      summary: createBuilderBuild
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestRecord
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderBuild
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: Idempotency-Key
         in: header
@@ -3309,88 +3382,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestRequest
-  /api/control/v1/builder/tests/poll:
+              $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderBuildRequest
+  /api/control/v1/builder/builds/{id}/package:
     get:
-      operationId: pollBuilderTest
-      summary: pollBuilderTest
-      security:
-      - deviceCertificate: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestPoll
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-  /api/control/v1/builder/tests/results:
-    post:
-      operationId: completeBuilderTest
-      summary: completeBuilderTest
-      security:
-      - deviceCertificate: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestRecord
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestResult
-  /api/control/v1/builder/drafts/{id}/seal:
-    post:
-      operationId: sealBuilderDraft
-      summary: sealBuilderDraft
+      operationId: downloadBuilderPackage
+      summary: downloadBuilderPackage
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
-            application/json:
+            application/vnd.ololabs.toolgate.package+zip:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraft
+                type: string
+                format: binary
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: id
         in: path
@@ -3398,43 +3416,32 @@ paths:
         schema:
           type: string
           maxLength: 128
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderRevisionRequest
-  /api/control/v1/builder/drafts/{id}/publication:
-    post:
-      operationId: prepareBuilderPublication
-      summary: prepareBuilderPublication
+  /api/control/v1/builder/builds/{id}/source:
+    get:
+      operationId: downloadBuilderSource
+      summary: downloadBuilderSource
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
-            application/json:
+            application/zip:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDefinition
+                type: string
+                format: binary
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: id
         in: path
@@ -3442,94 +3449,6 @@ paths:
         schema:
           type: string
           maxLength: 128
-  /api/control/v1/builder/drafts/{id}/release:
-    post:
-      operationId: publishBuilderRelease
-      summary: publishBuilderRelease
-      security:
-      - adminAccessToken: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetPackageRelease
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetPackageRelease
-  /api/control/v1/builder/drafts/{id}/deploy:
-    post:
-      operationId: deployBuilderDraft
-      summary: deployBuilderDraft
-      security:
-      - adminAccessToken: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetRolloutRecord
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetRolloutRequest
   /api/control/v1/mcp/catalog:
     post:
       operationId: queryLocalMcpCatalog
@@ -7694,6 +7613,70 @@ paths:
                 $ref: ../schemas/v1/endpoint.schema.json#/$defs/RemoteToolResponse
         '403':
           description: Current group grant or target trust denied
+  /api/control/v1/access/invocations/{id}/events:
+    get:
+      operationId: invocationRunEvents
+      summary: Authorized cursor replay of an invocation's retained run-response events
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Retained events after the cursor, with explicit gaps, truncation and expiry
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventPage
+        '403':
+          description: The invocation's owner no longer holds current access, or the reader lacks operation.read
+        '404':
+          description: Invocation not found
+    post:
+      operationId: submitInvocationRunEvents
+      summary: Executor frames of the admitted attempt, bound by device certificate and fencing token
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventBatch
+      responses:
+        '200':
+          description: Highest contiguous sequence retained, duplicates and refusals
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventAck
+        '400':
+          description: Invalid frame or invocation binding
+        '401':
+          description: Direct device certificate required
+        '403':
+          description: Not the admitting executor or a stale fencing token
   /api/control/v1/vault:
     get:
       operationId: listVaultReferences
@@ -8038,6 +8021,49 @@ paths:
           description: Not permitted, or not a registered Tool Host
         '404':
           description: Not found, or not deployed
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages/provisioning:
+    get:
+      operationId: listProvisioningStatuses
+      description: Administrators with package.read. The latest recorded ProvisioningStatus of every applied deployment
+        profile, by profile id, with the package changes from the profile applied before it.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/ProvisioningStatusPage
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages/provisioning/{profileId}:
+    get:
+      operationId: getProvisioningStatus
+      description: Administrators with package.read. The latest recorded ProvisioningStatus of one deployment profile.
+      parameters:
+      - name: profileId
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/ProvisioningStatus
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted
+        '404':
+          description: Profile not applied
         '503':
           description: Dependency unavailable
   /api/control/v1/marketplace:

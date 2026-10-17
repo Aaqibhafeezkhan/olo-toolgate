@@ -55,7 +55,7 @@ public final class Staging {
                     + "(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
     public static final String TOOL_JAR = "artifacts/tool.jar";
     /** A fixed date for every zip entry, so the same jars give the same bytes. */
-    private static final long ZIP_TIME = 315_532_800_000L;
+    private static final java.time.LocalDateTime ZIP_TIME = java.time.LocalDateTime.of(1980, 1, 2, 0, 0);
 
     private Staging() {}
 
@@ -206,7 +206,7 @@ public final class Staging {
         for (String name : ordered.keySet()) {
             for (int slash = name.indexOf('/'); slash >= 0; slash = name.indexOf('/', slash + 1)) directories.add(name.substring(0, slash + 1));
         }
-        try (OutputStream file = Files.newOutputStream(target); ZipOutputStream out = new ZipOutputStream(file)) {
+        try (OutputStream file = new java.io.BufferedOutputStream(Files.newOutputStream(target)); ZipOutputStream out = new ZipOutputStream(file)) {
             // META-INF/ and the manifest come first, as JarInputStream expects.
             List<String> names = new ArrayList<>();
             names.add("META-INF/");
@@ -217,7 +217,7 @@ public final class Staging {
                     .thenComparing(n -> n));
             for (String name : names) {
                 ZipEntry entry = new ZipEntry(name);
-                entry.setTime(ZIP_TIME);
+                entry.setTimeLocal(ZIP_TIME);
                 out.putNextEntry(entry);
                 if (!name.endsWith("/")) out.write(ordered.get(name));
                 out.closeEntry();

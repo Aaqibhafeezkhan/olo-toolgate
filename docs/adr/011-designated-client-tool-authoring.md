@@ -1,38 +1,31 @@
-# ADR 011: Signed source authoring and designated-client sandbox tests
+# ADR 011: SDK package authoring and isolated builds
 
-Status: accepted for Module 10, 2026-10-03.
+Status: accepted, updated 2026-10-16 for the first supported package contract.
 
-Control persists and validates bounded drafts; it never interprets, compiles,
-builds images from, or runs author code. Additive inline script source is part of
-the signed immutable tool registration. Python/Node/PowerShell/Shell runners
-receive code through stdin data and evaluate it only inside the existing
-no-network/no-host-mount/non-root/child-process-restricted OCI sandbox. Fixed
-runner code is application-owned; author input never becomes host command text.
-Native/Java/.NET continue using reviewed image-contained artifacts, with explicit
-unsupported inline-source capability. Batch/WASM remain unsupported.
+Builder and the standalone JSON SDK share one compiler/stager/packager. Their
+authoring input is a canonical JSON SDK project. The SDK lowers a closed typed
+operation set to Java SDK source and uses the existing annotation processor,
+example checks, runtime staging and canonical Rust package CLI. Executable
+behavior is installed only as a verified package.
 
-Tests are durable leased jobs targeted to one active enrolled device. The device
-polls over direct mTLS and verifies an organization-signed, short-lived job binding
-tenant/server/device/source digest/lease before confined execution. Results contain
-only match/failure codes, never arbitrary stdout/stderr. Test execution has no
-host/network/credential capability and cannot register a runtime tool or mint a
-Gateway permit. Ordinary deployed calls retain fresh Gateway/ASK authorization.
+Builder exports exactly two artifacts: the standard `.tgpkg` and one canonical
+source-project ZIP. Identical source and pinned SDK/toolchain produce identical
+package bytes. Generated Java, descriptors and manifests are build artifacts,
+not a second authoring/export format.
 
-COMPUTE is supported. Host files, network and ambient credential injection are
-rejected; credential requirements are references in draft metadata, and an
-unbound requirement prevents testing/sealing/deployment. This module provides no
-credential bypass and does not depend on future Vault work for its compute path.
+Compilation jobs pin a saved source revision, digest, creator and Tool Group.
+Claims and completion are transactional and fenced; compilation runs outside
+the database transaction and web process. Current management authority is
+checked at submission, claim, completion and download. Worker errors expose safe
+codes rather than raw source or diagnostics. Package versions are immutable.
 
-Sealing requires a matching successful test, locks the draft and reserves the
-package/version immutably. It creates exact descriptor bytes for an independent
-external release authority; the organization assignment signer is never reused
-as a release signer. The supplied signing CLI executes trusted packaging code
-outside Control, never author code. Existing release verification/mirror/desired
-reconciliation performs deployment. Public preparation excludes device/job/tenant
-state and organization credential references and repeats secret scanning.
+The initial process adapter accepts only the closed JSON SDK language. It has a
+fixed deployment-supplied JDK/SDK/CLI, a clean environment, a private per-job
+workspace and bounded resources/time. Future arbitrary-source SDKs require a
+reviewed build isolation adapter. Requests cannot inject executable paths or
+toolchain options.
 
-No new server, broker, container engine in Control or mandatory infrastructure is
-introduced. PostgreSQL persists drafts, versions and leases with audit/idempotency
-in one transaction. Existing fleet signing/mTLS configuration enables the builder;
-no new Helm setting or secret is needed. Native certification limitations inherited
-from Modules 08/09 remain explicit and cannot be replaced by cross-compilation.
+Installation and testing reuse normal package governance and invocation permits.
+Builder build authority never grants runtime access. Runtime response streams
+are distinct from compilation state. See the
+[Builder guide](../client/tool-builder.md) for settings, artifacts and checks.

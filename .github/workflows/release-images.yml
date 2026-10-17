@@ -4,6 +4,10 @@ name: Publish release images, Helm and GitHub assets
 'on':
   workflow_call:
     inputs:
+      selection_artifact_id:
+        type: string
+        default: ''
+        description: Immutable selection artifact ID emitted by the trusted manual controller
       manual:
         type: boolean
         default: false
@@ -47,6 +51,12 @@ jobs:
       with:
         name: ${{ inputs.manual && 'manual-development-images' || 'verified-release-images' }}
         path: ${{ inputs.manual && 'build/manual-development' || 'build/development' }}
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      if: ${{ inputs.manual }}
+      with:
+        artifact-ids: ${{ inputs.selection_artifact_id }}
+        merge-multiple: true
+        path: build/manual-development/selection
     - name: Publish tested images and development prerelease
       id: push
       env:

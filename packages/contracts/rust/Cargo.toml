@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 [package]
 name = "olo-toolgate-contracts"
-version = "1.0.0"
+version = "0.10.0-dev"
 edition.workspace = true
 license.workspace = true
 description = "Shared protocol and data contracts for OLO ToolGate"

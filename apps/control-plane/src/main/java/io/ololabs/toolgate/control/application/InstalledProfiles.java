@@ -20,6 +20,12 @@ public final class InstalledProfiles {
         var manifest=JSON.createObjectNode();manifest.set("registration",registration);manifest.set("runtime",JSON.valueToTree(runtime));
         try{return DirectoryService.digest(JSON.writeValueAsBytes(sorted(manifest)));}catch(java.io.IOException failure){throw Failure.validation();}
     }
+    /** The same digest for a registration being assembled, before it carries its authorization profile. */
+    public static String packageDigest(JsonNode registration,JsonNode runtime) {
+        var copy=(ObjectNode)registration.deepCopy();copy.remove("authorizationProfile");
+        var manifest=JSON.createObjectNode();manifest.set("registration",copy);manifest.set("runtime",runtime);
+        try{return DirectoryService.digest(JSON.writeValueAsBytes(sorted(manifest)));}catch(java.io.IOException failure){throw Failure.validation();}
+    }
     public static void validate(LocalToolRegistration tool,ManagedRuntime runtime) {
         var profile=tool.authorizationProfile();var definition=profile.tool().definition();
         if(!profile.tool().enabled()||!profile.extractor().enabled()||!profile.tool().id().equals(tool.toolId())||!definition.id().equals(tool.toolId())

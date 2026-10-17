@@ -36,6 +36,14 @@ for package in "$here"/java-tools/*/build/toolgate/*.tgpkg "$here"/mocked-tools/
     (cd "$out/$name" && echo "$request" | env -i TOOLGATE_MODE=development "TOOLGATE_DEV_JSON=$dev" "$java" -jar artifacts/tool.jar \
       >"$out/$name.txt" 2>"$out/$name.log") || true
   fi
+  if grep -q 'CLIENT_TOOLS_UNAVAILABLE' "$out/$name.txt" "$out/$name.log"; then
+    # Only devices broker ClientTools (ADR 027), so a package of ClientTools alone refuses to run standalone; its
+    # examples ran in the build's toolgate check. Any ServerTool in the package would have been listed.
+    if (cd "$out/$name" && jar xf "$package" toolgate-package.json && ! grep -q '"kind":"SERVER"' toolgate-package.json); then
+      count=$((count + 1))
+      continue
+    fi
+  fi
   grep -q '"tools":\[{' "$out/$name.txt" || { echo "examples: $name did not list its tools"; cat "$out/$name.txt" "$out/$name.log"; exit 1; }
   count=$((count + 1))
 done

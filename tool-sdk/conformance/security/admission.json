@@ -5,7 +5,7 @@
   "title": "Permit admission at the Tool Host",
   "sources": [
     "docs/security/threat-models/tool-host.md §4.1",
-    "plan.md §11.2–§11.4",
+    "platform-requirements.md §11.2–§11.4",
     "ADR 013"
   ],
   "cases": [
@@ -70,7 +70,7 @@
       "title": "A permit addressed to another host is refused",
       "requirements": [
         "T-AD-1",
-        "plan.md §11.2"
+        "platform-requirements.md §11.2"
       ],
       "level": "component",
       "targets": [
@@ -87,7 +87,7 @@
       "id": "admission/expired-window",
       "title": "A permit past exp is refused even if the nonce is unused",
       "requirements": [
-        "plan.md §11.4",
+        "platform-requirements.md §11.4",
         "invocation-state-v2.md T5"
       ],
       "level": "component",
@@ -175,7 +175,7 @@
       "title": "Any package, artifact, runtime, globals, profile or binding digest mismatch is refused",
       "requirements": [
         "T-AD-3",
-        "plan.md §11.2"
+        "platform-requirements.md §11.2"
       ],
       "level": "component",
       "targets": [
@@ -192,7 +192,7 @@
       "id": "admission/stale-epoch",
       "title": "A permit minted before an authorization epoch bump is refused at consumption",
       "requirements": [
-        "plan.md §15.2",
+        "platform-requirements.md §15.2",
         "invocation-state-v2.md §5"
       ],
       "level": "integration",
@@ -212,7 +212,7 @@
       "title": "The Gateway process holds no permit, requestState or MAC key",
       "requirements": [
         "ADR 013 decisions 2 and 9",
-        "plan.md §11.2"
+        "platform-requirements.md §11.2"
       ],
       "level": "system",
       "targets": [

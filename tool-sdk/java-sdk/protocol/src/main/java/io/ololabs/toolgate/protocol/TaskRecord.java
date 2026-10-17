@@ -12,7 +12,7 @@ import java.time.Instant;
  */
 public final class TaskRecord {
     public String taskId;
-    /** The identity (or connection) that created it; every other owner gets not-found (plan.md §12.6). */
+    /** The identity (or connection) that created it; every other owner gets not-found (platform-requirements.md §12.6). */
     public String owner;
     public TaskStatus status = TaskStatus.WORKING;
     public String statusMessage;

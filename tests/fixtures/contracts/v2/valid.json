@@ -1826,5 +1826,342 @@
   "UnixMs": 1791676800000,
   "ValueSource": "ENVIRONMENT",
   "ValueType": "INT",
-  "VariableName": "TimeoutSeconds"
+  "VariableName": "TimeoutSeconds",
+  "ControlSettingsView": {
+    "formatVersion": 2,
+    "revision": 5,
+    "gateway": {
+      "gatewayName": "ToolGate EU"
+    },
+    "deviceApproval": {
+      "autoApprove": true,
+      "durationMs": 86400000,
+      "ownerUserId": "admin-1"
+    },
+    "clientCheckIn": {
+      "checkInMs": 2000,
+      "jitterPct": 20,
+      "offlineAfterMs": 120000,
+      "source": "ENVIRONMENT"
+    },
+    "configuration": {
+      "requiredReviews": 2
+    }
+  },
+  "RunEventKind": "PROGRESS",
+  "RunEventSource": "EXECUTOR",
+  "RunEventFrame": {
+    "sequence": 1,
+    "emittedAtUnixMs": 1700000000000,
+    "kind": "PROGRESS",
+    "fraction": 0.5,
+    "message": "Half way"
+  },
+  "RunEventBatch": {
+    "invocationId": "inv-5",
+    "fencingToken": "nonce-77",
+    "attempt": 1,
+    "events": [
+      {
+        "sequence": 1,
+        "emittedAtUnixMs": 1700000000000,
+        "kind": "PROGRESS",
+        "fraction": 0.5,
+        "message": "Half way"
+      },
+      {
+        "sequence": 2,
+        "emittedAtUnixMs": 1700000000001,
+        "kind": "LOG",
+        "level": "info",
+        "message": "fetched order"
+      }
+    ],
+    "droppedFrames": 0
+  },
+  "RunEventAck": {
+    "invocationId": "inv-5",
+    "attempt": 1,
+    "acceptedThrough": 2,
+    "duplicates": 0,
+    "refused": 0
+  },
+  "RunEvent": {
+    "cursor": 3,
+    "source": "EXECUTOR",
+    "kind": "LOG",
+    "attempt": 1,
+    "sequence": 2,
+    "executorId": "host-1",
+    "emittedAtUnixMs": 1700000000001,
+    "recordedAtUnixMs": 1700000000002,
+    "level": "info",
+    "message": "fetched order"
+  },
+  "RunEventGap": {
+    "attempt": 1,
+    "fromSequence": 3,
+    "toSequence": 4
+  },
+  "RunEventPage": {
+    "invocationId": "inv-5",
+    "state": "SUCCEEDED",
+    "terminal": true,
+    "toolId": "acme.orders/items.get",
+    "executorId": "host-1",
+    "events": [
+      {
+        "cursor": 1,
+        "source": "PLATFORM",
+        "kind": "STATE",
+        "state": "QUEUED",
+        "recordedAtUnixMs": 1700000000000
+      },
+      {
+        "cursor": 3,
+        "source": "EXECUTOR",
+        "kind": "LOG",
+        "attempt": 1,
+        "sequence": 2,
+        "executorId": "host-1",
+        "emittedAtUnixMs": 1700000000001,
+        "recordedAtUnixMs": 1700000000002,
+        "level": "info",
+        "message": "fetched order"
+      },
+      {
+        "cursor": 4,
+        "source": "EXECUTOR",
+        "kind": "RESULT",
+        "attempt": 1,
+        "executorId": "host-1",
+        "recordedAtUnixMs": 1700000000003,
+        "result": {
+          "kind": "RESULT",
+          "resultType": "complete",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello World"
+            }
+          ],
+          "structuredContent": {
+            "message": "Hello World"
+          },
+          "isError": false
+        }
+      }
+    ],
+    "nextCursor": 4,
+    "more": false,
+    "truncated": false,
+    "droppedFrames": 0,
+    "expired": false,
+    "gaps": []
+  },
+  "ProfilePackageSource": "MARKETPLACE",
+  "ProfileToolActivation": {
+    "toolId": "examples.loans/evaluate",
+    "toolGroupId": "MockToolGroup"
+  },
+  "ProfilePackage": {
+    "packageId": "examples.loans",
+    "source": "MARKETPLACE",
+    "version": "0.1.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "required": true,
+    "hostIds": [
+      "tool-host-local"
+    ],
+    "globals": {},
+    "tools": [
+      {
+        "toolId": "examples.loans/evaluate",
+        "toolGroupId": "MockToolGroup"
+      }
+    ],
+    "bindingIds": [
+      "mocks-on-tool-host"
+    ]
+  },
+  "ProfileReadinessCase": {
+    "toolId": "examples.loans/evaluate",
+    "agentId": "readiness-agent",
+    "arguments": {
+      "applicantId": "A-1003"
+    },
+    "expected": {
+      "decision": "APPROVE"
+    }
+  },
+  "DeploymentProfile": {
+    "profileVersion": 1,
+    "profileId": "demo3",
+    "packages": [
+      {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true,
+        "hostIds": [
+          "tool-host-local"
+        ],
+        "globals": {},
+        "tools": [
+          {
+            "toolId": "examples.loans/evaluate",
+            "toolGroupId": "MockToolGroup"
+          }
+        ],
+        "bindingIds": [
+          "mocks-on-tool-host"
+        ]
+      }
+    ],
+    "readiness": [
+      {
+        "toolId": "examples.loans/evaluate",
+        "agentId": "readiness-agent",
+        "arguments": {
+          "applicantId": "A-1003"
+        },
+        "expected": {
+          "decision": "APPROVE"
+        }
+      }
+    ]
+  },
+  "ProvisioningState": "PENDING",
+  "ProvisioningStep": "DEPLOY",
+  "ProvisioningPackageStatus": {
+    "packageId": "examples.loans",
+    "version": "0.1.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "required": true,
+    "state": "PENDING",
+    "step": "DEPLOY",
+    "reason": "Tool Host tool-host-local has not registered",
+    "toolIds": []
+  },
+  "ProvisioningStatus": {
+    "profileId": "demo3",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "generation": 1,
+    "state": "PENDING",
+    "packages": [
+      {
+        "packageId": "examples.loans",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true,
+        "state": "PENDING",
+        "step": "DEPLOY",
+        "reason": "Tool Host tool-host-local has not registered",
+        "toolIds": []
+      }
+    ],
+    "appliedAtUnixMs": 1700000000000,
+    "changes": [
+      {
+        "packageId": "examples.hotfolder",
+        "change": "CHANGED",
+        "previousVersion": "0.1.0",
+        "previousPackageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "0.2.0",
+        "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "previousProfileDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "ProvisioningStatusPage": {
+    "items": [
+      {
+        "profileId": "demo3",
+        "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "generation": 1,
+        "state": "PENDING",
+        "packages": [
+          {
+            "packageId": "examples.loans",
+            "version": "0.1.0",
+            "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "required": true,
+            "state": "PENDING",
+            "step": "DEPLOY",
+            "reason": "Tool Host tool-host-local has not registered",
+            "toolIds": []
+          }
+        ],
+        "appliedAtUnixMs": 1700000000000,
+        "changes": [
+          {
+            "packageId": "examples.hotfolder",
+            "change": "CHANGED",
+            "previousVersion": "0.1.0",
+            "previousPackageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "version": "0.2.0",
+            "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "previousProfileDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    ]
+  },
+  "ClientReleaseRequest": {
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ClientReleaseTool": {
+    "toolId": "ololabs.hello-world/client_greet",
+    "supported": true
+  },
+  "ClientRelease": {
+    "packageId": "ololabs.hello-world",
+    "version": "1.0.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "image": "registry.example.com/toolgate/client-tools@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "runtimeVersion": "21.0.12+1",
+    "manifestDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "signed": false,
+    "document": {
+      "formatVersion": 1
+    },
+    "documentBase64": "eyJmb3JtYXRWZXJzaW9uIjoxfQ",
+    "tools": [
+      {
+        "toolId": "ololabs.hello-world/client_greet",
+        "supported": true
+      },
+      {
+        "toolId": "acme.orders/items.get",
+        "supported": false,
+        "reason": "needs HTTP routes"
+      }
+    ]
+  },
+  "BrokerOperation": "FILES_READ",
+  "BrokerRequestFrame": {
+    "kind": "BROKER_REQUEST",
+    "requestId": "b-1",
+    "operation": "FILES_READ",
+    "request": {
+      "path": "notes/today.txt"
+    }
+  },
+  "BrokerResponseFrame": {
+    "kind": "BROKER_RESPONSE",
+    "requestId": "b-1",
+    "result": {
+      "text": "hello"
+    }
+  },
+  "ProfileChangeKind": "CHANGED",
+  "ProfileChange": {
+    "packageId": "examples.hotfolder",
+    "change": "CHANGED",
+    "previousVersion": "0.1.0",
+    "previousPackageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "0.2.0",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
 }

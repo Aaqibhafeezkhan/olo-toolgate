@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRolloutRecord, FleetPackageRelease, EnterpriseApprovalDecisionRequest, EnterpriseApprovalPage, EnterpriseApproval, ControlUser, ErrorEnvelope, EndpointEnrollmentReview, EndpointEnrollmentDecision } from '@olo-labs/toolgate-contracts';
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
-import type { BuilderDraft, BuilderDraftPage, BuilderDraftRequest, BuilderTestPage, BuilderTestRequest, BuilderTestRecord, BuilderDefinition } from '@olo-labs/toolgate-contracts';
-import type { AdminSession, ControlAuditPage } from '@olo-labs/toolgate-contracts';
-import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
+import type {SdkBuilderDraft,SdkBuilderDraftPage,SdkBuilderSave,SdkBuilderBuild,SdkBuilderBuildPage,SdkBuilderBuildRequest,SdkBuilderStatus} from '@olo-labs/toolgate-contracts';
+import type { AdminSession, ControlAuditPage,ConsoleDeviceLookup,ConsoleDeviceChallenge,ConsoleDeviceProof,ConsoleDeviceVerified } from '@olo-labs/toolgate-contracts';
+import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest,ProvisioningStatusPage} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
 import {pendingOperations,type ConfigurationFile,type EnrollmentLookup,type ImportIdentityOptions,type PendingServerSettings,type PendingServerSettingsPatch,type ReauthorizedWorkload,type ReviewPolicy} from './pendingContracts';
 
@@ -80,6 +80,12 @@ export class ControlClient {
   authorityStatus(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseAuthorityStatus>{return this.send(operations.accessAuthorityStatus,{signal});}
   effectiveAccess(entity:'users'|'agents'|'tools'|'devices',id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseEffectiveAccess>{const op={users:operations.effectiveUsers,agents:operations.effectiveAgents,tools:operations.effectiveTools,devices:operations.effectiveDevices}[entity];return this.send(op,{id,signal});}
   humanToolResult(id:string):Promise<import('@olo-labs/toolgate-contracts').RemoteToolResponse>{return this.send(operations.humanToolResult,{id});}
+  /** Tools the chosen target reports for this binding, each matching its verified definition. */
+  humanCatalog(body:import('@olo-labs/toolgate-contracts').EnterpriseHumanTarget,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').LocalToolCatalog>{return this.send(operations.humanToolCatalog,{body,signal});}
+  /** The person's own governed invocation. The key is kept by the caller for an exact retry; nothing retries automatically. */
+  invokeHumanTool(body:import('@olo-labs/toolgate-contracts').EnterpriseHumanRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseHumanOutcome>{return this.send(operations.invokeHumanTool,{body,key,timeoutMs:45000});}
+  /** Retained run-response events after a cursor, authorized on every page. */
+  runEvents(id:string,after:number,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').RunEventPage>{return this.send(operations.invocationRunEvents,{id,query:new URLSearchParams({after:String(after),limit:'200'}),signal});}
   remoteRequests(signal?:AbortSignal):Promise<RemoteToolPage>{return this.send(operations.listLocalMcpRequests,{signal});}
   remoteRequest(id:string,signal?:AbortSignal):Promise<RemoteToolInspection>{return this.send(operations.inspectLocalMcpRequest,{id,signal});}
   private token: string;
@@ -87,7 +93,7 @@ export class ControlClient {
   constructor(token: string, private readonly onUnauthorized: () => void, private readonly transport: typeof fetch = (input, init) => fetch(input, init)) {
     this.token = token;
   }
-  quickstart<T>(path: 'tools' | 'invoke' | 'vault', body?: unknown, key?:string): Promise<T> {
+  quickstart<T>(path: 'vault', body?: unknown, key?:string): Promise<T> {
     return this.send<T>({method: body === undefined ? 'GET' : 'POST', path: `/api/quickstart/v1/${path}`}, body === undefined ? {} : {body,key});
   }
   dispose(): void { this.token = ''; this.lifetime.abort(); }
@@ -131,6 +137,8 @@ export class ControlClient {
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */
   uploadServerPackage(file:Blob):Promise<PackageVersion>{return this.send(operations.uploadServerPackage,{raw:file,contentType:'application/vnd.ololabs.toolgate.package+zip',timeoutMs:120000});}
   deployServerPackage(body:PackageDeploymentRequest):Promise<PackageDeployment>{return this.send(operations.deployServerPackage,{body});}
+  /** The latest status of every applied deployment profile, with its package changes. */
+  provisioningStatuses(signal?:AbortSignal):Promise<ProvisioningStatusPage>{return this.send(operations.listProvisioningStatuses,{signal});}
   marketplaceStatus(signal?:AbortSignal):Promise<MarketplaceStatus>{return this.send(operations.getMarketplaceStatus,{signal});}
   marketplaceCatalog(q:string,signal?:AbortSignal):Promise<MarketplaceCatalog>{const query=new URLSearchParams({limit:'50'});if(q)query.set('q',q);return this.send(operations.listMarketplaceCatalog,{query,signal});}
   marketplaceVersions(packageId:string,signal?:AbortSignal):Promise<MarketplaceVersions>{return this.send(at(operations.listMarketplacePackageVersions,{packageId}),{signal});}
@@ -142,14 +150,28 @@ export class ControlClient {
   configurationChange(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.getConfigurationChange,{id,signal});}
   transitionConfiguration(id:string,body:import('@olo-labs/toolgate-contracts').EnterpriseConfigurationTransition,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseConfigurationChange>{return this.send(operations.transitionConfigurationChange,{id,body,key});}
   fleetReleases(cursor?:string,signal?:AbortSignal):Promise<FleetReleasePage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listFleetReleases,{query,signal});}
-  builderDrafts(cursor?:string,signal?:AbortSignal):Promise<BuilderDraftPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderDrafts,{query,signal});}
-  builderTests(cursor?:string,signal?:AbortSignal):Promise<BuilderTestPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderTests,{query,signal});}
-  saveDraft(body:BuilderDraftRequest,key:string):Promise<BuilderDraft>{return this.send(operations.saveBuilderDraft,{body,key});}
-  testDraft(body:BuilderTestRequest,key:string):Promise<BuilderTestRecord>{return this.send(operations.createBuilderTest,{body,key});}
-  sealDraft(id:string,expectedRevision:number,key:string):Promise<BuilderDraft>{return this.send(operations.sealBuilderDraft,{id,key,body:{expectedRevision}});}
-  publicationDraft(id:string):Promise<BuilderDefinition>{return this.send(operations.prepareBuilderPublication,{id});}
-  releaseDraft(id:string,body:FleetPackageRelease,key:string):Promise<FleetPackageRelease>{return this.send(operations.publishBuilderRelease,{id,body,key});}
-  deployDraft(id:string,body:FleetRolloutRequest,key:string):Promise<FleetRolloutRecord>{return this.send(operations.deployBuilderDraft,{id,body,key});}
+  builderDrafts(cursor?:string,signal?:AbortSignal):Promise<SdkBuilderDraftPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderDrafts,{query,signal});}
+  sdkBuilderStatus(signal?:AbortSignal):Promise<SdkBuilderStatus>{return this.send(operations.getSdkBuilderStatus,{signal});}
+  builderBuilds(cursor?:string,signal?:AbortSignal):Promise<SdkBuilderBuildPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderBuilds,{query,signal});}
+  saveSdkDraft(body:SdkBuilderSave,key:string):Promise<SdkBuilderDraft>{return this.send(operations.saveBuilderDraft,{body,key});}
+  buildSdkDraft(body:SdkBuilderBuildRequest,key:string):Promise<SdkBuilderBuild>{return this.send(operations.createBuilderBuild,{body,key});}
+  async downloadSdkBuild(id:string,source:boolean):Promise<Blob>{
+    if(this.lifetime.signal.aborted)throw new DOMException('Session ended','AbortError');
+    const timeout=AbortSignal.timeout(120000),signal=AbortSignal.any([this.lifetime.signal,timeout]);
+    const operation=source?operations.downloadBuilderSource:operations.downloadBuilderPackage;
+    const mediaType=source?'application/zip':'application/vnd.ololabs.toolgate.package+zip';
+    try{
+      const response=await this.transport(operation.path.replace('{id}',encodeURIComponent(id)),{headers:{Authorization:`Bearer ${this.token}`,Accept:mediaType},signal,credentials:'omit',cache:'no-store',redirect:'error'});
+      if(response.status===401){this.dispose();this.onUnauthorized();}
+      if(!response.ok){await readBody(response);throw new ApiError(response.status,'HTTP_ERROR',response.headers.get('X-Request-ID')??undefined);}
+      if(!response.headers.get('content-type')?.startsWith(mediaType))throw new ApiError(502,'INVALID_RESPONSE');
+      const reader=response.body?.getReader();if(!reader)throw new ApiError(502,'INVALID_RESPONSE');
+      const chunks:Uint8Array<ArrayBuffer>[]=[];let size=0;
+      try{while(true){const next=await reader.read();if(next.done)break;size+=next.value.byteLength;if(size>64*1024*1024)throw new ApiError(502,'RESPONSE_LIMIT');chunks.push(new Uint8Array(next.value));}}
+      finally{await reader.cancel();}
+      return new Blob(chunks,{type:mediaType});
+    }catch(error){if(error instanceof ApiError)throw error;if(this.lifetime.signal.aborted)throw new DOMException('Session ended','AbortError');throw new ApiError(0,timeout.aborted?'TIMEOUT':'NETWORK');}
+  }
   fleetRollouts(cursor?:string,signal?:AbortSignal):Promise<FleetRolloutPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listFleetRollouts,{query,signal});}
   publishRelease(release:FleetPackageRelease,key:string):Promise<FleetPackageRelease>{return this.send(operations.publishFleetRelease,{body:release,key});}
   assignPackage(request:FleetRolloutRequest,key:string):Promise<FleetRolloutRecord>{return this.send(operations.createFleetRollout,{body:request,key});}
@@ -159,7 +181,13 @@ export class ControlClient {
     return this.send(listOperations[kind], { query, signal });
   }
   bootstrapAdminUserId?:string;
-  async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;return session;}
+  private permissionSet=new Set<string>();
+  private permissionVersion=0;
+  private permissionListeners=new Set<()=>void>();
+  can(permission:string):boolean{return this.permissionSet.has(permission);}
+  permissionSnapshot=()=>this.permissionVersion;
+  subscribePermissions=(listener:()=>void)=>{this.permissionListeners.add(listener);return()=>{this.permissionListeners.delete(listener);};};
+  async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;this.permissionSet=new Set(session.permissions??[]);this.permissionVersion++;this.permissionListeners.forEach(listener=>listener());return session;}
   audit(cursor:string,signal?:AbortSignal):Promise<ControlAuditPage>{return this.send(operations.listAudit,{query:new URLSearchParams({cursor,limit:'50'}),signal});}
   record<K extends DirectoryKind>(kind:K,id:string):Promise<DirectoryRecords[K]> {return this.send(getOperations[kind],{id});}
   async all<K extends DirectoryKind>(kind:K,signal?:AbortSignal):Promise<DirectoryRecords[K][]> {
@@ -171,7 +199,7 @@ export class ControlClient {
   memberships(entity:'users'|'agents'|'tools'|'devices',id:string,signal?:AbortSignal):Promise<GroupMembership>{const operation={users:operations.getUserGroupMembership,agents:operations.getAgentGroupMembership,tools:operations.getToolGroupMembership,devices:operations.getDeviceGroupMembership}[entity];return this.send(operation,{id,signal});}
   saveMemberships(entity:'users'|'agents'|'tools'|'devices',body:GroupMembership,key:string):Promise<GroupMembership>{const operation={users:operations.updateUserGroupMembership,agents:operations.updateAgentGroupMembership,tools:operations.updateToolGroupMembership,devices:operations.updateDeviceGroupMembership}[entity];return this.send(operation,{id:body.entityId,body,revision:body.revision,key});}
   simulateAccess(body:EnterpriseEvaluation):Promise<EnterpriseDecision>{return this.send(operations.simulateEnterpriseAccess,{body});}
-  serverSettings(signal?:AbortSignal):Promise<PendingServerSettings>{return this.send(operations.getServerSettings,{signal});}
+  serverSettings(signal?:AbortSignal,section?:'server'|'device'):Promise<PendingServerSettings>{return this.send(operations.getServerSettings,{signal,...(section?{query:new URLSearchParams({section})}:{})});}
   /** Every signed-in console user may read the configuration review threshold. */
   reviewPolicy(signal?:AbortSignal):Promise<ReviewPolicy>{return this.send(pendingOperations.getReviewPolicy,{signal});}
   /** Saves only the groups one Configuration page owns. */
@@ -217,6 +245,8 @@ export class ControlClient {
   }
   /** Rate-limited: Control answers 404 with no detail for an unknown code and 429 after repeated failures. */
   lookupEnrollment(userCode:string,signal?:AbortSignal):Promise<EnrollmentLookup>{return this.send(pendingOperations.lookupEndpointEnrollment,{body:{userCode},signal});}
+  consoleDeviceChallenge(body:ConsoleDeviceLookup,signal?:AbortSignal):Promise<ConsoleDeviceChallenge>{return this.send(operations.challengeConsoleDevice,{body,signal});}
+  verifyConsoleDevice(body:ConsoleDeviceProof,signal?:AbortSignal):Promise<ConsoleDeviceVerified>{return this.send(operations.verifyConsoleDevice,{body,signal});}
   /** Quickstart rotates the delegated binding credential, waits for the Gateway, and returns the new agent token once. */
   reauthorizeWorkload(id:string,key:string):Promise<ReauthorizedWorkload>{return this.send(pendingOperations.reauthorizeQuickstartWorkload,{id,body:{},key,timeoutMs:60000});}
   endpointDevice(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointDeviceRecord>{return this.send(operations.getEndpointDevice,{id,signal});}

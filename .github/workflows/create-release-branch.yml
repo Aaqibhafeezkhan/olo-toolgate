@@ -1,0 +1,66 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: Prepare release branch
+'on':
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: Source branch (main or release/*)
+        type: string
+        default: main
+        required: true
+      source_commit:
+        description: latest or full 40-character commit SHA from the source branch
+        type: string
+        default: latest
+        required: true
+      base_version:
+        description: MAJOR.MINOR.PATCH (build number is allocated automatically)
+        type: string
+        default: 1.0.0
+        required: true
+      channel:
+        description: Release channel
+        type: choice
+        options: [Beta, RC, Stable]
+        default: Beta
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: prepare-product-release
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: Reserve the next build number and pin source commit
+      id: allocate
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SOURCE_BRANCH: ${{ inputs.source_branch }}
+        SOURCE_COMMIT: ${{ inputs.source_commit }}
+        BASE_VERSION: ${{ inputs.base_version }}
+        CHANNEL: ${{ inputs.channel }}
+      run: python tools/release/prepare.py allocate
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ steps.allocate.outputs.sourceCommit }}
+        path: source
+        persist-credentials: false
+    - name: Apply one release version to binaries, packages and configuration
+      run: python tools/release/prepare.py stamp --root source
+    - name: Create release branch and immutable preparation tag
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: python tools/release/prepare.py commit --root source

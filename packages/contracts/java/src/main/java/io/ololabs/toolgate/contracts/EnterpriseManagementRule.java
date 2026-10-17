@@ -3,14 +3,14 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** Management grants belong to group-assigned Management Roles only.
+/** Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected.
  *
  * @param actions canonical actions value
  * @param groupType canonical groupType value
  * @param groups canonical groups value
  * @param grantableScopes canonical grantableScopes value
  * @param conditions canonical conditions value
- * @param ownDevices canonical ownDevices value
+ * @param deviceScope canonical deviceScope value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EnterpriseManagementRule(
@@ -19,7 +19,7 @@ public record EnterpriseManagementRule(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "groups", required = true) GroupSelection groups,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "grantableScopes", required = true) java.util.List<EnterpriseScope> grantableScopes,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "conditions", required = true) EnterpriseConditions conditions,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "ownDevices", required = false) Boolean ownDevices
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceScope", required = false) String deviceScope
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -28,7 +28,7 @@ public record EnterpriseManagementRule(
      * @param groups canonical groups value
      * @param grantableScopes canonical grantableScopes value
      * @param conditions canonical conditions value
-     * @param ownDevices canonical ownDevices value
+     * @param deviceScope canonical deviceScope value
      */
     public EnterpriseManagementRule {
         java.util.Objects.requireNonNull(actions, "actions");

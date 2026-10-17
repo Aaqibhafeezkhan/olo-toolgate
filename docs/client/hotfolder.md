@@ -1,15 +1,21 @@
-# HotFolder and native client operations
+# Device files area and the HotFolder package
 
-Quickstart HotFolder uses local-hotfolder for device-bound policy filters and checks its enabled owner, its own enablement and the fixed executor before effects. Installed-client HotFolder retains the enrolled client identity and the same client approval gates.
+A device can offer tools one confined folder, its **files area**. The client knows
+nothing about the tools that use it: any signed package tool that declares file
+access goes through the same checks ([ADR 027](../adr/027-one-tool-protocol-device-files.md)).
+The HotFolder file tools are such a package, `examples.hotfolder`
+([source](../../examples/java-tools/hotfolder/README.md)), installed like any other
+Marketplace package. There are no built-in tools in the client.
 
-See [Device registry and tool-call controls](../control-plane/device-registry.md).
+See [Device registry and tool-call controls](../control-plane/device-registry.md)
+and [managed local runtimes](local-runtimes.md) for how package tools run.
 
 The service runs independently of interactive login. Windows uses an automatic
 LocalSystem service, macOS uses a system LaunchDaemon, and Linux uses a root
 systemd service enabled for multi-user boot. A locked or logged-out session does
 not stop it. Shutdown, sleep or unavailable network prevents live protected work.
-There is no arbitrary scheduler or background job engine in Module 07: callers
-use authenticated local IPC, and the service maintains its identity heartbeat.
+There is no arbitrary scheduler or background job engine: the service maintains
+its identity heartbeat and runs signed package tools when Control sends them.
 
 ## Installation and enrollment
 
@@ -20,111 +26,77 @@ verify SHA-256, extract the archive, and run its `install --server HTTPS_ORIGIN`
 command with administrator rights. Linux/macOS use `sudo`; Windows uses an
 elevated PowerShell. Restart/reinstall upgrades require stopping the old service
 and retaining identity. `uninstall` retains identity; `uninstall --purge` removes
-fixed identity files and always preserves HotFolder data. Revoke retired devices.
+fixed identity files and always preserves the files area. Revoke retired devices.
 
 Run `enroll` from an explicitly authorized OS account, confirm the code and key
 fingerprint in the browser, and wait for `health` to become ready. Browser/CLI
 sessions can then close. Windows IPC uses impersonated SIDs and Unix IPC uses
 kernel UIDs. The CLI verifies a root/LocalSystem server. Never add wildcard peers.
 Ordinary users cannot edit the installed service, configuration, credentials or
-tool root. Root/administrators are trusted deployment operators.
+files area. Root/administrators are trusted deployment operators.
 Windows installation rejects caller-writable service directories and ancestors,
 even when that caller is running an elevated installer.
 
 ## Protected configuration
 
-Installation starts with tools disabled. An administrator supplies the optional
-`tools` object in the protected client JSON, restarts the system service, and
-provisions an expiring Gateway credential bound to the enrolled device. The
-credential comes from existing Gateway identity configuration; the client does
-not mint it. The following illustrates Linux paths; use protected ProgramData
-paths on Windows and `/Library/Application Support/OLO/ToolGate` on macOS.
+The files area is part of the administrator-owned `execution` settings in the
+protected client JSON (beside `engine`, `stateDirectory` and the managed runtimes,
+see [managed local runtimes](local-runtimes.md)). Without `files`, every file
+operation is refused. Linux paths shown; use protected ProgramData paths on Windows
+and `/Library/Application Support/OLO/ToolGate` on macOS.
 
 ```json
 {
-  "hotfolder": {
+  "files": {
     "root": "/var/lib/olo-toolgate/hotfolder",
     "maxFileBytes": 65536,
     "maxEntries": 256,
-    "extensions": ["txt", "json", "md"]
-  },
-  "gatewayUrl": "https://gateway.example.com",
-  "gatewayTokenPath": "/etc/olo-toolgate/gateway-token",
-  "gatewayCaPath": null,
-  "deviceId": "device-ENROLLED_ID",
-  "webSearchTokenPath": null,
-  "webSearchAllowedDomains": []
+    "extensions": ["txt", "json", "md", "csv"]
+  }
 }
 ```
 
-This object belongs under `tools`, alongside existing `serverUrl`,
-`stateDirectory`, `ipcEndpoint`, `authorizedPeers`, `caCertificatePath` and
-`requestTimeoutSeconds`. Device ID must match the enrolled certificate identity.
-All configured paths are absolute. Create missing protected parent directories
-first. The service creates an owner-only HotFolder root; symlinks, writable
-ancestors, reparse points and hard-linked files are rejected. Credentials are
-private files (Unix 0600, directory 0700; Windows SYSTEM/Administrators ACLs).
-Never put credential contents into policy arguments, chart values or logs.
+`root` is absolute; `maxFileBytes` is 1 to 65,536; `maxEntries` 1 to 1,024; at most
+32 lowercase alphanumeric extensions. The service creates an owner-only root;
+symlinks, writable ancestors, reparse points and hard-linked files are rejected.
+Linux's unit confines writes to `/var/lib/olo-toolgate` and `/run/olo-toolgate`;
+for a root outside that tree, add the exact root to a systemd `ReadWritePaths`
+drop-in and restart. Do not remove confinement.
 
-Linux's unit confines writes to `/var/lib/olo-toolgate` and `/run/olo-toolgate`.
-For a root outside that tree, an administrator must add the exact protected root
-to a systemd `ReadWritePaths` drop-in and restart; do not remove confinement.
-The client fixes its runtime at two workers and at most eight blocking workers,
-so high-core-count machines remain within the installed service's task budget.
+## How a tool reaches files
 
-Gateway policy needs the fixed catalog action plus resource kind/locator for
-each operation. File tools use FILE and the portable path relative to HotFolder;
-list/events and pure utilities use locator `hotfolder`. Utilities use CUSTOM.
-The Gateway extractor registry uses `/path` for these tools. Copy/move requires
-separate grants for both source and destination. Path spellings are ASCII,
-relative, lowercase and bounded: no traversal, absolute paths, backslashes,
-ADS, encoded aliases, hidden names or Windows device names. Policy path matching
-is exact; uppercase names are rejected to prevent aliases on case-insensitive filesystems.
+1. The package declares access with `@DeviceFileAccess` on a `@ClientTool`; its
+   descriptor carries `DEVICE_FILES_READ`, plus `DEVICE_FILES_WRITE` for writes.
+   Administrators see these permissions when they review and enable the package.
+2. Control signs the access into the tool's registration (`fileAccess`: `NONE`,
+   `READ` or `WRITE`) in the device's fleet release.
+3. A call needs the usual ready device identity and a fresh online ALLOW; ASK must
+   be approved and its exact-operation permit consumed. There is no cached ALLOW.
+4. The tool runs in the managed sandbox, which has no host mounts or network. It
+   asks for files with tool protocol v2 `BROKER_REQUEST` frames (`FILES_LIST`,
+   `FILES_READ`, `FILES_INFO`, `FILES_WRITE`, `FILES_APPEND`, `FILES_MKDIR`,
+   `FILES_RENAME`). The client answers only when the registration grants that
+   access, only for a path or destination equal to a string argument of the
+   authorized call, and at most 64 times per call. Anything else is `BROKER_REFUSED`.
 
-Every call needs ready device identity and a fresh online ALLOW. ASK must already
-be approved and its exact-operation permit must be consumed online. ASK pending,
-denial, expiry, identity mismatch, Control staleness or Gateway outage blocks.
-There is no cached offline ALLOW. Authorization occurs before effects, with
-bounded HTTPS timeouts and a readiness/certificate deadline checked after grants.
+Paths are ASCII, relative, lowercase and bounded: no traversal, absolute paths,
+backslashes, alternate data streams, encoded aliases, hidden names or Windows
+device names, at most sixteen levels. Writes replace atomically and appends are
+serialized; renames never overwrite. Delete does not exist.
 
-## Fixed tools and limits
+Self-tests run each tool's examples in a new, empty files area under the state
+directory that is removed afterwards, so they never read or change user files.
 
-`olo-toolgate-client tools` lists canonical schemas for all enabled tools.
-`olo-toolgate-client tools hotfolder.read_text '{"path":"notes.txt"}'` invokes
-one tool. Use a PowerShell single-quoted JSON string on Windows. Scripts must
-check the exit code and the canonical response; busy IPC may reject during
-check-in, so retry reads with bounded backoff. Never blindly retry a mutation
-after losing its response: inspect the authorized state first.
+## The HotFolder package
 
-HotFolder provides list, UTF-8 read/write/append, mkdir, search in one authorized
-file, hash, copy, move, file information, and event polling. Delete is absent.
-Atomic replacement and serialized append prevent partial writes and lost
-concurrent appends. Destination overwrite in copy/move is prohibited. Files are
-at most 64 KiB, inventory at most 1,024 entries, path depth at most sixteen.
-Each installation can reduce file and entry limits; allowed extensions are
-explicit. Search uses literal text and returns at most 100 line numbers.
-
-Pure tools provide bounded arithmetic, text transformations, JSON validation,
-SHA-256 and OS/architecture/version information. No shell, scripts, network
-fetch, command execution, package installation or process control is exposed.
-Tool inputs are closed schemas; wire frames are bounded to 128 KiB and output
-to 120,000 serialized bytes. Calculator depth is at most 32 and nonfinite results
-fail. Structured logs record tool, request, argument digest and outcome rather
-than contents or credentials. Gateway records authorization audit events.
-
-`hotfolder.watch_events` and `hotfolder.list_events` are bounded polling of
-service-observed successful mutations, not filesystem monitoring of arbitrary
-external changes. The ring retains 256 records. Pass `after` and the previous
-`epoch`; a restart, cursor gap or epoch mismatch sets `reset`. Re-read authorized
-inventory after reset. Events are transient, never durable security evidence.
-The Control audit and Gateway audit retain their existing durable/sink behavior.
-
-`web.search` is disabled until `webSearchTokenPath` names a private Brave Search
-provider credential. Only the fixed HTTPS Brave endpoint is contacted; redirects,
-proxies and result fetching are disabled. Queries are at most 256 characters,
-responses 128 KiB, results five. `webSearchAllowedDomains` can restrict returned
-links to exact domains/subdomains. Results are untrusted data, never executable
-instructions. A deployment without a credential makes no provider calls.
+`examples.hotfolder` provides `hotfolder.list`, `read_text`, `file_info`, `hash`
+and `search_text` (read access) and `write_text`, `append_text`, `mkdir`, `move`
+and `copy` (write access). A missing file is reported as data (`exists: false`,
+`moved: false`); `move` and `copy` refuse an existing destination. A deployment
+profile installs it on devices with `deviceGroupIds` ([profiles](../deployment/profiles.md));
+the demo lab devices get theirs this way. Grant it to
+callers per tool, for example `tool://examples.hotfolder/` with match `PREFIX`, or
+one `EXACT` locator per read tool for read-only access.
 
 ## Downloads, deployment and release
 
@@ -159,18 +131,18 @@ deployment must apply its signing/notarization policy before distribution.
 
 ## Upgrade and troubleshooting
 
-Deploy matching product/contracts/chart release metadata. IPC protocol 1 remains
-frozen; tools use additive protocol 2. Current device management requires the
-complete Control Flyway series through V11. Discovery minimum client version uses SemVer minimum
+Deploy matching product/contracts/chart release metadata; installations are fresh,
+and no earlier tool protocol or client catalog is accepted. Discovery minimum client version uses SemVer minimum
 comparison. Control is built with TLS client-auth REQUEST; enabling enrollment
 also requires external server TLS and device trust store with insecure HTTP
 disabled. Device routes live under `/api/control/v1/endpoint`; discovery remains
 `/.well-known/olo-toolgate-client`. Certificate headers never authenticate a device.
 
 If health is unready, check connectivity, signed discovery origin/CA, enrollment
-state, revocation and certificate freshness before changing tools. If tool calls
-block, inspect protected token expiry, enrolled device binding, policy action,
-extractor and both paths for copy/move. Fix permissions administratively; never
+state, revocation and certificate freshness before changing tools. If a file tool
+is refused, check that its signed registration grants the access it needs, that
+the device has an `execution.files` area, and that each path is one the caller
+passed as an argument (both paths for `move` and `copy`). Fix permissions administratively; never
 relax custody or TLS. A crash may leave an internal `.write-*` temporary file,
 causing inventory to fail closed. Stop the service, inspect and remove only the
 verified stale internal file as an administrator, then restart. Preserve user
@@ -180,5 +152,5 @@ approval deadline or bypass disablement. See the
 [device registry flow](../control-plane/device-registry.md). Partial installer
 repair can still require administrator action.
 
-See [Module 07 verification](../codex/modules/07-completion.md) for executed gates
+See [testing and verification](../testing/README.md) for required gates
 and the distinction between local evidence and native CI evidence.

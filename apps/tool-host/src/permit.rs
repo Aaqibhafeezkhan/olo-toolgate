@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Permit verification (plan.md §11.2, §11.3): a compact JWS over `InvocationPermitClaims`,
+//! Permit verification (platform-requirements.md §11.2, §11.3): a compact JWS over `InvocationPermitClaims`,
 //! RS256 with one of Control's effect-signing keys, addressed to this host, inside its short
 //! admission window, and never seen before.
 

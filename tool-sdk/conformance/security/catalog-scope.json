@@ -4,7 +4,7 @@
   "area": "catalog-scope",
   "title": "Catalog scope routes",
   "sources": [
-    "plan.md §9.4",
+    "platform-requirements.md §9.4",
     "ADR 015"
   ],
   "cases": [
@@ -12,7 +12,7 @@
       "id": "catalog-scope/routes",
       "title": "Each route serves only its scope",
       "requirements": [
-        "plan.md §9.4"
+        "platform-requirements.md §9.4"
       ],
       "level": "component",
       "targets": [
@@ -31,7 +31,7 @@
       "id": "catalog-scope/no-existence-oracle",
       "title": "A mismatch looks the same whether or not the target exists",
       "requirements": [
-        "plan.md §9.4",
+        "platform-requirements.md §9.4",
         "ADR 015",
         "§21 security"
       ],
@@ -50,7 +50,7 @@
       "id": "catalog-scope/recheck-per-call",
       "title": "tools/call re-checks scope and authorization",
       "requirements": [
-        "plan.md §9.4"
+        "platform-requirements.md §9.4"
       ],
       "level": "component",
       "targets": [
@@ -67,7 +67,7 @@
       "id": "catalog-scope/url-does-not-change-identity",
       "title": "The URL never changes who the caller is",
       "requirements": [
-        "plan.md §9.4"
+        "platform-requirements.md §9.4"
       ],
       "level": "component",
       "targets": [
@@ -83,7 +83,7 @@
       "id": "catalog-scope/toolset-filter",
       "title": "?toolset= filters visibility only",
       "requirements": [
-        "plan.md §9.4"
+        "platform-requirements.md §9.4"
       ],
       "level": "component",
       "targets": [
@@ -100,7 +100,7 @@
       "id": "catalog-scope/slug-grammar",
       "title": "Route slugs follow the grammar",
       "requirements": [
-        "plan.md §9.4"
+        "platform-requirements.md §9.4"
       ],
       "level": "unit",
       "targets": [
@@ -116,7 +116,7 @@
       "id": "catalog-scope/cache-key",
       "title": "The decision cache is keyed by scope and epochs",
       "requirements": [
-        "plan.md §9.4"
+        "platform-requirements.md §9.4"
       ],
       "level": "unit",
       "targets": [

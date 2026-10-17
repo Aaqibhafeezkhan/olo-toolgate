@@ -3,20 +3,17 @@
 //! Protected endpoint identity, enrollment and batched health reporting.
 pub mod activity;
 pub mod browser;
-pub mod builder;
-pub mod builtins;
 pub mod config;
 pub mod connections;
 pub mod contracts;
 pub mod deployment;
 pub mod diagnostics;
 pub mod execution;
-pub mod hotfolder;
+pub mod files;
 pub mod identity;
 pub mod install;
 pub mod ipc;
 mod json;
-pub mod local_tools;
 
 pub mod authorization_profile;
 pub mod platform;

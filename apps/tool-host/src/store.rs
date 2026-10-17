@@ -95,6 +95,9 @@ impl Store {
                     == Some(target.tool_id.as_str())
             })
             .ok_or_else(|| not_present(format!("the package has no tool {}", target.tool_id)))?;
+        if tool.pointer("/descriptor/kind").and_then(Value::as_str) != Some("SERVER") {
+            return Err(not_present("a Tool Host can only execute SERVER tools"));
+        }
         let tool: ToolDefinition = serde_json::from_value(tool.clone())
             .map_err(|e| not_present(format!("the tool definition is invalid: {e}")))?;
         if tool.tool_descriptor_digest != target.tool_descriptor_digest {

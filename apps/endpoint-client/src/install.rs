@@ -216,7 +216,7 @@ fn reconfigure(
             settings.server_url = server.clone();
             match restore_profile(&previous.state_directory, &server, ca, &mut moves)? {
                 Some((saved, snapshot)) => {
-                    settings.tools = saved.tools;
+                    settings.gateway = saved.gateway;
                     settings.execution = saved.execution;
                     settings.deployment = saved.deployment;
                     settings.ca_certificate_path = saved.ca_certificate_path;
@@ -426,7 +426,7 @@ const GATEWAY_STATE: [&str; 7] = [
 /// These settings contain gateway destinations, pins and credentials from the old site.
 #[cfg(windows)]
 fn clear_gateway_settings(settings: &mut Config) {
-    settings.tools = None;
+    settings.gateway = None;
     settings.execution = None;
     settings.deployment = None;
     settings.ca_certificate_path = None;
@@ -587,7 +587,7 @@ fn adopt_kept_state(
             let parked = Config {
                 deployment: None,
                 execution: None,
-                tools: None,
+                gateway: None,
                 ca_certificate_path: kept_ca(&state, &kept, config_directory),
                 local_console_url: known_gateways()
                     .into_iter()
@@ -606,7 +606,7 @@ fn adopt_kept_state(
         Some(_) => retire_gateway_state(&state, moves, &mut retired)?,
     }
     if let Some((saved, snapshot)) = restore_profile(&state, &settings.server_url, ca, moves)? {
-        settings.tools = saved.tools;
+        settings.gateway = saved.gateway;
         settings.execution = saved.execution;
         settings.deployment = saved.deployment;
         settings.ca_certificate_path = saved.ca_certificate_path;
@@ -799,7 +799,7 @@ fn install_config(
     let mut settings = previous.unwrap_or(Config {
         deployment: None,
         execution: None,
-        tools: None,
+        gateway: None,
         server_url: origin,
         state_directory: state,
         ipc_endpoint: ipc_endpoint(),
@@ -945,6 +945,36 @@ fn write_definition(path: &Path, bytes: &[u8]) -> Result<()> {
 pub fn uninstall(purge: bool) -> Result<()> {
     remove(purge, true)
 }
+/// Unloads the launchd job and waits until launchd no longer knows it. bootout answers 36 (operation now in progress)
+/// while the daemon is still stopping, which is not a failure.
+#[cfg(target_os = "macos")]
+fn launchd_bootout() -> Result<()> {
+    const JOB: &str = "system/io.ololabs.toolgate.client";
+    let status = Command::new("/bin/launchctl")
+        .args(["bootout", JOB])
+        .status()
+        .map_err(|_| Failure::Unavailable)?;
+    if !status.success() && status.code() != Some(36) {
+        return Err(Failure::Unavailable);
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let listed = Command::new("/bin/launchctl")
+            .args(["print", JOB])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|_| Failure::Unavailable)?;
+        if !listed.success() {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(Failure::Unavailable);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+}
+
 /// `park` moves the active gateway's enrollment into its profile, so a later install for
 /// another gateway keeps it connected in the background instead of inheriting it.
 #[cfg(not(windows))]
@@ -963,10 +993,7 @@ fn remove(purge: bool, park: bool) -> Result<()> {
     }
     #[cfg(target_os = "macos")]
     {
-        command(
-            "/bin/launchctl",
-            &["bootout", "system/io.ololabs.toolgate.client"],
-        )?;
+        launchd_bootout()?;
         std::fs::remove_file("/Library/LaunchDaemons/io.ololabs.toolgate.client.plist")
             .map_err(|_| Failure::Unavailable)?;
     }
@@ -1165,7 +1192,7 @@ mod tests {
         let settings = Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: "https://localhost:18450".into(),
             state_directory: directory.clone(),
             ipc_endpoint: ipc_endpoint(),
@@ -1220,7 +1247,7 @@ mod tests {
         let first = Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: "https://localhost:18450".into(),
             state_directory: directory.clone(),
             ipc_endpoint: ipc_endpoint(),
@@ -1317,7 +1344,7 @@ mod tests {
         let fresh = |ca: Option<PathBuf>| Config {
             deployment: None,
             execution: None,
-            tools: None,
+            gateway: None,
             server_url: "https://localhost:18450".into(),
             state_directory: directory.clone(),
             ipc_endpoint: ipc_endpoint(),

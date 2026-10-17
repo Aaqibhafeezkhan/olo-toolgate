@@ -43,7 +43,7 @@ class UiContractTest(unittest.TestCase):
                 with self.assertRaises(SystemExit):generator.main()
 
     def test_console_documentation_links_exist(self):
-        for name in ('apps/admin-ui/README.md','docs/control-plane/admin-ui.md','docs/adr/004-embedded-admin-console.md','docs/codex/modules/03-coverage.md'):
+        for name in ('apps/admin-ui/README.md','docs/control-plane/admin-ui.md','docs/adr/004-embedded-admin-console.md','docs/testing/README.md'):
             path=ROOT/name
             for target in re.findall(r'\]\(([^)]+)\)',path.read_text(encoding='utf-8')):
                 if '://' in target or target.startswith('#'):continue

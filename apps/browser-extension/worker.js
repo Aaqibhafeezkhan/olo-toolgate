@@ -17,6 +17,11 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const result = {protocol,version:chrome.runtime.getManifest().version_name,chromeVersion:chrome.runtime.getManifest().version,client:null};
     if (message.operation === 'hello') return {...result,phase:'available'};
     const state = (await chrome.storage.local.get(origin))[origin];
+    if (message.operation==='proof') {
+      if(!state?.approved||state.phase!=='ready'||!/^[a-f0-9]{64}$/.test(message.nonce))return {...result,error:'CONNECT_REQUIRED'};
+      const proof=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'proof',consoleUrl:sender.tab.url,nonce:message.nonce});
+      return proof.error?{...result,error:'PROOF_UNAVAILABLE'}:{...result,proof:proof.proof};
+    }
     if (message.operation === 'cancel') {
       await chrome.storage.local.remove(origin);
       return {...result,phase:'cancelled'};

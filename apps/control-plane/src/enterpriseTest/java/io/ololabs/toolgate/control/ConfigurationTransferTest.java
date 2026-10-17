@@ -66,7 +66,7 @@ class ConfigurationTransferTest {
         var conflict=assertThrows(Failure.class,()->source.directory.importConfig(source.administrator,request(without,"REPLACE",true,Map.of(),false),false,without.get("revision").asLong(),"dangling","request"));
         assertEquals(409,conflict.status());assertEquals(ControlErrorDetailCode.REPLACE_CONFLICTS,conflict.detail());assertEquals(List.of("DEVICE_EVIDENCE:evidence"),conflict.ids());
     }
-    @Test void settingsImportsNeedSuperAdminAndCannotMoveTheReviewThreshold(){
+    @Test void settingsImportsNeedFeaturePermissionsAndCannotMoveTheReviewThreshold(){
         var snapshot=exported();((ObjectNode)snapshot.get("settings").get("gateway")).put("gatewayName","Restored Gateway");
         assertEquals(200,source.directory.importConfig(source.administrator,request(snapshot,"MERGE",false,Map.of(),false),false,snapshot.get("revision").asLong(),"settings","request").status());
         assertEquals("Restored Gateway",source.store.transaction(EnterpriseConformanceTest.TENANT,false,tx->new ServerSettingsService(null,codec,ClientCheckInPolicy.QUICKSTART).current(tx).gateway().gatewayName()));
@@ -75,8 +75,8 @@ class ConfigurationTransferTest {
         demote();var scoped=exported();assertFalse(scoped.has("settings"));
         assertEquals(403,assertThrows(Failure.class,()->source.directory.importConfig(source.administrator,request(snapshot,"MERGE",true,Map.of(),false),false,snapshot.get("revision").asLong(),"scoped","request")).status());
     }
-    void demote(){source.store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var r=codec.model(entries.get(Kind.ROLE.id("recovery-role")).document(),ControlRole.class);var e=codec.entry(Kind.ROLE,codec.json(new ControlRole(r.id(),r.name(),true,r.revision()+1,UserRole.ADMINISTRATOR,r.roleType(),r.managementRules())));entries.put(e.id(),e);tx.save(before,new Directory(before.revision()+1,entries));return null;});}
-    @Test void credentialRotationRebindsDelegatedBindingAndIsSuperAdminOnly(){
+    void demote(){source.retainIndependentAdministrator();source.store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var r=codec.model(entries.get(Kind.ROLE.id("recovery-role")).document(),ControlRole.class);var e=codec.entry(Kind.ROLE,codec.json(new ControlRole(r.id(),r.name(),true,r.revision()+1,UserRole.ADMINISTRATOR,r.roleType(),r.managementRules().stream().map(rule->new EnterpriseManagementRule(rule.actions().stream().filter(p->!Set.of("server_configuration.read","device_configuration.read","server_configuration.update","device_configuration.update","workload_binding.rotate_credential","user.disable").contains(p)).toList(),rule.groupType(),rule.groups(),rule.grantableScopes(),rule.conditions(),rule.deviceScope())).toList())));entries.put(e.id(),e);tx.save(before,new Directory(before.revision()+1,entries));return null;});}
+    @Test void credentialRotationRebindsDelegatedBindingAndRequiresFeaturePermission(){
         String hash="c".repeat(64);var body=codec.json(Map.of("credentialSha256",hash,"enable",true));
         var result=codec.model(source.directory.rotateCredential(source.administrator,"workload",body,"rotate","request").body(),ControlWorkloadCredentialResult.class);
         assertEquals(2L,result.binding().credentialEpoch());assertEquals(hash,result.binding().credentialSha256());assertTrue(result.binding().enabled());assertEquals(1L,result.binding().delegatedSessionEpoch());assertNull(result.binding().needsReauthorization());

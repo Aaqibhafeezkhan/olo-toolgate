@@ -1,53 +1,27 @@
-# Run Your First Tool
+# Authorize and run your first tool
 
-First check the [device registry](../control-plane/device-registry.md).
-Installed clients need an enabled registered owner/device and current timed or
-unlimited connection approval. Quickstart's server tools use its registered fixed
-executor and HotFolder identities. All paths still require applicable Gateway
-filters and permits; installation, green status or approval alone grants no tool access.
+Start from a running [Quickstart](one-minute-quickstart.md). Choose a low-risk tool
+from the installed catalog, or build the [Java starter](../../TOOL-SDK-GUIDE.md).
+Fresh installations do not grant access automatically.
 
-## Built-In Tool
+1. Register the intended executor and review its fingerprint/owner. Installed
+   clients need both enablement and current connection approval.
+2. Enable the Tool and put it in its intended Tool Group. Bind that Tool Group to
+   the executor's Device Group.
+3. Give the requesting User's Team a complete grant for that Tool Group, Device
+   Group, action and resource. For an Agent, also configure Agent Group capability
+   and explicit SERVICE or delegated authority.
+4. Apply configuration through the applicable review workflow. Management roles
+   and device approval do not replace these runtime grants.
+5. Discover and invoke the tool using the configured client/Agent identity. Inspect
+   the correlated decision and result. If policy requires ASK, review the exact
+   pending operation before retrying it unchanged.
+6. Disable a required grant or target and confirm a subsequent call is denied.
 
-Open:
+For local files, install the HotFolder package on an enrolled device with a files area and grant exact allowed
+paths. Do not grant arbitrary filesystem or shell access as a shortcut.
 
-```text
-Tools → Built-In → calculator.evaluate
-```
-
-Test:
-
-```json
-{
-  "expression": "(12 * 5) + 7"
-}
-```
-
-Expected:
-
-```json
-{
-  "result": 67
-}
-```
-
-## Local File Tool
-
-After installing the endpoint client, place a file in HotFolder and call:
-
-```text
-hotfolder.list
-hotfolder.read_text
-```
-
-The client must ask the Gateway for authorization before protected execution.
-
-## Change Policy
-
-Change:
-
-```text
-hotfolder.write_text
-ALLOW → ASK
-```
-
-The next write should create an approval request.
+Use [device controls](../control-plane/device-registry.md),
+[HotFolder instructions](../client/hotfolder.md),
+[ASK approvals](../control-plane/approvals.md), or the runnable
+[LangChain/device example](../../examples/langchain/README.md) for the relevant path.

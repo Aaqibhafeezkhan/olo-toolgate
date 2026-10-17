@@ -644,9 +644,49 @@
         "fleet",
         "effect",
         "recovery",
-        "clientCheckIn"
+        "clientCheckIn",
+        "builder"
       ],
       "properties": {
+        "builder": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "existingClaim"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "existingClaim": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "existingClaim": {
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          ]
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -947,6 +987,13 @@
               }
             },
             "marketplaceTo": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "type": "object"
+              }
+            },
+            "registryTo": {
               "type": "array",
               "maxItems": 128,
               "items": {
@@ -1266,7 +1313,7 @@
         "clientCheckIn": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Env-owned Phase A client check-in (plan.md \u00a717.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
+          "description": "Env-owned Phase A client check-in (platform-requirements.md §17.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
           "required": [
             "checkInMs",
             "jitterPct",
@@ -1577,6 +1624,125 @@
             "packetKey",
             "trustSecret",
             "trustKey"
+          ]
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "configMap"
+          ],
+          "properties": {
+            "configMap": {
+              "type": "string",
+              "maxLength": 253
+            }
+          }
+        },
+        "clientImages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "registryUrl",
+            "repository",
+            "base",
+            "platforms",
+            "credentialsSecret",
+            "caSecret"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "registryUrl": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "repository": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "base": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "platforms": {
+              "type": "string",
+              "pattern": "^(LINUX|WINDOWS|MACOS)(,(LINUX|WINDOWS|MACOS)){0,2}$"
+            },
+            "credentialsSecret": {
+              "type": "string",
+              "maxLength": 253
+            },
+            "caSecret": {
+              "type": "string",
+              "maxLength": 253
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "registryUrl": {
+                    "minLength": 1,
+                    "pattern": "^https://[^/?#@]+/?$"
+                  },
+                  "repository": {
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]+([._/-][a-z0-9]+)*$"
+                  },
+                  "base": {
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]+([._/-][a-z0-9]+)*@sha256:[a-f0-9]{64}$"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "packageRelease": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "signingSecret",
+            "keyId"
+          ],
+          "properties": {
+            "signingSecret": {
+              "type": "string",
+              "maxLength": 253
+            },
+            "keyId": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "signingSecret": {
+                    "minLength": 1
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "keyId": {
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9._-]{1,64}$"
+                  }
+                }
+              }
+            }
           ]
         }
       },

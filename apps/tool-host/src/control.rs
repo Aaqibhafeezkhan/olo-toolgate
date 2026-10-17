@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The host's calls to Control under its workload certificate. Per invocation (plan.md §11.3,
+//! The host's calls to Control under its workload certificate. Per invocation (platform-requirements.md §11.3,
 //! §12.8): claim the permit's nonce, fetch a secret for a running invocation, and report the
 //! outcome. As an enrolled device (`device`): enroll, check in, register and fetch content. The
 //! certificate is either configured or the one enrollment issued, swapped in as it renews.
@@ -8,7 +8,7 @@
 use crate::config::ControlConfig;
 use olo_toolgate_contracts::v2::{
     AdmissionResponse, Dispatch, InvocationResultReport, PermitConsumed, PermitConsumption,
-    ResultMessage,
+    ResultMessage, RunEventAck, RunEventBatch,
 };
 use olo_toolgate_contracts::{EnterpriseSecretDelivery, EnterpriseSecretDeliveryRequest};
 use std::time::Duration;
@@ -117,6 +117,12 @@ impl Control {
             .post("/effects/report", report, Some(&report.fencing_token))
             .await?;
         Ok(())
+    }
+
+    /// Response frames of the attempt this host admitted, bound to its fencing token.
+    pub async fn events(&self, batch: &RunEventBatch) -> Result<RunEventAck, ControlError> {
+        let path = format!("/invocations/{}/events", batch.invocation_id);
+        self.post(&path, batch, None).await
     }
 
     /// Pull mode: the oldest call Control holds for this host, which the host now owns.

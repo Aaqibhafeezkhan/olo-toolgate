@@ -1,12 +1,15 @@
 # CI check ownership
 
-`ci.yml` has one main/version-tag push/dispatch entry point. Admission and preflight run once;
+`ci.yml` has one main push/dispatch validation entry point. Admission and preflight run once;
 foundation and the six native platform jobs then run in parallel. Images wait
-for both, and release waits for all required evidence from the same run and SHA.
+for both. Main CI does not publish development releases. Manual development
+publication selects any source branch; product publication retains its separate
+full-test graph. See [development releases](development-releases.md) and
+[how to release](how-to-release.md).
 
 | Check | Main owner |
 | --- | --- |
-| RC title, allowed main/version-tag ref and CI-enabled admission | admission |
+| RC title, allowed main ref and CI-enabled admission | admission |
 | Release/version metadata, generated contract bindings | preflight |
 | CI regressions, extension protocol/package regressions, staged secret proof | preflight |
 | UI generation, source headers, canonical contract fixtures | foundation |
@@ -27,8 +30,9 @@ for both, and release waits for all required evidence from the same run and SHA.
 | Linux device enrollment/tools/health/container proof and LangChain native smoke | images |
 | Every production image vulnerability scan, SBOM, archive and checksum | images |
 | Raw contract/Java/Helm release assets, source release SBOM and asset checksums | foundation |
-| Exact run/SHA/tag prerequisite verification, Maven/image/development or versioned publication | release |
-| Versioned Helm OCI, all four GHCR image attestations, native/source/image asset provenance | release |
+| Prepared source/version verification and product registry publication | Build and release binaries |
+| Versioned Helm OCI, all five GHCR image attestations, native/source/image asset provenance | Build and release binaries |
+| Pinned branch/SHA development packages and isolated Docker/npm aliases | Manual development release |
 
 Foundation builds the UI once, including Chromium download/experience checks.
 Gradle and CI's explicit `--prebuilt-ui` Docker stage consume that artifact.
@@ -37,7 +41,7 @@ image is reused for production Control and Gateway validation.
 
 The same test on another OS/architecture, with published contracts, another
 database mode or another production binary is a distinct context and remains.
-Version tags use the same complete graph, with no repeated check inside a run.
+Prepared product releases use the shared validation bodies in their own complete graph.
 Explicit manual build-only publication keeps its existing behavior.
 Legacy component workflows remain callable but are absent from the main call
 graph, so their old job bodies do not repeat main checks.

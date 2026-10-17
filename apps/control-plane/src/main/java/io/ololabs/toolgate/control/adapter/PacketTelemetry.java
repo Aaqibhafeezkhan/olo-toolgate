@@ -17,7 +17,7 @@ public class PacketTelemetry implements ContainerRequestFilter, ContainerRespons
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(PacketTelemetry.class);
     private static final Set<String> ROUTES = Set.of("/api/control/v1/endpoint/check-in", "/api/control/v1/endpoint/enrollments", "/api/control/v1/endpoint/enrollments/poll", "/api/control/v1/mcp/catalog", "/api/control/v1/mcp/requests", "/api/control/v1/mcp/responses", "/api/control/v1/mcp/authorize", "/api/control/v1/mcp/results", "/.well-known/olo-toolgate-client");
-    private static final Set<String> FIELDS = Set.of("requestId", "deviceId", "toolId", "action", "state", "code", "error", "sequence", "reportSequence", "clientVersion", "platform", "revision", "appliedRevision", "serverTimeUnixMs", "nextIntervalSeconds", "nextIntervalMs", "expiresAtUnixMs", "digest", "permissionDigest", "enabled", "decision", "protocolVersion");
+    private static final Set<String> FIELDS = Set.of("requestId", "deviceId", "toolId", "action", "state", "code", "error", "sequence", "reportSequence", "clientVersion", "platform", "revision", "appliedRevision", "serverTimeUnixMs", "nextIntervalMs", "expiresAtUnixMs", "digest", "permissionDigest", "enabled", "decision", "protocolVersion");
     private static final Set<String> NESTED = Set.of("report", "localTools", "configuration", "permissions", "task", "request", "record", "context", "input");
     static JsonNode summary(JsonNode value, int depth) {
         var result = JSON.createObjectNode();

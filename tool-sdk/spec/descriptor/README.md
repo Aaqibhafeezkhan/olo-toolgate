@@ -32,7 +32,7 @@ All members are always present unless marked optional. Optional members are **om
 | `routes` | The tool's routes, full declaration minus host values, sorted by `id`; list members inside a route keep declaration order except `query`, `headers`, `requestContentTypes`, which are sorted |
 | `destinations`, `httpAuth`, `tcp` | Only those reachable from the tool's routes and `tcp` list, sorted by `id`; destinations without `defaultHost` |
 | `variables` | `{globals, secrets, claims}`, each sorted by `name`. Globals carry `{name, type, required, default?, sensitive, …constraints}` with `default` as a typed JSON value. |
-| `permissions` | Derived, sorted: `HTTP_ROUTE`, `TCP`, `CREDENTIALS_IN_SANDBOX`, `USER_SECRET`, `TOKEN_EXCHANGE`, `CONNECTION` |
+| `permissions` | Derived, sorted: `HTTP_ROUTE`, `TCP`, `CREDENTIALS_IN_SANDBOX`, `USER_SECRET`, `TOKEN_EXCHANGE`, `CONNECTION`, and for a client tool with `@DeviceFileAccess`, `DEVICE_FILES_READ` (plus `DEVICE_FILES_WRITE` when it writes) |
 | `toolsets` | Sorted |
 
 "Sorted" always means by UTF-16 code units, the RFC 8785 order, so every language sorts the same way.
@@ -47,7 +47,7 @@ All members are always present unless marked optional. Optional members are **om
 |---|---|
 | `toolDescriptorDigest` | `"sha256:" + lowercase hex SHA-256 of the canonical bytes of one semantic descriptor` |
 | `descriptorSetDigest` | Same, over the array of `{toolId, toolDescriptorDigest}` for every tool in the package, sorted by `toolId` |
-| `artifactDigest`, `packageDigest` | Over exact bytes; defined by the package format (plan.md §7.2) and frozen at D1. They are never used to decide semantic equality. |
+| `artifactDigest`, `packageDigest` | Over exact bytes; defined by the package format (platform-requirements.md §7.2) and frozen at D1. They are never used to decide semantic equality. |
 
 Generation 1 emits integers only for numeric values it derives (bounds of `INT` and `LONG`, sizes, durations). Author-declared `NUMBER` bounds and defaults are serialised by JCS's number rules; the packager rejects values that are not finite doubles.
 

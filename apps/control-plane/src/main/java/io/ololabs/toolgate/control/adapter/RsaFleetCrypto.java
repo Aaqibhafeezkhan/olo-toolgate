@@ -63,5 +63,4 @@ public final class RsaFleetCrypto implements FleetCrypto {
     public FleetArtifactGrantClaims grant(FleetSignedDocument signed){return verify(signed,GRANT,FleetArtifactGrantClaims.class,organizations).model();}
     public FleetSignedDocument desired(FleetDesiredDocument document){codec.model(codec.json(document),FleetDesiredDocument.class);return sign(document,DESIRED);}
     public FleetSignedDocument grant(FleetArtifactGrantClaims document){codec.model(codec.json(document),FleetArtifactGrantClaims.class);return sign(document,GRANT);}
-    public FleetSignedDocument builder(BuilderTestTask document){codec.model(codec.json(document),BuilderTestTask.class);return sign(document,"toolgate-builder-test+jws");}
 }

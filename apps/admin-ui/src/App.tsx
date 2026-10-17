@@ -1,6 +1,6 @@
-import {EffectOutcomes,AccessSimulation} from './EffectOutcomes';
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {EffectOutcomes,AccessSimulation} from './EffectOutcomes';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ControlUser } from '@olo-labs/toolgate-contracts';
 import { ApiError, ControlClient } from './api';
@@ -11,6 +11,7 @@ import {ConfigurationRequests} from './ConfigurationRequests';
 import {ConfigurationTransfer} from './ConfigurationTransfer';
 import {ServerConfiguration,DeviceConfiguration} from './ServerSettings';
 import {LoginHints} from './LoginHints';
+import {readLoginLink,clearLoginLink,type LoginLink} from './LoginLink';
 import {ReviewPolicyBanner} from './ReviewPolicyBanner';
 import {WorkloadReauthorization} from './WorkloadReauthorization';
 import type {PendingWorkloadBinding} from './pendingContracts';
@@ -19,6 +20,7 @@ import { Builder } from './Builder';
 import { ServerPackages } from './ServerPackages';
 import { Enrollment } from './Enrollment';
 import { QuickstartTools } from './QuickstartTools';
+import { ToolTest } from './ToolTest';
 import { ClientDownloads } from './ClientDownloads';
 import { ClientConnection } from './ClientConnection';
 import {Devices} from './Devices';
@@ -33,16 +35,15 @@ import {protectedRecord,useRecordActions} from './RecordActions';
 import {ApprovalBell} from './ApprovalBell';
 import {EditorDialog} from './EditorDialog';
 import {sessionPresentation} from './SessionPresentation';
+import {FeatureAccess,usePermissions} from './Permissions';
 import oloLogo from './assets/olo.png';
 
 declare const __APP_VERSION__: string;
 declare const __APP_BUILD__: string;
 const directorySections = [['users','Users'],['teams','Teams'],['roles','Typed roles'],['tools','Tools'],['policies','Policies'],['devices','Devices'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['delegations','Human delegations'],['agentDelegations','Agent delegations'],['bindings','Execution bindings'],['extractors','Resource extractors'],['workloadBindings','Workload identities'],['identityBindings','Human identities'],['deviceEvidence','Device evidence']] as const;
-const sections = [['overview','Overview'],...directorySections,['audit','Audit log'],['approvals','Approvals'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['fleet','Packages'],['server-packages','Server packages'],['builder','Tool builder'],['enroll','Enroll device'],['local','Built-in tools and vault'],['requests','Client tool requests'],['mapping','Agent Group tool mapping'],['about','About']] as const;
-const navigationGroups=[{label:'Audit',routes:['audit','approvals','config-reviews','outcomes','simulation']},{label:'Tools',routes:['tools','toolGroups','grants','bindings','policies','extractors','server-packages','builder','local','requests']},{label:'Devices',routes:['devices','deviceGroups','deviceEvidence','enroll','fleet']},{label:'Users',routes:['users','teams','roles','identityBindings','delegations']},{label:'Agents',routes:['agents','agentGroups','mapping','workloadBindings','agentDelegations']},{label:'Administration',routes:['config-server','config-device','config-backup','about']}] as const;
+const sections = [['overview','Overview'],...directorySections,['audit','Audit log'],['approvals','Approvals'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['fleet','Packages'],['server-packages','Server packages'],['builder','Tool builder'],['test','Test a tool'],['enroll','Enroll device'],['local','Local vault'],['requests','Client tool requests'],['mapping','Agent Group tool mapping'],['about','About']] as const;
+const navigationGroups=[{label:'Audit',routes:['audit','approvals','config-reviews','outcomes','simulation']},{label:'Tools',routes:['tools','toolGroups','grants','bindings','policies','extractors','server-packages','builder','test','local','requests']},{label:'Devices',routes:['devices','deviceGroups','deviceEvidence','enroll','fleet']},{label:'Users',routes:['users','teams','roles','identityBindings','delegations']},{label:'Agents',routes:['agents','agentGroups','mapping','workloadBindings','agentDelegations']},{label:'Administration',routes:['config-server','config-device','config-backup']}] as const;
 type Route = typeof sections[number][0];
-/** Administration pages are Super Admin only, in the console and the API. About stays visible to everyone. */
-const superAdminRoutes:readonly Route[]=['config-server','config-device','config-backup'];
 type RecordValue = DirectoryRecords[DirectoryKind];
 /** Old #configuration links open Administration > Server; links naming a review open its queue. */
 function redirectLegacyHash() {
@@ -55,7 +56,7 @@ const routeFromHash = (): Route => { redirectLegacyHash(); return sections.find(
 const safeOrigin = () => window.location.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
 
 /** Authenticated shell; identities/roles are verified only by Control. */
-export function App() {
+export function App({initialLogin}:{initialLogin?:LoginLink}={}) {
   const quickstart = document.querySelector('meta[name=toolgate-mode]')?.getAttribute('content') === 'quickstart';
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [presentation,setPresentation]=useState<ReturnType<typeof sessionPresentation>>();
@@ -76,11 +77,15 @@ export function App() {
     setSidebarCollapsed(!sidebarCollapsed);
     try { localStorage.setItem('toolgate.sidebar.collapsed', String(!sidebarCollapsed)); } catch { /* Preferences are optional. */ }
   };
-  const [username,setUsername]=useState('admin');
+  const [prefill]=useState(()=>quickstart&&safeOrigin()?(initialLogin??readLoginLink()):undefined);
+  const [username,setUsername]=useState(prefill?.username??'admin');
+  useEffect(clearLoginLink,[]);
   const [passwordDisabled, setPasswordDisabled] = useState(false);
   const [client, setClient] = useState<ControlClient>();
+  const permissions=usePermissions(client);
+  useEffect(()=>{if(!client)return;const refresh=()=>{void client.adminSession().catch(()=>{});};const timer=setInterval(refresh,15000);window.addEventListener('focus',refresh);window.addEventListener('toolgate:permissions-change',refresh);return()=>{clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('toolgate:permissions-change',refresh);};},[client]);
   const [administrator,setAdministrator]=useState(false);
-  const [credential, setCredential] = useState(''); const [connecting, setConnecting] = useState(false);
+  const [credential, setCredential] = useState(prefill?.password??''); const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<unknown>(); const [route, setRoute] = useState<Route>(routeFromHash);
   const active = useRef<ControlClient | undefined>(undefined);
   useEffect(() => { const update = () => setRoute(routeFromHash()); window.addEventListener('hashchange', update); return () => { window.removeEventListener('hashchange', update); active.current?.dispose(); }; }, []);
@@ -99,8 +104,8 @@ export function App() {
     const status = fetch('/api/quickstart/v1/status', {credentials:'omit',redirect:'error',signal:abort.signal})
       .then(response => response.ok ? response.json() : undefined).catch(() => undefined);
     void (async () => {
-      let noSession = false;
-      try {
+      let noSession = Boolean(prefill);
+      if(!prefill) try {
         const response = await fetch('/api/quickstart/v1/session', {credentials:'same-origin',cache:'no-store',redirect:'error',signal:abort.signal});
         if (response.status === 401) noSession = true;
         else {
@@ -116,7 +121,7 @@ export function App() {
       if (typeof body?.tenant === 'string') setTenant(body.tenant);
       if (body?.passwordRequired === false) {
         setPasswordDisabled(true);
-        if (noSession) void connect(null, true);
+        if (noSession&&!prefill) void connect(null, true);
       }
     })();
     return () => { abort.abort(); };
@@ -160,8 +165,9 @@ export function App() {
     finally { if (!active.current || active.current === candidate) setConnecting(false); }
   }
   function navigationGroup(group:{label:string;routes:readonly Route[]}) {
+    if(!group.routes.some(value=>(quickstart||value!=="local")&&permissions.view(value)))return null;
     return sidebarCollapsed?<button className="rail-menu" key={group.label} title={group.label} aria-label={group.label} onClick={()=>{setExpandedGroups([group.label]);toggleSidebar();}}><MenuIcon name={group.label}/></button>:
-      <details className="nav-group" key={group.label} open={expandedGroups.includes(group.label)} onToggle={event=>{const opened=event.currentTarget.open;setExpandedGroups(previous=>opened===previous.includes(group.label)?previous:opened?[...previous,group.label]:previous.filter(label=>label!==group.label));}}><summary><MenuIcon name={group.label}/>{group.label}</summary><div className="nav-submenu">{group.routes.filter(value=>quickstart||value!=='local').map(value=><a key={value} href={`#${value}`} aria-current={route===value?'page':undefined}><MenuIcon name={value}/>{sections.find(([key])=>key===value)![1]}</a>)}</div></details>;
+      <details className="nav-group" key={group.label} open={expandedGroups.includes(group.label)} onToggle={event=>{const opened=event.currentTarget.open;setExpandedGroups(previous=>opened===previous.includes(group.label)?previous:opened?[...previous,group.label]:previous.filter(label=>label!==group.label));}}><summary><MenuIcon name={group.label}/>{group.label}</summary><div className="nav-submenu">{group.routes.filter(value=>(quickstart||value!=='local')&&permissions.view(value)).map(value=><a key={value} href={`#${value}`} aria-current={route===value?'page':undefined}><MenuIcon name={value}/>{sections.find(([key])=>key===value)![1]}</a>)}</div></details>;
   }
   return <><a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     {!client ? <main id="main" tabIndex={-1} className="connect-page"><header className="login-header"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /> <span>ToolGate</span></div>
@@ -182,7 +188,7 @@ export function App() {
       {!sidebarCollapsed && <p className="sidebar-caption">{administrator?'Workspace':'Approval workspace'}</p>}
       <nav aria-label="Main navigation"><div className="navigation-scroll"><a href="#overview" title="Overview" aria-label={sidebarCollapsed?'Overview':undefined} aria-current={route==='overview'?'page':undefined}><MenuIcon name="overview"/>{!sidebarCollapsed&&'Overview'}</a>
         {administrator?navigationGroups.slice(0,-1).map(navigationGroup):<a href="#approvals" title="Approvals" aria-label={sidebarCollapsed?'Approvals':undefined} aria-current={route==='approvals'?'page':undefined}><MenuIcon name="approvals"/>{!sidebarCollapsed&&'Approvals'}</a>}
-      </div>{navigationGroup(administrator&&superAdmin?navigationGroups[navigationGroups.length-1]:{label:'Administration',routes:['about']})}</nav>
+      </div>{administrator&&navigationGroup(navigationGroups[navigationGroups.length-1])}<a href="#about" title="About" aria-label={sidebarCollapsed?'About':undefined} aria-current={route==='about'?'page':undefined}><MenuIcon name="about"/>{!sidebarCollapsed&&'About'}</a></nav>
       <div className="sidebar-bottom"><div className="sidebar-user">{!sidebarCollapsed&&<span className="signed-in-user" title={presentation?.name}>{presentation?.name}</span>}<ApprovalBell client={client} administrator={administrator} superAdmin={superAdmin} userId={presentation?.userId}/></div>{!sidebarCollapsed&&<><span className="connection">Connected to Control</span><small>v{__APP_VERSION__}</small></>}<button title="Disconnect" aria-label="Disconnect" onClick={disconnect}>{sidebarCollapsed?<MenuIcon name="disconnect"/>:'Disconnect'}</button></div></aside>
       <div className="navigation-controls" role="region" aria-label="Navigation controls"><button className="sidebar-toggle" style={{left:sidebarCollapsed?18:sidebarWidth-38}} aria-label={sidebarCollapsed?'Expand navigation':'Collapse navigation'} aria-controls="sidebar" aria-expanded={!sidebarCollapsed} onClick={toggleSidebar}>{sidebarCollapsed?'>':'<'}</button>
       {!sidebarCollapsed && <div className="sidebar-resizer" role="separator" aria-label="Resize navigation" aria-orientation="vertical" aria-valuemin={190} aria-valuemax={420} aria-valuenow={sidebarWidth} tabIndex={0}
@@ -192,7 +198,7 @@ export function App() {
         onKeyDown={event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); resizeSidebar(event.key==='Home'?190:event.key==='End'?420:sidebarWidth+(event.key==='ArrowLeft'?-20:20)); } }} />}</div>
 
       <div className="workspace"><ReviewPolicyBanner client={client}/>
-        <main id="main" tabIndex={-1} className={administrator&&route==='requests'?'request-canvas':undefined}>{route==='about'?<About/>:!administrator?route==='overview'?<><p className="eyebrow">Workspace overview</p><h1>Your workspace, at a glance</h1><p>Open your approval queue to review pending requests.</p><a href="#approvals">Open approvals</a></>:<Approvals client={client}/>:route==='outcomes'?<EffectOutcomes client={client}/>:route==='simulation'?<AccessSimulation client={client}/>:route==='config-reviews'?<ConfigurationRequests client={client} superAdmin={superAdmin}/>:superAdminRoutes.includes(route)&&!superAdmin?<><div className="page-heading"><h1>Administration</h1></div><p role="status">Administration is available to Super Admin accounts only.</p></>:route==='config-server'?<ServerConfiguration client={client}/>:route==='config-device'?<DeviceConfiguration client={client}/>:route==='config-backup'?<><div className="page-heading"><h1>Backup/Restore</h1></div><ConfigurationTransfer client={client}/></>:route==='mapping'?<AgentToolMapping client={client}/>:route==='devices'?<Devices client={client} superAdmin={superAdmin} userId={presentation?.userId}/>:route==='requests'?<RemoteRequests client={client}/>:route === 'local' ? quickstart ? <QuickstartTools client={client} /> : <p>Local tools are available in Quickstart.</p> : route === 'overview' ? <Dashboard client={client} /> : route === 'audit' ? <Audit client={client}/> : route === 'approvals' ? <Approvals client={client} /> : route === 'fleet' ? <Fleet client={client} /> : route === 'server-packages' ? <ServerPackages client={client} /> : route === 'builder' ? <Builder client={client} /> : route === 'enroll' ? <><Enrollment client={client} superAdmin={superAdmin} /><ClientDownloads /></> : <Directory key={route} client={client} kind={route} reauthorize={quickstart&&superAdmin} />}</main>
+        <main id="main" tabIndex={-1} className={administrator&&route==='requests'?'request-canvas':undefined}><FeatureAccess client={client} route={route}>{route==='about'?<About/>:!administrator?route==='overview'?<><p className="eyebrow">Workspace overview</p><h1>Your workspace, at a glance</h1><p>Open your approval queue to review pending requests.</p><a href="#approvals">Open approvals</a></>:<Approvals client={client}/>:route==='outcomes'?<EffectOutcomes client={client}/>:route==='simulation'?<AccessSimulation client={client}/>:route==='config-reviews'?<ConfigurationRequests client={client} superAdmin={superAdmin}/>:route==='config-server'?<ServerConfiguration client={client}/>:route==='config-device'?<DeviceConfiguration client={client}/>:route==='config-backup'?<><div className="page-heading"><h1>Backup/Restore</h1></div><ConfigurationTransfer client={client}/></>:route==='mapping'?<AgentToolMapping client={client}/>:route==='devices'?<Devices client={client} superAdmin={superAdmin} userId={presentation?.userId}/>:route==='requests'?<RemoteRequests client={client}/>:route === 'test' ? <ToolTest client={client} /> : route === 'local' ? quickstart ? <QuickstartTools client={client} /> : <p>The local vault is available in Quickstart.</p> : route === 'overview' ? <Dashboard client={client} /> : route === 'audit' ? <Audit client={client}/> : route === 'approvals' ? <Approvals client={client} /> : route === 'fleet' ? <Fleet client={client} /> : route === 'server-packages' ? <ServerPackages client={client} /> : route === 'builder' ? <Builder client={client} /> : route === 'enroll' ? <><Enrollment client={client} superAdmin={superAdmin} /><ClientDownloads /></> : <Directory key={route} client={client} kind={route} reauthorize={quickstart&&permissions.can('workload_binding.rotate_credential')} />}</FeatureAccess></main>
         <footer>Control verifies permissions. Gateway checks current policy for every runtime authorization.</footer></div></div></div>}
   </>;
 }
@@ -218,6 +224,7 @@ const iconPaths: Record<string,string> = {
   audit:'M3 3h14v18H3z M6 7h7 M6 11h7 M6 15h4 M17 13l5 5 M18 18a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
   approvals:'M4 4h16v16H4z M7 12l3 3 7-7',
   builder:'M8 5l-6 7 6 7 M16 5l6 7-6 7 M14 3l-4 18',
+  test:'M5 3l14 9-14 9z',
   local:'M4 3h16v6H4z M4 15h16v6H4z M7 6h1 M7 18h1 M12 9v6',
   requests:'M3 6h14 M13 2l4 4-4 4 M21 18H7 M11 14l-4 4 4 4',
   mapping:'M4 4h6v6H4z M14 14h6v6h-6z M10 7h7v7',
@@ -273,23 +280,26 @@ function Directory({ client, kind, reauthorize=false }: { client: ControlClient;
     void poll();const timer=kind==='devices'?setInterval(()=>void poll(),2000):undefined;
     return () => {abort.abort();clearInterval(timer);};
   },[client,kind,cursor,attempt]);
+  const permissions=usePermissions(client);const feature=permissions.resource(kind);
+  // Tools and extractors come only from installed packages: they can be enabled or disabled here, never created or edited.
+  const packaged=kind==='tools'||kind==='extractors';
   const refresh = () => setAttempt(attempt+1);
-  return <><div className="page-heading"><div><p className="eyebrow">Organization directory</p><h1>{label}</h1></div><div className="actions"><button onClick={refresh}>Refresh</button>{<button className="primary" onClick={() => { setSelected(undefined); setCreating(true); }}>Add {kind==='users'?'user':kind==='devices'?'client':entityTitles[kind]}</button>}</div></div>
+  return <><div className="page-heading"><div><p className="eyebrow">Organization directory</p><h1>{label}</h1></div><div className="actions"><button onClick={refresh}>Refresh</button>{permissions.can(`${feature}.create`)&&!packaged&&<button className="primary" onClick={() => { setSelected(undefined); setCreating(true); }}>Add {kind==='users'?'user':kind==='devices'?'client':entityTitles[kind]}</button>}</div></div>
     <p className="intro">{kind === 'users' ? 'Users inherit access through Teams. Verified new identities appear disabled for administrator review.' : kind === 'policies' ? 'Policies constrain complete grants through current online authority. Snapshot publication and device adoption are separate states.' : kind === 'devices' ? 'Manage registered clients. Directory activation and device enrollment are separate approvals.' : `Browse registered ${label.toLowerCase()} in your organization.`}</p>
     {kind==='devices'&&<p className="hint">Green means an active client checked in within the last two minutes. Red means the client is offline or unavailable; the status label explains why. The client list and connection status refresh every two seconds.</p>}
     {error ? <Failure error={error} retry={refresh} /> : !page ? <p role="status">Loading {label.toLowerCase()}…</p> : <>
       {page.items.length === 0 ? <section className="empty"><h2>No {label.toLowerCase()} on this page</h2><p>{kind === 'users' ? 'Add a directory user to get started.' : 'Records will appear here when they are added to Control.'}</p></section> :
-        <div className="table-wrap"><Table disabled={actions.busy} bulkActions={keys=>{const records=page.items.filter(record=>keys.includes(record.id)),mutable=records.filter(record=>!protectedRecord(kind,record.id,client.bootstrapAdminUserId));return <><button disabled={actions.busy||!records.some(record=>!record.enabled)} onClick={()=>void actions.run(records,'enable')}>Enable selected</button><button disabled={actions.busy||!mutable.some(record=>record.enabled)} onClick={()=>void actions.run(mutable,'disable')}>Disable selected</button><button className="danger" disabled={actions.busy||!mutable.length} onClick={()=>actions.requestDelete(mutable)}>Delete selected</button></>;}}><caption className="sr-only">{label} directory</caption><thead><tr><th scope="col">Name</th><th scope="col">Identifier</th>{kind==='devices'&&<th scope="col">Connection</th>}<th scope="col">Directory status</th><th scope="col">Revision</th><th scope="col">Actions</th></tr></thead><tbody>{page.items.map(record => <tr key={record.id}><th scope="row">{record.name}{kind==='workloadBindings'&&<> <WorkloadReauthorization client={client} binding={record as PendingWorkloadBinding} allowed={reauthorize} done={refresh}/></>}</th><td><code>{record.id}</code></td>{kind==='devices'&&<td><ClientConnection client={client} id={record.id} enabled={record.enabled} ownerUserId={'ownerUserId' in record?record.ownerUserId:''}/></td>}<td data-sort-value={record.enabled?'Enabled':'Disabled'}><StatusToggle enabled={record.enabled} label={record.id} disabled={actions.busy||protectedRecord(kind,record.id,client.bootstrapAdminUserId)} onClick={()=>void actions.run([record],record.enabled?'disable':'enable')}/></td><td data-sort-value={record.revision}>{record.revision}</td><td><div className="actions"><ActionButton icon="edit" label={`Edit ${record.id}`} disabled={actions.busy} onClick={()=>{setSelected(record);setCreating(false);}}/><ActionButton icon="delete" label={`Delete ${record.id}`} title={protectedRecord(kind,record.id,client.bootstrapAdminUserId)?'The setup administrator and required default groups cannot be deleted':`Delete ${record.id}; fresh onboarding will be required`} disabled={actions.busy||protectedRecord(kind,record.id,client.bootstrapAdminUserId)} onClick={()=>actions.requestDelete([record])}/></div></td></tr>)}</tbody></Table></div>}
+        <div className="table-wrap"><Table disabled={actions.busy} bulkActions={keys=>{const records=page.items.filter(record=>keys.includes(record.id)),mutable=records.filter(record=>!protectedRecord(kind,record.id,client.bootstrapAdminUserId));return <><button disabled={actions.busy||!permissions.can(`${feature}.enable`)||!records.some(record=>!record.enabled)} onClick={()=>void actions.run(records,'enable')}>Enable selected</button><button disabled={actions.busy||!permissions.can(`${feature}.disable`)||!mutable.some(record=>record.enabled)} onClick={()=>void actions.run(mutable,'disable')}>Disable selected</button><button className="danger" disabled={actions.busy||!permissions.can(`${feature}.delete`)||!mutable.length} onClick={()=>actions.requestDelete(mutable)}>Delete selected</button></>;}}><caption className="sr-only">{label} directory</caption><thead><tr><th scope="col">Name</th><th scope="col">Identifier</th>{kind==='devices'&&<th scope="col">Connection</th>}<th scope="col">Directory status</th><th scope="col">Revision</th><th scope="col">Actions</th></tr></thead><tbody>{page.items.map(record => <tr key={record.id}><th scope="row">{record.name}{kind==='workloadBindings'&&<> <WorkloadReauthorization client={client} binding={record as PendingWorkloadBinding} allowed={reauthorize} done={refresh}/></>}</th><td><code>{record.id}</code></td>{kind==='devices'&&<td><ClientConnection client={client} id={record.id} enabled={record.enabled} ownerUserId={'ownerUserId' in record?record.ownerUserId:''}/></td>}<td data-sort-value={record.enabled?'Enabled':'Disabled'}><StatusToggle enabled={record.enabled} label={record.id} disabled={actions.busy||!permissions.can(`${feature}.${record.enabled?'disable':'enable'}`)||protectedRecord(kind,record.id,client.bootstrapAdminUserId)} onClick={()=>void actions.run([record],record.enabled?'disable':'enable')}/></td><td data-sort-value={record.revision}>{record.revision}</td><td><div className="actions"><ActionButton icon="edit" label={`${permissions.can(`${feature}.update`)?'Edit':'View'} ${record.id}`} disabled={actions.busy} onClick={()=>{setSelected(record);setCreating(false);}}/><ActionButton icon="delete" label={`Delete ${record.id}`} title={protectedRecord(kind,record.id,client.bootstrapAdminUserId)?'The setup administrator and required default groups cannot be deleted':`Delete ${record.id}; fresh onboarding will be required`} disabled={actions.busy||!permissions.can(`${feature}.delete`)||protectedRecord(kind,record.id,client.bootstrapAdminUserId)} onClick={()=>actions.requestDelete([record])}/></div></td></tr>)}</tbody></Table></div>}
       <div className="pagination"><span>{page.items.length} records on this page</span><div className="actions"><button disabled={!history.length} onClick={() => { setCursor(history.at(-1)); setHistory(history.slice(0,-1)); }}>Previous page</button><button disabled={!page.nextCursor} onClick={() => { setHistory([...history,cursor]); setCursor(page.nextCursor); }}>Next page</button></div></div>
     </>}
     {actions.feedback}
     {['teams','agentGroups','toolGroups','deviceGroups'].includes(kind)&&<StandardPresets client={client}/>}
     {kind==='deviceGroups'&&<><p className="hint">Device groups contain devices. Complete group grants and Tool Group execution bindings determine access. Disabled groups grant no access.</p><PublishAccess client={client}/></>}
-    {(creating || selected) && (kind === 'users' ? <UserEditor key={selected?.id ?? 'new'} client={client} user={selected as ControlUser | undefined} close={() => { setCreating(false); setSelected(undefined); }} saved={refresh} /> : <DirectoryEditor key={selected?.id??'new'} client={client} kind={kind} record={selected as DirectoryRecords[Exclude<DirectoryKind,'users'>] | undefined} close={()=>{setCreating(false);setSelected(undefined);}} saved={refresh}/>)}
+    {(creating || selected) && (kind === 'users' ? <UserEditor key={selected?.id ?? 'new'} readOnly={!permissions.can(`${feature}.${selected ? "update" : "create"}`)} client={client} user={selected as ControlUser | undefined} close={() => { setCreating(false); setSelected(undefined); }} saved={refresh} /> : <DirectoryEditor key={selected?.id??'new'} readOnly={packaged||!permissions.can(`${feature}.${selected ? "update" : "create"}`)} client={client} kind={kind} record={selected as DirectoryRecords[Exclude<DirectoryKind,'users'>] | undefined} close={()=>{setCreating(false);setSelected(undefined);}} saved={refresh}/>)}
   </>;
 }
 
-function UserEditor({ client, user, close, saved }: { client: ControlClient; user?: ControlUser; close: () => void; saved: () => void }) {
+function UserEditor({ client, user, close, saved,readOnly=false }: { client: ControlClient; user?: ControlUser; close: () => void; saved: () => void;readOnly?:boolean }) {
   const [id,setId] = useState(user?.id ?? ''); const [name,setName] = useState(user?.name ?? ''); const [enabled,setEnabled] = useState(user?.enabled ?? false);
   const [email,setEmail] = useState(user?.email ?? '');
   const protectedAdmin = !!user && user.id === client.bootstrapAdminUserId;
@@ -299,8 +309,8 @@ function UserEditor({ client, user, close, saved }: { client: ControlClient; use
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; },[]);
   const mutationKey = (body: string) => { if (pending.current?.body !== body) pending.current = {body,key:crypto.randomUUID()}; return pending.current!.key; };
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (busy) return; setBusy(true); setError(undefined);
-    const record: ControlUser = {id,name,enabled,revision:current?.revision ?? 1,...(email?{email}:{})};
+    event.preventDefault(); if (busy||readOnly) return; setBusy(true); setError(undefined);
+    const record: ControlUser = {...current,id,name,enabled,revision:current?.revision ?? 1,email:email||undefined};
     try { await client.saveUser(record,!!current,mutationKey(JSON.stringify(record))); if (alive.current) saved(); }
     catch (failure) { if (alive.current) setError(failure); } finally { if (alive.current) setBusy(false); }
   }
@@ -316,14 +326,15 @@ function UserEditor({ client, user, close, saved }: { client: ControlClient; use
   }
   return <EditorDialog title={current ? 'Edit user' : 'Add directory user'} close={close} busy={busy}><section aria-label="User editor">
     {Boolean(error) && <Failure error={error} />}
-    <form onSubmit={submit} className="user-form"><label htmlFor="user-id">Identifier</label><input id="user-id" value={id} required maxLength={128} disabled={!!current || busy} onChange={e => setId(e.target.value)} />
+    {readOnly&&<p role="status">View only. Your role cannot edit this user.</p>}
+    <form onSubmit={submit} className="user-form"><fieldset disabled={readOnly}><label htmlFor="user-id">Identifier</label><input id="user-id" value={id} required maxLength={128} disabled={!!current || busy} onChange={e => setId(e.target.value)} />
       <label htmlFor="user-name">Display name</label><input id="user-name" value={name} required maxLength={200} disabled={busy} onChange={e => setName(e.target.value)} />
       <label htmlFor="user-email">Email</label><input id="user-email" type="email" value={email} maxLength={254} disabled={busy} onChange={e => setEmail(e.target.value)} />
       <label className="checkbox"><input type="checkbox" checked={enabled} disabled={busy||protectedAdmin} onChange={e => setEnabled(e.target.checked)} />Enabled in directory</label>
       {protectedAdmin&&<p className="hint">The setup administrator cannot be deleted or disabled. Authority comes from current Team and Role assignments.</p>}
       <p className="hint">New users start disabled and join the default Team. Enable after review, then manage their Team membership. Individuals cannot receive Roles or permissions directly. The server validates all values and references. {current && `Editing revision ${current.revision}.`}</p><div className="actions"><button className="primary" disabled={busy}>{busy ? 'Working…' : 'Save user'}</button>{current && <button type="button" disabled={busy} onClick={reload}>Reload current record</button>}</div>
-    </form>
-    {current&&<GroupMembershipEditor client={client} entity="users" id={current.id} saved={saved}/>}
-    {current && !protectedAdmin && <div className="delete-area">{confirm ? <><p>Delete this directory record? Its identifier cannot be reused. Referenced users cannot be deleted.</p><button disabled={busy} className="danger" onClick={remove}>Confirm delete</button> <button disabled={busy} onClick={() => setConfirm(false)}>Cancel delete</button></> : <button className="danger" disabled={busy} onClick={() => setConfirm(true)}>Delete user</button>}</div>}
+    </fieldset></form>
+    {!readOnly&&current&&<GroupMembershipEditor client={client} entity="users" id={current.id} saved={saved}/>}
+    {!readOnly&&current && !protectedAdmin && <div className="delete-area">{confirm ? <><p>Delete this directory record? Its identifier cannot be reused. Referenced users cannot be deleted.</p><button disabled={busy} className="danger" onClick={remove}>Confirm delete</button> <button disabled={busy} onClick={() => setConfirm(false)}>Cancel delete</button></> : <button className="danger" disabled={busy} onClick={() => setConfirm(true)}>Delete user</button>}</div>}
   </section></EditorDialog>;
 }

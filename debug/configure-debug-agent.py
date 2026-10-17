@@ -178,7 +178,12 @@ class Configuration:
             self.fixture_login(user,user)
 
 
-def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWriteAgentGroup'):
+# The HotFolder package's tools the mimic calls. They exist only once the package is installed and released to the
+# device (ADR 026/027); this helper never creates or changes a tool definition.
+MIMIC_TOOLS = ('examples.hotfolder/write_text', 'examples.hotfolder/read_text')
+
+
+def configure(device, local_fixture_reviewers=False, group='ReadAndWriteAgentGroup'):
     # Verify private token custody before publishing any rotated workload credential.
     path = ROOT/'.dev/debug/client-agent-token'
     private_file(path)
@@ -189,18 +194,16 @@ def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWri
     endpoint = config.api('/api/control/v1/endpoint/devices/'+device)
     if endpoint.get('state') != 'ACTIVE' or endpoint.get('connectionApproved') is False or int(time.time()*1000)-endpoint.get('lastSeenUnixMs',0)>120000:
         raise ValueError('The selected device must already be enrolled, approved and connected')
-    selected = [p for p in profiles if p['tool']['id'] in ('hotfolder.write_text','client.read_log_entry')]
-    if len(selected) != 2: raise ValueError('Installed profiles must include the existing file-write and diagnostic-log tools')
-    for profile in selected:
-        config.upsert('extractors', profile['extractor'])
-        config.upsert('tools', profile['tool'])
+    installed = {tool['id']: tool for tool in config.all('tools') if tool['id'] in MIMIC_TOOLS}
+    if set(installed) != set(MIMIC_TOOLS):
+        raise ValueError('Install the examples.hotfolder package and release it to this device first; its tools are not installed')
     config.upsert('agents', dict(id='debug-mimic-agent', name='Debug mimic agent', enabled=True, revision=1, ownerUserId='admin'))
     config.memberships('agents','debug-mimic-agent',[group])
     config.memberships('devices',device,['ReadAndWriteDeviceGroup'])
-    for profile in selected:config.memberships('tools',profile['tool']['id'],['ReadAndWriteToolGroup'])
+    for tool_id in MIMIC_TOOLS:config.memberships('tools',tool_id,['ReadAndWriteToolGroup'])
     config.upsert('bindings', dict(id='standard-ReadAndWrite-ReadAndWrite', name='ReadAndWrite tools on ReadAndWrite devices', enabled=True, revision=1,
-        toolGroupId='ReadAndWriteToolGroup', deviceGroupId='ReadAndWriteDeviceGroup', actions=['write','read'],
-        allowedPackageDigests=sorted({p['tool']['packageDigest'] for p in selected}), requireOnline=True, ownerDependency=False))
+        toolGroupId='ReadAndWriteToolGroup', deviceGroupId='ReadAndWriteDeviceGroup', actions=['invoke'],
+        allowedPackageDigests=sorted({tool['packageDigest'] for tool in installed.values()}), requireOnline=True, ownerDependency=False))
     for purpose in ('capability','service'):config.delete('grants','debug-mimic-'+purpose)
     config.delete('bindings','debug-mimic-binding')
     for collection, id in (('agent-groups','debug-mimic-agents'),('device-groups','debug-mimic-devices')):
@@ -237,7 +240,6 @@ def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWri
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device-id')
-    parser.add_argument('--profiles',type=Path)
     parser.add_argument('--agent-group',choices=['ReadOnlyAgentGroup','ReadAndWriteAgentGroup','AdminAgentGroup'],default='ReadAndWriteAgentGroup')
     parser.add_argument('--local-fixture-reviewers',action='store_true',help='Explicit local Quickstart test setup using independent fixture password logins')
     parser.add_argument('--allocate-agent',help='Only allocate an existing Agent using the reviewed membership API; do not rotate credentials or configure devices')
@@ -247,8 +249,8 @@ if __name__ == '__main__':
             config=Configuration(args.local_fixture_reviewers)
             config.memberships('agents',args.allocate_agent,[args.agent_group])
         else:
-            if not args.device_id or not args.profiles:raise ValueError('Provide --device-id and --profiles for initial provisioning')
-            configure(args.device_id,json.loads(args.profiles.read_text(encoding='utf-8-sig')),args.local_fixture_reviewers,args.agent_group)
+            if not args.device_id:raise ValueError('Provide --device-id for initial provisioning')
+            configure(args.device_id,args.local_fixture_reviewers,args.agent_group)
     except (ValueError,OSError,KeyError,subprocess.SubprocessError) as error:
         print('FAILED: '+(str(error) if isinstance(error,ValueError) else 'Debug setup failed; private details withheld'))
         raise SystemExit(1)

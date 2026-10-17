@@ -46,12 +46,12 @@ sha=lambda value:hashlib.sha256(value.encode() if isinstance(value,str) else val
 
 class Control:
     """Stands in for Control and the Gateway management listener, as the supervisor sees them over HTTP."""
-    def __init__(self):self.calls=[];self.loaded=None;self.role='SUPER_ADMIN';self.epochs={}
+    def __init__(self):self.calls=[];self.loaded=None;self.role='SUPER_ADMIN';self.permissions=['workload_binding.rotate_credential'];self.epochs={}
     def signal(self):self.loaded=sha((quickstart.DATA/'run/credentials.json').read_bytes())
     def __call__(self,path,token=None,body=None,port=8082,secure=False,method=None,extra_headers=None):
         self.calls.append((path,token,body))
         if port==9091:return 200,json.dumps({'sha256':self.loaded,'count':1}).encode(),{}
-        if path=='/api/control/v1/admin-session':return 200,json.dumps({'role':self.role}).encode(),{}
+        if path=='/api/control/v1/admin-session':return 200,json.dumps({'role':self.role,'permissions':self.permissions}).encode(),{}
         if path.endswith('/enable'):return 200,b'{}',{}
         if path.endswith('/credential'):
             binding_id=path.split('/')[-2];snapshot=strict_packet()
@@ -90,7 +90,7 @@ class AccountTests(unittest.TestCase):
                                          'TOOLGATE_DEMO_REFRESH_AT':'2026-10-15T03:00:00Z'});self.env.start()
     def tearDown(self):self.env.stop();self.temp.cleanup()
     def prepare(self):
-        return bootstrap.prepare(quickstart.DATA,quickstart.TENANT,quickstart.ISSUER,quickstart.key,quickstart.atomic,[])
+        return bootstrap.prepare(quickstart.DATA,quickstart.TENANT,quickstart.ISSUER,quickstart.key,quickstart.atomic)
     def install(self):
         """A prepared installation with its directory identities, the admin login and generated accounts."""
         self.prepare()
@@ -144,8 +144,11 @@ class AccountTests(unittest.TestCase):
         snapshot=strict_packet();state=json.loads((quickstart.DATA/'state/installation.json').read_text())
         rows=lambda kind:{row['id']:row for row in snapshot[kind]}
         users,teams=rows('users'),rows('teams')
-        self.assertTrue(users['admin']['enabled']);self.assertEqual(users['admin']['email'],'admin@admin.com')
-        self.assertEqual(teams['installation-administrators']['roleIds'],['installation-management'])
+        # Profiles are no longer silently rewritten by a legacy reserved-record list.
+        # Control's common authority guard rejects these proposed setup-login changes.
+        self.assertFalse(users['admin']['enabled']);self.assertEqual(users['admin']['name'],'Replaced')
+        self.assertTrue(next(u for u in installation_packet()['users'] if u['id']=='admin')['enabled'])
+        self.assertEqual(teams['installation-administrators']['roleIds'],[])
         self.assertIn('admin',teams['team-default']['userIds']);self.assertIn('public',teams['team-default']['userIds'])
         self.assertEqual(users['public']['claims'],{'employee_id':'E-101'});self.assertTrue(users['public']['showOnLogin'])
         self.assertFalse(users['alice']['enabled']);self.assertIn('alice',teams['VisitorTeam']['userIds'])  # Placeholder.
@@ -249,16 +252,16 @@ class AccountTests(unittest.TestCase):
         self.assertEqual({u:a['requester'] for u,a in recorded.items()},{'visitor-001':'marketplace-user-1','visitor-002':'marketplace-user-2','visitor-003':'marketplace-user-3'})
         self.assertNotIn(first['password'],(quickstart.DATA/'state/demo-accounts.json').read_text())
 
-    def test_super_admin_reauthorizes_a_workload_with_a_new_token(self):
+    def test_feature_permission_reauthorizes_a_workload_with_a_new_token(self):
         saved=self.install();control=Control();url=self.serve(control)
         old=saved['agents'][0]['token']
         quickstart.gateway_credentials()
         admin=quickstart.jwt(quickstart.GROUPS,'admin',generation=1)
         with patch.object(quickstart,'call',control):
-            control.role='USER'
+            control.role='USER';control.permissions=[]
             status,_=self.post(url+'/api/quickstart/v1/workloads/public-workload/reauthorize',{},{'Authorization':'Bearer '+admin})
             self.assertEqual(status,403);self.assertEqual(self.gateway()['public-workload']['tokenSha256'],sha(old))
-            control.role='SUPER_ADMIN'
+            control.role='ADMINISTRATOR';control.permissions=['workload_binding.rotate_credential']
             status,body=self.post(url+'/api/quickstart/v1/workloads/public-workload/reauthorize',{},{'Authorization':'Bearer '+admin})
         self.assertEqual((status,set(body)),(200,{'token'}))
         live=self.gateway()['public-workload']

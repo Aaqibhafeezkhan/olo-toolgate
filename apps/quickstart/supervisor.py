@@ -3,8 +3,8 @@
 """Single-node composition root. Child failure removes readiness and stops every process.
 
 Only fixed local adapters run here: identity bootstrap, encrypted vault and HTTP
-composition. Tool execution stays in the Rust fixed built-in executor; custom
-author code stays on designated clients. No credential is emitted in logs.
+composition. Tools run only from verified packages: on the composed Tool Hosts, or on
+enrolled client devices. No credential is emitted in logs.
 """
 import argparse
 import base64
@@ -285,7 +285,7 @@ def initialize():
     if trust_mounted():
         if TRUST.is_symlink() or TRUST.stat().st_uid != os.getuid(): raise ValueError('Private service-owned /trust required')
         TRUST.chmod(0o700)
-    for name in ('keys', 'run', 'state', 'hotfolder', 'artifacts'):
+    for name in ('keys', 'run', 'state', 'artifacts'):
         path = DATA/name
         if path.is_symlink(): raise ValueError('Unsafe local layout')
         path.mkdir(exist_ok=True); path.chmod(0o700)
@@ -491,9 +491,9 @@ def claim_account(requester, signal_gateway):
 
 
 def reauthorize(binding_id, actor, signal_gateway):
-    """A Super Admin issues a fresh token for one workload binding; it is returned once and never stored."""
+    """An authorized administrator issues a fresh token for one workload binding; it is returned once and never stored."""
     status, raw, _ = call('/api/control/v1/admin-session', actor)
-    if status != 200 or strict(raw).get('role') != 'SUPER_ADMIN': raise Forbidden()
+    if status != 200 or 'workload_binding.rotate_credential' not in strict(raw).get('permissions', []): raise Forbidden()
     stored = workload_credentials().get(binding_id)
     execution = stored['context'].get('bindingId') if stored else None
     if execution is None:
@@ -516,11 +516,9 @@ def login_hints():
 
 
 def configure():
-    profiles = strict(subprocess.run(['/usr/local/bin/quickstart-tools','--authorization-profiles'],
-                     check=True,capture_output=True,timeout=20).stdout)
     runtime_path=DATA/'run/runtime-token'
     if not runtime_path.exists(): atomic(runtime_path,secrets.token_urlsafe(48))
-    device, packet, review_trust = prepare(DATA,TENANT,ISSUER,key,atomic,profiles)
+    packet, review_trust = prepare(DATA,TENANT,ISSUER,key,atomic)
     accounts()
     gateway_credentials()
     config = {'listen':'127.0.0.1:8081','managementListen':'127.0.0.1:9091',
@@ -543,15 +541,6 @@ def configure():
            storeDir=str(DATA/'tool-host-remote/store'),workDir=str(DATA/'tool-host-remote/work'),
            control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host-remote')),runtimes=dict(javaPath='java'))))
-    control_origin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443')
-    gateway_origin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL',control_origin)
-    tools=dict(hotfolder=dict(root='/data/hotfolder',maxFileBytes=65536,maxEntries=256,extensions=['txt','md','json','csv']),
-               gatewayUrl=gateway_origin,gatewayTokenPath='/data/run/runtime-token',gatewayCaPath='/data/keys/device-ca.crt',
-               deviceId=device,authorizationProfiles=profiles,webSearchTokenPath=None)
-    atomic(DATA/'run/native.json',json.dumps(dict(serverUrl=control_origin,stateDirectory='/data/state/native',
-           ipcEndpoint='/data/run/client.sock',authorizedPeers=[str(os.getuid())],caCertificatePath='/data/keys/device-ca.crt',
-           requestTimeoutSeconds=10,tools=tools)))
-    atomic(DATA/'run/executor.json',json.dumps(dict(deviceId=device,bindingId='binding-default')))
     machine()
     env = dict(os.environ)
     settings = {'TOOLGATE_QUICKSTART_ENABLED': 'true', 'TOOLGATE_QUICKSTART_DATABASE': '/data/state/control.sqlite',
@@ -567,6 +556,8 @@ def configure():
                 'TOOLGATE_CONTROL_FLEET_PRIVATE_KEY_PATH': '/data/keys/fleet.pem',
                 'TOOLGATE_CONTROL_FLEET_RELEASE_KEYS_PATH': '/data/keys/release-keys.json',
                 'TOOLGATE_CONTROL_FLEET_ORGANIZATION_KEYS_PATH': '/data/keys/organization-keys.json',
+                # The package-release authority signs client releases (ADR 026); it is never the organization key.
+                'TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH': '/data/keys/package-release.pem', 'TOOLGATE_CONTROL_PACKAGE_RELEASE_KEY_ID': 'package-local',
                 'TOOLGATE_CONTROL_FLEET_ARTIFACT_ORIGIN': env.get('TOOLGATE_CONTROL_FLEET_ARTIFACT_ORIGIN', 'https://localhost:8443/artifacts'),
                 'TOOLGATE_CONTROL_FLEET_ARTIFACT_CA_PATH': env.get('TOOLGATE_CONTROL_FLEET_ARTIFACT_CA_PATH', '/data/keys/device-ca.crt'),
                 'TOOLGATE_CONTROL_EFFECT_ENABLED':'true', 'TOOLGATE_CONTROL_EFFECT_PRIVATE_KEY_PATH':'/data/keys/permit.pem',
@@ -576,8 +567,8 @@ def configure():
                 'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(review_trust)),
                 'TOOLGATE_CONTROL_INITIALIZE_PATH':str(DATA/'state/initialize-snapshot.json'),
                 'TOOLGATE_CONTROL_ENDPOINT_ENABLED': 'true',
-                # Quickstart check-in defaults (plan.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
-                'TOOLGATE_CONTROL_CLIENT_CHECKIN_MS': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_MS') or '500',
+                # Quickstart check-in defaults (platform-requirements.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
+                'TOOLGATE_CONTROL_CLIENT_CHECKIN_MS': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_MS') or '2000',
                 'TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT') or '0',
                 'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS': env.get('TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS') or '120000',
                 'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': str(trust('device-ca.key')), 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': str(trust('device-ca.crt')),
@@ -594,7 +585,7 @@ def configure():
     # Initialize-file server settings seed Control; an explicit container value always wins.
     settings.update({name: value for name, value in installation()['environment'].items() if not env.get(name)})
     env.update(settings)
-    return env, tools
+    return env
 
 
 def fleet_keys():
@@ -776,22 +767,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             workload = re.fullmatch(r'/api/quickstart/v1/workloads/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})/reauthorize', path)
             if workload and self.command=='POST':
                 return self.reply(200, {'token': reauthorize(workload.group(1), self.headers['Authorization'][7:], self.server.signal_gateway)})
-            if path=='/api/quickstart/v1/tools' and self.command=='GET':
-                target=strict((DATA/'run/executor.json').read_bytes())
-                status,response,upstream=call('/api/control/v1/access/human/catalog',self.headers['Authorization'][7:],target)
-                return self.reply(status,response,headers=upstream)
-            if path=='/api/quickstart/v1/invoke' and self.command=='POST':
-                data = strict(raw)
-                if not isinstance(data,dict) or set(data)!={'toolId','arguments'}:raise ValueError()
-                profiles=strict((DATA/'run/native.json').read_bytes())['tools']['authorizationProfiles']
-                tool=next((p['tool'] for p in profiles if p['tool']['id']==data['toolId']),None)
-                if tool is None or len(tool['definition']['actions'])!=1:raise ValueError()
-                target=strict((DATA/'run/executor.json').read_bytes())
-                key_=self.headers.get('Idempotency-Key','')
-                if not re.fullmatch('[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}',key_):raise ValueError()
-                request={**target,'request':{'toolId':tool['id'],'action':tool['definition']['actions'][0]['name'],'arguments':data['arguments']}}
-                status, response, upstream = call('/api/control/v1/access/human/invocations',self.headers['Authorization'][7:],request,extra_headers={'Idempotency-Key':key_})
-                return self.reply(status, response, headers=upstream)
             if path=='/api/quickstart/v1/vault' and self.command in ('GET','POST'):
                 token_=self.headers['Authorization'][7:]
                 if self.command=='GET':
@@ -823,13 +798,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if len(body)>limit: raise ValueError()
                     if path=='/api/control/v1/endpoint/devices' and self.command=='GET' and response.status==200:
                         page=strict(body)
-                        for device in page['items']:
-                            if device.get('systemExecutor'):
-                                import socket
-                                device['systemAvailable']=self.server.ready.is_set()
-                                device['systemName']=socket.gethostname()
-                                try: device['ipAddress']=socket.gethostbyname(socket.gethostname())
-                                except OSError: pass
                         if urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('deployment')==['true']:
                             page=deployment_details(page)
                         body=json.dumps(page).encode()
@@ -860,7 +828,7 @@ def deployment_details(page):
         required={'executionKind','containerId','containerName','systemName','networkId','networkName','ipAddress'}
         for value in records.values():
             if not isinstance(value,dict) or set(value)!=required or not all(isinstance(v,str) for v in value.values()):return page
-            if value['executionKind'] not in ('QUICKSTART_CLIENT','ENDPOINT_CLIENT','TOOL_HOST_DIRECT','TOOL_HOST_PULL'):return page
+            if value['executionKind'] not in ('ENDPOINT_CLIENT','TOOL_HOST_DIRECT','TOOL_HOST_PULL'):return page
             if any(not re.fullmatch('[a-f0-9]{64}',value[k]) for k in ('containerId','networkId')):return page
             if any(not re.fullmatch('[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}',value[k]) for k in ('containerName','networkName')):return page
             if not re.fullmatch('[a-zA-Z0-9._-]{1,255}',value['systemName']):return page
@@ -903,7 +871,7 @@ def main():
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         if args.backup: backup(args.backup); return
         if args.restore: restore(args.restore,args.restore_review,args.restore_trust); return
-        initialize(); env, _ = configure(); children = []; stop=threading.Event(); ready_state=threading.Event()
+        initialize(); env = configure(); children = []; stop=threading.Event(); ready_state=threading.Event()
         signal.signal(signal.SIGTERM, lambda *_: stop.set()); signal.signal(signal.SIGINT, lambda *_: stop.set())
         server = None; bridges=[]
         try:
@@ -920,8 +888,6 @@ def main():
             child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_'))}
             gateway_env = dict(child_env, TOOLGATE_GATEWAY_CONFIG='/data/run/gateway.json',TOOLGATE_GATEWAY_CREDENTIALS='/data/run/credentials.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env))
-            child_env['TOOLGATE_CLIENT_CONFIG']='/data/run/native.json'
-            children.append(subprocess.Popen(['/usr/local/bin/quickstart-tools'],env=child_env))
             host_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=host_env))
             remote_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host-remote.json')
@@ -943,9 +909,8 @@ def main():
                         child.terminate(); child.wait(timeout=20)
                     configure()
                     children[1] = subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env)
-                    children[2] = subprocess.Popen(['/usr/local/bin/quickstart-tools'],env=child_env)
-                    children[3] = subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=host_env)
-                    children[4] = subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=remote_env)
+                    children[2] = subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=host_env)
+                    children[3] = subprocess.Popen(['/usr/local/bin/olo-toolgate-tool-host'],env=remote_env)
                     boot=now
         finally:
             ready_state.clear()

@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** Fixed service tool boundary; validate schema before use.
+/** Local tool boundary for signed managed registrations; validate schema before use.
  *
  * @param version canonical version value
  * @param artifacts canonical artifacts value

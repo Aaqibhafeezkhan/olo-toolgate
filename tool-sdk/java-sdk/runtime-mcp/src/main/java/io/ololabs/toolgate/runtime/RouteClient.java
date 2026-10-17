@@ -363,7 +363,7 @@ final class RouteClient implements HttpClient {
             if (reply == null) {
                 throw refused("Test mode: no recorded exchange answers " + method + " on route " + routeId + " with variables " + vars);
             }
-            // The Tool Host's broker refuses a call it will not send, with its reason (plan.md §11.8).
+            // The Tool Host's broker refuses a call it will not send, with its reason (platform-requirements.md §11.8).
             if (reply.hasNonNull("refused")) throw refused(reply.get("refused").asText());
             String failure = reply.path("failure").asText("");
             switch (failure) {

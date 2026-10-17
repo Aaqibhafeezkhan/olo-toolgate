@@ -8,6 +8,9 @@ services:
     pull_policy: ${TOOLGATE_DEVICE_PULL_POLICY:-always}
     hostname: ${TOOLGATE_DEVICE_NAME:-toolgate-secured-device}
     restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
     read_only: true
     cap_drop: [ALL]
     # Removed from the native client and all its children before enrollment starts.

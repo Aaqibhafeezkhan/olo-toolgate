@@ -94,19 +94,19 @@ class SharedCheckOwnershipTests(unittest.TestCase):
     def test_reusable_workflow_permissions_fit_the_calling_job(self):
         self.check_caller_permissions(workflow('ci.yml'))
 
-    def test_missing_release_pr_read_permission_reproduces_startup_rejection(self):
+    def test_missing_client_pr_read_permission_reproduces_startup_rejection(self):
         pipeline = workflow('ci.yml')
-        del pipeline['jobs']['release']['permissions']['pull-requests']
-        with self.assertRaisesRegex(AssertionError, 'release.*pull-requests'):
+        pipeline['jobs']['clients']['permissions'] = {'contents':'read'}
+        with self.assertRaisesRegex(AssertionError, 'clients.*pull-requests'):
             self.check_caller_permissions(pipeline)
 
     def test_main_calls_one_shared_stage_and_one_platform_matrix(self):
         jobs = workflow('ci.yml')['jobs']
-        self.assertEqual(set(jobs), {'admission','preflight','foundation','clients','images','release'})
+        self.assertEqual(set(jobs), {'admission','preflight','foundation','clients','images'})
         for name in ('preflight','clients'):
             self.assertTrue(jobs[name]['with']['shared_checks'])
         self.assertEqual(set(jobs['images']['needs']), {'foundation','clients'})
-        self.assertEqual(set(jobs['release']['needs']), {'foundation','clients','images'})
+        self.assertNotIn('release',jobs)
         native = workflow('client.yml')['jobs']['native']
         self.assertEqual({row['target'] for row in native['strategy']['matrix']['include']}, set(TARGETS))
         self.assertFalse(native['strategy']['fail-fast'])

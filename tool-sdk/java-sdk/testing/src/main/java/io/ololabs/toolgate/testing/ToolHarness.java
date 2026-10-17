@@ -72,7 +72,7 @@ public final class ToolHarness implements AutoCloseable {
         readIndex();
         TestExchanges answer = this::answer;
         this.runtime = StandaloneRuntime.startTest(loader, b.fixtures, answer, workingDirectory,
-                new PrintStream(diagnostics, true, StandardCharsets.UTF_8));
+                new PrintStream(diagnostics, true, StandardCharsets.UTF_8), b.files);
         this.core = new ProtocolCore(runtime);
     }
 
@@ -319,8 +319,15 @@ public final class ToolHarness implements AutoCloseable {
         private ClassLoader loader = Thread.currentThread().getContextClassLoader();
         private final ObjectNode fixtures = RecordedExchange.JSON.createObjectNode();
         private final List<RecordedExchange> exchanges = new ArrayList<>();
+        private io.ololabs.toolgate.sdk.context.DeviceFiles files;
 
         private Builder() {}
+
+        /** The device files area tools declared with {@code @DeviceFileAccess} use, for example {@link io.ololabs.toolgate.runtime.InMemoryDeviceFiles}; an empty one when not set. */
+        public Builder deviceFiles(io.ololabs.toolgate.sdk.context.DeviceFiles files) {
+            this.files = files;
+            return this;
+        }
 
         /** Where the tools and their descriptors are; the thread's context class loader by default. */
         public Builder classLoader(ClassLoader loader) {

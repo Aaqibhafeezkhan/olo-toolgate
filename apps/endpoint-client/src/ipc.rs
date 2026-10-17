@@ -177,8 +177,8 @@ async fn handle<S: AsyncWrite + Unpin>(
         .await;
     }
     if envelope["protocolVersion"] == 2 {
-        let request: BuiltinIpcRequest = contracts.decode("BuiltinIpcRequest", bytes)?;
-        let mut response = BuiltinIpcResponse {
+        let request: LocalToolIpcRequest = contracts.decode("LocalToolIpcRequest", bytes)?;
+        let mut response = LocalToolIpcResponse {
             request_id: request.request_id,
             tools: None,
             output: None,
@@ -186,16 +186,24 @@ async fn handle<S: AsyncWrite + Unpin>(
         };
         if off {
             response.error = Some(code(Failure::Unavailable));
-            return write(stream, &contracts.encode("BuiltinIpcResponse", &response)?).await;
+            return write(
+                stream,
+                &contracts.encode("LocalToolIpcResponse", &response)?,
+            )
+            .await;
         }
         let mut state = match service.try_lock() {
             Ok(state) => state,
             Err(_) => {
                 response.error = Some(ErrorCode::Conflict);
-                return write(stream, &contracts.encode("BuiltinIpcResponse", &response)?).await;
+                return write(
+                    stream,
+                    &contracts.encode("LocalToolIpcResponse", &response)?,
+                )
+                .await;
             }
         };
-        let command = if request.operation == BuiltinOperation::Call {
+        let command = if request.operation == LocalToolOperation::Call {
             request
                 .invocation
                 .as_ref()
@@ -204,13 +212,13 @@ async fn handle<S: AsyncWrite + Unpin>(
             None
         };
         let result = match request.operation {
-            BuiltinOperation::Catalog if request.invocation.is_none() => state
+            LocalToolOperation::Catalog if request.invocation.is_none() => state
                 .tool_catalog(request.agent_id.as_deref())
                 .await
                 .map(|tools| response.tools = Some(tools)),
-            BuiltinOperation::Call => match request.invocation {
+            LocalToolOperation::Call => match request.invocation {
                 Some(invocation) => {
-                    let span = tracing::info_span!("builtin_call",request_id=%response.request_id,tool_id=%invocation.tool_id);
+                    let span = tracing::info_span!("local_tool_call",request_id=%response.request_id,tool_id=%invocation.tool_id);
                     state
                         .execute_tool(invocation)
                         .instrument(span)
@@ -226,14 +234,27 @@ async fn handle<S: AsyncWrite + Unpin>(
         }
         if let Err(failure) = result {
             response.error = Some(code(failure));
-            tracing::warn!(event="builtin_execution",result="rejected",error=?failure);
+            tracing::warn!(event="local_tool_call",result="rejected",error=?failure);
         }
-        let bytes = contracts.encode("BuiltinIpcResponse", &response)?;
+        let bytes = contracts.encode("LocalToolIpcResponse", &response)?;
         drop(state);
         return write(stream, &bytes).await;
     }
     if bytes.len() > 4096 {
         return Err(Failure::Validation);
+    }
+    if serde_json::from_slice::<serde_json::Value>(bytes)
+        .ok()
+        .is_some_and(|value| {
+            value.get("kind").and_then(serde_json::Value::as_str) == Some("console-device-proof")
+        })
+    {
+        let request: ConsoleDeviceProofRequest =
+            contracts.decode("ConsoleDeviceProofRequest", bytes)?;
+        let state = service.try_lock().map_err(|_| Failure::Conflict)?;
+        let proof = state.console_device_proof(&request.console_url, &request.nonce)?;
+        drop(state);
+        return write(stream, &contracts.encode("ConsoleDeviceProof", &proof)?).await;
     }
     let request: ClientIpcRequest = contracts.decode("ClientIpcRequest", bytes)?;
     let mut response = ClientIpcResponse {
@@ -450,32 +471,47 @@ pub async fn call(endpoint: &str, operation: ClientIpcOperation) -> Result<Clien
     }
     Ok(response)
 }
+pub async fn console_proof(
+    endpoint: &str,
+    console_url: &str,
+    nonce: &str,
+) -> Result<ConsoleDeviceProof> {
+    let contracts = Contracts::new()?;
+    let request = ConsoleDeviceProofRequest {
+        kind: "console-device-proof".to_owned(),
+        console_url: console_url.to_owned(),
+        nonce: nonce.to_owned(),
+    };
+    let bytes = contracts.encode("ConsoleDeviceProofRequest", &request)?;
+    let response = exchange(endpoint, &bytes, 16384).await?;
+    contracts.decode("ConsoleDeviceProof", &response)
+}
 pub async fn call_tool(
     endpoint: &str,
-    invocation: Option<BuiltinInvocation>,
-) -> Result<BuiltinIpcResponse> {
+    invocation: Option<LocalToolCall>,
+) -> Result<LocalToolIpcResponse> {
     call_tool_for_agent(endpoint, invocation, None).await
 }
 pub async fn call_tool_for_agent(
     endpoint: &str,
-    invocation: Option<BuiltinInvocation>,
+    invocation: Option<LocalToolCall>,
     agent_id: Option<String>,
-) -> Result<BuiltinIpcResponse> {
+) -> Result<LocalToolIpcResponse> {
     let contracts = Contracts::new()?;
-    let request = BuiltinIpcRequest {
+    let request = LocalToolIpcRequest {
         protocol_version: 2,
         request_id: crate::identity::nonce()?,
         operation: if invocation.is_some() {
-            BuiltinOperation::Call
+            LocalToolOperation::Call
         } else {
-            BuiltinOperation::Catalog
+            LocalToolOperation::Catalog
         },
         invocation,
         agent_id,
     };
-    let bytes = contracts.encode("BuiltinIpcRequest", &request)?;
-    let response: BuiltinIpcResponse = contracts.decode(
-        "BuiltinIpcResponse",
+    let bytes = contracts.encode("LocalToolIpcRequest", &request)?;
+    let response: LocalToolIpcResponse = contracts.decode(
+        "LocalToolIpcResponse",
         &exchange(endpoint, &bytes, 131072).await?,
     )?;
     if response.request_id != request.request_id {

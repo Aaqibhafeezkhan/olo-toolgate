@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** Tool resource requests; each at most the platform ceiling (plan.md §13.5). */
+/** Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5). */
 final readonly class ToolLimits implements \JsonSerializable {
     public function __construct(
         public ?int $memoryBytes = null,

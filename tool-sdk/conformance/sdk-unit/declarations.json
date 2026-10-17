@@ -200,7 +200,7 @@
       "title": "Typed and grouped forms produce byte-identical descriptors",
       "requirements": [
         "tool-sdk/spec/authoring/README.md §4",
-        "plan.md §5.2"
+        "platform-requirements.md §5.2"
       ],
       "level": "unit",
       "targets": [

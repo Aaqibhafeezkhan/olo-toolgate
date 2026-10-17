@@ -23,17 +23,25 @@ class GithubReleaseTests(unittest.TestCase):
         self.calls = []
         self.fail_upload = False
         self.fail_create = False
+        self.hidden_listings = 0
 
     def command(self, *args, capture=False):
         self.calls.append(args)
         result = ''
-        if args[:2] == ('gh','api'):
+        if args[:4] == ('gh','api','-X','DELETE'):
+            asset = int(args[4].rsplit('/',1)[1])
+            self.remote = {name:item for name,item in self.remote.items() if item['id'] != asset}
+        elif args[:2] == ('gh','api'):
             if '/releases/tags/' in args[2]:
                 if self.current is None or self.current['draft']:
                     raise subprocess.CalledProcessError(1,args,output='{"status":"404"}')
                 result = json.dumps(self.current)
             elif '/releases?' in args[2]:
-                result = json.dumps([[self.current] if self.current else []])
+                if self.current and self.hidden_listings:
+                    self.hidden_listings -= 1
+                    result = json.dumps([[]])
+                else:
+                    result = json.dumps([[self.current] if self.current else []])
             else:
                 result = json.dumps([list(self.remote.values())])
         elif args[:3] == ('gh','release','create'):
@@ -42,7 +50,7 @@ class GithubReleaseTests(unittest.TestCase):
                 raise subprocess.CalledProcessError(1,args)
         elif args[:3] == ('gh','release','upload'):
             path = Path(args[4])
-            self.remote[path.name] = {'name':path.name,'size':path.stat().st_size,
+            self.remote[path.name] = {'id':len(self.calls),'name':path.name,'size':path.stat().st_size,
                 'digest':'sha256:'+hashlib.sha256(path.read_bytes()).hexdigest(),'state':'uploaded'}
             if self.fail_upload:
                 raise subprocess.CalledProcessError(1,args)
@@ -86,6 +94,28 @@ class GithubReleaseTests(unittest.TestCase):
         self.publish()
         self.assertTrue(all(call[:2] == ('gh','api') for call in self.calls))
 
+    def test_rerun_replaces_changed_and_stale_assets_of_a_published_release(self):
+        self.publish()
+        (self.folder/'package.zip').write_bytes(b'rebuilt package')
+        self.remote['old.zip'] = {'id':999,'name':'old.zip','size':1,'digest':'sha256:old','state':'uploaded'}
+        self.calls.clear()
+        github_release.publish(self.command,'olo-labs/olo-toolgate','dev-test','a'*40,
+                               self.folder,'development','notes.md',replace=True)
+        deleted = [call[4] for call in self.calls if call[:4] == ('gh','api','-X','DELETE')]
+        self.assertEqual(len(deleted),2)
+        uploads = [Path(call[4]).name for call in self.calls if call[:3] == ('gh','release','upload')]
+        self.assertEqual(uploads,['package.zip'])
+        self.assertEqual(set(self.remote),{'package.zip','SHA256SUMS'})
+        self.assertEqual(self.remote['package.zip']['digest'],'sha256:'+hashlib.sha256(b'rebuilt package').hexdigest())
+        self.assertFalse(self.current['draft'])
+
+    def test_stable_release_is_not_marked_as_a_prerelease(self):
+        github_release.publish(self.command,'olo-labs/olo-toolgate','dev-test','a'*40,
+                               self.folder,'stable','notes.md',prerelease=False)
+        create=next(call for call in self.calls if call[:3] == ('gh','release','create'))
+        self.assertIn('--prerelease=false',create)
+        self.assertIn('--prerelease=false',self.calls[-1])
+
     def test_conflicting_asset_or_commit_stops_before_writes(self):
         self.publish()
         for change in ('digest','commit'):
@@ -115,3 +145,67 @@ class GithubReleaseTests(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             github_release.publish(denied,'olo-labs/olo-toolgate','dev-test','a'*40,
                                    self.folder,'development','notes.md')
+
+    def test_created_draft_visibility_is_polled_without_recreating(self):
+        for lost_response in (False, True):
+            with self.subTest(lost_response=lost_response):
+                self.current = None
+                self.remote.clear()
+                self.calls.clear()
+                self.fail_create = lost_response
+                self.hidden_listings = 3
+                with patch.object(github_release.time,'sleep') as sleep:
+                    self.publish()
+                self.assertFalse(self.current['draft'])
+                self.assertEqual(sum(call[:3] == ('gh','release','create') for call in self.calls),1)
+                self.assertEqual(sum(call[:3] == ('gh','release','upload') for call in self.calls),2)
+                self.assertEqual([call.args[0] for call in sleep.call_args_list],[1,2,4])
+
+    def test_created_draft_visibility_timeout_leaves_draft_unpublished(self):
+        self.hidden_listings = 100
+        with patch.object(github_release.time,'sleep') as sleep:
+            with self.assertRaisesRegex(ValueError,'Created draft release did not become visible'):
+                self.publish()
+        self.assertTrue(self.current['draft'])
+        self.assertFalse(self.remote)
+        self.assertFalse(any(call[:3] == ('gh','release','edit') for call in self.calls))
+        self.assertEqual([call.args[0] for call in sleep.call_args_list],[1,2,4,8,8])
+        self.assertEqual(sum(call[:3] == ('gh','release','create') for call in self.calls),1)
+
+    def test_failed_create_with_no_visible_draft_preserves_original_error(self):
+        self.fail_create = True
+        self.hidden_listings = 100
+        with patch.object(github_release.time,'sleep'):
+            with self.assertRaises(subprocess.CalledProcessError) as raised:
+                self.publish()
+        self.assertEqual(raised.exception.cmd[:3],('gh','release','create'))
+        self.assertTrue(self.current['draft'])
+        self.assertFalse(self.remote)
+        self.assertEqual(sum(call[:3] == ('gh','release','create') for call in self.calls),1)
+
+    def test_forbidden_post_create_lookup_is_not_retried(self):
+        def command(*args,**kwargs):
+            if self.current and args[:2] == ('gh','api'):
+                raise subprocess.CalledProcessError(1,args,output='{"status":"403"}')
+            return self.command(*args,**kwargs)
+        with patch.object(github_release.time,'sleep') as sleep:
+            with self.assertRaises(subprocess.CalledProcessError):
+                github_release.publish(command,'olo-labs/olo-toolgate','dev-test','a'*40,
+                                       self.folder,'development','notes.md')
+        sleep.assert_not_called()
+        self.assertTrue(self.current['draft'])
+        self.assertFalse(self.remote)
+
+    def test_conflicting_post_create_identity_is_rejected_without_retry(self):
+        def command(*args,**kwargs):
+            result = self.command(*args,**kwargs)
+            if args[:3] == ('gh','release','create'):
+                self.current['target_commitish'] = 'b'*40
+            return result
+        with patch.object(github_release.time,'sleep') as sleep:
+            with self.assertRaisesRegex(ValueError,'commit or tag mismatch'):
+                github_release.publish(command,'olo-labs/olo-toolgate','dev-test','a'*40,
+                                       self.folder,'development','notes.md')
+        sleep.assert_not_called()
+        self.assertTrue(self.current['draft'])
+        self.assertFalse(self.remote)

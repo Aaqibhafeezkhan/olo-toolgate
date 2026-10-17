@@ -35,11 +35,11 @@ local key is protected by the volume's filesystem permissions: full volume theft
 includes custody, so use encrypted host storage and protect backups. No automatic
 credential binding for custom tools is introduced.
 
-Defaults grant compute/read-only demo tools and exact welcome.txt operations;
-mutations require ASK. Unselected paths/tools and deletion stay BLOCK. The fixed
-executor obtains fresh Gateway decisions, consumes exact one-use approval permits,
-and uses capability-relative HotFolder access. Runtime authorization is distinct
-from admin sessions, assignment and testing. Failures cannot grant tool access.
+Quickstart runs tools only from verified packages on its Tool Hosts or on enrolled
+devices, with fresh Gateway decisions and exact one-use approval permits; it has
+no built-in executor (amended by [ADR 027](027-one-tool-protocol-device-files.md)).
+Runtime authorization is distinct from admin sessions, assignment and testing.
+Failures cannot grant tool access.
 
 SQLite JDBC is the pinned Xerial adapter (Apache-2.0), reusing JDBC rather than
 adding another server/framework. Python cryptography is pinned to the existing

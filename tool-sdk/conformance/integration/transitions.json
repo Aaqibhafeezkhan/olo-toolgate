@@ -5,7 +5,7 @@
   "title": "Invocation state transitions",
   "sources": [
     "docs/control-plane/invocation-state-v2.md",
-    "plan.md §12.2"
+    "platform-requirements.md §12.2"
   ],
   "cases": [
     {

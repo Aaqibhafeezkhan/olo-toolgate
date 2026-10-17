@@ -1,19 +1,16 @@
-# Endpoint Client and HotFolder
+# Endpoint Client
 
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding. Clients keep sending signed-key presence pings in every state and follow Control's enrollment, check-in or wait directive. Deleted live devices request fresh approval with their existing ID and key. Expired approvals remain listed as Approval required; protected access resumes only after reapproval.
+The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Clients keep sending signed-key presence pings in every state and follow Control's enrollment, check-in or wait directive. Deleted live devices request fresh approval with their existing ID and key. Expired approvals remain listed as Approval required; protected access resumes only after reapproval.
 
 See [Device registry and tool-call controls](../../docs/control-plane/device-registry.md).
 
-Module 08 adds opt-in [managed local runtimes](../../docs/client/local-runtimes.md).
-Approved images contain Python and other dependencies and can be provisioned
-automatically on first use. A system-accessible Linux OCI engine is required;
-Batch/CMD and WASM currently report UNSUPPORTED. Host interpreters are never a fallback.
-
-The native protected service provides enrollment, check-in and eighteen fixed
-built-in tools and signed local tools within the confined managed engine.
-Gateway credentials are provisioned externally.
-See [HotFolder configuration and operations](../../docs/client/hotfolder.md) and
-[ADR 008](../../docs/adr/008-hotfolder-builtins.md).
+The native protected service provides enrollment, check-in and signed package tools,
+run in [managed local runtimes](../../docs/client/local-runtimes.md): Control-built
+Java SDK images on an approved JRE base, in a sandbox on a system-accessible Linux
+OCI engine. It has no built-in tools, and host interpreters are never a fallback.
+Tools speak the one tool protocol, v2 over stdio; a device brokers only its
+confined [files area](../../docs/client/hotfolder.md) to tools whose signed
+registration grants it ([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)).
 
 Download the Windows, macOS or Linux archive from the Control home page without
 signing in. Check its SHA-256 against the displayed manifest before extracting.
@@ -120,8 +117,8 @@ on all three operating systems. Native CI tests the real service manager and
 builds x64 and ARM64 packages. A protected tagged-release job publishes verified
 packages and provenance; signing hooks require externally provisioned OS/KMS
 identities. Local development packages are unsigned and macOS notarization is
-not configured. Module 06's historical completion report remains unchanged;
-current verification and any open gates are recorded in the Module 07 report.
+not configured. See [installer limitations](../../docs/client/installers.md) and
+[remaining qualification work](../../docs/planning/README.md).
 
 Module 09 uses immutable signed descriptors and monotonic device generations.
 See the [fleet usage, upgrade and debug guide](../../docs/client/package-deployment.md) for external trust/store
