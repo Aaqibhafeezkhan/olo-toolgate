@@ -8,6 +8,26 @@ use std::path::Path;
 use std::process::Command;
 
 #[test]
+fn python_starter_and_project_adapter_are_wired() {
+    let dir = scratch("python-project");
+    let (code, out) = toolgate(
+        &dir,
+        &["init", "orders", "--lang", "python", "--dir", "here"],
+    );
+    assert_eq!(0, code, "{out}");
+    let project = dir.join("here");
+    assert_eq!(
+        "python-sdk",
+        toolgate_cli::project::detect(&project, None).unwrap().id
+    );
+    assert!(project.join("src/example_orders/__init__.py").is_file());
+    assert!(project.join("tests/test_tools.py").is_file());
+    assert!(!std::fs::read_to_string(project.join("pyproject.toml"))
+        .unwrap()
+        .contains("{{"));
+}
+
+#[test]
 fn json_project_selects_the_shared_sdk_distribution() {
     let dir = scratch("json-project");
     std::fs::write(dir.join("toolgate.json"), "{}").unwrap();

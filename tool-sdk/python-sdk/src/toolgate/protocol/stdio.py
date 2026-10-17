@@ -35,6 +35,7 @@ class StdioServer:
                 output.flush()
 
         workers = concurrent.futures.ThreadPoolExecutor(max_workers=64, thread_name_prefix="toolgate-stdio")
+        slots = threading.BoundedSemaphore(64)
         pending = []
         try:
             while True:
@@ -50,9 +51,14 @@ class StdioServer:
                     continue
 
                 def run(message: Any = message) -> None:
-                    response = self.core.handle(message, connection, None, write)
-                    if response is not None:
-                        write(response)
+                    try:
+                        response = self.core.handle(message, connection, None, write)
+                        if response is not None:
+                            write(response)
+                    finally:
+                        slots.release()
+                # Backpressure bounds queued input independently of per-tool concurrency.
+                slots.acquire()
                 pending.append(workers.submit(run))
                 pending = [f for f in pending if not f.done()]
         finally:

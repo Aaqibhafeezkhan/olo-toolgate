@@ -6,5 +6,7 @@ package io.ololabs.toolgate.contracts;
 /** Canonical LocalRuntimeKind wire values; unknown values must be rejected. */
 public enum LocalRuntimeKind {
     /** Canonical JAVA_SDK value. */
-    JAVA_SDK
+    JAVA_SDK,
+    /** Canonical PYTHON_SDK value. */
+    PYTHON_SDK
 }

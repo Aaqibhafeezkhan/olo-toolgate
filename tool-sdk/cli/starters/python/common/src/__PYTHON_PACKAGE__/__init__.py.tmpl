@@ -1,0 +1,29 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+from dataclasses import dataclass
+from typing import Annotated
+from toolgate import (tool_package, server_tool, example, Global, ValueType, Param, ToolContext,
+                      destination, http_route)
+
+tool_package(id="{{packageId}}", name="{{title}}", publisher="{{publisher}}")
+destination(id="catalog", host_setting="CatalogHost")
+http_route(id="catalog.get", destination="catalog", method="GET", path="/items/{id:[0-9]+}")
+
+
+@dataclass
+class Greeting:
+    message: str
+
+
+@server_tool(name="hello", title="Hello", description="Greet someone using the configured prefix.")
+@Global(name="Prefix", type=ValueType.STRING, default_value="Hello")
+@example(arguments={"name": "World"}, expected_output={"message": "Hello World"})
+def hello(name: Annotated[str, Param(description="Who to greet")] = "World", *, context: ToolContext) -> Greeting:
+    context.log.info("Producing greeting")
+    context.progress(1, "Greeting complete")
+    return Greeting(context.globals.get_str("Prefix") + " " + name)
+
+
+@server_tool(name="lookup", title="Lookup", description="Look up an item using a declared route.", routes=["catalog.get"])
+@example(arguments={"id": "7"}, expected_output={"message": "Item 7"}, exchanges="exchanges/item.json")
+def lookup(id: Annotated[str, Param(description="Item number", pattern="^[0-9]+$")], *, context: ToolContext) -> Greeting:
+    return context.http.route("catalog.get").path_var("id", id).send(Greeting)

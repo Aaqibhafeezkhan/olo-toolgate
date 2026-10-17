@@ -111,6 +111,8 @@ fn the_launch_vector_is_fixed_and_never_interpolates_input() {
 
 #[test]
 fn exact_versions_and_closed_configuration_fail_safely() {
+    adapters::verify_version(b"Python 3.12.14\n", "3.12.14").unwrap();
+    assert!(adapters::verify_version(b"Python 3.12.14\n", "3.12.1").is_err());
     adapters::verify_version(
         b"openjdk version \"21.0.12.1\" 2026-08-18 LTS\n",
         "21.0.12+1",
@@ -142,6 +144,30 @@ fn exact_versions_and_closed_configuration_fail_safely() {
     let mut bad = original;
     bad.tools[0].entry_point = "/opt/tool/acme.other/tool.jar".into();
     assert!(bad.validate().is_err());
+}
+
+#[test]
+fn python_sdk_has_a_fixed_isolated_launch_vector_and_rejects_other_artifacts() {
+    let mut registration = tool(None);
+    registration.entry_point = "/opt/tool/acme.tools/tool.pyz".into();
+    let args = adapters::invocation_arguments(&LocalRuntimeKind::PythonSdk, &registration).unwrap();
+    assert_eq!(
+        &args[args.len() - 3..],
+        &[
+            "/usr/local/bin/python3",
+            "-I",
+            "/opt/tool/acme.tools/tool.pyz"
+        ]
+    );
+    assert_eq!(
+        adapters::version_arguments(&LocalRuntimeKind::PythonSdk).unwrap(),
+        vec!["/usr/local/bin/python3", "-I", "--version"]
+    );
+    registration.entry_point = "/opt/tool/acme.tools/tool.jar".into();
+    assert_eq!(
+        Failure::Validation,
+        adapters::invocation_arguments(&LocalRuntimeKind::PythonSdk, &registration).unwrap_err()
+    );
 }
 
 /// A fake engine CLI: `start` plays a tool speaking tool protocol v2, sending the broker requests listed in

@@ -85,6 +85,7 @@ def analyse(handlers: Dict[str, Any], routes: Dict[str, Any], facts: Dict[str, A
     for module_name, module in seen.items():
         found = _source(module)
         if found is None:
+            problems.append(Problem(None, "cannot analyse source for " + module_name))
             continue
         path, text = found
         try:
@@ -130,6 +131,7 @@ class _Scanner(ast.NodeVisitor):
         self.facts: Any = None
         self.scope = _Scope()
         self.annotations: Set[int] = set()
+        self.direct_calls: Set[int] = set()
 
     def error(self, node: ast.AST, message: str) -> None:
         self.problems.append(Problem(Site(self.path, getattr(node, "lineno", 0)), message))
@@ -232,6 +234,8 @@ class _Scanner(ast.NodeVisitor):
             self.error(node, "reflective access to " + node.id + " cannot be analysed; call the network API directly")
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
+        if node.attr in CONVENIENCE and self._is_http(node.value) and id(node) not in self.direct_calls:
+            self.error(node, "a bound convenience method cannot be analysed; call the network API directly")
         if node.attr in NETWORK_TYPES and id(node) not in self.annotations and isinstance(node.ctx, ast.Load):
             self.error(node, "reflective access to " + node.attr + " cannot be analysed; call the network API"
                              " directly")
@@ -243,6 +247,7 @@ class _Scanner(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
+        self.direct_calls.add(id(func))
         if isinstance(func, ast.Name) and func.id in _REFLECTION and node.args:
             target = node.args[0]
             if self._is_http(target) or self._is_tcp(target):

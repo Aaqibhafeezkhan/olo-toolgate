@@ -1453,7 +1453,7 @@ export interface LocalRuntimeIpcResponse {
   readonly result?: LocalToolOutput;
   readonly error?: ErrorCode;
 }
-export type LocalRuntimeKind = "JAVA_SDK";
+export type LocalRuntimeKind = "JAVA_SDK" | "PYTHON_SDK";
 /** Bounded local sandbox budget; limits never grant host access. */
 export interface LocalRuntimeLimits {
   readonly timeoutMs: number;

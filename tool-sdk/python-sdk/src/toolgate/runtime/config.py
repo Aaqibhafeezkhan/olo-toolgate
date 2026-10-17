@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import enum
 import os
+import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
@@ -55,6 +56,8 @@ class Config:
         self.dev_json = dev_json
         self.warnings: List[str] = []
         self._secrets: Optional[Callable[[str], Any]] = None
+        self.tokens = {}
+        self.token_lock = threading.RLock()
 
     @classmethod
     def load(cls, env: Mapping[str, str], working_directory: os.PathLike) -> "Config":
@@ -63,8 +66,11 @@ class Config:
         if raw not in modes:
             raise StartupRefused("CONFIGURATION", "TOOLGATE_MODE must be production or development, not " + raw)
         mode = modes[raw]
-        file = Path(env["TOOLGATE_DEV_JSON"]) if "TOOLGATE_DEV_JSON" in env \
-            else Path(working_directory) / "toolgate.dev.json"
+        if mode is Mode.TEST:
+            raise StartupRefused("CONFIGURATION", "Test mode is available only through ToolHarness")
+        file = Path(env.get("TOOLGATE_DEV_JSON", "toolgate.dev.json"))
+        if not file.is_absolute():
+            file = Path(working_directory) / file
         dev = None
         if file.is_file():
             try:

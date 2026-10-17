@@ -22,7 +22,7 @@ from ..context import ToolContext, ToolResult
 from ..declarations import (ATTACHED_ATTRIBUTE, REGISTRY_ATTRIBUTE, Declaration, ErrorDecl, Global, JwtClaim, Param,
                             Secret, ToolDeclaration, ToolPackageDeclaration, client_tool, destination, example,
                             http_auth, http_route, idempotency, reconcile, server_tool, tcp_destination,
-                            tool_variables)
+                            tool_variables, device_file_access)
 from ..enums import AuthType, BusinessKey, EffectSafety, OpenWorld, SecretScope, ValueType
 from ..jcs import canonical, sha256, sorted_utf16, utf16_key, utf16_length
 from . import schemas as S
@@ -619,6 +619,13 @@ class _Builder:
         d["variables"] = variables.to_json()
 
         permissions: Set[str] = set()
+        files = [x for x in attached if isinstance(x, device_file_access)]
+        if files:
+            if not is_client or len(files) != 1:
+                raise Problem(site, "device_file_access is only for a client_tool, at most once")
+            permissions.add("DEVICE_FILES_READ")
+            if files[0].write:
+                permissions.add("DEVICE_FILES_WRITE")
         if route_ids:
             permissions.add("HTTP_ROUTE")
         if tcp_ids:

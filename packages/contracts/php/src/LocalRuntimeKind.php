@@ -8,4 +8,5 @@ namespace OloLabs\ToolGate\Contracts;
 /** Canonical LocalRuntimeKind wire values. */
 enum LocalRuntimeKind: string {
     case JAVA_SDK = 'JAVA_SDK';
+    case PYTHON_SDK = 'PYTHON_SDK';
 }

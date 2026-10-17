@@ -79,12 +79,19 @@ fn default_pool() -> String {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Runtimes {
+    #[serde(default = "default_python")]
+    pub python_path: PathBuf,
     pub java_path: PathBuf,
+}
+
+fn default_python() -> PathBuf {
+    PathBuf::from(if cfg!(windows) { "python" } else { "python3" })
 }
 
 impl Default for Runtimes {
     fn default() -> Self {
         Runtimes {
+            python_path: default_python(),
             java_path: PathBuf::from("java"),
         }
     }
@@ -145,6 +152,7 @@ impl Config {
             serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
         config.validate()?;
         config.runtimes.java_path = resolve(&config.runtimes.java_path);
+        config.runtimes.python_path = resolve(&config.runtimes.python_path);
         Ok(config)
     }
 

@@ -49,7 +49,7 @@ pub struct Store {
 }
 
 /// Runtimes this host can launch, by `runtimeId`.
-pub const RUNTIMES: [&str; 1] = ["jvm"];
+pub const RUNTIMES: [&str; 2] = ["jvm", "python"];
 
 fn not_present(why: impl Into<String>) -> StoreError {
     StoreError::NotPresent(why.into())
@@ -151,6 +151,19 @@ impl Store {
             && artifact.get("mediaType").and_then(Value::as_str) != Some("application/java-archive")
         {
             return Err(not_present("a JVM tool must run from one jar"));
+        }
+        if runtime.runtime_id == "python"
+            && (artifact.get("mediaType").and_then(Value::as_str) != Some("application/zip")
+                || !artifact
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .ends_with(".pyz")
+                || tool.entry_point.as_deref() != Some("toolgate.runtime"))
+        {
+            return Err(not_present(
+                "a Python tool must run the SDK runtime from one pyz",
+            ));
         }
         let executable = package_dir.join(artifact_name(
             artifact

@@ -2428,6 +2428,8 @@ pub struct LocalRuntimeIpcResponse {
 pub enum LocalRuntimeKind {
     #[serde(rename = "JAVA_SDK")]
     JavaSdk,
+    #[serde(rename = "PYTHON_SDK")]
+    PythonSdk,
 }
 /// Bounded local sandbox budget; limits never grant host access.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

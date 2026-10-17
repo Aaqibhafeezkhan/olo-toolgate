@@ -32,11 +32,24 @@ public final class ClientReleases {
     private static final Map<String, String> ARCHITECTURES = Map.of("amd64", "x86_64", "arm64", "aarch64");
 
     /** repository: where client-tool images are pushed; base: the approved JRE, mirrored on the same registry, by digest. */
-    public record Settings(String repository, String baseRepository, String baseDigest, List<String> platforms, String minimumClientVersion) {
+    public record Settings(String repository, String baseRepository, String baseDigest, List<String> platforms, String minimumClientVersion,
+                           String pythonBaseRepository, String pythonBaseDigest) {
+        public Settings(String repository, String baseRepository, String baseDigest, List<String> platforms, String minimumClientVersion) {
+            this(repository, baseRepository, baseDigest, platforms, minimumClientVersion, null, null);
+        }
         public Settings {
             if (repository == null || !repository.matches("[a-z0-9]+([._/-][a-z0-9]+)*") || baseRepository == null || !baseRepository.matches("[a-z0-9]+([._/-][a-z0-9]+)*")
                 || baseDigest == null || !baseDigest.matches("sha256:[a-f0-9]{64}") || platforms == null || platforms.isEmpty()
                 || !Set.of("LINUX", "WINDOWS", "MACOS").containsAll(platforms) || new HashSet<>(platforms).size() != platforms.size()) throw new IllegalArgumentException("Invalid client image settings");
+            if ((pythonBaseRepository == null) != (pythonBaseDigest == null) || pythonBaseRepository != null && (
+                !pythonBaseRepository.matches("[a-z0-9]+([._/-][a-z0-9]+)*") || !pythonBaseDigest.matches("sha256:[a-f0-9]{64}")))
+                throw new IllegalArgumentException("Invalid Python client base");
+        }
+        public Settings withPythonBase(String base) {
+            if (base == null) return this;
+            int at = base.indexOf('@');
+            if (at < 1) throw new IllegalArgumentException("The Python base must be pinned by digest");
+            return new Settings(repository, baseRepository, baseDigest, platforms, minimumClientVersion, base.substring(0, at), base.substring(at + 1));
         }
         public static Settings parse(String repository, String base, String platforms, String minimumClientVersion) {
             int at = base == null ? -1 : base.indexOf('@');
@@ -71,24 +84,29 @@ public final class ClientReleases {
         });
         var verified = PackageArchive.validate(content.getKey(), this::node); var manifest = verified.manifest();
         String packageId = manifest.path("id").asText(), version = manifest.path("version").asText();
-        if (!"JAVA".equals(manifest.path("sdk").path("language").asText())) throw incompatible("Only Java SDK packages have a client runtime");
-        var jars = new ArrayList<JsonNode>(); for (var a : manifest.path("artifacts")) if (RUNTIME_ID.equals(a.path("runtimeId").asText())) jars.add(a);
-        if (jars.size() != 1 || !jars.get(0).path("path").asText().endsWith(".jar")) throw incompatible("A client release needs exactly one Java artifact");
+        String language = manifest.path("sdk").path("language").asText();
+        if (!Set.of("JAVA", "PYTHON").contains(language)) throw incompatible("Only Java and Python SDK packages have a client runtime");
+        boolean python = "PYTHON".equals(language);
+        if (python && settings.pythonBaseRepository() == null) throw incompatible("Configure an approved Python base image before releasing Python tools");
+        String runtimeId = python ? "python" : RUNTIME_ID;
+        String filename = python ? "tool.pyz" : "tool.jar";
+        var jars = new ArrayList<JsonNode>(); for (var a : manifest.path("artifacts")) if (runtimeId.equals(a.path("runtimeId").asText())) jars.add(a);
+        if (jars.size() != 1 || !jars.get(0).path("path").asText().endsWith(python ? ".pyz" : ".jar")) throw incompatible("A client release needs exactly one SDK artifact");
         byte[] jar = verified.files().get(jars.get(0).path("path").asText());
-        var examples = examples(jar);
+        var examples = examples(jar, python ? "_toolgate_index/package.json" : "META-INF/toolgate/package.json");
 
         // Which exports a device can run, and why the others cannot.
         var report = new ArrayList<ObjectNode>(); var supported = new ArrayList<JsonNode>();
         for (var tool : manifest.path("tools")) {
             var d = tool.path("descriptor"); String toolId = d.path("toolId").asText();
-            String reason = unsupported(tool, d, content.getValue(), examples.get(toolId.substring(toolId.indexOf('/') + 1)));
+            String reason = unsupported(tool, d, content.getValue(), examples.get(toolId.substring(toolId.indexOf('/') + 1)), runtimeId);
             var entry = JSON.objectNode().put("toolId", toolId).put("supported", reason == null); if (reason != null) entry.put("reason", reason);
             report.add(entry); if (reason == null) supported.add(tool);
         }
         if (supported.isEmpty()) throw incompatible("No export of this package can run on a client device");
 
-        var image = push(packageId, version, jar);
-        var runtime = JSON.objectNode().put("id", RUNTIME_ID).put("kind", "JAVA_SDK").put("image", image.reference()).put("version", image.javaVersion());
+        var image = push(packageId, version, jar, python);
+        var runtime = JSON.objectNode().put("id", runtimeId).put("kind", python ? "PYTHON_SDK" : "JAVA_SDK").put("image", image.reference()).put("version", image.javaVersion());
         var document = JSON.objectNode().put("formatVersion", 1).put("packageId", packageId).put("version", version);
         var platforms = document.putArray("platforms"); settings.platforms().forEach(platforms::add);
         var architectures = document.putArray("architectures"); image.architectures().forEach(architectures::add);
@@ -97,8 +115,8 @@ public final class ClientReleases {
         var tools = document.putArray("tools"); var tests = document.putArray("selfTests"); var records = new ArrayList<ObjectNode[]>();
         for (var tool : supported) {
             var d = tool.path("descriptor"); String toolId = d.path("toolId").asText();
-            var registration = JSON.objectNode().put("toolId", toolId).put("action", ServerPackages.ACTION).put("runtimeId", RUNTIME_ID)
-                .put("entryPoint", "/opt/tool/" + packageId + "/tool.jar");
+            var registration = JSON.objectNode().put("toolId", toolId).put("action", ServerPackages.ACTION).put("runtimeId", runtimeId)
+                .put("entryPoint", "/opt/tool/" + packageId + "/" + filename);
             registration.set("inputSchema", d.get("inputSchema")); registration.set("outputSchema", d.get("outputSchema"));
             // The device brokers its files area only as the signed registration grants (ADR 027).
             String access = "NONE";
@@ -152,8 +170,8 @@ public final class ClientReleases {
     }
 
     /** Why a device cannot run this export, or null. Devices have no broker, routes, secrets, globals or claims. */
-    private static String unsupported(JsonNode tool, JsonNode d, Set<String> server, JsonNode[] example) {
-        if (!JAVA_SDK_MAIN.equals(tool.path("entryPoint").asText())) return "The entry point is not the Java SDK runtime";
+    private static String unsupported(JsonNode tool, JsonNode d, Set<String> server, JsonNode[] example, String runtimeId) {
+        if (!runtimeId.equals(tool.path("runtimeId").asText()) || !("python".equals(runtimeId) ? "toolgate.runtime" : JAVA_SDK_MAIN).equals(tool.path("entryPoint").asText())) return "The entry point is not the SDK runtime";
         if (!io.ololabs.toolgate.sdk.ExecutionLocation.CLIENT.allows(d.path("kind").asText())) return "The declaration does not allow client devices";
         for (var field : List.of("routes", "destinations", "httpAuth", "tcp")) if (!d.path(field).isEmpty()) return "Needs Tool Host network capabilities devices do not provide";
         for (var permission : d.path("permissions")) if (!permission.asText().startsWith("DEVICE_FILES_")) return "Needs Tool Host network capabilities devices do not provide";
@@ -182,11 +200,11 @@ public final class ClientReleases {
     }
 
     /** The SDK's examples index inside the verified artifact: tool name -> {arguments, expectedOutput} of the first plain example. */
-    private Map<String, JsonNode[]> examples(byte[] jar) {
+    private Map<String, JsonNode[]> examples(byte[] jar, String indexPath) {
         var result = new HashMap<String, JsonNode[]>();
         try (var zip = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(jar))) {
             for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
-                if (!entry.getName().equals("META-INF/toolgate/package.json")) continue;
+                if (!entry.getName().equals(indexPath)) continue;
                 byte[] raw = zip.readNBytes(1048577); if (raw.length > 1048576) throw incompatible("The SDK package index is too large");
                 for (var tool : node(raw).path("tools")) for (var e : tool.path("examples")) {
                     if (e.has("expectedError") || e.has("exchanges") || !e.path("expectedOutput").isTextual()) continue;
@@ -201,15 +219,17 @@ public final class ClientReleases {
     record Image(String reference, String javaVersion, List<String> architectures) {}
 
     /** Builds one manifest per supported base platform and an index, pushing every blob and manifest by digest. */
-    private Image push(String packageId, String version, byte[] jar) {
-        var layer = OciImages.layer(packageId, jar);
-        var base = registry.manifest(settings.baseRepository(), settings.baseDigest());
+    private Image push(String packageId, String version, byte[] jar, boolean python) {
+        String baseRepository = python ? settings.pythonBaseRepository() : settings.baseRepository();
+        String baseDigest = python ? settings.pythonBaseDigest() : settings.baseDigest();
+        var layer = OciImages.layer(packageId, python ? "tool.pyz" : "tool.jar", jar);
+        var base = registry.manifest(baseRepository, baseDigest);
         var platforms = new ArrayList<JsonNode[]>(); // {descriptor or null, manifest}
         if (OciImages.OCI_INDEX.equals(base.mediaType()) || OciImages.DOCKER_LIST.equals(base.mediaType())) {
             for (var entry : node(base.body()).path("manifests")) {
                 var p = entry.path("platform");
                 if (!"linux".equals(p.path("os").asText()) || !ARCHITECTURES.containsKey(p.path("architecture").asText())) continue;
-                var m = registry.manifest(settings.baseRepository(), entry.path("digest").asText());
+                var m = registry.manifest(baseRepository, entry.path("digest").asText());
                 platforms.add(new JsonNode[]{entry, JSON.objectNode().put("mediaType", m.mediaType()).set("body", node(m.body()))});
             }
         } else platforms.add(new JsonNode[]{null, JSON.objectNode().put("mediaType", base.mediaType()).set("body", node(base.body()))});
@@ -219,13 +239,13 @@ public final class ClientReleases {
         for (var platform : platforms) {
             var manifest = platform[1].get("body"); String mediaType = platform[1].get("mediaType").asText();
             String configDigest = manifest.path("config").path("digest").asText();
-            var baseConfig = node(registry.blob(settings.baseRepository(), configDigest, 1048576));
+            var baseConfig = node(registry.blob(baseRepository, configDigest, 1048576));
             String architecture = baseConfig.path("architecture").asText(), os = baseConfig.path("os").asText();
             if (!"linux".equals(os) || !ARCHITECTURES.containsKey(architecture)) continue;
-            String javaVersion = OciImages.javaVersion(baseConfig);
+            String javaVersion = python ? OciImages.pythonVersion(baseConfig) : OciImages.javaVersion(baseConfig);
             if (java != null && !java.equals(javaVersion)) throw incompatible("The approved base platforms declare different Java versions");
             java = javaVersion;
-            for (var l : manifest.path("layers")) { String d = l.path("digest").asText(); if (!registry.hasBlob(settings.repository(), d)) registry.mount(settings.repository(), d, settings.baseRepository()); }
+            for (var l : manifest.path("layers")) { String d = l.path("digest").asText(); if (!registry.hasBlob(settings.repository(), d)) registry.mount(settings.repository(), d, baseRepository); }
             byte[] config = OciImages.config(baseConfig, layer, "toolgate client release " + packageId + "@" + version);
             registry.putBlob(settings.repository(), OciImages.sha256(config), config);
             byte[] built = OciImages.manifest(manifest, mediaType, config, layer);

@@ -11,11 +11,19 @@ pub const JAVA_SDK_MAIN: &str = "io.ololabs.toolgate.runtime.Main";
 pub fn executable(kind: &Kind) -> Result<&'static str> {
     match kind {
         Kind::JavaSdk => Ok("/opt/java/openjdk/bin/java"),
+        Kind::PythonSdk => Ok("/usr/local/bin/python3"),
     }
 }
 
 /// The version probe; the reported version must equal the managed runtime's exactly.
 pub fn version_arguments(kind: &Kind) -> Result<Vec<String>> {
+    if matches!(kind, Kind::PythonSdk) {
+        return Ok(vec![
+            executable(kind)?.into(),
+            "-I".into(),
+            "--version".into(),
+        ]);
+    }
     Ok(vec![
         executable(kind)?.into(),
         "-XX:ActiveProcessorCount=2".into(),
@@ -52,6 +60,10 @@ pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result
             JAVA_SDK_MAIN.into(),
         ],
         Kind::JavaSdk => return Err(Failure::Validation),
+        Kind::PythonSdk if entry.ends_with(".pyz") => {
+            vec![executable(kind)?.into(), "-I".into(), entry.clone()]
+        }
+        Kind::PythonSdk => return Err(Failure::Validation),
     };
     // env -i also removes environment baked into a reviewed image. Nothing of the caller's environment is forwarded.
     let mut clean = vec![

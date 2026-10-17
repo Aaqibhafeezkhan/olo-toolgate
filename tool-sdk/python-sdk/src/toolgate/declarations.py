@@ -21,7 +21,7 @@ from .enums import (AuthType, BusinessKey, EffectSafety, HttpMethod, Idempotency
 __all__ = [
     "tool_package", "server_tool", "client_tool", "Param", "tool_variables", "Variable", "Global", "Secret",
     "JwtClaim", "destination", "http_auth", "http_route", "tcp_destination", "idempotency", "reconcile", "example",
-    "ErrorDecl", "REGISTRY_ATTRIBUTE", "ATTACHED_ATTRIBUTE",
+    "ErrorDecl", "REGISTRY_ATTRIBUTE", "ATTACHED_ATTRIBUTE", "device_file_access",
 ]
 
 #: The module-level list every declaration registers in.
@@ -97,6 +97,17 @@ class Declaration:
     @property
     def where(self) -> str:
         return "%s:%d" % (self.file, self.line)
+
+
+class device_file_access(Declaration):
+    """A ClientTool's confined files permission, equivalent to Java DeviceFileAccess."""
+
+    kind = "device_file_access"
+    on_class = False
+
+    def __init__(self, *, write: bool = False) -> None:
+        super().__init__()
+        self.write = write
 
     def __repr__(self) -> str:
         fields = ", ".join("%s=%r" % (k, v) for k, v in vars(self).items()

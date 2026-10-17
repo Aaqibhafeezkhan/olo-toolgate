@@ -113,11 +113,15 @@ final class ClientReleasesTest {
 
     /** The approved base as a two-platform index on the mirror repository. */
     private String seedBase() throws Exception {
+        return seedBase(false);
+    }
+    private String seedBase(boolean python) throws Exception {
         var entries = new ArrayList<OciImages.Platform>();
         for (var arch : List.of("amd64", "arm64")) {
             byte[] layer = ("base layer " + arch).getBytes(StandardCharsets.UTF_8); registry.blob(BASE, layer);
             var config = (ObjectNode) JSON.readTree("{\"architecture\":\"" + arch + "\",\"os\":\"linux\",\"config\":{\"Env\":[\"PATH=/opt/java/openjdk/bin:/usr/bin\",\"JAVA_VERSION=jdk-21.0.12.1+1\"],\"Entrypoint\":[\"/__cacert_entrypoint.sh\"],\"Cmd\":[\"jshell\"]},"
                 + "\"rootfs\":{\"type\":\"layers\",\"diff_ids\":[\"" + OciImages.sha256(("diff " + arch).getBytes(StandardCharsets.UTF_8)) + "\"]},\"history\":[{\"created_by\":\"base\"}]}");
+            if (python) ((com.fasterxml.jackson.databind.node.ArrayNode) config.path("config").path("Env")).add("PYTHON_VERSION=3.12.14");
             byte[] configBytes = OciImages.bytes(config); registry.blob(BASE, configBytes);
             var manifest = JSON.createObjectNode().put("schemaVersion", 2).put("mediaType", OciImages.OCI_MANIFEST);
             manifest.putObject("config").put("mediaType", OciImages.OCI_CONFIG).put("digest", OciImages.sha256(configBytes)).put("size", configBytes.length);
@@ -130,9 +134,12 @@ final class ClientReleasesTest {
 
     /** A Java SDK package: a ClientTool and a route-free ServerTool devices can run, and a ServerTool needing routes. */
     static byte[] sdkPackage() throws Exception {
+        return sdkPackage(false);
+    }
+    static byte[] sdkPackage(boolean python) throws Exception {
         var jar = new ByteArrayOutputStream();
         try (var zip = new ZipOutputStream(jar)) {
-            zip.putNextEntry(new ZipEntry("META-INF/toolgate/package.json"));
+            zip.putNextEntry(new ZipEntry(python ? "_toolgate_index/package.json" : "META-INF/toolgate/package.json"));
             zip.write(("{\"tools\":[{\"name\":\"client_greet\",\"examples\":[{\"arguments\":\"{}\",\"expectedOutput\":\"{\\\"message\\\":\\\"Hello World\\\"}\"}]},"
                 + "{\"name\":\"server_greet\",\"examples\":[{\"arguments\":\"{\\\"text\\\":\\\"Ada\\\"}\",\"expectedOutput\":\"{\\\"message\\\":\\\"Hello Ada\\\"}\"}]},"
                 + "{\"name\":\"fetch\",\"examples\":[{\"arguments\":\"{}\",\"expectedOutput\":\"{}\"}]}]}").getBytes(StandardCharsets.UTF_8));
@@ -146,6 +153,10 @@ final class ClientReleasesTest {
             {"schemaVersion":2,"kind":"SDK","id":"acme.greet","version":"1.0.0","publisher":"Acme","sdk":{"language":"JAVA","version":"0.1.0","protocol":{"min":2,"max":2},"descriptorGeneration":1},
              "compatibility":{"contractsVersion":"@CONTRACTS@"},"runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],"credentialReferences":[],"connections":[],"composition":[],
              "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION));
+        if (python) {
+            ((ObjectNode) manifest.get("sdk")).put("language", "PYTHON");
+            ((ObjectNode) manifest.get("runtimes").get(0)).put("runtimeId", "python").put("language", "python").put("version", "3.10");
+        }
         var tools = manifest.putArray("tools"); var set = JSON.createArrayNode();
         for (var spec : List.of(new String[]{"client_greet", "CLIENT"}, new String[]{"fetch", "SERVER"}, new String[]{"server_greet", "SERVER"})) {
             var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"acme.greet/" + spec[0] + "\",\"mcpName\":\"greet." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","
@@ -158,13 +169,14 @@ final class ClientReleasesTest {
                 d.putArray("permissions").add("HTTP_ROUTE");
             }
             byte[] canonical = Canonical.bytes(d); String digest = Canonical.sha256(canonical);
-            var tool = tools.addObject(); tool.set("descriptor", d); tool.put("toolDescriptorDigest", digest).put("runtimeId", "jvm").put("entryPoint", ClientReleases.JAVA_SDK_MAIN); tool.putArray("artifactIds").add("app");
+            var tool = tools.addObject(); tool.set("descriptor", d); tool.put("toolDescriptorDigest", digest).put("runtimeId", python ? "python" : "jvm").put("entryPoint", python ? "toolgate.runtime" : ClientReleases.JAVA_SDK_MAIN); tool.putArray("artifactIds").add("app");
             set.addObject().put("toolId", "acme.greet/" + spec[0]).put("toolDescriptorDigest", digest);
             files.put("tools/" + spec[0] + ".json", canonical);
         }
-        manifest.putArray("artifacts").addObject().put("artifactId", "app").put("path", "artifacts/app.jar").put("mediaType", "application/java-archive").put("runtimeId", "jvm").put("artifactDigest", Canonical.sha256(jarBytes)).put("sizeBytes", jarBytes.length);
+        String artifact = python ? "artifacts/tool.pyz" : "artifacts/app.jar";
+        manifest.putArray("artifacts").addObject().put("artifactId", "app").put("path", artifact).put("mediaType", python ? "application/zip" : "application/java-archive").put("runtimeId", python ? "python" : "jvm").put("artifactDigest", Canonical.sha256(jarBytes)).put("sizeBytes", jarBytes.length);
         manifest.put("descriptorSetDigest", Canonical.digest(set));
-        files.put("artifacts/app.jar", jarBytes); files.put("toolgate-package.json", JSON.writeValueAsBytes(manifest));
+        files.put(artifact, jarBytes); files.put("toolgate-package.json", JSON.writeValueAsBytes(manifest));
         var checksums = new StringBuilder();
         for (var e : files.entrySet()) checksums.append(Canonical.sha256(e.getValue()).substring(7)).append("  ").append(e.getKey()).append('\n');
         files.put("CHECKSUMS.sha256", checksums.toString().getBytes(StandardCharsets.UTF_8));
@@ -174,10 +186,13 @@ final class ClientReleasesTest {
     private record Rig(PostgresStore store, ContractCodec codec, Ids.TenantId tenant, DirectoryService.Actor admin, String digest, ClientReleases releases, RsaFleetCrypto crypto, LocalArtifactStore artifacts, FleetService fleet, byte[] bytes) {}
 
     private Rig rig(boolean signed, String credentials) throws Exception {
-        start(); String baseDigest = seedBase();
+        return rig(signed, credentials, false);
+    }
+    private Rig rig(boolean signed, String credentials, boolean python) throws Exception {
+        start(); String baseDigest = seedBase(python);
         var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("releases.sqlite")), codec);
         var tenant = new Ids.TenantId("fleet"); var admin = TestSupport.seed(store, codec, tenant, "root");
-        byte[] bytes = sdkPackage();
+        byte[] bytes = sdkPackage(python);
         String digest = JSON.readTree(new ServerPackages(store, codec, null, java.time.Clock.systemUTC()).upload(admin, bytes, "upload").body()).get("packageDigest").asText();
         var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
         var organization = generator.generateKeyPair(); var release = generator.generateKeyPair();
@@ -186,7 +201,7 @@ final class ClientReleasesTest {
         var fleet = new FleetService(store, codec, crypto, endpoint, java.time.Clock.systemUTC(), true, "fleet", "server");
         java.nio.file.Files.createDirectories(directory.resolve("artifacts"));
         var artifacts = new LocalArtifactStore(directory.resolve("artifacts"));
-        var settings = ClientReleases.Settings.parse(REPOSITORY, BASE + "@" + baseDigest, "LINUX", "0.10.0-dev");
+        var settings = ClientReleases.Settings.parse(REPOSITORY, BASE + "@" + baseDigest, "LINUX", "0.10.0-dev").withPythonBase(python ? BASE + "@" + baseDigest : null);
         var signer = signed ? new RsaPackageReleaseSigner(codec, (RSAPrivateCrtKey) release.getPrivate(), "release") : null;
         var releases = new ClientReleases(store, codec, new HttpsOciRegistry(origin, credentials, null), settings, signer, fleet, artifacts, java.time.Clock.systemUTC());
         return new Rig(store, codec, tenant, admin, digest, releases, crypto, artifacts, fleet, bytes);
@@ -194,6 +209,18 @@ final class ClientReleasesTest {
     private static FleetTrustKey trust(String kid, java.security.PublicKey key) {
         byte[] n = ((RSAPublicKey) key).getModulus().toByteArray(); if (n[0] == 0) n = Arrays.copyOfRange(n, 1, n.length);
         return new FleetTrustKey(kid, Base64.getUrlEncoder().withoutPadding().encodeToString(n), "AQAB");
+    }
+
+    @Test void pythonReleaseUsesItsApprovedBaseSdkIndexAndManagedRuntime() throws Exception {
+        var rig = rig(true, "robot:secret", true);
+        var result = JSON.readTree(rig.releases.release(rig.admin, "{\"packageDigest\":\"" + rig.digest + "\"}", "python-release").body());
+        assertEquals("3.12.14", result.path("runtimeVersion").asText());
+        var document = rig.codec.model(rig.codec.json(result.get("document")), FleetPackageDocument.class);
+        assertEquals(LocalRuntimeKind.PYTHON_SDK, document.runtimes().getFirst().kind());
+        assertEquals("python", document.runtimes().getFirst().id());
+        assertTrue(document.tools().stream().allMatch(t -> t.entryPoint().equals("/opt/tool/acme.greet/tool.pyz")));
+        assertEquals(2, document.tools().size());
+        FleetService.validatePackage(document);
     }
 
     @Test void aSignedClientReleasePushesADeterministicImageAndPinsItInTheFleetDocument() throws Exception {

@@ -216,7 +216,12 @@ class Tasks:
         t.cancel_if_abandoned = cancel_if_abandoned
         with self._handlers_lock:
             self._cancel_handlers[t.task_id] = on_cancel
-        self.store.create(t)
+        try:
+            self.store.create(t)
+        except Exception:
+            with self._handlers_lock:
+                self._cancel_handlers.pop(t.task_id, None)
+            raise
         return t.copy()
 
     @staticmethod
@@ -362,6 +367,7 @@ class Tasks:
 
     def close(self) -> None:
         self._closed.set()
+        self._sweeper.join(timeout=1)
 
     def _sweep_loop(self) -> None:
         while not self._closed.wait(self._sweep_s):

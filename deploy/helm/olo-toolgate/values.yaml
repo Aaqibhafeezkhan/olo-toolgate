@@ -221,6 +221,7 @@ control:
     registryUrl: ''
     repository: ''
     base: ''
+    pythonBase: ''
     platforms: LINUX
     credentialsSecret: ''
     caSecret: ''

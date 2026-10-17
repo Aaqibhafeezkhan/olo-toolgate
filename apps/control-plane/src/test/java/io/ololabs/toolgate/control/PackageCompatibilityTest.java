@@ -53,7 +53,7 @@ final class PackageCompatibilityTest {
         cases.put("descriptor generation", m -> ((ObjectNode) m.get("sdk")).put("descriptorGeneration", 2));
         cases.put("protocol", m -> ((ObjectNode) m.get("sdk")).putObject("protocol").put("min", 3).put("max", 4));
         cases.put("protocol not a range", m -> ((ObjectNode) m.get("sdk")).putObject("protocol").put("min", 3).put("max", 2));
-        cases.put("runtime", m -> ((ObjectNode) m.get("runtimes").get(0)).put("language", "python"));
+        cases.put("runtime", m -> ((ObjectNode) m.get("runtimes").get(0)).put("language", "dotnet"));
         cases.put("no runtime", m -> m.putArray("runtimes"));
         for (var c : cases.entrySet()) {
             var problems = PackageCompatibility.problems(edited(c.getValue()));

@@ -1667,6 +1667,11 @@
               "type": "string",
               "maxLength": 512
             },
+            "pythonBase": {
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^$|^[a-z0-9]+([._/-][a-z0-9]+)*@sha256:[a-f0-9]{64}$"
+            },
             "platforms": {
               "type": "string",
               "pattern": "^(LINUX|WINDOWS|MACOS)(,(LINUX|WINDOWS|MACOS)){0,2}$"

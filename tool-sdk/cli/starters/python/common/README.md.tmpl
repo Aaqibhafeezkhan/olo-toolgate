@@ -1,0 +1,11 @@
+# {{title}}
+
+Python 3.10+ tools built with ToolGate. Install the SDK and `python -m pip install -e .`.
+
+Use `toolgate check`, `toolgate dev` and `toolgate pack`. The Rust CLI delegates
+to the project's Python interpreter. `TOOLGATE_PYTHON` selects it explicitly.
+
+`hello` uses a configured global; `lookup` uses a declared route and a recorded
+exchange in its example. Set `CatalogHost` in git-ignored `toolgate.dev.json`
+to call a real upstream in development. Packaged tools are governed with the
+same v2 protocol as Java packages.

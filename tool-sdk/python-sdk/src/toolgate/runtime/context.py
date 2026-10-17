@@ -137,6 +137,7 @@ class StandaloneContext:
         self._responses: Optional[Dict[str, Any]] = None
         self._pending_input: Optional[Dict[str, Any]] = None
         self._http: Any = None
+        self._files: Any = None
         self._tcp: Any = None
         self._business_key: Optional[str] = None
         self._mode = InvocationMode.STANDALONE
@@ -190,6 +191,12 @@ class StandaloneContext:
                 "claims": self.jwt.declared_types()}
 
     # ---- network ----
+
+    @property
+    def files(self) -> Any:
+        if self._files is None:
+            raise PlatformError(PlatformCode.FILES_REFUSED, "This tool did not declare device file access")
+        return self._files
 
     @property
     def http(self) -> Any:
@@ -254,6 +261,12 @@ class StandaloneContext:
             safe = None if message is None or not str(message).strip() \
                 else cap(self._redactor.text(str(message)), 256)
             percent = math.floor(f * 100 + 0.5)
+            frames = getattr(self, "_frames", None)
+            if frames:
+                frame = {"kind": "PROGRESS", "fraction": f}
+                if safe is not None:
+                    frame["message"] = safe
+                frames(frame)
             if self._tasks is not None:
                 self._tasks.progress(self._task_id, str(percent) + "%" + ("" if safe is None else " " + safe))
             elif self._progress_token is not None and self._notifications is not None:
@@ -339,6 +352,10 @@ class StandaloneContext:
             self._logged += size
             over = self._logged > LOG_INVOCATION_BYTES
         if over:
+            return
+        frames = getattr(self, "_frames", None)
+        if frames:
+            frames({"kind": "LOG", "level": level, "message": entry})
             return
         self._diagnostics.println("[" + level + "] " + self.tool_id + " " + self.invocation_id + ": " + entry)
 

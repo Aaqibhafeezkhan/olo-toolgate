@@ -85,6 +85,8 @@ def _key(k: Any) -> str:
 
 
 def to_json(value: Any) -> Any:
+    if isinstance(value, enum.Enum):
+        return value.name
     if value is None or isinstance(value, (bool, str)):
         return value
     if isinstance(value, int):
@@ -97,8 +99,6 @@ def to_json(value: Any) -> Any:
         if not value.is_finite():
             raise ConversionError("a number is not finite")
         return int(value) if value == value.to_integral_value() and value.as_tuple().exponent >= 0 else float(value)
-    if isinstance(value, enum.Enum):
-        return value.name
     if isinstance(value, _dt.datetime):
         return format_datetime(value)
     if isinstance(value, _dt.date):

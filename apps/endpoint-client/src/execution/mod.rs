@@ -191,7 +191,12 @@ fn sdk_input(
         invocation_id: request_id.to_owned(),
         task_id: None,
         tool_id: tool.tool_id.clone(),
-        entry_point: adapters::JAVA_SDK_MAIN.into(),
+        entry_point: if tool.entry_point.ends_with(".pyz") {
+            "toolgate.runtime"
+        } else {
+            adapters::JAVA_SDK_MAIN
+        }
+        .into(),
         arguments: arguments.clone(),
         globals: BTreeMap::new(),
         claims: BTreeMap::new(),

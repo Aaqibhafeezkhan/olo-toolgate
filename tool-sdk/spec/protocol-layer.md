@@ -40,7 +40,9 @@ Rules that hold in every language:
 
 ### A1 Protocol core
 
-**Used where:** the official SDK lacks the 2026-07-28 server core (Java 2.0.1).
+**Used where:** the Java SDK uses the ToolGate core. Python follows that core's
+observable behavior under [ADR 028](../../docs/adr/028-python-sdk-java-parity.md).
+The historical official-SDK compatibility record is separate evidence.
 
 - Implements `server/discover`, `tools/list`, `tools/call` (with `resultType`), per-request `_meta` validation, errors -32020, -32021 and -32022, and `subscriptions/listen` for `toolsListChanged`.
 - Routes by version: a request carrying 2026-07-28 `_meta` goes to A1; `initialize` and other 2025-11-25 traffic goes to the official SDK's legacy path unchanged. Both versions are served on one URL and over stdio.
