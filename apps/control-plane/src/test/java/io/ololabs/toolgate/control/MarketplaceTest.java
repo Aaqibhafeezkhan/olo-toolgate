@@ -82,7 +82,7 @@ final class MarketplaceTest {
         var body = JSON.createObjectNode().put("packageId", "acme.orders").put("version", "0.1.0").put("title", "Orders").put("delisted", false)
             .put("downloadUrl", ORIGIN + BASE + "/package").put("releaseUrl", ORIGIN + BASE + "/release").put("archiveSha256", sha256(data));
         body.putObject("publisher").put("slug", "acme").put("displayName", "Acme");
-        body.set("compatibility", JSON.readTree("{\"contractsVersion\":\"1.0.0\",\"minimumToolHostVersion\":null,\"protocol\":{\"min\":2,\"max\":2},\"descriptorGeneration\":1,\"runtimes\":[{\"language\":\"java\",\"version\":\"17\"}]}"));
+        body.set("compatibility", JSON.readTree("{\"contractsVersion\":\"" + io.ololabs.toolgate.contracts.ContractSet.VERSION + "\",\"minimumToolHostVersion\":null,\"protocol\":{\"min\":2,\"max\":2},\"descriptorGeneration\":1,\"runtimes\":[{\"language\":\"java\",\"version\":\"17\"}]}"));
         detail.accept(body);
         source.json(BASE, body);
         source.json(BASE + "/release", signed(record, signer));
@@ -198,8 +198,8 @@ final class MarketplaceTest {
         var versions = JSON.readTree("""
             {"packageId":"acme.orders","latestVersion":"0.3.0","versions":[
               {"version":"0.3.0","delisted":false,"compatibility":{"contractsVersion":"2.0.0","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}},
-              {"version":"0.2.0","delisted":true,"compatibility":{"contractsVersion":"1.0.0","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}},
-              {"version":"0.1.0","delisted":false,"compatibility":{"contractsVersion":"1.0.0","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}}]}""");
+              {"version":"0.2.0","delisted":true,"compatibility":{"contractsVersion":"@CONTRACTS@","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}},
+              {"version":"0.1.0","delisted":false,"compatibility":{"contractsVersion":"@CONTRACTS@","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}}]}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION));
         source.json("/api/toolgate/v1/tools/acme.orders", versions);
         var reply = JSON.readTree(marketplace().versions(actor, "acme.orders").body());
         assertEquals("0.1.0", reply.get("installVersion").asText());

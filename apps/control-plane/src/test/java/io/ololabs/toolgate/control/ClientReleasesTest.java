@@ -144,8 +144,8 @@ final class ClientReleasesTest {
         String output = "{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}";
         var files = new TreeMap<String, byte[]>(); var manifest = (ObjectNode) JSON.readTree("""
             {"schemaVersion":2,"kind":"SDK","id":"acme.greet","version":"1.0.0","publisher":"Acme","sdk":{"language":"JAVA","version":"0.1.0","protocol":{"min":2,"max":2},"descriptorGeneration":1},
-             "compatibility":{"contractsVersion":"1.0.0"},"runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],"credentialReferences":[],"connections":[],"composition":[],
-             "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""");
+             "compatibility":{"contractsVersion":"@CONTRACTS@"},"runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],"credentialReferences":[],"connections":[],"composition":[],
+             "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION));
         var tools = manifest.putArray("tools"); var set = JSON.createArrayNode();
         for (var spec : List.of(new String[]{"client_greet", "CLIENT"}, new String[]{"fetch", "SERVER"}, new String[]{"server_greet", "SERVER"})) {
             var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"acme.greet/" + spec[0] + "\",\"mcpName\":\"greet." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","

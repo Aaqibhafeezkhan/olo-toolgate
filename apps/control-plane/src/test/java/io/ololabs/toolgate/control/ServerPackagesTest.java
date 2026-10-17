@@ -48,8 +48,8 @@ final class ServerPackagesTest {
         String digest = Canonical.sha256(canonical);
         var manifest = (ObjectNode) JSON.readTree("""
             {"schemaVersion":2,"kind":"SDK","id":"acme.orders","version":"0.1.0","publisher":"Acme","sdk":{"language":"JAVA","version":"0.1.0","protocol":{"min":2,"max":2},"descriptorGeneration":1},
-             "compatibility":{"contractsVersion":"1.0.0"},"runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],"credentialReferences":[],"connections":[],"composition":[],
-             "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""");
+             "compatibility":{"contractsVersion":"@CONTRACTS@"},"runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],"credentialReferences":[],"connections":[],"composition":[],
+             "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION));
         var tool = manifest.putArray("tools").addObject(); tool.set("descriptor", descriptor); tool.put("toolDescriptorDigest", digest).put("runtimeId", "jvm"); tool.putArray("artifactIds").add("app");
         manifest.putArray("artifacts").addObject().put("artifactId", "app").put("path", "artifacts/app.jar").put("mediaType", "application/java-archive").put("runtimeId", "jvm").put("artifactDigest", Canonical.sha256(jar)).put("sizeBytes", jar.length);
         if (split) {
