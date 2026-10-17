@@ -67,6 +67,21 @@ pub struct ClientService {
     observed: u64,
     boot_time: u64,
 }
+/// Local calls need the administrator-provisioned Gateway credential; without one the device still runs the calls
+/// Control relays and authorizes (ADR 027), so signed releases work on devices with no local Gateway settings.
+fn local_authorization(
+    config: &crate::config::Config,
+) -> Result<Arc<dyn crate::execution::AuthorizationPort>> {
+    Ok(match &config.gateway {
+        Some(gateway) => Arc::new(crate::tool_gateway::HttpsGateway::new(
+            gateway,
+            config,
+            Arc::new(crate::contracts::Contracts::new()?),
+        )?),
+        None => Arc::new(crate::execution::RelayOnly),
+    })
+}
+
 impl ClientService {
     pub fn open(
         config: Config,
@@ -110,19 +125,13 @@ impl ClientService {
         } else {
             EndpointState::Unenrolled
         };
-        let execution =
-            if let (Some(settings), Some(gateway)) = (&config.execution, &config.gateway) {
-                Some(crate::execution::Manager::new(
-                    settings.clone(),
-                    Arc::new(crate::tool_gateway::HttpsGateway::new(
-                        gateway,
-                        &config,
-                        Arc::new(crate::contracts::Contracts::new()?),
-                    )?),
-                )?)
-            } else {
-                None
-            };
+        let execution = match &config.execution {
+            Some(settings) => Some(crate::execution::Manager::new(
+                settings.clone(),
+                local_authorization(&config)?,
+            )?),
+            None => None,
+        };
         let deployment = if let Some(settings) = &config.deployment {
             crate::deployment::State::open(&store, settings)?
         } else {
@@ -363,12 +372,7 @@ impl ClientService {
             return Ok(());
         }
         let base = self.config.execution.clone().ok_or(Failure::Unsupported)?;
-        let gateway_settings = self.config.gateway.as_ref().ok_or(Failure::Unsupported)?;
-        let authorization = Arc::new(crate::tool_gateway::HttpsGateway::new(
-            gateway_settings,
-            &self.config,
-            Arc::new(crate::contracts::Contracts::new()?),
-        )?);
+        let authorization = local_authorization(&self.config)?;
         // Fence old assigned tools immediately, preserving only administrator-local registrations.
         if let Some(old) = self.execution.take() {
             old.shutdown().await?;

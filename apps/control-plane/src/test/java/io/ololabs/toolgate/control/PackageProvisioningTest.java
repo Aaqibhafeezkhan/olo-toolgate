@@ -33,7 +33,7 @@ final class PackageProvisioningTest {
         String digest = PackageArchive.validate(bytes, document -> (JsonNode) codec.value(document)).packageDigest();
         var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
         PackageProvisioning.CoreArtifacts core = (id, version) -> id.equals("acme.orders") && version.equals("0.1.0") ? new PackageProvisioning.Core(digest, () -> bytes) : null;
-        return new Rig(store, codec, tenant, admin, packages, new PackageProvisioning(store, codec, packages, null, core, java.time.Clock.systemUTC()), digest);
+        return new Rig(store, codec, tenant, admin, packages, new PackageProvisioning(store, codec, packages, null, core, null, null, java.time.Clock.systemUTC()), digest);
     }
 
     private static String profile(String packages) { return "{\"profileVersion\":1,\"profileId\":\"orders\",\"packages\":[" + packages + "]}"; }

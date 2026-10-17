@@ -232,6 +232,37 @@ fn service(directory: &Directory) -> ClientService {
     let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
     ClientService::open(config(directory), store, key, Arc::new(Offline)).unwrap()
 }
+/// Signed releases do not need the local Gateway credential: relayed calls are authorized by Control (ADR 027).
+#[test]
+fn execution_and_releases_do_not_require_local_gateway_settings() {
+    let directory = Directory::new();
+    let mut config = config(&directory);
+    config.execution = Some(olo_toolgate_client::execution::Settings {
+        engine_path: "/usr/bin/docker".into(),
+        engine_endpoint: "unix:///var/run/docker.sock".into(),
+        state_directory: directory.0.join("runtimes"),
+        allow_first_use_pull: true,
+        pull_timeout_seconds: 60,
+        runtimes: vec![],
+        tools: vec![],
+        files: None,
+    });
+    let fleet: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/fixtures/fleet/v1/signed.json")).unwrap();
+    config.deployment = Some(olo_toolgate_client::deployment::Settings {
+        release_keys: serde_json::from_value(fleet["releaseKeys"].clone()).unwrap(),
+        organization_keys: serde_json::from_value(fleet["organizationKeys"].clone()).unwrap(),
+    });
+    assert!(config.gateway.is_none());
+    assert_eq!(config.validate(), Ok(()));
+    config.execution = None;
+    assert_eq!(
+        config.validate(),
+        Err(Failure::Validation),
+        "releases still need execution settings"
+    );
+}
+
 #[test]
 fn key_survives_restart_and_csr_contains_no_private_key() {
     let directory = Directory::new();

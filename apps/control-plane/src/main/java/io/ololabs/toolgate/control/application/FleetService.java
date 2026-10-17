@@ -106,6 +106,24 @@ public final class FleetService {
             tx.audit(actor.id(),"PACKAGE_ASSIGN",rollout.id(),1,requestId,digest);var result=reply(rollout,1);tx.remember(actor.id(),key,digest,result);return result;
         });
     }
+    /** Deployment profiles: the active, approved devices in any of these enabled device groups, and which of them already
+     *  hold this release. Observations only; rollouts still go through {@link #rollout} with the actor's permissions. */
+    public record GroupTargets(List<String> members,List<String> assigned){}
+    public GroupTargets targets(DirectoryService.Actor actor,String packageId,String version,Collection<String> groups){
+        admin(actor);
+        return store.transaction(tenant,false,tx->{var directory=tx.load();var members=new TreeSet<String>();var assigned=new TreeSet<String>();
+            for(var group:groups){var entry=directory.entries().get(Ids.Kind.DEVICE_GROUP.id(group));if(entry==null||!entry.enabled())continue;
+                for(var id:GroupGraph.members(entry,codec)){var row=tx.endpoint(id);if(row==null)continue;
+                    try{endpoints.active(tx,codec.model(row.document(),EndpointDeviceRecord.class));}catch(Failure inactive){continue;}
+                    members.add(id);
+                    if(snapshot(tx,id).assignments().stream().anyMatch(a->a.desiredPresence()&&a.release().packageId().equals(packageId)&&a.release().version().equals(version)))assigned.add(id);}}
+            return new GroupTargets(List.copyOf(members),List.copyOf(assigned));});
+    }
+    /** The verified document of a recorded release, or null when none is recorded. */
+    public FleetPackageDocument document(DirectoryService.Actor actor,String packageId,String version){
+        admin(actor);
+        return store.transaction(tenant,false,tx->{var row=tx.fleet().get(RELEASE,releaseId(packageId,version));return row==null?null:crypto.release(codec.model(row.document(),FleetPackageRelease.class).release()).model();});
+    }
     public Store.Reply advance(DirectoryService.Actor actor,String id,String body,String key,String requestId){
         admin(actor);Ids.valid(id);Ids.valid(key);Ids.valid(requestId);var request=codec.model(body,FleetRolloutAdvance.class);var digest=DirectoryService.digest("fleet.advance\n"+id+"\n"+body);
         return store.transaction(tenant,true,tx->{now(tx);var row=tx.fleet().get(ROLLOUT,id);if(row==null)throw Failure.conflict();rolloutPermission(tx,actor,"deploy",codec.model(row.document(),FleetRolloutRecord.class));var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;

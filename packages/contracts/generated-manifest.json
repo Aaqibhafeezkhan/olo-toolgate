@@ -28,7 +28,7 @@
     "packages/contracts/schemas/v2/kill.schema.json": "08f899bea20c69c94a2d31aefd4433391111f3132f3f6bc2b64574d62bf53e79",
     "packages/contracts/schemas/v2/package.schema.json": "9f75db4ac81e35f98e2f17e6f2f97a68dce4d64f896578eb77cbf62525f44733",
     "packages/contracts/schemas/v2/permit.schema.json": "76ff219e59c0e8bf722af074c86c93743e958f6655fec39144590c915afacaf4",
-    "packages/contracts/schemas/v2/profile.schema.json": "f30d31b98429b5165cab5a8238c2b104c2ba5d73ba87105ad171d6d32e34d966",
+    "packages/contracts/schemas/v2/profile.schema.json": "9cfe42626bcc6ad81cfaeb966d94036f3f794676b4cb8ec007ba0ac99aae501d",
     "packages/contracts/schemas/v2/protocol.schema.json": "fd8eb4e2c17ddec455f2d002b9f4674d107693df8973f3171c5d72bd2988aa5c",
     "packages/contracts/schemas/v2/service-profile.schema.json": "9d9526778d6b8d2625bf71232b642b68fd5a62a0b0ad5837f83596cce936d12a",
     "packages/contracts/schemas/v2/settings.schema.json": "2a55ae4fd562d8904f33104177a66f6789912509035e4fe8da91b92b2776da5a"

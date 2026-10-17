@@ -18,6 +18,18 @@ use std::{
 };
 
 /// The adapter must return only after validating/consuming a grant for this exact request.
+/// A device without a local Gateway credential runs only the calls Control relays to it, each authorized by Control
+/// over the device's own mTLS identity (`remote.rs`). Local command-line or IPC calls are refused.
+pub struct RelayOnly;
+impl AuthorizationPort for RelayOnly {
+    fn authorize(&self, _request: AuthorizationRequest) -> Call<'_, ()> {
+        Box::pin(async { Err(Failure::Unauthorized) })
+    }
+    fn authorize_bound(&self, _request: AuthorizationRequest) -> Call<'_, Option<u64>> {
+        Box::pin(async { Err(Failure::Unauthorized) })
+    }
+}
+
 pub trait AuthorizationPort: Send + Sync {
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()>;
     /// Managed execution needs the consumed permit's deadline. An adapter that

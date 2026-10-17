@@ -9,6 +9,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.ololabs.toolgate.control.adapter.*;
 import io.ololabs.toolgate.control.application.*;
+import io.ololabs.toolgate.control.domain.Directory;
 import io.ololabs.toolgate.control.domain.Ids;
 import io.ololabs.toolgate.contracts.*;
 import org.junit.jupiter.api.AfterEach;
@@ -170,13 +171,14 @@ final class ClientReleasesTest {
         return ServerPackagesTest.zip(files);
     }
 
-    private record Rig(PostgresStore store, ContractCodec codec, Ids.TenantId tenant, DirectoryService.Actor admin, String digest, ClientReleases releases, RsaFleetCrypto crypto, LocalArtifactStore artifacts) {}
+    private record Rig(PostgresStore store, ContractCodec codec, Ids.TenantId tenant, DirectoryService.Actor admin, String digest, ClientReleases releases, RsaFleetCrypto crypto, LocalArtifactStore artifacts, FleetService fleet, byte[] bytes) {}
 
     private Rig rig(boolean signed, String credentials) throws Exception {
         start(); String baseDigest = seedBase();
         var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("releases.sqlite")), codec);
         var tenant = new Ids.TenantId("fleet"); var admin = TestSupport.seed(store, codec, tenant, "root");
-        String digest = JSON.readTree(new ServerPackages(store, codec, null, java.time.Clock.systemUTC()).upload(admin, sdkPackage(), "upload").body()).get("packageDigest").asText();
+        byte[] bytes = sdkPackage();
+        String digest = JSON.readTree(new ServerPackages(store, codec, null, java.time.Clock.systemUTC()).upload(admin, bytes, "upload").body()).get("packageDigest").asText();
         var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
         var organization = generator.generateKeyPair(); var release = generator.generateKeyPair();
         var crypto = new RsaFleetCrypto(codec, (RSAPrivateCrtKey) organization.getPrivate(), "org", List.of(trust("release", release.getPublic())), List.of(trust("org", organization.getPublic())), List.of());
@@ -187,7 +189,7 @@ final class ClientReleasesTest {
         var settings = ClientReleases.Settings.parse(REPOSITORY, BASE + "@" + baseDigest, "LINUX", "0.10.0-dev");
         var signer = signed ? new RsaPackageReleaseSigner(codec, (RSAPrivateCrtKey) release.getPrivate(), "release") : null;
         var releases = new ClientReleases(store, codec, new HttpsOciRegistry(origin, credentials, null), settings, signer, fleet, artifacts, java.time.Clock.systemUTC());
-        return new Rig(store, codec, tenant, admin, digest, releases, crypto, artifacts);
+        return new Rig(store, codec, tenant, admin, digest, releases, crypto, artifacts, fleet, bytes);
     }
     private static FleetTrustKey trust(String kid, java.security.PublicKey key) {
         byte[] n = ((RSAPublicKey) key).getModulus().toByteArray(); if (n[0] == 0) n = Arrays.copyOfRange(n, 1, n.length);
@@ -254,6 +256,66 @@ final class ClientReleasesTest {
         var again = JSON.readTree(rig.releases.release(rig.admin, "{\"packageDigest\":\"" + rig.digest + "\"}", "release-2").body());
         assertEquals(image, again.get("image").asText());
         assertEquals(result.get("manifestDigest"), again.get("manifestDigest"));
+    }
+
+    /** A deployment profile naming a device group releases the package once and rolls it out to the group's active devices. */
+    private PackageProvisioning provisioning(Rig rig) {
+        rig.store.transaction(rig.tenant, true, tx -> { var before = tx.load(); var entries = new HashMap<>(before.entries());
+            TestSupport.put(entries, rig.codec, Ids.Kind.TOOL_GROUP, new ControlToolGroup("lab-tools", "Lab", true, 1L, List.of()));
+            TestSupport.put(entries, rig.codec, Ids.Kind.DEVICE_GROUP, new ControlDeviceGroup("lab", "Lab", true, 1L, List.of()));
+            TestSupport.put(entries, rig.codec, Ids.Kind.BINDING, new ControlExecutionBinding("lab-binding", "Lab", true, 1L, "lab-tools", "lab", List.of("invoke"), List.of(), true, false));
+            tx.save(before, new Directory(before.revision() + 1, entries)); return null; });
+        PackageProvisioning.CoreArtifacts core = (id, version) -> id.equals("acme.greet") && version.equals("1.0.0") ? new PackageProvisioning.Core(rig.digest, rig::bytes) : null;
+        return new PackageProvisioning(rig.store, rig.codec, new ServerPackages(rig.store, rig.codec, null, java.time.Clock.systemUTC()), null, core, rig.releases, rig.fleet, java.time.Clock.systemUTC());
+    }
+    private static final String DEVICE_PROFILE = "{\"profileVersion\":1,\"profileId\":\"lab\",\"packages\":[{\"packageId\":\"acme.greet\",\"source\":\"PREBUILT_CORE\",\"version\":\"1.0.0\","
+        + "\"required\":true,\"deviceGroupIds\":[\"lab\"],\"tools\":[{\"toolId\":\"acme.greet/client_greet\",\"toolGroupId\":\"lab-tools\"}],\"bindingIds\":[\"lab-binding\"]}]}";
+    private static void join(Rig rig, String device) {
+        rig.store.transaction(rig.tenant, true, tx -> { var before = tx.load(); var entries = new HashMap<>(before.entries());
+            TestSupport.put(entries, rig.codec, Ids.Kind.DEVICE, new ControlDevice(device, device, true, 1L, "root"));
+            TestSupport.put(entries, rig.codec, Ids.Kind.DEVICE_GROUP, new ControlDeviceGroup("lab", "Lab", true, 2L, List.of(device)));
+            tx.save(before, new Directory(before.revision() + 1, entries));
+            tx.saveEndpoint(new Store.EndpointRecord(device, DirectoryService.digest(device), rig.codec.json(new EndpointDeviceRecord(device, "fleet", "root", DirectoryService.digest(device),
+                EndpointState.ACTIVE, 1L, System.currentTimeMillis(), 1L, null, null, null, null, null, null)), "public", "0".repeat(64), "{}"));
+            return null; });
+    }
+
+    @Test void aProfileReleasesToTheActiveDevicesOfItsGroupsIncludingLaterOnes() throws Exception {
+        var rig = rig(true, "robot:secret"); var provisioning = provisioning(rig);
+        // No active device yet: released and activated, but PENDING.
+        var first = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
+        var status = first.get("packages").get(0);
+        assertEquals("PENDING", first.get("state").asText(), first.toString());
+        assertTrue(status.get("reason").asText().contains("active device in lab"));
+        assertEquals(0, status.get("deviceIds").size());
+        var document = rig.fleet.document(rig.admin, "acme.greet", "1.0.0");
+        assertNotNull(document, "the client release is recorded");
+        String managed = document.tools().getFirst().authorizationProfile().tool().packageDigest();
+        var tool = rig.store.transaction(rig.tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.greet/client_greet")));
+        assertTrue(tool.enabled());
+        var binding = rig.codec.model(rig.store.transaction(rig.tenant, false, tx -> tx.load().entries().get(Ids.Kind.BINDING.id("lab-binding")).document()), ControlExecutionBinding.class);
+        assertTrue(binding.allowedPackageDigests().contains(managed), binding.allowedPackageDigests().toString());
+
+        // A device joins the group: the next application rolls the release out to it.
+        join(rig, "lab-1");
+        var second = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
+        assertEquals("READY", second.get("state").asText(), second.toString());
+        assertEquals("lab-1", second.get("packages").get(0).get("deviceIds").get(0).asText());
+        var targets = rig.fleet.targets(rig.admin, "acme.greet", "1.0.0", List.of("lab"));
+        assertEquals(List.of("lab-1"), targets.assigned());
+
+        // Reapplying changes nothing: no second rollout, same generation.
+        var third = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
+        assertEquals(second.get("generation"), third.get("generation"));
+        assertEquals(1, JSON.readTree(rig.fleet.rollouts(rig.admin, null).body()).get("items").size());
+    }
+
+    @Test void devicesNeedTheReleaseKeyAndNothingIsSubstituted() throws Exception {
+        var rig = rig(false, "robot:secret"); var provisioning = provisioning(rig);
+        var result = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
+        assertEquals("FAILED", result.get("state").asText());
+        assertTrue(result.get("packages").get(0).get("reason").asText().contains("package-release key"), result.toString());
+        assertNull(rig.fleet.document(rig.admin, "acme.greet", "1.0.0"));
     }
 
     @Test void withoutTheReleaseKeyTheExactDocumentIsReturnedForTheReleaseAuthority() throws Exception {

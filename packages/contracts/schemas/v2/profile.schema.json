@@ -34,7 +34,7 @@
     "ProfilePackage": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. bindingIds have their allowed package digests set to exactly the profile packages that name them.",
+      "description": "One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them.",
       "properties": {
         "packageId": {
           "$ref": "identifiers.schema.json#/$defs/PackageId"
@@ -57,6 +57,13 @@
             "$ref": "identifiers.schema.json#/$defs/Identifier"
           },
           "maxItems": 32
+        },
+        "deviceGroupIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16
         },
         "globals": {
           "type": "object",
@@ -150,7 +157,7 @@
         "PENDING",
         "FAILED"
       ],
-      "description": "READY: imported, deployed and activated as declared. PENDING: waiting for a declared target to register. FAILED: a pin, verifier, compatibility or reference check refused it; never replaced by another version or a built-in."
+      "description": "READY: imported, deployed and activated as declared, and released to every active device of its device groups. PENDING: waiting for a declared Tool Host to register or for an active device in a declared group. FAILED: a pin, verifier, compatibility, release or reference check refused it; never replaced by another version or a built-in."
     },
     "ProvisioningStep": {
       "type": "string",
@@ -158,10 +165,12 @@
         "VALIDATE",
         "IMPORT",
         "DEPLOY",
+        "RELEASE",
+        "ROLLOUT",
         "ACTIVATE",
         "DONE"
       ],
-      "description": "The step a package reached; DONE once imported, deployed and activated."
+      "description": "The step a package reached; DONE once imported, deployed or released to devices, rolled out and activated."
     },
     "ProvisioningPackageStatus": {
       "type": "object",
@@ -202,6 +211,21 @@
             "$ref": "identifiers.schema.json#/$defs/Identifier"
           },
           "maxItems": 32
+        },
+        "deviceGroupIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16
+        },
+        "deviceIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 256,
+          "description": "Active devices of deviceGroupIds that hold the release."
         },
         "globalsDigest": {
           "$ref": "identifiers.schema.json#/$defs/Digest"
