@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Call the configured client file and log tools, and print their responses."""
+"""Call the HotFolder package's write and read tools on a device, and print their responses."""
 import argparse
 import json
 import os
@@ -120,17 +120,17 @@ def mimic(agent, file_path, duration_seconds=0):
         write = agent.rpc('tools/call', {'name': 'hotfolder.write_text', 'arguments': {'path': file_path, 'text': TEXT}})
         print('Client file-write response:', flush=True)
         print(json.dumps(write, ensure_ascii=True, indent=2), flush=True)
-        if write.get('structuredContent', {}).get('success') is not True: raise ValueError('Client did not confirm file creation')
+        if write.get('structuredContent', {}).get('written') is not True: raise ValueError('Client did not confirm file creation')
         remaining = deadline - time.monotonic()
         if remaining <= 0: break
         time.sleep(min(0.25, remaining))
         if time.monotonic() >= deadline: break
-    log = agent.rpc('tools/call', {'name': 'client.read_log_entry', 'arguments': {}})
-    print('Client log response:', flush=True)
-    print(json.dumps(log, ensure_ascii=True, indent=2), flush=True)
-    content = log.get('structuredContent', {})
-    if content.get('file') != 'packets.jsonl' or not isinstance(content.get('entry'), dict): raise ValueError('Client did not return one diagnostic log entry')
-    return content['entry']
+    read = agent.rpc('tools/call', {'name': 'hotfolder.read_text', 'arguments': {'path': file_path}})
+    print('Client file-read response:', flush=True)
+    print(json.dumps(read, ensure_ascii=True, indent=2), flush=True)
+    content = read.get('structuredContent', {})
+    if content.get('exists') is not True or content.get('text') != TEXT: raise ValueError('Client did not read back the written file')
+    return content
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

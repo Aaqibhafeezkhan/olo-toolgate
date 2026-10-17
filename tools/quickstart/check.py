@@ -202,27 +202,34 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             member={'agentGroups':'agentIds','toolGroups':'toolIds','deviceGroups':'deviceIds'}[key]
             assert all(not row[member] for row in snapshot[key] if row['id']!=default)
         mark('fresh reviewed installation/independent identities/default groups/zero runtime rights')
-        # The actual native executable owns this CSR/key and advertises actual installed binary profiles.
-        deadline=time.monotonic()+45
+        # Quickstart has no native client: its execution identities are its two Tool Hosts, approved like any device.
+        # The fresh profile then deploys Hello World to tool-host-local and enables server_greet; nobody may run it yet.
+        owner=tokens.get('reviewer-2')
+        def approve(device_id):
+            deadline=time.monotonic()+45
+            while True:
+                pending=[e for e in ok(api('/api/control/v1/endpoint/enrollments',admin))['items'] if e['deviceId']==device_id]
+                if pending:break
+                assert time.monotonic()<deadline,device_id+' did not begin enrollment'
+                time.sleep(.5)
+            review=ok(api('/api/control/v1/endpoint/enrollments/review?code='+pending[0]['userCode'],admin))
+            ok(api('/api/control/v1/endpoint/enrollments/decision',admin,
+                {'userCode':review['userCode'],'keyFingerprint':review['keyFingerprint'],'choice':'APPROVE'},'POST'))
+        approve(TOOL_HOST);approve(REMOTE_TOOL_HOST)
+        device=TOOL_HOST;hello='ololabs.hello-world/server_greet'
+        deadline=time.monotonic()+180
         while True:
-            # The Tool Host enrolls too; it is approved with its own gate below.
-            pending=[e for e in ok(api('/api/control/v1/endpoint/enrollments',admin))['items'] if e['deviceId'] not in (TOOL_HOST,REMOTE_TOOL_HOST)]
-            if pending:break
-            assert time.monotonic()<deadline,'Native executor did not begin enrollment'
-            time.sleep(.5)
-        enrollment=pending[0];device=enrollment['deviceId']
-        review=ok(api('/api/control/v1/endpoint/enrollments/review?code='+enrollment['userCode'],admin))
-        ok(api('/api/control/v1/endpoint/enrollments/decision',admin,
-            {'userCode':review['userCode'],'keyFingerprint':review['keyFingerprint'],'choice':'APPROVE'},'POST'))
-        deadline=time.monotonic()+45
-        while True:
-            managed=ok(api('/api/control/v1/endpoint/devices/'+device,admin))
-            if managed.get('lastSeenUnixMs',0)>0:break
-            assert time.monotonic()<deadline,('Native mTLS check-in missing',managed)
-            time.sleep(.5)
+            status,provisioned=api('/api/control/v1/packages/provisioning/fresh',owner)
+            if status==200 and provisioned['state']=='READY':break
+            assert time.monotonic()<deadline,('The fresh profile did not become READY',status,provisioned)
+            time.sleep(1)
+        assert ok(api('/api/control/v1/tools/'+hello,admin))['enabled'] is True
         assert device in ok(api('/api/control/v1/device-groups/default-devices',admin))['deviceIds']
-        assert ok(api('/api/quickstart/v1/tools',admin))['tools']==[]
-        mark('real native CSR/enrollment/key-bound mTLS/default membership/no implicit discovery')
+        target=dict(bindingId='binding-default',deviceId=device)
+        def catalog(token=None):
+            return {t['toolId'] for t in ok(api('/api/control/v1/access/human/catalog',token or admin,target,'POST'))['tools']}
+        assert catalog()==set()
+        mark('Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery')
         # Keep the maker/checker regression scoped. Reviewer 2 is the installation
         # owner; admin and reviewer 1 use the same full-scope restrictive role.
         # This also proves the live Super Admin exception uses the ordinary APIs.
@@ -271,23 +278,20 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             reviewed('/api/control/v1/users/'+added[0]['id'],{**added[0],'enabled':True},'PUT',added[0]['revision'])
             assert ok(api('/api/control/v1/users/'+added[0]['id'],admin))['enabled'] is True
         mark('verified JWT creates one disabled User/default Team/invalid JWT creates none/reviewed activation')
-        calc=ok(api('/api/control/v1/tools/calculator.evaluate',admin))
-        reviewed('/api/control/v1/tools/'+calc['id'],{**calc,'enabled':True},'PUT',calc['revision'])
         # Complete HUMAN grant; management Role alone never supplies this runtime capability.
         conditions=dict(notBeforeUnixMs=0,expiresAtUnixMs=0,networkCidrs=[],devicePosture=[],regions=[],
                         hoursUtc=[],requireOnline=True,highRisk=False)
         scope=dict(toolGroups=dict(ids=['default-tools'],all=False),
-                   deviceGroups=dict(ids=['default-devices'],all=False),actions=['evaluate'],allActions=False,
-                   resources=[dict(kind='CUSTOM',locator='builtin/calculator.evaluate',match='EXACT')],conditions=conditions)
-        grant=dict(id='human-calculator',name='Reviewed calculator grant',enabled=True,revision=1,
+                   deviceGroups=dict(ids=['default-devices'],all=False),actions=['invoke'],allActions=False,
+                   resources=[dict(kind='CUSTOM',locator='tool://'+hello,match='EXACT')],conditions=conditions)
+        grant=dict(id='human-hello',name='Reviewed Hello World grant',enabled=True,revision=1,
                    sourceType='TEAM',sourceId='installation-administrators',purpose='HUMAN',scope=scope)
         reviewed('/api/control/v1/grants',grant)
-        tools=ok(api('/api/quickstart/v1/tools',admin))['tools']
-        assert {t['toolId'] for t in tools}=={'calculator.evaluate'},tools
+        assert catalog()=={hello},catalog()
         mark('HTTP maker/checker/idempotent drafts/self-review rejection/complete grant discovery')
         timings=[]
         for index in range(108):
-            start=time.perf_counter_ns();ok(api('/api/quickstart/v1/tools',admin));elapsed=(time.perf_counter_ns()-start)/1e6
+            start=time.perf_counter_ns();catalog();elapsed=(time.perf_counter_ns()-start)/1e6
             if index>=8:timings.append(elapsed)
         ordered=sorted(timings)
         report['discoveryPerformance']={'samples':len(timings),'warmup':8,'p50Ms':round(statistics.median(timings),3),
@@ -298,7 +302,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         agent=ok(api('/api/control/v1/agents/agent-local',admin))
         reviewed('/api/control/v1/agents/agent-local',{**agent,'enabled':True},'PUT',agent['revision'])
         service_token=exec_text('cat','/data/run/runtime-token')
-        reviewed('/api/control/v1/workload-bindings',dict(id='workload-local',name='Reviewed diagnostic workload',
+        reviewed('/api/control/v1/workload-bindings',dict(id='workload-local',name='Reviewed service workload',
             enabled=True,revision=1,agentId='agent-local',mode='SERVICE',issuer='gateway',subject='local-workload',
             audience='gateway',credentialSha256=hashlib.sha256(service_token.encode()).hexdigest(),
             credentialEpoch=1,expiresAtUnixMs=int(time.time()*1000)+3600000))
@@ -314,30 +318,19 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             if method=='tools/call':headers['MCP-Name']=params['name']
             status,raw,_=request(mcp_origin+'/mcp',token or service_token,body,'POST',headers)
             return status,json.loads(raw)
-        assert {t['name'] for t in ok(mcp('tools/list'))['result']['tools']}=={'calculator.evaluate'}
+        assert {t['name'] for t in ok(mcp('tools/list'))['result']['tools']}=={hello}
         service_key=secrets.token_hex(16)
-        service_result=ok(mcp('tools/call',{'name':'calculator.evaluate','arguments':{'expression':'7*2'}},service_key))
-        assert service_result['result']['structuredContent']['value']==14,service_result
-        assert ok(mcp('tools/call',{'name':'calculator.evaluate','arguments':{'expression':'7*2'}},service_key))['result']==service_result['result']
+        service_result=ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Ada'}},service_key))
+        assert service_result['result']['structuredContent']=={'message':'Hello Ada'},service_result
+        assert ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Ada'}},service_key))['result']==service_result['result']
         service_grant=ok(api('/api/control/v1/grants/service-service',admin))
         reviewed('/api/control/v1/grants/service-service',{**service_grant,'enabled':False},'PUT',service_grant['revision'])
         assert ok(mcp('tools/list'))['result']['tools']==[]
-        assert mcp('tools/call',{'name':'calculator.evaluate','arguments':{'expression':'7*2'}},service_key)[0]==403
-        mark('real authenticated Gateway SERVICE/group capability/native effect/exact retry/live revocation')
-        # A Java server tool, end to end: the Tool Host enrolls as a device, Control verifies and deploys the starter
-        # package, and a Gateway call is placed on the host, permitted by Control and run from that exact package.
-        def approve(device_id):
-            deadline=time.monotonic()+45
-            while True:
-                pending=[e for e in ok(api('/api/control/v1/endpoint/enrollments',admin))['items'] if e['deviceId']==device_id]
-                if pending:break
-                assert time.monotonic()<deadline,device_id+' did not begin enrollment'
-                time.sleep(.5)
-            review=ok(api('/api/control/v1/endpoint/enrollments/review?code='+pending[0]['userCode'],admin))
-            ok(api('/api/control/v1/endpoint/enrollments/decision',admin,
-                {'userCode':review['userCode'],'keyFingerprint':review['keyFingerprint'],'choice':'APPROVE'},'POST'))
-        approve(TOOL_HOST);approve(REMOTE_TOOL_HOST)
-        owner=tokens['reviewer-2']  # Package upload and deployment are the installation owner's (Super Admin).
+        assert mcp('tools/call',{'name':hello,'arguments':{'text':'Ada'}},service_key)[0]==403
+        mark('real authenticated Gateway SERVICE/group capability/Tool Host effect/exact retry/live revocation')
+        # A Java server tool authored with the SDK, end to end: Control verifies and deploys the starter package, and a
+        # Gateway call is placed on the host, permitted by Control and run from that exact package.
+        # Package upload and deployment are the installation owner's (Super Admin).
         status,raw,_=request(origin+'/api/control/v1/packages/uploads',owner,package,'POST',
             {'Content-Type':'application/vnd.ololabs.toolgate.package+zip','Idempotency-Key':secrets.token_hex(16)})
         assert status==201,(status,raw)
@@ -355,7 +348,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             count,after=0,None
             while True:
                 page=ok(api('/api/control/v1/access/invocations?limit=100'+('&after='+after if after else ''),admin))
-                count+=sum(1 for i in page['items'] if i['evaluation']['context'].get('deviceId')==host_id and i['state']=='SUCCEEDED')
+                count+=sum(1 for i in page['items'] if i['evaluation']['context'].get('deviceId')==host_id and i['evaluation'].get('toolId')=='acme.orders/greet' and i['state']=='SUCCEEDED')
                 after=page.get('nextCursor')
                 if not after:return count
         deployment=deploy(TOOL_HOST)
@@ -404,7 +397,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             reviewed('/api/control/v1/grants/'+grant_id,{**starter,'enabled':False},'PUT',starter['revision'])
         assert ok(mcp('tools/list'))['result']['tools']==[]
         assert mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}})[0]==403
-        mark('Tool Host enrollment/verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation')
+        mark('verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation')
         if gateway_image:
             identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='admin')
             reviewed('/api/control/v1/workload-bindings',dict(id='workload-delegated',name='Verified human delegation',
@@ -414,39 +407,18 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
             reviewed('/api/control/v1/delegations',dict(id='human-delegation',name='Same Team and Agent Group',
                 enabled=True,revision=1,teamId='installation-administrators',agentGroupId='default-agents',scope=scope))
-            assert {t['name'] for t in ok(mcp('tools/list',token=delegated_token))['result']['tools']}=={'calculator.evaluate'}
-            result=ok(mcp('tools/call',{'name':'calculator.evaluate','arguments':{'expression':'8*3'}},token=delegated_token))
-            assert result['result']['structuredContent']['value']==24
+            assert {t['name'] for t in ok(mcp('tools/list',token=delegated_token))['result']['tools']}=={hello}
+            result=ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token))
+            assert result['result']['structuredContent']=={'message':'Hello Grace'},result
             delegation=ok(api('/api/control/v1/delegations/human-delegation',admin))
             reviewed('/api/control/v1/delegations/human-delegation',{**delegation,'enabled':False},'PUT',delegation['revision'])
             assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
-            assert mcp('tools/call',{'name':'calculator.evaluate','arguments':{'expression':'8*3'}},token=delegated_token)[0]==403
-            mark('real DELEGATED identity/same Team and Agent Group/native effect/current delegation revocation')
-        # Configure the diagnostic workload outside the mimic script. The script only calls/logs.
-        for tool_id in ('hotfolder.write_text','client.read_log_entry'):
-            tool=ok(api('/api/control/v1/tools/'+tool_id,admin))
-            reviewed('/api/control/v1/tools/'+tool_id,{**tool,'enabled':True},'PUT',tool['revision'])
-        diagnostic_scope={**scope,'actions':['write','read'],'resources':[
-            dict(kind='FILE',locator='rahul-nigam.txt',match='EXACT'),
-            dict(kind='CUSTOM',locator='client/packets/latest',match='EXACT')]}
-        for purpose in ('CAPABILITY','SERVICE'):
-            reviewed('/api/control/v1/grants',dict(id='diagnostic-'+purpose.lower(),name='Bounded diagnostic '+purpose,
-                enabled=True,revision=1,sourceType='AGENT_GROUP',sourceId='default-agents',purpose=purpose,scope=diagnostic_scope))
-        with tempfile.TemporaryDirectory(prefix='toolgate-mimic-credential-') as private:
-            token_file=Path(private)/'token';token_file.write_text(service_token,encoding='utf-8');token_file.chmod(0o600)
-            result=run([sys.executable,str(ROOT/'debug/agent-mimic.py'),'--gateway',mcp_origin,'--token-file',str(token_file)],capture_output=True,text=True)
-            assert service_token not in result.stdout and service_token not in result.stderr
-            output=ROOT/'build/quickstart';output.mkdir(parents=True,exist_ok=True)
-            (output/'agent-mimic.log').write_text(result.stdout+result.stderr,encoding='utf-8')
-        assert mcp('tools/call',{'name':'hotfolder.write_text','arguments':{'path':'other.txt','text':'denied'}})[0]==403
-        diagnostic=ok(api('/api/control/v1/grants/diagnostic-service',admin))
-        reviewed('/api/control/v1/grants/diagnostic-service',{**diagnostic,'enabled':False},'PUT',diagnostic['revision'])
-        assert ok(mcp('tools/list'))['result']['tools']==[]
-        mark('unchanged call-and-log agent mimic/scoped file/one redacted log entry/ungranted file denied')
+            assert mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token)[0]==403
+            mark('real DELEGATED identity/same Team and Agent Group/Tool Host effect/current delegation revocation')
         def invoke(arguments,key=None):
-            return api('/api/quickstart/v1/invoke',admin,
-                       {'toolId':'calculator.evaluate','arguments':arguments},'POST',key)
-        key=secrets.token_hex(16);args={'expression':'2+3*4'}
+            return api('/api/control/v1/access/human/invocations',admin,
+                       dict(target,request=dict(toolId=hello,action='invoke',arguments=arguments)),'POST',key)
+        key=secrets.token_hex(16);args={'text':'World'}
         outcome=ok(invoke(args,key));invocation=outcome['invocation']
         assert invocation['evaluation']['context']['mode']=='HUMAN'
         assert invocation['evaluation']['context']['userId']=='admin'
@@ -456,21 +428,21 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             if result[0]==200 and result[1].get('result') is not None:break
             assert time.monotonic()<deadline,('Effect did not complete',result)
             time.sleep(.5)
-        assert result[1]['result']['output']['value']==14,result
+        assert result[1]['result']['output']=={'message':'Hello World'},result
         assert ok(invoke(args,key))['invocation']['id']==invocation['id']
-        assert invoke({'expression':'99'},key)[0]==409
+        assert invoke({'text':'someone else'},key)[0]==409
         saved=ok(api('/api/control/v1/access/invocations/'+invocation['id'],admin))
         assert saved['state']=='SUCCEEDED',saved
-        mark('direct HUMAN relay/actual native effect/signed permit/durable result/exact retry conflict')
+        mark('HUMAN invocation/Tool Host effect/signed permit/durable result/exact retry conflict')
         # ASK is discoverable but supplies no execution permit; a different person must review.
-        policy=dict(id='calculator-review',name='Independent calculation review',enabled=True,revision=1,
+        policy=dict(id='hello-review',name='Independent greeting review',enabled=True,revision=1,
                     scope=scope,decision='ASK',teams=dict(ids=[],all=True),agentGroups=dict(ids=[],all=True),approverTeams=dict(ids=['installation-administrators'],all=False))
         reviewed('/api/control/v1/policies',policy)
         ask_key=secrets.token_hex(16);ask=ok(invoke(args,ask_key),202)['invocation']
         assert ask['state']=='PENDING_APPROVAL'
         approvals=ok(api('/api/control/v1/approvals',tokens['reviewer-1']))['items']
         approval=next(a for a in approvals if a['invocationId']==ask['id'])
-        decision=dict(obligationId='calculator-review',expectedRevision=approval['revision'],decision='APPROVE')
+        decision=dict(obligationId='hello-review',expectedRevision=approval['revision'],decision='APPROVE')
         assert api('/api/control/v1/approvals/'+approval['id']+'/decision',admin,decision,'POST')[0]==403
         ok(api('/api/control/v1/approvals/'+approval['id']+'/decision',tokens['reviewer-1'],decision,'POST'))
         ok(invoke(args,ask_key))
@@ -484,7 +456,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         # Revocation is current online authority, even for saved results or an identical retry.
         current=ok(api('/api/control/v1/grants/'+grant['id'],admin))
         reviewed('/api/control/v1/grants/'+grant['id'],{**current,'enabled':False},'PUT',current['revision'])
-        assert ok(api('/api/quickstart/v1/tools',admin))['tools']==[]
+        assert catalog()==set()
         assert invoke(args,key)[0]==403
         assert api('/api/control/v1/access/human/invocations/'+invocation['id']+'/result',admin)[0]==403
         mark('live revocation hides discovery/blocks execution/retries/result retrieval')
@@ -533,7 +505,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
                 time.sleep(.25)
         admin=ok(api('/api/quickstart/v1/login',body={'username':'admin','password':passwords['admin']},method='POST'))['accessToken']
         assert ok(api('/api/control/v1/access/status',admin))['authorizationEpoch']>=authority['authorizationEpoch']
-        assert ok(api('/api/quickstart/v1/tools',admin))['tools']==[]
+        assert catalog(admin)==set()
         assert ok(api('/api/control/v1/grants/'+grant['id'],admin))['enabled'] is False
         mark('restart preserves identity/key/revocation/monotonic epoch/no installation reseeding')
         if gateway_image and not browser:
