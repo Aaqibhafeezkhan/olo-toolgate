@@ -152,6 +152,14 @@ public final class EnterpriseOperations {
                 state==EnterpriseInvocationState.SUCCEEDED?Canonical.digest(result).substring(7):null);
             var next=reportInSession(tenant,tx,device,effect);
             Integer attempt=tx.runEvents().attempt(i.id(),report.fencingToken());new RunEvents(store,codec,this).recordResult(tx,i,attempt==null?1:attempt,report.fencingToken(),device,report.result(),clock.millis());
+            // A call the Gateway took to the host directly: keep its result as a finished dispatch, as for a call the host
+            // fetched, so a repeated call returns it instead of running the tool again.
+            if(tx.packages().relayed(i.id())==null){
+                var finished=com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();var status=finished.putObject("status");
+                status.put("invocationId",i.id()).put("hostId",device).put("state","FINISHED");
+                status.set("result",(com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(new io.ololabs.toolgate.contracts.v2.ResultMessage(report.invocationId(),report.fencingToken(),report.outcome(),report.result()))));
+                tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),device,"FINISHED",i.expiresAtUnixMs(),codec.json(finished)));
+            }
             return reply(next,next.revision());});
     }
     private void reviewer(Store.Session tx,String user,EnterpriseInvocation i,String obligation,long now){
