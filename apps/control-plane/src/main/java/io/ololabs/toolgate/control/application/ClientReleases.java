@@ -55,6 +55,10 @@ public final class ClientReleases {
     private JsonNode node(byte[] bytes) { return node(new String(bytes, StandardCharsets.UTF_8)); }
     private static Failure incompatible(String reason) { return new Failure(ErrorCode.VALIDATION, 422, reason); }
 
+    /** Whether client images are configured, and whether Control signs releases itself (both needed by deployment profiles). */
+    public boolean configured() { return registry != null; }
+    public boolean signs() { return signer != null; }
+
     public Store.Reply release(DirectoryService.Actor actor, String body, String requestId) {
         String digest = codec.model(body, io.ololabs.toolgate.contracts.v2.ClientReleaseRequest.class).packageDigest();
         if (registry == null) throw Failure.unavailable();

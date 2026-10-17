@@ -64,6 +64,7 @@ public final class DirectoryService {
         var hash=digest(operation+"\n"+kind+"\n"+id+"\n"+expected+"\n"+(input==null?"":input.document()));
         return store.transaction(actor.tenant(),true,tx->{
             var before=tx.load();var old=before.entries().get(typedId);if(input==null&&old==null)throw missingFailure();authorizeMutation(actor,tx,before,old,input,operation);
+            packaged(kind,old,input,operation);
             var replay=tx.replay(actor.id(),key,hash);if(replay!=null)return replay;
             lifecycle(tx,old,input);
             if(GroupGraph.group(kind))management.requireAllocation(before,before,actor.userId(),input==null?old:input,System.currentTimeMillis());
@@ -78,6 +79,13 @@ public final class DirectoryService {
             var after=validated(tx,before,before.revision()+1,entries);secretReferences(tx,after);tx.save(before,after);auditChanges(tx,actor,before,after,requestId,operation,hash);
             var reply=input==null?new Store.Reply(204,"",after.revision()):new Store.Reply(old==null?201:200,after.entries().get(typedId).document(),after.entries().get(typedId).revision());tx.remember(actor.id(),key,hash,reply);return reply;
         });
+    }
+    /** Tools and their extractors come only from installed packages (ADR 027, plan.md §15): this API may enable, disable or
+     *  delete one, never create one or change what it runs, so no script can add a tool outside the package path. */
+    private void packaged(Kind kind,Directory.Entry old,Directory.Entry input,String operation){
+        if(kind!=Kind.TOOL&&kind!=Kind.EXTRACTOR)return;
+        if(operation.equals("CREATE")||operation.equals("UPDATE")&&!Set.of("enabled").containsAll(changedFields(old,input)))
+            throw new Failure(ErrorCode.VALIDATION,422,"Tools and extractors come only from installed packages; only enabled can change here");
     }
     /** Shared field/action authorization for direct changes and configuration imports. */
     private void authorizeMutation(Actor actor,Store.Session tx,Directory before,Directory.Entry old,Directory.Entry input,String operation){

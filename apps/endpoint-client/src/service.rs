@@ -67,6 +67,21 @@ pub struct ClientService {
     observed: u64,
     boot_time: u64,
 }
+/// Local calls need the administrator-provisioned Gateway credential; without one the device still runs the calls
+/// Control relays and authorizes (ADR 027), so signed releases work on devices with no local Gateway settings.
+fn local_authorization(
+    config: &crate::config::Config,
+) -> Result<Arc<dyn crate::execution::AuthorizationPort>> {
+    Ok(match &config.gateway {
+        Some(gateway) => Arc::new(crate::tool_gateway::HttpsGateway::new(
+            gateway,
+            config,
+            Arc::new(crate::contracts::Contracts::new()?),
+        )?),
+        None => Arc::new(crate::execution::RelayOnly),
+    })
+}
+
 impl ClientService {
     pub fn open(
         config: Config,
@@ -110,19 +125,13 @@ impl ClientService {
         } else {
             EndpointState::Unenrolled
         };
-        let execution =
-            if let (Some(settings), Some(gateway)) = (&config.execution, &config.gateway) {
-                Some(crate::execution::Manager::new(
-                    settings.clone(),
-                    Arc::new(crate::tool_gateway::HttpsGateway::new(
-                        gateway,
-                        &config,
-                        Arc::new(crate::contracts::Contracts::new()?),
-                    )?),
-                )?)
-            } else {
-                None
-            };
+        let execution = match &config.execution {
+            Some(settings) => Some(crate::execution::Manager::new(
+                settings.clone(),
+                local_authorization(&config)?,
+            )?),
+            None => None,
+        };
         let deployment = if let Some(settings) = &config.deployment {
             crate::deployment::State::open(&store, settings)?
         } else {
@@ -363,12 +372,7 @@ impl ClientService {
             return Ok(());
         }
         let base = self.config.execution.clone().ok_or(Failure::Unsupported)?;
-        let gateway_settings = self.config.gateway.as_ref().ok_or(Failure::Unsupported)?;
-        let authorization = Arc::new(crate::tool_gateway::HttpsGateway::new(
-            gateway_settings,
-            &self.config,
-            Arc::new(crate::contracts::Contracts::new()?),
-        )?);
+        let authorization = local_authorization(&self.config)?;
         // Fence old assigned tools immediately, preserving only administrator-local registrations.
         if let Some(old) = self.execution.take() {
             old.shutdown().await?;
@@ -935,9 +939,7 @@ impl ClientService {
         {
             return Err(Failure::Unauthorized);
         }
-        let interval_ms = ack
-            .next_interval_ms
-            .unwrap_or_else(|| ack.next_interval_seconds.saturating_mul(1000));
+        let interval_ms = ack.next_interval_ms;
         if !(500..=3600000).contains(&interval_ms) {
             return Err(Failure::Validation);
         }
@@ -1195,11 +1197,7 @@ mod tests {
                     device_id: report.report.device_id,
                     sequence: report.sequence,
                     server_time_unix_ms: crate::now(),
-                    next_interval_seconds: 2,
-                    next_interval_ms: match self.interval_ms.load(Ordering::SeqCst) {
-                        0 => None,
-                        interval => Some(interval),
-                    },
+                    next_interval_ms: self.interval_ms.load(Ordering::SeqCst),
                     identity: None,
                     adoption: None,
                     task: None,
@@ -1745,7 +1743,7 @@ mod tests {
         std::fs::remove_dir_all(directory).unwrap();
     }
     #[tokio::test]
-    async fn millisecond_interval_falls_back_to_legacy_seconds_and_rejects_invalid_values() {
+    async fn the_interval_follows_control_and_invalid_values_are_rejected() {
         let (mut service, gateway, directory) = test_service();
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
@@ -1756,7 +1754,7 @@ mod tests {
         service.journal.last_success = Some(crate::now());
         service.tick().await.unwrap();
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 1);
-        gateway.interval_ms.store(0, Ordering::SeqCst);
+        gateway.interval_ms.store(2000, Ordering::SeqCst);
         service.journal.last_success = Some(crate::now() - 2000);
         service.tick().await.unwrap();
         assert_eq!(service.next_delay_millis(), 2000);

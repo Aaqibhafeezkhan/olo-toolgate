@@ -77,11 +77,9 @@ See [current ASK approval behavior](approvals.md) and the [security model](../se
 Source: [Platform requirements §17.1 and §17.2](../contracts/platform-requirements.md). Phase A ships with
 milestone M1; Phase B below is still a specification.
 
-Control returns the check-in interval in each check-in reply. Clients that send
-`X-ToolGate-Poll-Interval-Unit: milliseconds` receive `nextIntervalMs`, which takes
-precedence; older clients receive `nextIntervalSeconds`, the same interval rounded up
-to whole seconds (at least 2). The endpoint client accepts any value from 500 ms to
-1 hour and rejects anything else (`apps/endpoint-client/src/service.rs:859-865`). The
+Control returns the next check-in interval as `nextIntervalMs` in every check-in reply;
+there is no other unit or negotiation. The endpoint client and Tool Host accept any
+value from 500 ms to 1 hour and reject anything else. The
 client opens its WebSocket only after a poll delivers a job.
 
 ### Five settings, not one

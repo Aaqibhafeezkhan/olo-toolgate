@@ -15,6 +15,8 @@ struct Authorization {
     identity: DeviceIdentity,
     task: RemoteToolTask,
     consumed: tokio::sync::Mutex<bool>,
+    /// The fencing token permit consumption returned; run events are bound to it.
+    fencing: std::sync::Mutex<Option<String>>,
 }
 impl AuthorizationPort for Authorization {
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()> {
@@ -49,6 +51,9 @@ impl AuthorizationPort for Authorization {
                     return Err(Failure::Unauthorized);
                 }
                 *consumed = true;
+                if let Ok(mut fencing) = self.fencing.lock() {
+                    *fencing = invocation.reserved_nonce.clone();
+                }
             }
             let ack = self
                 .control
@@ -101,7 +106,7 @@ async fn execute(
         return Err(Failure::Unauthorized);
     }
     settings.state_directory = settings.state_directory.join("remote");
-    let mut manager = execution::Manager::new(settings, auth)?;
+    let mut manager = execution::Manager::new(settings, auth.clone())?;
     let input = LocalToolInput {
         protocol_version: 1,
         request_id: task.request_id,
@@ -112,8 +117,42 @@ async fn execute(
         _=cancelled.changed()=>Err(Failure::Revoked),
         outcome=tokio::time::timeout(std::time::Duration::from_millis(valid_until.saturating_sub(crate::now())),manager.invoke(input,valid_until))=>outcome.unwrap_or(Err(Failure::Expired)).map(|output|output.output),
     };
+    let (frames, dropped) = manager.take_frames();
     manager.shutdown().await?;
+    forward_frames(&auth, frames, dropped).await;
     result
+}
+
+/// Sends the run's response frames to Control before the result, once retried; the result never waits on a failure.
+async fn forward_frames(
+    auth: &Authorization,
+    events: Vec<olo_toolgate_contracts::v2::RunEventFrame>,
+    dropped: u64,
+) {
+    let fencing = auth.fencing.lock().ok().and_then(|f| f.clone());
+    let Some(fencing_token) = fencing else { return };
+    if events.is_empty() && dropped == 0 {
+        return;
+    }
+    let batch = olo_toolgate_contracts::v2::RunEventBatch {
+        invocation_id: auth.task.invocation.id.clone(),
+        fencing_token,
+        attempt: 1,
+        events,
+        dropped_frames: (dropped > 0).then_some(dropped.min(i32::MAX as u64)),
+    };
+    for _ in 0..2 {
+        match auth
+            .control
+            .run_events(auth.identity.clone(), batch.clone())
+            .await
+        {
+            Ok(_) => return,
+            Err(failure) => {
+                tracing::warn!(event = "run_events", result = "not_delivered", error = ?failure)
+            }
+        }
+    }
 }
 
 pub(crate) struct Job {
@@ -149,6 +188,7 @@ impl Job {
             identity,
             task: task.clone(),
             consumed: tokio::sync::Mutex::new(false),
+            fencing: std::sync::Mutex::new(None),
         });
         let command = activity.begin(&task.request.tool_id);
         let handle = tokio::spawn(async move {

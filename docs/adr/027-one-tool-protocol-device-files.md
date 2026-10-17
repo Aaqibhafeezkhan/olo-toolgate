@@ -63,3 +63,14 @@ device tool has is what the client performs for it after checking the signed gra
 arguments, inside one administrator-configured folder. A tool cannot name another tool's files unless the caller's
 authorized arguments do, cannot follow links, and cannot exceed the area's limits. Refusals are explicit errors.
 Removing built-ins removes a large block of privileged client code.
+
+## Amendment (2026-10-17)
+
+- Deployment profiles release packages to devices (`deviceGroupIds`): one signed client release per package version,
+  rolled out to the active devices of the named groups, including devices that join later.
+- Devices run relayed calls without a local Gateway credential (Control authorizes them over the device identity);
+  without one, local command-line calls are refused.
+- Devices forward each run's LOG and PROGRESS frames to Control's run-event stream, bound to the fencing token.
+- Control's directory API never creates a tool or extractor, or changes anything but whether it is enabled: tool
+  records come only from installed packages.
+

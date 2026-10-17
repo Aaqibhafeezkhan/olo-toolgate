@@ -35,9 +35,6 @@ class ClientCheckInPolicyTest {
         var enterprise=ClientCheckInPolicy.configure(null,null,null);
         assertEquals(800,enterprise.burstGuardMs());
         for(int i=0;i<500;i++){long next=enterprise.nextIntervalMs();assertTrue(next>=1600&&next<=2400,String.valueOf(next));}
-        assertEquals(2,enterprise.nextIntervalSeconds(1600));
-        assertEquals(3,enterprise.nextIntervalSeconds(2400));
-        assertEquals(2,enterprise.nextIntervalSeconds(500));
     }
     @Test void aDeviceIsOfflineAfterTheConfiguredThreshold(){
         var policy=ClientCheckInPolicy.configure(1000L,0,10000L);

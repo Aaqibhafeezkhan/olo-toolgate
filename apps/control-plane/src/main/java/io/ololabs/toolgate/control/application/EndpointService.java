@@ -304,7 +304,7 @@ public final class EndpointService {
         });
     }
     public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId) {
-        return checkIn(peer,body,requestId,false);
+        return checkIn(peer,body,requestId,null,null);
     }
     public String issuerCertificate() { available();return issuer.issuerCertificate(); }
     public void verifySocketPeer(java.security.cert.X509Certificate peer) {
@@ -312,20 +312,17 @@ public final class EndpointService {
     }
     /** Configured gateway name sent to devices in enrollment and check-in replies. */
     private String serverName(Store.Session tx){return new ServerSettingsService(store,codec,checkInPolicy).current(tx).gateway().gatewayName();}
-    private Store.Reply interval(Store.Reply reply,boolean milliseconds,String serverName) {
+    private Store.Reply interval(Store.Reply reply,String serverName) {
         var ack=codec.model(reply.body(),EndpointCheckInAck.class);
         long now=clock.millis();var identity=ack.identity()!=null&&ack.identity().expiresAtUnixMs()<=now?null:ack.identity();
         // Preserve exact recent replies, but a lost response recovered after a long outage must
         // not reinstall an expired certificate or fail the client's current clock-skew check.
         long serverTime=now-ack.serverTimeUnixMs()>300000?now:ack.serverTimeUnixMs();
         long next=checkInPolicy.nextIntervalMs();
-        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,checkInPolicy.nextIntervalSeconds(next),milliseconds?next:null,identity,ack.adoption(),ack.task(),serverName);
+        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,next,identity,ack.adoption(),ack.task(),serverName);
         return new Store.Reply(reply.status(),codec.json(negotiated),reply.revision());
     }
-    public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,boolean milliseconds) {
-        return checkIn(peer,body,requestId,milliseconds,null,null);
-    }
-    public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,boolean milliseconds,String systemName,String ipAddress) {
+    public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,String systemName,String ipAddress) {
         available();
         if(systemName!=null&&(systemName.length()>255||!systemName.matches("[a-zA-Z0-9._-]+")))throw Failure.validation();
         if(ipAddress!=null&&(ipAddress.length()>45||!ipAddress.matches("[0-9a-fA-F:.]{2,45}")))throw Failure.validation();
@@ -335,7 +332,7 @@ public final class EndpointService {
             var device=codec.model(row.document(),EndpointDeviceRecord.class);active(tx,device);
             if(!device.deviceId().equals(check.report().deviceId()))throw forbidden();
             if(check.report().appliedRevision()!=0||!check.report().packages().isEmpty())FleetService.validateReport(tx,codec,check.report());
-            if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),milliseconds,serverName(tx));}
+            if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),serverName(tx));}
             if(check.sequence()!=device.reportSequence()+1)throw Failure.conflict();
             // Only the device's owner switches its power; the report that says so is sent at once.
             boolean off=DevicePlacement.poweredOff(check.report()),switched=off!=DevicePlacement.poweredOff(device.report());
@@ -346,11 +343,11 @@ public final class EndpointService {
             DeviceIdentity renewed=null;if(peer.getNotAfter().getTime()-now<43200000&&peer.getNotAfter().getTime()<connectionExpires/1000*1000)renewed=issuer.issue(row.csr(),device.deviceId(),tenant.value(),device.userId(),server,now,connectionExpires);
             var configuration=new EndpointAdoptions(codec).poll(tx,device,server,check.adoptionDigest(),check.localTools());
             var task=off?null:relay().poll(tx,device,now,requestId);
-            var ack=new EndpointCheckInAck(device.deviceId(),check.sequence(),now,2L,null,renewed,configuration,task,null);
+            var ack=new EndpointCheckInAck(device.deviceId(),check.sequence(),now,checkInPolicy.nextIntervalMs(),renewed,configuration,task,null);
             var updated=new EndpointDeviceRecord(device.deviceId(),tenant.value(),device.userId(),fingerprint,EndpointState.ACTIVE,device.revision()+1,now,check.sequence(),check.report(),device.connectionExpiresAtUnixMs(),device.connectionApproved(),device.approvalRevision(),systemName==null?device.systemName():systemName,ipAddress==null?device.ipAddress():ipAddress);
             var response=reply(ack,updated.revision());tx.saveEndpoint(new Store.EndpointRecord(row.id(),row.fingerprint(),codec.json(updated),row.csr(),digest,response.body()));
             tx.audit(fingerprint,renewed==null?"DEVICE_CHECK_IN":"DEVICE_RENEW","endpoint:"+row.id(),updated.revision(),requestId,digest);
-            if(switched)tx.audit(fingerprint,off?"DEVICE_POWER_OFF":"DEVICE_POWER_ON","endpoint:"+row.id(),updated.revision(),requestId,digest);return interval(response,milliseconds,serverName(tx));
+            if(switched)tx.audit(fingerprint,off?"DEVICE_POWER_OFF":"DEVICE_POWER_ON","endpoint:"+row.id(),updated.revision(),requestId,digest);return interval(response,serverName(tx));
         });
     }
     public EndpointDeviceRecord authenticate(Store.Session tx,java.security.cert.X509Certificate peer,long now){

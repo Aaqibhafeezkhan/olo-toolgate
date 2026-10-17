@@ -33,7 +33,7 @@ final class PackageProvisioningTest {
         String digest = PackageArchive.validate(bytes, document -> (JsonNode) codec.value(document)).packageDigest();
         var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
         PackageProvisioning.CoreArtifacts core = (id, version) -> id.equals("acme.orders") && version.equals("0.1.0") ? new PackageProvisioning.Core(digest, () -> bytes) : null;
-        return new Rig(store, codec, tenant, admin, packages, new PackageProvisioning(store, codec, packages, null, core, java.time.Clock.systemUTC()), digest);
+        return new Rig(store, codec, tenant, admin, packages, new PackageProvisioning(store, codec, packages, null, core, null, null, java.time.Clock.systemUTC()), digest);
     }
 
     private static String profile(String packages) { return "{\"profileVersion\":1,\"profileId\":\"orders\",\"packages\":[" + packages + "]}"; }
@@ -99,8 +99,24 @@ final class PackageProvisioningTest {
         // Removing the entry never uninstalls: the deployment and enabled tool stay.
         var emptied = node(rig.provisioning.apply(rig.admin, profile("")));
         assertEquals("READY", emptied.get("state").asText()); assertEquals(rig.digest.length(), emptied.get("previousProfileDigest").asText().length());
+        // The change is recorded for review: the package left the profile and is still installed.
+        var removed = emptied.get("changes").get(0);
+        assertEquals("acme.orders", removed.get("packageId").asText()); assertEquals("REMOVED", removed.get("change").asText());
+        assertEquals("0.1.0", removed.get("previousVersion").asText()); assertEquals(rig.digest, removed.get("previousPackageDigest").asText());
+        // Adding it back is recorded as an addition of the same pin.
+        var restored = node(rig.provisioning.apply(rig.admin, profile(ORDERS)));
+        assertEquals("ADDED", restored.get("changes").get(0).get("change").asText());
+        assertEquals(rig.digest, restored.get("changes").get(0).get("packageDigest").asText());
         assertNotNull(rig.store.transaction(rig.tenant, false, tx -> tx.packages().deployment("acme.orders")));
         assertTrue(rig.store.transaction(rig.tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))).enabled());
+    }
+
+    @Test void aToolHostThatCannotSpeakProtocolTwoIsRefusedAtRegistration() throws Exception {
+        var rig = rig();
+        var host = new EndpointDeviceRecord("host-1", "tenant", "root", "f".repeat(64), EndpointState.ACTIVE, 1L, 0L, 0L, null, null, true, 1L, null, null);
+        var old = "{\"hostId\":\"host-1\",\"poolId\":\"pool\",\"version\":\"0.9.0\",\"protocol\":{\"min\":1,\"max\":1},\"launcherVersion\":\"0.9.0\",\"tiers\":[\"HOST_NATIVE\"]}";
+        assertEquals(409, assertThrows(Failure.class, () -> rig.packages.register(rig.tenant, tx -> host, old, "register-old")).status());
+        assertNull(rig.store.transaction(rig.tenant, false, tx -> tx.packages().toolHost("host-1")));
     }
 
     @Test void unknownExportsAndUnavailableSourcesFailWithoutSubstitutes() throws Exception {

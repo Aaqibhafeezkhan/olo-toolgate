@@ -28,15 +28,13 @@ impl Config {
     pub fn validate(&self) -> Result<()> {
         if let Some(deployment) = &self.deployment {
             deployment.validate()?;
-            if self.execution.is_none() || self.gateway.is_none() {
+            if self.execution.is_none() {
                 return Err(Failure::Validation);
             }
         }
         if let Some(execution) = &self.execution {
             execution.validate()?;
-            if self.gateway.is_none()
-                || execution.state_directory != self.state_directory.join("runtimes")
-            {
+            if execution.state_directory != self.state_directory.join("runtimes") {
                 return Err(Failure::Validation);
             }
         }

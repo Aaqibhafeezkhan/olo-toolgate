@@ -9,6 +9,7 @@ import signal
 import threading
 
 import device_entrypoint as device
+import device_execution
 from secured_network import settings
 
 
@@ -18,6 +19,7 @@ def main():
     if any(int(status[key].strip(), 16) for key in ('CapEff', 'CapPrm', 'CapBnd', 'CapInh', 'CapAmb')):
         raise RuntimeError('The device service must have no Linux capabilities')
     config = settings(os.environ)
+    mounted = device_execution.load(os.environ)
     for key in list(os.environ):
         if key.lower() in ('http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'):
             del os.environ[key]
@@ -34,6 +36,12 @@ def main():
             raise ValueError('Existing device belongs to another Gateway; use separate identity volumes')
         if Path(saved['caCertificatePath']).read_bytes() != Path(config['ca']).read_bytes():
             raise ValueError('Gateway CA changed; use separate device volumes and approve a new enrollment')
+        saved, changed = device_execution.merge(saved, mounted)
+        if changed:
+            temporary = path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(saved))
+            temporary.chmod(0o600)
+            temporary.replace(path)
     else:
         # The service uses the same fixed Linux configuration as the native installer.
         # No HTTP trust bootstrap, browser download, or secondary network port is needed.
@@ -43,6 +51,7 @@ def main():
         saved = dict(serverUrl=config['origin'], stateDirectory='/var/lib/olo-toolgate',
                      ipcEndpoint='/run/olo-toolgate/client.sock', authorizedPeers=['0'],
                      caCertificatePath=str(trust), requestTimeoutSeconds=10)
+        saved, _ = device_execution.merge(saved, mounted)
         temporary = path.with_suffix('.tmp')
         temporary.write_text(json.dumps(saved))
         temporary.chmod(0o600)

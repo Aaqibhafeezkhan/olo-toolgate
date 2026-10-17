@@ -100,7 +100,7 @@ poll. Only its fixed runtime proxy routes delegate opaque bearer validation to
 Gateway; Control administrator JWT and client mTLS routes retain their existing
 authentication.
 
-Current clients request millisecond intervals with `X-ToolGate-Poll-Interval-Unit: milliseconds`. Control replies with `nextIntervalMs` set to the configured check-in; that value takes precedence over the legacy `nextIntervalSeconds`. Older clients receive the interval in whole seconds (at least two), and current clients fall back to seconds against an older server.
+Control replies to every check-in with `nextIntervalMs`, the configured check-in interval spread by its jitter.
 
 When a remote tool or builder job is delivered, the client opens a direct mTLS
 WebSocket at `/api/control/v1/endpoint/socket`. Check-ins, permission replacements,

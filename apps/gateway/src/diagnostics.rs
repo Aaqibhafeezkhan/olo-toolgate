@@ -28,7 +28,6 @@ pub(crate) fn summary(value: &Value) -> Value {
                     | "revision"
                     | "appliedRevision"
                     | "serverTimeUnixMs"
-                    | "nextIntervalSeconds"
                     | "nextIntervalMs"
                     | "expiresAtUnixMs"
                     | "digest"

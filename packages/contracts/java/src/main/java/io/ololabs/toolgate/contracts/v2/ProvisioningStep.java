@@ -11,6 +11,10 @@ public enum ProvisioningStep {
     IMPORT,
     /** Canonical DEPLOY value. */
     DEPLOY,
+    /** Canonical RELEASE value. */
+    RELEASE,
+    /** Canonical ROLLOUT value. */
+    ROLLOUT,
     /** Canonical ACTIVATE value. */
     ACTIVATE,
     /** Canonical DONE value. */

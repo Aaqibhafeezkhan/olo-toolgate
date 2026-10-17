@@ -671,8 +671,7 @@ export interface EndpointCheckInAck {
   readonly deviceId: string;
   readonly sequence: number;
   readonly serverTimeUnixMs: number;
-  readonly nextIntervalSeconds: number;
-  readonly nextIntervalMs?: number;
+  readonly nextIntervalMs: number;
   readonly identity?: DeviceIdentity;
   readonly adoption?: EndpointAdoption;
   readonly task?: RemoteToolTask;

@@ -78,7 +78,10 @@ There is one protocol for every executor, tool protocol v2 over stdio
   `BROKER_RESPONSE` line on stdin, in order;
 - takes the final `RESULT` frame and returns its structured content after output-schema validation.
 
-A device provides only the `FILES_*` broker operations, and only to a registration whose signed `fileAccess` grants
+A device needs no local Gateway credential for this: Control authorizes each relayed call over the device's own mTLS
+identity. Without a `gateway` section, local command-line calls are refused. The LOG and PROGRESS frames of each run
+(at most 64) are posted to Control's run-event stream before the result, so the Test panel shows device runs like Tool
+Host runs. A device provides only the `FILES_*` broker operations, and only to a registration whose signed `fileAccess` grants
 them, for paths that are arguments of the authorized call, at most 64 per call. `ROUTE_CALL`, `SECRET_REDEEM` and
 anything else are refused with `BROKER_REFUSED`. An `INPUT_REQUEST` (devices take no interactive input), a tool error,
 a malformed frame, stderr content, nonzero exit, schema mismatch or overflow fails closed with a fixed canonical error;

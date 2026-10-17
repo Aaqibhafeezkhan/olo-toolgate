@@ -492,14 +492,6 @@ paths:
         renew before expiry.
       parameters:
       - in: header
-        name: X-ToolGate-Poll-Interval-Unit
-        required: false
-        description: Opt in to nextIntervalMs; legacy clients continue receiving nextIntervalSeconds.
-        schema:
-          type: string
-          enum:
-          - milliseconds
-      - in: header
         name: X-ToolGate-System-Name
         required: false
         description: Informational OS hostname from the authenticated protected client;

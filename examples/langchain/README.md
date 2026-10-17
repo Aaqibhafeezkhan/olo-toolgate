@@ -14,6 +14,12 @@ Its file reads and writes use Gateway MCP calls. The endpoint authenticates with
 its enrolled mTLS identity and consumes the current authorization before effects.
 The console records the requests; the endpoint records its actual activity.
 
+> **Not runnable at the moment.** This example registered the client's former built-in HotFolder tools from the
+> device. Those built-ins are gone (ADR 027): HotFolder is now the `examples.hotfolder` Marketplace package, released to
+> devices with their own container engine and files area, as `deploy/docker` does for the demo lab devices. This
+> example has no Marketplace, so it needs a package-upload and client-release flow before it runs again; that rework is
+> tracked in `plan.md`. Its scripts no longer register tool definitions.
+
 ## What it does
 
 | Use case | Device input | AI work | Generated device file |

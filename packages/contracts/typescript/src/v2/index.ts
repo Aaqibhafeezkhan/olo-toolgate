@@ -638,7 +638,17 @@ export interface PrivateRangeApproval {
   readonly cidr: string;
   readonly ports: ReadonlyArray<number>;
 }
-/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. bindingIds have their allowed package digests set to exactly the profile packages that name them. */
+/** One package difference from the previously applied profile, recorded for review. */
+export interface ProfileChange {
+  readonly packageId: string;
+  readonly change: ProfileChangeKind;
+  readonly previousVersion?: string;
+  readonly previousPackageDigest?: string;
+  readonly version?: string;
+  readonly packageDigest?: string;
+}
+export type ProfileChangeKind = "ADDED" | "CHANGED" | "REMOVED";
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. */
 export interface ProfilePackage {
   readonly packageId: string;
   readonly source: ProfilePackageSource;
@@ -646,6 +656,7 @@ export interface ProfilePackage {
   readonly packageDigest?: string;
   readonly required: boolean;
   readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
   readonly globals?: Record<string, unknown>;
   readonly tools?: ReadonlyArray<ProfileToolActivation>;
   readonly bindingIds?: ReadonlyArray<string>;
@@ -685,6 +696,8 @@ export interface ProvisioningPackageStatus {
   readonly reason?: string;
   readonly toolIds?: ReadonlyArray<string>;
   readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
+  readonly deviceIds?: ReadonlyArray<string>;
   readonly globalsDigest?: string;
 }
 export type ProvisioningState = "READY" | "PENDING" | "FAILED";
@@ -697,8 +710,9 @@ export interface ProvisioningStatus {
   readonly packages: ReadonlyArray<ProvisioningPackageStatus>;
   readonly appliedAtUnixMs: number;
   readonly previousProfileDigest?: string;
+  readonly changes?: ReadonlyArray<ProfileChange>;
 }
-export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "ACTIVATE" | "DONE";
+export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "RELEASE" | "ROLLOUT" | "ACTIVATE" | "DONE";
 /** Supersedes kills after two-person review. Issuer is always control. */
 export interface RecoveryEvent {
   readonly eventId: string;

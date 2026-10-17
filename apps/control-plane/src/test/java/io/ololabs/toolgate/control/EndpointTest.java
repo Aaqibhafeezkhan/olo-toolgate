@@ -114,24 +114,21 @@ final class EndpointTest {
         assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(1L,new ClientReport("device","0.6.1",0L,List.of(),null),null,null)),"changed")).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,new ClientReport("other","0.6.0-dev",0L,List.of(),null),null,null)),"wrong")).status());
         assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"gap")).status());
-        assertFalse(ack.body().contains("nextIntervalMs"));
-        var optedIn=codec.model(s.service.checkIn(peer,body,"millisecond-retry",true).body(),EndpointCheckInAck.class);
-        assertEquals(500L,optedIn.nextIntervalMs());
-        assertEquals(ack.body(),s.service.checkIn(peer,body,"legacy-retry").body());
+        // Every acknowledgement carries the interval in milliseconds; there is no other unit to negotiate.
+        assertEquals(500L,codec.model(ack.body(),EndpointCheckInAck.class).nextIntervalMs());
+        assertFalse(ack.body().contains("nextIntervalSeconds"));
         s.clock.time+=249;
-        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"burst",true)).status());
+        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"burst")).status());
         s.clock.time+=1;
-        var fast=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"millisecond",true).body(),EndpointCheckInAck.class);
-        assertEquals(2L,fast.nextIntervalSeconds());
+        var fast=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"millisecond").body(),EndpointCheckInAck.class);
         assertEquals(500L,fast.nextIntervalMs());
         // A configured check-in changes the negotiated interval and scales the burst guard with it.
         s.service.checkInPolicy(ClientCheckInPolicy.configure(4000L,0,null));
         s.clock.time+=1999;
-        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured-burst",true)).status());
+        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured-burst")).status());
         s.clock.time+=1;
-        var configured=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured",true).body(),EndpointCheckInAck.class);
+        var configured=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured").body(),EndpointCheckInAck.class);
         assertEquals(4000L,configured.nextIntervalMs());
-        assertEquals(4L,configured.nextIntervalSeconds());
         s.service.checkInPolicy(ClientCheckInPolicy.configure(500L,0,120000L));
         s.clock.time=START+50000000;var renewed=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(4L,report,null,null)),"renew").body(),EndpointCheckInAck.class).identity();assertNotNull(renewed);assertTrue(renewed.expiresAtUnixMs()>identity.expiresAtUnixMs());
         var device=codec.model(s.service.device(s.admin,"device").body(),EndpointDeviceRecord.class);assertEquals(4,device.reportSequence());

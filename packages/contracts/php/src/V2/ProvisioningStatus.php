@@ -14,12 +14,13 @@ final readonly class ProvisioningStatus implements \JsonSerializable {
         public ProvisioningState $state,
         public array $packages,
         public int $appliedAtUnixMs,
-        public ?string $previousProfileDigest = null
+        public ?string $previousProfileDigest = null,
+        public ?array $changes = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['profileId', 'profileDigest', 'generation', 'state', 'packages', 'appliedAtUnixMs', 'previousProfileDigest']) || array_diff(['profileId', 'profileDigest', 'generation', 'state', 'packages', 'appliedAtUnixMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['profileId', 'profileDigest', 'generation', 'state', 'packages', 'appliedAtUnixMs', 'previousProfileDigest', 'changes']) || array_diff(['profileId', 'profileDigest', 'generation', 'state', 'packages', 'appliedAtUnixMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -29,7 +30,8 @@ final readonly class ProvisioningStatus implements \JsonSerializable {
             ProvisioningState::from($data['state']),
             array_map(static fn ($item) => ProvisioningPackageStatus::fromArray($item), $data['packages']),
             $data['appliedAtUnixMs'],
-            array_key_exists('previousProfileDigest', $data) ? $data['previousProfileDigest'] : null
+            array_key_exists('previousProfileDigest', $data) ? $data['previousProfileDigest'] : null,
+            array_key_exists('changes', $data) ? array_map(static fn ($item) => ProfileChange::fromArray($item), $data['changes']) : null
         );
     }
 

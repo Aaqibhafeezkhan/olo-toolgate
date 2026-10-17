@@ -66,8 +66,10 @@ class EnterpriseAdministrationTest {
     }
     @Test void everyIndividualCreationAndGroupDeletionKeepsMandatoryMembership(){
         var tool=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.entries.get(Kind.TOOL.id("tool")).document());tool.put("id","new-tool");tool.put("enabled",false);((com.fasterxml.jackson.databind.node.ObjectNode)tool.get("definition")).put("id","new-tool");
-        var records=Map.of(Kind.USER,graph.codec.json(new ControlUser("created-user","Created",false,1L)),Kind.AGENT,graph.codec.json(new ControlAgent("created-agent","Created",null,false,1L,"bob")),Kind.DEVICE,graph.codec.json(new ControlDevice("created-device","Created",false,1L,"bob")),Kind.TOOL,graph.codec.json(tool));
-        var defaults=Map.of(Kind.USER,"team-default",Kind.AGENT,"default-agents",Kind.DEVICE,"default-devices",Kind.TOOL,"default-tools");
+        var records=Map.of(Kind.USER,graph.codec.json(new ControlUser("created-user","Created",false,1L)),Kind.AGENT,graph.codec.json(new ControlAgent("created-agent","Created",null,false,1L,"bob")),Kind.DEVICE,graph.codec.json(new ControlDevice("created-device","Created",false,1L,"bob")));
+        var defaults=Map.of(Kind.USER,"team-default",Kind.AGENT,"default-agents",Kind.DEVICE,"default-devices");
+        // Tools come only from installed packages (ADR 027): the directory API refuses to create one.
+        assertEquals(422,assertThrows(Failure.class,()->directory.mutate(administrator,Kind.TOOL,"new-tool","CREATE",graph.codec.json(tool),0,"create-new-tool","request")).status());
         for(var record:records.entrySet()){
             var id=((com.fasterxml.jackson.databind.JsonNode)graph.codec.value(record.getValue())).get("id").asText();
             assertEquals(201,directory.mutate(administrator,record.getKey(),id,"CREATE",record.getValue(),0,"create-"+id,"request").status());

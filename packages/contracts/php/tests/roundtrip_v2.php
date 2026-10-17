@@ -126,6 +126,8 @@ $models = [
     'ProvisioningState',
     'ProvisioningStatus',
     'ProvisioningStep',
+    'ProfileChange',
+    'ProfileChangeKind',
     'RecoveryEvent',
     'RecoveryRequest',
     'RefusalReason',

@@ -16,11 +16,14 @@ import java.util.concurrent.*;
 /** Applies the mounted deployment profile (TOOLGATE_CONTROL_PROFILE_PATH) after the installation, its configuration file
  *  and the core inventory check. An invalid profile or lock stops startup before any package changes. A profile waiting
  *  for a Tool Host, or one whose required package failed, keeps Control running for repair and is reapplied — an
- *  idempotent no-op once nothing changes — until it is READY. The profile selects; it never mints an identity or grant. */
+ *  idempotent no-op once nothing changes — until it is READY. A profile that names device groups is reapplied every
+ *  minute even when READY, so devices that join a group later receive its client releases. The profile selects; it never
+ *  mints an identity or grant. */
 @ApplicationScoped
 public class PackageProvisioningBootstrap {
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(PackageProvisioningBootstrap.class);
     @Inject Config config; @Inject PostgresStore store; @Inject ContractCodec codec; @Inject ServerPackages packages; @Inject Marketplace marketplace;
+    @Inject ClientReleases clients; @Inject FleetService fleet;
     private ScheduledExecutorService executor;
 
     PackageProvisioning service() throws java.io.IOException {
@@ -28,11 +31,11 @@ public class PackageProvisioningBootstrap {
         var inventory = lock.isEmpty() ? java.util.List.<CorePackageInventory.Artifact>of() : CorePackageInventory.load(Path.of(lock.get()));
         PackageProvisioning.CoreArtifacts core = (id, version) -> inventory.stream().filter(a -> a.id().equals(id) && a.version().equals(version)).findFirst()
             .map(a -> new PackageProvisioning.Core(a.packageDigest(), () -> { try { return a.bytes(); } catch (java.io.IOException changed) { throw Failure.unavailable(); } })).orElse(null);
-        return new PackageProvisioning(store, codec, packages, marketplace, core, java.time.Clock.systemUTC());
+        return new PackageProvisioning(store, codec, packages, marketplace, core, clients, fleet, java.time.Clock.systemUTC());
     }
 
     /** Reads recorded status only; it neither verifies artifacts nor contacts the Marketplace. */
-    PackageProvisioning reader() { return new PackageProvisioning(store, codec, packages, null, null, java.time.Clock.systemUTC()); }
+    PackageProvisioning reader() { return new PackageProvisioning(store, codec, packages, null, null, null, null, java.time.Clock.systemUTC()); }
 
     /** The installation's Super Admin, resolved through the central role resolver, as for the core inventory import. */
     private DirectoryService.Actor deployer(Ids.TenantId tenant) {
@@ -53,13 +56,14 @@ public class PackageProvisioningBootstrap {
             service = service(); tenant = new Ids.TenantId(config.getValue("toolgate.control.endpoint.tenant-id", String.class));
         } catch (Exception invalid) { throw new IllegalStateException("Deployment profile rejected; verify the profile file and the sealed core package lock", invalid); }
         String state = apply(service, tenant, profile, true);
-        if (state.equals("READY")) return;
+        boolean follows = service.followsDevices(profile);
+        if (state.equals("READY") && !follows) return;
         executor = Executors.newSingleThreadScheduledExecutor(r -> { var t = new Thread(r, "toolgate-profile-provisioning"); t.setDaemon(true); return t; });
-        schedule(service, tenant, profile, state);
+        schedule(service, tenant, profile, state, follows);
     }
 
-    private void schedule(PackageProvisioning service, Ids.TenantId tenant, String profile, String state) {
-        executor.schedule(() -> { String next = apply(service, tenant, profile, false); if (!next.equals("READY")) schedule(service, tenant, profile, next); },
+    private void schedule(PackageProvisioning service, Ids.TenantId tenant, String profile, String state, boolean follows) {
+        executor.schedule(() -> { String next = apply(service, tenant, profile, false); if (follows || !next.equals("READY")) schedule(service, tenant, profile, next, follows); },
             state.equals("PENDING") ? 15 : 60, TimeUnit.SECONDS);
     }
 

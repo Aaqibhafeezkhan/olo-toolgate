@@ -12,6 +12,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param packages canonical packages value
  * @param appliedAtUnixMs canonical appliedAtUnixMs value
  * @param previousProfileDigest canonical previousProfileDigest value
+ * @param changes canonical changes value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ProvisioningStatus(
@@ -21,7 +22,8 @@ public record ProvisioningStatus(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "state", required = true) ProvisioningState state,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "packages", required = true) java.util.List<ProvisioningPackageStatus> packages,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "appliedAtUnixMs", required = true) Long appliedAtUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "previousProfileDigest", required = false) String previousProfileDigest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "previousProfileDigest", required = false) String previousProfileDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "changes", required = false) java.util.List<ProfileChange> changes
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,6 +34,7 @@ public record ProvisioningStatus(
      * @param packages canonical packages value
      * @param appliedAtUnixMs canonical appliedAtUnixMs value
      * @param previousProfileDigest canonical previousProfileDigest value
+     * @param changes canonical changes value
      */
     public ProvisioningStatus {
         java.util.Objects.requireNonNull(profileId, "profileId");
@@ -41,5 +44,6 @@ public record ProvisioningStatus(
         java.util.Objects.requireNonNull(packages, "packages");
         packages = packages == null ? null : java.util.List.copyOf(packages);
         java.util.Objects.requireNonNull(appliedAtUnixMs, "appliedAtUnixMs");
+        changes = changes == null ? null : java.util.List.copyOf(changes);
     }
 }

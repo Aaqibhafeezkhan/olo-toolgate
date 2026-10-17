@@ -38,15 +38,12 @@ public record ClientCheckInPolicy(long checkInMs,int jitterPct,long offlineAfter
     /** Check-ins closer together than half the shortest jittered interval are request bursts, not transport jitter. */
     public long burstGuardMs(){return Math.max(1,(checkInMs-checkInMs*jitterPct/100)/2);}
 
-    /** The next interval for clients that negotiate milliseconds, spread by the jitter. */
+    /** The next check-in interval, spread by the jitter. */
     public long nextIntervalMs(){
         long spread=checkInMs*jitterPct/100;
         long value=spread==0?checkInMs:checkInMs-spread+java.util.concurrent.ThreadLocalRandom.current().nextLong(2*spread+1);
         return Math.max(500,value);
     }
-
-    /** Older clients only understand whole seconds, from 2 to 3600. */
-    public long nextIntervalSeconds(long intervalMs){return Math.min(3600,Math.max(2,(intervalMs+999)/1000));}
 
     public boolean offline(long lastSeenUnixMs,long now){return lastSeenUnixMs==0||now-lastSeenUnixMs>offlineAfterMs;}
 

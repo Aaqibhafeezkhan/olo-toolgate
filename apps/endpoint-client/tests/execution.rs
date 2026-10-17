@@ -289,6 +289,50 @@ async fn tool_protocol_v2_brokers_only_the_signed_file_access_for_authorized_pat
     );
 }
 
+/// Without a local Gateway credential a device runs only what Control relays and authorizes; a local call is refused
+/// before the tool starts.
+#[cfg(unix)]
+#[tokio::test]
+async fn without_a_local_gateway_credential_local_calls_are_refused() {
+    struct Directory(PathBuf);
+    impl Drop for Directory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let dir = Directory(std::env::temp_dir().join(format!(
+        "toolgate-relay-only-{}",
+        olo_toolgate_client::identity::nonce().unwrap()
+    )));
+    let _custody = olo_toolgate_client::storage::ProtectedStore::open(dir.0.clone()).unwrap();
+    let engine = fake_engine(&dir.0);
+    std::fs::write(
+        dir.0.join("requests"),
+        "
+
+",
+    )
+    .unwrap();
+    let mut manager = Manager::new(
+        settings(engine, dir.0.join("runtimes"), None),
+        Arc::new(olo_toolgate_client::execution::RelayOnly),
+    )
+    .unwrap();
+    let refused = manager
+        .invoke(
+            LocalToolInput {
+                protocol_version: 1,
+                request_id: "inv-local-1".into(),
+                tool_id: "acme.notes/notes.read".into(),
+                arguments: serde_json::from_value(json!({"path": "notes.txt"})).unwrap(),
+            },
+            olo_toolgate_client::now() + 60000,
+        )
+        .await;
+    assert_eq!(refused.err(), Some(Failure::Unauthorized));
+    assert!(!dir.0.join("input").exists(), "the tool never started");
+}
+
 /// Explicitly invoked by the real-engine CI gate with the Hello World package on the approved JRE base.
 #[tokio::test]
 #[ignore = "requires tools/client/runtime_check.py real Docker fixture provisioning"]

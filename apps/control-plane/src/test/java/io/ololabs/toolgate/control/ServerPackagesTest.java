@@ -197,6 +197,14 @@ final class ServerPackagesTest {
         var entry = (com.fasterxml.jackson.databind.node.ObjectNode) node(directory.get(actor, Ids.Kind.TOOL, "acme.orders/items.get").body());
         directory.mutate(actor, Ids.Kind.TOOL, "acme.orders/items.get", "UPDATE", entry.put("enabled", true).toString(), entry.get("revision").asLong(), "enable-1", "request-8");
         assertTrue(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))).enabled());
+        // Nothing else about a tool can change here, and no tool or extractor can be created outside a package.
+        var enabled = (com.fasterxml.jackson.databind.node.ObjectNode) node(directory.get(actor, Ids.Kind.TOOL, "acme.orders/items.get").body());
+        var swapped = enabled.deepCopy().put("packageDigest", "b".repeat(64));
+        assertEquals(422, assertThrows(Failure.class, () -> directory.mutate(actor, Ids.Kind.TOOL, "acme.orders/items.get", "UPDATE", swapped.toString(), enabled.get("revision").asLong(), "swap-1", "request-8a")).status());
+        var injected = enabled.deepCopy().put("id", "acme.orders/injected").put("name", "acme.orders/injected").put("revision", 1);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) injected.get("definition")).put("id", "acme.orders/injected");
+        assertEquals(422, assertThrows(Failure.class, () -> directory.mutate(actor, Ids.Kind.TOOL, "acme.orders/injected", "CREATE", injected.toString(), 0, "inject-1", "request-8b")).status());
+        assertNull(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/injected"))));
 
         // A configuration export with deployed tools imports again.
         var snapshot = directory.export(actor, false);

@@ -19,9 +19,10 @@ import java.util.function.Supplier;
  *
  *  The whole profile is validated before anything changes. Each pinned package is then imported through the ordinary
  *  verifier — the sealed core artifact from the image lock, or the exact signed Marketplace release — deployed to the
- *  Tool Hosts it names (which receive only its ServerTool exports), and its declared exports are enabled in their
- *  reviewed Tool Groups. Bindings named by the profile allow exactly the profile's packages that name them. A Tool Host
- *  that has not registered leaves the package PENDING; a pin, verifier, compatibility or reference failure leaves it
+ *  Tool Hosts it names (which receive only its ServerTool exports), released to the active devices of the device groups
+ *  it names (a signed client release, ADR 026, rolled out to members that do not hold it yet), and its declared exports
+ *  are enabled in their reviewed Tool Groups. Bindings named by the profile allow exactly the profile's packages that name them. A Tool Host
+ *  that has not registered, or a device group with no active device, leaves the package PENDING; a pin, verifier, compatibility or reference failure leaves it
  *  FAILED, and nothing is substituted. Repeating an identical profile changes nothing; removing an entry never
  *  uninstalls a package. Installation grants no runtime access: grants and policies stay separate reviewed records. */
 public final class PackageProvisioning {
@@ -30,9 +31,15 @@ public final class PackageProvisioning {
     public record Core(String packageDigest, Supplier<byte[]> bytes) {}
 
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
-    private final Store store; private final Codec codec; private final ServerPackages packages; private final Marketplace marketplace; private final CoreArtifacts core; private final Clock clock;
-    public PackageProvisioning(Store store, Codec codec, ServerPackages packages, Marketplace marketplace, CoreArtifacts core, Clock clock) {
-        this.store = store; this.codec = codec; this.packages = packages; this.marketplace = marketplace; this.core = core; this.clock = clock;
+    private final Store store; private final Codec codec; private final ServerPackages packages; private final Marketplace marketplace; private final CoreArtifacts core;
+    private final ClientReleases clients; private final FleetService fleet; private final Clock clock;
+    public PackageProvisioning(Store store, Codec codec, ServerPackages packages, Marketplace marketplace, CoreArtifacts core, ClientReleases clients, FleetService fleet, Clock clock) {
+        this.store = store; this.codec = codec; this.packages = packages; this.marketplace = marketplace; this.core = core; this.clients = clients; this.fleet = fleet; this.clock = clock;
+    }
+
+    /** Whether a profile names device groups: their membership changes after READY, so the profile keeps being reapplied. */
+    public boolean followsDevices(String document) {
+        return codec.model(document, DeploymentProfile.class).packages().stream().anyMatch(p -> p.deviceGroupIds() != null && !p.deviceGroupIds().isEmpty());
     }
 
     private JsonNode node(String document) { return (JsonNode) codec.value(document); }
@@ -53,12 +60,14 @@ public final class PackageProvisioning {
             }
             var hosts = p.hostIds() == null ? List.<String>of() : p.hostIds();
             if (new HashSet<>(hosts).size() != hosts.size()) throw refused(p.packageId() + " names a Tool Host twice");
+            var groups = p.deviceGroupIds() == null ? List.<String>of() : p.deviceGroupIds();
+            if (new HashSet<>(groups).size() != groups.size()) throw refused(p.packageId() + " names a device group twice");
             var tools = new HashSet<String>();
             for (var t : p.tools() == null ? List.<io.ololabs.toolgate.contracts.v2.ProfileToolActivation>of() : p.tools()) {
                 if (!t.toolId().startsWith(p.packageId() + "/")) throw refused(t.toolId() + " is not an export of " + p.packageId());
                 if (!tools.add(t.toolId())) throw refused(t.toolId() + " is activated twice");
             }
-            if (!tools.isEmpty() && hosts.isEmpty()) throw refused(p.packageId() + " activates exports without a deployment target");
+            if (!tools.isEmpty() && hosts.isEmpty() && groups.isEmpty()) throw refused(p.packageId() + " activates exports without a Tool Host or device group");
         }
     }
 
@@ -71,7 +80,7 @@ public final class PackageProvisioning {
         var before = new HashMap<String, JsonNode>();
         if (previous != null) for (var p : node(previous.document()).path("packages")) before.put(p.path("packageId").asText(), p);
 
-        var statuses = new ArrayList<ObjectNode>(); var digests = new HashMap<String, String>();
+        var statuses = new ArrayList<ObjectNode>(); var digests = new HashMap<String, Set<String>>();
         for (var p : profile.packages()) {
             var status = JSON.objectNode().put("packageId", p.packageId()).put("version", p.version()).put("required", p.required());
             statuses.add(status);
@@ -90,11 +99,16 @@ public final class PackageProvisioning {
             if (current != null) {
                 var old = (ObjectNode) node(current.document());
                 // An identical outcome of an identical profile is the same generation: nothing to record.
-                var comparable = old.deepCopy(); comparable.remove("appliedAtUnixMs"); comparable.remove("previousProfileDigest");
+                var comparable = old.deepCopy(); comparable.remove("appliedAtUnixMs"); comparable.remove("previousProfileDigest"); comparable.remove("changes");
                 if (Canonical.digest(comparable).equals(Canonical.digest(result)) && current.profileDigest().equals(profileDigest)) return new Store.Reply(200, current.document(), current.generation());
                 result.put("generation", current.generation() + 1);
-                if (!current.profileDigest().equals(profileDigest)) result.put("previousProfileDigest", current.profileDigest());
-                else if (old.has("previousProfileDigest")) result.set("previousProfileDigest", old.get("previousProfileDigest"));
+                if (!current.profileDigest().equals(profileDigest)) {
+                    result.put("previousProfileDigest", current.profileDigest());
+                    var changes = changes(before, statuses); if (!changes.isEmpty()) result.set("changes", changes);
+                } else {
+                    if (old.has("previousProfileDigest")) result.set("previousProfileDigest", old.get("previousProfileDigest"));
+                    if (old.has("changes")) result.set("changes", old.get("changes"));
+                }
             }
             result.put("appliedAtUnixMs", clock.millis());
             codec.model(codec.json(result), io.ololabs.toolgate.contracts.v2.ProvisioningStatus.class);
@@ -105,7 +119,28 @@ public final class PackageProvisioning {
         });
     }
 
-    private void provision(DirectoryService.Actor actor, ProfilePackage p, ObjectNode status, JsonNode before, Map<String, String> digests) {
+    /** What a changed profile changes, package by package, for review: added, re-pinned, or dropped (and still installed). */
+    private static ArrayNode changes(Map<String, JsonNode> before, List<ObjectNode> statuses) {
+        var changes = JSON.arrayNode(); var seen = new HashSet<String>();
+        for (var now : statuses) {
+            String id = now.path("packageId").asText(); seen.add(id); var was = before.get(id);
+            if (was == null) {
+                var change = changes.addObject().put("packageId", id).put("change", "ADDED").put("version", now.path("version").asText());
+                if (now.has("packageDigest")) change.put("packageDigest", now.path("packageDigest").asText());
+            } else if (!was.path("version").asText().equals(now.path("version").asText()) || !was.path("packageDigest").asText().equals(now.path("packageDigest").asText())) {
+                var change = changes.addObject().put("packageId", id).put("change", "CHANGED").put("previousVersion", was.path("version").asText()).put("version", now.path("version").asText());
+                if (was.has("packageDigest")) change.put("previousPackageDigest", was.path("packageDigest").asText());
+                if (now.has("packageDigest")) change.put("packageDigest", now.path("packageDigest").asText());
+            }
+        }
+        for (var e : new TreeMap<>(before).entrySet()) if (!seen.contains(e.getKey())) {
+            var change = changes.addObject().put("packageId", e.getKey()).put("change", "REMOVED").put("previousVersion", e.getValue().path("version").asText());
+            if (e.getValue().has("packageDigest")) change.put("previousPackageDigest", e.getValue().path("packageDigest").asText());
+        }
+        return changes;
+    }
+
+    private void provision(DirectoryService.Actor actor, ProfilePackage p, ObjectNode status, JsonNode before, Map<String, Set<String>> digests) {
         // 1. Import through the ordinary verifier.
         status.put("step", "IMPORT");
         String digest;
@@ -121,7 +156,8 @@ public final class PackageProvisioning {
         }
         var stored = version(actor, digest);
         if (stored == null || !stored.packageId().equals(p.packageId()) || !stored.version().equals(p.version())) throw refused(p.packageId() + " " + p.version() + " did not import as pinned");
-        digests.put(p.packageId(), digest);
+        var allowed = new TreeSet<String>(); allowed.add(hex(digest)); digests.put(p.packageId(), allowed);
+        var expected = new HashMap<String, String>();  // toolId -> packageDigest of its directory record
 
         // 2. Deploy eligible exports to the named Tool Hosts.
         var hosts = new TreeSet<>(p.hostIds() == null ? List.<String>of() : p.hostIds());
@@ -141,10 +177,41 @@ public final class PackageProvisioning {
                 var targets = request.putArray("hostIds"); hosts.forEach(targets::add);
                 deployment = node(packages.deploy(actor, codec.json(request), "profile-deploy-" + hex(digest).substring(0, 24) + "-" + hex(globalsDigest).substring(0, 8)).body());
             }
-            deployment.path("toolIds").forEach(id -> toolIds.add(id.asText()));
+            deployment.path("toolIds").forEach(id -> { toolIds.add(id.asText()); expected.put(id.asText(), hex(digest)); });
         }
 
-        // 3. Enable the declared exports in their reviewed groups. Unknown exports block; nothing is created for them.
+        // 3. Release device-runnable exports to the active devices of the named groups.
+        var groups = new TreeSet<>(p.deviceGroupIds() == null ? List.<String>of() : p.deviceGroupIds());
+        boolean waitingForDevice = false;
+        if (!groups.isEmpty()) {
+            status.put("step", "RELEASE");
+            var groupIds = status.putArray("deviceGroupIds"); groups.forEach(groupIds::add);
+            if (clients == null || !clients.configured()) throw refused("Devices need client images configured (TOOLGATE_CONTROL_CLIENT_IMAGES_*) to receive " + p.packageId());
+            if (!clients.signs()) throw refused("Devices need the package-release key (TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH) to sign " + p.packageId());
+            var document = fleet.document(actor, p.packageId(), p.version());
+            if (document == null) {
+                clients.release(actor, codec.json(JSON.objectNode().put("packageDigest", digest)), "profile-release-" + hex(digest).substring(0, 32));
+                document = fleet.document(actor, p.packageId(), p.version());
+                if (document == null) throw refused("The client release of " + p.packageId() + " " + p.version() + " was not recorded");
+            }
+            for (var tool : document.tools()) {
+                String managed = tool.authorizationProfile().tool().packageDigest();
+                toolIds.add(tool.toolId()); expected.put(tool.toolId(), managed); allowed.add(managed);
+            }
+            status.put("step", "ROLLOUT");
+            var targets = fleet.targets(actor, p.packageId(), p.version(), groups);
+            var missing = targets.members().stream().filter(d -> !targets.assigned().contains(d)).toList();
+            if (!missing.isEmpty()) {
+                String id = "profile-" + DirectoryService.digest(p.packageId() + "\n" + p.version() + "\n" + String.join(",", missing)).substring(0, 40);
+                var request = JSON.objectNode().put("id", id).put("packageId", p.packageId()).put("version", p.version()).put("desiredPresence", true).put("percentage", 100);
+                var devices = request.putArray("deviceIds"); missing.forEach(devices::add);
+                fleet.rollout(actor, codec.json(request), id, id);
+            }
+            var deviceIds = status.putArray("deviceIds"); targets.members().forEach(deviceIds::add);
+            waitingForDevice = targets.members().isEmpty();
+        }
+
+        // 4. Enable the declared exports in their reviewed groups. Unknown exports block; nothing is created for them.
         status.put("step", "ACTIVATE");
         var activations = p.tools() == null ? List.<io.ololabs.toolgate.contracts.v2.ProfileToolActivation>of() : p.tools();
         if (!activations.isEmpty()) store.transaction(actor.tenant(), true, tx -> {
@@ -153,7 +220,8 @@ public final class PackageProvisioning {
             var directory = tx.load(); var entries = new HashMap<>(directory.entries()); boolean changed = false;
             for (var t : activations) {
                 var entry = entries.get(Kind.TOOL.id(t.toolId()));
-                if (entry == null || !hex(digest).equals(node(entry.document()).path("packageDigest").asText())) throw refused(t.toolId() + " is not an installed export of " + p.packageId() + " " + p.version());
+                String recorded = expected.getOrDefault(t.toolId(), hex(digest));
+                if (entry == null || !recorded.equals(node(entry.document()).path("packageDigest").asText())) throw refused(t.toolId() + " is not an installed export of " + p.packageId() + " " + p.version());
                 if (!entries.containsKey(Kind.TOOL_GROUP.id(t.toolGroupId()))) throw refused("Tool Group " + t.toolGroupId() + " does not exist");
                 if (!entry.enabled()) {
                     var tool = (ObjectNode) node(entry.document()); tool.put("enabled", true).put("revision", tool.path("revision").asLong() + 1);
@@ -166,17 +234,18 @@ public final class PackageProvisioning {
             if (changed) save(tx, actor, directory, entries, "PROFILE_ACTIVATE", "package:" + p.packageId());
             return null;
         });
+        if (waitingForDevice) { status.put("state", "PENDING").put("reason", bounded("Waiting for an active device in " + String.join(", ", groups))); return; }
         status.put("step", "DONE").put("state", "READY");
     }
 
     /** Each binding the profile names allows exactly the imported profile packages that name it. */
-    private void bindings(DirectoryService.Actor actor, DeploymentProfile profile, Map<String, String> digests, List<ObjectNode> statuses) {
+    private void bindings(DirectoryService.Actor actor, DeploymentProfile profile, Map<String, Set<String>> digests, List<ObjectNode> statuses) {
         var named = new TreeMap<String, TreeSet<String>>(); var owners = new HashMap<String, List<ObjectNode>>();
         for (int i = 0; i < profile.packages().size(); i++) {
             var p = profile.packages().get(i);
             for (var binding : p.bindingIds() == null ? List.<String>of() : p.bindingIds()) {
                 named.computeIfAbsent(binding, b -> new TreeSet<>()); owners.computeIfAbsent(binding, b -> new ArrayList<>()).add(statuses.get(i));
-                if (digests.containsKey(p.packageId())) named.get(binding).add(hex(digests.get(p.packageId())));
+                if (digests.containsKey(p.packageId())) named.get(binding).addAll(digests.get(p.packageId()));
             }
         }
         for (var e : named.entrySet()) {
