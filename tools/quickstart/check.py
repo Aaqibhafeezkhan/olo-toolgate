@@ -230,30 +230,43 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             return {t['toolId'] for t in ok(api('/api/control/v1/access/human/catalog',token or admin,target,'POST'))['tools']}
         assert catalog()==set()
         mark('Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery')
-        # Keep the maker/checker regression scoped. Reviewer 2 is the installation
-        # owner; admin and reviewer 1 use the same full-scope restrictive role.
+        # Keep the maker/checker regression scoped. The setup login (admin) keeps Super Admin authority, which
+        # Control protects: downgrading the Role it holds is refused. Reviewer 2 is a second installation owner
+        # through an ordinary Role and Team; reviewer 1 is the maker, with a full-scope restrictive Role.
         # This also proves the live Super Admin exception uses the ordinary APIs.
         management=ok(api('/api/control/v1/roles/installation-management',admin))
+        refused=api('/api/control/v1/roles/'+management['id'],admin,{**management,'portalRole':'ADMINISTRATOR'},
+            'PUT',revision=management['revision'])
+        assert refused[0]==409,refused
         super_role={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1,'managementRules':[]}
         ok(api('/api/control/v1/roles',admin,super_role,'POST'),201)
         ok(api('/api/control/v1/teams',admin,dict(id='smoke-super-team',name='Smoke installation owners',
             enabled=True,revision=1,userIds=['reviewer-2'],roleIds=[super_role['id']]),'POST'),201)
-        ok(api('/api/control/v1/roles/'+management['id'],admin,{**management,'portalRole':'ADMINISTRATOR'},
-            'PUT',revision=management['revision']))
+        restricted={**management,'id':'smoke-restricted-management','name':'Smoke restricted administrator',
+                    'revision':1,'portalRole':'ADMINISTRATOR'}
+        ok(api('/api/control/v1/roles',admin,restricted,'POST'),201)
+        ok(api('/api/control/v1/teams',admin,dict(id='smoke-makers',name='Smoke makers',
+            enabled=True,revision=1,userIds=['reviewer-1'],roleIds=[restricted['id']]),'POST'),201)
+        owners=ok(api('/api/control/v1/teams/installation-administrators',admin))
+        ok(api('/api/control/v1/teams/installation-administrators',admin,
+            {**owners,'userIds':[u for u in owners['userIds'] if u!='reviewer-1']},'PUT',revision=owners['revision']))
         def transition(change,action,user):
             return ok(api('/api/control/v1/configuration-changes/'+change['id']+'/transition',tokens[user],
                 {'action':action,'expectedRevision':change['revision']},'POST'))
         def reviewed(path,document,method='POST',revision=None):
-            key=secrets.token_hex(16)
-            change=ok(api(path,admin,document,method,key,revision),202)
-            assert ok(api(path,admin,document,method,key,revision),202)['id']==change['id']
-            change=transition(change,'SUBMIT','admin')
-            denied=api('/api/control/v1/configuration-changes/'+change['id']+'/transition',admin,
+            maker=tokens['reviewer-1'];key=secrets.token_hex(16)
+            change=ok(api(path,maker,document,method,key,revision),202)
+            assert ok(api(path,maker,document,method,key,revision),202)['id']==change['id']
+            change=transition(change,'SUBMIT','reviewer-1')
+            denied=api('/api/control/v1/configuration-changes/'+change['id']+'/transition',maker,
                 {'action':'APPROVE','expectedRevision':change['revision']},'POST')
             assert denied[0]==403,denied
-            for reviewer in ('reviewer-1','reviewer-2')[:change['requiredReviews']]:
+            # A Super Admin's review approves at once; ordinary reviews count toward requiredReviews.
+            for reviewer in ('admin','reviewer-2'):
+                if change['state']!='PENDING':break
                 change=transition(change,'APPROVE',reviewer)
-            return transition(change,'APPLY','admin')
+            assert change['state']=='APPROVED',change
+            return transition(change,'APPLY','reviewer-1')
         # The public UI adapter only accepts its local password identities; use Core's
         # real TLS interface for an externally verified identity with no directory claim.
         with tempfile.TemporaryDirectory(prefix='toolgate-public-ca-') as certs:
