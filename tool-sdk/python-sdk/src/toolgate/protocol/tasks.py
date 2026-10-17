@@ -436,4 +436,3 @@ def _task_id(params: Dict[str, Any]) -> str:
 
 def _not_found() -> ProtocolError:
     return ProtocolError(INVALID_PARAMS, "Task not found")
-

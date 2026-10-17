@@ -111,4 +111,3 @@ class RequestStates:
 
 def _refused() -> ProtocolError:
     return ProtocolError(INVALID_PARAMS, "Invalid requestState")
-
