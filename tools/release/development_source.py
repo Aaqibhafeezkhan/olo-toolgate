@@ -59,8 +59,10 @@ def verify(info):
     expected = load()
     if any(info.get(key) != value for key, value in expected.items()):
         raise ValueError('Built development metadata differs from the selected source/version')
-    if (expected['runId'], expected['runAttempt']) != (os.environ['GITHUB_RUN_ID'], os.environ.get('GITHUB_RUN_ATTEMPT', '1')):
-        raise ValueError('Development artifacts belong to another workflow attempt')
+    # Re-running failed jobs reuses the selection of an earlier attempt of the same run: it publishes that identity
+    # again, replacing what the earlier attempt published.
+    if expected['runId'] != os.environ['GITHUB_RUN_ID'] or int(os.environ.get('GITHUB_RUN_ATTEMPT', '1')) < int(expected['runAttempt']):
+        raise ValueError('Development artifacts belong to another workflow run')
     return expected
 
 

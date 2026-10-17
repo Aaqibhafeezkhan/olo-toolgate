@@ -28,7 +28,10 @@ class GithubReleaseTests(unittest.TestCase):
     def command(self, *args, capture=False):
         self.calls.append(args)
         result = ''
-        if args[:2] == ('gh','api'):
+        if args[:4] == ('gh','api','-X','DELETE'):
+            asset = int(args[4].rsplit('/',1)[1])
+            self.remote = {name:item for name,item in self.remote.items() if item['id'] != asset}
+        elif args[:2] == ('gh','api'):
             if '/releases/tags/' in args[2]:
                 if self.current is None or self.current['draft']:
                     raise subprocess.CalledProcessError(1,args,output='{"status":"404"}')
@@ -47,7 +50,7 @@ class GithubReleaseTests(unittest.TestCase):
                 raise subprocess.CalledProcessError(1,args)
         elif args[:3] == ('gh','release','upload'):
             path = Path(args[4])
-            self.remote[path.name] = {'name':path.name,'size':path.stat().st_size,
+            self.remote[path.name] = {'id':len(self.calls),'name':path.name,'size':path.stat().st_size,
                 'digest':'sha256:'+hashlib.sha256(path.read_bytes()).hexdigest(),'state':'uploaded'}
             if self.fail_upload:
                 raise subprocess.CalledProcessError(1,args)
@@ -90,6 +93,21 @@ class GithubReleaseTests(unittest.TestCase):
         self.calls.clear()
         self.publish()
         self.assertTrue(all(call[:2] == ('gh','api') for call in self.calls))
+
+    def test_rerun_replaces_changed_and_stale_assets_of_a_published_release(self):
+        self.publish()
+        (self.folder/'package.zip').write_bytes(b'rebuilt package')
+        self.remote['old.zip'] = {'id':999,'name':'old.zip','size':1,'digest':'sha256:old','state':'uploaded'}
+        self.calls.clear()
+        github_release.publish(self.command,'olo-labs/olo-toolgate','dev-test','a'*40,
+                               self.folder,'development','notes.md',replace=True)
+        deleted = [call[4] for call in self.calls if call[:4] == ('gh','api','-X','DELETE')]
+        self.assertEqual(len(deleted),2)
+        uploads = [Path(call[4]).name for call in self.calls if call[:3] == ('gh','release','upload')]
+        self.assertEqual(uploads,['package.zip'])
+        self.assertEqual(set(self.remote),{'package.zip','SHA256SUMS'})
+        self.assertEqual(self.remote['package.zip']['digest'],'sha256:'+hashlib.sha256(b'rebuilt package').hexdigest())
+        self.assertFalse(self.current['draft'])
 
     def test_stable_release_is_not_marked_as_a_prerelease(self):
         github_release.publish(self.command,'olo-labs/olo-toolgate','dev-test','a'*40,

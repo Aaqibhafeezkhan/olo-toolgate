@@ -73,8 +73,13 @@ class ManualSourceTests(unittest.TestCase):
             for key, value in [('sourceBranch','main'), ('commit','b'*40), ('version','9.0.0')]:
                 with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'differs'):
                     source.verify({**info, key:value})
-            with patch.dict(os.environ, GITHUB_RUN_ATTEMPT='2'), self.assertRaisesRegex(ValueError, 'another'):
+            # Re-running failed jobs publishes the identity the first attempt selected.
+            with patch.dict(os.environ, GITHUB_RUN_ATTEMPT='2'):
                 source.verify(info)
+            with patch.dict(os.environ, GITHUB_RUN_ID='654321'), self.assertRaisesRegex(ValueError, 'another'):
+                source.verify(info)
+        with patch.object(source, 'load', return_value={**info, 'runAttempt':'2'}), self.assertRaisesRegex(ValueError, 'another'):
+            source.verify({**info, 'runAttempt':'2'})
 
     def test_feature_sharing_main_sha_never_pushes_shared_dev_and_stale_head_has_no_branch_alias(self):
         for current in (True, False):
@@ -91,7 +96,8 @@ class ManualSourceTests(unittest.TestCase):
             self.assertTrue(any('heads/feature%2Ftest' in args[-1] for args in calls if args[0] == 'gh'))
 
     def test_npm_publishes_exact_prepared_version_and_restricts_dev_alias(self):
-        for branch, current in [('main',True), ('feature/test',True), ('main',False)]:
+        # The last case is a rerun: the version an earlier attempt published is deleted, then published again.
+        for branch, current, published in [('main',True,False), ('feature/test',True,False), ('main',False,False), ('main',True,True)]:
             with tempfile.TemporaryDirectory() as directory:
                 assets = Path(directory)
                 info = self.select(branch)
@@ -103,10 +109,16 @@ class ManualSourceTests(unittest.TestCase):
                 with patch.object(manual, 'ASSETS', assets), patch.object(source, 'load', return_value=info), \
                      patch.object(images, 'current_head', return_value=current), patch.object(manual, 'run') as run, \
                      patch.dict(os.environ, GITHUB_REPOSITORY='owner/repo'):
+                    versions = [[{'id':7,'name':info['version']}]] if published else [[{'id':6,'name':'0.0.1'}]]
+                    run.side_effect = lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, stdout=json.dumps(versions))
                     manual.publish_typescript()
                 commands = [c.args for c in run.call_args_list]
-                self.assertIn('--ignore-scripts', commands[0])
-                self.assertIn('--tag', commands[0])
+                deletes = [c for c in commands if c[:4] == ('gh','api','-X','DELETE')]
+                self.assertEqual(deletes, [('gh','api','-X','DELETE','orgs/owner/packages/npm/toolgate-contracts/versions/7')] if published else [])
+                publish = next(c for c in commands if c[:2] == ('npm','publish'))
+                self.assertLess(commands.index(deletes[0]) if deletes else -1, commands.index(publish))
+                self.assertIn('--ignore-scripts', publish)
+                self.assertIn('--tag', publish)
                 tags = [c[4] for c in commands if c[:3] == ('npm','dist-tag','add')]
                 self.assertEqual('dev' in tags, branch == 'main' and current)
                 self.assertEqual(len(tags), (2 if branch == 'main' else 1) if current else 0)
