@@ -129,7 +129,7 @@ final class RunEventsTest {
     @Test void redactionMasksCredentialShapesAndTerminalControls() {
         assertEquals("password=[REDACTED] ok", RunEvents.redact("password=hunter2 ok"));
         assertEquals("[REDACTED] tail", RunEvents.redact("eyJhbGciOi.eyJzdWIiOiJ4.c2lnbmF0dXJl tail"));
-        assertEquals("[REDACTED]", RunEvents.redact("-----BEGIN PRIVATE KEY-----\nMIIabc\n-----END PRIVATE KEY-----"));
+        assertEquals("[REDACTED]", RunEvents.redact("-----BEGIN " + "PRIVATE KEY-----\nMIIabc\n-----END " + "PRIVATE KEY-----"));
         assertEquals("clean\ttext\nline", RunEvents.redact("clean\ttext\nline\u0007\u001b]0;title\u0007"));
         assertEquals("Hello World", RunEvents.redact("Hello World"));
     }

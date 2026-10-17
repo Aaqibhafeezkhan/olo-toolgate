@@ -113,11 +113,9 @@ fn exact_versions_and_closed_configuration_fail_safely() {
     assert!(
         adapters::verify_version(b"secret\nopenjdk version \"21.0.12.1\"", "21.0.12+1").is_err()
     );
-    let original = settings(
-        "/usr/bin/docker".into(),
-        "/var/lib/olo-toolgate/runtimes".into(),
-        None,
-    );
+    // Absolute on every platform; validation never touches these paths.
+    let base = std::env::temp_dir();
+    let original = settings(base.join("docker"), base.join("runtimes"), None);
     original.validate().unwrap();
     let mut bad = original.clone();
     bad.runtimes[0].image = "eclipse-temurin:latest".into();

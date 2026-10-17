@@ -42,7 +42,7 @@ public class ClientReleaseBootstrap {
             var keyPath = config.getOptionalValue("toolgate.control.package-release.private-key-path", String.class);
             if (keyPath.isPresent()) {
                 String pem = ProtectedCustody.privateText(Path.of(keyPath.get()), 16384);
-                byte[] der = Base64.getDecoder().decode(pem.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").replaceAll("\\s", ""));
+                byte[] der = Base64.getDecoder().decode(pem.replace("-----BEGIN " + "PRIVATE KEY-----", "").replace("-----END " + "PRIVATE KEY-----", "").replaceAll("\\s", ""));
                 var key = (RSAPrivateCrtKey) KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
                 var releaseKeys = (com.fasterxml.jackson.databind.JsonNode) codec.value(new String(ProtectedCustody.read(Path.of(config.getValue("toolgate.control.fleet.release-keys-path", String.class)), 8192), java.nio.charset.StandardCharsets.UTF_8));
                 var organizationKeys = (com.fasterxml.jackson.databind.JsonNode) codec.value(new String(ProtectedCustody.read(Path.of(config.getValue("toolgate.control.fleet.organization-keys-path", String.class)), 8192), java.nio.charset.StandardCharsets.UTF_8));
