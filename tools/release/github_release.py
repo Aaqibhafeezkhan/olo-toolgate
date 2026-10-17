@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Resume draft prerelease uploads without replacing existing remote artifacts."""
+"""Resume draft prerelease uploads; development reruns replace the assets of their own release."""
 import hashlib
 import json
 import subprocess
@@ -50,7 +50,9 @@ def assets(run, repo, release_id):
     return result
 
 
-def publish(run, repo, tag, commit, folder, title, notes, prerelease=True):
+def publish(run, repo, tag, commit, folder, title, notes, prerelease=True, replace=False):
+    """Uploads folder as the release tag. With replace, remote assets that differ from or are absent in folder are
+    deleted and uploaded again, even on a published release; otherwise they are refused."""
     files = sorted(path for path in folder.iterdir() if path.is_file())
     expected = {path.name:('sha256:'+hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size) for path in files}
     if not expected or 'SHA256SUMS' not in expected:
@@ -74,6 +76,11 @@ def publish(run, repo, tag, commit, folder, title, notes, prerelease=True):
     if not current['draft'] and current.get('prerelease', prerelease) != prerelease:
         raise ValueError('Published release channel differs from the prepared channel')
     remote = assets(run, repo, current['id'])
+    if replace:
+        for name, item in remote.items():
+            if name not in expected or (item.get('digest'), item.get('size')) != expected[name] or item.get('state') != 'uploaded':
+                run('gh', 'api', '-X', 'DELETE', f'repos/{repo}/releases/assets/{item["id"]}')
+        remote = assets(run, repo, current['id'])
 
     def verify(remote):
         for name, item in remote.items():
@@ -81,7 +88,7 @@ def publish(run, repo, tag, commit, folder, title, notes, prerelease=True):
                 raise ValueError('Existing release asset does not match prepared bytes: '+name)
 
     verify(remote)
-    if not current['draft']:
+    if not current['draft'] and not replace:
         if set(remote) != set(expected):
             raise ValueError('Published release has an incomplete asset set')
         return  # A completed retry must not mutate the published release.

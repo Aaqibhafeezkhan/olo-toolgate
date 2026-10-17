@@ -131,7 +131,19 @@ def publish():
         'Library version: `'+info['libraryVersion']+'`. Container digests and checksums are attached.\n\n'
         +(ASSETS/'RELEASE-NOTES.md').read_text(encoding='utf-8'), encoding='utf-8')
     github_release.publish(run, repo, info['releaseTag'], info['commit'], ASSETS,
-                           'ToolGate manual development '+info['commit'][:12], notes)
+                           'ToolGate manual development '+info['commit'][:12], notes, replace=True)
+
+
+def npm_version_id(owner, version):
+    """The GitHub Packages id of this contracts version, or None when it was never published."""
+    try:
+        pages = json.loads(run('gh', 'api', f'orgs/{owner}/packages/npm/toolgate-contracts/versions?per_page=100',
+                               '--paginate', '--slurp', capture=True).stdout)
+    except subprocess.CalledProcessError as error:
+        if '404' in (error.stdout or '') + (error.stderr or ''):
+            return None
+        raise
+    return next((item['id'] for page in pages for item in page if item['name'] == version), None)
 
 
 def publish_typescript():
@@ -145,6 +157,11 @@ def publish_typescript():
         raise ValueError('TypeScript archive differs from selected package identity')
     # Each run has an immutable version; branch aliases only follow the current head.
     tag = 'dev-run-'+info['runId']+'-'+info['runAttempt']
+    # npm never overwrites a version: a rerun deletes the version its earlier attempt published, then publishes again.
+    owner = os.environ['GITHUB_REPOSITORY'].split('/')[0]
+    existing = npm_version_id(owner, info['version'])
+    if existing is not None:
+        run('gh', 'api', '-X', 'DELETE', f'orgs/{owner}/packages/npm/toolgate-contracts/versions/{existing}')
     run('npm', 'publish', str(package), '--registry', 'https://npm.pkg.github.com',
         '--tag', tag, '--ignore-scripts')
     if image_publication.current_head(run, os.environ['GITHUB_REPOSITORY'], info['sourceBranch'], info['commit']):

@@ -83,7 +83,11 @@ to the original selection artifact pinned by its immutable artifact ID, and publ
 executing selected source code. Core and TypeScript publishers run independently
 after the build; failure of one does not skip the other.
 
-Registry publication is not atomic. Inspect partial publication on failure; use a
-new manual run for fresh package coordinates after fixing the cause. Runs for the
+Registry publication is not atomic. **Re-run failed jobs** on the same workflow run
+to finish a failed publication: a later attempt publishes the version the first
+attempt selected and replaces what that version already published (image and Helm
+tags are pushed again, differing or stale GitHub release assets are deleted and
+uploaded again, and an existing npm version is deleted before it is published
+again). Use a new manual run for fresh package coordinates. Runs for the
 same source branch are serialized. GitHub concurrency may replace an older pending
 run with a newer pending run; it is not a FIFO release queue.
