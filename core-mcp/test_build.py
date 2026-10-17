@@ -18,11 +18,19 @@ class InventoryTest(unittest.TestCase):
             path.write_text(document if isinstance(document, str) else json.dumps(document), encoding="utf-8")
             return list(build.inventory(path))
 
-    def test_initial_inventory_builds_one_package_through_java_sdk(self):
+    def test_inventory_builds_through_both_sdk_adapters(self):
         packages = list(build.inventory(build.CORE / "core-packages.build.json"))
-        self.assertEqual(1, len(packages))
-        self.assertEqual("java-gradle", packages[0][0]["sdk"])
-        self.assertEqual(build.CORE / "hello-world", packages[0][1])
+        self.assertEqual([("ololabs.hello-world", "java-gradle", build.CORE / "hello-world"),
+                          ("ololabs.echo", "json", build.CORE / "echo")],
+                         [(p["id"], p["sdk"], project) for p, project in packages])
+
+    def test_json_projects_build_from_a_copy_pinned_to_the_build_sdk_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            staged = build.pinned_json_project(build.CORE / "echo", Path(directory) / "echo", "9.9.9-dev.1.2.gabc")
+            self.assertEqual("9.9.9-dev.1.2.gabc", json.loads((staged / "toolgate.json").read_text())["sdkVersion"])
+            source = json.loads((build.CORE / "echo" / "toolgate.json").read_text())
+            self.assertEqual({k: v for k, v in source.items() if k != "sdkVersion"},
+                             {k: v for k, v in json.loads((staged / "toolgate.json").read_text()).items() if k != "sdkVersion"})
 
     def test_rejects_duplicate_keys_unsupported_adapters_and_outside_projects(self):
         initial = json.loads((build.CORE / "core-packages.build.json").read_text())
