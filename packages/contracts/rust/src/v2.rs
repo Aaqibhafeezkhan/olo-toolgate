@@ -1348,6 +1348,12 @@ pub struct ProvisioningStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changes: Option<Vec<ProfileChange>>,
 }
+/// The latest ProvisioningStatus of every applied deployment profile, by profile id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningStatusPage {
+    pub items: Vec<ProvisioningStatus>,
+}
 /// Canonical ProvisioningStep wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProvisioningStep {

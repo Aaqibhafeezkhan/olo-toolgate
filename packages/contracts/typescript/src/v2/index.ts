@@ -712,6 +712,10 @@ export interface ProvisioningStatus {
   readonly previousProfileDigest?: string;
   readonly changes?: ReadonlyArray<ProfileChange>;
 }
+/** The latest ProvisioningStatus of every applied deployment profile, by profile id. */
+export interface ProvisioningStatusPage {
+  readonly items: ReadonlyArray<ProvisioningStatus>;
+}
 export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "RELEASE" | "ROLLOUT" | "ACTIVATE" | "DONE";
 /** Supersedes kills after two-person review. Issuer is always control. */
 export interface RecoveryEvent {

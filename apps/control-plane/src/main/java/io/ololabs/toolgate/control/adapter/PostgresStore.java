@@ -206,6 +206,13 @@ public class PostgresStore implements Store {
                         return rows.next()?new Provisioning(profileId,rows.getLong(1),rows.getString(2),rows.getString(3)):null;
                     }catch(SQLException failure){throw Failure.unavailable();}
                 }
+                public java.util.List<Provisioning> provisionings(){
+                    try(var s=statement("SELECT profile_id,generation,profile_digest,document FROM control_package_provisioning WHERE tenant_id=? ORDER BY profile_id LIMIT 64");var rows=s.executeQuery()){
+                        var all=new java.util.ArrayList<Provisioning>();
+                        while(rows.next())all.add(new Provisioning(rows.getString(1),rows.getLong(2),rows.getString(3),rows.getString(4)));
+                        return all;
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
                 public void saveProvisioning(Provisioning p){
                     if(p.generation()==1)write("INSERT INTO control_package_provisioning (tenant_id,profile_id,generation,profile_digest,document) VALUES (?,?,?,?,?)",p.profileId(),p.generation(),p.profileDigest(),p.document());
                     else try(var s=connection.prepareStatement("UPDATE control_package_provisioning SET generation=?,profile_digest=?,document=? WHERE tenant_id=? AND profile_id=? AND generation=?")){

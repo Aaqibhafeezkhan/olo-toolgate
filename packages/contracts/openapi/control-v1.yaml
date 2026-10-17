@@ -8023,6 +8023,49 @@ paths:
           description: Not found, or not deployed
         '503':
           description: Dependency unavailable
+  /api/control/v1/packages/provisioning:
+    get:
+      operationId: listProvisioningStatuses
+      description: Administrators with package.read. The latest recorded ProvisioningStatus of every applied deployment
+        profile, by profile id, with the package changes from the profile applied before it.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/ProvisioningStatusPage
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages/provisioning/{profileId}:
+    get:
+      operationId: getProvisioningStatus
+      description: Administrators with package.read. The latest recorded ProvisioningStatus of one deployment profile.
+      parameters:
+      - name: profileId
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/ProvisioningStatus
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted
+        '404':
+          description: Profile not applied
+        '503':
+          description: Dependency unavailable
   /api/control/v1/marketplace:
     get:
       operationId: getMarketplaceStatus

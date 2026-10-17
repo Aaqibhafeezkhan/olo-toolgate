@@ -4,7 +4,7 @@ import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRoll
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
 import type {SdkBuilderDraft,SdkBuilderDraftPage,SdkBuilderSave,SdkBuilderBuild,SdkBuilderBuildPage,SdkBuilderBuildRequest,SdkBuilderStatus} from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage,ConsoleDeviceLookup,ConsoleDeviceChallenge,ConsoleDeviceProof,ConsoleDeviceVerified } from '@olo-labs/toolgate-contracts';
-import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest} from '@olo-labs/toolgate-contracts/v2';
+import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest,ProvisioningStatusPage} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
 import {pendingOperations,type ConfigurationFile,type EnrollmentLookup,type ImportIdentityOptions,type PendingServerSettings,type PendingServerSettingsPatch,type ReauthorizedWorkload,type ReviewPolicy} from './pendingContracts';
 
@@ -137,6 +137,8 @@ export class ControlClient {
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */
   uploadServerPackage(file:Blob):Promise<PackageVersion>{return this.send(operations.uploadServerPackage,{raw:file,contentType:'application/vnd.ololabs.toolgate.package+zip',timeoutMs:120000});}
   deployServerPackage(body:PackageDeploymentRequest):Promise<PackageDeployment>{return this.send(operations.deployServerPackage,{body});}
+  /** The latest status of every applied deployment profile, with its package changes. */
+  provisioningStatuses(signal?:AbortSignal):Promise<ProvisioningStatusPage>{return this.send(operations.listProvisioningStatuses,{signal});}
   marketplaceStatus(signal?:AbortSignal):Promise<MarketplaceStatus>{return this.send(operations.getMarketplaceStatus,{signal});}
   marketplaceCatalog(q:string,signal?:AbortSignal):Promise<MarketplaceCatalog>{const query=new URLSearchParams({limit:'50'});if(q)query.set('q',q);return this.send(operations.listMarketplaceCatalog,{query,signal});}
   marketplaceVersions(packageId:string,signal?:AbortSignal):Promise<MarketplaceVersions>{return this.send(at(operations.listMarketplacePackageVersions,{packageId}),{signal});}

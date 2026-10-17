@@ -325,6 +325,23 @@
         "packageId",
         "change"
       ]
+    },
+    "ProvisioningStatusPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The latest ProvisioningStatus of every applied deployment profile, by profile id.",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProvisioningStatus"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "items"
+      ]
     }
   }
 }
