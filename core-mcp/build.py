@@ -77,7 +77,8 @@ def main():
     lock = {"schemaVersion": 1, "sdkVersion": (ROOT / "VERSION").read_text().strip(), "packages": []}
     for package, project in packages:
         if package["sdk"] == "java-gradle":
-            run([gradle, "-p", project, "--console=plain", "-PtoolgateSdkRepository=" + (ROOT / "build/sdk-repo").as_uri(), "clean", "check", "toolgatePackage"], env)
+            run([gradle, "-p", project, "--console=plain", "-PtoolgateSdkRepository=" + (ROOT / "build/sdk-repo").as_uri(),
+                 "-PtoolgateSdkVersion=" + lock["sdkVersion"], "clean", "check", "toolgatePackage"], env)
         else:
             sdk = ROOT / "tool-sdk/json-sdk/build/install/toolgate-json-sdk/bin" / ("toolgate-json-sdk.bat" if os.name == "nt" else "toolgate-json-sdk")
             run([sdk, "pack", project], env)

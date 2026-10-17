@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-plugins { id("io.ololabs.toolgate.sdk") version "0.10.0-dev" }
+plugins { id("io.ololabs.toolgate.sdk") }
 group = "io.ololabs.toolgate.examples"
 version = "1.0.0"
 repositories {
