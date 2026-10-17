@@ -173,6 +173,10 @@ fn device_broker(
 
 /// Bytes a v2 ToolInput envelope may add to the arguments the registration bounds.
 const SDK_ENVELOPE_BYTES: u64 = 4096;
+/// A relayed call is started only with this much of its deadline left. Like a Tool Host run, the run itself is bounded
+/// by the call's deadline (the tool sees it as deadlineUnixMs) and by the tool's own timeout, not by a fixed reserve
+/// that the platform's default 20 s request window could never satisfy.
+const MIN_RUN_MS: u64 = 2000;
 
 /// One v2 `ToolInput` line for a Java SDK package (ADR 026), bound to this invocation and its deadline. The device has no
 /// broker, globals, claims or secrets to hand the tool; an export needing them is never released to devices.
@@ -668,7 +672,7 @@ impl Manager {
         }
         // The reviewed profile pins image/source versions; extraction sees the exact original arguments.
         let arguments = invocation.arguments.clone();
-        if crate::now().saturating_add(20000) >= valid_until {
+        if crate::now().saturating_add(MIN_RUN_MS) >= valid_until {
             return Err(Failure::Expired);
         }
         let permit_deadline = self
@@ -680,8 +684,7 @@ impl Manager {
             })
             .await?;
         let deadline = permit_deadline.unwrap_or(valid_until).min(valid_until);
-        let startup_ms = engine::CONTAINER_CREATE_TIMEOUT.as_millis() as u64 + 500;
-        if crate::now().saturating_add(tool.limits.timeout_ms + startup_ms) >= deadline {
+        if crate::now().saturating_add(MIN_RUN_MS) >= deadline {
             return Err(Failure::Expired);
         }
         let command = adapters::invocation_arguments(&runtime.kind, &tool)?;
