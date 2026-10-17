@@ -2900,7 +2900,7 @@ impl ContractSet {
     pub fn current() -> Self {
         Self {
             name: "olo-toolgate-contracts".into(),
-            version: "1.0.0".into(),
+            version: "0.10.0-dev".into(),
         }
     }
 }
