@@ -772,6 +772,15 @@ mod self_test_files {
         let root = base.join("self-test-1");
         let scratch = ScratchArea::open(&device, root.clone()).unwrap();
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0, "starts empty");
+        let area = scratch.area.clone().unwrap();
+        {
+            let area = area.lock().unwrap();
+            // Appending creates a missing file, then adds to it: the HotFolder append_text self-test.
+            area.write("notes.txt", b"one", true).unwrap();
+            area.write("notes.txt", b"two", true).unwrap();
+            assert_eq!(area.read("notes.txt").unwrap(), b"onetwo");
+        }
+        drop(area);
         std::fs::write(root.join("selftest.txt"), "ok").unwrap();
         drop(scratch);
         assert!(!root.exists(), "removed with everything the probe wrote");

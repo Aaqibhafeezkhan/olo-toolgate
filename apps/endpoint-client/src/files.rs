@@ -174,15 +174,25 @@ impl Area {
             return Err(Failure::Validation);
         }
         let (dir, name) = self.parent(path, true)?;
-        let mut content = if append { self.read(path)? } else { Vec::new() };
+        // Appending to a file that does not exist yet creates it.
+        let exists = match dir.symlink_metadata(&name) {
+            Ok(_) => true,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+            Err(_) => return Err(Failure::Unavailable),
+        };
+        let mut content = if append && exists {
+            self.read(path)?
+        } else {
+            Vec::new()
+        };
         content.extend_from_slice(bytes);
         if content.len() as u64 > self.settings.max_file_bytes {
             return Err(Failure::Validation);
         }
-        match dir.symlink_metadata(&name) {
-            Ok(_) => self.regular(&dir, &name, path)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => self.capacity()?,
-            Err(_) => return Err(Failure::Unavailable),
+        if exists {
+            self.regular(&dir, &name, path)?;
+        } else {
+            self.capacity()?;
         }
         let temporary = format!(".write-{}", crate::identity::nonce()?);
         let mut options = OpenOptions::new();

@@ -444,7 +444,10 @@ impl ClientService {
             }
             for document in documents {
                 for test in document.self_tests {
-                    candidate.probe(&test).await?;
+                    if let Err(failure) = candidate.probe(&test).await {
+                        tracing::warn!(event="self_test",tool_id=%test.tool_id,result="failed",error=?failure);
+                        return Err(failure);
+                    }
                 }
             }
             self.clock()?;
