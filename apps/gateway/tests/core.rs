@@ -62,6 +62,8 @@ struct Authority {
     /// Pull mode: the dispatch handed to Control, and how many status polls it took.
     relayed: Mutex<Option<v2::Dispatch>>,
     polls: AtomicUsize,
+    /// A repeated call: the invocation already succeeded and Control holds the Tool Host's result.
+    replayed: bool,
 }
 impl Authority {
     /// The host claims the call on the second poll and finishes it on the third.
@@ -136,7 +138,17 @@ impl RelayPort for Authority {
         &'a self,
         _: &'a str,
     ) -> PortFuture<'a, Result<v2::ToolHostDispatchStatus, ErrorCode>> {
-        Box::pin(async move { Ok(self.relay_status()) })
+        Box::pin(async move {
+            if self.replayed {
+                self.polls.store(2, Ordering::SeqCst);
+                return Ok(self.relay_status());
+            }
+            // Control holds a dispatch only for calls placed on a Tool Host.
+            if self.relayed.lock().unwrap().is_none() {
+                return Err(ErrorCode::NotFound);
+            }
+            Ok(self.relay_status())
+        })
     }
     fn ready(&self, _: u64) -> bool {
         !self.failure
@@ -199,6 +211,8 @@ impl RelayPort for Authority {
             i.expires_at_unix_ms = unix_ms().unwrap() + 60000;
             i.state = if self.ask {
                 EnterpriseInvocationState::PendingApproval
+            } else if self.replayed {
+                EnterpriseInvocationState::Succeeded
             } else {
                 EnterpriseInvocationState::Queued
             };
@@ -750,6 +764,25 @@ async fn a_tool_host_without_a_route_gets_its_calls_through_control() {
         payload()["arguments"]
     );
     assert_eq!(a.polls.load(Ordering::SeqCst), 3);
+    assert!(a.submission.lock().unwrap().is_none());
+}
+#[tokio::test]
+async fn a_repeated_tool_host_call_returns_the_result_control_kept_without_running_again() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        replayed: true,
+        ..Authority::default()
+    });
+    let (code, body) = call(
+        runtime_router(state(a.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    // No new permit, no new dispatch and no device relay: the stored result answers.
+    assert!(a.permit.lock().unwrap().is_none());
+    assert!(a.relayed.lock().unwrap().is_none());
     assert!(a.submission.lock().unwrap().is_none());
 }
 #[tokio::test]

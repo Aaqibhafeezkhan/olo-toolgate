@@ -221,6 +221,7 @@ impl HttpRelay {
             );
             return Err(match response.status().as_u16() {
                 401 | 403 => ErrorCode::Forbidden,
+                404 => ErrorCode::NotFound,
                 409 => ErrorCode::Conflict,
                 _ => ErrorCode::DependencyUnavailable,
             });

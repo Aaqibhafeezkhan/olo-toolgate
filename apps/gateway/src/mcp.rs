@@ -363,6 +363,20 @@ async fn tools_call(
             }
         }
     }
+    if outcome.invocation.state != EnterpriseInvocationState::Queued {
+        // A repeated call: Control keeps the result of a call it placed on a Tool Host, whether the Gateway reached
+        // the host directly or the host fetched it, so the repeat returns that result and never runs it again.
+        // Control knows no dispatch for a call placed on a client device, which the relay below answers.
+        let invocation_id = &outcome.invocation.id;
+        match relay.dispatch_status(invocation_id).await {
+            Ok(state) => {
+                let dispatched = follow(relay.as_ref(), state, invocation_id, expires).await;
+                return host_result(dispatched, invocation_id, id);
+            }
+            Err(ErrorCode::NotFound) => {}
+            Err(code) => return host_result(Err(code), invocation_id, id),
+        }
+    }
     let submission = RemoteToolSubmission {
         context: context.clone(),
         invocation_id: outcome.invocation.id,
@@ -435,9 +449,19 @@ async fn relayed(
     invocation_id: &str,
     deadline: u64,
 ) -> Result<crate::toolhost::Dispatched, ErrorCode> {
+    let state = relay.relay_dispatch(dispatch).await?;
+    follow(relay, state, invocation_id, deadline).await
+}
+
+/// Waits for a dispatch Control holds to finish, be refused or expire, until `deadline` (Unix ms).
+async fn follow(
+    relay: &dyn crate::relay::RelayPort,
+    mut state: olo_toolgate_contracts::v2::ToolHostDispatchStatus,
+    invocation_id: &str,
+    deadline: u64,
+) -> Result<crate::toolhost::Dispatched, ErrorCode> {
     use crate::toolhost::Dispatched;
     use olo_toolgate_contracts::v2::{AdmissionKind, ToolHostDispatchState};
-    let mut state = relay.relay_dispatch(dispatch).await?;
     loop {
         if state.invocation_id != invocation_id {
             return Err(ErrorCode::Validation);
