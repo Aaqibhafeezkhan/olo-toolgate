@@ -52,6 +52,18 @@ def inventory(path):
         yield package, project
 
 
+def pinned_json_project(project, staged, sdk_version):
+    """A JSON project pins its SDK version, which a release stamps. Like Java projects, which get
+    -PtoolgateSdkVersion, core JSON projects build from a copy pinned to the SDK version of this build."""
+    if staged.exists():
+        shutil.rmtree(staged)
+    shutil.copytree(project, staged, ignore=shutil.ignore_patterns("build"))
+    document = json.loads((staged / "toolgate.json").read_text(encoding="utf-8"), object_pairs_hook=strict_object)
+    document["sdkVersion"] = sdk_version
+    (staged / "toolgate.json").write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    return staged
+
+
 def run(command, env):
     subprocess.run([str(arg) for arg in command], env=env, check=True, cwd=ROOT)
 
@@ -81,6 +93,7 @@ def main():
                  "-PtoolgateSdkVersion=" + lock["sdkVersion"], "clean", "check", "toolgatePackage"], env)
         else:
             sdk = ROOT / "tool-sdk/json-sdk/build/install/toolgate-json-sdk/bin" / ("toolgate-json-sdk.bat" if os.name == "nt" else "toolgate-json-sdk")
+            project = pinned_json_project(project, output / "projects" / package["project"], lock["sdkVersion"])
             run([sdk, "pack", project], env)
         artifacts = sorted((project / "build/toolgate").glob("*.tgpkg"))
         if len(artifacts) != 1:

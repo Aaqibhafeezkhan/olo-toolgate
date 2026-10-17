@@ -1,10 +1,16 @@
 # Core MCP packages
 
-`core-packages.build.json` is the build inventory. Initially it selects one
-Java SDK package, `hello-world`, with `client_greet` and `server_greet`.
-Both accept `text` with default `World` and return `{"message":"Hello World"}`.
-They share their greeting implementation and emit actual SDK log/progress
-messages. The package defines no alternative executor or installation branch.
+`core-packages.build.json` is the build inventory. It selects two packages, one
+per SDK adapter:
+
+- `hello-world` (Java SDK), `ololabs.hello-world`: `client_greet` and
+  `server_greet` accept `text` with default `World` and return
+  `{"message":"Hello World"}`. They share their greeting implementation and emit
+  actual SDK log/progress messages.
+- `echo` (JSON SDK), `ololabs.echo`: `echo` returns its `text` input unchanged
+  (default `ping`), a connectivity check for agents and Tool Hosts.
+
+Neither defines an alternative executor or installation branch.
 
 To build and verify every configured package:
 
@@ -25,7 +31,9 @@ require their shared adapter/runtime implementation before an inventory may
 select them. A package does not require an entry in root Gradle settings.
 For Java projects, use the versioned SDK plugin and the explicit
 `toolgateSdkRepository` Gradle property, as the example does. JSON projects use
-the installed distribution built by `:sdk-json:installDist`.
+the installed distribution built by `:sdk-json:installDist` and build from a
+copy under `build/core-mcp/projects` whose `sdkVersion` is the pinned SDK
+version of the build, as Java projects receive `-PtoolgateSdkVersion`.
 
 Deployment provisioning and Marketplace publication consume these sealed
 artifacts separately. The inventory is not a deployment profile.
