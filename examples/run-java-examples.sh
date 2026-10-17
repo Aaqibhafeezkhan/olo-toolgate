@@ -40,6 +40,7 @@ for package in "$here"/java-tools/*/build/toolgate/*.tgpkg "$here"/mocked-tools/
     # Only devices broker ClientTools (ADR 027), so a package of ClientTools alone refuses to run standalone; its
     # examples ran in the build's toolgate check. Any ServerTool in the package would have been listed.
     if (cd "$out/$name" && jar xf "$package" toolgate-package.json && ! grep -q '"kind":"SERVER"' toolgate-package.json); then
+      count=$((count + 1))
       continue
     fi
   fi
