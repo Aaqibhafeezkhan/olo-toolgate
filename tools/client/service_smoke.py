@@ -9,7 +9,14 @@ import subprocess
 import time
 from pathlib import Path
 
-def run(arguments):return subprocess.run(arguments,check=True,capture_output=True,text=True)
+def run(arguments):
+    result=subprocess.run(arguments,capture_output=True,text=True)
+    if result.returncode:
+        # The failing command's own output, so a red run names its cause.
+        shown=arguments[2:] if arguments[:2]==['sudo','-n'] else arguments
+        print(f'{shown} exited {result.returncode}\n{result.stdout}{result.stderr}',flush=True)
+        raise subprocess.CalledProcessError(result.returncode,arguments,result.stdout,result.stderr)
+    return result
 def check(binary):
     if os.environ.get('GITHUB_ACTIONS')!='true':raise RuntimeError('Service installation smoke is restricted to disposable native CI runners')
     system=platform.system();elevate=[] if system=='Windows' else ['sudo','-n']
