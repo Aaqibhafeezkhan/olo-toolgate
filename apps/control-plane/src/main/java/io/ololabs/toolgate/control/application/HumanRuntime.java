@@ -26,5 +26,5 @@ public final class HumanRuntime {
         var current=codec.model(operations.get(actor,invocation.id()).body(),EnterpriseInvocation.class);
         return new Store.Reply(200,codec.json(new EnterpriseHumanOutcome(current,dispatch)),current.revision());
     }
-    public Store.Reply result(DirectoryService.Actor actor,long epoch,String id){var invocation=codec.model(operations.get(actor,id).body(),EnterpriseInvocation.class);var e=invocation.evaluation();if(!actor.userId().equals(e.context().userId())||e.context().mode()!=RequestMode.HUMAN||e.context().sessionEpoch()!=epoch)throw ManagementAccess.denied();var c=context(id,actor,epoch,e.context().bindingId());return relay.response(internal(actor),true,codec.json(c),id);}
+    public Store.Reply result(DirectoryService.Actor actor,long epoch,String id){var invocation=codec.model(operations.get(actor,id).body(),EnterpriseInvocation.class);var e=invocation.evaluation();if(!actor.userId().equals(e.context().userId())||e.context().mode()!=RequestMode.HUMAN||e.context().sessionEpoch()!=epoch)throw ManagementAccess.denied();if(hosts.toolHost(actor.tenant(),e.context().deviceId()))return hosts.humanResult(actor,epoch,id);var c=context(id,actor,epoch,e.context().bindingId());return relay.response(internal(actor),true,codec.json(c),id);}
 }

@@ -195,7 +195,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
                 'newPassword':passwords[user]},method='POST')
             assert login[0]==200,('Login failed for '+user,login[0],login[1])
             tokens[user]=login[1]['accessToken']
-        admin=tokens['admin']
+        admin=tokens['admin'];human=tokens['reviewer-1']
         snapshot=ok(api('/api/control/v1/config/export',admin))
         assert all(g['id'].startswith('standard-') for g in snapshot['grants']) and snapshot['delegations']==[]
         assert all(not tool['enabled'] for tool in snapshot['tools'])
@@ -206,7 +206,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         mark('fresh reviewed installation/independent identities/default groups/zero runtime rights')
         # Quickstart has no native client: its execution identities are its two Tool Hosts, approved like any device.
         # The fresh profile then deploys Hello World to tool-host-local and enables server_greet; nobody may run it yet.
-        owner=tokens.get('reviewer-2')
+        owner=admin
         def approve(device_id):
             deadline=time.monotonic()+45
             while True:
@@ -231,29 +231,23 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         assert device in ok(api('/api/control/v1/device-groups/default-devices',admin))['deviceIds']
         target=dict(bindingId='binding-default',deviceId=device)
         def catalog(token=None):
-            return {t['toolId'] for t in ok(api('/api/control/v1/access/human/catalog',token or admin,target,'POST'))['tools']}
+            return {t['toolId'] for t in ok(api('/api/control/v1/access/human/catalog',token or human,target,'POST'))['tools']}
         assert catalog()==set()
         mark('Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery')
-        # Keep the maker/checker regression scoped. The setup login (admin) keeps Super Admin authority, which
-        # Control protects: downgrading the Role it holds is refused. Reviewer 2 is a second installation owner
-        # through an ordinary Role and Team; reviewer 1 is the maker, with a full-scope restrictive Role.
-        # This also proves the live Super Admin exception uses the ordinary APIs.
+        # The bootstrap account must retain Super Admin authority. Keep it as the installation owner;
+        # the two other local accounts become ordinary administrators for maker/checker and HUMAN tests.
         management=ok(api('/api/control/v1/roles/installation-management',admin))
         refused=api('/api/control/v1/roles/'+management['id'],admin,{**management,'portalRole':'ADMINISTRATOR'},
             'PUT',revision=management['revision'])
         assert refused[0]==409,refused
-        super_role={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1,'managementRules':[]}
-        ok(api('/api/control/v1/roles',admin,super_role,'POST'),201)
-        ok(api('/api/control/v1/teams',admin,dict(id='smoke-super-team',name='Smoke installation owners',
-            enabled=True,revision=1,userIds=['reviewer-2'],roleIds=[super_role['id']]),'POST'),201)
         restricted={**management,'id':'smoke-restricted-management','name':'Smoke restricted administrator',
                     'revision':1,'portalRole':'ADMINISTRATOR'}
         ok(api('/api/control/v1/roles',admin,restricted,'POST'),201)
         ok(api('/api/control/v1/teams',admin,dict(id='smoke-makers',name='Smoke makers',
-            enabled=True,revision=1,userIds=['reviewer-1'],roleIds=[restricted['id']]),'POST'),201)
+            enabled=True,revision=1,userIds=['reviewer-1','reviewer-2'],roleIds=[restricted['id']]),'POST'),201)
         owners=ok(api('/api/control/v1/teams/installation-administrators',admin))
-        ok(api('/api/control/v1/teams/installation-administrators',admin,
-            {**owners,'userIds':[u for u in owners['userIds'] if u!='reviewer-1']},'PUT',revision=owners['revision']))
+        ok(api('/api/control/v1/teams/installation-administrators',owner,
+            {**owners,'userIds':['admin']},'PUT',revision=owners['revision']))
         def transition(change,action,user):
             return ok(api('/api/control/v1/configuration-changes/'+change['id']+'/transition',tokens[user],
                 {'action':action,'expectedRevision':change['revision']},'POST'))
@@ -302,7 +296,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
                    deviceGroups=dict(ids=['default-devices'],all=False),actions=['invoke'],allActions=False,
                    resources=[dict(kind='CUSTOM',locator='tool://'+name,match='EXACT') for name in sorted(hello_tools)],conditions=conditions)
         grant=dict(id='human-hello',name='Reviewed Hello World grant',enabled=True,revision=1,
-                   sourceType='TEAM',sourceId='installation-administrators',purpose='HUMAN',scope=scope)
+                   sourceType='TEAM',sourceId='smoke-makers',purpose='HUMAN',scope=scope)
         reviewed('/api/control/v1/grants',grant)
         assert catalog()==hello_tools,catalog()
         mark('HTTP maker/checker/idempotent drafts/self-review rejection/complete grant discovery')
@@ -436,14 +430,14 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         assert mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}})[0]==403
         mark('verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation')
         if gateway_image:
-            identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='admin')
+            identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='reviewer-1')
             reviewed('/api/control/v1/workload-bindings',dict(id='workload-delegated',name='Verified human delegation',
                 enabled=True,revision=1,agentId='agent-local',mode='DELEGATED',issuer='gateway',subject='local-workload',
                 audience='gateway',credentialSha256=delegated_digest,credentialEpoch=1,
                 expiresAtUnixMs=int(time.time()*1000)+3600000,delegatedUserId=identity['userId'],delegatedSessionEpoch=identity['sessionEpoch']))
             assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
             reviewed('/api/control/v1/delegations',dict(id='human-delegation',name='Same Team and Agent Group',
-                enabled=True,revision=1,teamId='installation-administrators',agentGroupId='default-agents',scope=scope))
+                enabled=True,revision=1,teamId='smoke-makers',agentGroupId='default-agents',scope=scope))
             assert {t['name'] for t in ok(mcp('tools/list',token=delegated_token))['result']['tools']}==hello_tools
             result=ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token))
             assert result['result']['structuredContent']=={'message':'Hello Grace'},result
@@ -452,40 +446,45 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
             assert mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token)[0]==403
             mark('real DELEGATED identity/same Team and Agent Group/Tool Host effect/current delegation revocation')
-        def invoke(arguments,key=None):
-            return api('/api/control/v1/access/human/invocations',admin,
-                       dict(target,request=dict(toolId=hello,action='invoke',arguments=arguments)),'POST',key)
-        key=secrets.token_hex(16);args={'text':'World'}
-        outcome=ok(invoke(args,key));invocation=outcome['invocation']
-        assert invocation['evaluation']['context']['mode']=='HUMAN'
-        assert invocation['evaluation']['context']['userId']=='admin'
-        deadline=time.monotonic()+45
-        while True:
-            result=api('/api/control/v1/access/human/invocations/'+invocation['id']+'/result',admin)
-            if result[0]==200 and result[1].get('result') is not None:break
-            assert time.monotonic()<deadline,('Effect did not complete',result)
-            time.sleep(.5)
-        assert result[1]['result']['output']=={'message':'Hello World'},result
-        assert ok(invoke(args,key))['invocation']['id']==invocation['id']
-        assert invoke({'text':'someone else'},key)[0]==409
-        saved=ok(api('/api/control/v1/access/invocations/'+invocation['id'],admin))
-        assert saved['state']=='SUCCEEDED',saved
-        mark('HUMAN invocation/Tool Host effect/signed permit/durable result/exact retry conflict')
-        # ASK is discoverable but supplies no execution permit; a different person must review.
+        def invoke(arguments,key=None,tool_name=hello):
+            return api('/api/control/v1/access/human/invocations',human,
+                       dict(target,request=dict(toolId=tool_name,action='invoke',arguments=arguments)),'POST',key)
+        args={'text':'World'};human_invocations={}
+        for tool_name in sorted(hello_tools):
+            key=secrets.token_hex(16)
+            outcome=ok(invoke(args,key,tool_name));invocation=outcome['invocation']
+            assert invocation['evaluation']['context']['mode']=='HUMAN'
+            assert invocation['evaluation']['context']['userId']=='reviewer-1'
+            deadline=time.monotonic()+45
+            while True:
+                result=api('/api/control/v1/access/human/invocations/'+invocation['id']+'/result',human)
+                if result[0]==200 and result[1].get('result') is not None:break
+                assert time.monotonic()<deadline,('Effect did not complete',tool_name,result)
+                time.sleep(.5)
+            assert result[1]['result']['output']=={'message':'Hello World'},result
+            assert ok(invoke(args,key,tool_name))['invocation']['id']==invocation['id']
+            assert invoke({'text':'someone else'},key,tool_name)[0]==409
+            saved=ok(api('/api/control/v1/access/invocations/'+invocation['id'],admin))
+            assert saved['state']=='SUCCEEDED',saved
+            human_invocations[tool_name]=(key,invocation,saved)
+        key,invocation,saved=human_invocations[hello]
+        mark('Java/Python HUMAN invocation/Tool Host effect/signed permit/durable result/exact retry conflict')
+        # ASK is discoverable but supplies no execution permit. Use the ordinary maker's team
+        # as approvers: reviewer-1 was deliberately removed from installation-administrators above.
         policy=dict(id='hello-review',name='Independent greeting review',enabled=True,revision=1,
-                    scope=scope,decision='ASK',teams=dict(ids=[],all=True),agentGroups=dict(ids=[],all=True),approverTeams=dict(ids=['installation-administrators'],all=False))
+                    scope=scope,decision='ASK',teams=dict(ids=[],all=True),agentGroups=dict(ids=[],all=True),approverTeams=dict(ids=['smoke-makers'],all=False))
         reviewed('/api/control/v1/policies',policy)
         ask_key=secrets.token_hex(16);ask=ok(invoke(args,ask_key),202)['invocation']
         assert ask['state']=='PENDING_APPROVAL'
-        approvals=ok(api('/api/control/v1/approvals',tokens['reviewer-1']))['items']
+        approvals=ok(api('/api/control/v1/approvals',tokens['reviewer-2']))['items']
         approval=next(a for a in approvals if a['invocationId']==ask['id'])
         decision=dict(obligationId='hello-review',expectedRevision=approval['revision'],decision='APPROVE')
-        assert api('/api/control/v1/approvals/'+approval['id']+'/decision',admin,decision,'POST')[0]==403
-        ok(api('/api/control/v1/approvals/'+approval['id']+'/decision',tokens['reviewer-1'],decision,'POST'))
+        assert api('/api/control/v1/approvals/'+approval['id']+'/decision',human,decision,'POST')[0]==403
+        ok(api('/api/control/v1/approvals/'+approval['id']+'/decision',tokens['reviewer-2'],decision,'POST'))
         ok(invoke(args,ask_key))
         deadline=time.monotonic()+45
         while True:
-            result=api('/api/control/v1/access/human/invocations/'+ask['id']+'/result',admin)
+            result=api('/api/control/v1/access/human/invocations/'+ask['id']+'/result',human)
             if result[0]==200 and result[1].get('result') is not None:break
             assert time.monotonic()<deadline,result
             time.sleep(.5)
@@ -495,7 +494,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         reviewed('/api/control/v1/grants/'+grant['id'],{**current,'enabled':False},'PUT',current['revision'])
         assert catalog()==set()
         assert invoke(args,key)[0]==403
-        assert api('/api/control/v1/access/human/invocations/'+invocation['id']+'/result',admin)[0]==403
+        assert api('/api/control/v1/access/human/invocations/'+invocation['id']+'/result',human)[0]==403
         mark('live revocation hides discovery/blocks execution/retries/result retrieval')
         authority=ok(api('/api/control/v1/access/status',admin))
         operational=ok(api('/api/control/v1/access/operations',admin))
@@ -513,11 +512,15 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         shadow=ok(api('/api/control/v1/access/shadow',admin,dict(snapshot=proposed,evaluation=evaluation,
             observedLegacyDecision='BLOCK',legacyEvidenceDigest=evidence['archiveDigest']),'POST'))
         assert shadow['accessExpansion'] is False and shadow['decision']['decision']=='BLOCK'
-        # A restricted administrator cannot replace a graph containing a Super Admin role.
+        # A restricted administrator cannot modify a Super Admin role. Unchanged owner records
+        # in a replacement snapshot are allowed, so request an actual owner-role change for this denial.
         # The installation owner can apply the import directly, with canonical lifecycle checks and audit.
         import_body=dict(snapshot=proposed,mode='REPLACE',dryRun=False)
-        assert api('/api/control/v1/config/import',admin,import_body,'POST',revision=baseline['revision'])[0]==403
-        ok(api('/api/control/v1/config/import',tokens['reviewer-2'],import_body,'POST',revision=baseline['revision']))
+        privileged_import={**import_body,'snapshot':{**proposed,'roles':[
+            {**role,'name':role['name']+' changed'} if role['portalRole']=='SUPER_ADMIN' else role
+            for role in proposed['roles']]}}
+        assert api('/api/control/v1/config/import',human,privileged_import,'POST',revision=baseline['revision'])[0]==403
+        ok(api('/api/control/v1/config/import',owner,import_body,'POST',revision=baseline['revision']))
         assert ok(api('/api/control/v1/teams/'+team['id'],admin))['name']=='Reviewed installation operators'
         evidence.update(shadow=shadow,superAdministratorImportApplied=True,interpretation='Isolated conversion/shadow and audited Super Admin import HTTP proof; production plans require their own captured legacy evidence')
         output=ROOT/'build/enterprise';output.mkdir(parents=True,exist_ok=True)
@@ -573,9 +576,12 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         if browser:
             run(['npm','exec','--workspace','@olo-labs/toolgate-admin-ui','--','playwright','test',
                  'tests/e2e/enterprise.spec.ts'],env={**os.environ,'TOOLGATE_ENTERPRISE_ORIGIN':origin,
-                 'TOOLGATE_ENTERPRISE_PASSWORD':passwords['admin'],
-                 'TOOLGATE_ENTERPRISE_REVIEWER_1':passwords['reviewer-1'],
-                 'TOOLGATE_ENTERPRISE_REVIEWER_2':passwords['reviewer-2']})
+                 'TOOLGATE_ENTERPRISE_USERNAME':'reviewer-1',
+                 'TOOLGATE_ENTERPRISE_PASSWORD':passwords['reviewer-1'],
+                 'TOOLGATE_ENTERPRISE_REVIEWER_1_USER':'reviewer-2',
+                 'TOOLGATE_ENTERPRISE_REVIEWER_1':passwords['reviewer-2'],
+                 'TOOLGATE_ENTERPRISE_REVIEWER_2_USER':'admin',
+                 'TOOLGATE_ENTERPRISE_REVIEWER_2':passwords['admin']})
             mark('real accessible enterprise administration browser')
         output=ROOT/'build/quickstart';output.mkdir(parents=True,exist_ok=True)
         (output/('smoke-postgresql.json' if database_options else 'smoke.json')).write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')

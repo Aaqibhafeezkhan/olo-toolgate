@@ -35,6 +35,7 @@ POLICY = {
     'admission.admit': 'admission',
     'preflight.metadata': 'replay',
     'foundation.check': 'replay',
+    'foundation.python-sdk': 'python-matrix',
     'images.verify': 'artifacts',
     'gateway.container-and-replicas': 'legacy',
     'policy.enterprise-access': 'legacy',
@@ -57,6 +58,7 @@ POLICY = {
     'manual-development-release.publish-marketplace': 'publication',
 }
 REASONS = {
+    'python-matrix': 'Requires the hosted Python 3.10–3.14 and Linux, Windows and macOS matrix; foundation also runs the SDK tests locally on Python 3.12.',
     'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',
     'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',
     'native': 'Requires all six native VMs and system service/installer support.',

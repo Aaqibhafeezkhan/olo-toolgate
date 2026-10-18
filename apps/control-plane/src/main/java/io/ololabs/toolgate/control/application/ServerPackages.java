@@ -407,6 +407,41 @@ public final class ServerPackages {
 
     public boolean toolHost(Ids.TenantId tenant, String deviceId) { return store.transaction(tenant, false, tx -> tx.packages().toolHost(deviceId) != null); }
 
+    /** The caller's own retained Tool Host result, with the same live authority checks as execution. */
+    public Store.Reply humanResult(DirectoryService.Actor actor, long sessionEpoch, String invocationId) {
+        return store.transaction(actor.tenant(), true, tx -> {
+            var invocation = operations.invocationIn(tx, invocationId); var evaluation = invocation.evaluation();
+            var context = evaluation.context();
+            if (actor.userId() == null || !actor.userId().equals(context.userId())
+                    || context.mode() != io.ololabs.toolgate.contracts.v2.RequestMode.HUMAN
+                    || !Objects.equals(context.sessionEpoch(), sessionEpoch)) throw ManagementAccess.denied();
+            operations.requireFresh(actor.tenant(), tx, invocation);
+            var relayed = current(tx.packages().relayed(invocationId));
+            if (relayed == null || !relayed.hostId().equals(context.deviceId())) throw notFound();
+            var status = status(relayed); RemoteToolResult result = null; ErrorCode error = null;
+            RemoteToolState state = switch (relayed.state()) {
+                case "QUEUED" -> RemoteToolState.WAITING_FOR_POLL;
+                case "EXPIRED" -> RemoteToolState.EXPIRED;
+                case "REFUSED" -> RemoteToolState.FAILED;
+                default -> RemoteToolState.SUBMITTED;
+            };
+            if (relayed.state().equals("FINISHED")) {
+                var message = codec.model(codec.json(status.get("result")), io.ololabs.toolgate.contracts.v2.ResultMessage.class);
+                var frame = message.result();
+                boolean completed = message.outcome() == io.ololabs.toolgate.contracts.v2.InvocationOutcome.COMPLETED
+                        && frame != null && frame.resultType() == io.ololabs.toolgate.contracts.v2.ResultType.complete
+                        && !Boolean.TRUE.equals(frame.isError()) && frame.structuredContent() != null;
+                error = completed ? null : ErrorCode.INTERNAL;
+                state = completed ? RemoteToolState.DONE : RemoteToolState.FAILED;
+                result = new RemoteToolResult(invocationId, invocation.reservedNonce(), completed ? frame.structuredContent() : null, error);
+            } else if (state == RemoteToolState.EXPIRED) error = ErrorCode.TIMEOUT;
+            else if (state == RemoteToolState.FAILED) error = ErrorCode.DEPENDENCY_UNAVAILABLE;
+            var record = new RemoteToolRecord(invocationId, context.deviceId(), null, evaluation.toolId(), state,
+                    evaluation.nowUnixMs(), invocation.expiresAtUnixMs(), null, null, null, error);
+            return reply(200, new RemoteToolResponse(record, result));
+        });
+    }
+
     private Store.Reply relayIn(Store.Session tx, io.ololabs.toolgate.contracts.v2.Dispatch dispatch) {
         var claims = claims(node(codec.json(dispatch)));
         String invocationId = claims.path("invocationId").asText(), audience = claims.path("aud").asText();

@@ -22,6 +22,13 @@ class LocalCiTests(unittest.TestCase):
         expected = {f'{name}.{job}' for name, document in self.workflows.items() for job in document['jobs']}
         self.assertEqual({row['id'] for row in rows}, expected)
 
+    def test_python_matrix_remains_explicitly_outside_local_replay(self):
+        rows = local.inventory(self.workflows)
+        matrix = next(row for row in rows if row['id'] == 'foundation.python-sdk')
+        self.assertEqual(matrix['kind'], 'python-matrix')
+        self.assertIn('3.10', matrix['reason'])
+        self.assertNotIn(matrix['id'], local.replayable_jobs(rows))
+
     def test_replayable_selection_follows_inventory_without_a_second_job_list(self):
         rows = local.inventory(self.workflows)
         rows.append(dict(id='future.validation', kind='replay'))
