@@ -201,6 +201,7 @@ class LocalCiTests(unittest.TestCase):
             self.assertNotIn('--bind', command)
             self.assertIn('--rm', command)
             self.assertIn('--volume /var/lib/docker', command[command.index('--container-options') + 1])
+            self.assertIn('--cgroupns=private', command[command.index('--container-options') + 1])
             self.assertEqual(command[command.index('--container-daemon-socket') + 1], '-')
             self.assertEqual(command[command.index('--network') + 1], 'toolgate-local-ci')
             for option in ('--secret-file', '--var-file', '--input-file', '--env-file'):

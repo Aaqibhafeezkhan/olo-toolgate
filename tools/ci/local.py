@@ -70,6 +70,19 @@ ALLOWED_ACTIONS = {'actions/checkout', 'actions/setup-python', 'actions/setup-ja
 DOCKER_SETUP = {
     'name': 'Prepare isolated local Docker engine',
     'run': """mkdir -p /var/run/local-ci
+# Delegate controllers inside this runner's private cgroup namespace before nesting Docker.
+# A populated cgroup v2 root otherwise produces invalid domain groups for PostgreSQL.
+if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  mkdir -p /sys/fs/cgroup/init
+  for attempt in $(seq 1 10); do
+    for process in $(cat /sys/fs/cgroup/cgroup.procs); do
+      echo "$process" > /sys/fs/cgroup/init/cgroup.procs 2>/dev/null || true
+    done
+    controllers=$(sed 's/[^ ]*/+&/g' /sys/fs/cgroup/cgroup.controllers)
+    if echo "$controllers" > /sys/fs/cgroup/cgroup.subtree_control; then break; fi
+    if [ "$attempt" = 10 ]; then exit 1; fi
+  done
+fi
 dockerd --host=unix:///var/run/docker.sock > /var/run/local-ci/docker.log 2>&1 &
 for attempt in $(seq 1 60); do
   if docker info >/dev/null 2>&1; then exit 0; fi
@@ -317,7 +330,7 @@ def act_command(executable, workflow, workspace, root=ROOT, image=IMAGE, network
             '--workflows', str(workflow), '--job', 'replay',
             '--platform', 'ubuntu-24.04=' + image,
             '--container-architecture', 'linux/amd64', '--pull=false', '--rm',
-            '--container-options', '--privileged --volume /var/lib/docker',
+            '--container-options', '--privileged --cgroupns=private --volume /var/lib/docker',
             '--network', network, '--container-daemon-socket', '-',
             '--artifact-server-path', str(workspace / 'artifacts'),
             '--secret-file', str(empty), '--var-file', str(empty),

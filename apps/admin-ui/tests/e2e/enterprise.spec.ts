@@ -33,11 +33,12 @@ test('real group administration, inherited provenance and review impact are acce
     await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
     expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   }
-  // The smoke setup downgrades the maker to Administrator. Settings stay owner-only.
-  for(const route of ['config-server','config-device','config-backup']){
+  // The maker is an Administrator with explicit full-scope management rules, including settings reads.
+  for(const [route,title] of [['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
     await page.goto(origin+'/console/#'+route);
-    await expect(page.getByRole('heading',{name:'Administration',exact:true})).toBeVisible();
-    await expect(page.getByRole('status')).toHaveText('Administration is available to Super Admin accounts only.');
+    await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+    await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
+    expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   }
   await page.goto(origin+'/console/#config-reviews');
   await expect(page.getByRole('heading',{name:'Configuration reviews',exact:true})).toBeVisible();
