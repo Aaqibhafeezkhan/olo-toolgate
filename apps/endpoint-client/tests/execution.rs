@@ -388,6 +388,8 @@ async fn real_engine_runs_hello_world_over_tool_protocol_v2() {
     let mut registration = settings.tools[0].clone();
     registration.tool_id = format!("{package}/client_greet");
     registration.runtime_id = settings.runtimes[0].id.clone();
+    // Match the greeting declaration's 10-second budget, rather than the notes fixture's 3 seconds.
+    registration.limits.timeout_ms = 10000;
     registration.entry_point = format!(
         "/opt/tool/{package}/tool.{}",
         if python { "pyz" } else { "jar" }

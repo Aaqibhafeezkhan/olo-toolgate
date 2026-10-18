@@ -22,3 +22,12 @@ With the same grants, binding and arguments, change only the MCP tool name from
 `tools/quickstart/check.py` tests both names through a real Gateway, Control and
 Tool Host. `tools/client/runtime_check.py` tests both SDKs under the managed-device
 container sandbox. These gates use isolated test resources.
+
+```text
+python tools/quickstart/check.py --image YOUR_SOURCE_BUILT_QUICKSTART --hello-world-only
+python tools/client/runtime_check.py --cli /absolute/path/to/toolgate
+```
+
+The focused Gateway gate writes `build/quickstart/hello-world-smoke.json`; the
+device gate writes `build/client/runtime-smoke.json`. The full enterprise smoke
+suite remains available by omitting `--hello-world-only`.

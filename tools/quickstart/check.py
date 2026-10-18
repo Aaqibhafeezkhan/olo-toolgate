@@ -112,13 +112,13 @@ def starter_package():
         return (out/'build/toolgate/orders-0.1.0.tgpkg').read_bytes()
 
 
-def smoke(image, browser, database_options=None, gateway_image=None):
+def smoke(image, browser, database_options=None, gateway_image=None, hello_world_only=False):
     """Fresh group-only installation through real JWT, TLS, device and reviewed HTTP APIs."""
-    package=starter_package()
+    package=None if hello_world_only else starter_package()
     name='toolgate-enterprise-test-'+secrets.token_hex(6)
     volume=name+'-data'; containers=[]; report={'image':image,'storage':'PostgreSQL' if database_options else 'SQLite','gates':[]}
     output=ROOT/'build/quickstart';output.mkdir(parents=True,exist_ok=True)
-    (output/('smoke-postgresql.json' if database_options else 'smoke.json')).unlink(missing_ok=True)
+    (output/('hello-world-smoke.json' if hello_world_only else 'smoke-postgresql.json' if database_options else 'smoke.json')).unlink(missing_ok=True)
     if browser:(output/'browser-smoke.json').unlink(missing_ok=True)
     def mark(gate):
         report['gates'].append(gate);print('PASS '+gate,flush=True)
@@ -337,8 +337,10 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             return status,json.loads(raw)
         listed_hello={t['name']:t for t in ok(mcp('tools/list'))['result']['tools']}
         assert set(listed_hello)==hello_tools
+        assert len({json.dumps(tool['inputSchema'],sort_keys=True) for tool in listed_hello.values()})==1
+        definitions=[ok(api('/api/control/v1/tools/'+name,admin))['definition'] for name in sorted(hello_tools)]
         for schema in ('inputSchema','outputSchema'):
-            assert len({json.dumps(tool[schema],sort_keys=True) for tool in listed_hello.values()})==1,listed_hello
+            assert len({json.dumps(tool[schema],sort_keys=True) for tool in definitions})==1,definitions
         hello_results={}
         for tool_name in sorted(hello_tools):
             for arguments,expected in (({},'Hello World'),({'text':'Ada'},'Hello Ada')):
@@ -358,6 +360,11 @@ def smoke(image, browser, database_options=None, gateway_image=None):
         for tool_name in hello_tools:
             assert mcp('tools/call',{'name':tool_name,'arguments':{'text':'Ada'}},service_key)[0]==403
         mark('real authenticated Gateway SERVICE/group capability/Tool Host effect/exact retry/live revocation')
+        if hello_world_only:
+            report['scope']='Java/Python Hello World through the real Gateway, Control and Tool Host'
+            (output/'hello-world-smoke.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+            print('Real Java/Python Hello World parity gate passed')
+            return
         # A Java server tool authored with the SDK, end to end: Control verifies and deploys the starter package, and a
         # Gateway call is placed on the host, permitted by Control and run from that exact package.
         # Package upload and deployment are the installation owner's (Super Admin).
@@ -598,7 +605,7 @@ def build_images(image='olo-toolgate-quickstart:enterprise-validation',client_as
     run(['docker','build','-f','apps/quickstart/Dockerfile','--build-arg','CONTROL_IMAGE=olo-toolgate-control:enterprise-validation','--build-arg','VERSION='+version,'--build-arg','REVISION='+revision,*assets,'-t',image,'.'])
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--image',default='olo-toolgate-quickstart:enterprise-validation');parser.add_argument('--build',action='store_true');parser.add_argument('--build-only',action='store_true');parser.add_argument('--no-browser',action='store_true');parser.add_argument('--postgresql',action='store_true');parser.add_argument('--gateway-image');parser.add_argument('--client-assets',type=Path);parser.add_argument('--prebuilt-ui',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--image',default='olo-toolgate-quickstart:enterprise-validation');parser.add_argument('--build',action='store_true');parser.add_argument('--build-only',action='store_true');parser.add_argument('--no-browser',action='store_true');parser.add_argument('--hello-world-only',action='store_true',help='Run the shared Java/Python Hello World Gateway gate and write hello-world-smoke.json');parser.add_argument('--postgresql',action='store_true');parser.add_argument('--gateway-image');parser.add_argument('--client-assets',type=Path);parser.add_argument('--prebuilt-ui',action='store_true');args=parser.parse_args()
     if args.build_only and not args.build:parser.error('--build-only requires --build')
     if args.build:build_images(args.image,args.client_assets,args.prebuilt_ui)
     if args.build_only:return
@@ -614,11 +621,11 @@ def main():
                     QUARKUS_DATASOURCE_USERNAME='control_app',QUARKUS_DATASOURCE_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                     QUARKUS_FLYWAY_USERNAME='control_migrator',QUARKUS_FLYWAY_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                     TOOLGATE_CONTROL_DEVELOPMENT_MODE='true').items())+'\n',encoding='utf-8');env.chmod(0o600)
-                smoke(args.image,not args.no_browser,['--network',network,'--env-file',str(env)],args.gateway_image)
+                smoke(args.image,not args.no_browser,['--network',network,'--env-file',str(env)],args.gateway_image,args.hello_world_only)
             finally:
                 subprocess.run(['docker','network','disconnect',network,db['container']],capture_output=True)
                 subprocess.run(['docker','network','rm',network],capture_output=True)
-    else:smoke(args.image,not args.no_browser,gateway_image=args.gateway_image)
+    else:smoke(args.image,not args.no_browser,gateway_image=args.gateway_image,hello_world_only=args.hello_world_only)
 
 
 if __name__=='__main__':main()

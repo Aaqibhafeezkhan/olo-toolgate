@@ -48,8 +48,7 @@ def main():
         raise SystemExit('A local container engine is required for this explicit gate')
     base = Path(os.environ['ProgramData']) if os.name == 'nt' else Path(tempfile.gettempdir())
     state = base/('toolgate-runtime-test-' + uuid.uuid4().hex)
-    if os.name != 'nt':
-        state.mkdir(mode=0o700)
+    states = []
     endpoint = 'npipe:////./pipe/dockerDesktopLinuxEngine' if os.name == 'nt' else 'unix:///var/run/docker.sock'
     tag = 'olo-toolgate-runtime-test:' + uuid.uuid4().hex
     tags = []
@@ -63,6 +62,8 @@ def main():
             for sdk in (('java', 'python') if args.sdk == 'all' else (args.sdk,)):
                 sdk_tag = tag + '-' + sdk
                 tags.append(sdk_tag)
+                sdk_state = state.with_name(state.name + '-' + sdk)
+                states.append(sdk_state)
                 package = PACKAGE + ('-python' if sdk == 'python' else '')
                 extension = 'pyz' if sdk == 'python' else 'jar'
                 runtime_base = PYTHON_BASE if sdk == 'python' else BASE
@@ -77,7 +78,7 @@ def main():
                 if sdk == 'python':
                     config = json.loads(run(['docker', 'image', 'inspect', sdk_tag], capture_output=True, text=True).stdout)[0]
                     version = next(item.split('=', 1)[1] for item in config['Config']['Env'] if item.startswith('PYTHON_VERSION='))
-                env = dict(os.environ, TOOLGATE_RUNTIME_TEST_IMAGE=image, TOOLGATE_RUNTIME_TEST_STATE=str(state/sdk),
+                env = dict(os.environ, TOOLGATE_RUNTIME_TEST_IMAGE=image, TOOLGATE_RUNTIME_TEST_STATE=str(sdk_state),
                            TOOLGATE_RUNTIME_TEST_ENGINE=str(engine), TOOLGATE_RUNTIME_TEST_ENDPOINT=endpoint,
                            TOOLGATE_RUNTIME_TEST_SDK=sdk, TOOLGATE_RUNTIME_TEST_VERSION=version)
                 command = [str(args.test_binary.resolve())] if args.test_binary else ['cargo', 'test', '-p', 'olo-toolgate-client', '--test', 'execution', '--locked', '--']
@@ -100,10 +101,11 @@ def main():
     finally:
         for sdk_tag in tags:
             subprocess.run(['docker', 'image', 'rm', sdk_tag], cwd=ROOT, capture_output=True)
-        if state.resolve().parent != base.resolve() or not state.name.startswith('toolgate-runtime-test-'):
-            raise ValueError('Owned test path verification failed')
-        if state.exists():
-            shutil.rmtree(state)
+        for sdk_state in states:
+            if sdk_state.resolve().parent != base.resolve() or not sdk_state.name.startswith('toolgate-runtime-test-'):
+                raise ValueError('Owned test path verification failed')
+            if sdk_state.exists():
+                shutil.rmtree(sdk_state)
 
 
 if __name__ == '__main__':
