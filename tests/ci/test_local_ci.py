@@ -4,6 +4,7 @@
 import copy
 import json
 import io
+import os
 from pathlib import Path
 import tempfile
 import subprocess
@@ -63,6 +64,7 @@ class LocalCiTests(unittest.TestCase):
         body = local.replay_document('foundation.check', self.workflows)['jobs']['replay']
         expected=copy.deepcopy(source['steps'])
         del expected[0]['with']['ref']
+        expected.insert(1, copy.deepcopy(local.WORKSPACE_SETUP))
         self.assertEqual(body['steps'][1:], expected)
         self.assertEqual(source['steps'][0]['with']['ref'],'${{ inputs.source_sha || github.sha }}')
         self.assertNotIn('needs', body)
@@ -74,6 +76,24 @@ class LocalCiTests(unittest.TestCase):
         self.workflows['foundation']['jobs']['new-job'] = {'runs-on': 'ubuntu-24.04', 'steps': []}
         with self.assertRaisesRegex(ValueError, 'no local coverage policy'):
             local.inventory(self.workflows)
+
+    @unittest.skipIf(os.name == 'nt', 'Linux checkout modes need a POSIX filesystem')
+    def test_checkout_bootstrap_restores_line_endings_and_executable_modes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(['git', 'init', '--quiet', '--template='], cwd=root, check=True)
+            (root / '.gitattributes').write_text('* text eol=lf\n')
+            wrapper = root / 'gradlew'
+            canonical = b'#!/bin/sh\nexit 0\n'
+            wrapper.write_bytes(canonical)
+            subprocess.run(['git', 'add', '.'], cwd=root, check=True)
+            subprocess.run(['git', 'update-index', '--chmod=+x', 'gradlew'], cwd=root, check=True)
+            wrapper.write_bytes(canonical.replace(b'\n', b'\r\n'))
+            wrapper.chmod(0o644)
+            subprocess.run(['sh', '-eu', '-c', local.WORKSPACE_SETUP['run']], cwd=root, check=True)
+            self.assertEqual(wrapper.read_bytes(), canonical)
+            self.assertTrue(wrapper.stat().st_mode & 0o111)
+            subprocess.run([str(wrapper)], cwd=root, check=True)
 
     def test_preflight_replay_includes_delegated_browser_gate_and_rejects_other_conditions(self):
         source = self.workflows['preflight']['jobs']['metadata']

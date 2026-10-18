@@ -92,6 +92,24 @@ cat /var/run/local-ci/docker.log
 exit 1
 """,
 }
+WORKSPACE_SETUP = {
+    'name': 'Materialize the reviewed Git checkout for Linux',
+    'run': """python3 - <<'PY'
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+# act copies Windows files rather than performing a Linux checkout. The snapshot
+# index contains every reviewed change and its canonical line endings and modes.
+with tempfile.TemporaryDirectory(prefix='toolgate-local-checkout-') as temporary:
+    exported = Path(temporary) / 'tree'
+    exported.mkdir()
+    subprocess.run(['git', 'checkout-index', '--all', '--prefix=' + str(exported) + '/'], check=True)
+    shutil.copytree(exported, Path.cwd(), dirs_exist_ok=True, symlinks=True)
+PY
+""",
+}
 
 
 def load_workflows(root=ROOT):
@@ -219,7 +237,12 @@ def replay_document(key, workflows):
     validate_replay(key, document, job)
     body = replay_body(key, document, job)
     body.pop('needs', None)
-    body['steps'].insert(0, copy.deepcopy(DOCKER_SETUP))
+    steps = [copy.deepcopy(DOCKER_SETUP)]
+    for step in body['steps']:
+        steps.append(step)
+        if step.get('uses', '').split('@')[0] == 'actions/checkout':
+            steps.append(copy.deepcopy(WORKSPACE_SETUP))
+    body['steps'] = steps
     return {'name': 'Local ' + key, 'on': {'workflow_dispatch': {}},
             'permissions': {'contents': 'read'}, 'jobs': {'replay': body}}
 
