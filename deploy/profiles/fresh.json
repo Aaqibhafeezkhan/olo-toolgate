@@ -19,6 +19,20 @@
       "bindingIds": [
         "binding-default"
       ]
+    },
+    {
+      "packageId": "ololabs.hello-world-python",
+      "source": "PREBUILT_CORE",
+      "version": "1.0.0",
+      "required": true,
+      "hostIds": ["tool-host-local"],
+      "tools": [
+        {
+          "toolId": "ololabs.hello-world-python/server_greet",
+          "toolGroupId": "default-tools"
+        }
+      ],
+      "bindingIds": ["binding-default"]
     }
   ]
 }

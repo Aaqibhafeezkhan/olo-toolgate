@@ -47,6 +47,9 @@ def expected():
         suffix = {'dev': '.dev', 'alpha': 'a', 'beta': 'b', 'rc': 'rc'}
         pep440 = core if not prerelease else core + (suffix[match[1]] + (match[2] or '0') if match else '.dev0+' + prerelease)
         outputs[python_project] = re.sub(r'^version = "[^"]+"', f'version = "{pep440}"', python_project.read_text(encoding='utf-8'), flags=re.M)
+        for example in (ROOT/'core-mcp').glob('*/pyproject.toml'):
+            outputs[example] = re.sub(r'toolgate-sdk==[^"\s]+', 'toolgate-sdk==' + pep440,
+                                      example.read_text(encoding='utf-8'))
         python_version = ROOT/'tool-sdk/python-sdk/src/toolgate/_version.py'
         source = python_version.read_text(encoding='utf-8')
         source = re.sub(r'^SDK_VERSION = .*', f'SDK_VERSION = "{product}"', source, flags=re.M)

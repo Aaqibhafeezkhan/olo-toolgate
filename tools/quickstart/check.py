@@ -78,6 +78,8 @@ REMOTE_TOOL_HOST='tool-host-remote'
 
 
 def toolgate_cli():
+    if os.environ.get('TOOLGATE_CLI'):
+        return Path(os.environ['TOOLGATE_CLI']).resolve(strict=True)
     if shutil.which('cargo'):
         run(['cargo','build','-q','--locked','-p','toolgate-cli','--bin','toolgate'])
         target=Path(os.environ.get('CARGO_TARGET_DIR',ROOT/'target'))
@@ -217,13 +219,15 @@ def smoke(image, browser, database_options=None, gateway_image=None):
                 {'userCode':review['userCode'],'keyFingerprint':review['keyFingerprint'],'choice':'APPROVE'},'POST'))
         approve(TOOL_HOST);approve(REMOTE_TOOL_HOST)
         device=TOOL_HOST;hello='ololabs.hello-world/server_greet'
+        hello_tools={hello,'ololabs.hello-world-python/server_greet'}
         deadline=time.monotonic()+180
         while True:
             status,provisioned=api('/api/control/v1/packages/provisioning/fresh',owner)
             if status==200 and provisioned['state']=='READY':break
             assert time.monotonic()<deadline,('The fresh profile did not become READY',status,provisioned)
             time.sleep(1)
-        assert ok(api('/api/control/v1/tools/'+hello,admin))['enabled'] is True
+        for tool_name in hello_tools:
+            assert ok(api('/api/control/v1/tools/'+tool_name,admin))['enabled'] is True
         assert device in ok(api('/api/control/v1/device-groups/default-devices',admin))['deviceIds']
         target=dict(bindingId='binding-default',deviceId=device)
         def catalog(token=None):
@@ -296,11 +300,11 @@ def smoke(image, browser, database_options=None, gateway_image=None):
                         hoursUtc=[],requireOnline=True,highRisk=False)
         scope=dict(toolGroups=dict(ids=['default-tools'],all=False),
                    deviceGroups=dict(ids=['default-devices'],all=False),actions=['invoke'],allActions=False,
-                   resources=[dict(kind='CUSTOM',locator='tool://'+hello,match='EXACT')],conditions=conditions)
+                   resources=[dict(kind='CUSTOM',locator='tool://'+name,match='EXACT') for name in sorted(hello_tools)],conditions=conditions)
         grant=dict(id='human-hello',name='Reviewed Hello World grant',enabled=True,revision=1,
                    sourceType='TEAM',sourceId='installation-administrators',purpose='HUMAN',scope=scope)
         reviewed('/api/control/v1/grants',grant)
-        assert catalog()=={hello},catalog()
+        assert catalog()==hello_tools,catalog()
         mark('HTTP maker/checker/idempotent drafts/self-review rejection/complete grant discovery')
         timings=[]
         for index in range(108):
@@ -331,15 +335,28 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             if method=='tools/call':headers['MCP-Name']=params['name']
             status,raw,_=request(mcp_origin+'/mcp',token or service_token,body,'POST',headers)
             return status,json.loads(raw)
-        assert {t['name'] for t in ok(mcp('tools/list'))['result']['tools']}=={hello}
-        service_key=secrets.token_hex(16)
-        service_result=ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Ada'}},service_key))
-        assert service_result['result']['structuredContent']=={'message':'Hello Ada'},service_result
-        assert ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Ada'}},service_key))['result']==service_result['result']
+        listed_hello={t['name']:t for t in ok(mcp('tools/list'))['result']['tools']}
+        assert set(listed_hello)==hello_tools
+        for schema in ('inputSchema','outputSchema'):
+            assert len({json.dumps(tool[schema],sort_keys=True) for tool in listed_hello.values()})==1,listed_hello
+        hello_results={}
+        for tool_name in sorted(hello_tools):
+            for arguments,expected in (({},'Hello World'),({'text':'Ada'},'Hello Ada')):
+                service_key=secrets.token_hex(16)
+                service_result=ok(mcp('tools/call',{'name':tool_name,'arguments':arguments},service_key))
+                assert service_result['result']['isError'] is False,service_result
+                assert service_result['result']['structuredContent']=={'message':expected},service_result
+                assert ok(mcp('tools/call',{'name':tool_name,'arguments':arguments},service_key))['result']==service_result['result']
+                hello_results.setdefault(tool_name,[]).append(service_result['result']['structuredContent'])
+        assert len({json.dumps(results,sort_keys=True) for results in hello_results.values()})==1
+        report['helloWorldParity']={'tools':sorted(hello_tools),'arguments':[{}, {'text':'Ada'}],
+                                   'outputs':hello_results[hello],'transport':'Gateway MCP -> Control permit -> Tool Host'}
+        mark('Java/Python Hello World parity: same MCP calls/defaults/output/exact retry, changing only tool name')
         service_grant=ok(api('/api/control/v1/grants/service-service',admin))
         reviewed('/api/control/v1/grants/service-service',{**service_grant,'enabled':False},'PUT',service_grant['revision'])
         assert ok(mcp('tools/list'))['result']['tools']==[]
-        assert mcp('tools/call',{'name':hello,'arguments':{'text':'Ada'}},service_key)[0]==403
+        for tool_name in hello_tools:
+            assert mcp('tools/call',{'name':tool_name,'arguments':{'text':'Ada'}},service_key)[0]==403
         mark('real authenticated Gateway SERVICE/group capability/Tool Host effect/exact retry/live revocation')
         # A Java server tool authored with the SDK, end to end: Control verifies and deploys the starter package, and a
         # Gateway call is placed on the host, permitted by Control and run from that exact package.
@@ -420,7 +437,7 @@ def smoke(image, browser, database_options=None, gateway_image=None):
             assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
             reviewed('/api/control/v1/delegations',dict(id='human-delegation',name='Same Team and Agent Group',
                 enabled=True,revision=1,teamId='installation-administrators',agentGroupId='default-agents',scope=scope))
-            assert {t['name'] for t in ok(mcp('tools/list',token=delegated_token))['result']['tools']}=={hello}
+            assert {t['name'] for t in ok(mcp('tools/list',token=delegated_token))['result']['tools']}==hello_tools
             result=ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token))
             assert result['result']['structuredContent']=={'message':'Hello Grace'},result
             delegation=ok(api('/api/control/v1/delegations/human-delegation',admin))

@@ -53,6 +53,7 @@ COPY apps/marketplace-worker/build.gradle.kts apps/marketplace-worker/build.grad
 # Gradle configures every project included in settings, including the SDK modules.
 COPY tool-sdk/java-sdk/ tool-sdk/java-sdk/
 COPY tool-sdk/json-sdk/ tool-sdk/json-sdk/
+COPY tool-sdk/python-sdk/ tool-sdk/python-sdk/
 COPY core-mcp/ core-mcp/
 COPY --from=package-cli /usr/local/bin/toolgate /usr/local/bin/toolgate
 ARG QUARKUS_PROFILE=prod

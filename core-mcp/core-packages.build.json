@@ -8,6 +8,12 @@
       "version": "1.0.0"
     },
     {
+      "project": "hello-world-python",
+      "sdk": "python",
+      "id": "ololabs.hello-world-python",
+      "version": "1.0.0"
+    },
+    {
       "project": "echo",
       "sdk": "json",
       "id": "ololabs.echo",
