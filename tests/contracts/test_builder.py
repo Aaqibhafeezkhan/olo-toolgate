@@ -44,7 +44,12 @@ class BuilderContracts(unittest.TestCase):
         api = yaml.safe_load((ROOT / 'packages/contracts/openapi/control-v1.yaml').read_text())
         paths = {path: methods for path, methods in api['paths'].items() if '/builder/' in path}
         self.assertEqual(set(paths), {'/api/control/v1/builder/status', '/api/control/v1/builder/drafts', '/api/control/v1/builder/builds',
-            '/api/control/v1/builder/builds/{id}/package', '/api/control/v1/builder/builds/{id}/source'})
+            '/api/control/v1/builder/builds/{id}/package', '/api/control/v1/builder/builds/{id}/source', '/api/control/v1/builder/sources'})
+        # Importing a source ZIP only reads it back as a canonical project; saving it is the ordinary draft save.
+        imported = paths['/api/control/v1/builder/sources']
+        self.assertEqual(set(imported), {'post'})
+        self.assertEqual(set(imported['post']['requestBody']['content']), {'application/zip'})
+        self.assertTrue(imported['post']['responses']['200']['content']['application/json']['schema']['$ref'].endswith('/SdkBuilderSource'))
         count = 0
         for path, methods in paths.items():
             for operation in methods.values():
@@ -55,7 +60,7 @@ class BuilderContracts(unittest.TestCase):
                     self.assertEqual(next(iter(content.values()))['schema'], {'type': 'string', 'format': 'binary'})
                 else:
                     self.assertIn('sdk-builder.schema.json', json.dumps(operation))
-        self.assertEqual(count, 7)
+        self.assertEqual(count, 8)
 
     def test_unbuilt_source_is_not_a_runtime_registration(self):
         schema = json.loads((ROOT / 'packages/contracts/schemas/v1/execution.schema.json').read_text())

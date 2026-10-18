@@ -7,94 +7,306 @@
   "$defs": {
     "SdkBuilderGroup": {
       "description": "Minimal authoring context filtered by current Builder permissions, without Tool Group membership data.",
-      "type": "object", "additionalProperties": false, "required": ["id", "name", "canBuild"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "canBuild"
+      ],
       "properties": {
-        "id": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "name": {"type": "string", "minLength": 1, "maxLength": 256},
-        "canBuild": {"type": "boolean"}
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "canBuild": {
+          "type": "boolean"
+        }
       }
     },
     "SdkBuilderStatus": {
       "description": "Configured SDK and current authorized authoring contexts; availability grants no authority.",
-      "type": "object", "additionalProperties": false, "required": ["sdkVersion", "configured", "maxSourceCharacters", "groups"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sdkVersion",
+        "configured",
+        "maxSourceCharacters",
+        "groups"
+      ],
       "properties": {
-        "sdkVersion": {"type": "string", "minLength": 1, "maxLength": 128},
-        "configured": {"type": "boolean"},
-        "maxSourceCharacters": {"type": "integer", "const": 32768},
-        "groups": {"type": "array", "maxItems": 512, "items": {"$ref": "#/$defs/SdkBuilderGroup"}}
+        "sdkVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "maxSourceCharacters": {
+          "type": "integer",
+          "const": 32768
+        },
+        "groups": {
+          "type": "array",
+          "maxItems": 512,
+          "items": {
+            "$ref": "#/$defs/SdkBuilderGroup"
+          }
+        }
       }
     },
     "SdkBuilderDraft": {
       "description": "Canonical JSON SDK source project at an optimistic revision; no executable registration.",
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "revision", "toolGroupId", "source", "sourceDigest"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "toolGroupId",
+        "source",
+        "sourceDigest"
+      ],
       "properties": {
-        "id": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
-        "toolGroupId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "source": {"type": "string", "minLength": 1, "maxLength": 32768},
-        "sourceDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "toolGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     },
     "SdkBuilderSave": {
       "description": "Save a canonical SDK source revision in an authorized Tool Group.",
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "expectedRevision", "toolGroupId", "source"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "expectedRevision",
+        "toolGroupId",
+        "source"
+      ],
       "properties": {
-        "id": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740990},
-        "toolGroupId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "source": {"type": "string", "minLength": 1, "maxLength": 32768}
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740990
+        },
+        "toolGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        }
+      }
+    },
+    "SdkBuilderSource": {
+      "description": "The canonical JSON SDK project read from an uploaded source ZIP; nothing is saved until the project is saved as a draft.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "sourceDigest"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     },
     "SdkBuilderDraftPage": {
       "description": "Authorized SDK source projects.",
-      "type": "object", "additionalProperties": false, "required": ["items"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
       "properties": {
-        "items": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/SdkBuilderDraft"}},
-        "nextCursor": {"$ref": "identifiers.schema.json#/$defs/Identifier"}
+        "items": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/SdkBuilderDraft"
+          }
+        },
+        "nextCursor": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
       }
     },
-    "SdkBuilderState": {"description": "Durable package build state, distinct from a tool invocation.", "type": "string", "enum": ["QUEUED", "RUNNING", "READY", "FAILED"]},
-    "SdkBuilderError": {"description": "Safe package build failure code; raw compiler output is never returned.", "type": "string", "enum": ["BUILD_FAILED", "AUTHORITY_REVOKED", "EXPIRED", "VERSION_CONFLICT"]},
+    "SdkBuilderState": {
+      "description": "Durable package build state, distinct from a tool invocation.",
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "READY",
+        "FAILED"
+      ]
+    },
+    "SdkBuilderError": {
+      "description": "Safe package build failure code; raw compiler output is never returned.",
+      "type": "string",
+      "enum": [
+        "BUILD_FAILED",
+        "AUTHORITY_REVOKED",
+        "EXPIRED",
+        "VERSION_CONFLICT"
+      ]
+    },
     "SdkBuilderBuildRequest": {
       "description": "Queue an immutable project revision for the shared SDK worker.",
-      "type": "object", "additionalProperties": false, "required": ["id", "draftId", "expectedRevision"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "draftId",
+        "expectedRevision"
+      ],
       "properties": {
-        "id": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "draftId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "expectedRevision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "draftId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
       }
     },
     "SdkBuilderBuild": {
       "description": "Pinned package build and fenced worker lease; artifacts confer no runtime authority.",
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "draftId", "draftRevision", "toolGroupId", "source", "sourceDigest", "creatorUserId", "state", "revision", "createdAtUnixMs", "expiresAtUnixMs", "leaseId"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "draftId",
+        "draftRevision",
+        "toolGroupId",
+        "source",
+        "sourceDigest",
+        "creatorUserId",
+        "state",
+        "revision",
+        "createdAtUnixMs",
+        "expiresAtUnixMs",
+        "leaseId"
+      ],
       "properties": {
-        "id": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "draftId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "draftRevision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
-        "toolGroupId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "source": {"type": "string", "minLength": 1, "maxLength": 32768},
-        "sourceDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "creatorUserId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "state": {"$ref": "#/$defs/SdkBuilderState"},
-        "revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
-        "createdAtUnixMs": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
-        "expiresAtUnixMs": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
-        "leaseId": {"$ref": "identifiers.schema.json#/$defs/Identifier"},
-        "artifactDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "sourceArchiveDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "packageDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "error": {"$ref": "#/$defs/SdkBuilderError"}
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "draftId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "draftRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "toolGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "creatorUserId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "#/$defs/SdkBuilderState"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "createdAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "leaseId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "artifactDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "sourceArchiveDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "packageDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "error": {
+          "$ref": "#/$defs/SdkBuilderError"
+        }
       }
     },
     "SdkBuilderBuildPage": {
       "description": "Authorized immutable SDK package builds.",
-      "type": "object", "additionalProperties": false, "required": ["items"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
       "properties": {
-        "items": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/SdkBuilderBuild"}},
-        "nextCursor": {"$ref": "identifiers.schema.json#/$defs/Identifier"}
+        "items": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/SdkBuilderBuild"
+          }
+        },
+        "nextCursor": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
       }
     }
   }

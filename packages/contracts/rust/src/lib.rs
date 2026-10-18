@@ -2833,6 +2833,13 @@ pub struct SdkBuilderSave {
     pub tool_group_id: String,
     pub source: String,
 }
+/// The canonical JSON SDK project read from an uploaded source ZIP; nothing is saved until the project is saved as a draft.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderSource {
+    pub source: String,
+    pub source_digest: String,
+}
 /// Canonical SdkBuilderState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SdkBuilderState {
