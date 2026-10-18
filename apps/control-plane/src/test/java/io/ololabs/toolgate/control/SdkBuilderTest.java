@@ -38,6 +38,7 @@ class SdkBuilderTest {
         var files = ServerPackagesTest.files();
         var manifest = (ObjectNode) json.readTree(files.get("toolgate-package.json"));
         ((ObjectNode)manifest.get("sdk")).put("version", JsonProject.sdkVersion());
+        manifest.put("version", JsonProject.parse(project).version());
         files.put("toolgate-package.json", json.writeValueAsBytes(manifest));
         var checksums = new StringBuilder();
         for (var entry : files.entrySet()) if (!entry.getKey().equals("CHECKSUMS.sha256")) checksums.append(Canonical.sha256(entry.getValue()).substring(7)).append("  ").append(entry.getKey()).append('\n');
@@ -75,6 +76,42 @@ class SdkBuilderTest {
         assertEquals(SdkBuilderError.VERSION_CONFLICT, conflict.error());
     }
 
+    /** Unzip, edit and zip again inside the project's folder, as a person editing the exported source would. */
+    private static byte[] rezip(byte[] exported, java.util.function.UnaryOperator<String> edit) throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var in = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(exported)); var out = new java.util.zip.ZipOutputStream(bytes)) {
+            for (var entry = in.getNextEntry(); entry != null; entry = in.getNextEntry()) {
+                byte[] content = in.readAllBytes();
+                if (entry.getName().equals(JsonProject.FILE)) content = edit.apply(new String(content, StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);
+                out.putNextEntry(new java.util.zip.ZipEntry("acme-orders/" + entry.getName())); out.write(content); out.closeEntry();
+            }
+        }
+        return bytes.toByteArray();
+    }
+
+    @Test void anExportedSourceEditedAndImportedBuildsTheNextVersion() throws Exception {
+        var store = new PostgresStore(SqliteState.open(directory.resolve("round-trip.sqlite")), codec);
+        var root = TestSupport.seed(store, codec, tenant, "root"); var service = service(store, worker(new AtomicInteger()));
+        var first = save(service, root, project(), 0, "save"); queue(service, root, first, "first"); service.workOne();
+        byte[] exported = service.download(root, "first", true);
+        // The unchanged export imports as exactly the saved project.
+        assertEquals(first.source(), codec.model(service.source(root, exported).body(), SdkBuilderSource.class).source());
+        java.util.function.UnaryOperator<String> nextVersion = text -> {
+            try { var tree = (ObjectNode) json.readTree(text); tree.put("version", "0.2.0"); return json.writerWithDefaultPrettyPrinter().writeValueAsString(tree).replace("Hello ", "Welcome "); }
+            catch (java.io.IOException invalid) { throw new java.io.UncheckedIOException(invalid); }
+        };
+        var imported = codec.model(service.source(root, rezip(exported, nextVersion)).body(), SdkBuilderSource.class);
+        assertEquals("0.2.0", JsonProject.parse(imported.source().getBytes(StandardCharsets.UTF_8)).version());
+        assertEquals("sha256:" + DirectoryService.digest(imported.source()), imported.sourceDigest());
+        // Saved over the same project, it builds as the next version, and its own export imports back unchanged.
+        var second = save(service, root, imported.source(), first.revision(), "save-imported");
+        queue(service, root, second, "second"); service.workOne();
+        var built = codec.model(service.builds(root, null).body(), SdkBuilderBuildPage.class).items().stream().filter(b -> b.id().equals("second")).findFirst().orElseThrow();
+        assertEquals(SdkBuilderState.READY, built.state());
+        assertEquals(imported.source(), codec.model(service.source(root, service.download(root, "second", true)).body(), SdkBuilderSource.class).source());
+        assertEquals(400, assertThrows(Failure.class, () -> service.source(root, new byte[]{1, 2, 3})).status());
+    }
+
     private DirectoryService.Actor editor(Store store) {
         store.transaction(tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
@@ -98,12 +135,15 @@ class SdkBuilderTest {
     @Test void currentAuthorityIsCheckedBeforeWorkerClaimAndDownloads() throws Exception {
         var store = new PostgresStore(SqliteState.open(directory.resolve("authority.sqlite")), codec);
         TestSupport.seed(store, codec, tenant, "root"); var actor = editor(store); var calls = new AtomicInteger(); var service = service(store, worker(calls));
+        byte[] archive = JsonSdk.sourceArchive(project().getBytes(StandardCharsets.UTF_8));
+        assertEquals(200, service.source(actor, archive).status());
         var status = codec.model(service.status(actor).body(), SdkBuilderStatus.class);
         assertTrue(status.configured()); assertEquals(1, status.groups().size()); assertTrue(status.groups().getFirst().canBuild());
         var draft = save(service, actor, project(), 0, "save"); queue(service, actor, draft, "build"); revoke(store);
         assertFalse(service.workOne()); assertEquals(0, calls.get());
         assertEquals(403, assertThrows(Failure.class, () -> service.status(actor)).status());
         assertEquals(403, assertThrows(Failure.class, () -> service.download(actor, "build", true)).status());
+        assertEquals(403, assertThrows(Failure.class, () -> service.source(actor, archive)).status());
     }
     @Test void revocationDuringCompilationPreventsArtifactPublication() throws Exception {
         var store = new PostgresStore(SqliteState.open(directory.resolve("during.sqlite")), codec);

@@ -52,6 +52,43 @@ class JsonSdkTest {
         assertArrayEquals(Files.readAllBytes(builder.staging().resolve("toolgate-package.json")), Files.readAllBytes(cli.staging().resolve("toolgate-package.json")));
     }
 
+    private static byte[] zip(java.util.Map<String, byte[]> files) throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var zip = new java.util.zip.ZipOutputStream(bytes)) {
+            for (var file : files.entrySet()) { zip.putNextEntry(new java.util.zip.ZipEntry(file.getKey())); zip.write(file.getValue()); zip.closeEntry(); }
+        }
+        return bytes.toByteArray();
+    }
+
+    @Test void anExportedOrRezippedSourceZipImportsAsTheSameCanonicalProject() throws Exception {
+        byte[] canonical = JsonProject.parse(example()).source();
+        assertArrayEquals(canonical, JsonSdk.projectFromArchive(JsonSdk.sourceArchive(example())));
+        // Unzipped, edited elsewhere and zipped again with its folder, a local dev file and build output.
+        var edited = new String(example(), StandardCharsets.UTF_8).replace("\"version\": \"1.0.0\"", "\"version\": \"1.0.1\"");
+        var files = new java.util.LinkedHashMap<String, byte[]>();
+        files.put("hello/build/toolgate/old.tgpkg", new byte[]{1, 2});
+        files.put("hello/toolgate.json", edited.getBytes(StandardCharsets.UTF_8));
+        files.put("hello/README.md", "notes".getBytes(StandardCharsets.UTF_8));
+        files.put("hello/toolgate.dev.json", "{}".getBytes(StandardCharsets.UTF_8));
+        var imported = JsonProject.parse(JsonSdk.projectFromArchive(zip(files)));
+        assertEquals("1.0.1", imported.version());
+        assertArrayEquals(imported.source(), JsonSdk.projectFromArchive(JsonSdk.sourceArchive(edited.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    @Test void sourceZipImportRefusesUnsafeIncompleteOrLossyArchives() throws Exception {
+        byte[] project = example();
+        for (var files : java.util.List.of(
+                java.util.Map.of("README.md", project),
+                java.util.Map.of("toolgate.json", project, "Main.java", project),
+                java.util.Map.of("../toolgate.json", project),
+                java.util.Map.of("/toolgate.json", project),
+                java.util.Map.of("a/toolgate.json", project, "b/toolgate.json", project),
+                java.util.Map.of("toolgate.json", new String(project, StandardCharsets.UTF_8).replace("\"schemaVersion\": 1", "\"schemaVersion\": 1, \"source\": \"x\"").getBytes(StandardCharsets.UTF_8))))
+            assertThrows(java.io.IOException.class, () -> JsonSdk.projectFromArchive(zip(files)), files.keySet().toString());
+        assertThrows(java.io.IOException.class, () -> JsonSdk.projectFromArchive(new byte[JsonSdk.MAX_ARCHIVE_BYTES + 1]));
+        assertThrows(java.io.IOException.class, () -> JsonSdk.projectFromArchive(zip(java.util.Map.of("toolgate.json", new byte[JsonSdk.MAX_FILE_BYTES + 1]))));
+    }
+
     @Test void rejectsUnbuiltCodeUnknownFieldsDuplicateKeysAndInvalidDefaults() throws Exception {
         String source = new String(example(), StandardCharsets.UTF_8);
         for (String invalid : java.util.List.of(

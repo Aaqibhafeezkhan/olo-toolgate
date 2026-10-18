@@ -59,7 +59,7 @@ def restore(archive, manifest_path, review_path, trust_path, connection_path, pg
         result=executor([pg_restore,'--exit-on-error','--no-owner','--dbname',target['dbname'],str(archive)],env=env,capture_output=True)
         if result.returncode:raise ValueError('Archive restore failed; keep target offline and inspect restricted database diagnostics')
         with connection.transaction():
-            tables=('control_tenants','control_records','control_endpoints','control_enterprise_invocations','control_enterprise_approvals','control_configuration_changes','control_recovery_floors')
+            tables=('control_tenants','control_records','control_endpoints','control_enterprise_invocations','control_enterprise_approvals','control_configuration_changes','control_recovery_floors','control_tool_host_dispatches')
             connection.execute(sql.SQL('LOCK TABLE {} IN ACCESS EXCLUSIVE MODE').format(sql.SQL(',').join(map(sql.Identifier,tables))))
             quarantine_connection(Connection(connection),a,now)
     return dict(tenantId=a['tenantId'],reviewDigest=hashlib.sha256(canonical(a)).hexdigest(),runtimeConnectEnabled=False)

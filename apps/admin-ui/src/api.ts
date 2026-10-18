@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRolloutRecord, FleetPackageRelease, EnterpriseApprovalDecisionRequest, EnterpriseApprovalPage, EnterpriseApproval, ControlUser, ErrorEnvelope, EndpointEnrollmentReview, EndpointEnrollmentDecision } from '@olo-labs/toolgate-contracts';
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
-import type {SdkBuilderDraft,SdkBuilderDraftPage,SdkBuilderSave,SdkBuilderBuild,SdkBuilderBuildPage,SdkBuilderBuildRequest,SdkBuilderStatus} from '@olo-labs/toolgate-contracts';
+import type {SdkBuilderDraft,SdkBuilderDraftPage,SdkBuilderSave,SdkBuilderBuild,SdkBuilderBuildPage,SdkBuilderBuildRequest,SdkBuilderStatus,SdkBuilderSource} from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage,ConsoleDeviceLookup,ConsoleDeviceChallenge,ConsoleDeviceProof,ConsoleDeviceVerified } from '@olo-labs/toolgate-contracts';
 import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest,ProvisioningStatusPage} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
@@ -155,6 +155,8 @@ export class ControlClient {
   builderBuilds(cursor?:string,signal?:AbortSignal):Promise<SdkBuilderBuildPage>{const query=new URLSearchParams();if(cursor)query.set('cursor',cursor);return this.send(operations.listBuilderBuilds,{query,signal});}
   saveSdkDraft(body:SdkBuilderSave,key:string):Promise<SdkBuilderDraft>{return this.send(operations.saveBuilderDraft,{body,key});}
   buildSdkDraft(body:SdkBuilderBuildRequest,key:string):Promise<SdkBuilderBuild>{return this.send(operations.createBuilderBuild,{body,key});}
+  /** The project in a source ZIP, validated and canonical; nothing is stored until it is saved as a draft. */
+  importSdkSource(file:Blob):Promise<SdkBuilderSource>{return this.send(operations.importBuilderSource,{raw:file,contentType:'application/zip'});}
   async downloadSdkBuild(id:string,source:boolean):Promise<Blob>{
     if(this.lifetime.signal.aborted)throw new DOMException('Session ended','AbortError');
     const timeout=AbortSignal.timeout(120000),signal=AbortSignal.any([this.lifetime.signal,timeout]);

@@ -20,6 +20,16 @@ registration. See [JSON SDK](../../tool-sdk/json-sdk/README.md) and
 5. Download **package** (`.tgpkg`) and **source** (the one canonical JSON SDK
    project ZIP). The exported source rebuilds with the same SDK distribution,
    JDK and CLI. Generated Java is internal to compilation.
+6. To continue in Tool Builder from a source ZIP, edited or not, open a project
+   and choose **Import source ZIP**. Control reads the one `toolgate.json`
+   (the export as-is, or rezipped, optionally inside one folder; `README.md`,
+   `.gitignore`, `toolgate.dev.json` and `build/` are ignored), validates it and
+   loads the canonical project into the editor. Nothing is stored until you
+   **Save project**, so permissions, revisions and builds work as for any edit.
+   A ZIP with any other file, unsafe names or oversized entries is refused
+   rather than partly imported (`POST /api/control/v1/builder/sources`,
+   `tool_builder.build`). An unchanged export imports as exactly the saved
+   project; an edited one builds as its new version.
 
 Successful package versions are immutable. Increase the project's `version`
 before changing the contents of an already built version. Optimistic revisions

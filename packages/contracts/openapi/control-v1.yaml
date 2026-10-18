@@ -3314,6 +3314,34 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderSave
+  /api/control/v1/builder/sources:
+    post:
+      operationId: importBuilderSource
+      summary: importBuilderSource
+      description: Reads the JSON SDK project from a source ZIP, as Download source exports it or rezipped after editing, and
+        returns it canonical and validated. Nothing is stored; save it as a draft to keep it. Requires tool_builder.build.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: The project in the ZIP
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderSource
+        '400':
+          description: Not a source ZIP of one valid JSON SDK project
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Current role does not authorize building
+      requestBody:
+        required: true
+        content:
+          application/zip:
+            schema:
+              type: string
+              format: binary
   /api/control/v1/builder/builds:
     get:
       operationId: listBuilderBuilds

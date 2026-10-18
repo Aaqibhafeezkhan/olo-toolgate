@@ -93,6 +93,7 @@ export const operations = {
   getSdkBuilderStatus: { method: 'GET', path: '/api/control/v1/builder/status' },
   listBuilderDrafts: { method: 'GET', path: '/api/control/v1/builder/drafts' },
   saveBuilderDraft: { method: 'POST', path: '/api/control/v1/builder/drafts' },
+  importBuilderSource: { method: 'POST', path: '/api/control/v1/builder/sources' },
   listBuilderBuilds: { method: 'GET', path: '/api/control/v1/builder/builds' },
   createBuilderBuild: { method: 'POST', path: '/api/control/v1/builder/builds' },
   downloadBuilderPackage: { method: 'GET', path: '/api/control/v1/builder/builds/{id}/package' },

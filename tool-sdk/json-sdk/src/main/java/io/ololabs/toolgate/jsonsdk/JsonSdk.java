@@ -132,6 +132,48 @@ public final class JsonSdk {
         return bytes.toByteArray();
     }
 
+    /** Import limits: a project is one bounded toolgate.json, so a source ZIP is small. */
+    public static final int MAX_ARCHIVE_BYTES = 1048576, MAX_ARCHIVE_ENTRIES = 64, MAX_FILE_BYTES = 65536;
+
+    /**
+     * The project in a source ZIP: the one {@value JsonProject#FILE}, validated and canonical. Accepts the export as-is
+     * or rezipped (any compression or order, optionally inside one top folder); the export's README.md and .gitignore,
+     * a local toolgate.dev.json and build/ output are ignored. Any other file is refused rather than silently dropped,
+     * as are absolute or traversing names, duplicates and oversized entries.
+     */
+    public static byte[] projectFromArchive(byte[] archive) throws IOException {
+        if (archive == null || archive.length > MAX_ARCHIVE_BYTES) throw new IOException("Source ZIP is too large");
+        Map<String, byte[]> files = new TreeMap<>();
+        int entries = 0;
+        try (var zip = new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(archive), StandardCharsets.UTF_8)) {
+            for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                if (++entries > MAX_ARCHIVE_ENTRIES) throw new IOException("Source ZIP has too many entries");
+                String name = entry.getName().replace('\\', '/');
+                if (name.isEmpty() || name.startsWith("/") || name.contains(":") || java.util.Arrays.asList(name.split("/")).contains(".."))
+                    throw new IOException("Unsafe name in source ZIP: " + name);
+                if (entry.isDirectory()) continue;
+                byte[] bytes = zip.readNBytes(MAX_FILE_BYTES + 1);
+                if (bytes.length > MAX_FILE_BYTES) throw new IOException("File too large in source ZIP: " + name);
+                if (files.put(name, bytes) != null) throw new IOException("Duplicate file in source ZIP: " + name);
+            }
+        }
+        // One optional top folder, as zipping the unzipped project folder produces.
+        String prefix = "";
+        var tops = new java.util.TreeSet<String>();
+        for (String name : files.keySet()) tops.add(name.contains("/") ? name.substring(0, name.indexOf('/') + 1) : "");
+        if (tops.size() == 1 && !tops.first().isEmpty()) prefix = tops.first();
+        byte[] project = null;
+        for (var file : files.entrySet()) {
+            String name = file.getKey().substring(prefix.length());
+            if (name.equals(JsonProject.FILE)) project = file.getValue();
+            else if (!List.of("README.md", ".gitignore", "toolgate.dev.json").contains(name) && !name.startsWith("build/"))
+                throw new IOException("Unexpected file in source ZIP: " + file.getKey());
+        }
+        if (project == null) throw new IOException("Source ZIP has no " + JsonProject.FILE);
+        try { return JsonProject.parse(project).source(); }
+        catch (IllegalArgumentException invalid) { throw new IOException(invalid.getMessage(), invalid); }
+    }
+
     private static final List<Class<?>> RUNTIME = List.of(
             io.ololabs.toolgate.runtime.StandaloneRuntime.class, io.ololabs.toolgate.protocol.ProtocolCore.class,
             io.ololabs.toolgate.sdk.context.ToolContext.class, com.fasterxml.jackson.databind.ObjectMapper.class,
