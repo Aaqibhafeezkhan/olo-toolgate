@@ -13,16 +13,27 @@ class RestoreTests(unittest.TestCase):
   self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.source=self.root/'backup';self.data=self.source/'data';(self.data/'state').mkdir(parents=True);self.target=self.root/'restored';self.target.mkdir();self.now=1800000000000
   db=self.data/'state/control.sqlite'
   with closing(sqlite3.connect(db)) as c,c:
-   for version in range(1,10):
+   # The current Quickstart schema: every migration it ships.
+   for version in range(1,len(list((ROOT/'apps/control-plane/src/main/resources/db/quickstart').glob('V*.sql')))+1):
     script=(ROOT/f'apps/control-plane/src/main/resources/db/quickstart/V{version}.sql').read_text()
     for statement in script.split('-- statement'):
      if statement.strip():c.executescript(statement)
    c.execute("INSERT INTO control_tenants(tenant_id,revision,authorization_epoch) VALUES('tenant',7,9)")
    records=[('USER',dict(id='user',name='User',enabled=True,revision=1)),('TEAM',dict(id='team-default',name='Default',enabled=True,revision=1,userIds=['user'],roleIds=['management'])),('ROLE',dict(id='management',enabled=True,revision=1)),('WORKLOAD_BINDING',dict(id='workload',enabled=True,revision=1,credentialEpoch=3)),('IDENTITY_BINDING',dict(id='identity',enabled=True,revision=1,sessionEpoch=2,sessionsValidAfterUnixMs=0))]
-   for kind,doc in records:c.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',('tenant',kind,doc['id'],1,json.dumps(doc)))
-   c.execute("INSERT INTO control_enterprise_invocations VALUES('tenant','running',?,'EXECUTING',9,1,2,1,?)",('a'*64,json.dumps(dict(id='running',state='EXECUTING',revision=1))))
-   c.execute("INSERT INTO control_enterprise_nonces VALUES('tenant','consumed','running',?,9,2,1)",('a'*64,))
-   c.execute("INSERT INTO control_credential_history VALUES('tenant',?)",('f'*64,))
+   for kind,doc in records:c.execute('INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,?,?,?,?)',('tenant',kind,doc['id'],1,json.dumps(doc)))
+   c.execute("INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,authorization_epoch,created_at,expires_at,revision,document) VALUES('tenant','running',?,'EXECUTING',9,1,2,1,?)",('a'*64,json.dumps(dict(id='running',state='EXECUTING',revision=1))))
+   c.execute("INSERT INTO control_enterprise_nonces(tenant_id,nonce,invocation_id,evaluation_digest,authorization_epoch,expires_at,consumed_at) VALUES('tenant','consumed','running',?,9,2,1)",('a'*64,))
+   c.execute("INSERT INTO control_credential_history(tenant_id,credential_sha256) VALUES('tenant',?)",('f'*64,))
+   # Package, deployment, profile and release state, which restore keeps exactly, and Tool Host dispatches.
+   package='sha256:'+'b'*64
+   c.execute("INSERT INTO control_server_packages(tenant_id,package_digest,package_id,version,uploaded_at,document,content) VALUES('tenant',?,'acme.orders','1.0.0',5,?,?)",(package,json.dumps(dict(packageDigest=package)),b'PK exact package bytes'))
+   c.execute("INSERT INTO control_server_deployments(tenant_id,package_id,document) VALUES('tenant','acme.orders',?)",(json.dumps(dict(packageId='acme.orders',packageDigest=package,revision=3)),))
+   c.execute("INSERT INTO control_server_documents(tenant_id,digest,document) VALUES('tenant',?,?)",('c'*64,json.dumps(dict(kind='globals'))))
+   c.execute("INSERT INTO control_package_provisioning(tenant_id,profile_id,generation,profile_digest,document) VALUES('tenant','fresh',4,?,?)",('sha256:'+'d'*64,json.dumps(dict(profileId='fresh',generation=4,state='READY'))))
+   c.execute("INSERT INTO control_fleet(tenant_id,kind,record_id,revision,document) VALUES('tenant','RELEASE','acme.orders@1.0.0',1,?)",(json.dumps(dict(packageId='acme.orders',version='1.0.0')),))
+   for invocation,state in (('queued','QUEUED'),('claimed','CLAIMED'),('admitted','ADMITTED'),('finished','FINISHED')):
+    c.execute("INSERT INTO control_tool_host_dispatches(tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES('tenant',?,'host',?,9,1,?)",
+              (invocation,state,json.dumps(dict(status=dict(invocationId=invocation,hostId='host',state=state,**({'result':{'outcome':'COMPLETED'}} if state=='FINISHED' else {}))))))
   self.manifest=dict(layoutVersion=1,files={p.relative_to(self.data).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.data.rglob('*') if p.is_file()});restore.write(self.source/'manifest.json',self.manifest)
   self.keys=[rsa.generate_private_key(public_exponent=65537,key_size=2048) for _ in range(2)]
   encode=lambda b:base64.urlsafe_b64encode(b).rstrip(b'=').decode()
@@ -40,6 +51,19 @@ class RestoreTests(unittest.TestCase):
    self.assertTrue(records['USER']['enabled']);self.assertEqual(records['TEAM']['roleIds'],[]);self.assertFalse(records['ROLE']['enabled']);self.assertFalse(records['WORKLOAD_BINDING']['enabled']);self.assertEqual(records['WORKLOAD_BINDING']['credentialEpoch'],41);self.assertEqual(records['IDENTITY_BINDING']['sessionEpoch'],31)
    self.assertEqual(json.loads(c.execute('SELECT document FROM control_enterprise_invocations').fetchone()[0])['state'],'OUTCOME_UNKNOWN');self.assertEqual(c.execute('SELECT consumed_at FROM control_enterprise_nonces').fetchone()[0],1);self.assertEqual(c.execute('SELECT count(*) FROM control_credential_history').fetchone()[0],2);self.assertEqual(c.execute('SELECT operation FROM control_audit').fetchone()[0],'RESTORE_QUARANTINE')
    self.assertEqual(c.execute("SELECT count(*) FROM control_record_ids WHERE record_id='post-backup-retired-user'").fetchone()[0],1)
+ def test_packages_deployments_profiles_and_releases_restore_exactly_and_open_dispatches_expire(self):
+  tables=('control_server_packages','control_server_deployments','control_server_documents','control_package_provisioning','control_fleet')
+  def rows(path):
+   with closing(sqlite3.connect(path)) as c:return {t:sorted(c.execute(f'SELECT * FROM {t}').fetchall()) for t in tables}
+  before=rows(self.data/'state/control.sqlite')
+  restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
+  self.assertEqual(before,rows(self.target/'state/control.sqlite'))
+  with closing(sqlite3.connect(self.target/'state/control.sqlite')) as c:
+   dispatches={rid:(state,json.loads(doc)['status']) for rid,state,doc in c.execute('SELECT invocation_id,state,document FROM control_tool_host_dispatches')}
+  for invocation in ('queued','claimed','admitted'):
+   self.assertEqual(dispatches[invocation][0],'EXPIRED');self.assertEqual(dispatches[invocation][1]['state'],'EXPIRED')
+  # A finished call keeps the result a repeated call returns.
+  self.assertEqual(dispatches['finished'],('FINISHED',dict(invocationId='finished',hostId='host',state='FINISHED',result={'outcome':'COMPLETED'})))
  def test_one_reviewer_and_self_selected_archived_trust_are_rejected(self):
   with self.assertRaises(ValueError):restore.validate(dict(authorization=self.authorization,proofs=self.proofs[:1]),self.trust,self.manifest,self.now)
   restore.write(self.source/'trust.json',self.trust)

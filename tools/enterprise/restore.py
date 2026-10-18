@@ -134,6 +134,12 @@ def quarantine_connection(db,a,now):
             if doc['state'] in ('PENDING','PENDING_APPROVAL','DRAFT','APPROVED','QUEUED','RESERVED','EXECUTING'):
                 doc['state']='OUTCOME_UNKNOWN' if doc['state']=='EXECUTING' else ('REVOKED' if table!='control_enterprise_invocations' else 'EXPIRED');doc['revision']+=1
                 db.execute(f'UPDATE {table} SET revision=?,document=?'+(',state=?' if table=='control_enterprise_invocations' else '')+f' WHERE tenant_id=? AND {key}=?',(doc['revision'],canonical(doc).decode(),*([doc['state']] if table=='control_enterprise_invocations' else []),tenant,rid))
+    # Tool Host dispatches follow their invocations: an open one is expired, never run after restore; a finished one keeps
+    # the result a repeated call returns. Packages with their bytes, deployments, deployment profile status and fleet
+    # releases are restored exactly; Control's provisioning service reconciles them, installing nothing anew.
+    for rid,raw in db.execute("SELECT invocation_id,document FROM control_tool_host_dispatches WHERE tenant_id=? AND state IN ('QUEUED','CLAIMED','ADMITTED')",(tenant,)).fetchall():
+        doc=json.loads(raw);doc['status']['state']='EXPIRED'
+        db.execute("UPDATE control_tool_host_dispatches SET state='EXPIRED',document=? WHERE tenant_id=? AND invocation_id=?",(canonical(doc).decode(),tenant,rid))
     db.execute('UPDATE control_tenants SET revision=?,authorization_epoch=? WHERE tenant_id=?',(revision,epoch,tenant))
     db.execute('INSERT INTO control_recovery_floors VALUES(?,?) ON CONFLICT(tenant_id) DO UPDATE SET snapshot_sequence=max(snapshot_sequence,excluded.snapshot_sequence)',(tenant,a['snapshotSequenceFloor']))
     db.execute('INSERT INTO control_authorization_outbox VALUES(?,?,?,?,NULL)',(tenant,revision,epoch,now))
