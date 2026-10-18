@@ -18,9 +18,10 @@ class InventoryTest(unittest.TestCase):
             path.write_text(document if isinstance(document, str) else json.dumps(document), encoding="utf-8")
             return list(build.inventory(path))
 
-    def test_inventory_builds_through_both_sdk_adapters(self):
+    def test_inventory_builds_through_all_sdk_adapters(self):
         packages = list(build.inventory(build.CORE / "core-packages.build.json"))
         self.assertEqual([("ololabs.hello-world", "java-gradle", build.CORE / "hello-world"),
+                          ("ololabs.hello-world-python", "python", build.CORE / "hello-world-python"),
                           ("ololabs.echo", "json", build.CORE / "echo")],
                          [(p["id"], p["sdk"], project) for p, project in packages])
 
@@ -35,7 +36,7 @@ class InventoryTest(unittest.TestCase):
     def test_rejects_duplicate_keys_unsupported_adapters_and_outside_projects(self):
         initial = json.loads((build.CORE / "core-packages.build.json").read_text())
         invalid = ['{"schemaVersion":1,"schemaVersion":1,"packages":[]}']
-        for key, value in (("sdk", "python"), ("project", "../apps/control-plane"), ("project", str(build.ROOT))):
+        for key, value in (("sdk", "unsupported"), ("project", "../apps/control-plane"), ("project", str(build.ROOT))):
             document = json.loads(json.dumps(initial))
             document["packages"][0][key] = value
             invalid.append(document)

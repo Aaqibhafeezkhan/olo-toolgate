@@ -20,7 +20,7 @@ public final class PackageCompatibility {
     /** Descriptor generations Control accepts (descriptor.schema.json `descriptorGeneration` const). */
     public static final Set<Long> DESCRIPTOR_GENERATIONS = Set.of(1L);
     /** Runtime languages a Tool Host of this release provides. */
-    public static final Set<String> RUNTIME_LANGUAGES = Set.of("java");
+    public static final Set<String> RUNTIME_LANGUAGES = Set.of("java", "python");
     private static final Pattern SEMVER = Pattern.compile("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$");
 
     private PackageCompatibility() {}

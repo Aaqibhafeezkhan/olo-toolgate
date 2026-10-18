@@ -191,7 +191,12 @@ fn sdk_input(
         invocation_id: request_id.to_owned(),
         task_id: None,
         tool_id: tool.tool_id.clone(),
-        entry_point: adapters::JAVA_SDK_MAIN.into(),
+        entry_point: if tool.entry_point.ends_with(".pyz") {
+            "toolgate.runtime"
+        } else {
+            adapters::JAVA_SDK_MAIN
+        }
+        .into(),
         arguments: arguments.clone(),
         globals: BTreeMap::new(),
         claims: BTreeMap::new(),
@@ -522,8 +527,12 @@ impl Manager {
             .engine
             .probe_version(&runtime.image, &command, &limits)
             .await?;
-        // The JVM reports its version on stderr.
-        adapters::verify_version(&data.stderr, &runtime.version)?;
+        // Python reports its version on stdout; the JVM reports it on stderr.
+        let version_output = match runtime.kind {
+            LocalRuntimeKind::PythonSdk => &data.stdout,
+            LocalRuntimeKind::JavaSdk => &data.stderr,
+        };
+        adapters::verify_version(version_output, &runtime.version)?;
         self.states.insert(id.to_owned(), LocalRuntimeState::Ready);
         tracing::info!(event="runtime_prepare",runtime_id=%runtime.id,result="ready");
         Ok(())

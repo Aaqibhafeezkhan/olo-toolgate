@@ -8,9 +8,10 @@
     "LocalRuntimeKind": {
       "type": "string",
       "enum": [
-        "JAVA_SDK"
+        "JAVA_SDK",
+        "PYTHON_SDK"
       ],
-      "description": "Managed runtime kind. Every managed tool speaks tool protocol v2; JAVA_SDK runs a Java SDK package artifact as a CLIENT target (ADR 026, ADR 027). Other SDKs are added only with their runtime adapter."
+      "description": "Managed runtime kind. Every managed tool speaks tool protocol v2 as a CLIENT target. JAVA_SDK runs a Java SDK jar; PYTHON_SDK runs a Python SDK pyz (ADR 026, ADR 027)."
     },
     "LocalRuntimeState": {
       "type": "string",

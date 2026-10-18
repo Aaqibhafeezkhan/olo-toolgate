@@ -8,7 +8,10 @@ This guide is for anyone who wants to write a tool once and run it two ways:
 
 The same source code and the same package serve both. You never write MCP plumbing, credential handling or network policy yourself: you declare what the tool needs, and the SDK and ToolGate enforce it.
 
-The guide uses Java, which is the SDK available today. Python, TypeScript and .NET follow the same contract ([spec/authoring](tool-sdk/spec/authoring/README.md)), so everything here except the Java syntax carries over.
+The guide uses Java. The [Python SDK](tool-sdk/python-sdk/README.md) implements
+the same authoring and execution path, with `toolgate init --lang python`.
+TypeScript and .NET follow the same specified contract
+([spec/authoring](tool-sdk/spec/authoring/README.md)).
 
 This file is also bundled in the published SDK: inside the `toolgate-sdk-api` jar as `META-INF/toolgate/TOOL-SDK-GUIDE.md`, and printed by `toolgate guide`.
 

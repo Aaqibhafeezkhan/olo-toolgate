@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +29,9 @@ def package(root=ROOT):
                 archive.writestr(info, path.read_bytes())
     for path in sorted((root/'tool-sdk/java-sdk').glob('*/build/libs/*.jar')):
         shutil.copyfile(path, output/path.name)
+    # Build the Python distribution from these same checked sources and stamped versions.
+    subprocess.run([sys.executable, '-m', 'pip', 'wheel', '--no-deps', '--no-build-isolation',
+                    '--wheel-dir', str(output), str(root/'tool-sdk/python-sdk')], cwd=root, check=True)
     if (root/'release.json').is_file():
         release = json.loads((root/'release.json').read_text())
         if release['version'] != version or version != (root/'VERSION').read_text().strip():

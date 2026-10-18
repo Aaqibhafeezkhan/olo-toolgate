@@ -2,6 +2,10 @@
 
 Safe example packages, policies and integrations. Never include real credentials.
 
+- [Python Hello World](../core-mcp/hello-world-python/README.md): the same
+  server/device greetings as Java Hello World, packaged and invoked through the
+  ordinary ToolGate flow by changing only the tool name.
+
 - [Java example tools](java-tools/README.md): twelve ready-to-run tool packages built with the
   Java Tool SDK for everyday operations: run an allowlisted script and return its last lines
   of output, download a file, system health, CPU and processes, log search and error grouping,

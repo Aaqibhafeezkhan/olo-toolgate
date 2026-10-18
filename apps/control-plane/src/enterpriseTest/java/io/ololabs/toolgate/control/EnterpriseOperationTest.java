@@ -40,6 +40,43 @@ class EnterpriseOperationTest {
     EnterpriseInvocation consume(EnterpriseReservation r){return graph.codec.model(operations.consume(EnterpriseConformanceTest.TENANT,"device",consumption(r)).body(),EnterpriseInvocation.class);}
     EnterpriseApproval approval(EnterpriseInvocation i){return store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().approval("operation-"+DirectoryService.digest(i.id()).substring(0,40)));}
     EnterpriseApproval approve(EnterpriseApproval a,String obligation){return graph.codec.model(operations.decide(reviewer,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),obligation,EnterpriseReviewDecision.APPROVE)),"review-"+obligation).body(),EnterpriseApproval.class);}
+
+    private HumanRuntime completedHumanHostCall() {
+        var original=request("human-host", "data/report.txt");
+        var context=new RequestContext("human-host",gateway.tenant().value(),RequestMode.HUMAN,CredentialKind.STATIC_TOKEN,
+                null,"alice",null,null,List.of(),1L,null,null,null,"binding-a",null);
+        var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        var i=graph.codec.model(operations.submitHuman(alice,new EnterpriseInvocationRequest(context,original.request(),
+                original.toolDigest(),original.packageDigest(),null),"device").body(),EnterpriseInvocation.class);
+        var finished=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.SUCCEEDED,
+                i.revision()+1,i.authorizationEpoch(),"host-fence",i.expiresAtUnixMs(),i.evaluation().resources(),
+                i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId());
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().saveInvocation(finished,clock.millis(),i.revision());tx.packages().saveToolHost("device","{}");
+            tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),"device","FINISHED",i.expiresAtUnixMs(),
+                "{\"status\":{\"state\":\"FINISHED\",\"result\":{\"invocationId\":\"human-host\",\"outcome\":\"COMPLETED\",\"result\":{\"kind\":\"RESULT\",\"resultType\":\"complete\",\"content\":[],\"structuredContent\":{\"message\":\"Hello World\"},\"isError\":false}}}}"));
+            return null;
+        });
+        return new HumanRuntime(store,graph.codec,operations,null,new ServerPackages(store,graph.codec,operations,clock));
+    }
+
+    @Test void humanHostResultUsesTheDispatchStoreAndPreservesLiveCallerAuthority() {
+        var runtime=completedHumanHostCall();
+        var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        var response=graph.codec.model(runtime.result(alice,1L,"human-host").body(),RemoteToolResponse.class);
+        assertEquals(RemoteToolState.DONE,response.record().state());
+        assertEquals("Hello World",response.result().output().get("message").asText());
+        assertEquals(403,assertThrows(Failure.class,()->runtime.result(alice,2L,"human-host")).status());
+        assertEquals(403,assertThrows(Failure.class,()->runtime.result(reviewer,1L,"human-host")).status());
+        graph.remove(Kind.GRANT,"human");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->runtime.result(alice,1L,"human-host")).status());
+    }
+
+    @Test void humanHostResultCannotBypassANewApprovalObligation() {
+        var runtime=completedHumanHostCall();graph.policy("ask-result",Decision.ASK);saveGraph();
+        var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        assertEquals(403,assertThrows(Failure.class,()->runtime.result(alice,1L,"human-host")).status());
+    }
     @Test void superAdministratorCanApproveOwnOperationOutsideApproverTeams(){
         graph.add(Kind.ROLE,new ControlRole("super-role","Super Admin",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()));graph.add(Kind.TEAM,new ControlTeam("super-team","Owners",true,1L,List.of("alice"),List.of("super-role")));graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("admin"),List.of("reviewer-role")));graph.policy("ask",Decision.ASK);saveGraph();var i=submit("super-request");var a=approval(i);var owner=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"d".repeat(64),true,false,"alice");var reply=graph.codec.model(operations.decide(owner,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),"ask",EnterpriseReviewDecision.APPROVE)),"super-self").body(),EnterpriseApproval.class);assertEquals(EnterpriseApprovalState.APPROVED,reply.state());assertEquals("alice",reply.reviews().getFirst().reviewerUserId());assertEquals(EnterpriseInvocationState.EXECUTING,consume(reserve(store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation(i.id())))).state());
     }

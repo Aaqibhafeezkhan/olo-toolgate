@@ -47,12 +47,17 @@ public final class OciImages {
 
     /** The artifact at {@code /opt/tool/<packageId>/tool.jar}: root-owned, read-only, zero timestamps. */
     public static Layer layer(String packageId, byte[] jar) {
+        return layer(packageId, "tool.jar", jar);
+    }
+
+    public static Layer layer(String packageId, String filename, byte[] jar) {
+        if (!Set.of("tool.jar", "tool.pyz").contains(filename)) throw Failure.validation();
         if (!packageId.matches("[a-z][a-z0-9-]{1,30}(\\.[a-z][a-z0-9-]{1,30}){1,3}")) throw Failure.validation();
         var tar = new ByteArrayOutputStream();
         entry(tar, "opt/", 0755, '5', new byte[0]);
         entry(tar, "opt/tool/", 0755, '5', new byte[0]);
         entry(tar, "opt/tool/" + packageId + "/", 0755, '5', new byte[0]);
-        entry(tar, "opt/tool/" + packageId + "/tool.jar", 0444, '0', jar);
+        entry(tar, "opt/tool/" + packageId + "/" + filename, 0444, '0', jar);
         tar.writeBytes(new byte[1024]);
         byte[] raw = tar.toByteArray();
         var zipped = new ByteArrayOutputStream();
@@ -144,5 +149,16 @@ public final class OciImages {
             if (parts.length == 3 && Arrays.stream(parts).allMatch(p -> p.matches("0|[1-9][0-9]{0,8}"))) return version;
         }
         throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.VALIDATION, 422, "The approved base image does not declare its Java version");
+    }
+
+    /** The approved Python base uses the fixed /usr/local/bin/python3 launch vector. */
+    public static String pythonVersion(JsonNode config) {
+        for (var e : config.path("config").path("Env")) {
+            String value = e.asText();
+            if (!value.startsWith("PYTHON_VERSION=")) continue;
+            String version = value.substring("PYTHON_VERSION=".length());
+            if (version.matches("3\\.(1[0-9]|[2-9][0-9])\\.(0|[1-9][0-9]*)")) return version;
+        }
+        throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.VALIDATION, 422, "The approved base image must declare Python 3.10+ via PYTHON_VERSION");
     }
 }

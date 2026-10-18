@@ -40,6 +40,20 @@ def expected():
     chart = ROOT/'deploy/helm/olo-toolgate/Chart.yaml'
     outputs[chart] = re.sub(r'^version: .*', f'version: {product}', chart.read_text(encoding='utf-8'), flags=re.M)
     outputs[chart] = re.sub(r'^appVersion: .*', f'appVersion: "{product}"', outputs[chart], flags=re.M)
+    python_project = ROOT/'tool-sdk/python-sdk/pyproject.toml'
+    if python_project.is_file():
+        core, _, prerelease = product.partition('-')
+        match = re.fullmatch(r'(dev|alpha|beta|rc)(?:\.(\d+))?', prerelease)
+        suffix = {'dev': '.dev', 'alpha': 'a', 'beta': 'b', 'rc': 'rc'}
+        pep440 = core if not prerelease else core + (suffix[match[1]] + (match[2] or '0') if match else '.dev0+' + prerelease)
+        outputs[python_project] = re.sub(r'^version = "[^"]+"', f'version = "{pep440}"', python_project.read_text(encoding='utf-8'), flags=re.M)
+        for example in (ROOT/'core-mcp').glob('*/pyproject.toml'):
+            outputs[example] = re.sub(r'toolgate-sdk==[^"\s]+', 'toolgate-sdk==' + pep440,
+                                      example.read_text(encoding='utf-8'))
+        python_version = ROOT/'tool-sdk/python-sdk/src/toolgate/_version.py'
+        source = python_version.read_text(encoding='utf-8')
+        source = re.sub(r'^SDK_VERSION = .*', f'SDK_VERSION = "{product}"', source, flags=re.M)
+        outputs[python_version] = re.sub(r'^CONTRACTS_VERSION = .*', f'CONTRACTS_VERSION = "{contracts}"', source, flags=re.M)
     gateway_api = ROOT/'packages/contracts/openapi/gateway-v1.yaml'
     if gateway_api.exists():
         outputs[gateway_api] = re.sub(r'^  version: .*', f'  version: {product}', gateway_api.read_text(encoding='utf-8'), flags=re.M)

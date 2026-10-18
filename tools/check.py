@@ -150,6 +150,7 @@ def main():
     python('tools/ui/generate.py','--check')
     python('tools/quality.py')
     python('-m','unittest','discover','-s','tests/contracts','-v')
+    python('-m','unittest','discover','-s','tool-sdk/python-sdk/tests','-v')
     if args.ci_common:
         run(['npm','ci','--ignore-scripts'])
         run(['npm','run','contracts:check'])

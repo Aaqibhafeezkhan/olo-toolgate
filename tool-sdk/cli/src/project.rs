@@ -66,7 +66,33 @@ pub const ADAPTERS: &[Adapter] = &[
         package: &["-q", "-B", "package"],
         output: "target/toolgate",
     },
+    Adapter {
+        id: "python-sdk",
+        build: "python",
+        markers: &["pyproject.toml"],
+        launcher: python,
+        dev: &["-m", "toolgate", "dev"],
+        check: &["-m", "toolgate", "check"],
+        package: &["-m", "toolgate", "pack"],
+        output: "build/toolgate",
+    },
 ];
+
+fn python(dir: &Path) -> Command {
+    let configured = std::env::var_os("TOOLGATE_PYTHON");
+    let venv = dir.join(if cfg!(windows) {
+        ".venv/Scripts/python.exe"
+    } else {
+        ".venv/bin/python"
+    });
+    Command::new(configured.unwrap_or_else(|| {
+        if venv.is_file() {
+            std::path::absolute(venv).unwrap().into_os_string()
+        } else {
+            if cfg!(windows) { "python" } else { "python3" }.into()
+        }
+    }))
+}
 
 fn json_sdk(_: &Path) -> Command {
     Command::new(if cfg!(windows) {

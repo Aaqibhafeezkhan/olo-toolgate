@@ -37,7 +37,8 @@ Historical test counts are evidence for their recorded revision, not a fresh run
 
 | Priority | Feature | Status and remaining scope | Completion evidence |
 |---|---|---|---|
-| P0 | Python, TypeScript and .NET SDKs | Planned: language APIs are specified; implement authoring, descriptors, runtime, identity, testing and starters. Java is the existing implementation. | Each language runs a first tool, passes its conformance cases and produces compatible descriptors. |
+| P0 | Python SDK conformance | Authoring, descriptors, runtime, identity, testing, starter, packaging and host/device launch paths are implemented against Java. Shared vectors and end-to-end package tests run in CI; the full official protocol/conformance record remains to be completed. | Record passing evidence for every applicable Python conformance case. |
+| P0 | TypeScript and .NET SDKs | Planned: implement the specified language APIs against the Java reference. | Each language runs a first tool, passes its conformance cases and produces compatible descriptors. |
 | P1 | Governed language parity | Partial: Java governed invocation exists; finish isolation and add the other language launchers/runtimes. | Same tool semantics in standalone and governed mode; explicit support matrix and no implicit permission increase. |
 | P1 | Broker transports and authentication | Partial: brokered HTTP(S) with API key/basic auth exists; add approved CONNECT/TCP, OAuth, token exchange, connection delivery and streaming. | Denial, TLS, secret-redaction, timeout-after-send and revocation tests for each supported transport. |
 | P1 | Existing MCP server proxy | Planned: reviewed upstream catalog snapshots, schema checks, approved credential mapping and drift handling. | An unmodified server works behind ToolGate; schema or permission widening requires review. |

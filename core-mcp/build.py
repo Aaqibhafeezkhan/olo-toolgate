@@ -37,7 +37,7 @@ def inventory(path):
     for package in document["packages"]:
         if not isinstance(package, dict) or set(package) != {"project", "sdk", "id", "version"} or any(not isinstance(v, str) or not v for v in package.values()):
             raise ValueError("Invalid package entry")
-        if package["sdk"] not in {"java-gradle", "json"}:
+        if package["sdk"] not in {"java-gradle", "json", "python"}:
             raise ValueError("SDK build adapter is not implemented: " + package["sdk"])
         if not re.fullmatch(r"[A-Za-z][A-Za-z0-9._-]{0,127}", package["id"]) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?", package["version"]):
             raise ValueError("Invalid package identity")
@@ -83,7 +83,10 @@ def main():
         prerequisites.append("publishJavaSdkLocally")
     if any(p["sdk"] == "json" for p, _ in packages):
         prerequisites.append(":sdk-json:installDist")
-    run([gradle, "--console=plain", *prerequisites], env)
+    if prerequisites:
+        run([gradle, "--console=plain", *prerequisites], env)
+    python_env = dict(env, TOOLGATE_PYTHON=sys.executable,
+                      PYTHONPATH=str(ROOT / "tool-sdk/python-sdk/src") + os.pathsep + env.get("PYTHONPATH", ""))
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     lock = {"schemaVersion": 1, "sdkVersion": (ROOT / "VERSION").read_text().strip(), "packages": []}
@@ -91,10 +94,13 @@ def main():
         if package["sdk"] == "java-gradle":
             run([gradle, "-p", project, "--console=plain", "-PtoolgateSdkRepository=" + (ROOT / "build/sdk-repo").as_uri(),
                  "-PtoolgateSdkVersion=" + lock["sdkVersion"], "clean", "check", "toolgatePackage"], env)
-        else:
+        elif package["sdk"] == "json":
             sdk = ROOT / "tool-sdk/json-sdk/build/install/toolgate-json-sdk/bin" / ("toolgate-json-sdk.bat" if os.name == "nt" else "toolgate-json-sdk")
             project = pinned_json_project(project, output / "projects" / package["project"], lock["sdkVersion"])
             run([sdk, "pack", project], env)
+        else:
+            run([cli, "check", project], python_env)
+            run([cli, "pack", project], python_env)
         artifacts = sorted((project / "build/toolgate").glob("*.tgpkg"))
         if len(artifacts) != 1:
             raise ValueError("Build must produce exactly one package: " + str(project))

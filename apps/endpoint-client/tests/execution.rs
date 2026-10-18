@@ -111,6 +111,8 @@ fn the_launch_vector_is_fixed_and_never_interpolates_input() {
 
 #[test]
 fn exact_versions_and_closed_configuration_fail_safely() {
+    adapters::verify_version(b"Python 3.12.14\n", "3.12.14").unwrap();
+    assert!(adapters::verify_version(b"Python 3.12.14\n", "3.12.1").is_err());
     adapters::verify_version(
         b"openjdk version \"21.0.12.1\" 2026-08-18 LTS\n",
         "21.0.12+1",
@@ -142,6 +144,30 @@ fn exact_versions_and_closed_configuration_fail_safely() {
     let mut bad = original;
     bad.tools[0].entry_point = "/opt/tool/acme.other/tool.jar".into();
     assert!(bad.validate().is_err());
+}
+
+#[test]
+fn python_sdk_has_a_fixed_isolated_launch_vector_and_rejects_other_artifacts() {
+    let mut registration = tool(None);
+    registration.entry_point = "/opt/tool/acme.tools/tool.pyz".into();
+    let args = adapters::invocation_arguments(&LocalRuntimeKind::PythonSdk, &registration).unwrap();
+    assert_eq!(
+        &args[args.len() - 3..],
+        &[
+            "/usr/local/bin/python3",
+            "-I",
+            "/opt/tool/acme.tools/tool.pyz"
+        ]
+    );
+    assert_eq!(
+        adapters::version_arguments(&LocalRuntimeKind::PythonSdk).unwrap(),
+        vec!["/usr/local/bin/python3", "-I", "--version"]
+    );
+    registration.entry_point = "/opt/tool/acme.tools/tool.jar".into();
+    assert_eq!(
+        Failure::Validation,
+        adapters::invocation_arguments(&LocalRuntimeKind::PythonSdk, &registration).unwrap_err()
+    );
 }
 
 /// A fake engine CLI: `start` plays a tool speaking tool protocol v2, sending the broker requests listed in
@@ -338,7 +364,7 @@ async fn without_a_local_gateway_credential_local_calls_are_refused() {
     assert!(!dir.0.join("input").exists(), "the tool never started");
 }
 
-/// Explicitly invoked by the real-engine CI gate with the Hello World package on the approved JRE base.
+/// The same real-engine gate for Java and Python Hello World on their pinned bases.
 #[tokio::test]
 #[ignore = "requires tools/client/runtime_check.py real Docker fixture provisioning"]
 async fn real_engine_runs_hello_world_over_tool_protocol_v2() {
@@ -348,9 +374,26 @@ async fn real_engine_runs_hello_world_over_tool_protocol_v2() {
     let mut settings = settings(engine, state, None);
     settings.engine_endpoint = std::env::var("TOOLGATE_RUNTIME_TEST_ENDPOINT").unwrap();
     settings.runtimes[0].image = image;
+    let python = std::env::var("TOOLGATE_RUNTIME_TEST_SDK").as_deref() == Ok("python");
+    let package = if python {
+        "ololabs.hello-world-python"
+    } else {
+        "ololabs.hello-world"
+    };
+    if python {
+        settings.runtimes[0].id = "python-sdk".into();
+        settings.runtimes[0].kind = LocalRuntimeKind::PythonSdk;
+        settings.runtimes[0].version = std::env::var("TOOLGATE_RUNTIME_TEST_VERSION").unwrap();
+    }
     let mut registration = settings.tools[0].clone();
-    registration.tool_id = "ololabs.hello-world/client_greet".into();
-    registration.entry_point = "/opt/tool/ololabs.hello-world/tool.jar".into();
+    registration.tool_id = format!("{package}/client_greet");
+    registration.runtime_id = settings.runtimes[0].id.clone();
+    // Match the greeting declaration's 10-second budget, rather than the notes fixture's 3 seconds.
+    registration.limits.timeout_ms = 10000;
+    registration.entry_point = format!(
+        "/opt/tool/{package}/tool.{}",
+        if python { "pyz" } else { "jar" }
+    );
     registration.input_schema = serde_json::from_value(json!({"type":"object","additionalProperties":false,"properties":{"text":{"type":"string","default":"World","maxLength":128}},"required":[]})).unwrap();
     registration.output_schema = serde_json::from_value(json!({"type":"object","additionalProperties":false,"properties":{"message":{"type":"string"}},"required":["message"]})).unwrap();
     registration.authorization_profile.tool.id = registration.tool_id.clone();
@@ -381,17 +424,25 @@ async fn real_engine_runs_hello_world_over_tool_protocol_v2() {
     )
     .unwrap();
     assert!(manager.prepare().await.unwrap().ready);
-    let output = manager
-        .invoke(
-            LocalToolInput {
-                protocol_version: 1,
-                request_id: "inv-real-1".into(),
-                tool_id: "ololabs.hello-world/client_greet".into(),
-                arguments: serde_json::from_value(json!({"text": "Anupriya"})).unwrap(),
-            },
-            olo_toolgate_client::now() + 60000,
-        )
-        .await
-        .unwrap();
-    assert_eq!(output.output["message"], "Hello Anupriya");
+    for (index, (arguments, expected)) in [
+        (json!({}), "Hello World"),
+        (json!({"text": "Anupriya"}), "Hello Anupriya"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let output = manager
+            .invoke(
+                LocalToolInput {
+                    protocol_version: 1,
+                    request_id: format!("inv-real-{index}"),
+                    tool_id: format!("{package}/client_greet"),
+                    arguments: serde_json::from_value(arguments).unwrap(),
+                },
+                olo_toolgate_client::now() + 60000,
+            )
+            .await
+            .unwrap();
+        assert_eq!(output.output["message"], expected);
+    }
 }

@@ -240,6 +240,10 @@ struct Rig {
 }
 
 async fn rig() -> Option<Rig> {
+    rig_for(false).await
+}
+
+async fn rig_for(python_sdk: bool) -> Option<Rig> {
     let python = ["/usr/bin/python3", "/usr/local/bin/python3", "/bin/python3"]
         .into_iter()
         .find(|p| Path::new(p).exists())?;
@@ -266,7 +270,55 @@ async fn rig() -> Option<Rig> {
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
-    std::fs::write(staging.join("artifacts/app.jar"), b"not really a jar").unwrap();
+    if !python_sdk {
+        std::fs::write(staging.join("artifacts/app.jar"), b"not really a jar").unwrap();
+    }
+    if python_sdk {
+        let project = dir.join("python-project");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("pyproject.toml"),
+            r#"
+[project]
+name = "orders"
+version = "1.0.0"
+[tool.toolgate]
+descriptor_generation = 1
+modules = ["orders"]
+"#,
+        )
+        .unwrap();
+        std::fs::write(project.join("orders.py"), r#"
+from typing import Annotated, Any
+from toolgate import *
+tool_package(id="acme.orders", name="Orders", publisher="Acme")
+destination(id="acme-api", host_setting="AcmeApiHost")
+http_auth(id="acme-key", type="API_KEY", header="X-Api-Key", secret="ApiKey")
+http_route(id="orders.get", destination="acme-api", method="GET", path="/orders/{orderId:[0-9]{6,12}}", headers=["X-On-Behalf-Of"], auth="acme-key")
+@server_tool(name="orders.lookup", title="Lookup", description="Lookup", effect=EffectSafety.READ_ONLY, routes=["orders.get"])
+@Secret(name="ApiKey")
+@Global(name="TimeoutSeconds", type=ValueType.INT, default_value="10")
+@JwtClaim(name="UserName", claim="UserName")
+def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *, context: ToolContext) -> dict[str, Any]:
+    context.log.info("Calling the order API")
+    context.progress(.5, "calling")
+    return context.http.route("orders.get").path_var("orderId", order_id).header("X-On-Behalf-Of", context.jwt.get_str("UserName")).send(dict[str, Any])
+"#).unwrap();
+        // The ordinary SDK staging command builds the executable and manifest, rather than a test runtime double.
+        let built = std::process::Command::new(python)
+            .args(["-m", "toolgate", "stage"])
+            .arg(&project)
+            .arg("--output")
+            .arg(&staging)
+            .env("PYTHONPATH", root().join("tool-sdk/python-sdk/src"))
+            .output()
+            .unwrap();
+        assert!(
+            built.status.success(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+    }
     let (package, report) = toolgate_cli::package::pack(&staging).unwrap();
     let packaged = toolgate_cli::package::verify(&package).unwrap().manifest;
     let store = dir.join("store");
@@ -311,7 +363,7 @@ async fn rig() -> Option<Rig> {
         "storeDir": store,
         "workDir": dir.join("work"),
         "control": {"url": format!("http://127.0.0.1:{control_port}"), "developmentLoopbackHttp": true},
-        "runtimes": {"javaPath": runtime},
+        "runtimes": {"javaPath": runtime, "pythonPath": python},
         "limits": {"maxConcurrent": 4, "maxInputBytes": 65536, "maxOutputBytes": 1048576, "syncDeadlineMs": 20000, "memoryBytes": 268435456, "maxPermitWindowMs": 30000},
         "developmentLoopbackHttp": true
     }))
@@ -403,6 +455,24 @@ macro_rules! rig {
             }
         }
     };
+}
+
+#[tokio::test]
+async fn a_real_python_sdk_package_runs_through_admission_broker_and_control_reporting() {
+    let Some(rig) = rig_for(true).await else {
+        panic!("Python is required for the SDK end-to-end test")
+    };
+    let arguments = json!({"orderId": "123456"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[0]["kind"], "ADMITTED", "{lines:?}");
+    assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
+    assert_eq!(lines[1]["result"]["structuredContent"]["orderId"], "123456");
+    let seen = rig.seen.lock().unwrap();
+    assert_eq!(seen.upstream[0]["apiKey"], API_KEY);
+    assert_eq!(seen.upstream[0]["onBehalfOf"], "ada");
+    assert_eq!(seen.reports[0]["outcome"], "COMPLETED");
+    assert!(!seen.events.is_empty());
 }
 
 #[tokio::test]

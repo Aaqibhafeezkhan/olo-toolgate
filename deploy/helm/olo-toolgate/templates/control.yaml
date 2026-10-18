@@ -61,6 +61,9 @@ data:
   TOOLGATE_CONTROL_CLIENT_IMAGES_REGISTRY_URL: {{ required "control.clientImages.registryUrl required" $g.clientImages.registryUrl | quote }}
   TOOLGATE_CONTROL_CLIENT_IMAGES_REPOSITORY: {{ required "control.clientImages.repository required" $g.clientImages.repository | quote }}
   TOOLGATE_CONTROL_CLIENT_IMAGES_BASE: {{ required "control.clientImages.base required" $g.clientImages.base | quote }}
+  {{- if $g.clientImages.pythonBase }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_PYTHON_BASE: {{ $g.clientImages.pythonBase | quote }}
+  {{- end }}
   TOOLGATE_CONTROL_CLIENT_IMAGES_PLATFORMS: {{ $g.clientImages.platforms | quote }}
   {{- if $g.clientImages.credentialsSecret }}
   TOOLGATE_CONTROL_CLIENT_IMAGES_CREDENTIALS_PATH: /etc/toolgate/client-images-credentials/credentials

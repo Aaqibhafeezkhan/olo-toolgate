@@ -35,6 +35,7 @@ POLICY = {
     'admission.admit': 'admission',
     'preflight.metadata': 'replay',
     'foundation.check': 'replay',
+    'foundation.python-sdk': 'python-matrix',
     'images.verify': 'artifacts',
     'gateway.container-and-replicas': 'legacy',
     'policy.enterprise-access': 'legacy',
@@ -57,6 +58,7 @@ POLICY = {
     'manual-development-release.publish-marketplace': 'publication',
 }
 REASONS = {
+    'python-matrix': 'Requires the hosted Python 3.10–3.14 and Linux, Windows and macOS matrix; foundation also runs the SDK tests locally on Python 3.12.',
     'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',
     'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',
     'native': 'Requires all six native VMs and system service/installer support.',
@@ -68,6 +70,19 @@ ALLOWED_ACTIONS = {'actions/checkout', 'actions/setup-python', 'actions/setup-ja
 DOCKER_SETUP = {
     'name': 'Prepare isolated local Docker engine',
     'run': """mkdir -p /var/run/local-ci
+# Delegate controllers inside this runner's private cgroup namespace before nesting Docker.
+# A populated cgroup v2 root otherwise produces invalid domain groups for PostgreSQL.
+if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  mkdir -p /sys/fs/cgroup/init
+  for attempt in $(seq 1 10); do
+    for process in $(cat /sys/fs/cgroup/cgroup.procs); do
+      echo "$process" > /sys/fs/cgroup/init/cgroup.procs 2>/dev/null || true
+    done
+    controllers=$(sed 's/[^ ]*/+&/g' /sys/fs/cgroup/cgroup.controllers)
+    if echo "$controllers" > /sys/fs/cgroup/cgroup.subtree_control; then break; fi
+    if [ "$attempt" = 10 ]; then exit 1; fi
+  done
+fi
 dockerd --host=unix:///var/run/docker.sock > /var/run/local-ci/docker.log 2>&1 &
 for attempt in $(seq 1 60); do
   if docker info >/dev/null 2>&1; then exit 0; fi
@@ -75,6 +90,24 @@ for attempt in $(seq 1 60); do
 done
 cat /var/run/local-ci/docker.log
 exit 1
+""",
+}
+WORKSPACE_SETUP = {
+    'name': 'Materialize the reviewed Git checkout for Linux',
+    'run': """python3 - <<'PY'
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+# act copies Windows files rather than performing a Linux checkout. The snapshot
+# index contains every reviewed change and its canonical line endings and modes.
+with tempfile.TemporaryDirectory(prefix='toolgate-local-checkout-') as temporary:
+    exported = Path(temporary) / 'tree'
+    exported.mkdir()
+    subprocess.run(['git', 'checkout-index', '--all', '--prefix=' + str(exported) + '/'], check=True)
+    shutil.copytree(exported, Path.cwd(), dirs_exist_ok=True, symlinks=True)
+PY
 """,
 }
 
@@ -204,7 +237,12 @@ def replay_document(key, workflows):
     validate_replay(key, document, job)
     body = replay_body(key, document, job)
     body.pop('needs', None)
-    body['steps'].insert(0, copy.deepcopy(DOCKER_SETUP))
+    steps = [copy.deepcopy(DOCKER_SETUP)]
+    for step in body['steps']:
+        steps.append(step)
+        if step.get('uses', '').split('@')[0] == 'actions/checkout':
+            steps.append(copy.deepcopy(WORKSPACE_SETUP))
+    body['steps'] = steps
     return {'name': 'Local ' + key, 'on': {'workflow_dispatch': {}},
             'permissions': {'contents': 'read'}, 'jobs': {'replay': body}}
 
@@ -315,7 +353,7 @@ def act_command(executable, workflow, workspace, root=ROOT, image=IMAGE, network
             '--workflows', str(workflow), '--job', 'replay',
             '--platform', 'ubuntu-24.04=' + image,
             '--container-architecture', 'linux/amd64', '--pull=false', '--rm',
-            '--container-options', '--privileged --volume /var/lib/docker',
+            '--container-options', '--privileged --cgroupns=private --volume /var/lib/docker',
             '--network', network, '--container-daemon-socket', '-',
             '--artifact-server-path', str(workspace / 'artifacts'),
             '--secret-file', str(empty), '--var-file', str(empty),

@@ -4,7 +4,8 @@ Build tools that can run standalone over MCP or be packaged for governed executi
 The Java authoring API, descriptor processor, runtime, build integrations and CLI
 are implemented. Java server tools also run through the Tool Host and Gateway;
 host isolation and reliable result retry still have unfinished scope.
-Python, TypeScript and .NET APIs are specified but their SDK implementations remain planned.
+The Python SDK implements the same authoring, runtime, testing and packaging path;
+see [Python SDK](python-sdk/README.md). TypeScript and .NET implementations remain planned.
 
 | Task | Guide |
 |---|---|

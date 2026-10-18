@@ -13,6 +13,7 @@ test('real group administration, inherited provenance and review impact are acce
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.name));
   const origin=process.env.TOOLGATE_ENTERPRISE_ORIGIN!;
   await page.goto(origin+'/console/');
+  await page.getByLabel('Username',{exact:true}).fill(process.env.TOOLGATE_ENTERPRISE_USERNAME||'admin');
   await page.getByLabel('Password',{exact:true}).fill(process.env.TOOLGATE_ENTERPRISE_PASSWORD!);
   async function connect(workspace:typeof page){
     // Password verification and the subsequent Control session are separate requests.
@@ -32,11 +33,12 @@ test('real group administration, inherited provenance and review impact are acce
     await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
     expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   }
-  // The smoke setup downgrades the maker to Administrator. Settings stay owner-only.
-  for(const route of ['config-server','config-device','config-backup']){
+  // The maker is an Administrator with explicit full-scope management rules, including settings reads.
+  for(const [route,title] of [['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
     await page.goto(origin+'/console/#'+route);
-    await expect(page.getByRole('heading',{name:'Administration',exact:true})).toBeVisible();
-    await expect(page.getByRole('status')).toHaveText('Administration is available to Super Admin accounts only.');
+    await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+    await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
+    expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   }
   await page.goto(origin+'/console/#config-reviews');
   await expect(page.getByRole('heading',{name:'Configuration reviews',exact:true})).toBeVisible();
@@ -53,7 +55,7 @@ test('real group administration, inherited provenance and review impact are acce
     for(const [index,reviewer] of reviewers.entries()){
       reviewer.setDefaultTimeout(15000);
       await reviewer.goto(origin+'/console/');
-      await reviewer.getByLabel('Username',{exact:true}).fill('reviewer-'+(index+1));
+      await reviewer.getByLabel('Username',{exact:true}).fill(process.env['TOOLGATE_ENTERPRISE_REVIEWER_'+(index+1)+'_USER']||'reviewer-'+(index+1));
       await reviewer.getByLabel('Password',{exact:true}).fill(process.env['TOOLGATE_ENTERPRISE_REVIEWER_'+(index+1)]!);
       await connect(reviewer);
     }

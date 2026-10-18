@@ -34,6 +34,13 @@ pub const STARTERS: &[Starter] = &[
         layers: &["java/common", "java/maven"],
         local_sdk_note: JAVA_LOCAL_SDK,
     },
+    Starter {
+        language: "python",
+        build: "python",
+        layers: &["python/common"],
+        local_sdk_note:
+            "Install the Python SDK from the checkout: python -m pip install -e tool-sdk/python-sdk",
+    },
 ];
 
 /// What `toolgate init` was asked for.
@@ -201,6 +208,9 @@ fn variables(starter: &Starter, options: &Options) -> Result<Vec<(&'static str, 
                 },
             ));
         }
+        "python" => {
+            values.push(("pythonPackage", package_id.replace(['.', '-'], "_")));
+        }
         other => unreachable!("starter language {other} has no variables"),
     }
     Ok(values)
@@ -269,6 +279,10 @@ fn expand_path(path: &str, variables: &[(&str, String)]) -> String {
         lookup("packagePath").unwrap_or("__PACKAGE__"),
     )
     .replace("__CLASS__", lookup("className").unwrap_or("__CLASS__"))
+    .replace(
+        "__PYTHON_PACKAGE__",
+        lookup("pythonPackage").unwrap_or("__PYTHON_PACKAGE__"),
+    )
 }
 
 #[cfg(test)]
@@ -317,8 +331,12 @@ mod tests {
                 .find(|(p, _, _)| *p == format!("java/gradle/{file}"))
                 .unwrap();
             assert_eq!(
-                std::fs::read(root.join(file)).unwrap(),
-                embedded.1,
+                std::fs::read_to_string(root.join(file))
+                    .unwrap()
+                    .replace("\r\n", "\n"),
+                std::str::from_utf8(embedded.1)
+                    .unwrap()
+                    .replace("\r\n", "\n"),
                 "starters/java/gradle/{file} differs from the repository's; copy it again"
             );
         }

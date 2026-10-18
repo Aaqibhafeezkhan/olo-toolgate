@@ -10,7 +10,7 @@ use toolgate_cli::{canonical, descriptor, init, package, project, strict_json, E
 const USAGE: &str = "toolgate: create, run, check and pack ToolGate tools
 
 Project commands (run in a tool project, or name its directory):
-  toolgate init <name> [--lang java] [--build gradle|maven] [--dir <dir>] [--id <package-id>]
+  toolgate init <name> [--lang java|python] [--build gradle|maven|python] [--dir <dir>] [--id <package-id>]
                 [--publisher <name>] [--sdk-version <version>] [--sdk-repo <url-or-dir>]
                                                   Create a tool project from a starter
   toolgate dev [<dir>] [--http <host:port>] [--digests]

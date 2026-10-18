@@ -1,6 +1,7 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 """Shipped deployment profiles validate against the v2 contract and pin only what the build inventory produces."""
+import ast
 import json
 import re
 import unittest
@@ -23,12 +24,23 @@ def validator(name):
 
 
 def core_exports():
-    """Package id -> (version, declared tool local names) from the core inventory and its Java SDK sources."""
+    """Package id -> (version, declared tool local names) from the inventory's SDK sources."""
     inventory = json.loads((ROOT/'core-mcp/core-packages.build.json').read_text(encoding='utf-8'))
     exports = {}
     for entry in inventory['packages']:
-        sources = (ROOT/'core-mcp'/entry['project']/'src/main/java').rglob('*.java')
-        names = {m for path in sources for m in re.findall(r'@(?:Client|Server)Tool\(name = "([a-z0-9_.-]+)"', path.read_text(encoding='utf-8'))}
+        project = ROOT/'core-mcp'/entry['project']
+        if entry['sdk'] == 'python':
+            names = set()
+            for path in (project/'src').rglob('*.py'):
+                for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        for decorator in node.decorator_list:
+                            if isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Name) and decorator.func.id in {'client_tool', 'server_tool'}:
+                                names.update(keyword.value.value for keyword in decorator.keywords
+                                             if keyword.arg == 'name' and isinstance(keyword.value, ast.Constant))
+        else:
+            sources = (project/'src/main/java').rglob('*.java')
+            names = {m for path in sources for m in re.findall(r'@(?:Client|Server)Tool\(name = "([a-z0-9_.-]+)"', path.read_text(encoding='utf-8'))}
         exports[entry['id']] = (entry['version'], names)
     return exports
 

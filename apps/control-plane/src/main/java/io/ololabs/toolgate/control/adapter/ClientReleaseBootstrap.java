@@ -37,7 +37,7 @@ public class ClientReleaseBootstrap {
             var registry = new HttpsOciRegistry(value("registry-url"), credentials, tls);
             String minimum = value("minimum-client-version");
             if (minimum == null) try (var in = ClientReleaseBootstrap.class.getResourceAsStream("/META-INF/toolgate-product.version")) { minimum = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).strip(); }
-            var settings = ClientReleases.Settings.parse(value("repository"), value("base"), value("platforms") == null ? "LINUX" : value("platforms"), minimum);
+            var settings = ClientReleases.Settings.parse(value("repository"), value("base"), value("platforms") == null ? "LINUX" : value("platforms"), minimum).withPythonBase(value("python-base"));
             PackageReleaseSigner signer = null;
             var keyPath = config.getOptionalValue("toolgate.control.package-release.private-key-path", String.class);
             if (keyPath.isPresent()) {

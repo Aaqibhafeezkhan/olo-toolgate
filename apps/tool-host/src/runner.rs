@@ -33,12 +33,23 @@ pub struct Launch<'a> {
     pub entry_point: &'a str,
     pub sandbox_dir: &'a Path,
     pub java_path: &'a Path,
+    pub python_path: &'a Path,
     pub memory_bytes: u64,
     pub max_output_bytes: usize,
 }
 
 fn command(launch: &Launch<'_>) -> Result<tokio::process::Command, String> {
     match launch.runtime_id {
+        "python" => {
+            if launch.entry_point != "toolgate.runtime"
+                || launch.executable.extension().and_then(|e| e.to_str()) != Some("pyz")
+            {
+                return Err("A Python tool must use the SDK runtime and one pyz artifact".into());
+            }
+            let mut c = tokio::process::Command::new(launch.python_path);
+            c.arg("-I").arg(launch.executable);
+            Ok(c)
+        }
         "jvm" => {
             let mut c = tokio::process::Command::new(launch.java_path);
             c.arg(format!(

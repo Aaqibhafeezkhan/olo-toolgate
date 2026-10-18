@@ -389,6 +389,7 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 entry_point: &input.entry_point,
                 sandbox_dir: &sandbox,
                 java_path: &host.config.runtimes.java_path,
+                python_path: &host.config.runtimes.python_path,
                 memory_bytes: memory,
                 max_output_bytes: output,
             };
