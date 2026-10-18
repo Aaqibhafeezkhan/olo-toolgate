@@ -72,9 +72,10 @@ final class PolicyBundleTest {
         var database="bundle_"+UUID.randomUUID().toString().replace("-","");
         try (var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()) { statement.execute("CREATE DATABASE "+database); }
         var url=base.replace("/control?","/"+database+"?");
-        var flyway=org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).target("2").load(); flyway.migrate();
-        assertEquals(2,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).target("4").load().migrate().migrationsExecuted);
-        org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
+        var flyway=org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load();
+        assertEquals(1,flyway.migrate().migrationsExecuted);
+        assertEquals(0,flyway.migrate().migrationsExecuted);
+        flyway.validate();
         var source=new org.postgresql.ds.PGSimpleDataSource(); source.setURL(url);source.setUser("control_app");source.setPassword(password);
         var store=new PostgresStore(source,codec); var directory=new DirectoryService(store,codec,512,1048576);
         var actor=TestSupport.seed(store,codec,new Ids.TenantId("bundle-tenant"),"root");

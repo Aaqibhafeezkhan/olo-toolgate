@@ -1,4 +1,4 @@
-# Enterprise operation, migration and recovery
+# Enterprise operation and recovery
 
 ## Authority and incident response
 
@@ -16,13 +16,11 @@ A durable reservation is single-use. A consumed effect that expires without reli
 
 Use Effect outcomes to propose an exact terminal state with the expected invocation revision, every confirmed resource, evidence digest and result digest. A different currently authorized checker reviews the exact proposal revision. Reconciliation changes durable outcome metadata, never issues a new effect permit or redispatches work. The certificate-bound native client may recover its local fence only from the exact authoritative terminal outcome. Current grants remain necessary for any subsequent new operation.
 
-## Reviewed configuration and migration
+## Reviewed configuration
 
 Directory writes create drafts with a digest, graph revision/epoch, changed records, affected groups and individuals. Submit, obtain the required independent current reviewers, then apply. Self-review, stale reviews, revoked reviewers and conflicting retries reject. Import and high-risk expansion require two reviewers. Reviews expire within thirty minutes.
 
-Before cutover, stop obsolete producers and capture immutable configuration/audit evidence. Ordered PostgreSQL/SQLite migrations archive retired individual permissions and disable old runtime authority. They do not translate empty fields to wildcard grants or create an ALLOW fallback. Preserve stable identities, identifiers, credential history and audit.
-
-Use `tools/enterprise/migration.py prepare` with the exact post-cutover baseline and explicit operator-authored group mappings. Its output records archive, proposal and reason digests and preserved identifiers. Run `shadow` against captured requests with trusted identity and evidence; inspect each access expansion. Shadow evaluation has no effects, quota charge, approval consumption or secret disclosure. Apply the exact reviewed snapshot through configuration import with two independent reviewers. Compare current decisions and adoption before reopening traffic. Rollback is a new monotonic reviewed configuration, never restoration of old individual ACLs.
+Initialize an empty PostgreSQL or SQLite database from the release V1 schema. Pre-release databases and configuration formats are unsupported. Use current configuration export/import and simulation to review changes. Shadow evaluation has no effects, quota charge, approval consumption or secret disclosure. Rollback creates a new monotonic reviewed configuration.
 
 ## Backup and recovery
 

@@ -30,8 +30,8 @@ to use their existing current database checks.
 Writes clear the transaction's memoized data, so subsequent reads see their own
 changes. Shared entries are published only after a successful commit. A rollback
 cannot publish its data, and a delayed reader cannot overwrite a newer cached
-generation. Failed database checks fail closed. PostgreSQL uses migration V22;
-Quickstart SQLite uses migration V15. Apply migrations before running the new binary.
+generation. Failed database checks fail closed. Both PostgreSQL and Quickstart
+SQLite include this state in their initial version 1 schemas.
 
 ## SQLite connection reuse
 

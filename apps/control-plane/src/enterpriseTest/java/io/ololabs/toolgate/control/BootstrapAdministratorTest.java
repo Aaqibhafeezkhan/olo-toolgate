@@ -98,22 +98,10 @@ class BootstrapAdministratorTest {
         assertEquals(200,directory.mutate(second,Kind.ROLE,role.id(),"UPDATE",codec.json(new ControlRole(role.id(),"Updated role",false,1L,role.portalRole(),role.roleType(),List.of())),1,"edit-role","request").status());
     }
 
-    @Test void upgradeProtectsExistingReviewedAdminWithoutReseedingUsersEmailOrRoles() throws Exception {
-        var source=SqliteState.open(temp.resolve("state.sqlite"));
-        var identity=new ControlIdentityBinding("installed-admin","Reviewed identity",true,1L,"admin","https://quickstart.local","admin",1L,1L,1L,1L,"REVIEWED_INSTALLATION",0L);
-        directory.mutate(second,Kind.IDENTITY_BINDING,identity.id(),"CREATE",codec.json(identity),0,"upgrade-identity","request");
+    @Test void restartPreservesAdminProtectionWithoutReseedingUsersEmailOrRoles() throws Exception {
         var before=directory.export(second,false).body();
-        // Simulate the same records at the previous SQLite migration boundary.
-        try(var c=source.getConnection();var s=c.createStatement()) {
-            s.execute("DROP TABLE control_bootstrap_admins");
-            s.execute("DELETE FROM quickstart_migrations WHERE version=12");
-        }
-        var upgraded=new PostgresStore(SqliteState.open(temp.resolve("state.sqlite")),codec);
-        assertEquals(before,new DirectoryService(upgraded,codec,512,1048576).export(second,false).body());
-        upgraded.transaction(owner.tenant(),false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());assertNull(codec.model(tx.load().entries().get(Kind.USER.id("admin")).document(),ControlUser.class).email());return null;});
-        try(var c=source.getConnection();var s=c.createStatement()) {
-            assertThrows(java.sql.SQLException.class,()->s.execute("UPDATE control_bootstrap_admins SET user_id='alice'"));
-            assertThrows(java.sql.SQLException.class,()->s.execute("DELETE FROM control_bootstrap_admins"));
-        }
+        var reopened=new PostgresStore(SqliteState.open(temp.resolve("state.sqlite")),codec);
+        assertEquals(before,new DirectoryService(reopened,codec,512,1048576).export(second,false).body());
+        reopened.transaction(owner.tenant(),false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());return null;});
     }
 }

@@ -315,7 +315,7 @@ public class PostgresStore implements Store {
                 if(after.equals(before))return;
                 if(after.revision()<before.revision() || !after.entries().equals(before.entries())&&after.revision()<=before.revision())throw Failure.conflict();
                 invalidateDirectory();
-                try (var statement = statement("INSERT INTO control_tenants (tenant_id,revision,authorization_epoch,cutover_revision) VALUES (?,?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET revision=excluded.revision,authorization_epoch=GREATEST(control_tenants.authorization_epoch+1,excluded.authorization_epoch)", after.revision(),after.revision(),after.revision())) {
+                try (var statement = statement("INSERT INTO control_tenants (tenant_id,revision,authorization_epoch) VALUES (?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET revision=excluded.revision,authorization_epoch=GREATEST(control_tenants.authorization_epoch+1,excluded.authorization_epoch)", after.revision(),after.revision())) {
                     statement.executeUpdate();
                 }
                 if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenants WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}

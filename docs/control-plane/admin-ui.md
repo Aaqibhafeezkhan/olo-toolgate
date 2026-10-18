@@ -96,7 +96,7 @@ Runtime MIT copyright/license notices are included. Rebuild UI and backend
 together from the lockfile. Product version is injected into the console; shared
 wire contracts remain v1. The normal version tool synchronizes console release
 metadata. Deploy matching UI, Control and generated contracts; PostgreSQL migration
-V11 supports reversible device-control and identity-recovery audit events.
+V1 supports reversible device-control and identity-recovery audit events.
 
 During rolling upgrades, old HTML may reference assets absent on a new replica.
 Refresh the console after rollout. Retain previous asset sets at the proxy if

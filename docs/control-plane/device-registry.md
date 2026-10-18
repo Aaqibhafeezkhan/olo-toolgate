@@ -195,7 +195,7 @@ approval decision stale.
 `connectionExpiresAtUnixMs` on an approval is invalid. Omitting both gives the
 24-hour default. Neither duration is inferred from the UI alone.
 
-PostgreSQL migration V11 allows the new approve/deapprove, enable/disable and
+PostgreSQL initial changeset 1 allows the new approve/deapprove, enable/disable and
 identity-recovery audit events. Quickstart SQLite stores the same transactions
 without a destructive state reset. Redeployment preserves existing identities,
 owners, approvals, names and enablement and seeds only missing server records.

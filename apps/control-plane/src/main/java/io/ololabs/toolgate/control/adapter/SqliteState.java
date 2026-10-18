@@ -32,8 +32,8 @@ public final class SqliteState {
             var source = new org.sqlite.SQLiteDataSource(settings); source.setUrl("jdbc:sqlite:" + path);
             try (var c = source.getConnection(); var s = c.createStatement()) {
                 s.execute("CREATE TABLE IF NOT EXISTS quickstart_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL)");
-                try(var r=s.executeQuery("SELECT COALESCE(max(version),0) FROM quickstart_migrations")){if(!r.next() || r.getInt(1)>19)throw new IllegalStateException("Newer local state requires a newer image");}
-                for(int version=1;version<=19;version++) {
+                try(var r=s.executeQuery("SELECT COALESCE(max(version),0) FROM quickstart_migrations")){if(!r.next() || r.getInt(1)>1)throw new IllegalStateException("Newer local state requires a newer image");}
+                for(int version=1;version<=1;version++) {
                     String script;
                     try(var input=SqliteState.class.getResourceAsStream("/db/quickstart/V"+version+".sql")){
                         if(input==null)throw new IllegalStateException(); script=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).replace("\r\n","\n");

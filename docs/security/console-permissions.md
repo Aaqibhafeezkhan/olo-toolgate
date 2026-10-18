@@ -30,14 +30,14 @@ If no setup identity is recorded, a transition must retain an enabled effective 
 
 Role permissions are directory data and round-trip through configuration backup, merge/replace restore, and initialization profiles. Session-device proofs and cached permission decisions are never exported. The destination keeps its own setup-identity protection; an imported file cannot clear or reassign that marker.
 
-PostgreSQL V24 and SQLite V17 convert stored legacy actions once. Unknown actions abort the upgrade rather than silently disappearing. Legacy ownership restrictions become explicit OWNED rules, and broad device reads in the same legacy role are removed to preserve private visibility. Role/document revisions, tenant authorization epochs and the authorization outbox advance with the conversion. New writes reject generic legacy verbs and `ownDevices`.
+Initialization uses the current feature permission vocabulary. Pre-release rule formats are unsupported. New writes reject generic legacy verbs and `ownDevices`.
 
-For operator-owned JSON profiles, run `python tools/access/migrate_management.py --write <profile.json>` and review the resulting feature grants before applying them. This is a file migration tool, not a runtime compatibility layer. The three marketplace demo profiles and standard initialization roles already use the canonical model. Check them with `python ../deploy/docker/demo-permissions.py --check` and `python tools/access/permissions.py --check` from the ToolGate checkout.
+The three marketplace demo profiles and standard initialization roles use the canonical model. Check them with `python ../deploy/docker/demo-permissions.py --check` and `python tools/access/permissions.py --check` from the ToolGate checkout.
 
 Server and Device Configuration have separate read/write permissions and settings views omit unreadable groups. Workload-token rotation requires its explicit action and target scope. Snapshot publication uses access-snapshot authority, without requiring backup export. Sensitive runtime credentials remain outside exported configuration.
 
 ## Validation and deployment
 
-Regression coverage includes PostgreSQL and SQLite stored upgrades, feature/action independence, direct/import mutation guards, setup identity and concurrent removal, device proof signature/session/replay/expiry checks, native origin enforcement, browser extension nonce/origin behavior, console read-only and revocation handling, and account/profile initialization. The UI builds into a separate validation output directory.
+Regression coverage includes PostgreSQL and SQLite initialization and restart, feature/action independence, direct/import mutation guards, setup identity and concurrent removal, device proof signature/session/replay/expiry checks, native origin enforcement, browser extension nonce/origin behavior, console read-only and revocation handling, and account/profile initialization. The UI builds into a separate validation output directory.
 
 No local Docker image build or running demo reset is required by this change. Source validation does not replace acceptance using the installed Windows client and Chrome extension. Complete that installed flow before declaring the original live enrollment issue resolved.

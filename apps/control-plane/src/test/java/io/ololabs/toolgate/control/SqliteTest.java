@@ -12,6 +12,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class SqliteTest {
     @TempDir Path directory;
+    @Test void firstInitializationContainsOnlyTheCurrentSchema() throws Exception {
+        var source=SqliteState.open(directory.resolve("initial.sqlite"));
+        try(var c=source.getConnection();var s=c.createStatement()) {
+            try(var r=s.executeQuery("SELECT version FROM quickstart_migrations")){
+                assertTrue(r.next());assertEquals(1,r.getInt(1));assertFalse(r.next());
+            }
+            try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name IN ('control_access_migration_archive','control_approvals','control_permit_leases')")){
+                assertFalse(r.next());
+            }
+            try(var r=s.executeQuery("PRAGMA foreign_key_check")){assertFalse(r.next());}
+        }
+    }
     @Test void concurrentDirectoryReadsDoNotReserveTheWriterAndKeepSnapshotIsolation() {
         var codec=new ContractCodec();var store=new PostgresStore(SqliteState.open(directory.resolve("readers.sqlite")),codec);
         var actor=TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");
@@ -67,7 +79,7 @@ final class SqliteTest {
             try(var r=s.executeQuery("SELECT count(*) FROM control_audit")){assertTrue(r.next());assertEquals(3,r.getInt(1));}
         }
     }
-    @Test void cleanOrderedUpgradeAndFutureVersionFailClosed() throws Exception {
+    @Test void initialSchemaReopensWithoutReplayingAndFutureVersionFailsClosed() throws Exception {
         var path=directory.resolve("upgrade.sqlite");var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+path);
         try(var c=source.getConnection();var statement=c.createStatement()) {
             statement.execute("CREATE TABLE quickstart_migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)");
@@ -79,9 +91,9 @@ final class SqliteTest {
         }
         var upgraded=SqliteState.open(path);
         try(var c=upgraded.getConnection();var s=c.createStatement()){
-            try(var r=s.executeQuery("SELECT count(*) FROM quickstart_migrations")){assertTrue(r.next());assertEquals(19,r.getInt(1));}
+            try(var r=s.executeQuery("SELECT count(*) FROM quickstart_migrations")){assertTrue(r.next());assertEquals(1,r.getInt(1));}
             try(var r=s.executeQuery("SELECT document FROM control_records WHERE record_id='kept'")){assertTrue(r.next());assertTrue(r.getString(1).contains("Kept"));}
-            s.execute("INSERT INTO quickstart_migrations VALUES(20,'future')");
+            s.execute("INSERT INTO quickstart_migrations VALUES(2,'future')");
         }
         assertThrows(IllegalStateException.class,()->SqliteState.open(path));
     }
@@ -92,32 +104,4 @@ final class SqliteTest {
         }
         assertThrows(IllegalStateException.class,()->SqliteState.open(path));
     }
-    @Test void legacyManagementRulesUpgradeOnceAndRetainPrivateDeviceVisibility() throws Exception {
-        var path=directory.resolve("legacy-management.sqlite");var source=SqliteState.open(path);
-        try(var c=source.getConnection();var s=c.createStatement()) {
-            // V17 changes data only. Seed the exact stored V16 representation, never the new contract decoder.
-            s.execute("DELETE FROM quickstart_migrations WHERE version=17");
-            s.execute("INSERT INTO control_tenants(tenant_id,revision) VALUES('legacy',7)");
-            var document="""
-                {"id":"visitor","name":"Visitor","enabled":true,"revision":2,"portalRole":"ADMINISTRATOR","roleType":"MANAGEMENT","managementRules":[
-                  {"actions":["read"],"groupType":"DEVICE_GROUP","groups":{"ids":[],"all":true},"grantableScopes":[],"conditions":{}},
-                  {"actions":["approve-device"],"groupType":"DEVICE_GROUP","groups":{"ids":["private"],"all":false},"grantableScopes":[],"conditions":{},"ownDevices":true}]}
-                """;
-            try(var insert=c.prepareStatement("INSERT INTO control_records VALUES('legacy','ROLE','visitor',2,?)")){insert.setString(1,document);insert.executeUpdate();}
-        }
-        var upgraded=SqliteState.open(path);
-        try(var c=upgraded.getConnection();var s=c.createStatement();var r=s.executeQuery("SELECT document,revision FROM control_records WHERE record_id='visitor'")){
-            assertTrue(r.next());var role=new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.getString(1));
-            assertEquals(3,r.getInt(2));assertEquals(3,role.get("revision").asInt());
-            var broad=role.get("managementRules").get(0);var owned=role.get("managementRules").get(1);
-            assertFalse(broad.get("actions").toString().contains("device.read"));assertTrue(broad.get("actions").toString().contains("user.read"));
-            assertFalse(owned.has("ownDevices"));assertEquals("OWNED",owned.get("deviceScope").asText());
-            assertEquals("private",owned.get("groups").get("ids").get(0).asText());assertTrue(owned.get("actions").toString().contains("device.approve"));
-        }
-        SqliteState.open(path);
-        try(var c=upgraded.getConnection();var s=c.createStatement();var r=s.executeQuery("SELECT revision,authorization_epoch FROM control_tenants WHERE tenant_id='legacy'")){
-            assertTrue(r.next());assertEquals(8,r.getLong(1));assertEquals(1,r.getLong(2));
-        }
-    }
-
 }

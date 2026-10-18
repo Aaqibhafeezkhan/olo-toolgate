@@ -11,7 +11,7 @@ Control already has the pieces this needs: an authorization epoch, bumped on eve
 
 ## Decision
 
-1. **Grow-only signed events.** Kills and recoveries are immutable `KillEvent` and `RecoveryEvent` records (`kill.schema.json`), identified as `<issuer>:<counter>`. They are stored insert-only in `control_kill_events` and `control_kill_supersessions` (Flyway V19 and Quickstart V12 specifications), with triggers and grants that refuse updates and deletes.
+1. **Grow-only signed events.** Kills and recoveries are immutable `KillEvent` and `RecoveryEvent` records (`kill.schema.json`), identified as `<issuer>:<counter>`. They are stored insert-only in `control_kill_events` and `control_kill_supersessions` (prospective PostgreSQL and SQLite V2 specifications), with triggers and grants that refuse updates and deletes.
 2. **Merge rule.** A component's state is the union of the valid events it has seen. Effective kills are those that no recovery supersedes, and `TERMINATE` beats `STOP_NEW`. A direct full fetch from Control replaces the set, after checking signatures and that the page's epoch is not older than one the component has seen.
 3. **One transaction per event.** Authorize, allocate the counter, sign, insert, bump the tenant revision (which raises the authorization epoch and writes the outbox row), and cancel matching stored work, all in one commit ([kill-switch.md](../control-plane/kill-switch.md) §3).
 4. **Signing.** Events and pushes are signed in Control's fleet signing key domain with their own `typ` values (`toolgate-kill-event+jws`, `toolgate-kill-push+jws`) over the JCS of the record without its signature.
@@ -57,6 +57,6 @@ Additive. New tables, endpoints and push messages. Release-1 endpoint clients ne
 
 ## Validation
 
-- `tests/contracts/test_migration_specs_v2.py` covers V19 and V12: grow-only rows, unique event ids, no break-glass recovery, supersession and archive guards, and monotonic acknowledgements, on both databases.
+- `tests/contracts/test_migration_specs_v2.py` covers prospective version 2 for both database dialects: grow-only rows, unique event ids, no break-glass recovery, supersession and archive guards, and monotonic acknowledgements, on both databases.
 - `kill.schema.json` valid and invalid fixtures, including a break-glass request with one operator.
 - D3 conformance cases: terminate running work, a partitioned host, replayed pushes that can't remove a kill, a stale full fetch refused, break-glass with one key, reused or expired operator approvals.

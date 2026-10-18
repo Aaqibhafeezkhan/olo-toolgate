@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Design gate D2: the migration specifications apply cleanly and enforce their invariants.
 
-The specification files under docs/control-plane/migrations-v2/ ship unchanged in the
-milestone that implements them; a shipped file must stay byte-identical to its
-specification. These checks apply the files not yet shipped on top of the current
+Invocation/task storage is folded into the first-release V1 schemas. The remaining
+kill-switch specifications ship unchanged when implemented. These checks apply the files not yet shipped on top of the current
 Quickstart tree (SQLite, always) and the current Flyway tree (PostgreSQL, when
 TOOLGATE_D2_POSTGRES names a server as host:port), then run the same scenarios on
 both, so the two dialects can't drift apart.
@@ -55,7 +54,7 @@ RESULT = ("INSERT INTO control_invocation_results(tenant_id,invocation_id,fencin
 
 # (statement, should it succeed?) in order; each failure must leave the database unchanged.
 SCENARIOS = [
-    (invocation('i1'), True),                                              # v1 rows are untouched
+    (invocation('i1'), True),                                              # synchronous invocation without a task
     (task('i2', 'QUEUED', 'QUEUED'), True),
     ("UPDATE control_enterprise_invocations SET state='EXECUTING' WHERE invocation_id='i2'", False),
     ("UPDATE control_enterprise_invocations SET state='EXECUTING',task_state='RUNNING',lease_holder='host-1',"
