@@ -37,6 +37,7 @@ export function Builder({client}:{client:ControlClient}){
  function save(event:FormEvent){event.preventDefault();try{JSON.parse(source);}catch{setValidation('Enter a valid JSON SDK project.');return;}void action(async()=>{
   const draft=await client.saveSdkDraft({id,expectedRevision:selected?.revision??0,toolGroupId:group,source},crypto.randomUUID());setSelected(draft);setSource(draft.source);setRefresh(value=>value+1);setMessage(`Project saved at revision ${draft.revision}.`);
  });}
+ function load(file:File){void action(async()=>{const imported=await client.importSdkSource(file);setSource(imported.source);setMessage('Source loaded from the ZIP. Save the project to keep it.');});}
  const dirty=!selected||selected.source!==source||selected.toolGroupId!==group;
  const mayAuthor=canBuild&&Boolean(groups.find(item=>item.id===group)?.canBuild);
  return <><p className="eyebrow">SDK packages</p><div className="page-heading"><h1>Tool Builder</h1><button className="primary" disabled={busy||!canBuild||!groups.some(item=>item.canBuild)} onClick={create}>Add project</button></div>
@@ -55,6 +56,7 @@ export function Builder({client}:{client:ControlClient}){
  {open&&<EditorDialog title={selected?'SDK project':'New SDK project'} close={()=>setOpen(false)} busy={busy}>
  {error!==undefined&&<Failure error={error}/>}<p role="status" aria-live="polite">{message}</p>{validation&&<p role="alert">{validation}</p>}
  <form onSubmit={save}><label htmlFor="sdk-builder-group">Tool Group</label><select id="sdk-builder-group" value={group} disabled={busy||!canBuild} onChange={event=>setGroup(event.target.value)}>{groups.map(item=><option key={item.id} value={item.id}>{item.name}{item.canBuild?'':' (view only)'}</option>)}</select>
+ <label htmlFor="sdk-builder-import">Import source ZIP (from Download source, edited or not)</label><input id="sdk-builder-import" type="file" accept=".zip,application/zip" disabled={busy||!mayAuthor} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)load(file);}}/>
  <label htmlFor="sdk-builder-source">JSON SDK project</label><textarea id="sdk-builder-source" rows={22} maxLength={32768} value={source} readOnly={!mayAuthor} disabled={busy} onChange={event=>setSource(event.target.value)} spellCheck={false}/>
  <p>Choose CLIENT for device-only tools or SERVER for host and supported device execution. The current JSON SDK supports bounded string inputs and concatenation. Defaults and examples are checked during the build. Project versions are immutable after a successful build.</p>
  <button disabled={busy||!mayAuthor}>Save project</button></form>

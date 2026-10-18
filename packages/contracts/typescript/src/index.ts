@@ -1692,6 +1692,11 @@ export interface SdkBuilderSave {
   readonly toolGroupId: string;
   readonly source: string;
 }
+/** The canonical JSON SDK project read from an uploaded source ZIP; nothing is saved until the project is saved as a draft. */
+export interface SdkBuilderSource {
+  readonly source: string;
+  readonly sourceDigest: string;
+}
 export type SdkBuilderState = "QUEUED" | "RUNNING" | "READY" | "FAILED";
 /** Configured SDK and current authorized authoring contexts; availability grants no authority. */
 export interface SdkBuilderStatus {

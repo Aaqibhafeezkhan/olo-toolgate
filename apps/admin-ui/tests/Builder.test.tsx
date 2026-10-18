@@ -55,3 +55,16 @@ it('does not reflect source-bearing backend errors',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>json({code:'VALIDATION',message:'private-source-detail'},400)));render(<Builder client={client()}/>);
  await screen.findByRole('alert');expect(document.body.textContent).not.toContain('private-source-detail');expect(screen.getByRole('button',{name:'Try again'})).toBeTruthy();
 });
+it('imports a source ZIP into the editor without saving it',async()=>{
+ const imported=fixtures.SdkBuilderSource;
+ const fetcher=vi.fn(async(url:string,init?:RequestInit)=>url.endsWith('/builder/sources')&&init?.method==='POST'?json(imported):empty(url));
+ vi.stubGlobal('fetch',fetcher);render(<Builder client={client()}/>);
+ await screen.findByText('No SDK projects yet. Add a project to start with Hello World.');fireEvent.click(screen.getByRole('button',{name:'Add project'}));
+ const zip=new File([new Uint8Array([80,75,3,4])],'tool-source.zip',{type:'application/zip'});
+ fireEvent.change(screen.getByLabelText(/Import source ZIP/),{target:{files:[zip]}});
+ await screen.findByText('Source loaded from the ZIP. Save the project to keep it.');
+ expect((screen.getByLabelText('JSON SDK project') as HTMLTextAreaElement).value).toBe(imported.source);
+ const upload=fetcher.mock.calls.find(([url])=>url.endsWith('/builder/sources'))!;
+ expect(upload[1]?.body).toBe(zip);expect(new Headers(upload[1]?.headers).get('Content-Type')).toBe('application/zip');
+ expect(fetcher.mock.calls.some(([url,init])=>url.endsWith('/drafts')&&init?.method==='POST')).toBe(false);
+});

@@ -107,6 +107,19 @@ public final class SdkBuilderService {
             var response = reply(result, result.revision()); tx.remember(actor.id(), key, digest, response); return response;
         });
     }
+    /** The canonical project in an uploaded source ZIP, for the editor to load and save as a draft. Stores nothing. */
+    public Store.Reply source(DirectoryService.Actor actor, byte[] archive) {
+        actor(actor);
+        store.transaction(tenant, false, tx -> {
+            if (!new ManagementAccess(codec).capabilities(tx.load(), actor.userId(), clock.millis()).contains("tool_builder.build")) throw ManagementAccess.denied();
+            return null;
+        });
+        String project;
+        try { project = new String(io.ololabs.toolgate.jsonsdk.JsonSdk.projectFromArchive(archive), StandardCharsets.UTF_8); }
+        catch (java.io.IOException invalid) { throw Failure.validation(); }
+        String canonical = source(project);
+        return reply(new SdkBuilderSource(canonical, "sha256:" + DirectoryService.digest(canonical)), 0);
+    }
     public Store.Reply queue(DirectoryService.Actor actor, String body, String key, String requestId) {
         actor(actor); Ids.valid(key); Ids.valid(requestId);
         var request = codec.model(body, SdkBuilderBuildRequest.class);

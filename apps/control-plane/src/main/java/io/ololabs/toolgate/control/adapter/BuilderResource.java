@@ -33,7 +33,11 @@ public class BuilderResource {
     @POST @Path("drafts") @Consumes("application/json") public Response save(@HeaderParam("Idempotency-Key") String key, String value) {
         return response(service.save(actor(), body(value), key, correlation.id()));
     }
-    @GET @Path("builds") public Response builds(@QueryParam("cursor") String cursor) { return response(service.builds(actor(), cursor)); }
+    @POST @Path("sources") @Consumes("application/zip") public Response source(byte[] archive) {
+        if (archive == null || archive.length > io.ololabs.toolgate.jsonsdk.JsonSdk.MAX_ARCHIVE_BYTES) throw Failure.validation();
+        return response(service.source(actor(), archive));
+    }
+        @GET @Path("builds") public Response builds(@QueryParam("cursor") String cursor) { return response(service.builds(actor(), cursor)); }
     @POST @Path("builds") @Consumes("application/json") public Response build(@HeaderParam("Idempotency-Key") String key, String value) {
         return response(service.queue(actor(), body(value), key, correlation.id()));
     }

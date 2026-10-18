@@ -279,6 +279,7 @@ fn shared_fixture_round_trips() {
         SdkBuilderError,
         SdkBuilderGroup,
         SdkBuilderSave,
+        SdkBuilderSource,
         SdkBuilderState,
         SdkBuilderStatus,
         SignedClientDiscovery,
