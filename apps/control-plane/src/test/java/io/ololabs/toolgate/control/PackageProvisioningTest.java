@@ -144,6 +144,33 @@ final class PackageProvisioningTest {
         assertNull(rig.store.transaction(rig.tenant, false, tx -> tx.load().entries().get(Ids.Kind.BINDING.id("nowhere"))));
     }
 
+    @Test void aRestoredInstallationReconcilesItsExactRecordedPackagesAsANoOp() throws Exception {
+        var rig = rig(); register(rig);
+        var applied = node(rig.provisioning.apply(rig.admin, profile(ORDERS)));
+        assertEquals("READY", applied.get("state").asText());
+        long revision = deployment(rig).get("revision").asLong();
+        // A backup is the database file. The restored installation runs the same image, so the same sealed core lock;
+        // its recorded package is already installed, so the artifact is never read again.
+        var restoredPath = directory.resolve("restored.sqlite");
+        java.nio.file.Files.copy(directory.resolve("profiles.sqlite"), restoredPath);
+        var restored = new PostgresStore(SqliteState.open(restoredPath), rig.codec);
+        var packages = new ServerPackages(restored, rig.codec, null, java.time.Clock.systemUTC());
+        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        PackageProvisioning.CoreArtifacts core = (id, version) -> id.equals("acme.orders") && version.equals("0.1.0")
+                ? new PackageProvisioning.Core(rig.digest, () -> { reads.incrementAndGet(); throw new AssertionError("re-imported"); }) : null;
+        var reconcile = new PackageProvisioning(restored, rig.codec, packages, null, core, null, null, java.time.Clock.systemUTC());
+        var again = node(reconcile.apply(rig.admin, profile(ORDERS)));
+        // The exact recorded package is installed: nothing is imported, redeployed, substituted or granted.
+        assertEquals("READY", again.get("state").asText(), again::toString);
+        assertEquals(applied.get("generation").asLong(), again.get("generation").asLong());
+        assertEquals(rig.digest, again.get("packages").get(0).get("packageDigest").asText());
+        String raw = restored.<String>transaction(rig.tenant, false, tx -> tx.packages().deployment("acme.orders"));
+        assertEquals(revision, JSON.readTree(raw).get("revision").asLong());
+        Boolean noGrant = restored.transaction(rig.tenant, false, tx -> tx.load().entries().keySet().stream().noneMatch(id -> id.kind() == Ids.Kind.GRANT));
+        assertTrue(noGrant);
+        assertEquals(0, reads.get());
+    }
+
     @Test void readersNeedPackageRead() throws Exception {
         var rig = rig(); rig.provisioning.apply(rig.admin, profile(ORDERS));
         var reader = new DirectoryService.Actor(rig.tenant, "b".repeat(64), true, false, "mallory");
