@@ -527,8 +527,12 @@ impl Manager {
             .engine
             .probe_version(&runtime.image, &command, &limits)
             .await?;
-        // The JVM reports its version on stderr.
-        adapters::verify_version(&data.stderr, &runtime.version)?;
+        // Python reports its version on stdout; the JVM reports it on stderr.
+        let version_output = match runtime.kind {
+            LocalRuntimeKind::PythonSdk => &data.stdout,
+            LocalRuntimeKind::JavaSdk => &data.stderr,
+        };
+        adapters::verify_version(version_output, &runtime.version)?;
         self.states.insert(id.to_owned(), LocalRuntimeState::Ready);
         tracing::info!(event="runtime_prepare",runtime_id=%runtime.id,result="ready");
         Ok(())

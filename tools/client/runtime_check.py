@@ -70,7 +70,8 @@ def main():
                 hello_world_artifact(output, work, package, extension)
                 # Root-owned, read-only, run as 65532 with the client's fixed launch vector.
                 (work/'Dockerfile').write_text('# Copyright 2026 OLO Labs\n# SPDX-License-Identifier: Apache-2.0\n'
-                    f'FROM {runtime_base}\nCOPY --chmod=0444 tool.{extension} /opt/tool/{package}/tool.{extension}\n'
+                    f'FROM {runtime_base}\nRUN mkdir -p /opt/tool/{package} && chmod 0755 /opt/tool /opt/tool/{package}\n'
+                    f'COPY --chmod=0444 tool.{extension} /opt/tool/{package}/tool.{extension}\n'
                     'USER 65532:65532\nENTRYPOINT []\nCMD []\n', encoding='utf-8')
                 run(['docker', 'build', '-t', sdk_tag, str(work)])
                 image = run(['docker', 'image', 'inspect', '--format', '{{.Id}}', sdk_tag], capture_output=True, text=True).stdout.strip()
