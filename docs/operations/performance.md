@@ -13,6 +13,11 @@ Each Control process populates its directory cache on first access. Entries expi
 entries when either bound is reached. Directory records and reference collections
 are immutable. The device adoption digest is computed once for each cached version.
 
+An optional external Redis/Valkey cache can supply directory data on a local miss.
+It uses authenticated, encrypted entries keyed by deployment namespace, tenant and
+database version, and falls back to database reads on cache failure. Local caching
+remains the default. See [configuration and deployment](../deployment/shared-cache.md).
+
 Every load reads the tenant's current configuration revision and cache generation
 from the database before reusing an entry. The generation is maintained by database
 triggers on directory records and server settings, covering insertion, updates and

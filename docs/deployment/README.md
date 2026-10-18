@@ -3,6 +3,7 @@
 - [Quickstart walkthrough](../getting-started/one-minute-quickstart.md): local evaluation.
 - [Quickstart configuration and recovery](quickstart.md).
 - [Docker Compose](docker-compose.md): existing deployment helpers.
+- [Optional shared cache](shared-cache.md): external Redis/Valkey for Docker Compose and Helm.
 - [Deployment profiles](profiles.md): pinned, configuration-driven package provisioning.
 - [Production preparation](production.md): separate services, external state and custody.
 - [Device installation](device.md) and [secured devices](secured-device.md).
