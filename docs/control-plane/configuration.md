@@ -72,6 +72,13 @@ Do not bypass these checks to make a deployment ready.
 
 See [current ASK approval behavior](approvals.md) and the [security model](../security/enterprise-access-control.md) before configuring reviewer authority.
 
+## Optional shared cache
+
+For optional external Redis/Valkey directory caching, including environment variables,
+Docker mounts, Helm Secret references and network policy, see
+[shared cache configuration](../deployment/shared-cache.md). It defaults to local
+caching and always checks the database before reusing entries.
+
 ## Client check-in
 
 Source: [Platform requirements §17.1 and §17.2](../contracts/platform-requirements.md). Phase A ships with

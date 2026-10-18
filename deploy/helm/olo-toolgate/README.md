@@ -16,6 +16,9 @@ current supported fields. Unknown settings and embedded secret values are reject
 - Set explicit ingress TLS and NetworkPolicy peers for runtime, management, Control,
   database and DNS traffic. Keep management endpoints restricted.
 - Configure replica/resources, PDB and optional HPA/ServiceMonitor for your cluster.
+- Optionally configure `control.cache` for an existing Redis/Valkey endpoint, mounted
+  credentials and `control.networkPolicy.cacheTo`/`dnsTo`. See
+  [shared cache configuration](../../../docs/deployment/shared-cache.md).
 
 The chart does not provision a database, identity provider or customer key custody.
 Read [production prerequisites](../../../docs/deployment/production.md),

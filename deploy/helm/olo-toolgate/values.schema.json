@@ -645,7 +645,8 @@
         "effect",
         "recovery",
         "clientCheckIn",
-        "builder"
+        "builder",
+        "cache"
       ],
       "properties": {
         "builder": {
@@ -938,7 +939,8 @@
             "databaseTo",
             "dnsTo",
             "collectorTo",
-            "artifactTo"
+            "artifactTo",
+            "cacheTo"
           ],
           "properties": {
             "enabled": {
@@ -994,6 +996,13 @@
               }
             },
             "registryTo": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "type": "object"
+              }
+            },
+            "cacheTo": {
               "type": "array",
               "maxItems": 128,
               "items": {
@@ -1313,7 +1322,7 @@
         "clientCheckIn": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Env-owned Phase A client check-in (platform-requirements.md §17.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
+          "description": "Env-owned Phase A client check-in (platform-requirements.md \u00c2\u00a717.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
           "required": [
             "checkInMs",
             "jitterPct",
@@ -1744,6 +1753,104 @@
                   "keyId": {
                     "minLength": 1,
                     "pattern": "^[A-Za-z0-9._-]{1,64}$"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "host",
+            "port",
+            "tls",
+            "username",
+            "namespace",
+            "credentialsSecret",
+            "caSecret",
+            "timeoutMs",
+            "ttlSeconds"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "local",
+                "redis"
+              ]
+            },
+            "host": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9.:-]*$"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "tls": {
+              "type": "boolean"
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "namespace": {
+              "type": "string",
+              "maxLength": 128,
+              "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9:_-]*$"
+            },
+            "credentialsSecret": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+            },
+            "caSecret": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 2000
+            },
+            "ttlSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "redis"
+                  }
+                },
+                "required": [
+                  "mode"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "host": {
+                    "minLength": 1
+                  },
+                  "namespace": {
+                    "minLength": 1
+                  },
+                  "credentialsSecret": {
+                    "minLength": 1
+                  },
+                  "tls": {
+                    "const": true
                   }
                 }
               }

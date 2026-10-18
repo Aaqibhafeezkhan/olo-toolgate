@@ -21,7 +21,13 @@ class PostgresDirectoryCacheTest {
         try (var c = source.getConnection(); var s = c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,'USER','same',1,?::jsonb)")) {
             for (String tenant : new String[] {"a", "b"}) { s.setString(1, tenant); s.setString(2, codec.json(new ControlUser("same", tenant, true, 1L))); s.executeUpdate(); }
         }
-        var first = new PostgresStore(source, codec); var replica = new PostgresStore(source, codec);
+        String cachePort = System.getenv("CONTROL_TEST_CACHE_PORT");
+        var shared = cachePort == null ? null : new SharedDirectoryCache(
+            new RedisCacheClient("localhost", Integer.parseInt(cachePort), "default",
+                System.getenv("CONTROL_TEST_CACHE_PASSWORD").getBytes(java.nio.charset.StandardCharsets.UTF_8), null, 1000),
+            codec, database, new byte[32], 60);
+        var first = new PostgresStore(source, codec, new DirectoryCache(shared));
+        var replica = new PostgresStore(source, codec, new DirectoryCache(shared));
         var old = first.transaction(a, false, tx -> tx.load());
         assertNotEquals(old, first.transaction(b, false, tx -> tx.load()));
         var oldDigest = first.transaction(a, false, tx -> tx.adoptionDigest(a, codec));

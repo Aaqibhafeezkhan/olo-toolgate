@@ -19,6 +19,9 @@ services:
       - path: ./env/control.env
         format: raw
         required: true
+      - path: ./env/.env.cache
+        format: raw
+        required: false
     mem_limit: 768m
     cpus: 2
     stop_grace_period: 30s
