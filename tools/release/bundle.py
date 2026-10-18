@@ -54,7 +54,7 @@ def main():
                     'approval':{'types':['OPERATION','CONFIGURATION'],'states':'durable per-invocation obligations; no temporary reusable grant','permit':'RS256 dedicated Control key; ten-second maximum; certificate-bound atomic nonce consume'},
                     'enterpriseAccessRevision':2,'gatewayApi':'/access/invocations; /mcp; retired decision and Gateway-consume routes return 404',
                     'controlApi':'/api/control/v1; group-only grants, scoped management and current effect authority',
-                    'controlDatabase':{'postgresql':'17.11','flywaySchema':13,'sqliteSchema':6},
+                    'controlDatabase':{'postgresql':'17.11','flywaySchema':1,'sqliteSchema':1},
                     'endpoint':{'protocolVersion':1,'enrollment':'HTTPS browser code plus verified P-256 CSR','identity':'dedicated RSA device CA; actual mTLS peer; active registry','platforms':['windows-x64','windows-arm64','linux-x64','linux-arm64','macos-x64','macos-arm64'],'execution':True},
                     'mcp':{'version':'2026-07-28','capabilities':'stateless ingress; current group-authorized discovery and device-bound execution; per-invocation approvals'},
                     'gatewayImage':f'ghcr.io/olo-labs/olo-toolgate-gateway:{product}', 'controlImage':f'ghcr.io/olo-labs/olo-toolgate-control:{product}',

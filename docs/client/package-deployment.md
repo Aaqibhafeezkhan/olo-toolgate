@@ -52,7 +52,7 @@ old key. Retain release keys needed to verify deployed/rollback versions.
 ## Production configuration
 
 Existing Control PostgreSQL, direct TLS/mTLS and authenticated administrative APIs
-are required. Run the complete Flyway series through V11 with the migration role
+are required. Initialize Flyway version 1 with the migration role
 before serving; runtime role
 cannot create tables or alter immutable releases. Fleet writes, generations,
 idempotency and audit share one tenant-serialized transaction. Rollouts survive

@@ -6,7 +6,7 @@ This is the reviewed state-machine specification behind design gate D2 (platform
 
 It is normative. Milestone code implements it. A change after D2 passes needs an amendment to ADR 016.
 
-The schema shapes are in `packages/contracts/schemas/v2/invocation.schema.json` and `permit.schema.json`. The migrations are the files in [migrations-v2/](migrations-v2/). [`tests/contracts/test_migration_specs_v2.py`](../../tests/contracts/test_migration_specs_v2.py) applies them to both database trees and runs the same scenarios on each.
+The schema shapes are in `packages/contracts/schemas/v2/invocation.schema.json` and `permit.schema.json`. Current invocation storage is included in the V1 initial schemas. Prospective kill-switch migrations are in [migrations-v2/](migrations-v2/). [`tests/contracts/test_migration_specs_v2.py`](../../tests/contracts/test_migration_specs_v2.py) applies them to both database trees and runs the same scenarios on each.
 
 ## 1. Authority
 
@@ -138,14 +138,13 @@ The trigger `control_business_key_guard` allows a rebind only from outcome `EXPI
 
 | Tree | File (specification) | Ships as | Content |
 |---|---|---|---|
-| Flyway (PostgreSQL) | [V18__invocation_tasks_v2.sql](migrations-v2/flyway/V18__invocation_tasks_v2.sql) | `db/migration/V18__invocation_tasks_v2.sql`, milestone M1 | §2–§7 columns, constraints and indexes; `control_business_keys`; `control_invocation_results`; guard triggers; grants |
-| Quickstart (SQLite) | [V11.sql](migrations-v2/quickstart/V11.sql) | `db/quickstart/V11.sql`, M1, with the `SqliteState` cap raised from 10 to 11 | Same state. Cross-column checks are triggers, because SQLite can't add table constraints. |
-| Flyway | [V23__kill_switch.sql](migrations-v2/flyway/V23__kill_switch.sql) | `db/migration/V23__kill_switch.sql`, with the kill switch | [kill-switch.md](kill-switch.md) §2 |
-| Quickstart | [V16.sql](migrations-v2/quickstart/V16.sql) | `db/quickstart/V16.sql`, cap raised to 16 | Same |
+| Flyway (PostgreSQL) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/migration/V1__initial_schema.sql) | Applied once to an empty database | Invocation/task columns, constraints and indexes; business keys; result payloads; guard triggers; grants |
+| Quickstart (SQLite) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/quickstart/V1.sql) | Applied once to an empty database | Same state; cross-column checks use triggers |
+| Flyway | [Prospective V2 kill switch](migrations-v2/flyway/V2__kill_switch.sql) | Ships when implemented | [kill-switch.md](kill-switch.md) §2 |
+| Quickstart | [Prospective V2 kill switch](migrations-v2/quickstart/V2.sql) | Ships when implemented | Same |
 
 **Rules:**
-- **Frozen content.** The files ship byte-for-byte; the Quickstart runner checksums each file. Only the version number may change, if another migration lands first, and then both trees and this table move together.
-- **Additive only.** Every new column is nullable or has a default, and no existing column, constraint or index changes. v1 rows and v1 code paths keep working, and an older image refuses the newer database through the runner cap (Quickstart) or Flyway's validation (PostgreSQL). There is no down-migration, as with every existing migration.
+- **Frozen content.** Released migration files are immutable. Future schema changes append a new version. The initial schema supports only the current application model; pre-release database histories are unsupported.
 - **Verified.** `tests/contracts/test_migration_specs_v2.py` applies the current trees plus these files, on SQLite always and on PostgreSQL when `TOOLGATE_D2_POSTGRES=host:port` is set, then runs the same accept/refuse scenarios on both. It was run against PostgreSQL 16 and SQLite 3.45 for this gate.
 
 ## 9. What this does not cover

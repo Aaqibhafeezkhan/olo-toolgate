@@ -19,7 +19,7 @@ final class PostgresTest {
         var value = System.getenv(name);
         assertNotNull(value, "Required real PostgreSQL test environment missing; run make check or tools/control/check.py"); return value;
     }
-    @Test void cleanInstallUpgradeAndAtomicMutations() throws Exception {
+    @Test void cleanInstallRestartAndAtomicMutations() throws Exception {
         var baseUrl = env("CONTROL_TEST_URL"); var password = env("CONTROL_TEST_PASSWORD");
         var database = "test_" + java.util.UUID.randomUUID().toString().replace("-", "");
         try (var connection = java.sql.DriverManager.getConnection(baseUrl, "control_migrator", password); var statement = connection.createStatement()) {
@@ -34,7 +34,7 @@ final class PostgresTest {
             statement.setString(1, DomainTest.user("kept", 1)); statement.executeUpdate();
         }
         var latest = Flyway.configure().dataSource(url, "control_migrator", password).cleanDisabled(true).load();
-        assertEquals(25, latest.migrate().migrationsExecuted); latest.validate();
+        assertEquals(0, latest.migrate().migrationsExecuted); latest.validate();
         var source = new PGSimpleDataSource(); source.setURL(url); source.setUser("control_app"); source.setPassword(password);
         var store = new PostgresStore(source, codec); var service = new DirectoryService(store, codec, 512, 1048576);
         var actor = TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");

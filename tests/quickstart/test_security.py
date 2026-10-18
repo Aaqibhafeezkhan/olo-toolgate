@@ -26,7 +26,7 @@ class SecurityTests(unittest.TestCase):
         (quickstart.DATA/'keys').mkdir(mode=0o700)
         (quickstart.DATA/'state').mkdir(mode=0o700)
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
-            for version in range(1,10):db.executescript((ROOT/f'apps/control-plane/src/main/resources/db/quickstart/V{version}.sql').read_text(encoding='utf-8'))
+            db.executescript((ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text(encoding='utf-8'))
             binding={'id':'installed-admin','name':'Reviewed test identity','enabled':True,'revision':1,'userId':'admin','issuer':quickstart.ISSUER,'subject':'admin','sessionEpoch':1,'firstSeenUnixMs':1,'lastAttemptUnixMs':1,'attemptCount':1,'registrationReason':'REVIEWED_INSTALLATION','sessionsValidAfterUnixMs':0}
             db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING','installed-admin',1,json.dumps(binding)))
     def tearDown(self):self.temp.cleanup()

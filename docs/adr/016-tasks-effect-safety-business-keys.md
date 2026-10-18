@@ -13,7 +13,7 @@ Two open inconsistencies in the plan are also settled here: the synchronous dead
 
 ## Decision
 
-1. **Control's invocation row is the task store.** v2 adds nullable columns to `control_enterprise_invocations`, plus two tables: `control_business_keys` and `control_invocation_results`. There is no separate task database and no Gateway or Tool Host database role. The exact contents are the migration specifications in `docs/control-plane/migrations-v2/` (Flyway V18, Quickstart V11). The normative behaviour is [invocation-state-v2.md](../control-plane/invocation-state-v2.md).
+1. **Control's invocation row is the task store.** The initial schema includes task columns on `control_enterprise_invocations`, plus two tables: `control_business_keys` and `control_invocation_results`. There is no separate task database and no Gateway or Tool Host database role. The exact contents are the V1 initial schemas in `apps/control-plane/src/main/resources/db/` (PostgreSQL and SQLite). The normative behaviour is [invocation-state-v2.md](../control-plane/invocation-state-v2.md).
 2. **The v1 state stays authoritative.** `task_state` is a projection of the existing `state` plus the sub-states `INPUT_REQUIRED`, `CANCEL_REQUESTED` and `REJECTED`. A constraint enforces the allowed pairs, so the two can't disagree, and no v1 enum value changes.
 3. **Every governed invocation has a row**, as today. platform-requirements.md §12.1 decides only whether that row gets task columns, a business-key row and a result row. "No task record" means none of those three. This settles §12.1 against §11.3, which requires a nonce, and therefore a row, for every non-built-in tool.
 4. **Effect safety resolves once.**
@@ -57,11 +57,11 @@ Two open inconsistencies in the plan are also settled here: the synchronous dead
 
 ## Operational Impact
 
-Two migrations per tree (V18 and V19; V11 and V12) ship with their milestones, and the Quickstart runner cap moves with them. New jobs: lease expiry, input-deadline expiry, retention purge. Control's database grows by result payloads up to their retention. Operators size it like the relay queue, with a 4 MiB per-result bound.
+Invocation storage ships in the version 1 schema for each database; the future kill-switch extension starts at version 2. New jobs: lease expiry, input-deadline expiry, retention purge. Control's database grows by result payloads up to their retention. Operators size it like the relay queue, with a 4 MiB per-result bound.
 
 ## Compatibility Impact
 
-Additive. v1 rows, endpoints and readers are unchanged. An older image refuses a newer Quickstart database through the runner cap, and Flyway validation does the same for PostgreSQL. The D1 amendments add optional members and new definitions only. One behaviour change: a denied approval now ends the invocation (`CANCELLED`, task `REJECTED`) at once, instead of waiting for it to expire.
+The first-release schema includes the current invocation model directly. Pre-release database histories are unsupported. The D1 amendments add optional members and new definitions only. One behaviour change: a denied approval now ends the invocation (`CANCELLED`, task `REJECTED`) at once, instead of waiting for it to expire.
 
 ## Consequences
 

@@ -13,11 +13,9 @@ class RestoreTests(unittest.TestCase):
   self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.source=self.root/'backup';self.data=self.source/'data';(self.data/'state').mkdir(parents=True);self.target=self.root/'restored';self.target.mkdir();self.now=1800000000000
   db=self.data/'state/control.sqlite'
   with closing(sqlite3.connect(db)) as c,c:
-   # The current Quickstart schema: every migration it ships.
-   for version in range(1,len(list((ROOT/'apps/control-plane/src/main/resources/db/quickstart').glob('V*.sql')))+1):
-    script=(ROOT/f'apps/control-plane/src/main/resources/db/quickstart/V{version}.sql').read_text()
-    for statement in script.split('-- statement'):
-     if statement.strip():c.executescript(statement)
+   # Complete first-release SQLite schema, executed by the Quickstart adapter.
+   script=(ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text()
+   c.executescript(script)
    c.execute("INSERT INTO control_tenants(tenant_id,revision,authorization_epoch) VALUES('tenant',7,9)")
    records=[('USER',dict(id='user',name='User',enabled=True,revision=1)),('TEAM',dict(id='team-default',name='Default',enabled=True,revision=1,userIds=['user'],roleIds=['management'])),('ROLE',dict(id='management',enabled=True,revision=1)),('WORKLOAD_BINDING',dict(id='workload',enabled=True,revision=1,credentialEpoch=3)),('IDENTITY_BINDING',dict(id='identity',enabled=True,revision=1,sessionEpoch=2,sessionsValidAfterUnixMs=0))]
    for kind,doc in records:c.execute('INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,?,?,?,?)',('tenant',kind,doc['id'],1,json.dumps(doc)))

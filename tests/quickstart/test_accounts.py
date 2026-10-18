@@ -95,7 +95,7 @@ class AccountTests(unittest.TestCase):
         """A prepared installation with its directory identities, the admin login and generated accounts."""
         self.prepare()
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
-            for version in range(1,10):db.executescript((ROOT/f'apps/control-plane/src/main/resources/db/quickstart/V{version}.sql').read_text(encoding='utf-8'))
+            db.executescript((ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text(encoding='utf-8'))
             for binding in strict_packet()['identityBindings']:
                 db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING',binding['id'],1,json.dumps(binding)))
         quickstart.atomic(quickstart.DATA/'identity.json',json.dumps(quickstart.password_record('admin-Initial-Password-2026')))

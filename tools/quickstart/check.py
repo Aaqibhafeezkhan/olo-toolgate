@@ -4,7 +4,6 @@
 import argparse
 import base64
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -502,15 +501,13 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         evaluation={**saved['evaluation'],'nowUnixMs':int(time.time()*1000)}
         assert ok(api('/api/control/v1/access/simulate',admin,evaluation,'POST'))['decision']=='BLOCK'
         baseline=ok(api('/api/control/v1/config/export',admin))
-        sys.path.insert(0,str(ROOT/'tools/enterprise'))
-        spec=importlib.util.spec_from_file_location('migration_gate',ROOT/'tools/enterprise/migration.py')
-        migration=importlib.util.module_from_spec(spec);spec.loader.exec_module(migration)
         team=next(t for t in baseline['teams'] if t['id']=='installation-administrators')
-        proposed,evidence=migration.prepare(dict(tenantId=baseline['tenantId'],source='isolated retained configuration',snapshot=baseline),
-            baseline,dict(tenantId=baseline['tenantId'],revision=baseline['revision'],
-                          records={'teams':[{**team,'name':'Reviewed installation operators'}]},reasonDigest='b'*64))
+        proposed=json.loads(json.dumps(baseline))
+        proposed['teams']=[{**t,'name':'Reviewed installation operators'} if t['id']==team['id'] else t for t in proposed['teams']]
+        evidence=dict(formatVersion=1,tenantId=baseline['tenantId'],effectsAuthorized=False,
+                      snapshotDigest=hashlib.sha256(json.dumps(baseline,sort_keys=True).encode()).hexdigest())
         shadow=ok(api('/api/control/v1/access/shadow',admin,dict(snapshot=proposed,evaluation=evaluation,
-            observedLegacyDecision='BLOCK',legacyEvidenceDigest=evidence['archiveDigest']),'POST'))
+            observedLegacyDecision='BLOCK',legacyEvidenceDigest=evidence['snapshotDigest']),'POST'))
         assert shadow['accessExpansion'] is False and shadow['decision']['decision']=='BLOCK'
         # A restricted administrator cannot modify a Super Admin role. Unchanged owner records
         # in a replacement snapshot are allowed, so request an actual owner-role change for this denial.
@@ -522,10 +519,10 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         assert api('/api/control/v1/config/import',human,privileged_import,'POST',revision=baseline['revision'])[0]==403
         ok(api('/api/control/v1/config/import',owner,import_body,'POST',revision=baseline['revision']))
         assert ok(api('/api/control/v1/teams/'+team['id'],admin))['name']=='Reviewed installation operators'
-        evidence.update(shadow=shadow,superAdministratorImportApplied=True,interpretation='Isolated conversion/shadow and audited Super Admin import HTTP proof; production plans require their own captured legacy evidence')
+        evidence.update(shadow=shadow,superAdministratorImportApplied=True,interpretation='Current-schema shadow evaluation and audited Super Admin import HTTP proof')
         output=ROOT/'build/enterprise';output.mkdir(parents=True,exist_ok=True)
-        (output/('migration-postgresql.json' if database_options else 'migration-sqlite.json')).write_text(json.dumps(evidence,indent=2)+'\n',encoding='utf-8')
-        mark('current status/fresh bounds/no-effect simulation/explicit conversion/shadow/scoped rejection/Super Admin import')
+        (output/('configuration-postgresql.json' if database_options else 'configuration-sqlite.json')).write_text(json.dumps(evidence,indent=2)+'\n',encoding='utf-8')
+        mark('current status/fresh bounds/no-effect simulation/configuration shadow/scoped rejection/Super Admin import')
         ports=restart_ready(container)
         port=ports['8080/tcp'][0]['HostPort']
         tls_port=ports['8443/tcp'][0]['HostPort']

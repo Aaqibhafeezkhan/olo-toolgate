@@ -1,0 +1,531 @@
+-- Copyright 2026 OLO Labs
+-- SPDX-License-Identifier: Apache-2.0
+-- Initial release schema. Initialize an empty database; pre-release schemas are unsupported.
+-- Provision the NOLOGIN role toolgate_control_runtime before initialization.
+
+CREATE TABLE control_records (
+    tenant_id varchar(128) NOT NULL,
+    kind varchar(32) NOT NULL CHECK (kind IN ('USER','TEAM','AGENT','TOOL','POLICY','DEVICE','ROLE','DEVICE_GROUP','AGENT_GROUP','TOOL_GROUP','GRANT','DELEGATION','AGENT_DELEGATION','BINDING','EXTRACTOR','WORKLOAD_BINDING','IDENTITY_BINDING','DEVICE_EVIDENCE')),
+    record_id varchar(128) NOT NULL,
+    revision bigint NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991),
+    document jsonb NOT NULL CHECK (jsonb_typeof(document) = 'object'),
+    PRIMARY KEY (tenant_id, kind, record_id),
+    CHECK (document->>'id' = record_id AND (document->>'revision')::bigint = revision)
+);
+
+CREATE TABLE control_audit (
+    sequence bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id varchar(128) NOT NULL,
+    actor_id char(64) NOT NULL,
+    operation varchar(40) NOT NULL CHECK(operation ~ '^[A-Z][A-Z0-9_]{0,39}$'),
+    target varchar(256) NOT NULL,
+    revision bigint NOT NULL,
+    request_id varchar(128) NOT NULL,
+    request_digest char(64) NOT NULL,
+    occurred_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE INDEX control_audit_tenant_cursor ON control_audit (tenant_id, sequence);
+
+GRANT USAGE ON SCHEMA public TO toolgate_control_runtime;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON control_records TO toolgate_control_runtime;
+
+GRANT SELECT, INSERT ON control_audit TO toolgate_control_runtime;
+
+GRANT USAGE ON SEQUENCE control_audit_sequence_seq TO toolgate_control_runtime;
+
+CREATE TABLE control_tenants (
+    tenant_id varchar(128) PRIMARY KEY,
+    revision bigint NOT NULL DEFAULT 0 CHECK (revision BETWEEN 0 AND 9007199254740991),
+    authorization_epoch bigint NOT NULL DEFAULT 0 CHECK(authorization_epoch BETWEEN 0 AND 9007199254740991),
+    directory_cache_generation bigint NOT NULL DEFAULT 0 CHECK(directory_cache_generation>=0)
+);
+
+CREATE TABLE control_idempotency (
+    tenant_id varchar(128) NOT NULL,
+    actor_id char(64) NOT NULL,
+    key varchar(128) NOT NULL,
+    request_digest char(64) NOT NULL,
+    status integer NOT NULL,
+    body text NOT NULL,
+    revision bigint NOT NULL,
+    expires_at timestamptz NOT NULL DEFAULT (clock_timestamp() + interval '7 days'),
+    PRIMARY KEY (tenant_id, actor_id, key)
+);
+
+CREATE INDEX control_idempotency_expiry ON control_idempotency (tenant_id, expires_at);
+
+CREATE TABLE control_record_ids (
+    tenant_id varchar(128) NOT NULL,
+    kind varchar(32) NOT NULL,
+    record_id varchar(128) NOT NULL,
+    PRIMARY KEY (tenant_id, kind, record_id)
+);
+
+GRANT SELECT, INSERT ON control_record_ids TO toolgate_control_runtime;
+
+GRANT SELECT, INSERT, UPDATE ON control_tenants TO toolgate_control_runtime;
+
+GRANT SELECT, INSERT, DELETE ON control_idempotency TO toolgate_control_runtime;
+
+CREATE TABLE control_policy_bundles (
+    tenant_id varchar(128) NOT NULL,
+    sequence bigint NOT NULL CHECK (sequence BETWEEN 1 AND 9007199254740991),
+    directory_revision bigint NOT NULL CHECK (directory_revision BETWEEN 0 AND 9007199254740991),
+    document text NOT NULL CHECK (octet_length(document) <= 2000100),
+    policy text NOT NULL CHECK (octet_length(policy) <= 1048576),
+    published_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (tenant_id, sequence)
+);
+
+GRANT SELECT, INSERT ON control_policy_bundles TO toolgate_control_runtime;
+
+CREATE TABLE control_approval_clocks (
+    tenant_id varchar(128) PRIMARY KEY,
+    observed_at bigint NOT NULL CHECK (observed_at BETWEEN 0 AND 9007199254740991)
+);
+
+GRANT SELECT, INSERT, UPDATE ON control_approval_clocks TO toolgate_control_runtime;
+
+CREATE TABLE control_enrollments (
+    tenant_id varchar(128) NOT NULL,
+    enrollment_id varchar(128) NOT NULL,
+    code_digest char(64) NOT NULL,
+    device_digest char(64) NOT NULL,
+    document text NOT NULL CHECK (octet_length(document)<=16384),
+    csr text NOT NULL CHECK (octet_length(csr)<=16384),
+    user_id varchar(128),
+    certificate text CHECK (octet_length(certificate)<=32768),
+    expires_at bigint NOT NULL CHECK (expires_at>=0),
+    last_poll bigint NOT NULL DEFAULT 0 CHECK (last_poll>=0),
+    PRIMARY KEY (tenant_id,enrollment_id),
+    UNIQUE (tenant_id,code_digest)
+);
+
+CREATE INDEX control_enrollment_expiry ON control_enrollments (tenant_id,expires_at);
+
+CREATE TABLE control_endpoints (
+    tenant_id varchar(128) NOT NULL,
+    device_id varchar(128) NOT NULL,
+    key_fingerprint char(64) NOT NULL,
+    document text NOT NULL CHECK (octet_length(document)<=1048576),
+    csr text NOT NULL CHECK (octet_length(csr)<=16384),
+    report_digest char(64) NOT NULL,
+    acknowledgment text NOT NULL CHECK (octet_length(acknowledgment)<=131072),
+    PRIMARY KEY (tenant_id,device_id),
+    UNIQUE (tenant_id,key_fingerprint),
+    CHECK (document::jsonb->>'deviceId'=device_id AND document::jsonb->>'tenantId'=tenant_id)
+);
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_enrollments TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,UPDATE ON control_endpoints TO toolgate_control_runtime;
+
+CREATE TABLE control_fleet (
+    tenant_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('RELEASE','DESIRED','ROLLOUT')),
+    record_id TEXT NOT NULL,
+    revision BIGINT NOT NULL CHECK (revision > 0 AND revision <= 9007199254740991),
+    document TEXT NOT NULL CHECK (octet_length(document) <= 131072),
+    PRIMARY KEY (tenant_id, kind, record_id)
+);
+
+CREATE FUNCTION control_fleet_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' OR OLD.kind = 'RELEASE' OR NEW.tenant_id <> OLD.tenant_id
+      OR NEW.kind <> OLD.kind OR NEW.record_id <> OLD.record_id OR NEW.revision <> OLD.revision + 1 THEN
+    RAISE EXCEPTION 'fleet immutable identity or generation violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER control_fleet_guard BEFORE UPDATE OR DELETE ON control_fleet
+  FOR EACH ROW EXECUTE FUNCTION control_fleet_guard();
+
+GRANT SELECT, INSERT, UPDATE ON control_fleet TO toolgate_control_runtime;
+
+REVOKE DELETE ON control_fleet FROM toolgate_control_runtime;
+
+CREATE TABLE control_builder (
+ tenant_id TEXT NOT NULL,
+ kind TEXT NOT NULL CHECK (kind IN ('DRAFT','VERSION','TEST')),
+ record_id TEXT NOT NULL,
+ revision BIGINT NOT NULL CHECK (revision > 0 AND revision <= 9007199254740991),
+ document TEXT NOT NULL CHECK (octet_length(document) <= 65536),
+ PRIMARY KEY (tenant_id,kind,record_id)
+);
+
+CREATE FUNCTION control_builder_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='DELETE' THEN
+  IF OLD.kind='TEST' AND (OLD.document::jsonb->>'expiresAtUnixMs')::bigint <
+    (extract(epoch from clock_timestamp())*1000)::bigint-604800000 THEN RETURN OLD; END IF;
+  RAISE EXCEPTION 'authoring retention violation';
+ END IF;
+ IF OLD.kind='VERSION' OR (OLD.kind='DRAFT' AND (OLD.document::jsonb->>'sealed')::boolean)
+  OR NEW.tenant_id<>OLD.tenant_id OR NEW.kind<>OLD.kind OR NEW.record_id<>OLD.record_id
+  OR NEW.revision<>OLD.revision+1 THEN RAISE EXCEPTION 'authoring immutable identity violation'; END IF;
+ RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER control_builder_guard BEFORE UPDATE OR DELETE ON control_builder FOR EACH ROW EXECUTE FUNCTION control_builder_guard();
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_builder TO toolgate_control_runtime;
+
+CREATE TABLE quickstart_vault(name TEXT PRIMARY KEY CHECK(length(name) BETWEEN 1 AND 128),cipher BYTEA NOT NULL CHECK(octet_length(cipher)<=32800));
+
+GRANT SELECT,INSERT,UPDATE ON quickstart_vault TO toolgate_control_runtime;
+
+CREATE TABLE control_endpoint_configurations (
+    tenant_id varchar(128) NOT NULL,
+    device_id varchar(128) NOT NULL,
+    source_revision bigint NOT NULL CHECK (source_revision>=0),
+    document text NOT NULL CHECK (octet_length(document)<=98304),
+    acknowledged_digest char(64),
+    local_tools text NOT NULL CHECK (octet_length(local_tools)<=49152),
+    PRIMARY KEY (tenant_id,device_id),
+    FOREIGN KEY (tenant_id,device_id) REFERENCES control_endpoints(tenant_id,device_id)
+);
+
+GRANT SELECT,INSERT,UPDATE ON control_endpoint_configurations TO toolgate_control_runtime;
+
+CREATE TABLE control_mcp_requests (
+    tenant_id varchar(128) NOT NULL,
+    request_id varchar(128) NOT NULL,
+    device_id varchar(128) NOT NULL,
+    state varchar(32) NOT NULL CHECK (state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED','RESPONSE_RECEIVED','DONE','FAILED','EXPIRED')),
+    received_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    record text NOT NULL CHECK (octet_length(record)<=8192),
+    task text NOT NULL CHECK (octet_length(task)<=16384),
+    result text CHECK (octet_length(result)<=65536),
+    PRIMARY KEY (tenant_id,request_id),
+    FOREIGN KEY (tenant_id,device_id) REFERENCES control_endpoints(tenant_id,device_id)
+);
+
+CREATE INDEX control_mcp_pending ON control_mcp_requests(tenant_id,device_id,state,received_at);
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_mcp_requests TO toolgate_control_runtime;
+
+CREATE TABLE control_authorization_outbox(tenant_id varchar(128) NOT NULL,revision bigint NOT NULL,authorization_epoch bigint NOT NULL,occurred_at bigint NOT NULL,published_at bigint,PRIMARY KEY(tenant_id,revision));
+
+CREATE TABLE control_enterprise_invocations(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,state varchar(32) NOT NULL,authorization_epoch bigint NOT NULL,created_at bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,invocation_id),
+    tool_id varchar(256),
+    package_id varchar(128),
+    package_digest char(71) CHECK (package_digest ~ '^sha256:[a-f0-9]{64}$'),
+    pool_id varchar(128),
+    runtime_digest char(71) CHECK (runtime_digest ~ '^sha256:[a-f0-9]{64}$'),
+    effect_safety varchar(16) CHECK (effect_safety IN ('READ_ONLY','IDEMPOTENT','NON_IDEMPOTENT','UNKNOWN')),
+    requires_execution_ledger boolean,
+    lease_holder varchar(256),
+    lease_expires_at bigint CHECK (lease_expires_at BETWEEN 0 AND 9007199254740991),
+    cancel_requested_at bigint CHECK (cancel_requested_at BETWEEN 0 AND 9007199254740991),
+    not_started boolean NOT NULL DEFAULT false,
+    task_id varchar(64) CHECK (task_id ~ '^[A-Za-z0-9_-]{22,64}$'),
+    task_state varchar(32),
+    task_owner_digest char(64) CHECK (task_owner_digest ~ '^[a-f0-9]{64}$'),
+    task_retain_until bigint CHECK (task_retain_until BETWEEN 0 AND 9007199254740991),
+    task_input_deadline_at bigint CHECK (task_input_deadline_at BETWEEN 0 AND 9007199254740991),
+    task_last_polled_at bigint CHECK (task_last_polled_at BETWEEN 0 AND 9007199254740991),
+    task_document text CHECK (octet_length(task_document) <= 32768),
+    CONSTRAINT control_invocation_v2_class CHECK (
+    requires_execution_ledger IS NULL
+    OR (tool_id IS NOT NULL AND package_digest IS NOT NULL AND effect_safety IS NOT NULL
+        AND requires_execution_ledger = (effect_safety IN ('NON_IDEMPOTENT','UNKNOWN')))),
+    CONSTRAINT control_invocation_task_shape CHECK (
+    (task_id IS NULL) = (task_state IS NULL)
+    AND (task_id IS NULL) = (task_owner_digest IS NULL)
+    AND (task_id IS NULL) = (task_retain_until IS NULL)
+    AND (task_id IS NULL) = (task_document IS NULL)
+    AND (task_id IS NULL OR requires_execution_ledger IS NOT NULL)),
+    CONSTRAINT control_invocation_task_projection CHECK (
+    task_state IS NULL
+    OR (state = 'PENDING_APPROVAL' AND task_state = 'AWAITING_APPROVAL')
+    OR (state = 'QUEUED' AND task_state = 'QUEUED')
+    OR (state IN ('RESERVED','DISPATCHED') AND task_state IN ('DISPATCHED','CANCEL_REQUESTED'))
+    OR (state = 'EXECUTING' AND task_state IN ('RUNNING','INPUT_REQUIRED','CANCEL_REQUESTED'))
+    OR (state = 'SUCCEEDED' AND task_state = 'COMPLETED')
+    OR (state IN ('FAILED','PARTIAL') AND task_state = 'FAILED')
+    OR (state = 'CANCELLED' AND task_state IN ('CANCELLED','REJECTED'))
+    OR (state = 'EXPIRED' AND task_state = 'EXPIRED')
+    OR (state = 'OUTCOME_UNKNOWN' AND task_state = 'OUTCOME_UNKNOWN')),
+    CONSTRAINT control_invocation_lease_shape CHECK (
+    (lease_holder IS NULL) = (lease_expires_at IS NULL)
+    AND (lease_holder IS NULL OR state NOT IN ('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED'))),
+    CONSTRAINT control_invocation_cancel_shape CHECK (
+    (task_state IS DISTINCT FROM 'CANCEL_REQUESTED' OR cancel_requested_at IS NOT NULL)
+    AND (NOT not_started OR state = 'FAILED'))
+);
+
+CREATE INDEX control_enterprise_invocation_window ON control_enterprise_invocations(tenant_id,created_at);
+
+CREATE TABLE control_enterprise_approvals(tenant_id varchar(128) NOT NULL,approval_id varchar(128) NOT NULL,approval_type varchar(16) NOT NULL CHECK(approval_type IN('OPERATION','CONFIGURATION')),invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,approval_id));
+
+CREATE TABLE control_enterprise_nonces(tenant_id varchar(128) NOT NULL,nonce varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,evaluation_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,consumed_at bigint,PRIMARY KEY(tenant_id,nonce));
+
+CREATE TABLE control_enterprise_adoptions(tenant_id varchar(128) NOT NULL,actor_type varchar(16) NOT NULL,actor_id varchar(128) NOT NULL,directory_revision bigint NOT NULL,snapshot_sequence bigint NOT NULL,graph_digest char(64) NOT NULL,observed_at bigint NOT NULL,PRIMARY KEY(tenant_id,actor_type,actor_id),authorization_epoch bigint NOT NULL DEFAULT 0);
+
+CREATE FUNCTION control_epoch_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.revision<OLD.revision OR NEW.authorization_epoch<OLD.authorization_epoch THEN RAISE EXCEPTION 'authorization cannot move backwards'; END IF; RETURN NEW; END $$;
+
+CREATE TRIGGER control_epoch_guard BEFORE UPDATE ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_epoch_guard();
+
+GRANT SELECT,INSERT,UPDATE ON control_authorization_outbox,control_enterprise_invocations,control_enterprise_approvals,control_enterprise_nonces,control_enterprise_adoptions TO toolgate_control_runtime;
+
+CREATE TABLE control_credential_history(tenant_id varchar(128) NOT NULL,credential_sha256 char(64) NOT NULL,PRIMARY KEY(tenant_id,credential_sha256));
+
+GRANT SELECT,INSERT ON control_credential_history TO toolgate_control_runtime;
+
+CREATE FUNCTION control_credential_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable credential history'; END $$;
+
+CREATE TRIGGER control_credential_history_immutable BEFORE UPDATE OR DELETE ON control_credential_history FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
+
+CREATE TABLE control_reviewed_recovery(tenant_id varchar(128) NOT NULL,review_digest char(64) NOT NULL,PRIMARY KEY(tenant_id,review_digest));
+
+GRANT SELECT,INSERT ON control_reviewed_recovery TO toolgate_control_runtime;
+
+CREATE TRIGGER control_reviewed_recovery_immutable BEFORE UPDATE OR DELETE ON control_reviewed_recovery FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
+
+CREATE TABLE control_configuration_changes(tenant_id varchar(128) NOT NULL,change_id varchar(128) NOT NULL,revision bigint NOT NULL,request_digest char(64) NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,change_id));
+
+GRANT SELECT,INSERT,UPDATE ON control_configuration_changes TO toolgate_control_runtime;
+
+CREATE TABLE control_secrets(tenant_id varchar(128) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,cipher text NOT NULL CHECK(octet_length(cipher)<=65536),PRIMARY KEY(tenant_id,name));
+
+GRANT SELECT,INSERT,UPDATE ON control_secrets TO toolgate_control_runtime;
+
+CREATE TABLE control_queued_authority(tenant_id varchar(128) NOT NULL,kind varchar(32) NOT NULL,record_id varchar(128) NOT NULL,creator_user_id varchar(128) NOT NULL,PRIMARY KEY(tenant_id,kind,record_id));
+
+GRANT SELECT,INSERT,UPDATE ON control_queued_authority TO toolgate_control_runtime;
+
+CREATE TABLE control_execution_budgets(tenant_id varchar(128) NOT NULL,budget_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,created_at bigint NOT NULL,PRIMARY KEY(tenant_id,budget_id,invocation_id));
+
+CREATE INDEX control_budget_window ON control_execution_budgets(tenant_id,budget_id,created_at);
+
+GRANT SELECT,INSERT ON control_execution_budgets TO toolgate_control_runtime;
+
+CREATE TABLE control_outcome_reconciliations(tenant_id varchar(128) NOT NULL,reconciliation_id varchar(128) NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,reconciliation_id));
+
+CREATE TABLE control_recovery_floors(tenant_id varchar(128) PRIMARY KEY,snapshot_sequence bigint NOT NULL CHECK(snapshot_sequence>=0));
+
+GRANT SELECT,INSERT,UPDATE ON control_outcome_reconciliations TO toolgate_control_runtime;
+
+GRANT SELECT ON control_recovery_floors TO toolgate_control_runtime;
+
+CREATE TABLE control_server_settings(tenant_id varchar(128) PRIMARY KEY,revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document text NOT NULL CHECK(octet_length(document)<=16384));
+
+GRANT SELECT,INSERT,UPDATE ON control_server_settings TO toolgate_control_runtime;
+
+CREATE UNIQUE INDEX control_invocation_task ON control_enterprise_invocations (tenant_id, task_id)
+    WHERE task_id IS NOT NULL;
+
+CREATE INDEX control_invocation_lease ON control_enterprise_invocations (tenant_id, lease_expires_at)
+    WHERE state = 'EXECUTING';
+
+CREATE INDEX control_invocation_task_retention ON control_enterprise_invocations (tenant_id, task_retain_until)
+    WHERE task_id IS NOT NULL;
+
+CREATE INDEX control_invocation_input_deadline ON control_enterprise_invocations (tenant_id, task_input_deadline_at)
+    WHERE task_state IN ('AWAITING_APPROVAL','INPUT_REQUIRED');
+
+CREATE INDEX control_invocation_active_package ON control_enterprise_invocations (tenant_id, package_digest)
+    WHERE state IN ('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING');
+
+CREATE INDEX control_invocation_active_tool ON control_enterprise_invocations (tenant_id, tool_id)
+    WHERE state IN ('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING');
+
+CREATE TABLE control_business_keys (
+    tenant_id varchar(128) NOT NULL,
+    tool_id varchar(256) NOT NULL,
+    namespace varchar(16) NOT NULL CHECK (namespace IN ('AGENT','DELEGATED_USER','TENANT')),
+    namespace_identity varchar(128) NOT NULL,
+    business_key_hash char(64) NOT NULL CHECK (business_key_hash ~ '^[a-f0-9]{64}$'),
+    source varchar(16) NOT NULL CHECK (source IN ('HEADER','ARGUMENT','DEDUPE_WINDOW')),
+    fingerprint char(71) NOT NULL CHECK (fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+    caller_agent_id varchar(128) NOT NULL,
+    caller_user_id varchar(128),
+    invocation_id varchar(128) NOT NULL,
+    created_at bigint NOT NULL CHECK (created_at BETWEEN 0 AND 9007199254740991),
+    dedupe_expires_at bigint CHECK (dedupe_expires_at BETWEEN 0 AND 9007199254740991),
+    retain_until bigint NOT NULL CHECK (retain_until BETWEEN 0 AND 9007199254740991),
+    outcome varchar(32) CHECK (outcome IN ('COMPLETED','FAILED','REJECTED','EXPIRED','CANCELLED','OUTCOME_UNKNOWN')),
+    tombstoned_at bigint CHECK (tombstoned_at BETWEEN 0 AND 9007199254740991),
+    PRIMARY KEY (tenant_id, tool_id, namespace, namespace_identity, business_key_hash),
+    CHECK ((namespace = 'TENANT') = (namespace_identity = '')),
+    CHECK ((source = 'DEDUPE_WINDOW') = (dedupe_expires_at IS NOT NULL)),
+    CHECK (dedupe_expires_at IS NULL OR dedupe_expires_at > created_at),
+    CHECK (retain_until >= created_at),
+    CHECK (tombstoned_at IS NULL OR outcome IS NOT NULL)
+);
+
+CREATE INDEX control_business_key_invocation ON control_business_keys (tenant_id, invocation_id);
+
+CREATE INDEX control_business_key_retention ON control_business_keys (tenant_id, retain_until)
+    WHERE tombstoned_at IS NULL;
+
+CREATE TABLE control_invocation_results (
+    tenant_id varchar(128) NOT NULL,
+    invocation_id varchar(128) NOT NULL,
+    fencing_nonce varchar(128) NOT NULL,
+    result_digest char(71) NOT NULL CHECK (result_digest ~ '^sha256:[a-f0-9]{64}$'),
+    byte_length integer NOT NULL CHECK (byte_length BETWEEN 0 AND 4194304),
+    payload bytea,
+    created_at bigint NOT NULL CHECK (created_at BETWEEN 0 AND 9007199254740991),
+    retain_until bigint NOT NULL CHECK (retain_until BETWEEN 0 AND 9007199254740991),
+    purged_at bigint CHECK (purged_at BETWEEN 0 AND 9007199254740991),
+    PRIMARY KEY (tenant_id, invocation_id),
+    FOREIGN KEY (tenant_id, invocation_id) REFERENCES control_enterprise_invocations (tenant_id, invocation_id),
+    CHECK ((payload IS NULL) = (purged_at IS NOT NULL)),
+    CHECK (payload IS NULL OR octet_length(payload) = byte_length),
+    CHECK (retain_until >= created_at)
+);
+
+CREATE INDEX control_invocation_result_retention ON control_invocation_results (tenant_id, retain_until)
+    WHERE purged_at IS NULL;
+
+CREATE FUNCTION control_invocation_result_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'invocation results are purged, never deleted'; END IF;
+    IF OLD.purged_at IS NOT NULL OR NEW.payload IS NOT NULL OR NEW.purged_at IS NULL
+       OR NEW.tenant_id <> OLD.tenant_id OR NEW.invocation_id <> OLD.invocation_id
+       OR NEW.fencing_nonce <> OLD.fencing_nonce OR NEW.result_digest <> OLD.result_digest
+       OR NEW.byte_length <> OLD.byte_length OR NEW.created_at <> OLD.created_at
+       OR NEW.retain_until <> OLD.retain_until THEN
+        RAISE EXCEPTION 'invocation result is immutable except for its purge';
+    END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER control_invocation_result_guard BEFORE UPDATE OR DELETE ON control_invocation_results
+    FOR EACH ROW EXECUTE FUNCTION control_invocation_result_guard();
+
+CREATE FUNCTION control_business_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'business keys are tombstoned, never deleted'; END IF;
+    IF OLD.tombstoned_at IS NOT NULL OR NEW.source <> OLD.source THEN
+        RAISE EXCEPTION 'business key reservation is immutable';
+    END IF;
+    IF OLD.source = 'DEDUPE_WINDOW' THEN
+        IF NEW.invocation_id <> OLD.invocation_id AND OLD.dedupe_expires_at > NEW.created_at THEN
+            RAISE EXCEPTION 'dedupe window still open';
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF NEW.fingerprint <> OLD.fingerprint OR NEW.caller_agent_id <> OLD.caller_agent_id
+       OR NEW.caller_user_id IS DISTINCT FROM OLD.caller_user_id THEN
+        RAISE EXCEPTION 'business key reservation is immutable';
+    END IF;
+    IF (NEW.invocation_id <> OLD.invocation_id OR NEW.created_at <> OLD.created_at)
+       AND NOT (COALESCE(OLD.outcome,'') IN ('EXPIRED','FAILED') AND NEW.outcome IS NULL) THEN
+        RAISE EXCEPTION 'business key already bound to an invocation';
+    END IF;
+    IF NEW.invocation_id = OLD.invocation_id AND OLD.outcome IS NOT NULL
+       AND NEW.outcome IS DISTINCT FROM OLD.outcome
+       AND NOT (OLD.outcome = 'OUTCOME_UNKNOWN' AND NEW.outcome IN ('COMPLETED','FAILED')) THEN
+        RAISE EXCEPTION 'business key outcome is final';
+    END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER control_business_key_guard BEFORE UPDATE OR DELETE ON control_business_keys
+    FOR EACH ROW EXECUTE FUNCTION control_business_key_guard();
+
+GRANT SELECT, INSERT, UPDATE ON control_business_keys, control_invocation_results TO toolgate_control_runtime;
+
+CREATE TABLE control_bootstrap_admins (
+    tenant_id varchar(128) PRIMARY KEY,
+    user_id varchar(128) NOT NULL
+);
+
+GRANT SELECT,INSERT ON control_bootstrap_admins TO toolgate_control_runtime;
+
+CREATE TABLE control_server_packages(tenant_id varchar(128) NOT NULL,package_digest char(71) NOT NULL CHECK(package_digest ~ '^sha256:[a-f0-9]{64}$'),
+    package_id varchar(127) NOT NULL,version varchar(128) NOT NULL,uploaded_at bigint NOT NULL CHECK(uploaded_at BETWEEN 0 AND 9007199254740991),
+    document text NOT NULL CHECK(octet_length(document)<=4194304),content bytea NOT NULL CHECK(octet_length(content)<=67108864),
+    PRIMARY KEY(tenant_id,package_digest));
+
+CREATE TABLE control_server_documents(tenant_id varchar(128) NOT NULL,digest char(71) NOT NULL CHECK(digest ~ '^sha256:[a-f0-9]{64}$'),
+    document text NOT NULL CHECK(octet_length(document)<=1048576),PRIMARY KEY(tenant_id,digest));
+
+CREATE TABLE control_server_deployments(tenant_id varchar(128) NOT NULL,package_id varchar(127) NOT NULL,
+    document text NOT NULL CHECK(octet_length(document)<=65536),PRIMARY KEY(tenant_id,package_id));
+
+CREATE TABLE control_tool_hosts(tenant_id varchar(128) NOT NULL,device_id varchar(128) NOT NULL,
+    document text NOT NULL CHECK(octet_length(document)<=16384),PRIMARY KEY(tenant_id,device_id));
+
+GRANT SELECT,INSERT ON control_server_packages,control_server_documents TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,UPDATE ON control_server_deployments,control_tool_hosts TO toolgate_control_runtime;
+
+CREATE TABLE control_tool_host_dispatches(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,host_id varchar(128) NOT NULL,
+    state varchar(16) NOT NULL CHECK(state IN ('QUEUED','CLAIMED','ADMITTED','REFUSED','FINISHED','EXPIRED')),
+    expires_at bigint NOT NULL CHECK(expires_at BETWEEN 0 AND 9007199254740991),created_at bigint NOT NULL CHECK(created_at BETWEEN 0 AND 9007199254740991),
+    document text NOT NULL CHECK(octet_length(document)<=16777216),PRIMARY KEY(tenant_id,invocation_id));
+
+CREATE INDEX control_tool_host_dispatches_queue ON control_tool_host_dispatches(tenant_id,host_id,state,created_at);
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_tool_host_dispatches TO toolgate_control_runtime;
+
+CREATE FUNCTION control_invalidate_directory_cache() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP <> 'INSERT' THEN
+        INSERT INTO control_tenants(tenant_id,revision,directory_cache_generation) VALUES(OLD.tenant_id,0,1)
+        ON CONFLICT(tenant_id) DO UPDATE SET directory_cache_generation=control_tenants.directory_cache_generation+1;
+    END IF;
+    IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.tenant_id<>OLD.tenant_id) THEN
+        INSERT INTO control_tenants(tenant_id,revision,directory_cache_generation) VALUES(NEW.tenant_id,0,1)
+        ON CONFLICT(tenant_id) DO UPDATE SET directory_cache_generation=control_tenants.directory_cache_generation+1;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER control_records_cache_generation AFTER INSERT OR UPDATE OR DELETE ON control_records
+FOR EACH ROW EXECUTE FUNCTION control_invalidate_directory_cache();
+
+CREATE TRIGGER control_settings_cache_generation AFTER INSERT OR UPDATE OR DELETE ON control_server_settings
+FOR EACH ROW EXECUTE FUNCTION control_invalidate_directory_cache();
+
+CREATE TABLE control_console_devices (
+ tenant_id text NOT NULL, session_id text NOT NULL, user_id text NOT NULL,
+ device_id text NOT NULL, nonce_digest text NOT NULL, code_digest text NOT NULL,
+ csr text NOT NULL, fingerprint text NOT NULL,
+ expires_at bigint NOT NULL, verified_at bigint NOT NULL DEFAULT 0,
+ PRIMARY KEY(tenant_id,session_id)
+);
+
+CREATE INDEX control_console_devices_expiry ON control_console_devices(tenant_id,expires_at);
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_console_devices TO toolgate_control_runtime;
+
+CREATE TABLE control_invocation_event_streams(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
+    last_cursor bigint NOT NULL CHECK(last_cursor BETWEEN 0 AND 9007199254740991),
+    event_count integer NOT NULL CHECK(event_count>=0),byte_count bigint NOT NULL CHECK(byte_count>=0),
+    dropped_frames bigint NOT NULL CHECK(dropped_frames>=0),refused_frames bigint NOT NULL CHECK(refused_frames>=0),
+    retain_until bigint NOT NULL CHECK(retain_until BETWEEN 0 AND 9007199254740991),purged_at bigint CHECK(purged_at BETWEEN 0 AND 9007199254740991),
+    PRIMARY KEY(tenant_id,invocation_id),
+    FOREIGN KEY(tenant_id,invocation_id) REFERENCES control_enterprise_invocations(tenant_id,invocation_id));
+
+CREATE INDEX control_invocation_event_stream_retention ON control_invocation_event_streams(tenant_id,retain_until) WHERE purged_at IS NULL;
+
+CREATE TABLE control_invocation_events(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
+    event_cursor bigint NOT NULL CHECK(event_cursor BETWEEN 1 AND 9007199254740991),
+    source varchar(16) NOT NULL CHECK(source IN('EXECUTOR','PLATFORM')),kind varchar(16) NOT NULL CHECK(kind IN('LOG','PROGRESS','INPUT_REQUEST','STATE','RESULT')),
+    attempt integer CHECK(attempt BETWEEN 1 AND 16),fencing_token varchar(128),sequence integer CHECK(sequence BETWEEN 1 AND 2147483647),
+    recorded_at bigint NOT NULL CHECK(recorded_at BETWEEN 0 AND 9007199254740991),document text NOT NULL CHECK(octet_length(document)<=131072),
+    PRIMARY KEY(tenant_id,invocation_id,event_cursor),
+    FOREIGN KEY(tenant_id,invocation_id) REFERENCES control_invocation_event_streams(tenant_id,invocation_id),
+    CHECK((source='EXECUTOR')=(fencing_token IS NOT NULL AND attempt IS NOT NULL)),
+    CHECK(sequence IS NULL OR source='EXECUTOR'));
+
+CREATE UNIQUE INDEX control_invocation_event_identity ON control_invocation_events(tenant_id,invocation_id,fencing_token,sequence) WHERE sequence IS NOT NULL;
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_invocation_event_streams,control_invocation_events TO toolgate_control_runtime;
+
+CREATE TABLE control_package_provisioning(tenant_id varchar(128) NOT NULL,profile_id varchar(128) NOT NULL,
+    generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),profile_digest char(71) NOT NULL CHECK(profile_digest ~ '^sha256:[a-f0-9]{64}$'),
+    document text NOT NULL CHECK(octet_length(document)<=262144),PRIMARY KEY(tenant_id,profile_id));
+
+GRANT SELECT,INSERT,UPDATE ON control_package_provisioning TO toolgate_control_runtime;
