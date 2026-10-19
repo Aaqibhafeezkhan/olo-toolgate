@@ -59,8 +59,8 @@ public final class ClientReleases {
     }
 
     private final Store store; private final Codec codec; private final OciRegistry registry; private final Settings settings;
-    private final PackageReleaseSigner signer; private final FleetService fleet; private final ArtifactStore artifacts; private final Clock clock;
-    public ClientReleases(Store store, Codec codec, OciRegistry registry, Settings settings, PackageReleaseSigner signer, FleetService fleet, ArtifactStore artifacts, Clock clock) {
+    private final PackageReleaseSigner signer; private final java.util.function.Function<io.ololabs.toolgate.control.domain.Ids.TenantId,FleetService> fleet; private final ArtifactStore artifacts; private final Clock clock;
+    public ClientReleases(Store store, Codec codec, OciRegistry registry, Settings settings, PackageReleaseSigner signer, java.util.function.Function<io.ololabs.toolgate.control.domain.Ids.TenantId,FleetService> fleet, ArtifactStore artifacts, Clock clock) {
         this.store = store; this.codec = codec; this.registry = registry; this.settings = settings; this.signer = signer; this.fleet = fleet; this.artifacts = artifacts; this.clock = clock;
     }
 
@@ -162,7 +162,7 @@ public final class ClientReleases {
         if (signer != null) {
             var release = new FleetPackageRelease(packageId, version, manifestDigest, (long) bytes.length, signer.sign(bytes));
             artifacts.mirror(manifestDigest, bytes);
-            fleet.publish(actor, codec.json(release), "client-release-" + manifestDigest.substring(0, 32), requestId);
+            fleet.apply(actor.tenant()).publish(actor, codec.json(release), "client-release-" + manifestDigest.substring(0, 32), requestId);
             result.set("release", node(codec.json(release)));
         }
         codec.model(codec.json(result), io.ololabs.toolgate.contracts.v2.ClientRelease.class);

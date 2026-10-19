@@ -1260,7 +1260,7 @@ export interface EnterpriseWitness {
   readonly bindingId: string;
   readonly provenance: ReadonlyArray<string>;
 }
-export type ErrorCode = "VALIDATION" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "DEPENDENCY_UNAVAILABLE" | "TIMEOUT" | "INTERNAL" | "UNSUPPORTED";
+export type ErrorCode = "VALIDATION" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "DEPENDENCY_UNAVAILABLE" | "TIMEOUT" | "INTERNAL" | "UNSUPPORTED" | "TENANT_MISMATCH" | "TENANT_UNAVAILABLE" | "MISDIRECTED_REQUEST";
 /** Machine-readable error without exception text or caller-controlled detail. */
 export interface ErrorEnvelope {
   readonly code: ErrorCode;

@@ -16,7 +16,8 @@ public class ResponseTelemetry implements ContainerResponseFilter {
     public void filter(ContainerRequestContext request, ContainerResponseContext response) {
         // Framework authentication mappers can produce empty responses. Normalize
         // them here as well as application exceptions so the wire error is stable.
-        if (response.getStatus() >= 400) {
+        if (response.getStatus() >= 400 && !(response.getEntity() instanceof io.ololabs.toolgate.contracts.ErrorEnvelope)
+                && !(response.getEntity() instanceof io.ololabs.toolgate.contracts.ControlErrorDetail)) {
             var code = switch (response.getStatus()) {
                 case 401 -> io.ololabs.toolgate.contracts.ErrorCode.UNAUTHORIZED;
                 case 403 -> io.ololabs.toolgate.contracts.ErrorCode.FORBIDDEN;

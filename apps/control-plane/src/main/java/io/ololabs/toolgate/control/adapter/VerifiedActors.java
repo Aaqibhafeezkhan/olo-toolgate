@@ -19,6 +19,7 @@ public class VerifiedActors {
     @Inject PostgresStore store;
     @Inject ContractCodec codec;
     @Inject DirectoryService directory;
+    @Inject TenantRequest request;
     @Inject io.quarkus.security.identity.SecurityIdentity security;
     private DirectoryService.Actor human; private long sessionEpoch;
 
@@ -28,6 +29,7 @@ public class VerifiedActors {
         if(!(tenant instanceof String value)||jwt.getIssuer()==null||jwt.getSubject()==null||jwt.getSubject().isBlank()
             ||jwt.getIssuedAtTime()>now||jwt.getIssuedAtTime()<now-900||jwt.getExpirationTime()<=now
             ||jwt.getExpirationTime()<=jwt.getIssuedAtTime()||jwt.getExpirationTime()-jwt.getIssuedAtTime()>900)throw unauthorized();
+        TenantRequestResolver.principal(request.context(),value);
         try {return new DirectoryService.Actor(new Ids.TenantId(value),DirectoryService.digest(jwt.getIssuer()+"\n"+jwt.getSubject()),false);}
         catch(IllegalArgumentException invalid) {throw unauthorized();}
     }

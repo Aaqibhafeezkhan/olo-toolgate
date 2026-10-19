@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.*;
 /** Direct mTLS job channel. Every message crosses the same durable authorization and replay rules as HTTP. */
 @ApplicationScoped
 public class EndpointSocket {
-    @Inject EndpointService endpoints;
+    @Inject EndpointBootstrap factory;
     @Inject ContractCodec codec;
     private static final String PATH="/api/control/v1/endpoint/socket";
     private static final org.jboss.logging.Logger LOG=org.jboss.logging.Logger.getLogger(EndpointSocket.class);
@@ -43,11 +43,11 @@ public class EndpointSocket {
                 peer=(X509Certificate)context.request().sslSession().getPeerCertificates()[0];
             }catch(Exception invalid){context.response().setStatusCode(401).end();return;}
             if(connections.incrementAndGet()>128){connections.decrementAndGet();context.response().setStatusCode(503).end();return;}
-            context.vertx().executeBlocking(()->{endpoints.verifySocketPeer(peer);return true;}).onComplete(auth->{
+            context.vertx().executeBlocking(()->{var endpoints=factory.forTenant(TenantRequest.require(context).tenant());endpoints.verifySocketPeer(peer);return endpoints;}).onComplete(auth->{
                 if(auth.failed()){connections.decrementAndGet();context.response().setStatusCode(auth.cause() instanceof Failure failure?failure.status():503).end();return;}
                 context.request().toWebSocket().onComplete(upgrade->{
                     if(upgrade.failed()){connections.decrementAndGet();return;}
-                    channel(context.vertx(),upgrade.result(),peer,context.request().getHeader("X-ToolGate-System-Name"),context.request().remoteAddress().hostAddress().split("%",2)[0]);
+                    channel(context.vertx(),upgrade.result(),peer,auth.result(),context.request().getHeader("X-ToolGate-System-Name"),context.request().remoteAddress().hostAddress().split("%",2)[0]);
                 });
             });
         });
@@ -57,7 +57,7 @@ public class EndpointSocket {
         var node=new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(body);
         LOG.info(codec.json(java.util.Map.of("service","control","event","protocol_packet","transport","WEBSOCKET","direction",direction,"path",PATH,"requestId",id,"operation",operation,"status",status==null?0L:status,"message",PacketTelemetry.summary(node,0))));
     }
-    private void channel(io.vertx.core.Vertx vertx,ServerWebSocket socket,X509Certificate peer,String systemName,String ipAddress){
+    private void channel(io.vertx.core.Vertx vertx,ServerWebSocket socket,X509Certificate peer,EndpointService endpoints,String systemName,String ipAddress){
         event("CONNECTED");
         var closed=new AtomicBoolean();var busy=new AtomicBoolean();var checking=new AtomicBoolean();
         var pong=new AtomicLong(System.nanoTime());var lastJob=new AtomicLong(System.nanoTime());

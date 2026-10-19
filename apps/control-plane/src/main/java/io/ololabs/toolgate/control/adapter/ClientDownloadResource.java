@@ -12,6 +12,7 @@ import io.smallrye.common.annotation.Blocking;
 public class ClientDownloadResource {
     @Inject ClientArtifacts artifacts;
     @Inject org.eclipse.microprofile.config.Config config;
+    @Inject EndpointBootstrap factory; @Inject TenantRequest request;
     @Inject io.ololabs.toolgate.control.application.EndpointService endpoints;
     @GET public Response home(){return Response.seeOther(java.net.URI.create("/console/")).build();}
     @GET @Path("api/public/v1/clients") @Produces("application/json")
@@ -21,7 +22,7 @@ public class ClientDownloadResource {
     @GET @Path("api/public/v1/clients/extension") @Produces("application/json")
     public Response extension(){return Response.ok(artifacts.extension()).header("Cache-Control","no-store").build();}
     private String serverUrl(){
-        var value=config.getOptionalValue("toolgate.control.endpoint.control-url",String.class).orElseThrow(()->new io.ololabs.toolgate.control.application.Failure(io.ololabs.toolgate.contracts.ErrorCode.DEPENDENCY_UNAVAILABLE,503,"Endpoint gateway is not configured"));
+        var profile=factory.profile(request.tenant()); if(profile==null)throw io.ololabs.toolgate.control.application.Failure.unavailable(); var value=profile.controlUrl();
         var uri=java.net.URI.create(value);
         if(!"https".equals(uri.getScheme())||uri.getHost()==null||uri.getUserInfo()!=null||uri.getQuery()!=null||uri.getFragment()!=null||!(uri.getPath().isEmpty()||uri.getPath().equals("/")))throw new IllegalStateException("Invalid endpoint gateway URL");
         return value.endsWith("/")?value.substring(0,value.length()-1):value;
@@ -37,7 +38,9 @@ public class ClientDownloadResource {
     public Response configuredSetup(@PathParam("target")String target){return artifacts.configuredWindowsInstaller(target,setupSource());}
     /** A local Quickstart console also publishes its gateway CA, so its setup names that console. */
     private String setupSource(){
-        if(!config.getOptionalValue("toolgate.quickstart.enabled",Boolean.class).orElse(false))return serverUrl();
+        String canonical=serverUrl();
+        if(!config.getOptionalValue("toolgate.quickstart.enabled",Boolean.class).orElse(false)
+            ||!java.util.Set.of("localhost","127.0.0.1","0:0:0:0:0:0:0:1").contains(TenantHosts.normalize(java.net.URI.create(canonical).getHost())))return canonical;
         return config.getOptionalValue("toolgate.control.endpoint.console-url",String.class).map(value->value.endsWith("/")?value.substring(0,value.length()-1):value).orElseGet(this::serverUrl);
     }
     @GET @Path("api/public/v1/clients/{filename}")

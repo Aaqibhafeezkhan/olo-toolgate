@@ -55,6 +55,6 @@ public class TenantRequestResolver {
         try{tenant=new TenantId(verifiedTenant);}catch(IllegalArgumentException invalid){throw new Failure(ErrorCode.UNAUTHORIZED,401,"Invalid verified identity");}
         if(!context.tenant().equals(tenant))throw mismatch();
     }
-    static Failure mismatch(){return new Failure(ErrorCode.FORBIDDEN,403,"TENANT_MISMATCH");}
-    static Failure misdirected(){return new Failure(ErrorCode.VALIDATION,421,"MISDIRECTED_REQUEST");}
+    static Failure mismatch(){return new Failure(ErrorCode.TENANT_MISMATCH,403,"TENANT_MISMATCH");}
+    static Failure misdirected(){return new Failure(ErrorCode.MISDIRECTED_REQUEST,421,"MISDIRECTED_REQUEST");}
 }

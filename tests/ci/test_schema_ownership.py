@@ -26,7 +26,10 @@ class SchemaOwnershipTests(unittest.TestCase):
         self.assertEqual({'PostgresStore', 'TenantRegistry'}, platform)
         for path in sources.rglob('*.java'):
             if path.stem != 'TenancyConfiguration':
+                self.assertNotIn('.defaultId()', path.read_text(), str(path))
                 self.assertNotIn('toolgate.control.endpoint.tenant-id', path.read_text(), str(path))
+                self.assertNotIn('toolgate.default-tenant-id', path.read_text(), str(path))
+                self.assertNotRegex(path.read_text(), r'["\']tenant-id["\']', str(path))
                 self.assertNotIn('toolgate.config.import-overwrite', path.read_text(), str(path))
         for path in [ROOT/'apps/quickstart/supervisor.py', *ROOT.glob('deploy/helm/olo-toolgate/templates/*.yaml')]:
             self.assertNotIn('TOOLGATE_CONTROL_ENDPOINT_TENANT_ID', path.read_text(), str(path))

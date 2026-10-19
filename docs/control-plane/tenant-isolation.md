@@ -1,6 +1,6 @@
 # Tenant data isolation foundation
 
-This implementation is under development. It does not yet qualify shared production hosting. Request routing, device/discovery cutover and release qualification remain in [the implementation plan](../../plan.md).
+This implementation is under development. It does not yet qualify shared production hosting. [Control request routing](tenant-routing.md) is implemented; device/Gateway/discovery cutover and release qualification remain in [the implementation plan](../../plan.md).
 
 The current inventory covers 44 application tables: 42 tenant-scoped tables with forced PostgreSQL row-level security and two platform-only registry/hostname tables. Every tenant-owned row references the registry's canonical UUID string. `PostgresStore.transaction(...)` sets `app.tenant_id` with transaction-local `set_config` before tenant SQL, for both read and write transactions. Commit and rollback clear the context before the pooled connection is reused. SQLite retains application scoping, explicit non-null tenant IDs, UUID registry checks and ownership foreign keys; it does not implement PostgreSQL RLS.
 

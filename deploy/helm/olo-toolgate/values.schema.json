@@ -1850,6 +1850,22 @@
             }
           ]
         },
+        "tenancy": {
+          "type": "object", "additionalProperties": false,
+          "required": ["mode", "hosts", "initializationSecret", "initializationItems"],
+          "properties": {
+            "mode": {"type": "string", "enum": ["single", "subdomain"]},
+            "hosts": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 253}},
+            "initializationSecret": {"type": "string", "maxLength": 253},
+            "initializationItems": {
+              "type": "array", "maxItems": 1024,
+              "items": {"type": "object", "additionalProperties": false, "required": ["key", "path"], "properties": {
+                "key": {"type": "string", "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,252}$"},
+                "path": {"type": "string", "maxLength": 1024, "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*$"}
+              }}
+            }
+          }
+        },
         "vaultKeyRingSecret": {
           "type": "string",
           "maxLength": 253

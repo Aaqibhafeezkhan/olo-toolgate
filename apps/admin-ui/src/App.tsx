@@ -173,6 +173,7 @@ export function App({initialLogin}:{initialLogin?:LoginLink}={}) {
     {!client ? <main id="main" tabIndex={-1} className="connect-page"><header className="login-header"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /> <span>ToolGate</span></div>
       <ThemePicker /></header><div className="connect-card"><p className="eyebrow">Organization console</p><h1>Manage your workspace</h1>
         {quickstart ? <p role="status" className="notice">Quickstart · Single node · Non-HA{tenant?` · Tenant: ${tenant}`:''}.</p> : <p>Connect to Control with an access token issued by your organization’s identity provider.</p>}
+        {!quickstart && <p>Workspace: {window.location.hostname}</p>}
         {!safeOrigin() && <div role="alert" className="notice error">Open this console over HTTPS before connecting.</div>}
         {Boolean(error) && <Failure error={error} />}
         {quickstart && safeOrigin() && <LoginHints use={(name,password)=>{setUsername(name);setCredential(password);}}/>}

@@ -25,7 +25,7 @@ public class Bootstrap {
     @Produces @ApplicationScoped
     io.ololabs.toolgate.control.application.ConfigurationChanges configurationChanges(PostgresStore store,ContractCodec codec){var l=limits();return new io.ololabs.toolgate.control.application.ConfigurationChanges(store,codec,java.time.Clock.systemUTC(),l.records(),l.bytes());}
     @Produces @ApplicationScoped
-    io.ololabs.toolgate.control.application.ServerSettingsService serverSettings(PostgresStore store,ContractCodec codec,io.ololabs.toolgate.control.application.EndpointService endpoint,io.ololabs.toolgate.control.application.ConfigurationChanges changes){return new io.ololabs.toolgate.control.application.ServerSettingsService(store,codec,endpoint.checkInPolicy()).reviews(changes);}
+    io.ololabs.toolgate.control.application.ServerSettingsService serverSettings(PostgresStore store,ContractCodec codec,EndpointBootstrap endpoint,io.ololabs.toolgate.control.application.ConfigurationChanges changes){return new io.ololabs.toolgate.control.application.ServerSettingsService(store,codec,endpoint.checkInPolicy()).reviews(changes);}
     private record Limits(int records, int bytes) {}
     private Limits limits() {
         var records = config.getValue("toolgate.control.max-records", Integer.class);

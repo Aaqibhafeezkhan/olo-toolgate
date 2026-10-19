@@ -39,6 +39,13 @@ public final class EndpointService {
         this.tenant=new Ids.TenantId(tenant);this.server=Ids.valid(server);this.organization=organization;
         this.control=origin(control);this.gateway=origin(gateway);
     }
+    /** A request gets an immutable tenant binding; failed-code budgets survive request/service recreation. */
+    public EndpointService forTenant(Ids.TenantId id,Store.RuntimeProfile profile) {
+        var scoped=new EndpointService(store,codec,issuer,clock,enabled&&profile!=null,id.value(),
+            profile==null?"disabled":profile.serverId(),profile==null?"disabled":profile.organization(),
+            profile==null?"https://disabled.invalid":profile.controlUrl(),profile==null?"https://disabled.invalid":profile.gatewayUrl());
+        scoped.failures=failures;scoped.checkInPolicy(checkInPolicy);if(operations!=null)scoped.operations(operations);return scoped;
+    }
     /** Fixed HTTPS origins exclude redirects, userinfo, paths and fragments. */
     public static String origin(String value) {
         try {var uri=java.net.URI.create(value);
@@ -94,7 +101,7 @@ public final class EndpointService {
     private static EndpointDeviceRecord redacted(EndpointDeviceRecord d){return new EndpointDeviceRecord(d.deviceId(),d.tenantId(),d.userId(),null,d.state(),d.revision(),d.lastSeenUnixMs(),d.reportSequence(),d.report(),d.connectionExpiresAtUnixMs(),d.connectionApproved(),d.approvalRevision(),d.systemName(),d.ipAddress());}
     /** An OWNED approval leaves the device in exactly the rule's group. */
     private void ownMembership(Store.Session tx,String deviceId,String group){var before=tx.load();var entries=new HashMap<>(before.entries());GroupGraph.setMemberships(entries,codec,Ids.Kind.DEVICE,deviceId,List.of(group));var after=new Directory(before.revision()+1,entries);after.validate(512,1048576);tx.save(before,after);}
-    private final java.util.concurrent.ConcurrentHashMap<String,ArrayDeque<Long>> failures=new java.util.concurrent.ConcurrentHashMap<>();
+    private java.util.concurrent.ConcurrentHashMap<String,ArrayDeque<Long>> failures=new java.util.concurrent.ConcurrentHashMap<>();
     /** Five failed code lookups or approvals per user in ten minutes, then 429 until the oldest failure ages out. */
     private <T> T limited(DirectoryService.Actor actor,java.util.function.Supplier<T> work){
         var times=failures.computeIfAbsent(actor.tenant().value()+"/"+actor.userId(),k->new ArrayDeque<>());long now=clock.millis();

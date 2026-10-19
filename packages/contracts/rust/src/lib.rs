@@ -2155,6 +2155,12 @@ pub enum ErrorCode {
     Internal,
     #[serde(rename = "UNSUPPORTED")]
     Unsupported,
+    #[serde(rename = "TENANT_MISMATCH")]
+    TenantMismatch,
+    #[serde(rename = "TENANT_UNAVAILABLE")]
+    TenantUnavailable,
+    #[serde(rename = "MISDIRECTED_REQUEST")]
+    MisdirectedRequest,
 }
 /// Machine-readable error without exception text or caller-controlled detail.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

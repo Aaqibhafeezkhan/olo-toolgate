@@ -26,6 +26,8 @@ public class TenantRegistry {
     public TenantRegistry(javax.sql.DataSource source,ContractCodec codec,TenantVaultKeys keys){this.source=source;this.codec=codec;this.database=null;this.keyBootstrap=null;this.configuredKeys=keys;}
     private TenantVaultKeys keys(){return keyBootstrap==null?configuredKeys:keyBootstrap.optional();}
     private javax.sql.DataSource source() { return source == null ? database.source() : source; }
+    /** Deployment readiness does not depend on an individual customer's lifecycle or directory. */
+    public boolean ready(){try(var c=source().getConnection();var s=c.prepareStatement("SELECT 1");var r=s.executeQuery()){return r.next()&&r.getInt(1)==1;}catch(SQLException unavailable){return false;}}
     private PostgresStore platformStore() { return new PostgresStore(source(), codec); }
     public static String alias(String alias) {
         if (alias == null || !alias.matches("[a-z0-9][a-z0-9-]{0,62}")) throw new IllegalArgumentException("Invalid tenant alias");

@@ -110,6 +110,16 @@ data:
   {{- end }}
   TOOLGATE_CONTROL_ENDPOINT_ENABLED: {{ $g.endpoint.enabled | quote }}
   TOOLGATE_DEFAULT_TENANT_ALIAS: {{ $g.defaultTenantAlias | quote }}
+  TOOLGATE_TENANCY_MODE: {{ $g.tenancy.mode | quote }}
+  {{- if and (eq $g.tenancy.mode "subdomain") (not $g.tenancy.initializationSecret) }}{{ fail "subdomain tenancy requires control.tenancy.initializationSecret" }}{{ end }}
+  {{- if $g.tenancy.hosts }}
+  TOOLGATE_SINGLE_TENANT_HOSTS: {{ join "," $g.tenancy.hosts | quote }}
+  {{- end }}
+  {{- if $g.tenancy.initializationSecret }}
+  TOOLGATE_INITIALIZE_MANIFEST: /etc/toolgate/initialization/manifest.json
+  {{- if not $g.tenancy.initializationItems }}{{ fail "initializationSecret requires explicit initializationItems including manifest.json" }}{{ end }}
+  {{- if not $g.vaultKeyRingSecret }}{{ fail "tenant initialization requires control.vaultKeyRingSecret" }}{{ end }}
+  {{- end }}
   TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH: /etc/toolgate/platform-db/password
   {{- if $g.vaultKeyRingSecret }}
   TOOLGATE_CONTROL_VAULT_WRAPPING_KEY_RING_PATH: /etc/toolgate/vault-wrapping/key-ring.json
@@ -122,10 +132,12 @@ data:
   TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY: {{ ternary "/opt/toolgate/client-downloads" "" $g.clientDownloads.enabled | quote }}
   {{- if $g.endpoint.enabled }}
   TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: /opt/toolgate/core-mcp/core-packages.lock.json
+  {{- if not $g.tenancy.initializationSecret }}
   TOOLGATE_CONTROL_ENDPOINT_SERVER_ID: {{ required "control.endpoint.serverId required" $g.endpoint.serverId | quote }}
   TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION: {{ required "control.endpoint.organization required" $g.endpoint.organization | quote }}
   TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL: {{ required "control.endpoint.controlUrl required" $g.endpoint.controlUrl | quote }}
   TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL: {{ required "control.endpoint.gatewayUrl required" $g.endpoint.gatewayUrl | quote }}
+  {{- end }}
   TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH: /etc/toolgate/device-ca/private.pem
   TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH: /etc/toolgate/device-ca/ca.pem
   QUARKUS_HTTP_INSECURE_REQUESTS: disabled
@@ -246,6 +258,9 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
           volumeMounts:
+            {{- if $g.tenancy.initializationSecret }}
+            - {name: initialization, mountPath: /etc/toolgate/initialization, readOnly: true}
+            {{- end }}
             - {name: platform-db, mountPath: /etc/toolgate/platform-db, readOnly: true}
             {{- if $g.vaultKeyRingSecret }}
             - {name: vault-wrapping, mountPath: /etc/toolgate/vault-wrapping, readOnly: true}
@@ -302,6 +317,14 @@ spec:
             - {name: database-ca, mountPath: /etc/toolgate/database, readOnly: true}
             {{- end }}
       volumes:
+        {{- if $g.tenancy.initializationSecret }}
+        - name: initialization
+          secret:
+            secretName: {{ $g.tenancy.initializationSecret | quote }}
+            defaultMode: 0440
+            items:
+              {{- toYaml $g.tenancy.initializationItems | nindent 14 }}
+        {{- end }}
         {{- if $g.vaultKeyRingSecret }}
         - name: vault-wrapping
           secret:

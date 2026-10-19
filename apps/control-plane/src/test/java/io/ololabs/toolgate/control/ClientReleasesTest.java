@@ -203,7 +203,7 @@ final class ClientReleasesTest {
         var artifacts = new LocalArtifactStore(directory.resolve("artifacts"));
         var settings = ClientReleases.Settings.parse(REPOSITORY, BASE + "@" + baseDigest, "LINUX", "0.10.0-dev").withPythonBase(python ? BASE + "@" + baseDigest : null);
         var signer = signed ? new RsaPackageReleaseSigner(codec, (RSAPrivateCrtKey) release.getPrivate(), "release") : null;
-        var releases = new ClientReleases(store, codec, new HttpsOciRegistry(origin, credentials, null), settings, signer, fleet, artifacts, java.time.Clock.systemUTC());
+        var releases = new ClientReleases(store, codec, new HttpsOciRegistry(origin, credentials, null), settings, signer, tenantId -> fleet, artifacts, java.time.Clock.systemUTC());
         return new Rig(store, codec, tenant, admin, digest, releases, crypto, artifacts, fleet, bytes);
     }
     private static FleetTrustKey trust(String kid, java.security.PublicKey key) {
@@ -293,7 +293,7 @@ final class ClientReleasesTest {
             TestSupport.put(entries, rig.codec, Ids.Kind.BINDING, new ControlExecutionBinding("lab-binding", "Lab", true, 1L, "lab-tools", "lab", List.of("invoke"), List.of(), true, false));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null; });
         PackageProvisioning.CoreArtifacts core = (id, version) -> id.equals("acme.greet") && version.equals("1.0.0") ? new PackageProvisioning.Core(rig.digest, rig::bytes) : null;
-        return new PackageProvisioning(rig.store, rig.codec, new ServerPackages(rig.store, rig.codec, null, java.time.Clock.systemUTC()), null, core, rig.releases, rig.fleet, java.time.Clock.systemUTC());
+        return new PackageProvisioning(rig.store, rig.codec, new ServerPackages(rig.store, rig.codec, null, java.time.Clock.systemUTC()), null, core, rig.releases, tenantId -> rig.fleet, java.time.Clock.systemUTC());
     }
     private static final String DEVICE_PROFILE = "{\"profileVersion\":1,\"profileId\":\"lab\",\"packages\":[{\"packageId\":\"acme.greet\",\"source\":\"PREBUILT_CORE\",\"version\":\"1.0.0\","
         + "\"required\":true,\"deviceGroupIds\":[\"lab\"],\"tools\":[{\"toolId\":\"acme.greet/client_greet\",\"toolGroupId\":\"lab-tools\"}],\"bindingIds\":[\"lab-binding\"]}]}";

@@ -497,7 +497,8 @@ final class EndpointTest {
         // Failed lookups and approvals are rate limited per user: B has three failures, two more, then 429 even for a valid code.
         // The failed attempt to claim A's code above counts toward B's limit too.
         for(int i=0;i<1;i++)assertEquals(404,assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup("1".repeat(16))))).status());
-        var limited=assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(theirs.userCode()))));assertEquals(429,limited.status());assertEquals(ControlErrorDetailCode.RATE_LIMITED,limited.detail());
+        var nextRequest=s.service.forTenant(s.admin.tenant(),new Store.RuntimeProfile("server","Organization","https://control.example.test","https://gateway.example.test"));
+        var limited=assertThrows(Failure.class,()->nextRequest.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(theirs.userCode()))));assertEquals(429,limited.status());assertEquals(ControlErrorDetailCode.RATE_LIMITED,limited.detail());
         s.clock.time+=600001;assertTrue(codec.model(s.service.pending(a,"visitor-a").body(),EndpointEnrollmentPage.class).items().isEmpty());
         var later=start(s,"device-b2");assertEquals("device-b2",codec.model(s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(later.userCode()))).body(),EndpointEnrollmentLookupResult.class).deviceId());
     }

@@ -85,6 +85,14 @@ gateway:
 control:
   enabled: false
   defaultTenantAlias: default
+  tenancy:
+    mode: single
+    # Exact hosts for a default-only initialization; empty derives local and configured endpoint hosts.
+    hosts: []
+    # Existing Secret: manifest.json and protected per-tenant packet/trust/import files.
+    initializationSecret: ''
+    # Map Secret keys to the relative paths referenced by manifest.json.
+    initializationItems: []
   # Existing Secret containing the protected operator-managed KEK ring as key-ring.json.
   vaultKeyRingSecret: ''
   # Optional external Redis/Valkey directory cache. Local remains the default.
