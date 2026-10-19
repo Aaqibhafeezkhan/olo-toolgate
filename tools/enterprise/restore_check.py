@@ -34,6 +34,7 @@ def main():
         source=dict(host='127.0.0.1',port=int(db['port']),dbname='control',user='control_migrator',password=db['CONTROL_TEST_PASSWORD'],sslmode='disable')
         with psycopg.connect(**source) as connection:
             a['tenantId']=connection.execute('SELECT tenant_id FROM control_tenants').fetchone()[0]
+            connection.execute("SELECT set_config('app.tenant_id', %s, true)",(a['tenantId'],))
             retired_user=connection.execute("SELECT document->>'userId' FROM control_records WHERE kind='IDENTITY_BINDING' AND document->>'subject'='admin'").fetchone()[0]
             a['retiredRecordIds']=[dict(kind='USER',id=retired_user)]
         encode=lambda b:base64.urlsafe_b64encode(b).rstrip(b'=').decode()
@@ -49,6 +50,7 @@ def main():
         result=restore(archive,backups/'manifest.json',root/'review.json',root/'trust.json',root/'connection.json',now=now,development=True,executor=execute)
         assert result['runtimeConnectEnabled'] is False
         with psycopg.connect(**target) as connection:
+            connection.execute("SELECT set_config('app.tenant_id', %s, true)",(a['tenantId'],))
             revision,epoch=connection.execute('SELECT revision,authorization_epoch FROM control_tenants').fetchone();assert revision==1001 and epoch==1001
             assert connection.execute("SELECT count(*) FROM control_records WHERE kind='USER' AND record_id=%s",(retired_user,)).fetchone()[0]==0
             assert connection.execute("SELECT count(*) FROM control_record_ids WHERE kind='USER' AND record_id=%s",(retired_user,)).fetchone()[0]==1

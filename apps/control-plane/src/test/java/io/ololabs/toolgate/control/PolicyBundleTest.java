@@ -112,8 +112,11 @@ final class PolicyBundleTest {
             statement.execute("ALTER TABLE control_audit DROP CONSTRAINT bundle_audit_failure");
         }
         assertEquals(4,service.publish(actor,publish(2,3,null),"failure","req").revision());
-        try(var connection=source.getConnection();var statement=connection.createStatement();var rows=statement.executeQuery("SELECT count(*) FROM control_audit WHERE operation LIKE 'BUNDLE_%' AND revision=2")) {
-            rows.next();assertEquals(4,rows.getLong(1));
+        try(var connection=source.getConnection();var statement=connection.createStatement()) {
+            TestSupport.scope(connection, actor.tenant());
+            try(var rows=statement.executeQuery("SELECT count(*) FROM control_audit WHERE operation LIKE 'BUNDLE_%' AND revision=2")) {
+                rows.next();assertEquals(4,rows.getLong(1));
+            }
         }
         assertThrows(Failure.class,()->service.publish(actor,publish(0,4,null),"stale-directory","req"));
         assertThrows(Failure.class,()->service.publish(actor,publish(2,4,5L),"future-rollback","req"));

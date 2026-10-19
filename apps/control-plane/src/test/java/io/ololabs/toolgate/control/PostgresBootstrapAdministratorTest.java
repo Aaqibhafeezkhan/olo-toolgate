@@ -24,8 +24,10 @@ final class PostgresBootstrapAdministratorTest {
         var codec=new ContractCodec();var user=new ControlUser("admin","Existing owner",true,1L,"existing@example.com",null,null);
         var binding=new ControlIdentityBinding("installed-admin","Reviewed identity",true,1L,"admin","https://quickstart.local","admin",1L,1L,1L,1L,"REVIEWED_INSTALLATION",0L);
         try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES('upgrade',?,?,1,?::jsonb)")) {
+            TestSupport.scope(c, new Ids.TenantId("upgrade"));
             s.setString(1,"USER");s.setString(2,"admin");s.setString(3,codec.json(user));s.executeUpdate();
             s.setString(1,"IDENTITY_BINDING");s.setString(2,"installed-admin");s.setString(3,codec.json(binding));s.executeUpdate();
+            c.commit();
         }
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);

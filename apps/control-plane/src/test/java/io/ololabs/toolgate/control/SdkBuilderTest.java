@@ -182,6 +182,7 @@ class SdkBuilderTest {
         assertEquals(1, calls.get());
         assertEquals(SdkBuilderState.READY, codec.model(service.builds(root, null).body(), SdkBuilderBuildPage.class).items().getFirst().state());
         try (var connection = data.getConnection(); var statement = connection.prepareStatement("UPDATE control_builder SET revision=revision+1 WHERE tenant_id=? AND kind='VERSION'")) {
+            TestSupport.scope(connection, tenant);
             statement.setString(1, tenant.value()); assertThrows(java.sql.SQLException.class, statement::executeUpdate);
         }
     }

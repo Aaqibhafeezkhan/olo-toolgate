@@ -86,7 +86,9 @@ final class FleetTest {
         fleet.rollout(admin,codec.json(new FleetRolloutRequest("rollback",release.packageId(),release.version(),List.of("device-a","device-b"),true,100L)),"rollback","request");
         store.transaction(tenant,false,tx->{assertEquals(4L,tx.fleet().get(FleetStore.Kind.DESIRED,"device-a").revision());return null;});
         try(var connection=source.getConnection();var statement=connection.createStatement()){
+            TestSupport.scope(connection, tenant);
             assertThrows(java.sql.SQLException.class,()->statement.executeUpdate("UPDATE control_fleet SET revision=revision+1 WHERE kind='RELEASE'"));
+            connection.rollback();
             assertThrows(java.sql.SQLException.class,()->statement.executeUpdate("DELETE FROM control_fleet"));
         }
     }

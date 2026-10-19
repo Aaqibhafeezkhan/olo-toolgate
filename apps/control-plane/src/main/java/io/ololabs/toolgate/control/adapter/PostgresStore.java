@@ -56,6 +56,11 @@ public class PostgresStore implements Store {
                 connection.setReadOnly(!write);
             }
             try {
+                // Transaction-local context is set before any tenant SQL on this connection.
+                // PostgreSQL clears it on commit/rollback, including pooled connection reuse.
+                if (!local) try (var statement = connection.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+                    statement.setString(1, tenant.value()); statement.execute();
+                }
                 if (!local) try (var statement = connection.createStatement()) {
                     statement.execute("SET LOCAL statement_timeout = '5s'"); statement.execute("SET LOCAL lock_timeout = '3s'");
                 }

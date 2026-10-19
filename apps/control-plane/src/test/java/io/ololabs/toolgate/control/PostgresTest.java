@@ -31,7 +31,8 @@ final class PostgresTest {
         var codec = new ContractCodec();
         try (var connection = java.sql.DriverManager.getConnection(url, "control_migrator", password); var statement = connection.prepareStatement(
                 "INSERT INTO control_records (tenant_id,kind,record_id,revision,document) VALUES ('upgrade','USER','kept',1,?::jsonb)")) {
-            statement.setString(1, DomainTest.user("kept", 1)); statement.executeUpdate();
+            TestSupport.scope(connection, new Ids.TenantId("upgrade"));
+            statement.setString(1, DomainTest.user("kept", 1)); statement.executeUpdate(); connection.commit();
         }
         var latest = Flyway.configure().dataSource(url, "control_migrator", password).cleanDisabled(true).load();
         assertEquals(0, latest.migrate().migrationsExecuted); latest.validate();
@@ -81,6 +82,7 @@ final class PostgresTest {
     }
     private long auditCount(PGSimpleDataSource source, String tenant) throws Exception {
         try (var connection = source.getConnection(); var statement = connection.prepareStatement("SELECT count(*) FROM control_audit WHERE tenant_id=?")) {
+            TestSupport.scope(connection, new Ids.TenantId(tenant));
             statement.setString(1, tenant); try (var rows = statement.executeQuery()) { rows.next(); return rows.getLong(1); }
         }
     }

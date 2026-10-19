@@ -42,6 +42,22 @@ class QuickstartDatabaseLockTests(unittest.TestCase):
         database.execute('BEGIN IMMEDIATE')
         database.connection.execute.assert_called_once_with('BEGIN IMMEDIATE', ())
 
+    def test_postgres_context_is_transaction_local_before_helper_sql(self):
+        database = self.adapter(True)
+        self.assertIs(database, database.__enter__())
+        database.connection.execute.assert_called_once_with(
+            "SELECT set_config('app.tenant_id', %s, true)", ('tenant-one',))
+        local = self.adapter(False)
+        self.assertIs(local, local.__enter__())
+        local.connection.execute.assert_not_called()
+
+    def test_context_setup_failure_closes_connection_before_any_helper_work(self):
+        database = self.adapter(True)
+        database.connection.execute.side_effect = RuntimeError('context unavailable')
+        with self.assertRaises(RuntimeError):
+            database.__enter__()
+        database.connection.close.assert_called_once_with()
+
     def test_parameterized_postgres_queries_preserve_bound_values(self):
         database = self.adapter(True)
         database.execute('SELECT document FROM control_records WHERE tenant_id=?', ('tenant-one',))

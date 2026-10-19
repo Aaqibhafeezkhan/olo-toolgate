@@ -525,3 +525,61 @@ CREATE TABLE control_package_provisioning(tenant_id varchar(128) NOT NULL,profil
     document text NOT NULL CHECK(octet_length(document)<=262144),PRIMARY KEY(tenant_id,profile_id));
 
 GRANT SELECT,INSERT,UPDATE ON control_package_provisioning TO toolgate_control_runtime;
+
+-- Customer data is denied without the transaction-local context set by PostgresStore.
+-- control_tenants is the temporary combined registry/authority table. Its split and
+-- platform-only enumeration boundary are a separate, mandatory shared-release gate.
+-- Keep this explicit list aligned with db/schema-ownership.json; CI rejects drift.
+DO $tenant_policies$
+DECLARE
+    tenant_table text;
+BEGIN
+    FOREACH tenant_table IN ARRAY ARRAY[
+        'control_approval_clocks',
+        'control_audit',
+        'control_authorization_outbox',
+        'control_bootstrap_admins',
+        'control_builder',
+        'control_business_keys',
+        'control_configuration_changes',
+        'control_console_devices',
+        'control_credential_history',
+        'control_endpoint_configurations',
+        'control_endpoints',
+        'control_enrollments',
+        'control_enterprise_adoptions',
+        'control_enterprise_approvals',
+        'control_enterprise_invocations',
+        'control_enterprise_nonces',
+        'control_execution_budgets',
+        'control_fleet',
+        'control_idempotency',
+        'control_invocation_event_streams',
+        'control_invocation_events',
+        'control_invocation_results',
+        'control_mcp_requests',
+        'control_outcome_reconciliations',
+        'control_package_provisioning',
+        'control_policy_bundles',
+        'control_queued_authority',
+        'control_record_ids',
+        'control_records',
+        'control_recovery_floors',
+        'control_reviewed_recovery',
+        'control_secrets',
+        'control_server_deployments',
+        'control_server_documents',
+        'control_server_packages',
+        'control_server_settings',
+        'control_tool_host_dispatches',
+        'control_tool_hosts'
+    ] LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
+        EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);
+        -- Table GRANTs still control the available operations. The restrictive
+        -- fence cannot be widened by an additional permissive policy.
+        EXECUTE format('CREATE POLICY tenant_access ON public.%I AS PERMISSIVE FOR ALL TO PUBLIC USING (true) WITH CHECK (true)', tenant_table);
+        EXECUTE format('CREATE POLICY tenant_fence ON public.%I AS RESTRICTIVE FOR ALL TO PUBLIC USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')) WITH CHECK (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), ''''))', tenant_table);
+    END LOOP;
+END;
+$tenant_policies$;

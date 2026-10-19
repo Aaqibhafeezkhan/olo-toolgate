@@ -118,7 +118,14 @@ class Database:
                 password=os.environ['QUARKUS_DATASOURCE_PASSWORD'], connect_timeout=3,
                 options='-c statement_timeout=3000', **options)
         else: self.connection = sqlite3.connect(DATA/'state/control.sqlite', timeout=3)
-    def __enter__(self): return self
+    def __enter__(self):
+        # This helper owns one transaction for local identity reads/audit writes.
+        if self.pg:
+            try: self.connection.execute("SELECT set_config('app.tenant_id', %s, true)", (TENANT,))
+            except Exception:
+                self.connection.close()
+                raise
+        return self
     def __exit__(self, typ, value, trace):
         try:
             if typ: self.connection.rollback()

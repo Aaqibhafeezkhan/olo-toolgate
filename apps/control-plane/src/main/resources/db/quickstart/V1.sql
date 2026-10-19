@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- Initial release schema. Initialize an empty database; pre-release schemas are unsupported.
 
-CREATE TABLE control_tenants(tenant_id TEXT PRIMARY KEY, revision INTEGER NOT NULL DEFAULT 0 CHECK(revision BETWEEN 0 AND 9007199254740991), authorization_epoch bigint NOT NULL DEFAULT 0 CHECK(authorization_epoch BETWEEN 0 AND 9007199254740991), directory_cache_generation INTEGER NOT NULL DEFAULT 0 CHECK(directory_cache_generation>=0));
+CREATE TABLE control_tenants(tenant_id TEXT NOT NULL PRIMARY KEY, revision INTEGER NOT NULL DEFAULT 0 CHECK(revision BETWEEN 0 AND 9007199254740991), authorization_epoch bigint NOT NULL DEFAULT 0 CHECK(authorization_epoch BETWEEN 0 AND 9007199254740991), directory_cache_generation INTEGER NOT NULL DEFAULT 0 CHECK(directory_cache_generation>=0));
 -- statement
 CREATE TABLE control_record_ids(tenant_id TEXT NOT NULL,kind TEXT NOT NULL,record_id TEXT NOT NULL,PRIMARY KEY(tenant_id,kind,record_id));
 -- statement
@@ -10,7 +10,7 @@ CREATE TABLE control_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,tenant_id 
 -- statement
 CREATE TABLE control_idempotency(tenant_id TEXT NOT NULL,actor_id TEXT NOT NULL,key TEXT NOT NULL,request_digest TEXT NOT NULL,status INTEGER NOT NULL,body TEXT NOT NULL,revision INTEGER NOT NULL,expires_at INTEGER NOT NULL DEFAULT(unixepoch()+86400),PRIMARY KEY(tenant_id,actor_id,key));
 -- statement
-CREATE TABLE control_approval_clocks(tenant_id TEXT PRIMARY KEY,observed_at INTEGER NOT NULL CHECK(observed_at BETWEEN 0 AND 9007199254740991));
+CREATE TABLE control_approval_clocks(tenant_id TEXT NOT NULL PRIMARY KEY,observed_at INTEGER NOT NULL CHECK(observed_at BETWEEN 0 AND 9007199254740991));
 -- statement
 CREATE TABLE control_enrollments(tenant_id TEXT NOT NULL,enrollment_id TEXT NOT NULL,code_digest TEXT NOT NULL,device_digest TEXT NOT NULL,document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=16384),csr TEXT NOT NULL CHECK(length(CAST(csr AS BLOB))<=16384),user_id TEXT,certificate TEXT CHECK(length(CAST(certificate AS BLOB))<=32768),expires_at INTEGER NOT NULL CHECK(expires_at>=0),last_poll INTEGER NOT NULL DEFAULT 0 CHECK(last_poll>=0),PRIMARY KEY(tenant_id,enrollment_id),UNIQUE(tenant_id,code_digest));
 -- statement
@@ -70,15 +70,15 @@ CREATE TABLE control_execution_budgets(tenant_id TEXT NOT NULL,budget_id TEXT NO
 -- statement
 CREATE TABLE control_outcome_reconciliations(tenant_id varchar(128) NOT NULL,reconciliation_id varchar(128) NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,reconciliation_id));
 -- statement
-CREATE TABLE control_recovery_floors(tenant_id varchar(128) PRIMARY KEY,snapshot_sequence bigint NOT NULL CHECK(snapshot_sequence>=0));
+CREATE TABLE control_recovery_floors(tenant_id varchar(128) NOT NULL PRIMARY KEY,snapshot_sequence bigint NOT NULL CHECK(snapshot_sequence>=0));
 -- statement
-CREATE TABLE control_server_settings(tenant_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=16384));
+CREATE TABLE control_server_settings(tenant_id TEXT NOT NULL PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=16384));
 -- statement
 CREATE TABLE control_business_keys(tenant_id TEXT NOT NULL,tool_id TEXT NOT NULL CHECK(length(tool_id) BETWEEN 1 AND 256),namespace TEXT NOT NULL CHECK(namespace IN('AGENT','DELEGATED_USER','TENANT')),namespace_identity TEXT NOT NULL CHECK(length(namespace_identity)<=128),business_key_hash TEXT NOT NULL CHECK(length(business_key_hash)=64 AND business_key_hash NOT GLOB '*[^0-9a-f]*'),source TEXT NOT NULL CHECK(source IN('HEADER','ARGUMENT','DEDUPE_WINDOW')),fingerprint TEXT NOT NULL CHECK(length(fingerprint)=71 AND substr(fingerprint,1,7)='sha256:' AND substr(fingerprint,8) NOT GLOB '*[^0-9a-f]*'),caller_agent_id TEXT NOT NULL,caller_user_id TEXT,invocation_id TEXT NOT NULL,created_at INTEGER NOT NULL CHECK(created_at BETWEEN 0 AND 9007199254740991),dedupe_expires_at INTEGER CHECK(dedupe_expires_at BETWEEN 0 AND 9007199254740991),retain_until INTEGER NOT NULL CHECK(retain_until BETWEEN 0 AND 9007199254740991),outcome TEXT CHECK(outcome IN('COMPLETED','FAILED','REJECTED','EXPIRED','CANCELLED','OUTCOME_UNKNOWN')),tombstoned_at INTEGER CHECK(tombstoned_at BETWEEN 0 AND 9007199254740991),PRIMARY KEY(tenant_id,tool_id,namespace,namespace_identity,business_key_hash),CHECK((namespace='TENANT')=(namespace_identity='')),CHECK((source='DEDUPE_WINDOW')=(dedupe_expires_at IS NOT NULL)),CHECK(dedupe_expires_at IS NULL OR dedupe_expires_at>created_at),CHECK(retain_until>=created_at),CHECK(tombstoned_at IS NULL OR outcome IS NOT NULL));
 -- statement
 CREATE TABLE control_invocation_results(tenant_id TEXT NOT NULL,invocation_id TEXT NOT NULL,fencing_nonce TEXT NOT NULL,result_digest TEXT NOT NULL CHECK(length(result_digest)=71 AND substr(result_digest,1,7)='sha256:' AND substr(result_digest,8) NOT GLOB '*[^0-9a-f]*'),byte_length INTEGER NOT NULL CHECK(byte_length BETWEEN 0 AND 4194304),payload BLOB,created_at INTEGER NOT NULL CHECK(created_at BETWEEN 0 AND 9007199254740991),retain_until INTEGER NOT NULL CHECK(retain_until BETWEEN 0 AND 9007199254740991),purged_at INTEGER CHECK(purged_at BETWEEN 0 AND 9007199254740991),PRIMARY KEY(tenant_id,invocation_id),FOREIGN KEY(tenant_id,invocation_id) REFERENCES control_enterprise_invocations(tenant_id,invocation_id),CHECK((payload IS NULL)=(purged_at IS NOT NULL)),CHECK(payload IS NULL OR length(payload)=byte_length),CHECK(retain_until>=created_at));
 -- statement
-CREATE TABLE control_bootstrap_admins(tenant_id TEXT PRIMARY KEY,user_id TEXT NOT NULL);
+CREATE TABLE control_bootstrap_admins(tenant_id TEXT NOT NULL PRIMARY KEY,user_id TEXT NOT NULL);
 -- statement
 CREATE TABLE control_server_packages(tenant_id TEXT NOT NULL,package_digest TEXT NOT NULL,package_id TEXT NOT NULL,version TEXT NOT NULL,
     uploaded_at INTEGER NOT NULL,document TEXT NOT NULL,content BLOB NOT NULL,PRIMARY KEY(tenant_id,package_digest));

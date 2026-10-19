@@ -6,13 +6,16 @@ Status: implementation started; multitenant support is not complete. Revised aga
 
 Working branch: `feature/multitenant-support-gap`. Commit each verified milestone on this branch and report its commit, overall completed percentage, pending percentage and next milestone. Stage only files belonging to this work; unrelated workspace content is excluded.
 
-Overall progress: **6% complete, 94% pending**. This is a weighted planning estimate of accepted implementation gates, not a measure of production readiness. The fixed weights below total 100; credit a row only when its stated implementation and verification gate passes. Phase 1 is split so its completed lock cleanup does not imply the registry/authority foundation is complete. Record any future scope/weight change explicitly rather than silently changing the denominator.
+Overall progress: **11% complete, 89% pending**. This is a weighted planning estimate of accepted implementation gates, not a measure of production readiness. The fixed weights below total 100; credit a row only when its stated implementation and verification gate passes. Phase 1 is split so its completed lock cleanup and customer-data RLS do not imply the registry/authority foundation is complete. Record any future scope/weight change explicitly rather than silently changing the denominator.
+
+Milestone allocation update: the former 19% phase 1b allocation is now split into 5% for the ownership inventory/customer-data RLS gate and 14% for the remaining registry, UUID, lifecycle and ownership-constraint gates. The original phase 1b total and the overall 100% denominator are unchanged. The temporary combined registry/authority table is explicitly excluded from the completed RLS gate and remains a shared-release blocker.
 
 | Milestone | Weight | Status | Earned progress |
 | --- | --- | --- | --- |
 | 0: Secret-delivery fencing | 5% | Implemented and verified | 5% |
 | 1a: Remove unused lock table; advisory-lock behavior | 1% | Implemented and verified | 1% |
-| 1b: V1 registry/authority split, UUID ownership, RLS and transaction gates | 19% | Pending | 0% |
+| 1b.1: Ownership inventory, customer-data RLS and transaction-local context | 5% | Implemented and verified | 5% |
+| 1b.2: Registry/authority split, UUID ownership, lifecycle/transaction gates and remaining ownership constraints | 14% | Pending | 0% |
 | 2: Default tenant and layered initialization | 12% | Pending | 0% |
 | 2a: Tenant vault keys and secret custody | 10% | Pending | 0% |
 | 3: Tenant resolution, service/deployment refactor and CI guards | 16% | Pending | 0% |
@@ -21,12 +24,13 @@ Overall progress: **6% complete, 94% pending**. This is a weighted planning esti
 | 6: Capacity and background isolation | 5% | Pending | 0% |
 | 7: Recovery qualification | 5% | Pending | 0% |
 | 8: Release qualification and documentation | 4% | Pending | 0% |
-| Total | 100% | In progress | 6% |
+| Total | 100% | In progress | 11% |
 
 - Phase 0 is implemented: secret delivery requires the current consumed permit nonce, matching invocation/device/epoch and live authority before secret lookup/decryption. The HTTP adapter, endpoint transport and OpenAPI header contract carry the fence. Regression coverage includes missing/invalid/foreign fences, a replaced attempt, wrong device/tenant, revoked grants and rejection before ciphertext decryption.
 - Phase 1 has begun with removal of the unused `quickstart_vault` table/grants from both V1 schemas. Quickstart's PostgreSQL adapter now takes a tenant-namespaced transaction advisory lock instead; SQLite keeps `BEGIN IMMEDIATE`.
-- Verification: Control unit/enterprise suites against isolated PostgreSQL 17 and SQLite reported 271 tests, zero failures/errors and five optional skips (266 passed). Five Control asset/contract tests and four lock-adapter tests passed. A two-connection PostgreSQL check verified same-tenant exclusion, different-tenant independence and release on commit/rollback. The endpoint Rust transport compile check and formatting check passed.
-- The registry/authority split, canonical UUID provisioning, RLS rollout, common/per-tenant initialization, subdomain routing, tenant key provider and discovery v2 remain pending. The current application must not be described as supporting shared production tenants yet.
+- Phase 1b.1 is implemented: the checked `db/schema-ownership.json` inventory covers all 39 application tables in both storage modes, including tenant column types, primary/foreign keys and runtime privileges. PostgreSQL forces restrictive RLS on 38 customer-data tables, with transaction-local context centralized in `PostgresStore.transaction(...)`. The Quickstart helper and offline recovery boundary also set local scope. SQLite now explicitly marks every tenant column non-null, including its single-column text primary keys. CI checks inventory drift and blocks new Java context-setting boundaries; real PostgreSQL catalog checks verify deployed policies, ownership keys and runtime privileges.
+- Current verification: Control unit/enterprise suites against isolated PostgreSQL 17 and SQLite reported 276 tests, zero failures/errors and five optional skips (271 passed). Five adversarial RLS tests cover unfiltered reads, colliding secrets, cross-tenant writes, ownership changes, missing/empty context, owner FORCE RLS, additional permissive policies and single-connection pool reuse after commit/rollback/read-only work. All 25 Quickstart tests, six lock/context-adapter tests, two inventory/context-boundary checks and five Control asset/contract checks passed. A real privileged PostgreSQL backup restored under the ordinary owner and preserved records/policy ordering. Earlier milestone verification also covered advisory-lock exclusion/release and the Rust transport compile/format checks.
+- `control_tenants` is still the combined registry/authority table, explicitly marked pending in the inventory. Its unrestricted enumeration, authority upserts/defaults and missing UUID/lifecycle gates are not resolved by customer-data RLS. The registry/authority split, canonical UUID provisioning and remaining ownership constraints are the next foundation work. Common/per-tenant initialization, subdomain routing, tenant key provider and discovery v2 also remain pending. The current application must not be described as supporting shared production tenants yet.
 
 ## 1. Outcome and scope
 
@@ -268,7 +272,7 @@ SQLite Quickstart has one provisioned tenant and retains scoped repository check
 
 Make `tenant_id NOT NULL` mandatory on every application table containing tenant-owned data, including join/child/history tables. Do not infer ownership only through a parent table, JSON document, filename or application convention. Apply this rule to the default tenant as well. Store the canonical lowercase UUID string in every such column, retaining V1 `varchar(128)`/text types consistently. Aliases never appear in ownership columns; there are no old-key mappings or staged data conversions.
 
-Inventory every table before implementation and maintain a checked schema-ownership manifest with table name, classification, tenant column/type, ownership constraints, RLS policies and permitted runtime roles. This is a release artifact, not an assumption based on selected examples. The design combines the layered checks in [OWASP multitenant guidance](https://cheatsheetseries.owasp.org/cheatsheets/Multi_Tenant_Security_Cheat_Sheet.html) with the database enforcement illustrated by [AWS SaaS Factory's PostgreSQL RLS example](https://aws.amazon.com/blogs/database/multi-tenant-data-isolation-with-postgresql-row-level-security/).
+Maintain the checked `apps/control-plane/src/main/resources/db/schema-ownership.json` inventory with table name, classification, tenant column/type, ownership constraints, RLS policies and permitted runtime roles. Its current combined-registry exception must be closed by phase 1b.2; the inventory must track every new registry/authority table and constraint as that work proceeds. This is a release artifact, not an assumption based on selected examples. The design combines the layered checks in [OWASP multitenant guidance](https://cheatsheetseries.owasp.org/cheatsheets/Multi_Tenant_Security_Cheat_Sheet.html) with the database enforcement illustrated by [AWS SaaS Factory's PostgreSQL RLS example](https://aws.amazon.com/blogs/database/multi-tenant-data-isolation-with-postgresql-row-level-security/).
 
 | Table category | Required ownership |
 | --- | --- |

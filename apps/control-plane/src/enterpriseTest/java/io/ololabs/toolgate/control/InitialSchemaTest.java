@@ -38,11 +38,14 @@ class InitialSchemaTest {
         var intake=new IdentityIntake(store,codec);long now=System.currentTimeMillis();
         intake.observe(tenant,"https://identity.example","new",null,null,now-1000,now+60000,now);
         try(var c=source.getConnection();var s=c.createStatement()) {
+            c.setAutoCommit(false);s.execute("SELECT set_config('app.tenant_id', 'initial', true)");
             try(var rows=s.executeQuery("SELECT t.revision,t.authorization_epoch,o.authorization_epoch FROM control_tenants t JOIN control_authorization_outbox o USING(tenant_id,revision) WHERE t.tenant_id='initial'")){
                 assertTrue(rows.next());assertEquals(rows.getLong(1),rows.getLong(2));assertEquals(rows.getLong(2),rows.getLong(3));
             }
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("DELETE FROM control_audit"));
+            c.rollback();
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_tenants SET authorization_epoch=0 WHERE tenant_id='initial'"));
+            c.rollback();
             for(var table:java.util.List.of("control_access_migration_archive","control_approvals","control_permit_leases")){
                 try(var rows=s.executeQuery("SELECT to_regclass('"+table+"')")){assertTrue(rows.next());assertNull(rows.getString(1));}
             }
