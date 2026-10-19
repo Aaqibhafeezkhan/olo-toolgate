@@ -18,6 +18,7 @@ pub trait ControlPort: Send + Sync {
         &self,
         _identity: DeviceIdentity,
         _request: EnterpriseSecretDeliveryRequest,
+        _fencing_token: String,
     ) -> Call<'_, EnterpriseSecretDelivery> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
@@ -298,9 +299,19 @@ impl ControlPort for HttpsControl {
         &self,
         identity: DeviceIdentity,
         request: EnterpriseSecretDeliveryRequest,
+        fencing_token: String,
     ) -> Call<'_, EnterpriseSecretDelivery> {
         Box::pin(async move {
+            if fencing_token.is_empty() || fencing_token.len() > 128 {
+                return Err(Failure::Validation);
+            }
+            let mut fence = reqwest::header::HeaderValue::from_str(&fencing_token)
+                .map_err(|_| Failure::Validation)?;
+            fence.set_sensitive(true);
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("toolgate-fencing-token", fence);
             let client = Self::builder(&self.config)?
+                .default_headers(headers)
                 .identity(self.key.tls_identity(&identity)?)
                 .build()
                 .map_err(|_| Failure::Unavailable)?;

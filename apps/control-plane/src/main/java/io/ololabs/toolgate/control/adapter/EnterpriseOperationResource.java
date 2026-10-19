@@ -80,5 +80,5 @@ public class EnterpriseOperationResource {
     @GET @Path("invocations/{id}/events") @io.quarkus.security.Authenticated
     public Response eventPage(@PathParam("id")String id,@QueryParam("after")@DefaultValue("0")long after,@QueryParam("limit")@DefaultValue("200")int limit){return reply(new RunEvents(store,codec,operations).page(actors.human(),id,after,limit));}
     @POST @Path("secrets/deliver") @Consumes("application/json") @PermitAll
-    public Response secret(String document){var certificate=peer();return reply(vault.service().deliver(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document),operations));}
+    public Response secret(@HeaderParam("Toolgate-Fencing-Token")String fencingToken,String document){var certificate=peer();return reply(vault.service().deliver(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document),fencingToken,operations));}
 }

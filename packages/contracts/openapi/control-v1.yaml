@@ -7919,6 +7919,16 @@ paths:
   /api/control/v1/access/secrets/deliver:
     post:
       operationId: deliverRuntimeSecret
+      description: Delivers a declared secret only to the current executing device and consumed permit nonce.
+      parameters:
+      - name: Toolgate-Fencing-Token
+        in: header
+        required: true
+        description: The consumed permit nonce for the current invocation attempt. Missing or stale tokens are denied.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
       responses:
         '200':
           description: Current scoped enterprise authority

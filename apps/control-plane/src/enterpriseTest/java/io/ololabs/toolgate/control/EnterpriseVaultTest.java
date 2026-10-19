@@ -31,10 +31,36 @@ class EnterpriseVaultTest {
     store.transaction(admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(tx.load().entries());graph.entries.values().stream().filter(v->v.id().kind()==Ids.Kind.TOOL||v.id().kind()==Ids.Kind.GRANT||v.id().kind()==Ids.Kind.EXTRACTOR||v.id().kind()==Ids.Kind.DELEGATION).forEach(v->entries.put(v.id(),v));tx.save(before,new Directory(before.revision()+1,entries));return null;});vault.write(admin,write("runtime-only-value"),"delivery-key");
     var generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);var signer=new RsaEffectSigner((java.security.interfaces.RSAPrivateCrtKey)generator.generateKeyPair().getPrivate(),"effect",graph.codec);var ops=new EnterpriseOperations(store,graph.codec,signer,java.time.Clock.fixed(java.time.Instant.ofEpochMilli(EnterpriseConformanceTest.NOW),java.time.ZoneOffset.UTC),"control","toolgate-client",60000,100);
     EnterpriseConformanceTest.online(store,graph.codec,"device");var context=new RequestContext("secret-operation",admin.tenant().value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\"data/report.txt\"}}",AuthorizationRequest.class);var directory=store.transaction(admin.tenant(),false,tx->tx.load());var tool=graph.codec.model(directory.entries().get(Ids.Kind.TOOL.id("tool")).document(),ControlTool.class);var gateway=new DirectoryService.Actor(admin.tenant(),"b".repeat(64),false);
-    var i=graph.codec.model(ops.submit(gateway,graph.codec.json(new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(directory,tool),EnterpriseConformanceTest.DIGEST,null))).body(),EnterpriseInvocation.class);String body=graph.codec.json(new EnterpriseSecretDeliveryRequest(i.id(),"provider/token"));assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,ops));
-    var r=graph.codec.model(ops.reserve(gateway,graph.codec.json(new EnterpriseReservationRequest(i.id(),i.revision()))).body(),EnterpriseReservation.class);var e=r.invocation().evaluation();ops.consume(admin.tenant(),"device",graph.codec.json(new EnterprisePermitConsumption(i.id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest())));
-    assertEquals("runtime-only-value",graph.codec.model(vault.deliver(admin.tenant(),tx->"device",body,ops).body(),EnterpriseSecretDelivery.class).value());assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"other-device",body,ops));
-    store.transaction(admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Ids.Kind.GRANT.id("human-secret"));tx.save(before,new Directory(before.revision()+1,entries));return null;});assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,ops));assertFalse(vault.list(admin).body().contains("runtime-only-value"));
+    var i=graph.codec.model(ops.submit(gateway,graph.codec.json(new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(directory,tool),EnterpriseConformanceTest.DIGEST,null))).body(),EnterpriseInvocation.class);
+    String body=graph.codec.json(new EnterpriseSecretDeliveryRequest(i.id(),"provider/token"));
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,null,ops)).status());
+    var r=graph.codec.model(ops.reserve(gateway,graph.codec.json(new EnterpriseReservationRequest(i.id(),i.revision()))).body(),EnterpriseReservation.class);
+    String fence=r.invocation().reservedNonce();var e=r.invocation().evaluation();
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status(),"An unconsumed reservation is not executing authority");
+    ops.consume(admin.tenant(),"device",graph.codec.json(new EnterprisePermitConsumption(i.id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest())));
+    String foreignFence=UUID.randomUUID().toString();
+    store.transaction(admin.tenant(),true,tx->{tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(foreignFence,"another-invocation",DirectoryService.digest("another-evaluation"),r.invocation().authorizationEpoch(),EnterpriseConformanceTest.NOW+10000,null));tx.enterprise().consumeNonce(foreignFence,EnterpriseConformanceTest.NOW);return null;});
+    for(String invalid:new String[]{null,""," ",foreignFence,"x".repeat(129)})
+        assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,invalid,ops)).status());
+    assertFalse(store.transaction(admin.tenant(),false,tx->tx.auditPage(0,100)).contains("SECRET_DELIVER"),"Denied fences never deliver or audit a secret");
+    var stored=store.transaction(admin.tenant(),false,tx->tx.enterprise().secret("provider/token"));
+    store.transaction(admin.tenant(),true,tx->{tx.enterprise().saveSecret(new EnterpriseStore.Secret(stored.name(),stored.toolGroupId(),stored.deviceGroupId(),"invalid-ciphertext"));return null;});
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,foreignFence,ops)).status(),"Reject a wrong fence before attempting decryption");
+    assertEquals(503,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status());
+    store.transaction(admin.tenant(),true,tx->{tx.enterprise().saveSecret(stored);return null;});
+    assertEquals("runtime-only-value",graph.codec.model(vault.deliver(admin.tenant(),tx->"device",body,fence,ops).body(),EnterpriseSecretDelivery.class).value());
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"other-device",body,fence,ops)).status());
+    assertEquals(404,assertThrows(Failure.class,()->vault.deliver(new Ids.TenantId("other"),tx->"device",body,fence,ops)).status(),"Another tenant cannot find this invocation");
+    // A subsequent attempt invalidates the first fence, even for the same tenant/device/invocation.
+    String nextFence=UUID.randomUUID().toString();
+    store.transaction(admin.tenant(),true,tx->{var current=tx.enterprise().invocation(i.id());
+        tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nextFence,i.id(),DirectoryService.digest(graph.codec.json(current.evaluation())),current.authorizationEpoch(),EnterpriseConformanceTest.NOW+10000,null));
+        tx.enterprise().consumeNonce(nextFence,EnterpriseConformanceTest.NOW);
+        tx.enterprise().saveInvocation(new EnterpriseInvocation(current.id(),current.requestDigest(),current.evaluation(),current.state(),current.revision()+1,current.authorizationEpoch(),nextFence,current.expiresAtUnixMs(),current.completedResources(),current.downstreamIdempotencyKey(),current.resultDigest(),current.diagnosticId()),EnterpriseConformanceTest.NOW,current.revision());return null;});
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status());
+    assertEquals("runtime-only-value",graph.codec.model(vault.deliver(admin.tenant(),tx->"device",body,nextFence,ops).body(),EnterpriseSecretDelivery.class).value());
+    store.transaction(admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Ids.Kind.GRANT.id("human-secret"));tx.save(before,new Directory(before.revision()+1,entries));return null;});
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,nextFence,ops)).status());assertFalse(vault.list(admin).body().contains("runtime-only-value"));
  }
 
 }

@@ -101,7 +101,17 @@ public final class EnterpriseOperations {
     EffectSigner signer(){return signer;}
     EnterpriseInvocation invocationIn(Store.Session tx,String id){return invocation(tx,id);}
     void requireFresh(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation invocation){fresh(tenant,tx,invocation,now(tx));}
-    EnterpriseInvocation secretAuthority(Ids.TenantId tenant,Store.Session tx,String device,String invocationId,String name){var i=invocation(tx,invocationId);if(i.state()!=EnterpriseInvocationState.EXECUTING||!device.equals(i.evaluation().context().deviceId())||i.evaluation().resources().stream().noneMatch(r->r.kind()==ResourceKind.CUSTOM&&r.locator().equals("secret://"+name)))throw ManagementAccess.denied();fresh(tenant,tx,i,now(tx));return i;}
+    EnterpriseInvocation secretAuthority(Ids.TenantId tenant,Store.Session tx,String device,String invocationId,String name,String fencingToken){
+        var i=invocation(tx,invocationId);
+        if(fencingToken==null||fencingToken.isEmpty()||fencingToken.length()>128||i.reservedNonce()==null
+            ||!java.security.MessageDigest.isEqual(i.reservedNonce().getBytes(java.nio.charset.StandardCharsets.UTF_8),fencingToken.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            ||i.state()!=EnterpriseInvocationState.EXECUTING||!device.equals(i.evaluation().context().deviceId())
+            ||i.evaluation().resources().stream().noneMatch(r->r.kind()==ResourceKind.CUSTOM&&r.locator().equals("secret://"+name)))throw ManagementAccess.denied();
+        var nonce=tx.enterprise().nonce(i.reservedNonce());
+        // Consumption starts the attempt. Its admission expiry does not shorten a running invocation's authority.
+        if(nonce==null||nonce.consumedAt()==null||!nonce.invocationId().equals(i.id())||nonce.authorizationEpoch()!=i.authorizationEpoch())throw ManagementAccess.denied();
+        fresh(tenant,tx,i,now(tx));return i;
+    }
     void checkpoint(Ids.TenantId tenant,Store.Session tx,String deviceId,EnterpriseInvocation invocation,AuthorizationRequest request){
         if(invocation.state()!=EnterpriseInvocationState.EXECUTING||!deviceId.equals(invocation.evaluation().context().deviceId())
             ||!request.toolId().equals(invocation.evaluation().toolId())||!request.action().equals(invocation.evaluation().action())
