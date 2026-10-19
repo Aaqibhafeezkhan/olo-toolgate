@@ -126,7 +126,11 @@ class Database:
         finally: self.connection.close()
     def execute(self, sql, values=()):
         if self.pg:
-            sql = 'LOCK TABLE quickstart_vault IN SHARE ROW EXCLUSIVE MODE' if sql == 'BEGIN IMMEDIATE' else sql.replace('?', '%s')
+            if sql == 'BEGIN IMMEDIATE':
+                # Advisory transaction locks need no placeholder table and release on commit/rollback.
+                return self.connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))',
+                                               ('toolgate:quickstart-bootstrap:'+TENANT,))
+            sql = sql.replace('?', '%s')
         return self.connection.execute(sql, values)
     def commit(self): self.connection.commit()
 

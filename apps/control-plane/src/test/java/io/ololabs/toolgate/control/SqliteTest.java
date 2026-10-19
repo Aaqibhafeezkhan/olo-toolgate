@@ -18,7 +18,7 @@ final class SqliteTest {
             try(var r=s.executeQuery("SELECT version FROM quickstart_migrations")){
                 assertTrue(r.next());assertEquals(1,r.getInt(1));assertFalse(r.next());
             }
-            try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name IN ('control_access_migration_archive','control_approvals','control_permit_leases')")){
+            try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name IN ('control_access_migration_archive','control_approvals','control_permit_leases','quickstart_vault')")){
                 assertFalse(r.next());
             }
             try(var r=s.executeQuery("PRAGMA foreign_key_check")){assertFalse(r.next());}

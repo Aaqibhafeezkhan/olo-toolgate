@@ -18,8 +18,6 @@ CREATE TABLE control_fleet(tenant_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind
 -- statement
 CREATE TABLE control_builder(tenant_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN('DRAFT','VERSION','TEST')),record_id TEXT NOT NULL,revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=65536),PRIMARY KEY(tenant_id,kind,record_id));
 -- statement
-CREATE TABLE quickstart_vault(name TEXT PRIMARY KEY CHECK(length(name) BETWEEN 1 AND 128),cipher BLOB NOT NULL CHECK(length(cipher)<=32800));
--- statement
 CREATE TABLE "control_endpoints"(tenant_id TEXT NOT NULL,device_id TEXT NOT NULL,key_fingerprint TEXT NOT NULL,document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=1048576 AND json_extract(document,'$.deviceId')=device_id AND json_extract(document,'$.tenantId')=tenant_id),csr TEXT NOT NULL CHECK(length(CAST(csr AS BLOB))<=16384),report_digest TEXT NOT NULL,acknowledgment TEXT NOT NULL CHECK(length(CAST(acknowledgment AS BLOB))<=131072),PRIMARY KEY(tenant_id,device_id),UNIQUE(tenant_id,key_fingerprint));
 -- statement
 CREATE TABLE control_endpoint_configurations (

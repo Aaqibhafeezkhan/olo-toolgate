@@ -175,10 +175,6 @@ CREATE TRIGGER control_builder_guard BEFORE UPDATE OR DELETE ON control_builder 
 
 GRANT SELECT,INSERT,UPDATE,DELETE ON control_builder TO toolgate_control_runtime;
 
-CREATE TABLE quickstart_vault(name TEXT PRIMARY KEY CHECK(length(name) BETWEEN 1 AND 128),cipher BYTEA NOT NULL CHECK(octet_length(cipher)<=32800));
-
-GRANT SELECT,INSERT,UPDATE ON quickstart_vault TO toolgate_control_runtime;
-
 CREATE TABLE control_endpoint_configurations (
     tenant_id varchar(128) NOT NULL,
     device_id varchar(128) NOT NULL,
