@@ -46,6 +46,22 @@ final class TenantLifecycleTest {
     }
     @Test void sqliteLifecycleAndAtomicInitialization() throws Exception { lifecycle(fixture(false)); }
     @Test void postgresLifecycleAndAtomicInitialization() throws Exception { lifecycle(fixture(true)); }
+    @Test void concurrentReplicasInitializeOnlyOnce() throws Exception {
+        var f=fixture(true);var tenant=f.registry.allocate("replicas","Replicas");var start=new CountDownLatch(1);
+        var applied=new java.util.concurrent.atomic.AtomicInteger();
+        try(var threads=Executors.newFixedThreadPool(2)) {
+            Callable<Boolean> run=()->{
+                assertTrue(start.await(5,TimeUnit.SECONDS));
+                return f.registry.initialize(tenant.id(),"c".repeat(64),"[]",unit->{
+                    applied.incrementAndGet();TestSupport.seed(unit,f.codec,tenant.id(),"admin");
+                    unit.transaction(tenant.id(),true,tx->{tx.protectBootstrapAdmin("admin");return null;});
+                });
+            };
+            var first=threads.submit(run);var second=threads.submit(run);start.countDown();
+            assertNotEquals(first.get(10,TimeUnit.SECONDS),second.get(10,TimeUnit.SECONDS));
+            assertEquals(1,applied.get());assertNull(f.registry.initializationFailure(tenant.id()));
+        }
+    }
     private void lifecycle(Fixture f) throws Exception {
         var unknown = Ids.TenantId.create(); unavailable(f,unknown,404);
         assertTrue(f.registry.activeAfter("",256).isEmpty());
@@ -57,7 +73,11 @@ final class TenantLifecycleTest {
             TestSupport.seed(unit,f.codec,tenant.id(),"admin"); throw new IllegalStateException("abort initialization");
         }));
         assertEquals("PROVISIONING",f.registry.find("default").status()); unavailable(f,tenant.id(),404);
+        var diagnostic=f.registry.initializationFailure(tenant.id());
+        assertEquals("INITIALIZATION_FAILED",diagnostic.code());assertTrue(diagnostic.failedAt()>0);
+        assertEquals(diagnostic,new TenantRegistry(f.platform,f.codec).initializationFailure(tenant.id()),"Diagnostics survive a new registry instance");
         initialize(f,tenant);
+        assertNull(f.registry.initializationFailure(tenant.id()),"Successful activation clears the previous failed attempt");
         assertEquals(List.of(tenant.id()),f.registry.activeAfter("",256));
         long revision = f.store.transaction(tenant.id(),false,tx->tx.load().revision()); assertEquals(1,revision,"Rolled-back seed must not survive");
         assertFalse(f.registry.initialize(tenant.id(),"b".repeat(64),"changed-source",unit->{throw new AssertionError("Never replay bootstrap");}));
@@ -80,11 +100,11 @@ final class TenantLifecycleTest {
     @Test void runtimeCannotRegisterEnumerateOrInsertAuthority() throws Exception {
         var f=fixture(true);var tenant=f.registry.allocate("default","Default");initialize(f,tenant);
         try(var c=f.runtime.getConnection();var s=c.createStatement()){
-            for(String sql:List.of("SELECT * FROM control_tenants","INSERT INTO control_tenants VALUES('anything','other','Other','PROVISIONING',1,1)","UPDATE control_tenants SET status='ACTIVE'","INSERT INTO control_tenant_authority(tenant_id) VALUES('"+Ids.TenantId.create().value()+"')"))
+            for(String sql:List.of("SELECT * FROM control_tenants","INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('anything','other','Other','PROVISIONING',1,1)","UPDATE control_tenants SET status='ACTIVE'","INSERT INTO control_tenant_authority(tenant_id) VALUES('"+Ids.TenantId.create().value()+"')"))
                 assertEquals("42501",assertThrows(SQLException.class,()->s.execute(sql)).getSQLState());
         }
         try(var c=f.platform.getConnection();var s=c.createStatement()){
-            assertEquals("23514",assertThrows(SQLException.class,()->s.execute("INSERT INTO control_tenants VALUES('quickstart','bad','Bad','PROVISIONING',1,1)")).getSQLState());
+            assertEquals("23514",assertThrows(SQLException.class,()->s.execute("INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('quickstart','bad','Bad','PROVISIONING',1,1)")).getSQLState());
         }
         assertThrows(IllegalArgumentException.class,()->new Ids.TenantId("quickstart"));
         assertThrows(IllegalArgumentException.class,()->new Ids.TenantId(tenant.id().value().toUpperCase(Locale.ROOT)));

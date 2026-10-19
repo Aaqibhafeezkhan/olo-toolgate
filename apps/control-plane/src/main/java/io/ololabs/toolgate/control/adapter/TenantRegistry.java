@@ -15,6 +15,7 @@ import java.util.function.Function;
 @ApplicationScoped
 public class TenantRegistry {
     public record Tenant(TenantId id, String alias, String name, String status) {}
+    public record InitializationFailure(String code,long failedAt) {}
     private final javax.sql.DataSource source;
     private final PlatformDatabase database;
     private final ContractCodec codec;
@@ -74,6 +75,27 @@ public class TenantRegistry {
     }
     public boolean initialize(TenantId tenant, String digest, String provenance, List<String> hosts, Consumer<Store> initializer) {
         if (digest == null || !digest.matches("[a-f0-9]{64}") || provenance == null || provenance.length() > 65536) throw Failure.validation();
+        try { return initializeAtomically(tenant,digest,provenance,hosts,initializer); }
+        catch(RuntimeException failure) {
+            // A separate commit preserves a bounded, non-sensitive diagnostic after the seed rolls back.
+            try { recordInitializationFailure(tenant); } catch(RuntimeException diagnostic) { failure.addSuppressed(diagnostic); }
+            throw failure;
+        }
+    }
+    public InitializationFailure initializationFailure(TenantId tenant) {
+        try(var c=source().getConnection();var s=c.prepareStatement("SELECT initialization_failure_code,initialization_failed_at FROM control_tenants WHERE tenant_id=?")) {
+            s.setString(1,tenant.value());try(var r=s.executeQuery()) {
+                if(!r.next())throw Failure.tenantUnavailable();
+                return r.getString(1)==null?null:new InitializationFailure(r.getString(1),r.getLong(2));
+            }
+        } catch(SQLException failure){throw Failure.unavailable();}
+    }
+    private void recordInitializationFailure(TenantId tenant) {
+        try(var c=source().getConnection();var s=c.prepareStatement("UPDATE control_tenants SET initialization_failure_code='INITIALIZATION_FAILED',initialization_failed_at=?,updated_at=? WHERE tenant_id=? AND status='PROVISIONING'")) {
+            long now=System.currentTimeMillis();s.setLong(1,now);s.setLong(2,now);s.setString(3,tenant.value());s.executeUpdate();
+        } catch(SQLException failure){throw Failure.unavailable();}
+    }
+    private boolean initializeAtomically(TenantId tenant,String digest,String provenance,List<String> hosts,Consumer<Store> initializer) {
         return platformStore().platformTransaction(tenant, (c, tx) -> {
             try {
                 String status;
@@ -102,7 +124,7 @@ public class TenantRegistry {
                     s.setString(1, tenant.value()); s.setString(2, digest); s.setString(3, provenance); s.setLong(4, now); s.executeUpdate();
                 }
                 tx.audit(DirectoryService.digest("tenant-provisioning"), "TENANT_INITIALIZE", "tenant", graph.revision(), "initialize-" + digest.substring(0, 32), digest);
-                try (var s = c.prepareStatement("UPDATE control_tenants SET status='ACTIVE',updated_at=? WHERE tenant_id=? AND status='PROVISIONING'")) {
+                try (var s = c.prepareStatement("UPDATE control_tenants SET status='ACTIVE',initialization_failure_code=NULL,initialization_failed_at=NULL,updated_at=? WHERE tenant_id=? AND status='PROVISIONING'")) {
                     s.setLong(1, now); s.setString(2, tenant.value()); if (s.executeUpdate() != 1) throw Failure.conflict();
                 }
                 return true;

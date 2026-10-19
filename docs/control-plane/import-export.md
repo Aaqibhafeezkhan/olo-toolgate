@@ -151,3 +151,51 @@ configuration file. These variables remain:
 The provisioning coordinator applies these inputs once, together with the tenant's initial configuration, receipt and activation. Subsequent starts preserve saved settings. The seed writes a tenant-scoped `SERVER_SETTINGS_IMPORT` audit entry.
 
 `TOOLGATE_DEFAULT_TENANT_ALIAS` selects the default provisioning record; runtime identity is its persisted UUID. `TOOLGATE_CONTROL_ENDPOINT_TENANT_ID`, `TOOLGATE_DEFAULT_TENANT_ID` and `TOOLGATE_CONFIG_IMPORT_OVERWRITE` are unsupported and rejected, including an overwrite value of `false`. Later settings changes use the reviewed runtime workflow.
+
+### Protected initialization manifest
+
+`TOOLGATE_INITIALIZE_MANIFEST` selects a local JSON/YAML manifest described by
+`config/initial/tenant-manifest.schema.json`. The default alias must name one of its
+tenants and agree with the environment selector. Aliases and normalized hostnames
+must be unique. For example:
+
+```yaml
+formatVersion: 1
+defaultTenantAlias: default
+commonImports:
+  - common.json
+tenants:
+  - alias: default
+    name: First organization
+    hosts: [tenant1.example.com]
+    administratorProvisioningRef: reviews/first
+    imports: [first.json]
+```
+
+Each protected review directory contains `packet.json` and `trust.json`. The signed
+packet establishes the tenant UUID and its reviewed administrator. Tenant imports
+must carry that exact UUID. Common imports omit tenant identity and cannot contain
+users, devices, identities, workload credentials or populated memberships. Their
+configuration is copied once; subsequent template edits do not change tenants.
+
+Inputs are confined to the manifest directory, including resolved symlinks. Each
+manifest/import/review packet is at most 2 MiB, trust files at most 16 KiB, and all
+files read together at most 16 MiB. Repeated references count toward the total.
+Missing explicit files, path escapes, duplicate records and invalid effective
+configuration are rejected before any tenant is allocated.
+
+Records replace by kind and ID; omitted records remain. Settings objects merge
+recursively, while arrays, scalars and explicit null replace. Final schema,
+reference, membership and protected-administrator checks apply to the result.
+Quickstart follows these same replacement rules before expanding its explicit
+`requiredIdentities` and visitor-pool setup instructions.
+
+Activation commits configuration, settings, hosts, audit and the initialization
+receipt together. Concurrent replicas cannot initialize twice. An apply failure
+rolls back that state and leaves the tenant `PROVISIONING`; the platform registry
+stores only `INITIALIZATION_FAILED` and its timestamp, without input contents or
+exception text. A successful retry clears the diagnostic. An initialized tenant
+is never reseeded, even when sources or environment values change.
+
+The manifest implements provisioning. Shared-host request routing and client
+binding remain under development as tracked in `plan.md`.

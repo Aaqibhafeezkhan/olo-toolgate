@@ -32,6 +32,12 @@ final class LayeredInitializationTest {
         var document=codec.json(envelope);return new Review(document,trust,new ReviewedRecovery(null,codec,java.time.Clock.systemUTC()).validate(document,trust));
     }
     private String number(java.math.BigInteger value){var raw=value.toByteArray();if(raw[0]==0)raw=Arrays.copyOfRange(raw,1,raw.length);return Base64.getUrlEncoder().withoutPadding().encodeToString(raw);}
+    @Test void settingsObjectsInheritButArraysAndExplicitNullReplace() {
+        var target=(ObjectNode)codec.configuration("{\"group\":{\"keep\":true,\"owner\":\"admin\",\"ids\":[\"old\"]}}",false);
+        TenantInitialization.merge(target,codec.configuration("{\"group\":{\"owner\":null,\"ids\":[]}}",false));
+        assertTrue(target.path("group").path("keep").asBoolean());assertTrue(target.path("group").get("owner").isNull());
+        assertTrue(target.path("group").path("ids").isEmpty());
+    }
     @Test void commonAndTenantLayersCopyIntoIndependentOneTimeConfigurations() throws Exception {
         var data=SqliteState.open(temp.resolve("layers.sqlite"));var registry=new TenantRegistry(data,codec);var store=new PostgresStore(data,codec);
         var initializer=new TenantInitialization(codec,ClientCheckInPolicy.QUICKSTART);

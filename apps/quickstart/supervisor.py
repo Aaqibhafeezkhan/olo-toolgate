@@ -118,7 +118,9 @@ class Database:
                 dbname=parsed.path.lstrip('/'), user=os.environ['QUARKUS_DATASOURCE_USERNAME'],
                 password=os.environ['QUARKUS_DATASOURCE_PASSWORD'], connect_timeout=3,
                 options='-c statement_timeout=3000', **options)
-        else: self.connection = sqlite3.connect(DATA/'state/control.sqlite', timeout=3)
+        else:
+            self.connection = sqlite3.connect(DATA/'state/control.sqlite', timeout=3)
+            self.connection.execute('PRAGMA foreign_keys=ON')
     def __enter__(self):
         # This helper owns one transaction for local identity reads/audit writes.
         if self.pg:

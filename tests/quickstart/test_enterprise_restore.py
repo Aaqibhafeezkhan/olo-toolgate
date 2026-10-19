@@ -16,7 +16,7 @@ class RestoreTests(unittest.TestCase):
    # Complete first-release SQLite schema, executed by the Quickstart adapter.
    script=(ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text()
    c.executescript(script)
-   c.execute("INSERT INTO control_tenants VALUES('00000000-0000-4000-8000-000000000001','test','Test','ACTIVE',1,1)")
+   c.execute("INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('00000000-0000-4000-8000-000000000001','test','Test','ACTIVE',1,1)")
    c.execute("INSERT INTO control_tenant_authority(tenant_id,revision,authorization_epoch) VALUES('00000000-0000-4000-8000-000000000001',7,9)")
    records=[('USER',dict(id='user',name='User',enabled=True,revision=1)),('TEAM',dict(id='team-default',name='Default',enabled=True,revision=1,userIds=['user'],roleIds=['management'])),('ROLE',dict(id='management',enabled=True,revision=1)),('WORKLOAD_BINDING',dict(id='workload',enabled=True,revision=1,credentialEpoch=3)),('IDENTITY_BINDING',dict(id='identity',enabled=True,revision=1,sessionEpoch=2,sessionsValidAfterUnixMs=0))]
    for kind,doc in records:c.execute('INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,?,?,?,?)',('00000000-0000-4000-8000-000000000001',kind,doc['id'],1,json.dumps(doc)))

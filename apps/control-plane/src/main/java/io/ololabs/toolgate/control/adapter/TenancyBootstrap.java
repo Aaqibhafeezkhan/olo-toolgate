@@ -58,7 +58,7 @@ public class TenancyBootstrap {
             for(var item:prepared){
                 if(item.initialized())continue;
                 var spec=item.spec();registry.allocate(spec.alias(),spec.name(),item.id());
-                var sources=new ArrayList<Map<String,String>>();sources.add(Map.of("source","reviewed-administrator","digest",DirectoryService.digest(spec.packet())));
+                var sources=new ArrayList<Map<String,String>>();sources.add(StandardAccessPresets.provenance(codec));sources.add(Map.of("source","reviewed-administrator","digest",DirectoryService.digest(spec.packet())));
                 for(var layer:spec.layers())sources.add(Map.of("source",layer.source(),"digest",DirectoryService.digest(codec.json(layer.snapshot()))));
                 sources.add(Map.of("source","initial-environment","digest",DirectoryService.digest(codec.json(environment))));
                 String provenance=codec.json(sources);

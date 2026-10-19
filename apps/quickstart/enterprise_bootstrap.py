@@ -58,6 +58,11 @@ def read_initialize():
         if not isinstance(rows, list) or any(not isinstance(row, dict) or not isinstance(row.get('id'), str) for row in rows) \
                 or len({row['id'] for row in rows}) != len(rows):
             raise Refused('Invalid or duplicate '+name+' in the initialize file')
+    for name, field in (('teams','userIds'),('agentGroups','agentIds'),('toolGroups','toolIds'),('deviceGroups','deviceIds')):
+        for row in document.get(name,[]):
+            for key in (field,):
+                if not isinstance(row.get(key),list) or any(not isinstance(value,str) for value in row[key]) or len(set(row[key]))!=len(row[key]):
+                    raise Refused('Initialize groups must contain an explicit, unique member array')
     if not number(document.get('reservedRecords', 0), 0, 100000): raise Refused('Invalid reservedRecords in the initialize file')
     return document
 
@@ -134,16 +139,10 @@ def initialize(snapshot, tenant, issuer, now):
         rows = {row['id']: row for row in snapshot[name]}
         for row in document.get(name, []):
             row = dict(row)
-            if name == 'teams': row['userIds'] = sorted(set(rows.get(row['id'], {}).get('userIds', [])) | set(row.get('userIds', [])))
             rows[row['id']] = row
         snapshot[name] = list(rows.values())
-    # A tool, device or agent belongs to exactly one group: the file's group takes it from the installation's group.
-    for name, members in (('toolGroups', 'toolIds'), ('deviceGroups', 'deviceIds'), ('agentGroups', 'agentIds')):
-        claimed = {member for row in document.get(name, []) for member in row.get(members, [])}
-        listed = {row['id'] for row in document.get(name, [])}
-        for index, row in enumerate(snapshot[name]):
-            if row['id'] not in listed and claimed & set(row.get(members, [])):
-                snapshot[name][index] = {**row, members: [member for member in row[members] if member not in claimed]}
+    # Records replace by kind/id; arrays replace exactly. Control validates final references,
+    # group exclusivity and the protected administrator instead of silently repairing an override.
     users = {user['id'] for user in snapshot['users']}
     teams = {team['id']: team for team in snapshot['teams']}
     # Initialize resolves every required identity as existing or as a disabled placeholder, added to its teams.

@@ -28,7 +28,7 @@ class SecurityTests(unittest.TestCase):
         quickstart.TENANT=quickstart.tenant_identity()
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
             db.executescript((ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text(encoding='utf-8'))
-            db.execute("INSERT INTO control_tenants VALUES(?,?,?,'ACTIVE',1,1)",(quickstart.TENANT,'quickstart','Test tenant'))
+            db.execute("INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES(?,?,?,'ACTIVE',1,1)",(quickstart.TENANT,'quickstart','Test tenant'))
             db.execute('INSERT INTO control_tenant_authority(tenant_id) VALUES(?)',(quickstart.TENANT,))
             binding={'id':'installed-admin','name':'Reviewed test identity','enabled':True,'revision':1,'userId':'admin','issuer':quickstart.ISSUER,'subject':'admin','sessionEpoch':1,'firstSeenUnixMs':1,'lastAttemptUnixMs':1,'attemptCount':1,'registrationReason':'REVIEWED_INSTALLATION','sessionsValidAfterUnixMs':0}
             db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING','installed-admin',1,json.dumps(binding)))

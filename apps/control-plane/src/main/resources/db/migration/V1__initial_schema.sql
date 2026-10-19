@@ -41,7 +41,11 @@ CREATE TABLE control_tenants (
     display_name text NOT NULL CHECK(length(display_name) BETWEEN 1 AND 256),
     status varchar(16) NOT NULL CHECK(status IN ('PROVISIONING','ACTIVE','SUSPENDED')),
     created_at bigint NOT NULL CHECK(created_at>=0),
-    updated_at bigint NOT NULL CHECK(updated_at>=created_at)
+    updated_at bigint NOT NULL CHECK(updated_at>=created_at),
+    initialization_failure_code varchar(32) CHECK(initialization_failure_code='INITIALIZATION_FAILED'),
+    initialization_failed_at bigint CHECK(initialization_failed_at>=0),
+    CHECK((initialization_failure_code IS NULL)=(initialization_failed_at IS NULL)),
+    CHECK(status='PROVISIONING' OR initialization_failure_code IS NULL)
 );
 
 CREATE TABLE control_tenant_authority (
