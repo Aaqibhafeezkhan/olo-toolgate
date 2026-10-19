@@ -333,10 +333,10 @@ public final class EndpointService {
         available();
         if(systemName!=null&&(systemName.length()>255||!systemName.matches("[a-zA-Z0-9._-]+")))throw Failure.validation();
         if(ipAddress!=null&&(ipAddress.length()>45||!ipAddress.matches("[0-9a-fA-F:.]{2,45}")))throw Failure.validation();
-        var check=codec.model(body,EndpointCheckIn.class);Ids.valid(requestId);var fingerprint=issuer.peerFingerprint(peer,clock.millis());
+        var check=codec.model(body,EndpointCheckIn.class);Ids.valid(requestId);var claims=peer(peer,clock.millis());var fingerprint=claims.fingerprint();
         var digest=DirectoryService.digest(codec.json(check));
         return transaction((tx,now)->{var row=tx.endpointKey(fingerprint);if(row==null)throw forbidden();
-            var device=codec.model(row.document(),EndpointDeviceRecord.class);active(tx,device);
+            var device=codec.model(row.document(),EndpointDeviceRecord.class);binding(claims,device);active(tx,device);
             if(!device.deviceId().equals(check.report().deviceId()))throw forbidden();
             if(check.report().appliedRevision()!=0||!check.report().packages().isEmpty())FleetService.validateReport(tx,codec,check.report());
             if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),serverName(tx));}
@@ -358,8 +358,17 @@ public final class EndpointService {
         });
     }
     public EndpointDeviceRecord authenticate(Store.Session tx,java.security.cert.X509Certificate peer,long now){
-        available();var fingerprint=issuer.peerFingerprint(peer,now);var row=tx.endpointKey(fingerprint);
-        if(row==null)throw forbidden();var device=codec.model(row.document(),EndpointDeviceRecord.class);active(tx,device);return device;
+        available();var claims=peer(peer,now);var row=tx.endpointKey(claims.fingerprint());
+        if(row==null)throw forbidden();var device=codec.model(row.document(),EndpointDeviceRecord.class);binding(claims,device);active(tx,device);return device;
+    }
+    private DeviceIssuer.Peer peer(java.security.cert.X509Certificate certificate,long now){
+        var peer=issuer.verifyPeer(certificate,now);
+        if(!peer.tenant().equals(tenant))throw new Failure(ErrorCode.TENANT_MISMATCH,403,"Tenant identity mismatch");
+        if(!peer.serverId().equals(server))throw forbidden();return peer;
+    }
+    private void binding(DeviceIssuer.Peer peer,EndpointDeviceRecord device){
+        if(!device.tenantId().equals(tenant.value())||!peer.deviceId().equals(device.deviceId())
+            ||!peer.identityUri().equals("urn:toolgate:device:"+DirectoryService.digest(server+"\n"+tenant.value()+"\n"+device.userId()+"\n"+device.deviceId())))throw forbidden();
     }
     public void active(Store.Session tx,EndpointDeviceRecord device){
         if(deleted(tx,device))throw enrollmentRequired();

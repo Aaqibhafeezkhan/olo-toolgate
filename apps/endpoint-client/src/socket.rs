@@ -282,7 +282,7 @@ impl Channel {
                         if reply.request_id != id { return Err(Failure::Validation); }
                         let bytes = serde_json::to_vec(&reply.body).map_err(|_| Failure::Validation)?;
                         packets.record("RECEIVE", PATH, &id, (Some(reply.status as u16), Some(&id)), bytes.len(), serde_json::json!({"operation":request.operation,"body":crate::diagnostics::summary(&serde_json::json!(reply.body))}));
-                        return match reply.status { 200 => contracts.decode(model, &bytes), 401 | 403 => Err(Failure::Revoked), 409 => Err(Failure::Conflict), 410 => Err(Failure::EnrollmentRequired), _ => Err(Failure::Unavailable) };
+                        return if reply.status == 200 {contracts.decode(model, &bytes)} else {Err(crate::rejection::socket(reply.status as u16, &bytes))};
                     }
                     _ => return Err(Failure::Unavailable),
                 }

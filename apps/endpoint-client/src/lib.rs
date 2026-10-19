@@ -18,6 +18,7 @@ mod json;
 pub mod authorization_profile;
 pub mod platform;
 pub mod power;
+mod rejection;
 mod remote;
 pub mod runtime;
 pub mod service;
@@ -31,6 +32,7 @@ pub mod transport;
 pub enum Failure {
     Validation,
     Unauthorized,
+    TenantMismatch,
     Conflict,
     Unavailable,
     Revoked,

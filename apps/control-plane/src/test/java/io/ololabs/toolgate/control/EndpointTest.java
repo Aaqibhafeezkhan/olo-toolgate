@@ -103,7 +103,7 @@ final class EndpointTest {
         decide(s,challenge,EnrollmentChoice.APPROVE,"approve");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");
         assertEquals(409,assertThrows(Failure.class,()->decide(s,challenge,EnrollmentChoice.DENY,"other-key")).status());
         s.clock.time+=5000;var result=poll(s,challenge);assertEquals(EnrollmentState.CONSUMED,result.state());var identity=result.identity();assertEquals("owner",identity.userId());assertEquals(io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),identity.tenantId());
-        var peer=certificate(identity);assertEquals(review.keyFingerprint(),s.issuer.peerFingerprint(peer,s.clock.time));assertEquals(-1,peer.getBasicConstraints());
+        var peer=certificate(identity);assertEquals(review.keyFingerprint(),s.issuer.verifyPeer(peer,s.clock.time).fingerprint());assertEquals(-1,peer.getBasicConstraints());
         s.service.verifySocketPeer(peer);
         assertEquals(List.of("1.3.6.1.5.5.7.3.2"),peer.getExtendedKeyUsage());
         s.clock.time+=5000;assertEquals(identity,poll(s,challenge).identity());
@@ -373,6 +373,34 @@ final class EndpointTest {
     }
     @Test void unlimitedApprovalAndReversibleManagementUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
         managementFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("managed.sqlite"))),codec)));
+    }
+    @Test void aCertificateCannotCrossTenantsEvenWhenTheSamePublicKeyWasEnrolledInBoth(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("certificate-binding.sqlite"))),codec));
+        var other=TestSupport.seed(s.store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"owner");
+        var target=s.service.forTenant(other.tenant(),new Store.RuntimeProfile("other-server","Other organization","https://other.example.test","https://other.example.test"));
+        String id="shared-key-device",request=csr(id);
+        var challenge=codec.model(target.start(codec.json(new EndpointEnrollmentStart(id,"0.6.0-dev",ClientPlatform.LINUX,request,List.of("endpoint.identity.v1"))),"request").body(),EndpointEnrollmentChallenge.class);
+        var review=codec.model(target.review(other,"owner",challenge.userCode()).body(),EndpointEnrollmentReview.class);
+        target.decide(other,"owner",codec.json(new EndpointEnrollmentDecision(challenge.userCode(),review.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"approve","request");
+        s.clock.time+=5000;
+        var identity=codec.model(target.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class).identity();
+        var own=certificate(identity);
+        var foreign=certificate(s.issuer.issue(request,id,s.admin.tenant().value(),"owner","server",s.clock.time));
+        assertEquals(s.issuer.verifyPeer(own,s.clock.time).fingerprint(),s.issuer.verifyPeer(foreign,s.clock.time).fingerprint());
+        assertEquals(id,s.store.transaction(other.tenant(),false,tx->target.authenticate(tx,own,s.clock.time)).deviceId());
+        assertEquals(ErrorCode.TENANT_MISMATCH,assertThrows(Failure.class,()->s.store.transaction(other.tenant(),false,tx->target.authenticate(tx,foreign,s.clock.time))).code());
+        assertEquals(ErrorCode.TENANT_MISMATCH,assertThrows(Failure.class,()->target.verifySocketPeer(foreign)).code());
+        String report=codec.json(new EndpointCheckIn(1L,new ClientReport(id,"0.6.0-dev",0L,List.of(),null),null,null));
+        assertEquals(ErrorCode.TENANT_MISMATCH,assertThrows(Failure.class,()->target.checkIn(foreign,report,"request")).code());
+        for(var wrong:List.of(
+            s.issuer.issue(request,"another-device",other.tenant().value(),"owner","other-server",s.clock.time),
+            s.issuer.issue(request,id,other.tenant().value(),"another-user","other-server",s.clock.time),
+            s.issuer.issue(request,id,other.tenant().value(),"owner","another-server",s.clock.time))) {
+            var invalid=certificate(wrong);
+            assertEquals(ErrorCode.FORBIDDEN,assertThrows(Failure.class,()->s.store.transaction(other.tenant(),false,tx->target.authenticate(tx,invalid,s.clock.time))).code());
+        }
+        assertEquals(0L,s.store.<Long>transaction(other.tenant(),false,tx->codec.model(tx.endpoint(id).document(),EndpointDeviceRecord.class).reportSequence()).longValue());
+        assertEquals(200,target.checkIn(own,report,"correct-tenant").status());
     }
     private void managementFlow(Setup s)throws Exception{
         var challenge=start(s,"managed");var review=review(s,challenge);

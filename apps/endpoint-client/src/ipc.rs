@@ -41,6 +41,7 @@ async fn write<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) -> Result<()
 fn code(failure: Failure) -> ErrorCode {
     match failure {
         Failure::Unauthorized | Failure::Revoked => ErrorCode::Forbidden,
+        Failure::TenantMismatch => ErrorCode::TenantMismatch,
         Failure::EnrollmentRequired => ErrorCode::NotFound,
         Failure::Validation => ErrorCode::Validation,
         Failure::Conflict => ErrorCode::Conflict,

@@ -100,6 +100,34 @@ pub struct HttpsControl {
     socket: crate::socket::Channel,
 }
 impl HttpsControl {
+    async fn refusal(&self, mut response: reqwest::Response) -> Failure {
+        let status = response.status().as_u16();
+        if response
+            .content_length()
+            .is_some_and(|size| size > crate::rejection::MAX_ERROR as u64)
+            || response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .is_none_or(|value| value.split(';').next() != Some("application/json"))
+        {
+            return Failure::Unavailable;
+        }
+        let mut bytes = Vec::new();
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => {
+                    if bytes.len() + chunk.len() > crate::rejection::MAX_ERROR {
+                        return Failure::Unavailable;
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                Ok(None) => break,
+                Err(_) => return Failure::Unavailable,
+            }
+        }
+        crate::rejection::http(status, &bytes, &self.contracts)
+    }
     pub fn new(config: Config, key: Arc<DeviceKey>, contracts: Arc<Contracts>) -> Result<Self> {
         config.validate()?;
         let client = Self::builder(&config)?
@@ -208,12 +236,8 @@ impl HttpsControl {
                 serde_json::json!({"code":"HTTP_REJECTED"}),
             );
         }
-        match response.status().as_u16() {
-            200 => {}
-            401 | 403 => return Err(Failure::Revoked),
-            409 => return Err(Failure::Conflict),
-            410 => return Err(Failure::EnrollmentRequired),
-            _ => return Err(Failure::Unavailable),
+        if status != 200 {
+            return Err(self.refusal(response).await);
         }
         if response.content_length().is_some_and(|n| n > 131072)
             || response
@@ -537,11 +561,8 @@ impl ControlPort for HttpsControl {
                 .send()
                 .await
                 .map_err(|_| Failure::Unavailable)?;
-            match response.status().as_u16() {
-                200 => {}
-                401 | 403 => return Err(Failure::Revoked),
-                409 => return Err(Failure::Conflict),
-                _ => return Err(Failure::Unavailable),
+            if response.status().as_u16() != 200 {
+                return Err(self.refusal(response).await);
             }
             if response.content_length().is_some_and(|n| n > 32768)
                 || response

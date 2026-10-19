@@ -23,6 +23,7 @@ impl Contracts {
                 serde_json::from_str(bytes).map_err(|_| Failure::Validation)?;
             if [
                 "/endpoint.schema.json",
+                "/error.schema.json",
                 "/control.schema.json",
                 "/client.schema.json",
                 "/local-tools.schema.json",

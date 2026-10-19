@@ -1108,6 +1108,7 @@ mod tests {
         revoked: AtomicBool,
         deleted: AtomicBool,
         blocked: AtomicBool,
+        tenant_mismatch: AtomicBool,
         authorizations: AtomicU64,
         deadline: AtomicU64,
         interval_ms: AtomicU64,
@@ -1196,6 +1197,9 @@ mod tests {
                 if self.blocked.load(Ordering::SeqCst) {
                     return Err(Failure::Unavailable);
                 }
+                if self.tenant_mismatch.load(Ordering::SeqCst) {
+                    return Err(Failure::TenantMismatch);
+                }
                 Ok(EndpointCheckInAck {
                     device_id: report.report.device_id,
                     sequence: report.sequence,
@@ -1283,6 +1287,7 @@ mod tests {
             revoked: AtomicBool::new(false),
             deleted: AtomicBool::new(false),
             blocked: AtomicBool::new(false),
+            tenant_mismatch: AtomicBool::new(false),
             authorizations: AtomicU64::new(0),
             deadline: AtomicU64::new(crate::now() + 29000),
             interval_ms: AtomicU64::new(500),
@@ -1395,6 +1400,37 @@ mod tests {
         service.tick().await.unwrap();
         assert_eq!(service.journal.sequence, 1);
         assert!(service.journal.pending_report.is_none());
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn tenant_mismatch_keeps_the_bound_identity_and_report_for_the_correct_gateway() {
+        let (mut service, gateway, directory) = test_service();
+        let mut identity: DeviceIdentity =
+            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
+        identity.expires_at_unix_ms = crate::now() + 60000;
+        let tenant = identity.tenant_id.clone();
+        let device = identity.device_id.clone();
+        let fingerprint = service.key.fingerprint();
+        service.journal.identity = Some(identity);
+        gateway.tenant_mismatch.store(true, Ordering::SeqCst);
+        assert_eq!(service.tick().await, Err(Failure::TenantMismatch));
+        assert_eq!(service.health().state, EndpointState::Offline);
+        assert!(!service.journal.revoked);
+        assert!(!service.journal.reenrollment);
+        assert_eq!(service.journal.identity.as_ref().unwrap().tenant_id, tenant);
+        assert_eq!(service.journal.identity.as_ref().unwrap().device_id, device);
+        assert_eq!(service.key.fingerprint(), fingerprint);
+        assert_eq!(service.journal.pending_report.as_ref().unwrap().sequence, 1);
+        let persisted: Journal =
+            serde_json::from_slice(&service.store.read("journal.json").unwrap().unwrap()).unwrap();
+        assert!(!persisted.revoked);
+        assert_eq!(persisted.identity.as_ref().unwrap().tenant_id, tenant);
+        gateway.tenant_mismatch.store(false, Ordering::SeqCst);
+        service.tick().await.unwrap();
+        assert_eq!(service.journal.sequence, 1);
+        assert!(service.journal.pending_report.is_none());
+        assert_eq!(service.health().state, EndpointState::Active);
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
     }
