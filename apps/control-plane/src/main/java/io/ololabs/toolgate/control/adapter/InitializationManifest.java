@@ -18,7 +18,8 @@ public record InitializationManifest(String defaultAlias,List<Spec> tenants) {
             return new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
         }
     }
-    public record Spec(String alias,String name,List<String> hosts,String packet,String trust,List<TenantInitialization.Layer> layers) {}
+    public record Endpoints(String serverId,String controlUrl,String gatewayUrl) {}
+    public record Spec(String alias,String name,List<String> hosts,String packet,String trust,List<TenantInitialization.Layer> layers,Endpoints endpoints) {}
     public static InitializationManifest load(Path path,ContractCodec codec) throws java.io.IOException {
         var budget=new Budget();var root=path.toAbsolutePath().getParent().toRealPath();var node=codec.configuration(budget.read(path.toAbsolutePath(),2097152),path.toString().endsWith(".yaml")||path.toString().endsWith(".yml"));
         exact(node,Set.of("formatVersion","defaultTenantAlias","commonImports","tenants"));
@@ -26,7 +27,7 @@ public record InitializationManifest(String defaultAlias,List<Spec> tenants) {
         String defaultAlias=TenantRegistry.alias(node.path("defaultTenantAlias").asText());
         var common=imports(root,node.path("commonImports"),true,codec,budget);var aliases=new HashSet<String>();var hosts=new HashSet<String>();var specs=new ArrayList<Spec>();
         for(var tenant:node.path("tenants")){
-            exact(tenant,Set.of("alias","name","hosts","administratorProvisioningRef","imports"));
+            exact(tenant,Set.of("alias","name","hosts","administratorProvisioningRef","imports","endpoints"));
             if(!tenant.path("alias").isTextual()||!tenant.path("name").isTextual()||!tenant.path("administratorProvisioningRef").isTextual())throw Failure.validation();
             var alias=TenantRegistry.alias(tenant.path("alias").asText());if(!aliases.add(alias))throw Failure.validation();
             String name=tenant.path("name").asText();if(name.isBlank()||name.length()>256)throw Failure.validation();
@@ -36,7 +37,16 @@ public record InitializationManifest(String defaultAlias,List<Spec> tenants) {
             var directory=inside(root,tenant.path("administratorProvisioningRef").asText());
             var packet=budget.read(inside(root,root.relativize(directory.resolve("packet.json")).toString()),2097152);
             var trust=budget.read(inside(root,root.relativize(directory.resolve("trust.json")).toString()),16384);
-            specs.add(new Spec(alias,name,List.copyOf(owned),packet,trust,List.copyOf(layers)));
+            Endpoints endpoints=null;
+            if(tenant.has("endpoints")) {
+                var value=tenant.get("endpoints");exact(value,Set.of("serverId","controlUrl","gatewayUrl"));
+                if(!value.path("controlUrl").isTextual()||!value.path("gatewayUrl").isTextual()||value.has("serverId")&&!value.path("serverId").isTextual())throw Failure.validation();
+                endpoints=new Endpoints(value.has("serverId")?value.path("serverId").asText():null,value.path("controlUrl").asText(),value.path("gatewayUrl").asText());
+                // Validate URL shape and ownership before registration; a missing server ID defaults to the UUID later.
+                var profile=new io.ololabs.toolgate.control.application.Store.RuntimeProfile(endpoints.serverId()==null?"pending":endpoints.serverId(),name,endpoints.controlUrl(),endpoints.gatewayUrl());
+                for(var origin:List.of(profile.controlUrl(),profile.gatewayUrl()))if(!owned.contains(TenantRequestResolver.authority(List.of(java.net.URI.create(origin).getRawAuthority()),443).host()))throw Failure.validation();
+            }
+            specs.add(new Spec(alias,name,List.copyOf(owned),packet,trust,List.copyOf(layers),endpoints));
         }
         if(!aliases.contains(defaultAlias))throw Failure.validation();return new InitializationManifest(defaultAlias,List.copyOf(specs));
     }

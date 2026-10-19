@@ -170,6 +170,9 @@ tenants:
     hosts: [tenant1.example.com]
     administratorProvisioningRef: reviews/first
     imports: [first.json]
+    endpoints:
+      controlUrl: https://tenant1.example.com:8443
+      gatewayUrl: https://tenant1.example.com
 ```
 
 Each protected review directory contains `packet.json` and `trust.json`. The signed
@@ -183,6 +186,14 @@ manifest/import/review packet is at most 2 MiB, trust files at most 16 KiB, and 
 files read together at most 16 MiB. Repeated references count toward the total.
 Missing explicit files, path escapes, duplicate records and invalid effective
 configuration are rejected before any tenant is allocated.
+
+Optional `endpoints` records the tenant's canonical HTTPS Control and Gateway
+origins. Both hostname owners must be the tenant declared in the manifest. Its
+optional `serverId` defaults to that tenant's UUID; the organization name comes
+from `name`. The profile is tenant-owned under PostgreSQL RLS and is inserted by
+platform provisioning in the activation transaction. Runtime cannot insert or
+change it. Default-only bring-up captures the explicit deployment endpoint
+settings into the same profile. Profile/host changes do not reopen initialization.
 
 Records replace by kind and ID; omitted records remain. Settings objects merge
 recursively, while arrays, scalars and explicit null replace. Final schema,

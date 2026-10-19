@@ -49,8 +49,10 @@ final class LayeredInitializationTest {
             var layers=List.of(common,new TenantInitialization.Layer(alias+".json",own,false));
             var environment=codec.configuration("{\"configuration\":{\"requiredReviews\":0}}",false);
             String preview=initializer.preview(tenant.id(),reviewed.packet(),layers,environment),digest=DirectoryService.digest(preview);
-            assertTrue(registry.initialize(tenant.id(),digest,"[]",List.of(alias+".example.com"),unit->initializer.apply(unit,tenant.id(),reviewed.document(),reviewed.trust(),layers,environment)));
+            var profile=new Store.RuntimeProfile(tenant.id().value(),alias,"https://"+alias+".example.com:8443","https://"+alias+".example.com");
+            assertTrue(registry.initialize(tenant.id(),digest,"[]",List.of(alias+".example.com"),profile,unit->initializer.apply(unit,tenant.id(),reviewed.document(),reviewed.trust(),layers,environment)));
             store.transaction(tenant.id(),false,tx->{
+                assertEquals(profile,tx.runtimeProfile());
                 assertTrue(tx.load().entries().get(Ids.Kind.TOOL_GROUP.id("shared-group")).document().contains(alias));
                 var settings=new ServerSettingsService(store,codec,ClientCheckInPolicy.QUICKSTART).current(tx);
                 assertEquals(alias,settings.gateway().gatewayName());assertEquals(604800000L,settings.deviceApproval().durationMs());assertEquals(0L,settings.configuration().requiredReviews());
@@ -59,6 +61,8 @@ final class LayeredInitializationTest {
             assertFalse(registry.initialize(tenant.id(),"f".repeat(64),"changed",List.of("other.example.com"),unit->{throw new AssertionError("Never replay initialization");}));
         }
         assertNotEquals(ids.get(0),ids.get(1));
+        var bad=registry.allocate("foreign-host","Foreign host");
+        assertThrows(Failure.class,()->registry.initialize(bad.id(),"a".repeat(64),"[]",List.of("foreign.example.com"),new Store.RuntimeProfile("foreign","Foreign","https://tenant-a.example.com","https://foreign.example.com"),unit->{throw new AssertionError("Foreign-host profile cannot reach the seed callback");}));
         assertEquals("Common",common.snapshot().path("toolGroups").get(0).path("name").asText(),"Templates are not live inheritance or mutable shared state");
         try(var c=data.getConnection();var s=c.createStatement();var r=s.executeQuery("SELECT count(*) FROM control_tenant_initializations")){assertTrue(r.next());assertEquals(2,r.getInt(1));}
     }

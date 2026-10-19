@@ -46,6 +46,13 @@ public class TenantRegistry {
             }
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
+    /** Public routing sees only an active binding, never the reason an unavailable host was rejected. */
+    public TenantId activeHost(String hostname) {
+        var normalized=TenantHosts.normalize(hostname);
+        try(var c=source().getConnection();var s=c.prepareStatement("SELECT h.tenant_id FROM control_tenant_hosts h JOIN control_tenants t ON t.tenant_id=h.tenant_id WHERE h.hostname=? AND t.status='ACTIVE'")) {
+            s.setString(1,normalized);try(var r=s.executeQuery()){return r.next()?new TenantId(r.getString(1)):null;}
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
     private Tenant tenant(ResultSet r) throws SQLException { return new Tenant(new TenantId(r.getString(1)), r.getString(2), r.getString(3), r.getString(4)); }
     public Tenant allocate(String alias, String name) { return allocate(alias, name, null); }
     /** A local composition's already generated UUID is accepted only at this protected bootstrap boundary. */
@@ -78,13 +85,22 @@ public class TenantRegistry {
         return initialize(tenant,digest,provenance,List.of(),initializer);
     }
     public boolean initialize(TenantId tenant, String digest, String provenance, List<String> hosts, Consumer<Store> initializer) {
+        return initialize(tenant,digest,provenance,hosts,null,initializer);
+    }
+    public boolean initialize(TenantId tenant,String digest,String provenance,List<String> hosts,Store.RuntimeProfile profile,Consumer<Store> initializer) {
         if (digest == null || !digest.matches("[a-f0-9]{64}") || provenance == null || provenance.length() > 65536) throw Failure.validation();
-        try { return initializeAtomically(tenant,digest,provenance,hosts,initializer); }
+        validateProfile(hosts,profile);
+        try { return initializeAtomically(tenant,digest,provenance,hosts,profile,initializer); }
         catch(RuntimeException failure) {
             // A separate commit preserves a bounded, non-sensitive diagnostic after the seed rolls back.
             try { recordInitializationFailure(tenant); } catch(RuntimeException diagnostic) { failure.addSuppressed(diagnostic); }
             throw failure;
         }
+    }
+    static void validateProfile(List<String> hosts,Store.RuntimeProfile profile) {
+        if(profile==null)return;
+        var owned=hosts.stream().map(TenantHosts::normalize).collect(java.util.stream.Collectors.toSet());
+        for(var origin:List.of(profile.controlUrl(),profile.gatewayUrl()))if(!owned.contains(TenantRequestResolver.authority(List.of(java.net.URI.create(origin).getRawAuthority()),443).host()))throw Failure.validation();
     }
     public InitializationFailure initializationFailure(TenantId tenant) {
         try(var c=source().getConnection();var s=c.prepareStatement("SELECT initialization_failure_code,initialization_failed_at FROM control_tenants WHERE tenant_id=?")) {
@@ -99,7 +115,7 @@ public class TenantRegistry {
             long now=System.currentTimeMillis();s.setLong(1,now);s.setLong(2,now);s.setString(3,tenant.value());s.executeUpdate();
         } catch(SQLException failure){throw Failure.unavailable();}
     }
-    private boolean initializeAtomically(TenantId tenant,String digest,String provenance,List<String> hosts,Consumer<Store> initializer) {
+    private boolean initializeAtomically(TenantId tenant,String digest,String provenance,List<String> hosts,Store.RuntimeProfile profile,Consumer<Store> initializer) {
         return platformStore().platformTransaction(tenant, (c, tx) -> {
             try {
                 String status;
@@ -111,6 +127,7 @@ public class TenantRegistry {
                 }
                 if (!status.equals("PROVISIONING")) throw Failure.conflict();
                 var vaultKeys=keys();if(vaultKeys!=null)vaultKeys.provision(tenant,tx);
+                if(profile!=null)tx.initializeRuntimeProfile(profile);
                 for(var host:hosts)try(var s=c.prepareStatement("INSERT INTO control_tenant_hosts(hostname,tenant_id) VALUES(?,?)")){
                     s.setString(1,TenantHosts.normalize(host));s.setString(2,tenant.value());s.executeUpdate();
                 }

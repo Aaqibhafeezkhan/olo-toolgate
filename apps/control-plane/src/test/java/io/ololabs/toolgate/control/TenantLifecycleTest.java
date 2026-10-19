@@ -32,7 +32,8 @@ final class TenantLifecycleTest {
         var codec = new ContractCodec(); return new Fixture(runtime,platform,new PostgresStore(runtime,codec),new TenantRegistry(platform,codec),codec);
     }
     private void initialize(Fixture f, TenantRegistry.Tenant tenant) {
-        assertTrue(f.registry.initialize(tenant.id(), "a".repeat(64), "[]", unit -> {
+        var origin="https://"+tenant.alias()+".example.test";
+        assertTrue(f.registry.initialize(tenant.id(), "a".repeat(64), "[]",List.of(tenant.alias()+".example.test"),new Store.RuntimeProfile(tenant.id().value(),tenant.name(),origin,origin), unit -> {
             TestSupport.seed(unit,f.codec,tenant.id(),"admin");
             unit.transaction(tenant.id(),true,tx->{tx.protectBootstrapAdmin("admin");return null;});
         }));
@@ -78,11 +79,14 @@ final class TenantLifecycleTest {
         assertEquals(diagnostic,new TenantRegistry(f.platform,f.codec).initializationFailure(tenant.id()),"Diagnostics survive a new registry instance");
         initialize(f,tenant);
         assertNull(f.registry.initializationFailure(tenant.id()),"Successful activation clears the previous failed attempt");
+        assertEquals(tenant.id(),f.registry.activeHost("DEFAULT.example.test"));
+        assertEquals("https://default.example.test",f.store.transaction(tenant.id(),false,tx->tx.runtimeProfile().controlUrl()));
         assertEquals(List.of(tenant.id()),f.registry.activeAfter("",256));
         long revision = f.store.transaction(tenant.id(),false,tx->tx.load().revision()); assertEquals(1,revision,"Rolled-back seed must not survive");
         assertFalse(f.registry.initialize(tenant.id(),"b".repeat(64),"changed-source",unit->{throw new AssertionError("Never replay bootstrap");}));
         assertEquals(revision,f.store.<Long>transaction(tenant.id(),false,tx->tx.load().revision()).longValue());
         f.registry.suspended(tenant.id(),true); unavailable(f,tenant.id(),404);
+        assertNull(f.registry.activeHost("default.example.test"));assertNull(f.registry.activeHost("unknown.example.test"));
         assertTrue(f.registry.activeAfter("",256).isEmpty());
         f.registry.suspended(tenant.id(),false);
         assertEquals(revision,f.store.<Long>transaction(tenant.id(),false,tx->tx.load().revision()).longValue());
@@ -100,7 +104,7 @@ final class TenantLifecycleTest {
     @Test void runtimeCannotRegisterEnumerateOrInsertAuthority() throws Exception {
         var f=fixture(true);var tenant=f.registry.allocate("default","Default");initialize(f,tenant);
         try(var c=f.runtime.getConnection();var s=c.createStatement()){
-            for(String sql:List.of("SELECT * FROM control_tenants","INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('anything','other','Other','PROVISIONING',1,1)","UPDATE control_tenants SET status='ACTIVE'","INSERT INTO control_tenant_authority(tenant_id) VALUES('"+Ids.TenantId.create().value()+"')"))
+            for(String sql:List.of("SELECT * FROM control_tenants","INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('anything','other','Other','PROVISIONING',1,1)","UPDATE control_tenants SET status='ACTIVE'","UPDATE control_tenant_runtime_profiles SET server_id='another-server'","INSERT INTO control_tenant_authority(tenant_id) VALUES('"+Ids.TenantId.create().value()+"')"))
                 assertEquals("42501",assertThrows(SQLException.class,()->s.execute(sql)).getSQLState());
         }
         try(var c=f.platform.getConnection();var s=c.createStatement()){

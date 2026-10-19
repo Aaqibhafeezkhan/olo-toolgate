@@ -10,6 +10,10 @@ CREATE TABLE control_tenant_hosts(hostname TEXT NOT NULL PRIMARY KEY CHECK(hostn
 -- statement
 CREATE TABLE control_tenant_initializations(tenant_id TEXT NOT NULL PRIMARY KEY REFERENCES control_tenants(tenant_id),version INTEGER NOT NULL CHECK(version=1),effective_digest TEXT NOT NULL CHECK(length(effective_digest)=64 AND effective_digest NOT GLOB '*[^a-f0-9]*'),provenance TEXT NOT NULL CHECK(length(CAST(provenance AS BLOB))<=65536),completed_at INTEGER NOT NULL CHECK(completed_at>=0));
 -- statement
+CREATE TABLE control_tenant_runtime_profiles(tenant_id TEXT NOT NULL PRIMARY KEY REFERENCES control_tenants(tenant_id),server_id TEXT NOT NULL CHECK(length(server_id) BETWEEN 1 AND 128),organization TEXT NOT NULL CHECK(length(organization) BETWEEN 1 AND 256),control_url TEXT NOT NULL CHECK(length(CAST(control_url AS BLOB))<=2048),gateway_url TEXT NOT NULL CHECK(length(CAST(gateway_url AS BLOB))<=2048));
+-- statement
+CREATE TRIGGER control_tenant_runtime_profiles_tenant_immutable BEFORE UPDATE OF tenant_id ON control_tenant_runtime_profiles WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
 CREATE TRIGGER control_tenant_initializations_immutable_update BEFORE UPDATE ON control_tenant_initializations BEGIN SELECT RAISE(ABORT,'initialization is immutable'); END;
 -- statement
 CREATE TRIGGER control_tenant_initializations_immutable_delete BEFORE DELETE ON control_tenant_initializations BEGIN SELECT RAISE(ABORT,'initialization is immutable'); END;

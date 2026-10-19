@@ -60,6 +60,15 @@ CREATE TABLE control_tenant_hosts (
     tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id)
 );
 CREATE INDEX control_tenant_hosts_owner ON control_tenant_hosts(tenant_id);
+CREATE TABLE control_tenant_runtime_profiles(
+    tenant_id varchar(128) NOT NULL PRIMARY KEY,
+    server_id varchar(128) NOT NULL,
+    organization text NOT NULL CHECK(length(organization) BETWEEN 1 AND 256),
+    control_url text NOT NULL CHECK(octet_length(control_url)<=2048),
+    gateway_url text NOT NULL CHECK(octet_length(gateway_url)<=2048)
+);
+GRANT SELECT ON control_tenant_runtime_profiles TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON control_tenant_runtime_profiles TO toolgate_control_platform;
 GRANT SELECT,INSERT,UPDATE,DELETE ON control_tenant_hosts TO toolgate_control_platform;
 
 CREATE TABLE control_idempotency (
@@ -690,6 +699,7 @@ BEGIN
         ,'control_tenant_authority'
         ,'control_tenant_initializations'
         ,'control_tenant_vault_keys'
+        ,'control_tenant_runtime_profiles'
     ] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
         EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);

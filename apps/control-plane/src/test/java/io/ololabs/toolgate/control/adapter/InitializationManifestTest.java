@@ -48,6 +48,8 @@ final class InitializationManifestTest {
         var missing=base.deepCopy();missing.put("defaultTenantAlias","missing");assertThrows(RuntimeException.class,()->load(missing));
         var unknown=base.deepCopy();unknown.put("overwrite",true);assertThrows(RuntimeException.class,()->load(unknown));
         var badVersion=base.deepCopy();badVersion.put("formatVersion","1");assertThrows(RuntimeException.class,()->load(badVersion));
+        var endpoints=base.deepCopy();((ObjectNode)endpoints.withArray("tenants").get(0)).putObject("endpoints").put("controlUrl","https://example.com:8443").put("gatewayUrl","https://example.com");assertNotNull(load(endpoints).tenants().getFirst().endpoints());
+        ((ObjectNode)endpoints.withArray("tenants").get(0).get("endpoints")).put("controlUrl","https://other.example.com");assertThrows(RuntimeException.class,()->load(endpoints));
         var escape=base.deepCopy();escape.putArray("commonImports").add("../outside.json");assertThrows(RuntimeException.class,()->load(escape));
         var absent=base.deepCopy();absent.putArray("commonImports").add("missing.json");assertThrows(java.io.IOException.class,()->load(absent));
     }

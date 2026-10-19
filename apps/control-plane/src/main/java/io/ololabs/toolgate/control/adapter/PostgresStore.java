@@ -118,6 +118,15 @@ public class PostgresStore implements Store {
             directoryDirty = true; directoryEntry = null; directoryCache.invalidate(tenant);
         }
         JdbcSession(Connection connection, String tenant) { this.connection = connection; this.tenant = tenant; }
+        public RuntimeProfile runtimeProfile(){
+            try(var s=statement("SELECT server_id,organization,control_url,gateway_url FROM control_tenant_runtime_profiles WHERE tenant_id=?");var r=s.executeQuery()){
+                return r.next()?new RuntimeProfile(r.getString(1),r.getString(2),r.getString(3),r.getString(4)):null;
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void initializeRuntimeProfile(RuntimeProfile profile){
+            try(var s=statement("INSERT INTO control_tenant_runtime_profiles(tenant_id,server_id,organization,control_url,gateway_url) VALUES(?,?,?,?,?)",profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl())){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.BuilderStore builder() { return new PostgresBuilderStore(connection, tenant); }

@@ -11,6 +11,8 @@ public interface Store {
     <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work);
     record ConsoleDeviceRecord(String sessionId,String userId,String deviceId,String nonceDigest,String codeDigest,String csr,String fingerprint,long expiresAt,long verifiedAt){}
     interface Session {
+        default RuntimeProfile runtimeProfile(){return null;}
+        default void initializeRuntimeProfile(RuntimeProfile profile){throw Failure.unavailable();}
         default EnterpriseStore enterprise() { throw Failure.unavailable(); }
         default FleetStore fleet() { throw Failure.unavailable(); }
         default BuilderStore builder() { throw Failure.unavailable(); }
@@ -51,6 +53,14 @@ public interface Store {
         /** Current tenant settings document, or null before the first save. */
         default String serverSettings() { throw Failure.unavailable(); }
         default void saveServerSettings(long revision, String document) { throw Failure.unavailable(); }
+    }
+    record RuntimeProfile(String serverId,String organization,String controlUrl,String gatewayUrl) {
+        public RuntimeProfile {
+            io.ololabs.toolgate.control.domain.Ids.valid(serverId);
+            if(organization==null||organization.isBlank()||organization.length()>256||controlUrl==null||gatewayUrl==null)throw Failure.validation();
+            controlUrl=EndpointService.origin(controlUrl);gatewayUrl=EndpointService.origin(gatewayUrl);
+            if(controlUrl.length()>2048||gatewayUrl.length()>2048)throw Failure.validation();
+        }
     }
     /** Immutable signed wire bytes and compiler bytes, committed with audit/replay. */
     record BundleRecord(long sequence, String document, String policy, long directoryRevision) {}

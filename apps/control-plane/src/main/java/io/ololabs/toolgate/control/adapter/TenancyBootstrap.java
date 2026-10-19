@@ -20,7 +20,7 @@ import org.eclipse.microprofile.config.Config;
 public class TenancyBootstrap {
     @Inject Config config; @Inject TenantRegistry registry; @Inject TenancyConfiguration tenancy;
     @Inject ContractCodec codec; @Inject ConfigurationImportBootstrap inputs;
-    private record Prepared(InitializationManifest.Spec spec,Ids.TenantId id,List<FleetTrustKey> trust,boolean initialized,String effectiveDigest){}
+    private record Prepared(InitializationManifest.Spec spec,Ids.TenantId id,List<FleetTrustKey> trust,boolean initialized,String effectiveDigest,Store.RuntimeProfile profile){}
     void start(@Observes @jakarta.annotation.Priority(8) StartupEvent event){
         tenancy.validate();
         try{
@@ -36,9 +36,14 @@ public class TenancyBootstrap {
                 var layers=new ArrayList<TenantInitialization.Layer>();
                 var initial=config.getOptionalValue("toolgate.control.initialize.path",String.class);
                 if(initial.isPresent())layers.add(new TenantInitialization.Layer("default-initialization",codec.configuration(ProtectedCustody.text(Path.of(initial.get()),2097152),initial.get().endsWith(".yaml")||initial.get().endsWith(".yml")),false));
-                var hosts=Arrays.stream(config.getOptionalValue("toolgate.single-tenant-hosts",String.class).orElse("localhost,127.0.0.1,::1").split(",",-1)).map(TenantHosts::normalize).distinct().toList();
-                manifest=new InitializationManifest(tenancy.defaultAlias(),List.of(new InitializationManifest.Spec(tenancy.defaultAlias(),"Default organization",hosts,
-                    ProtectedCustody.text(Path.of(packet.get()),2097152),ProtectedCustody.text(Path.of(config.getValue("toolgate.control.recovery.trust-path",String.class)),16384),List.copyOf(layers))));
+                InitializationManifest.Endpoints endpoints=null;
+                if(config.getValue("toolgate.control.endpoint.enabled",Boolean.class))endpoints=new InitializationManifest.Endpoints(config.getValue("toolgate.control.endpoint.server-id",String.class),config.getValue("toolgate.control.endpoint.control-url",String.class),config.getValue("toolgate.control.endpoint.gateway-url",String.class));
+                var hosts=new ArrayList<>(Arrays.stream(config.getOptionalValue("toolgate.single-tenant-hosts",String.class).orElse("localhost,127.0.0.1,::1").split(",",-1)).map(TenantHosts::normalize).distinct().toList());
+                if(endpoints!=null&&config.getOptionalValue("toolgate.single-tenant-hosts",String.class).isEmpty())for(var origin:List.of(endpoints.controlUrl(),endpoints.gatewayUrl())){
+                    var host=TenantRequestResolver.authority(List.of(java.net.URI.create(origin).getRawAuthority()),443).host();if(!hosts.contains(host))hosts.add(host);
+                }
+                manifest=new InitializationManifest(tenancy.defaultAlias(),List.of(new InitializationManifest.Spec(tenancy.defaultAlias(),config.getOptionalValue("toolgate.control.endpoint.organization",String.class).orElse("Default organization"),List.copyOf(hosts),
+                    ProtectedCustody.text(Path.of(packet.get()),2097152),ProtectedCustody.text(Path.of(config.getValue("toolgate.control.recovery.trust-path",String.class)),16384),List.copyOf(layers),endpoints)));
             }
             tenancy.manifestDefault(manifest.defaultAlias());
             var checkIn=ClientCheckInPolicy.configure(config.getOptionalValue("toolgate.control.client-check-in.check-in-ms",Long.class).orElse(null),config.getOptionalValue("toolgate.control.client-check-in.jitter-pct",Integer.class).orElse(null),config.getOptionalValue("toolgate.control.client-check-in.offline-after-ms",Long.class).orElse(null));
@@ -51,18 +56,26 @@ public class TenancyBootstrap {
                 var trust=new ArrayList<FleetTrustKey>();for(var key:trustNode.path("keys"))trust.add(codec.model(codec.json(key),FleetTrustKey.class));
                 var existing=registry.find(spec.alias());if(existing!=null&&!existing.id().equals(id))throw Failure.conflict();
                 boolean initialized=existing!=null&&registry.initialized(id);
+                var endpoints=spec.endpoints();
+                var profile=endpoints==null?null:new Store.RuntimeProfile(endpoints.serverId()==null?id.value():endpoints.serverId(),spec.name(),endpoints.controlUrl(),endpoints.gatewayUrl());
+                TenantRegistry.validateProfile(spec.hosts(),profile);
                 String effectiveDigest=null;
-                if(!initialized){var reviewed=new ReviewedRecovery(null,codec,Clock.systemUTC()).validate(spec.packet(),trust);effectiveDigest=DirectoryService.digest(initializer.preview(id,reviewed,spec.layers(),environment));}
-                prepared.add(new Prepared(spec,id,List.copyOf(trust),initialized,effectiveDigest));
+                if(!initialized){
+                    var reviewed=new ReviewedRecovery(null,codec,Clock.systemUTC()).validate(spec.packet(),trust);
+                    var effective=new TreeMap<String,Object>();effective.put("configuration",codec.configuration(initializer.preview(id,reviewed,spec.layers(),environment),false));effective.put("hosts",spec.hosts());if(profile!=null)effective.put("endpoints",profile);
+                    effectiveDigest=DirectoryService.digest(codec.json(effective));
+                }
+                prepared.add(new Prepared(spec,id,List.copyOf(trust),initialized,effectiveDigest,profile));
             }
             for(var item:prepared){
                 if(item.initialized())continue;
                 var spec=item.spec();registry.allocate(spec.alias(),spec.name(),item.id());
                 var sources=new ArrayList<Map<String,String>>();sources.add(StandardAccessPresets.provenance(codec));sources.add(Map.of("source","reviewed-administrator","digest",DirectoryService.digest(spec.packet())));
+                sources.add(Map.of("source","tenant-routing-configuration","digest",DirectoryService.digest(codec.json(List.of(spec.hosts(),codec.json(item.profile()))))));
                 for(var layer:spec.layers())sources.add(Map.of("source",layer.source(),"digest",DirectoryService.digest(codec.json(layer.snapshot()))));
                 sources.add(Map.of("source","initial-environment","digest",DirectoryService.digest(codec.json(environment))));
                 String provenance=codec.json(sources);
-                try{registry.initialize(item.id(),item.effectiveDigest(),provenance,spec.hosts(),unit->initializer.apply(unit,item.id(),spec.packet(),item.trust(),spec.layers(),environment));}
+                try{registry.initialize(item.id(),item.effectiveDigest(),provenance,spec.hosts(),item.profile(),unit->initializer.apply(unit,item.id(),spec.packet(),item.trust(),spec.layers(),environment));}
                 catch(RuntimeException invalid){org.jboss.logging.Logger.getLogger(TenancyBootstrap.class).error(codec.json(Map.of("event","tenant_initialization_failed","tenantId",item.id().value(),"code","INITIALIZATION_FAILED")));}
             }
         }catch(Exception invalid){throw new IllegalStateException("Tenant initialization manifest or protected provisioning material rejected",invalid);}
