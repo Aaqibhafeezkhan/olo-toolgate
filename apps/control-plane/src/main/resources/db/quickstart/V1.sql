@@ -72,7 +72,17 @@ CREATE TABLE control_reviewed_recovery(tenant_id TEXT REFERENCES control_tenants
 -- statement
 CREATE TABLE control_configuration_changes(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,change_id varchar(128) NOT NULL,revision bigint NOT NULL,request_digest char(64) NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,change_id));
 -- statement
-CREATE TABLE control_secrets(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,cipher text NOT NULL CHECK(length(cipher)<=65536),PRIMARY KEY(tenant_id,name));
+CREATE TABLE control_tenant_vault_keys(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),version INTEGER NOT NULL CHECK(version BETWEEN 1 AND 1024),state TEXT NOT NULL CHECK(state IN('ACTIVE','READ_ONLY','RETIRED')),provider_reference TEXT NOT NULL CHECK(length(provider_reference)<=128),wrapped_encryption_key TEXT NOT NULL CHECK(length(wrapped_encryption_key)<=1024),wrapped_retry_key TEXT NOT NULL CHECK(length(wrapped_retry_key)<=1024),PRIMARY KEY(tenant_id,version));
+-- statement
+CREATE UNIQUE INDEX control_tenant_vault_keys_current ON control_tenant_vault_keys(tenant_id) WHERE state='ACTIVE';
+-- statement
+CREATE TABLE control_secrets(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,version INTEGER NOT NULL CHECK(version BETWEEN 1 AND 9007199254740991),key_version INTEGER NOT NULL,cipher text NOT NULL CHECK(length(cipher)<=65536),PRIMARY KEY(tenant_id,name),FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version));
+-- statement
+CREATE TRIGGER control_vault_key_guard BEFORE UPDATE ON control_tenant_vault_keys WHEN NEW.version<>OLD.version OR NEW.tenant_id<>OLD.tenant_id OR OLD.state='RETIRED' OR (NEW.state<>OLD.state AND NOT ((OLD.state='ACTIVE' AND NEW.state='READ_ONLY') OR (OLD.state='READ_ONLY' AND NEW.state='RETIRED'))) OR (NEW.state='RETIRED' AND EXISTS(SELECT 1 FROM control_secrets WHERE tenant_id=OLD.tenant_id AND key_version=OLD.version)) BEGIN SELECT RAISE(ABORT,'invalid vault key transition'); END;
+-- statement
+CREATE TRIGGER control_vault_key_no_delete BEFORE DELETE ON control_tenant_vault_keys BEGIN SELECT RAISE(ABORT,'vault key retention requires explicit offboarding'); END;
+-- statement
+CREATE TRIGGER control_secret_version_guard BEFORE UPDATE ON control_secrets WHEN NEW.name<>OLD.name OR NEW.version<>OLD.version+1 BEGIN SELECT RAISE(ABORT,'invalid secret version transition'); END;
 -- statement
 CREATE TABLE control_queued_authority(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,kind TEXT NOT NULL,record_id TEXT NOT NULL,creator_user_id TEXT NOT NULL,PRIMARY KEY(tenant_id,kind,record_id));
 -- statement

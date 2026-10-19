@@ -111,6 +111,9 @@ data:
   TOOLGATE_CONTROL_ENDPOINT_ENABLED: {{ $g.endpoint.enabled | quote }}
   TOOLGATE_DEFAULT_TENANT_ALIAS: {{ $g.defaultTenantAlias | quote }}
   TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH: /etc/toolgate/platform-db/password
+  {{- if $g.vaultKeyRingSecret }}
+  TOOLGATE_CONTROL_VAULT_WRAPPING_KEY_RING_PATH: /etc/toolgate/vault-wrapping/key-ring.json
+  {{- end }}
   TOOLGATE_CONTROL_CLIENT_CHECKIN_MS: {{ printf "%d" (int $c.checkInMs) | quote }}
   TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT: {{ printf "%d" (int $c.jitterPct) | quote }}
   {{- if gt (int $c.offlineAfterMs) 0 }}
@@ -244,6 +247,9 @@ spec:
             timeoutSeconds: 2
           volumeMounts:
             - {name: platform-db, mountPath: /etc/toolgate/platform-db, readOnly: true}
+            {{- if $g.vaultKeyRingSecret }}
+            - {name: vault-wrapping, mountPath: /etc/toolgate/vault-wrapping, readOnly: true}
+            {{- end }}
             {{- if eq $g.cache.mode "redis" }}
             - {name: cache-credentials, mountPath: /etc/toolgate/cache, readOnly: true}
             {{- if $g.cache.caSecret }}
@@ -296,6 +302,13 @@ spec:
             - {name: database-ca, mountPath: /etc/toolgate/database, readOnly: true}
             {{- end }}
       volumes:
+        {{- if $g.vaultKeyRingSecret }}
+        - name: vault-wrapping
+          secret:
+            secretName: {{ $g.vaultKeyRingSecret | quote }}
+            defaultMode: 0440
+            items: [{key: key-ring.json, path: key-ring.json}]
+        {{- end }}
         - name: platform-db
           secret:
             secretName: {{ $g.database.credentialsSecret | quote }}

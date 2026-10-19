@@ -39,6 +39,12 @@ public interface EnterpriseStore {
     void rememberCreator(String kind,String id,String user);
     long budgetUsage(String budget,long since,String excludingInvocation);
     void reserveBudget(String budget,String invocation,long now);
-    record Secret(String name,String toolGroupId,String deviceGroupId,String cipher) {}
+    record Secret(String name,String toolGroupId,String deviceGroupId,long version,long keyVersion,String cipher) {}
+    record VaultKey(long version,String state,String providerReference,String wrappedEncryptionKey,String wrappedRetryKey) {}
+    VaultKey vaultKey(long version);
+    VaultKey currentVaultKey();
+    List<VaultKey> vaultKeys();
+    void insertVaultKey(VaultKey key);
+    void updateVaultKey(VaultKey key,String expectedState);
     record Nonce(String id,String invocationId,String evaluationDigest,long authorizationEpoch,long expiresAt,Long consumedAt) {}
 }

@@ -8,6 +8,8 @@ import javax.sql.DataSource;
 
 /** Explicit test-only provisioning. Production never derives UUIDs from aliases or creates tenants on writes. */
 public final class Tenants {
+    private static final io.ololabs.toolgate.control.application.TenantVaultKeys KEYS=new io.ololabs.toolgate.control.application.TenantVaultKeys(
+        new io.ololabs.toolgate.control.adapter.ContractCodec(),new io.ololabs.toolgate.control.application.LocalVaultWrappingProvider("fixture",java.util.Map.of("fixture",new byte[32])));
     private Tenants() {}
     public static TenantId id(String label) {
         if (label.matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}")) return new TenantId(label);
@@ -29,6 +31,11 @@ public final class Tenants {
                     s.setString(1,tenant.value()); s.setString(2,label); s.setString(3,label); s.executeUpdate();
                 }
                 try (var s = c.prepareStatement("INSERT INTO control_tenant_authority(tenant_id) VALUES(?) ON CONFLICT DO NOTHING")) { s.setString(1,tenant.value()); s.executeUpdate(); }
+                boolean keyMissing;
+                try(var s=c.prepareStatement("SELECT 1 FROM control_tenant_vault_keys WHERE tenant_id=?")){s.setString(1,tenant.value());try(var r=s.executeQuery()){keyMissing=!r.next();}}
+                if(keyMissing){var key=KEYS.initial(tenant);try(var s=c.prepareStatement("INSERT INTO control_tenant_vault_keys VALUES(?,1,'ACTIVE',?,?,?) ON CONFLICT DO NOTHING")){
+                    s.setString(1,tenant.value());s.setString(2,key.providerReference());s.setString(3,key.wrappedEncryptionKey());s.setString(4,key.wrappedRetryKey());s.executeUpdate();
+                }}
                 try (var s = c.prepareStatement("UPDATE control_tenants SET status='ACTIVE' WHERE tenant_id=? AND status='PROVISIONING'")) { s.setString(1,tenant.value()); s.executeUpdate(); }
             }
             c.commit();

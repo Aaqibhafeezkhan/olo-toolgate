@@ -85,6 +85,8 @@ gateway:
 control:
   enabled: false
   defaultTenantAlias: default
+  # Existing Secret containing the protected operator-managed KEK ring as key-ring.json.
+  vaultKeyRingSecret: ''
   # Optional external Redis/Valkey directory cache. Local remains the default.
   # Secrets contain `password` and `encryption-key` (base64 text for 32 random bytes).
   cache:

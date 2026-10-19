@@ -311,7 +311,35 @@ CREATE TABLE control_configuration_changes(tenant_id varchar(128) NOT NULL,chang
 
 GRANT SELECT,INSERT,UPDATE ON control_configuration_changes TO toolgate_control_runtime;
 
-CREATE TABLE control_secrets(tenant_id varchar(128) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,cipher text NOT NULL CHECK(octet_length(cipher)<=65536),PRIMARY KEY(tenant_id,name));
+CREATE TABLE control_tenant_vault_keys(
+    tenant_id varchar(128) NOT NULL,
+    version bigint NOT NULL CHECK(version BETWEEN 1 AND 1024),
+    state varchar(16) NOT NULL CHECK(state IN('ACTIVE','READ_ONLY','RETIRED')),
+    provider_reference varchar(128) NOT NULL,
+    wrapped_encryption_key text NOT NULL CHECK(octet_length(wrapped_encryption_key)<=1024),
+    wrapped_retry_key text NOT NULL CHECK(octet_length(wrapped_retry_key)<=1024),
+    PRIMARY KEY(tenant_id,version)
+);
+CREATE UNIQUE INDEX control_tenant_vault_keys_current ON control_tenant_vault_keys(tenant_id) WHERE state='ACTIVE';
+GRANT SELECT ON control_tenant_vault_keys TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON control_tenant_vault_keys TO toolgate_control_platform;
+CREATE FUNCTION control_vault_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'vault key retention requires explicit offboarding'; END IF;
+    IF NEW.version<>OLD.version OR NEW.tenant_id<>OLD.tenant_id OR OLD.state='RETIRED' OR
+       (NEW.state<>OLD.state AND NOT ((OLD.state='ACTIVE' AND NEW.state='READ_ONLY') OR (OLD.state='READ_ONLY' AND NEW.state='RETIRED'))) OR
+       (NEW.state='RETIRED' AND EXISTS(SELECT 1 FROM control_secrets WHERE tenant_id=OLD.tenant_id AND key_version=OLD.version))
+       THEN RAISE EXCEPTION 'invalid vault key transition'; END IF;
+    RETURN NEW;
+END $$;
+CREATE TABLE control_secrets(tenant_id varchar(128) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,version bigint NOT NULL CHECK(version BETWEEN 1 AND 9007199254740991),key_version bigint NOT NULL,cipher text NOT NULL CHECK(octet_length(cipher)<=65536),PRIMARY KEY(tenant_id,name),FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version));
+CREATE TRIGGER control_vault_key_guard BEFORE UPDATE OR DELETE ON control_tenant_vault_keys FOR EACH ROW EXECUTE FUNCTION control_vault_key_guard();
+CREATE FUNCTION control_secret_version_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.name<>OLD.name OR NEW.version<>OLD.version+1 THEN RAISE EXCEPTION 'invalid secret version transition'; END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER control_secret_version_guard BEFORE UPDATE ON control_secrets FOR EACH ROW EXECUTE FUNCTION control_secret_version_guard();
 
 GRANT SELECT,INSERT,UPDATE ON control_secrets TO toolgate_control_runtime;
 
@@ -661,6 +689,7 @@ BEGIN
         'control_tool_hosts'
         ,'control_tenant_authority'
         ,'control_tenant_initializations'
+        ,'control_tenant_vault_keys'
     ] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
         EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);

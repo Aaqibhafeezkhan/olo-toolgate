@@ -324,7 +324,10 @@ def initialize():
             atomic(identity_path(user),json.dumps(password_record(password)))
             atomic(DATA/('bootstrap-password-'+user),password+'\n')
     for name in ('identity', 'policy', 'permit', 'device-ca', 'server-tls', 'fleet', 'package-release'): key(name)
-    if not (DATA/'keys/vault.key').exists(): atomic(DATA/'keys/vault.key', secrets.token_bytes(32))
+    if (DATA/'keys/vault.key').exists(): raise ValueError('Unsupported raw vault key; select a fresh empty data directory')
+    if not (DATA/'keys/vault-wrapping.json').exists():
+        atomic(DATA/'keys/vault-wrapping.json', json.dumps(dict(formatVersion=1,currentKeyId='local-1',keys={'local-1':base64.b64encode(secrets.token_bytes(32)).decode()})))
+        (DATA/'keys/vault-wrapping.json').chmod(0o600)
     certificates()
     fleet_keys()
 
@@ -600,7 +603,7 @@ def configure():
                 'TOOLGATE_CONTROL_EFFECT_ENABLED':'true', 'TOOLGATE_CONTROL_EFFECT_PRIVATE_KEY_PATH':'/data/keys/permit.pem',
                 'TOOLGATE_CONTROL_EFFECT_KEY_ID':'effect-local','TOOLGATE_CONTROL_EFFECT_ISSUER':'control',
                 'TOOLGATE_CONTROL_EFFECT_AUDIENCE':'toolgate-client',
-                'TOOLGATE_CONTROL_VAULT_KEY_PATH':'/data/keys/vault.key',
+                'TOOLGATE_CONTROL_VAULT_WRAPPING_KEY_RING_PATH':'/data/keys/vault-wrapping.json',
                 'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(review_trust)),
                 'TOOLGATE_CONTROL_ENDPOINT_ENABLED': 'true',
                 # Quickstart check-in defaults (platform-requirements.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
@@ -922,7 +925,7 @@ def main():
                 if time.monotonic()>deadline: raise ValueError('Control readiness timeout')
                 stop.wait(.2)
             bridges=tls_bridges()
-            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_', 'TOOLGATE_CONTROL_PLATFORM_'))}
+            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_', 'TOOLGATE_CONTROL_PLATFORM_', 'TOOLGATE_CONTROL_VAULT_'))}
             gateway_env = dict(child_env, TOOLGATE_GATEWAY_CONFIG='/data/run/gateway.json',TOOLGATE_GATEWAY_CREDENTIALS='/data/run/credentials.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env))
             host_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host.json')

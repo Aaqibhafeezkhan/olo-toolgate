@@ -210,7 +210,7 @@ class AccountTests(unittest.TestCase):
         with quickstart.Database() as db:
             self.assertEqual(db.execute('PRAGMA foreign_keys').fetchone()[0],1)
             with self.assertRaises(sqlite3.IntegrityError):
-                db.execute("INSERT INTO control_secrets VALUES(?,?,?,?,?)",('00000000-0000-4000-8000-000000000099','test','tools','devices','opaque'))
+                db.execute("INSERT INTO control_secrets(tenant_id,name,tool_group_id,device_group_id,version,key_version,cipher) VALUES(?,?,?,?,1,1,?)",('00000000-0000-4000-8000-000000000099','test','tools','devices','opaque'))
 
     def test_credentials_file_logins_hints_and_no_forced_password_change(self):
         saved=self.install();path=quickstart.DATA/'credentials.json'

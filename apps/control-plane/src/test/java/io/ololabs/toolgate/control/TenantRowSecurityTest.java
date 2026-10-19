@@ -42,7 +42,7 @@ final class TenantRowSecurityTest {
         var codec = new ContractCodec(); store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(pool), codec);
         TestSupport.seed(store, codec, A, "a-user"); TestSupport.seed(store, codec, B, "b-user");
         for (var tenant : List.of(A, B)) try (var c = scoped(tenant); var s = c.prepareStatement(
-                "INSERT INTO control_secrets(tenant_id,name,tool_group_id,device_group_id,cipher) VALUES (?,'same-name','tools','devices',?)")) {
+                "INSERT INTO control_secrets(tenant_id,name,tool_group_id,device_group_id,version,key_version,cipher) VALUES (?,'same-name','tools','devices',1,1,?)")) {
             s.setString(1, tenant.value()); s.setString(2, tenant.value() + "-cipher"); s.executeUpdate(); c.commit();
         }
     }
@@ -84,7 +84,7 @@ final class TenantRowSecurityTest {
             assertEquals(0, s.executeUpdate("DELETE FROM control_records WHERE tenant_id='1830f913-d738-39b7-b4ae-55e6c6d28ad4'")); c.rollback();
         }
         for (String sql : List.of(
-                "INSERT INTO control_secrets VALUES(?,'other','tools','devices','cipher')",
+                "INSERT INTO control_secrets VALUES(?,'other','tools','devices',1,1,'cipher')",
                 "UPDATE control_secrets SET tenant_id=? WHERE name='same-name'")) {
             try (var c = scoped(A); var s = c.prepareStatement(sql)) {
                 s.setString(1,B.value());
@@ -93,7 +93,7 @@ final class TenantRowSecurityTest {
         }
         try (var c = pool.getConnection(); var s = c.createStatement()) {
             assertEquals("42501", assertThrows(SQLException.class, () -> s.executeUpdate(
-                "INSERT INTO control_secrets VALUES('d53602a5-45fe-3cc8-95a4-b9e525e2d6c8','no-context','tools','devices','cipher')")).getSQLState());
+                "INSERT INTO control_secrets VALUES('d53602a5-45fe-3cc8-95a4-b9e525e2d6c8','no-context','tools','devices',1,1,'cipher')")).getSQLState());
         }
     }
     @Test void storeContextClearsOnCommitRollbackAndReadOnlyPoolReuse() throws Exception {
@@ -104,7 +104,7 @@ final class TenantRowSecurityTest {
             noContextOnBorrowedConnection();
         }
         assertThrows(IllegalStateException.class, () -> store.transaction(A, true, tx -> {
-            tx.enterprise().saveSecret(new io.ololabs.toolgate.control.application.EnterpriseStore.Secret("rolled-back", "tools", "devices", "cipher"));
+            tx.enterprise().saveSecret(new io.ololabs.toolgate.control.application.EnterpriseStore.Secret("rolled-back", "tools", "devices", 1, 1, "cipher"));
             throw new IllegalStateException("force rollback");
         }));
         noContextOnBorrowedConnection();

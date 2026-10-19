@@ -19,8 +19,12 @@ public class TenantRegistry {
     private final javax.sql.DataSource source;
     private final PlatformDatabase database;
     private final ContractCodec codec;
-    @Inject public TenantRegistry(PlatformDatabase database, ContractCodec codec) { this.database = database; this.codec = codec; this.source = null; }
-    public TenantRegistry(javax.sql.DataSource source, ContractCodec codec) { this.source = source; this.codec = codec; this.database = null; }
+    private final VaultKeyBootstrap keyBootstrap;
+    private final TenantVaultKeys configuredKeys;
+    @Inject public TenantRegistry(PlatformDatabase database, ContractCodec codec,VaultKeyBootstrap keys) { this.database = database; this.codec = codec; this.source = null;this.keyBootstrap=keys;this.configuredKeys=null; }
+    public TenantRegistry(javax.sql.DataSource source, ContractCodec codec) { this(source,codec,null); }
+    public TenantRegistry(javax.sql.DataSource source,ContractCodec codec,TenantVaultKeys keys){this.source=source;this.codec=codec;this.database=null;this.keyBootstrap=null;this.configuredKeys=keys;}
+    private TenantVaultKeys keys(){return keyBootstrap==null?configuredKeys:keyBootstrap.optional();}
     private javax.sql.DataSource source() { return source == null ? database.source() : source; }
     private PostgresStore platformStore() { return new PostgresStore(source(), codec); }
     public static String alias(String alias) {
@@ -106,6 +110,7 @@ public class TenantRegistry {
                     s.setString(1, tenant.value()); try (var r = s.executeQuery()) { if (r.next()) return false; }
                 }
                 if (!status.equals("PROVISIONING")) throw Failure.conflict();
+                var vaultKeys=keys();if(vaultKeys!=null)vaultKeys.provision(tenant,tx);
                 for(var host:hosts)try(var s=c.prepareStatement("INSERT INTO control_tenant_hosts(hostname,tenant_id) VALUES(?,?)")){
                     s.setString(1,TenantHosts.normalize(host));s.setString(2,tenant.value());s.executeUpdate();
                 }
@@ -135,6 +140,30 @@ public class TenantRegistry {
         return platformStore().platformTransaction(tenant,(c,tx)->{
             try(var s=c.prepareStatement("SELECT 1 FROM control_tenant_initializations WHERE tenant_id=?")){s.setString(1,tenant.value());try(var r=s.executeQuery()){return r.next();}}
             catch(SQLException failure){throw Failure.unavailable();}
+        });
+    }
+    /** Protected operator boundary. The registry lock serializes rotation against all admitted tenant writes. */
+    public Store.Reply maintainVault(TenantId tenant,String operation,long version,String requestId) {
+        if(!Set.of("ROTATE","REWRAP","RETIRE").contains(operation)||version<1)throw Failure.validation();
+        io.ololabs.toolgate.control.domain.Ids.valid(requestId);var keys=keys();if(keys==null)throw Failure.unavailable();
+        String actor=DirectoryService.digest("platform-vault"),digest=DirectoryService.digest(codec.json(List.of(tenant.value(),operation,version)));
+        return platformStore().platformTransaction(tenant,(c,tx)->{
+            try(var s=c.prepareStatement("SELECT status FROM control_tenants WHERE tenant_id=?"+(SqliteState.local(c)?"":" FOR UPDATE"))) {
+                s.setString(1,tenant.value());try(var r=s.executeQuery()){if(!r.next()||!r.getString(1).equals("ACTIVE"))throw Failure.tenantUnavailable();}
+            }catch(SQLException failure){throw Failure.unavailable();}
+            var replay=tx.replay(actor,requestId,digest);if(replay!=null)return replay;
+            var current=keys.current(tx);
+            if(operation.equals("RETIRE")) {
+                var old=tx.enterprise().vaultKey(version);
+                if(old==null||!old.state().equals("READ_ONLY")||tx.enterprise().secrets().stream().anyMatch(secret->secret.keyVersion()==version))throw Failure.conflict();
+                tx.enterprise().updateVaultKey(new EnterpriseStore.VaultKey(old.version(),"RETIRED",old.providerReference(),old.wrappedEncryptionKey(),old.wrappedRetryKey()),"READ_ONLY");
+            } else {
+                if(current.version()!=version)throw Failure.conflict();
+                if(operation.equals("ROTATE"))new VaultService(platformStore(),codec,keys).rotate(tenant,tx);else keys.rewrap(tenant,tx);
+            }
+            var before=tx.load();tx.save(before,new io.ololabs.toolgate.control.domain.Directory(before.revision()+1,before.entries()));
+            tx.audit(actor,"VAULT_KEY_"+operation,"tenant-vault",before.revision()+1,requestId,digest);
+            var reply=new Store.Reply(200,codec.json(Map.of("keyVersion",keys.current(tx).version())),before.revision()+1);tx.remember(actor,requestId,digest,reply);return reply;
         });
     }
     public void suspended(TenantId tenant, boolean suspended) {

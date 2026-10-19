@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "status": "Registry/authority separation and canonical UUID ownership; remaining multitenant routing, custody and release qualification are tracked in plan.md.",
+  "status": "UUID registry, tenant RLS and versioned wrapped vault custody; remaining routing, device and release qualification are tracked in plan.md.",
   "runtimeRole": "toolgate_control_runtime",
   "tenantSetting": "app.tenant_id",
   "metadataExceptions": [
@@ -965,6 +965,17 @@
       ],
       "foreignKeys": [
         {
+          "table": "control_tenant_vault_keys",
+          "columns": [
+            "tenant_id",
+            "key_version"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "version"
+          ]
+        },
+        {
           "table": "control_tenants",
           "columns": [
             "tenant_id"
@@ -1147,6 +1158,32 @@
       "sqliteTenantType": "TEXT",
       "primaryKey": [
         "tenant_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_tenant_vault_keys",
+      "classification": "tenant-vault-key-metadata",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "version"
       ],
       "foreignKeys": [
         {
