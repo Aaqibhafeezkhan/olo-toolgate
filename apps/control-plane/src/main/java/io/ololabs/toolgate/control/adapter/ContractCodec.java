@@ -31,6 +31,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 /** Offline validation against canonical schemas embedded in the shared Maven artifact. */
 @ApplicationScoped
 public class ContractCodec implements Codec {
+    public com.fasterxml.jackson.databind.JsonNode configuration(String document, boolean yaml) { return parse(document, yaml); }
     private static final int MAX_BODY = 2 * 1024 * 1024;
     private final ObjectMapper mapper;
     private final ObjectNode canonicalDefinitions;

@@ -32,6 +32,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import uuid
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -44,7 +45,7 @@ DATA = Path('/data')
 TRUST = Path('/trust')
 TRUST_FILES = {'device-ca.crt': 'device-ca.crt', 'device-ca.key': 'device-ca.pem', 'server.crt': 'server.crt',
                'server.key': 'server-tls.pem', 'device-trust.p12': 'device-trust.p12'}
-TENANT = 'quickstart'
+TENANT = None  # Set from protected, persisted UUID state before composition starts.
 ISSUER = 'https://quickstart.local'
 GROUPS = ()  # Human portal permissions derive only from the reviewed Team/Role graph.
 # Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
@@ -235,6 +236,8 @@ def key(name):
 
 
 def jwt(groups, subject='admin', generation=None, directory_bound=True):
+    global TENANT
+    if TENANT is None: TENANT=tenant_identity()
     now = int(time.time())
     claims = {'iss': ISSUER, 'aud': 'toolgate-control', 'sub': subject, 'user_id': subject, 'tenant_id': TENANT, 'groups': groups, 'iat': now, 'exp': now+900}
     if not directory_bound: claims.pop('user_id')
@@ -526,7 +529,28 @@ def login_hints():
             'refreshAt': refresh_at()}
 
 
+def tenant_identity():
+    """A fresh composition allocates its UUID once; aliases never become identity claims."""
+    path=DATA/'state/tenant.json'
+    alias=os.environ.get('TOOLGATE_DEFAULT_TENANT_ALIAS','quickstart')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}',alias): raise ValueError('Invalid default tenant alias')
+    if path.is_symlink(): raise ValueError('Unsafe tenant state')
+    if path.exists():
+        value=strict(path.read_bytes())
+        if set(value)!={'formatVersion','alias','tenantId'} or value['formatVersion']!=1 or value['alias']!=alias: raise ValueError('Invalid or conflicting tenant state')
+        if str(uuid.UUID(value['tenantId']))!=value['tenantId']: raise ValueError('Canonical UUID tenant state required')
+        return value['tenantId']
+    if (DATA/'state/control.sqlite').exists() or (DATA/'installation-review.json').exists():
+        raise ValueError('Unsupported development state; use a new empty data directory')
+    tenant=str(uuid.uuid4())
+    atomic(path,json.dumps(dict(formatVersion=1,alias=alias,tenantId=tenant)))
+    path.chmod(0o600)
+    return tenant
+
+
 def configure():
+    global TENANT
+    TENANT = tenant_identity()
     runtime_path=DATA/'run/runtime-token'
     if not runtime_path.exists(): atomic(runtime_path,secrets.token_urlsafe(48))
     packet, review_trust = prepare(DATA,TENANT,ISSUER,key,atomic)
@@ -576,18 +600,18 @@ def configure():
                 'TOOLGATE_CONTROL_EFFECT_AUDIENCE':'toolgate-client',
                 'TOOLGATE_CONTROL_VAULT_KEY_PATH':'/data/keys/vault.key',
                 'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(review_trust)),
-                'TOOLGATE_CONTROL_INITIALIZE_PATH':str(DATA/'state/initialize-snapshot.json'),
                 'TOOLGATE_CONTROL_ENDPOINT_ENABLED': 'true',
                 # Quickstart check-in defaults (platform-requirements.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
                 'TOOLGATE_CONTROL_CLIENT_CHECKIN_MS': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_MS') or '2000',
                 'TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT') or '0',
                 'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS': env.get('TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS') or '120000',
                 'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': str(trust('device-ca.key')), 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': str(trust('device-ca.crt')),
-                'TOOLGATE_CONTROL_ENDPOINT_TENANT_ID': TENANT, 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
+                'TOOLGATE_DEFAULT_TENANT_ALIAS': os.environ.get('TOOLGATE_DEFAULT_TENANT_ALIAS','quickstart'), 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
                 'TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION': 'Quickstart',
                 'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443'),
                 'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL', 'https://localhost:8443'),
                 'TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY': env.get('TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY','/opt/toolgate/client-downloads')}
+    if (DATA/'state/initialize-snapshot.json').exists(): settings['TOOLGATE_CONTROL_INITIALIZE_PATH']=str(DATA/'state/initialize-snapshot.json')
     if database_mode() == 'postgresql':
         for name in ('QUARKUS_DATASOURCE_JDBC_URL','QUARKUS_DATASOURCE_USERNAME','QUARKUS_DATASOURCE_PASSWORD','QUARKUS_FLYWAY_USERNAME','QUARKUS_FLYWAY_PASSWORD'):
             if not env.get(name): raise ValueError('External database settings required')
@@ -896,7 +920,7 @@ def main():
                 if time.monotonic()>deadline: raise ValueError('Control readiness timeout')
                 stop.wait(.2)
             bridges=tls_bridges()
-            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_'))}
+            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_', 'TOOLGATE_CONTROL_PLATFORM_'))}
             gateway_env = dict(child_env, TOOLGATE_GATEWAY_CONFIG='/data/run/gateway.json',TOOLGATE_GATEWAY_CREDENTIALS='/data/run/credentials.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env))
             host_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host.json')

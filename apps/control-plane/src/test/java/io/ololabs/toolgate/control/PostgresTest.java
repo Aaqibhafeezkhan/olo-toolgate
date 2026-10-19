@@ -30,16 +30,17 @@ final class PostgresTest {
         migration.migrate();
         var codec = new ContractCodec();
         try (var connection = java.sql.DriverManager.getConnection(url, "control_migrator", password); var statement = connection.prepareStatement(
-                "INSERT INTO control_records (tenant_id,kind,record_id,revision,document) VALUES ('upgrade','USER','kept',1,?::jsonb)")) {
-            TestSupport.scope(connection, new Ids.TenantId("upgrade"));
+                "INSERT INTO control_records (tenant_id,kind,record_id,revision,document) VALUES ('2e7a227d-83fc-39a0-aa45-a486d145c2d6','USER','kept',1,?::jsonb)")) {
+            io.ololabs.toolgate.control.fixtures.Tenants.provision(connection);
+            TestSupport.scope(connection, io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade"));
             statement.setString(1, DomainTest.user("kept", 1)); statement.executeUpdate(); connection.commit();
         }
         var latest = Flyway.configure().dataSource(url, "control_migrator", password).cleanDisabled(true).load();
         assertEquals(0, latest.migrate().migrationsExecuted); latest.validate();
         var source = new PGSimpleDataSource(); source.setURL(url); source.setUser("control_app"); source.setPassword(password);
-        var store = new PostgresStore(source, codec); var service = new DirectoryService(store, codec, 512, 1048576);
-        var actor = TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");
-        var upgrade=TestSupport.seed(store,codec,new Ids.TenantId("upgrade"),"root");
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); var service = new DirectoryService(store, codec, 512, 1048576);
+        var actor = TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"),"root");
+        var upgrade=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade"),"root");
         assertEquals(200, service.get(upgrade, Kind.USER, "kept").status());
         try (var connection = source.getConnection(); var statement = connection.createStatement()) {
             assertThrows(java.sql.SQLException.class, () -> statement.executeUpdate("DELETE FROM control_audit"));
@@ -56,7 +57,7 @@ final class PostgresTest {
         var update = service.mutate(actor, Kind.USER, "user", "UPDATE", DomainTest.user("user", 1).replace("User", "Changed"), 1, "update-key", "request");
         assertEquals(2, update.revision());
         assertThrows(Failure.class, () -> service.mutate(actor, Kind.USER, "user", "UPDATE", DomainTest.user("user", 1), 1, "stale-key", "request"));
-        assertThrows(Failure.class, () -> service.get(new DirectoryService.Actor(new Ids.TenantId("other"), "a".repeat(64), true), Kind.USER, "user"));
+        assertThrows(Failure.class, () -> service.get(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"), "a".repeat(64), true), Kind.USER, "user"));
         var team = "{\"id\":\"team\",\"name\":\"Team\",\"enabled\":true,\"revision\":1,\"userIds\":[\"user\"],\"roleIds\":[]}";
         service.mutate(actor, Kind.TEAM, "team", "CREATE", team, 0, "team-key", "request");
         // Individual deletion removes group memberships atomically; keep this user for the import/replay checks.
@@ -68,9 +69,9 @@ final class PostgresTest {
         assertEquals(8, auditCount(source, "tenant"));
         // Inject an audit failure in a dedicated tenant and prove data + idempotency roll back.
         try (var connection = java.sql.DriverManager.getConnection(url, "control_migrator", password); var statement = connection.createStatement()) {
-            statement.execute("ALTER TABLE control_audit ADD CONSTRAINT reject_rollback CHECK (tenant_id <> 'rollback')");
+            statement.execute("ALTER TABLE control_audit ADD CONSTRAINT reject_rollback CHECK (tenant_id <> 'a99009da-7cfe-3f3a-902f-e4c9bd50ec63')");
         }
-        var rollback = TestSupport.seed(store,codec,new Ids.TenantId("rollback"),"root");
+        var rollback = TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("rollback"),"root");
         assertThrows(Failure.class, () -> service.mutate(rollback, Kind.USER, "user", "CREATE", DomainTest.user("user", 1), 0, "rollback-key", "request"));
         assertThrows(Failure.class, () -> service.get(rollback, Kind.USER, "user"));
         try (var connection = java.sql.DriverManager.getConnection(url, "control_migrator", password); var statement = connection.createStatement()) {
@@ -82,8 +83,8 @@ final class PostgresTest {
     }
     private long auditCount(PGSimpleDataSource source, String tenant) throws Exception {
         try (var connection = source.getConnection(); var statement = connection.prepareStatement("SELECT count(*) FROM control_audit WHERE tenant_id=?")) {
-            TestSupport.scope(connection, new Ids.TenantId(tenant));
-            statement.setString(1, tenant); try (var rows = statement.executeQuery()) { rows.next(); return rows.getLong(1); }
+            TestSupport.scope(connection, io.ololabs.toolgate.control.fixtures.Tenants.id(tenant));
+            statement.setString(1, io.ololabs.toolgate.control.fixtures.Tenants.id(tenant).value()); try (var rows = statement.executeQuery()) { rows.next(); return rows.getLong(1); }
         }
     }
 }

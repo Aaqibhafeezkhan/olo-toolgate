@@ -21,6 +21,7 @@ import java.util.concurrent.*;
  *  mints an identity or grant. */
 @ApplicationScoped
 public class PackageProvisioningBootstrap {
+    @Inject TenancyConfiguration tenancy;
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(PackageProvisioningBootstrap.class);
     @Inject Config config; @Inject PostgresStore store; @Inject ContractCodec codec; @Inject ServerPackages packages; @Inject Marketplace marketplace;
     @Inject ClientReleases clients; @Inject FleetService fleet;
@@ -53,7 +54,7 @@ public class PackageProvisioningBootstrap {
         String profile; PackageProvisioning service; Ids.TenantId tenant;
         try {
             profile = new String(ProtectedCustody.read(Path.of(path.get()), 262144), java.nio.charset.StandardCharsets.UTF_8);
-            service = service(); tenant = new Ids.TenantId(config.getValue("toolgate.control.endpoint.tenant-id", String.class));
+            service = service(); tenant = tenancy.defaultId();
         } catch (Exception invalid) { throw new IllegalStateException("Deployment profile rejected; verify the profile file and the sealed core package lock", invalid); }
         String state = apply(service, tenant, profile, true);
         boolean follows = service.followsDevices(profile);

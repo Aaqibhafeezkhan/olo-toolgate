@@ -126,6 +126,8 @@ def initialize(snapshot, tenant, issuer, now):
     and the record budget. Pool accounts start disabled and without any usable credential.
     """
     document = read_initialize()
+    if 'tenantId' in document and document['tenantId'] != tenant:
+        raise Refused('Initialize file tenantId must match the installation UUID; common templates omit it')
     values = environment(document.get('settings'))
     installed_users={user['id'] for user in snapshot['users']}
     for name in COLLECTIONS:

@@ -61,7 +61,7 @@ def restore(archive, manifest_path, review_path, trust_path, connection_path, pg
         with connection.transaction():
             # Quarantine is a separate, offline owner boundary; FORCE RLS still requires scope.
             connection.execute("SELECT set_config('app.tenant_id', %s, true)",(a['tenantId'],))
-            tables=('control_tenants','control_records','control_endpoints','control_enterprise_invocations','control_enterprise_approvals','control_configuration_changes','control_recovery_floors','control_tool_host_dispatches')
+            tables=('control_tenants','control_tenant_authority','control_tenant_initializations','control_tenant_hosts','control_records','control_endpoints','control_enterprise_invocations','control_enterprise_approvals','control_configuration_changes','control_recovery_floors','control_tool_host_dispatches')
             connection.execute(sql.SQL('LOCK TABLE {} IN ACCESS EXCLUSIVE MODE').format(sql.SQL(',').join(map(sql.Identifier,tables))))
             quarantine_connection(Connection(connection),a,now)
     return dict(tenantId=a['tenantId'],reviewDigest=hashlib.sha256(canonical(a)).hexdigest(),runtimeConnectEnabled=False)

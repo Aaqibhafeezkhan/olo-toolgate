@@ -190,15 +190,15 @@ final class ClientReleasesTest {
     }
     private Rig rig(boolean signed, String credentials, boolean python) throws Exception {
         start(); String baseDigest = seedBase(python);
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("releases.sqlite")), codec);
-        var tenant = new Ids.TenantId("fleet"); var admin = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("releases.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("fleet"); var admin = TestSupport.seed(store, codec, tenant, "root");
         byte[] bytes = sdkPackage(python);
         String digest = JSON.readTree(new ServerPackages(store, codec, null, java.time.Clock.systemUTC()).upload(admin, bytes, "upload").body()).get("packageDigest").asText();
         var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
         var organization = generator.generateKeyPair(); var release = generator.generateKeyPair();
         var crypto = new RsaFleetCrypto(codec, (RSAPrivateCrtKey) organization.getPrivate(), "org", List.of(trust("release", release.getPublic())), List.of(trust("org", organization.getPublic())), List.of());
-        var endpoint = new EndpointService(store, codec, null, java.time.Clock.systemUTC(), true, "fleet", "server", "Organization", "https://control.example.test", "https://gateway.example.test");
-        var fleet = new FleetService(store, codec, crypto, endpoint, java.time.Clock.systemUTC(), true, "fleet", "server");
+        var endpoint = new EndpointService(store, codec, null, java.time.Clock.systemUTC(), true, io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(), "server", "Organization", "https://control.example.test", "https://gateway.example.test");
+        var fleet = new FleetService(store, codec, crypto, endpoint, java.time.Clock.systemUTC(), true, io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(), "server");
         java.nio.file.Files.createDirectories(directory.resolve("artifacts"));
         var artifacts = new LocalArtifactStore(directory.resolve("artifacts"));
         var settings = ClientReleases.Settings.parse(REPOSITORY, BASE + "@" + baseDigest, "LINUX", "0.10.0-dev").withPythonBase(python ? BASE + "@" + baseDigest : null);
@@ -302,7 +302,7 @@ final class ClientReleasesTest {
             TestSupport.put(entries, rig.codec, Ids.Kind.DEVICE, new ControlDevice(device, device, true, 1L, "root"));
             TestSupport.put(entries, rig.codec, Ids.Kind.DEVICE_GROUP, new ControlDeviceGroup("lab", "Lab", true, 2L, List.of(device)));
             tx.save(before, new Directory(before.revision() + 1, entries));
-            tx.saveEndpoint(new Store.EndpointRecord(device, DirectoryService.digest(device), rig.codec.json(new EndpointDeviceRecord(device, "fleet", "root", DirectoryService.digest(device),
+            tx.saveEndpoint(new Store.EndpointRecord(device, DirectoryService.digest(device), rig.codec.json(new EndpointDeviceRecord(device, io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(), "root", DirectoryService.digest(device),
                 EndpointState.ACTIVE, 1L, System.currentTimeMillis(), 1L, null, null, null, null, null, null)), "public", "0".repeat(64), "{}"));
             return null; });
     }

@@ -85,7 +85,8 @@ class AccountTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name)
         quickstart.DATA=self.root/'data';quickstart.TRUST=self.root/'trust'
         for name in ('','keys','state','run'):(quickstart.DATA/name).mkdir(mode=0o700,exist_ok=True)
-        (self.root/'initialize.json').write_text(json.dumps(FILE))
+        quickstart.TENANT=quickstart.tenant_identity()
+        (self.root/'initialize.json').write_text(json.dumps({**FILE,'tenantId':quickstart.TENANT}))
         self.env=patch.dict(os.environ,{'TOOLGATE_INITIALIZE_FILE':str(self.root/'initialize.json'),'TOOLGATE_DEMO_ACCOUNT_POOL':'3',
                                          'TOOLGATE_DEMO_REFRESH_AT':'2026-10-15T03:00:00Z'});self.env.start()
     def tearDown(self):self.env.stop();self.temp.cleanup()
@@ -96,6 +97,8 @@ class AccountTests(unittest.TestCase):
         self.prepare()
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
             db.executescript((ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text(encoding='utf-8'))
+            db.execute("INSERT INTO control_tenants VALUES(?,?,?,'ACTIVE',1,1)",(quickstart.TENANT,'quickstart','Test tenant'))
+            db.execute('INSERT INTO control_tenant_authority(tenant_id) VALUES(?)',(quickstart.TENANT,))
             for binding in strict_packet()['identityBindings']:
                 db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING',binding['id'],1,json.dumps(binding)))
         quickstart.atomic(quickstart.DATA/'identity.json',json.dumps(quickstart.password_record('admin-Initial-Password-2026')))

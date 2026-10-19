@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "status": "Partial foundation: registry/authority split, canonical UUID constraints, lifecycle gating and remaining ownership foreign keys are pending. This manifest does not qualify shared production hosting.",
+  "status": "Registry/authority separation and canonical UUID ownership; remaining multitenant routing, custody and release qualification are tracked in plan.md.",
   "runtimeRole": "toolgate_control_runtime",
   "tenantSetting": "app.tenant_id",
   "metadataExceptions": [
@@ -33,7 +33,17 @@
       "primaryKey": [
         "tenant_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -50,7 +60,17 @@
       "primaryKey": [
         "sequence"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -67,7 +87,17 @@
         "tenant_id",
         "revision"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -84,7 +114,17 @@
       "primaryKey": [
         "tenant_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -102,7 +142,17 @@
         "kind",
         "record_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "DELETE",
@@ -124,7 +174,17 @@
         "namespace_identity",
         "business_key_hash"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -142,7 +202,17 @@
         "tenant_id",
         "change_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -160,7 +230,17 @@
         "tenant_id",
         "session_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "DELETE",
@@ -179,7 +259,17 @@
         "tenant_id",
         "credential_sha256"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -198,14 +288,23 @@
       ],
       "foreignKeys": [
         {
+          "table": "control_endpoints",
           "columns": [
             "tenant_id",
             "device_id"
           ],
-          "table": "control_endpoints",
           "referencedColumns": [
             "tenant_id",
             "device_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
           ]
         }
       ],
@@ -226,7 +325,17 @@
         "tenant_id",
         "device_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -244,7 +353,17 @@
         "tenant_id",
         "enrollment_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "DELETE",
@@ -264,7 +383,17 @@
         "actor_type",
         "actor_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -282,7 +411,17 @@
         "tenant_id",
         "approval_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -300,7 +439,17 @@
         "tenant_id",
         "invocation_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -318,7 +467,17 @@
         "tenant_id",
         "nonce"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -337,7 +496,17 @@
         "budget_id",
         "invocation_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -355,7 +524,17 @@
         "kind",
         "record_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -374,7 +553,17 @@
         "actor_id",
         "key"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "DELETE",
@@ -394,14 +583,23 @@
       ],
       "foreignKeys": [
         {
+          "table": "control_enterprise_invocations",
           "columns": [
             "tenant_id",
             "invocation_id"
           ],
-          "table": "control_enterprise_invocations",
           "referencedColumns": [
             "tenant_id",
             "invocation_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
           ]
         }
       ],
@@ -426,14 +624,23 @@
       ],
       "foreignKeys": [
         {
+          "table": "control_invocation_event_streams",
           "columns": [
             "tenant_id",
             "invocation_id"
           ],
-          "table": "control_invocation_event_streams",
           "referencedColumns": [
             "tenant_id",
             "invocation_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
           ]
         }
       ],
@@ -457,14 +664,23 @@
       ],
       "foreignKeys": [
         {
+          "table": "control_enterprise_invocations",
           "columns": [
             "tenant_id",
             "invocation_id"
           ],
-          "table": "control_enterprise_invocations",
           "referencedColumns": [
             "tenant_id",
             "invocation_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
           ]
         }
       ],
@@ -487,14 +703,23 @@
       ],
       "foreignKeys": [
         {
+          "table": "control_endpoints",
           "columns": [
             "tenant_id",
             "device_id"
           ],
-          "table": "control_endpoints",
           "referencedColumns": [
             "tenant_id",
             "device_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
           ]
         }
       ],
@@ -516,7 +741,17 @@
         "tenant_id",
         "reconciliation_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -534,7 +769,17 @@
         "tenant_id",
         "profile_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -552,7 +797,17 @@
         "tenant_id",
         "sequence"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -570,7 +825,17 @@
         "kind",
         "record_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -589,7 +854,17 @@
         "kind",
         "record_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -607,7 +882,17 @@
         "kind",
         "record_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "DELETE",
@@ -625,7 +910,17 @@
       "primaryKey": [
         "tenant_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "SELECT"
@@ -641,7 +936,17 @@
         "tenant_id",
         "review_digest"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -658,7 +963,17 @@
         "tenant_id",
         "name"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -676,7 +991,17 @@
         "tenant_id",
         "package_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -694,7 +1019,17 @@
         "tenant_id",
         "digest"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -711,7 +1046,17 @@
         "tenant_id",
         "package_digest"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -727,7 +1072,17 @@
       "primaryKey": [
         "tenant_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",
@@ -736,8 +1091,82 @@
       ]
     },
     {
+      "name": "control_tenant_authority",
+      "classification": "tenant-authority",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
+      "name": "control_tenant_hosts",
+      "classification": "platform-hostname",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "hostname"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "platform-only",
+      "runtimePrivileges": []
+    },
+    {
+      "name": "control_tenant_initializations",
+      "classification": "tenant-initialization-metadata",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "SELECT"
+      ]
+    },
+    {
       "name": "control_tenants",
-      "classification": "combined-registry-authority-pending-split",
+      "classification": "platform-registry",
       "tenantColumn": "tenant_id",
       "postgresTenantType": "varchar(128)",
       "sqliteTenantType": "TEXT",
@@ -745,12 +1174,8 @@
         "tenant_id"
       ],
       "foreignKeys": [],
-      "rowSecurity": "pending-registry-split",
-      "runtimePrivileges": [
-        "INSERT",
-        "SELECT",
-        "UPDATE"
-      ]
+      "rowSecurity": "platform-only",
+      "runtimePrivileges": []
     },
     {
       "name": "control_tool_host_dispatches",
@@ -762,7 +1187,17 @@
         "tenant_id",
         "invocation_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "DELETE",
@@ -781,7 +1216,17 @@
         "tenant_id",
         "device_id"
       ],
-      "foreignKeys": [],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
         "INSERT",

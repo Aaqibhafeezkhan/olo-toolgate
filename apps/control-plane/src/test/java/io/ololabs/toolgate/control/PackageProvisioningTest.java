@@ -23,8 +23,8 @@ final class PackageProvisioningTest {
 
     /** The mixed package (a ServerTool and a ClientTool) as the sealed core lock's only artifact. */
     private Rig rig() throws Exception {
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("profiles.sqlite")), codec);
-        var tenant = new Ids.TenantId("tenant"); var admin = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("profiles.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var admin = TestSupport.seed(store, codec, tenant, "root");
         store.transaction(tenant, true, tx -> { var before = tx.load(); var entries = new HashMap<>(before.entries());
             TestSupport.put(entries, codec, Ids.Kind.TOOL_GROUP, new ControlToolGroup("orders-tools", "Orders", true, 1L, List.of()));
             TestSupport.put(entries, codec, Ids.Kind.BINDING, new ControlExecutionBinding("orders-binding", "Orders", true, 1L, "orders-tools", "default-devices", List.of(), List.of(), false, false));
@@ -153,7 +153,7 @@ final class PackageProvisioningTest {
         // its recorded package is already installed, so the artifact is never read again.
         var restoredPath = directory.resolve("restored.sqlite");
         java.nio.file.Files.copy(directory.resolve("profiles.sqlite"), restoredPath);
-        var restored = new PostgresStore(SqliteState.open(restoredPath), rig.codec);
+        var restored = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(restoredPath)), rig.codec);
         var packages = new ServerPackages(restored, rig.codec, null, java.time.Clock.systemUTC());
         var reads = new java.util.concurrent.atomic.AtomicInteger();
         PackageProvisioning.CoreArtifacts core = (id, version) -> id.equals("acme.orders") && version.equals("0.1.0")

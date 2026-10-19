@@ -25,11 +25,23 @@ class SecurityTests(unittest.TestCase):
         quickstart.DATA=self.root/'data';quickstart.DATA.mkdir(mode=0o700)
         (quickstart.DATA/'keys').mkdir(mode=0o700)
         (quickstart.DATA/'state').mkdir(mode=0o700)
+        quickstart.TENANT=quickstart.tenant_identity()
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
             db.executescript((ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text(encoding='utf-8'))
+            db.execute("INSERT INTO control_tenants VALUES(?,?,?,'ACTIVE',1,1)",(quickstart.TENANT,'quickstart','Test tenant'))
+            db.execute('INSERT INTO control_tenant_authority(tenant_id) VALUES(?)',(quickstart.TENANT,))
             binding={'id':'installed-admin','name':'Reviewed test identity','enabled':True,'revision':1,'userId':'admin','issuer':quickstart.ISSUER,'subject':'admin','sessionEpoch':1,'firstSeenUnixMs':1,'lastAttemptUnixMs':1,'attemptCount':1,'registrationReason':'REVIEWED_INSTALLATION','sessionsValidAfterUnixMs':0}
             db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING','installed-admin',1,json.dumps(binding)))
     def tearDown(self):self.temp.cleanup()
+    def test_tenant_uuid_persists_and_unsupported_state_is_rejected(self):
+        import uuid
+        current=quickstart.tenant_identity()
+        self.assertEqual(current,str(uuid.UUID(current)))
+        self.assertEqual(current,quickstart.tenant_identity())
+        with patch.dict(os.environ,{'TOOLGATE_DEFAULT_TENANT_ALIAS':'different'}):
+            with self.assertRaises(ValueError):quickstart.tenant_identity()
+        (quickstart.DATA/'state/tenant.json').unlink()
+        with self.assertRaises(ValueError):quickstart.tenant_identity()
     def test_deployment_metadata_preserves_enrollment_and_observed_addresses(self):
         (quickstart.DATA/'run').mkdir()
         record=dict(executionKind='TOOL_HOST_DIRECT',containerId='a'*64,containerName='quickstart-1',

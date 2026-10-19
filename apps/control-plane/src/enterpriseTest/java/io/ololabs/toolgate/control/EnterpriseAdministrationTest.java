@@ -45,7 +45,7 @@ class EnterpriseAdministrationTest {
         var rules=Arrays.stream(EnterpriseGroupType.values()).map(g->new EnterpriseManagementRule(actions,g,all,List.of(ceilings),graph.conditions(),null)).toList();
         graph.add(Kind.ROLE,new ControlRole("recovery-role","Recovery role",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,rules));
         graph.add(Kind.TEAM,new ControlTeam("recovery-team","Reviewed administrators",true,1L,List.of("admin"),List.of("recovery-role")));
-        var source=SqliteState.open(temp.resolve("state.sqlite"));store=new PostgresStore(source,graph.codec);store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});
+        var source=SqliteState.open(temp.resolve("state.sqlite"));store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});
         directory=new DirectoryService(store,graph.codec,512,1048576);administrator=directory.portalActor(EnterpriseConformanceTest.TENANT,"a".repeat(64),"admin");
     }
     void retainIndependentAdministrator(){

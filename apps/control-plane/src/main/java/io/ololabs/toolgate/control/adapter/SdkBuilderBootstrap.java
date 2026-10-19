@@ -17,6 +17,7 @@ import java.nio.file.Path;
 /** Closed-JSON SDK worker configuration. SDK toolchains are supplied by deployment, never by an authoring request. */
 @ApplicationScoped
 public class SdkBuilderBootstrap {
+    @Inject TenancyConfiguration tenancy;
     @Inject Config config;
     @Inject ContractCodec codec;
     @Inject PostgresStore store;
@@ -31,7 +32,7 @@ public class SdkBuilderBootstrap {
     }
     private synchronized void load() {
         if (service != null) return;
-        String tenant = config.getOptionalValue("toolgate.control.endpoint.tenant-id", String.class).orElse("disabled");
+        String tenant = tenancy.defaultId().value();
         SdkBuildWorker worker = null; BuilderArtifacts artifacts = null;
         if (config.getValue("toolgate.control.builder.enabled", Boolean.class)) {
             try {

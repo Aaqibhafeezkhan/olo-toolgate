@@ -646,7 +646,8 @@
         "recovery",
         "clientCheckIn",
         "builder",
-        "cache"
+        "cache",
+        "defaultTenantAlias"
       ],
       "properties": {
         "builder": {
@@ -1322,7 +1323,7 @@
         "clientCheckIn": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Env-owned Phase A client check-in (platform-requirements.md \u00c2\u00a717.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
+          "description": "Env-owned Phase A client check-in (platform-requirements.md Â§17.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
           "required": [
             "checkInMs",
             "jitterPct",
@@ -1351,7 +1352,6 @@
           "additionalProperties": false,
           "required": [
             "enabled",
-            "tenantId",
             "serverId",
             "organization",
             "deviceCaSecret",
@@ -1363,10 +1363,6 @@
           "properties": {
             "enabled": {
               "type": "boolean"
-            },
-            "tenantId": {
-              "type": "string",
-              "maxLength": 128
             },
             "serverId": {
               "type": "string",
@@ -1408,9 +1404,6 @@
               },
               "then": {
                 "properties": {
-                  "tenantId": {
-                    "minLength": 1
-                  },
                   "serverId": {
                     "minLength": 1
                   },
@@ -1856,6 +1849,10 @@
               }
             }
           ]
+        },
+        "defaultTenantAlias": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
         }
       },
       "allOf": [

@@ -109,6 +109,8 @@ data:
   {{- end }}
   {{- end }}
   TOOLGATE_CONTROL_ENDPOINT_ENABLED: {{ $g.endpoint.enabled | quote }}
+  TOOLGATE_DEFAULT_TENANT_ALIAS: {{ $g.defaultTenantAlias | quote }}
+  TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH: /etc/toolgate/platform-db/password
   TOOLGATE_CONTROL_CLIENT_CHECKIN_MS: {{ printf "%d" (int $c.checkInMs) | quote }}
   TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT: {{ printf "%d" (int $c.jitterPct) | quote }}
   {{- if gt (int $c.offlineAfterMs) 0 }}
@@ -117,7 +119,6 @@ data:
   TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY: {{ ternary "/opt/toolgate/client-downloads" "" $g.clientDownloads.enabled | quote }}
   {{- if $g.endpoint.enabled }}
   TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: /opt/toolgate/core-mcp/core-packages.lock.json
-  TOOLGATE_CONTROL_ENDPOINT_TENANT_ID: {{ required "control.endpoint.tenantId required" $g.endpoint.tenantId | quote }}
   TOOLGATE_CONTROL_ENDPOINT_SERVER_ID: {{ required "control.endpoint.serverId required" $g.endpoint.serverId | quote }}
   TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION: {{ required "control.endpoint.organization required" $g.endpoint.organization | quote }}
   TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL: {{ required "control.endpoint.controlUrl required" $g.endpoint.controlUrl | quote }}
@@ -224,7 +225,7 @@ spec:
                 secretKeyRef: {name: {{ required "control.endpoint.trustStoreSecret required" $g.endpoint.trustStoreSecret | quote }}, key: password}
             {{- end }}
             - {name: MP_JWT_VERIFY_PUBLICKEY_LOCATION, value: /etc/toolgate/identity/public.pem}
-            {{- range $env, $key := dict "QUARKUS_DATASOURCE_USERNAME" "username" "QUARKUS_DATASOURCE_PASSWORD" "password" "QUARKUS_FLYWAY_USERNAME" "migrationUsername" "QUARKUS_FLYWAY_PASSWORD" "migrationPassword" }}
+            {{- range $env, $key := dict "QUARKUS_DATASOURCE_USERNAME" "username" "QUARKUS_DATASOURCE_PASSWORD" "password" "QUARKUS_FLYWAY_USERNAME" "migrationUsername" "QUARKUS_FLYWAY_PASSWORD" "migrationPassword" "TOOLGATE_CONTROL_PLATFORM_USERNAME" "platformUsername" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef: {name: {{ $g.database.credentialsSecret | quote }}, key: {{ $key }}}
@@ -242,6 +243,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
           volumeMounts:
+            - {name: platform-db, mountPath: /etc/toolgate/platform-db, readOnly: true}
             {{- if eq $g.cache.mode "redis" }}
             - {name: cache-credentials, mountPath: /etc/toolgate/cache, readOnly: true}
             {{- if $g.cache.caSecret }}
@@ -294,6 +296,11 @@ spec:
             - {name: database-ca, mountPath: /etc/toolgate/database, readOnly: true}
             {{- end }}
       volumes:
+        - name: platform-db
+          secret:
+            secretName: {{ $g.database.credentialsSecret | quote }}
+            defaultMode: 0440
+            items: [{key: platformPassword, path: password}]
         {{- if eq $g.cache.mode "redis" }}
         - name: cache-credentials
           secret:

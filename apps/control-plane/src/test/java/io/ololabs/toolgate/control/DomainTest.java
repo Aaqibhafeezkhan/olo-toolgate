@@ -28,7 +28,7 @@ final class DomainTest {
         directory.validate(512, 1048576);
         assertThrows(IllegalArgumentException.class, () -> directory.validate(1, 1048576));
         assertThrows(IllegalArgumentException.class, () -> directory.validate(512, 1));
-        assertThrows(Failure.class, () -> new DirectoryService.Actor(new Ids.TenantId("tenant"), "a".repeat(64), false).requireAdmin());
+        assertThrows(Failure.class, () -> new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"), "a".repeat(64), false).requireAdmin());
     }
     @Test void unknownMissingDuplicateAndMalformedFieldsReject() {
         for (var value : java.util.List.of("{}", "null", "{", user("user", 0), user("user", 1).replace("\"enabled\":true", "\"enabled\":\"true\""),
@@ -38,19 +38,19 @@ final class DomainTest {
         }
     }
     @Test void yamlCustomTagsAndAliasesReject() {
-        var tenant = new Ids.TenantId("tenant");
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant");
         assertThrows(Failure.class, () -> codec.input("!!java/object:java.lang.ProcessBuilder {}", true, tenant));
         assertThrows(Failure.class, () -> codec.input("a: &x [1]\nb: *x", true, tenant));
         assertThrows(Failure.class, () -> codec.input("snapshot: {}\nsnapshot: {}", true, tenant));
     }
     @Test void canonicalSnapshotsRoundTripBothFormats() {
-        var tenant = new Ids.TenantId("tenant"); var member = codec.entry(Kind.USER, user("user", 1));
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var member = codec.entry(Kind.USER, user("user", 1));
         var directory = new Directory(0, Map.of(member.id(), member));
         var request = "{\"snapshot\":" + codec.snapshot(tenant, directory, false) + ",\"mode\":\"MERGE\",\"dryRun\":true}";
         assertEquals(directory, codec.input(request, false, tenant).directory());
         var yaml = "mode: MERGE\ndryRun: true\nsnapshot:\n" + codec.snapshot(tenant, directory, true).replaceFirst("---\\s*", "").lines().map(s -> "  " + s + "\n").collect(java.util.stream.Collectors.joining());
         assertEquals(directory, codec.input(yaml, true, tenant).directory());
-        assertThrows(Failure.class, () -> codec.input(request, false, new Ids.TenantId("other")));
+        assertThrows(Failure.class, () -> codec.input(request, false, io.ololabs.toolgate.control.fixtures.Tenants.id("other")));
     }
     @Test void servedOpenApiContainsCanonicalModelsAndNoExternalReferences() {
         var api = codec.openapi();

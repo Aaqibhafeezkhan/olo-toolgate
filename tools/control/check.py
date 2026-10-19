@@ -49,8 +49,10 @@ def database():
         port = info['NetworkSettings']['Ports']['5432/tcp'][0]['HostPort']
         # SQL goes through stdin; secrets never appear in command arguments or logs.
         sql = f"""CREATE ROLE toolgate_control_runtime NOLOGIN;
+CREATE ROLE toolgate_control_platform NOLOGIN;
 CREATE ROLE control_migrator LOGIN CREATEDB PASSWORD '{password}';
 CREATE ROLE control_app LOGIN PASSWORD '{password}' IN ROLE toolgate_control_runtime;
+CREATE ROLE control_provisioner LOGIN PASSWORD '{password}' IN ROLE toolgate_control_platform;
 CREATE DATABASE control OWNER control_migrator;"""
         run(['docker', 'exec', '-i', container, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], input=sql, capture_output=True, text=True)
         yield {'CONTROL_TEST_URL':f'jdbc:postgresql://127.0.0.1:{port}/control?sslmode=disable', 'CONTROL_TEST_PASSWORD':password,

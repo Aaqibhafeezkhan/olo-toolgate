@@ -51,7 +51,7 @@ def main():
         assert result['runtimeConnectEnabled'] is False
         with psycopg.connect(**target) as connection:
             connection.execute("SELECT set_config('app.tenant_id', %s, true)",(a['tenantId'],))
-            revision,epoch=connection.execute('SELECT revision,authorization_epoch FROM control_tenants').fetchone();assert revision==1001 and epoch==1001
+            revision,epoch=connection.execute('SELECT revision,authorization_epoch FROM control_tenant_authority').fetchone();assert revision==1001 and epoch==1001
             assert connection.execute("SELECT count(*) FROM control_records WHERE kind='USER' AND record_id=%s",(retired_user,)).fetchone()[0]==0
             assert connection.execute("SELECT count(*) FROM control_record_ids WHERE kind='USER' AND record_id=%s",(retired_user,)).fetchone()[0]==1
             assert connection.execute("SELECT count(*) FROM control_records WHERE kind='ROLE' AND (document->>'enabled')::boolean").fetchone()[0]==0

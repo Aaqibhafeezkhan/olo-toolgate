@@ -18,6 +18,20 @@ class SchemaOwnershipTests(unittest.TestCase):
                    if re.search(r"set_config\s*\(|SET\s+(?:LOCAL\s+)?app\.tenant_id", path.read_text(), re.IGNORECASE)}
         self.assertEqual({'io/ololabs/toolgate/control/adapter/PostgresStore.java'}, setters)
 
+    def test_registry_credentials_and_removed_settings_stay_in_approved_boundaries(self):
+        sources = ROOT / 'apps/control-plane/src/main/java'
+        borrowers = {path.stem for path in sources.rglob('*.java') if '.getConnection(' in path.read_text()}
+        self.assertEqual({'Bootstrap', 'PlatformDatabase', 'PostgresStore', 'SqliteState', 'TenantRegistry'}, borrowers)
+        platform = {path.stem for path in sources.rglob('*.java') if 'platformTransaction(' in path.read_text()}
+        self.assertEqual({'PostgresStore', 'TenantRegistry'}, platform)
+        for path in sources.rglob('*.java'):
+            if path.stem != 'TenancyConfiguration':
+                self.assertNotIn('toolgate.control.endpoint.tenant-id', path.read_text(), str(path))
+                self.assertNotIn('toolgate.config.import-overwrite', path.read_text(), str(path))
+        for path in [ROOT/'apps/quickstart/supervisor.py', *ROOT.glob('deploy/helm/olo-toolgate/templates/*.yaml')]:
+            self.assertNotIn('TOOLGATE_CONTROL_ENDPOINT_TENANT_ID', path.read_text(), str(path))
+            self.assertNotIn('TOOLGATE_DEFAULT_TENANT_ID', path.read_text(), str(path))
+
     def test_v1_tables_match_reviewed_inventory_in_both_storage_modes(self):
         manifest = json.loads((DB / 'schema-ownership.json').read_text())
         entries = manifest['tables']
@@ -46,11 +60,15 @@ class SchemaOwnershipTests(unittest.TestCase):
         policy_block = postgres.split('DO $tenant_policies$', 1)[1]
         policies = set(re.findall(r"'(control_[a-z_]+)'", policy_block))
         self.assertEqual({entry['name'] for entry in entries if entry['rowSecurity'] == 'forced'}, policies)
-        pending = [entry for entry in entries if entry['rowSecurity'] != 'forced']
-        self.assertEqual(['control_tenants'], [entry['name'] for entry in pending])
-        self.assertEqual('combined-registry-authority-pending-split', pending[0]['classification'])
+        platform = [entry for entry in entries if entry['rowSecurity'] != 'forced']
+        self.assertEqual(['control_tenant_hosts','control_tenants'], [entry['name'] for entry in platform])
+        self.assertEqual({'platform-hostname','platform-registry'}, {entry['classification'] for entry in platform})
+        self.assertTrue(all(entry['runtimePrivileges']==[] for entry in platform))
         for entry in entries:
-            self.assertTrue(entry['runtimePrivileges'])
+            if entry['classification'] not in ('platform-registry','platform-hostname'):
+                self.assertTrue(entry['runtimePrivileges'])
+            if entry['classification'] != 'platform-registry':
+                self.assertIn({'table': 'control_tenants', 'columns': ['tenant_id'], 'referencedColumns': ['tenant_id']}, entry['foreignKeys'])
             self.assertEqual('tenant_id', entry['tenantColumn'])
             for reference in entry['foreignKeys']:
                 self.assertIn('tenant_id', reference['columns'])

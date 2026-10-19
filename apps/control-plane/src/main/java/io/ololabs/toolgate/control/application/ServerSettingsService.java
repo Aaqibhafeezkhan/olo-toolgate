@@ -112,11 +112,10 @@ public final class ServerSettingsService {
         var next=merge(current,groups);var approval=next.deviceApproval();
         return next.gateway().equals(current.gateway())&&next.configuration().equals(current.configuration())&&new DeviceApproval(approval.autoApprove(),approval.durationMs()==null?DEFAULT_AUTO_APPROVE_MS:approval.durationMs(),approval.ownerUserId()).equals(current.deviceApproval());
     }
-    /** Startup environment seeds settings once; with overwrite it replaces whatever an administrator saved before the restart.
-     * Directory users may be imported after the control plane starts, so the owner is checked again at each enrollment. */
-    public boolean importAtStartup(Ids.TenantId tenant,ControlServerSettings requested,boolean overwrite,String requestId){
-        return store.transaction(tenant,true,tx->{if(tx.serverSettings()!=null&&!overwrite)return false;
-            var saved=save(tx,requested,current(tx),null);tx.audit(STARTUP_ACTOR,"SERVER_SETTINGS_IMPORT",ENTITY,saved.revision(),requestId,DirectoryService.digest(codec.json(saved)));return true;});
+    /** Provisioning-only first write; the coordinator owns the transaction and activation marker. */
+    public boolean initialize(Store.Session tx,ControlServerSettings requested,String requestId){
+        if(tx.serverSettings()!=null)return false;
+        var saved=save(tx,requested,current(tx),tx.load());tx.audit(STARTUP_ACTOR,"SERVER_SETTINGS_IMPORT",ENTITY,saved.revision(),requestId,DirectoryService.digest(codec.json(saved)));return true;
     }
     private ControlServerSettings save(Store.Session tx,ControlServerSettings requested,ControlServerSettings current,Directory owners){
         var approval=requested.deviceApproval();long duration=approval.durationMs()==null?DEFAULT_AUTO_APPROVE_MS:approval.durationMs();

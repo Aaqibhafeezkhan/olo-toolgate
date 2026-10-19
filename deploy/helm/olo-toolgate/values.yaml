@@ -84,6 +84,7 @@ gateway:
     controlPort: 443
 control:
   enabled: false
+  defaultTenantAlias: default
   # Optional external Redis/Valkey directory cache. Local remains the default.
   # Secrets contain `password` and `encryption-key` (base64 text for 32 random bytes).
   cache:
@@ -186,7 +187,6 @@ control:
     offlineAfterMs: 0
   endpoint:
     enabled: false
-    tenantId: ''
     serverId: ''
     organization: ''
     controlUrl: ''

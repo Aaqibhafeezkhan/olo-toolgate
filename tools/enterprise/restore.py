@@ -105,7 +105,7 @@ def quarantine(database,a,now):
 
 
 def quarantine_connection(db,a,now):
-    tenants=db.execute('SELECT tenant_id,revision,authorization_epoch FROM control_tenants').fetchall()
+    tenants=db.execute('SELECT tenant_id,revision,authorization_epoch FROM control_tenant_authority').fetchall()
     if len(tenants)!=1 or tenants[0][0]!=a['tenantId']:raise ValueError('Single declared enterprise tenant required')
     tenant,revision,epoch=tenants[0];revision=max(revision,a['directoryRevisionFloor'])+1;epoch=max(epoch,a['authorizationEpochFloor'])+1
     if max(revision,epoch)>=LIMIT:raise ValueError('Authority exhausted')
@@ -140,7 +140,7 @@ def quarantine_connection(db,a,now):
     for rid,raw in db.execute("SELECT invocation_id,document FROM control_tool_host_dispatches WHERE tenant_id=? AND state IN ('QUEUED','CLAIMED','ADMITTED')",(tenant,)).fetchall():
         doc=json.loads(raw);doc['status']['state']='EXPIRED'
         db.execute("UPDATE control_tool_host_dispatches SET state='EXPIRED',document=? WHERE tenant_id=? AND invocation_id=?",(canonical(doc).decode(),tenant,rid))
-    db.execute('UPDATE control_tenants SET revision=?,authorization_epoch=? WHERE tenant_id=?',(revision,epoch,tenant))
+    db.execute('UPDATE control_tenant_authority SET revision=?,authorization_epoch=? WHERE tenant_id=?',(revision,epoch,tenant))
     db.execute('INSERT INTO control_recovery_floors VALUES(?,?) ON CONFLICT(tenant_id) DO UPDATE SET snapshot_sequence=max(snapshot_sequence,excluded.snapshot_sequence)',(tenant,a['snapshotSequenceFloor']))
     db.execute('INSERT INTO control_authorization_outbox VALUES(?,?,?,?,NULL)',(tenant,revision,epoch,now))
     digest=hashlib.sha256(canonical(a)).hexdigest()

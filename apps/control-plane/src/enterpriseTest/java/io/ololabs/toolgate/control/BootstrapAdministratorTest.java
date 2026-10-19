@@ -83,7 +83,7 @@ class BootstrapAdministratorTest {
         var identity=new ControlIdentityBinding("installed-admin","Reviewed identity",true,1L,"admin","https://quickstart.local","admin",1L,1L,1L,1L,"REVIEWED_INSTALLATION",0L);
         directory.mutate(second,Kind.IDENTITY_BINDING,identity.id(),"CREATE",codec.json(identity),0,"create-identity","request");
         assertEquals(409,assertThrows(Failure.class,()->directory.mutate(second,Kind.IDENTITY_BINDING,identity.id(),"DELETE",null,1,"remove-identity","request")).status());
-        var reopened=new PostgresStore(SqliteState.open(temp.resolve("state.sqlite")),codec);
+        var reopened=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("state.sqlite"))),codec);
         reopened.transaction(owner.tenant(),false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());return null;});
         reopened.transaction(owner.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Kind.USER.id("admin"));assertThrows(Failure.class,()->tx.save(before,new Directory(before.revision()+1,entries)));return null;});
         reopened.transaction(owner.tenant(),true,tx->{assertThrows(Failure.class,()->tx.protectBootstrapAdmin("alice"));return null;});
@@ -100,7 +100,7 @@ class BootstrapAdministratorTest {
 
     @Test void restartPreservesAdminProtectionWithoutReseedingUsersEmailOrRoles() throws Exception {
         var before=directory.export(second,false).body();
-        var reopened=new PostgresStore(SqliteState.open(temp.resolve("state.sqlite")),codec);
+        var reopened=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("state.sqlite"))),codec);
         assertEquals(before,new DirectoryService(reopened,codec,512,1048576).export(second,false).body());
         reopened.transaction(owner.tenant(),false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());return null;});
     }

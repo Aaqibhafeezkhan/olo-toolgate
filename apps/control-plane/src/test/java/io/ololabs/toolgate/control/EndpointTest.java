@@ -49,12 +49,12 @@ final class EndpointTest {
         var url=base.replace("/control?","/"+database+"?");
         assertEquals(1,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
         var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
-        return configured(new PostgresStore(source,codec));
+        return configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec));
     }
     private Setup configured(PostgresStore store)throws Exception{
-        var directory=new DirectoryService(store,codec,512,1048576);var admin=TestSupport.seed(store,codec,new Ids.TenantId("endpoint"),"owner");
+        var directory=new DirectoryService(store,codec,512,1048576);var admin=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint"),"owner");
         for(var user:List.of("other"))directory.mutate(admin,Ids.Kind.USER,user,"CREATE",DomainTest.user(user,1),0,user,"request");
-        var clock=new MutableClock();var issuer=issuer();var service=new EndpointService(store,codec,issuer,clock,true,"endpoint","server","Organization","https://control.example.test","https://gateway.example.test");
+        var clock=new MutableClock();var issuer=issuer();var service=new EndpointService(store,codec,issuer,clock,true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server","Organization","https://control.example.test","https://gateway.example.test");
         service.checkInPolicy(ClientCheckInPolicy.configure(500L,0,120000L)); // Explicit fast-cycle fixture; production defaults to 2 s.
         service.operations(new EnterpriseOperations(store,codec,null,clock,"control","toolgate-client",60000,256));
         return new Setup(service,directory,admin,store,clock,issuer);
@@ -65,7 +65,7 @@ final class EndpointTest {
     private EndpointEnrollmentResult poll(Setup s,EndpointEnrollmentChallenge challenge){return codec.model(s.service.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class);}
     private java.security.cert.X509Certificate certificate(DeviceIdentity identity)throws Exception{return (java.security.cert.X509Certificate)java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(identity.certificatePem().getBytes(java.nio.charset.StandardCharsets.US_ASCII)));}
     @Test void discoveryUsesProductClientVersion()throws Exception{
-        var service=new EndpointService(null,codec,issuer(),new MutableClock(),true,"endpoint","server","Organization","https://control.example.test","https://gateway.example.test");
+        var service=new EndpointService(null,codec,issuer(),new MutableClock(),true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server","Organization","https://control.example.test","https://gateway.example.test");
         var envelope=codec.model(service.discovery().body(),SignedClientDiscovery.class);
         var payload=new String(Base64.getUrlDecoder().decode(envelope.payload()),java.nio.charset.StandardCharsets.UTF_8);
         var discovery=codec.model(payload,ClientDiscovery.class);
@@ -81,7 +81,7 @@ final class EndpointTest {
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         var challenge=start(s,"queue-device");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");var peer=certificate(poll(s,challenge).identity());
         var releaseFixture=new FleetTest();var crypto=releaseFixture.crypto();
-        var fleet=new FleetService(s.store,codec,crypto,s.service,s.clock,true,"endpoint","server");
+        var fleet=new FleetService(s.store,codec,crypto,s.service,s.clock,true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server");
         var release=codec.model(releaseFixture.fixtures().get("release").toString(),FleetPackageRelease.class);
         fleet.publish(s.admin,codec.json(release),"publish","request");
         fleet.rollout(s.admin,codec.json(new FleetRolloutRequest("queued-rollout",release.packageId(),release.version(),List.of("queue-device"),true,100L)),"rollout","request");
@@ -97,12 +97,12 @@ final class EndpointTest {
     }
     @Test void enrollmentBindsOwnerKeyAndDurableSequenceAndRevocation()throws Exception{
         var s=setup();var challenge=start(s,"device");var review=review(s,challenge);assertEquals(EnrollmentState.PENDING,poll(s,challenge).state());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.review(new DirectoryService.Actor(new Ids.TenantId("other"),"a".repeat(64),true),"owner",challenge.userCode())).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.review(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"a".repeat(64),true),"owner",challenge.userCode())).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.review(s.admin,"unknown",challenge.userCode())).status());
         assertEquals(409,assertThrows(Failure.class,()->s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(challenge.userCode(),"0".repeat(64),EnrollmentChoice.APPROVE,null,null)),"wrong-key","request")).status());
         decide(s,challenge,EnrollmentChoice.APPROVE,"approve");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");
         assertEquals(409,assertThrows(Failure.class,()->decide(s,challenge,EnrollmentChoice.DENY,"other-key")).status());
-        s.clock.time+=5000;var result=poll(s,challenge);assertEquals(EnrollmentState.CONSUMED,result.state());var identity=result.identity();assertEquals("owner",identity.userId());assertEquals("endpoint",identity.tenantId());
+        s.clock.time+=5000;var result=poll(s,challenge);assertEquals(EnrollmentState.CONSUMED,result.state());var identity=result.identity();assertEquals("owner",identity.userId());assertEquals(io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),identity.tenantId());
         var peer=certificate(identity);assertEquals(review.keyFingerprint(),s.issuer.peerFingerprint(peer,s.clock.time));assertEquals(-1,peer.getBasicConstraints());
         s.service.verifySocketPeer(peer);
         assertEquals(List.of("1.3.6.1.5.5.7.3.2"),peer.getExtendedKeyUsage());
@@ -157,7 +157,7 @@ final class EndpointTest {
         }finally{pool.shutdownNow();}
         var second=start(s,"audit");var secondReview=review(s,second);
         Store failing=new Store(){public<T>T transaction(Ids.TenantId tenant,boolean write,java.util.function.Function<Session,T> work){return s.store.transaction(tenant,write,tx->work.apply((Session)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{Session.class},(proxy,method,args)->{if(method.getName().equals("audit"))throw Failure.unavailable();try{return method.invoke(tx,args);}catch(java.lang.reflect.InvocationTargetException failure){throw failure.getCause();}})));}};
-        var service=new EndpointService(failing,codec,s.issuer,s.clock,true,"endpoint","server","Organization","https://control.example.test","https://gateway.example.test");
+        var service=new EndpointService(failing,codec,s.issuer,s.clock,true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server","Organization","https://control.example.test","https://gateway.example.test");
         assertThrows(Failure.class,()->service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(second.userCode(),secondReview.keyFingerprint(),EnrollmentChoice.APPROVE,null,null)),"audit-fail","request"));
         assertEquals(EnrollmentState.PENDING,review(s,second).state());assertThrows(Failure.class,()->s.service.device(s.admin,"audit"));
     }
@@ -166,7 +166,7 @@ final class EndpointTest {
             new io.ololabs.toolgate.contracts.v2.DeviceApproval(auto,days*ServerSettingsService.DAY_MS,owner),ClientCheckInPolicy.QUICKSTART.effective(),new io.ololabs.toolgate.contracts.v2.ConfigurationSettings(2L));
     }
     @Test void autoApprovalUsesSettingsAndSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        var s=configured(new PostgresStore(SqliteState.open(directory.resolve("auto.sqlite")),codec));
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("auto.sqlite"))),codec));
         var policy=ClientCheckInPolicy.configure(2000L,20,null);s.service.checkInPolicy(policy);
         var settings=new ServerSettingsService(s.store,codec,policy);
         var defaults=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
@@ -204,23 +204,22 @@ final class EndpointTest {
         assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,"{\"formatVersion\":1,\"revision\":4,\"autoApproveDevices\":false,\"autoApproveDurationDays\":7}",4,"v1","request")).status());
         assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"gateway\":{\"gatewayName\":\" spaced\"}}",4,"bad-name","request")).status());
         assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"deviceApproval\":{\"autoApprove\":false,\"durationMs\":1000}}",4,"too-short","request")).status());
-        // Startup import seeds only once unless overwrite is requested.
-        assertFalse(settings.importAtStartup(s.admin.tenant(),settings(false,7,null,"Lab Gateway"),false,"startup"));
-        assertTrue(settings.importAtStartup(s.admin.tenant(),settings(false,7,null,"Imported"),true,"startup"));
+        // Initialization cannot overwrite an administrator's saved record.
+        assertFalse(s.store.<Boolean>transaction(s.admin.tenant(),true,tx->settings.initialize(tx,settings(false,7,null,"Imported"),"startup")).booleanValue());
         var imported=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
-        assertEquals(5L,imported.revision());assertEquals(7L*ServerSettingsService.DAY_MS,imported.deviceApproval().durationMs());assertEquals("Imported",imported.gateway().gatewayName());
+        assertEquals(4L,imported.revision());assertEquals(7L*ServerSettingsService.DAY_MS,imported.deviceApproval().durationMs());assertEquals("Lab Gateway",imported.gateway().gatewayName());
         assertEquals(EnrollmentState.PENDING,review(s,start(s,"after-off")).state());
         assertEquals(30L,ConfigurationImportBootstrap.days("30Day"));assertEquals(7L,ConfigurationImportBootstrap.days("7"));
         assertThrows(IllegalStateException.class,()->ConfigurationImportBootstrap.days("month"));
     }
     @Test void pendingDeviceListAndConnectionDeadlinesUsePostgres()throws Exception{deadlineFlow(setup());}
     @Test void pendingDeviceListAndConnectionDeadlinesUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        deadlineFlow(configured(new PostgresStore(SqliteState.open(directory.resolve("deadline.sqlite")),codec)));
+        deadlineFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("deadline.sqlite"))),codec)));
     }
     private void deadlineFlow(Setup s)throws Exception{
         var first=start(s,"timed");var second=start(s,"second");var denied=start(s,"denied");var legacy=start(s,"legacy-caller");
         assertEquals(4,codec.model(s.service.pending(s.admin,"owner").body(),EndpointEnrollmentPage.class).items().size());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.pending(new DirectoryService.Actor(new Ids.TenantId("other"),"b".repeat(64),true),"owner")).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.pending(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"b".repeat(64),true),"owner")).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.pending(s.admin,"unknown")).status());
         var review=review(s,first);long until=START+108000000; // 30 hours, longer than one certificate lifetime.
         for(long invalid:List.of(START,START-1))assertEquals(400,assertThrows(Failure.class,()->s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(first.userCode(),review.keyFingerprint(),EnrollmentChoice.APPROVE,invalid,null)),"invalid-"+invalid,"request")).status());
@@ -250,7 +249,7 @@ final class EndpointTest {
         assertEquals(until,codec.model(s.service.device(s.admin,"timed").body(),EndpointDeviceRecord.class).connectionExpiresAtUnixMs());
     }
     @Test void ownerPowerSwitchIsAuditedAndSkipsPlacementUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        var s=configured(new PostgresStore(SqliteState.open(directory.resolve("power.sqlite")),codec));
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("power.sqlite"))),codec));
         var challenge=start(s,"powered");decide(s,challenge,EnrollmentChoice.APPROVE,"approve-powered");var peer=certificate(poll(s,challenge).identity());
         s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
             TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("power-devices","Power devices",true,1L,List.of("powered")));
@@ -275,7 +274,7 @@ final class EndpointTest {
     @Test void unlimitedApprovalAndReversibleManagementUsePostgres()throws Exception{managementFlow(setup());}
     @Test void presenceDeletionAndExpiredApprovalUsePostgres()throws Exception{presenceFlow(setup());}
     @Test void presenceDeletionAndExpiredApprovalUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        presenceFlow(configured(new PostgresStore(SqliteState.open(directory.resolve("presence.sqlite")),codec)));
+        presenceFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("presence.sqlite"))),codec)));
     }
     private void presenceFlow(Setup s)throws Exception{
         String csr=csr("live");String announcement=codec.json(new EndpointEnrollmentStart("live","0.10.0-dev",ClientPlatform.LINUX,csr,List.of()));
@@ -322,7 +321,7 @@ final class EndpointTest {
     }
     @Test void revokedDeviceCanExplicitlyRequestFreshApprovalUsePostgres()throws Exception{revocationRequestFlow(setup());}
     @Test void revokedDeviceCanExplicitlyRequestFreshApprovalUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        revocationRequestFlow(configured(new PostgresStore(SqliteState.open(directory.resolve("retry.sqlite")),codec)));
+        revocationRequestFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("retry.sqlite"))),codec)));
     }
     private void revocationRequestFlow(Setup s)throws Exception{
         for(boolean fromClient:List.of(true,false)){
@@ -373,12 +372,12 @@ final class EndpointTest {
         }
     }
     @Test void unlimitedApprovalAndReversibleManagementUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        managementFlow(configured(new PostgresStore(SqliteState.open(directory.resolve("managed.sqlite")),codec)));
+        managementFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("managed.sqlite"))),codec)));
     }
     private void managementFlow(Setup s)throws Exception{
         var challenge=start(s,"managed");var review=review(s,challenge);
         assertEquals(1,codec.model(s.service.devices(s.admin).body(),EndpointManagedDevicePage.class).items().size());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.devices(new DirectoryService.Actor(new Ids.TenantId("other"),"a".repeat(64),true))).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.devices(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"a".repeat(64),true))).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.devices(new DirectoryService.Actor(s.admin.tenant(),"a".repeat(64),false))).status());
         var disabled=codec.model(s.service.enabled(s.admin,"owner","managed",codec.json(new EndpointEnabledRequest(0L,false)),"pending-disable","request").body(),ControlDevice.class);
         assertFalse(disabled.enabled());assertEquals("owner",disabled.ownerUserId());
@@ -421,10 +420,10 @@ final class EndpointTest {
         ownDevicesFlow(setup());
     }
     @Test void verifiedPendingDevicesArePrivateAndUnapprovedInSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        ownDevicesFlow(configured(new PostgresStore(SqliteState.open(directory.resolve("own-devices.sqlite")),codec)));
+        ownDevicesFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("own-devices.sqlite"))),codec)));
     }
     @Test void currentDeviceProofIsSessionBoundSingleUseAndNeverApprovesAccess(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        var s=configured(new PostgresStore(SqliteState.open(directory.resolve("console-proof.sqlite")),codec));
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("console-proof.sqlite"))),codec));
         s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
             TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("self-user","Self user",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"self-user");
             TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("self-devices","Self devices",true,1L,List.of()));

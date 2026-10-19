@@ -40,8 +40,14 @@ public class PostgresStore implements Store {
     }
     @jakarta.annotation.PreDestroy
     void close() { if (ownsDataSource && dataSource instanceof AgroalDataSource pool) pool.close(); }
-    public java.util.List<TenantId> tenants(){try(var connection=dataSource.getConnection();var s=connection.prepareStatement("SELECT tenant_id FROM control_tenants ORDER BY tenant_id LIMIT 10000");var rows=s.executeQuery()){var ids=new java.util.ArrayList<TenantId>();while(rows.next())ids.add(new TenantId(rows.getString(1)));return java.util.List.copyOf(ids);}catch(SQLException failure){throw Failure.unavailable();}}
     public <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work) {
+        return transaction(tenant, write, false, (connection, session) -> work.apply(session));
+    }
+    /** Separate platform credential boundary, inaccessible through the tenant Store port. */
+    <T> T platformTransaction(TenantId tenant, java.util.function.BiFunction<Connection, Session, T> work) {
+        return transaction(tenant, true, true, work);
+    }
+    private <T> T transaction(TenantId tenant, boolean write, boolean platform, java.util.function.BiFunction<Connection, Session, T> work) {
         try (var connection = dataSource.getConnection()) {
             boolean local = SqliteState.local(connection);
             if (local) {
@@ -67,8 +73,20 @@ public class PostgresStore implements Store {
                 if (write && !local) try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
                     statement.setString(1, tenant.value()); statement.execute();
                 }
+                if (!platform) {
+                    try (var statement = connection.prepareStatement(local
+                            ? "SELECT status='ACTIVE' FROM control_tenants WHERE tenant_id=?"
+                            : "SELECT public.control_tenant_admit(?, ?)")) {
+                        statement.setString(1, tenant.value()); if (!local) statement.setBoolean(2, write);
+                        try (var rows = statement.executeQuery()) { if (!rows.next() || !rows.getBoolean(1)) throw Failure.tenantUnavailable(); }
+                    }
+                    try (var statement = connection.prepareStatement("SELECT 1 FROM control_tenant_authority WHERE tenant_id=?")) {
+                        statement.setString(1, tenant.value());
+                        try (var rows = statement.executeQuery()) { if (!rows.next()) throw Failure.unavailable(); }
+                    }
+                }
                 var session = new JdbcSession(connection, tenant.value());
-                var result = work.apply(session);
+                var result = work.apply(connection, session);
                 // SQLite commit() starts another transaction immediately; closing this
                 // connection needs no second writer reservation after a successful commit.
                 if (local) connection.setAutoCommit(true); else connection.commit();
@@ -298,8 +316,9 @@ public class PostgresStore implements Store {
             } catch (SQLException e) { throw Failure.unavailable(); }
         }
         private DirectoryCache.Version directoryVersion() throws SQLException {
-            try (var s = statement("SELECT revision,directory_cache_generation FROM control_tenants WHERE tenant_id=?"); var rows = s.executeQuery()) {
-                return rows.next() ? new DirectoryCache.Version(rows.getLong(1), rows.getLong(2)) : new DirectoryCache.Version(0, -1);
+            try (var s = statement("SELECT revision,directory_cache_generation FROM control_tenant_authority WHERE tenant_id=?"); var rows = s.executeQuery()) {
+                if (!rows.next()) throw Failure.unavailable();
+                return new DirectoryCache.Version(rows.getLong(1), rows.getLong(2));
             }
         }
         public String adoptionDigest(TenantId requestedTenant, io.ololabs.toolgate.control.application.Codec requestedCodec) {
@@ -320,10 +339,11 @@ public class PostgresStore implements Store {
                 if(after.equals(before))return;
                 if(after.revision()<before.revision() || !after.entries().equals(before.entries())&&after.revision()<=before.revision())throw Failure.conflict();
                 invalidateDirectory();
-                try (var statement = statement("INSERT INTO control_tenants (tenant_id,revision,authorization_epoch) VALUES (?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET revision=excluded.revision,authorization_epoch=GREATEST(control_tenants.authorization_epoch+1,excluded.authorization_epoch)", after.revision(),after.revision())) {
-                    statement.executeUpdate();
+                try (var statement = connection.prepareStatement(SqliteState.sql(connection,"UPDATE control_tenant_authority SET revision=?,authorization_epoch=GREATEST(authorization_epoch+1,?) WHERE tenant_id=? AND revision=?"))) {
+                    statement.setLong(1,after.revision()); statement.setLong(2,after.revision()); statement.setString(3,tenant); statement.setLong(4,before.revision());
+                    if (statement.executeUpdate()!=1) throw Failure.conflict();
                 }
-                if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenants WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}
+                if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenant_authority WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}
                 for (var id : before.entries().keySet()) if (!after.entries().containsKey(id)) {
                     if(id.kind()==Kind.DEVICE){
                         var row=endpoint(id.value());

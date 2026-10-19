@@ -16,35 +16,36 @@ class RestoreTests(unittest.TestCase):
    # Complete first-release SQLite schema, executed by the Quickstart adapter.
    script=(ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text()
    c.executescript(script)
-   c.execute("INSERT INTO control_tenants(tenant_id,revision,authorization_epoch) VALUES('tenant',7,9)")
+   c.execute("INSERT INTO control_tenants VALUES('00000000-0000-4000-8000-000000000001','test','Test','ACTIVE',1,1)")
+   c.execute("INSERT INTO control_tenant_authority(tenant_id,revision,authorization_epoch) VALUES('00000000-0000-4000-8000-000000000001',7,9)")
    records=[('USER',dict(id='user',name='User',enabled=True,revision=1)),('TEAM',dict(id='team-default',name='Default',enabled=True,revision=1,userIds=['user'],roleIds=['management'])),('ROLE',dict(id='management',enabled=True,revision=1)),('WORKLOAD_BINDING',dict(id='workload',enabled=True,revision=1,credentialEpoch=3)),('IDENTITY_BINDING',dict(id='identity',enabled=True,revision=1,sessionEpoch=2,sessionsValidAfterUnixMs=0))]
-   for kind,doc in records:c.execute('INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,?,?,?,?)',('tenant',kind,doc['id'],1,json.dumps(doc)))
-   c.execute("INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,authorization_epoch,created_at,expires_at,revision,document) VALUES('tenant','running',?,'EXECUTING',9,1,2,1,?)",('a'*64,json.dumps(dict(id='running',state='EXECUTING',revision=1))))
-   c.execute("INSERT INTO control_enterprise_nonces(tenant_id,nonce,invocation_id,evaluation_digest,authorization_epoch,expires_at,consumed_at) VALUES('tenant','consumed','running',?,9,2,1)",('a'*64,))
-   c.execute("INSERT INTO control_credential_history(tenant_id,credential_sha256) VALUES('tenant',?)",('f'*64,))
+   for kind,doc in records:c.execute('INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,?,?,?,?)',('00000000-0000-4000-8000-000000000001',kind,doc['id'],1,json.dumps(doc)))
+   c.execute("INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,authorization_epoch,created_at,expires_at,revision,document) VALUES('00000000-0000-4000-8000-000000000001','running',?,'EXECUTING',9,1,2,1,?)",('a'*64,json.dumps(dict(id='running',state='EXECUTING',revision=1))))
+   c.execute("INSERT INTO control_enterprise_nonces(tenant_id,nonce,invocation_id,evaluation_digest,authorization_epoch,expires_at,consumed_at) VALUES('00000000-0000-4000-8000-000000000001','consumed','running',?,9,2,1)",('a'*64,))
+   c.execute("INSERT INTO control_credential_history(tenant_id,credential_sha256) VALUES('00000000-0000-4000-8000-000000000001',?)",('f'*64,))
    # Package, deployment, profile and release state, which restore keeps exactly, and Tool Host dispatches.
    package='sha256:'+'b'*64
-   c.execute("INSERT INTO control_server_packages(tenant_id,package_digest,package_id,version,uploaded_at,document,content) VALUES('tenant',?,'acme.orders','1.0.0',5,?,?)",(package,json.dumps(dict(packageDigest=package)),b'PK exact package bytes'))
-   c.execute("INSERT INTO control_server_deployments(tenant_id,package_id,document) VALUES('tenant','acme.orders',?)",(json.dumps(dict(packageId='acme.orders',packageDigest=package,revision=3)),))
-   c.execute("INSERT INTO control_server_documents(tenant_id,digest,document) VALUES('tenant',?,?)",('c'*64,json.dumps(dict(kind='globals'))))
-   c.execute("INSERT INTO control_package_provisioning(tenant_id,profile_id,generation,profile_digest,document) VALUES('tenant','fresh',4,?,?)",('sha256:'+'d'*64,json.dumps(dict(profileId='fresh',generation=4,state='READY'))))
-   c.execute("INSERT INTO control_fleet(tenant_id,kind,record_id,revision,document) VALUES('tenant','RELEASE','acme.orders@1.0.0',1,?)",(json.dumps(dict(packageId='acme.orders',version='1.0.0')),))
+   c.execute("INSERT INTO control_server_packages(tenant_id,package_digest,package_id,version,uploaded_at,document,content) VALUES('00000000-0000-4000-8000-000000000001',?,'acme.orders','1.0.0',5,?,?)",(package,json.dumps(dict(packageDigest=package)),b'PK exact package bytes'))
+   c.execute("INSERT INTO control_server_deployments(tenant_id,package_id,document) VALUES('00000000-0000-4000-8000-000000000001','acme.orders',?)",(json.dumps(dict(packageId='acme.orders',packageDigest=package,revision=3)),))
+   c.execute("INSERT INTO control_server_documents(tenant_id,digest,document) VALUES('00000000-0000-4000-8000-000000000001',?,?)",('c'*64,json.dumps(dict(kind='globals'))))
+   c.execute("INSERT INTO control_package_provisioning(tenant_id,profile_id,generation,profile_digest,document) VALUES('00000000-0000-4000-8000-000000000001','fresh',4,?,?)",('sha256:'+'d'*64,json.dumps(dict(profileId='fresh',generation=4,state='READY'))))
+   c.execute("INSERT INTO control_fleet(tenant_id,kind,record_id,revision,document) VALUES('00000000-0000-4000-8000-000000000001','RELEASE','acme.orders@1.0.0',1,?)",(json.dumps(dict(packageId='acme.orders',version='1.0.0')),))
    for invocation,state in (('queued','QUEUED'),('claimed','CLAIMED'),('admitted','ADMITTED'),('finished','FINISHED')):
-    c.execute("INSERT INTO control_tool_host_dispatches(tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES('tenant',?,'host',?,9,1,?)",
+    c.execute("INSERT INTO control_tool_host_dispatches(tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES('00000000-0000-4000-8000-000000000001',?,'host',?,9,1,?)",
               (invocation,state,json.dumps(dict(status=dict(invocationId=invocation,hostId='host',state=state,**({'result':{'outcome':'COMPLETED'}} if state=='FINISHED' else {}))))))
   self.manifest=dict(layoutVersion=1,files={p.relative_to(self.data).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.data.rglob('*') if p.is_file()});restore.write(self.source/'manifest.json',self.manifest)
   self.keys=[rsa.generate_private_key(public_exponent=65537,key_size=2048) for _ in range(2)]
   encode=lambda b:base64.urlsafe_b64encode(b).rstrip(b'=').decode()
   number=lambda n:encode(n.to_bytes((n.bit_length()+7)//8,'big'))
   self.trust=dict(keys=[dict(kid='reviewer-'+str(n),n=number(k.public_key().public_numbers().n),e='AQAB') for n,k in enumerate(self.keys)]);restore.write(self.root/'trust.json',self.trust)
-  self.authorization=dict(formatVersion=1,backupManifestDigest=hashlib.sha256(restore.canonical(self.manifest)).hexdigest(),tenantId='tenant',directoryRevisionFloor=100,authorizationEpochFloor=200,snapshotSequenceFloor=20,sessionEpochFloor=30,credentialEpochFloor=40,retiredCredentialDigests=['e'*64],retiredRecordIds=[dict(kind='USER',id='post-backup-retired-user')],issuedAtUnixMs=self.now-1000,expiresAtUnixMs=self.now+60000,reasonDigest='a'*64)
+  self.authorization=dict(formatVersion=1,backupManifestDigest=hashlib.sha256(restore.canonical(self.manifest)).hexdigest(),tenantId='00000000-0000-4000-8000-000000000001',directoryRevisionFloor=100,authorizationEpochFloor=200,snapshotSequenceFloor=20,sessionEpochFloor=30,credentialEpochFloor=40,retiredCredentialDigests=['e'*64],retiredRecordIds=[dict(kind='USER',id='post-backup-retired-user')],issuedAtUnixMs=self.now-1000,expiresAtUnixMs=self.now+60000,reasonDigest='a'*64)
   self.proofs=[dict(keyId='reviewer-'+str(n),signature=encode(k.sign(restore.DOMAIN+restore.canonical(self.authorization),padding.PKCS1v15(),hashes.SHA256()))) for n,k in enumerate(self.keys)]
   restore.write(self.root/'review.json',dict(authorization=self.authorization,proofs=self.proofs))
  def tearDown(self):self.temp.cleanup()
  def test_external_floors_quarantine_sessions_credentials_effects_and_management(self):
   restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
   with closing(sqlite3.connect(self.target/'state/control.sqlite')) as c,c:
-   self.assertEqual(c.execute('SELECT revision,authorization_epoch FROM control_tenants').fetchone(),(101,201));self.assertEqual(c.execute('SELECT snapshot_sequence FROM control_recovery_floors').fetchone()[0],20)
+   self.assertEqual(c.execute('SELECT revision,authorization_epoch FROM control_tenant_authority').fetchone(),(101,201));self.assertEqual(c.execute('SELECT snapshot_sequence FROM control_recovery_floors').fetchone()[0],20)
    records={kind:json.loads(doc) for kind,doc in c.execute('SELECT kind,document FROM control_records')}
    self.assertTrue(records['USER']['enabled']);self.assertEqual(records['TEAM']['roleIds'],[]);self.assertFalse(records['ROLE']['enabled']);self.assertFalse(records['WORKLOAD_BINDING']['enabled']);self.assertEqual(records['WORKLOAD_BINDING']['credentialEpoch'],41);self.assertEqual(records['IDENTITY_BINDING']['sessionEpoch'],31)
    self.assertEqual(json.loads(c.execute('SELECT document FROM control_enterprise_invocations').fetchone()[0])['state'],'OUTCOME_UNKNOWN');self.assertEqual(c.execute('SELECT consumed_at FROM control_enterprise_nonces').fetchone()[0],1);self.assertEqual(c.execute('SELECT count(*) FROM control_credential_history').fetchone()[0],2);self.assertEqual(c.execute('SELECT operation FROM control_audit').fetchone()[0],'RESTORE_QUARANTINE')

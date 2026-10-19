@@ -14,13 +14,14 @@ import java.nio.file.Path;
 /** Deployment-time import only. Package deployment and runtime grants remain separate authorities. */
 @ApplicationScoped
 public class CorePackageBootstrap {
+    @Inject TenancyConfiguration tenancy;
     @Inject Config config; @Inject PostgresStore store; @Inject ContractCodec codec; @Inject ServerPackages packages;
     void start(@Observes @jakarta.annotation.Priority(12) StartupEvent event) {
         var path = config.getOptionalValue("toolgate.control.core-packages.lock-path", String.class);
         if (path.isEmpty()) return;
         try {
             var inventory = CorePackageInventory.load(Path.of(path.get()));
-            var tenant = new Ids.TenantId(config.getValue("toolgate.control.endpoint.tenant-id", String.class));
+            var tenant = tenancy.defaultId();
             var actor = store.transaction(tenant, false, tx -> {
                 var directory = tx.load(); var access = new ManagementAccess(codec);
                 String user = directory.entries().values().stream().filter(e -> e.id().kind() == Ids.Kind.USER && e.enabled()

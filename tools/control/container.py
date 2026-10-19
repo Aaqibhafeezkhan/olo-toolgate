@@ -68,13 +68,17 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;"+code],
                 capture_output=True,text=True).stdout.strip()
         try:
-            env=json.loads(helper("s.initialize();import json;print(json.dumps({k:v for k,v in s.configure()[0].items() if k.startswith(('QUARKUS_','MP_JWT_','TOOLGATE_'))}))"))
+            env=json.loads(helper("s.initialize();import json;print(json.dumps({k:v for k,v in s.configure().items() if k.startswith(('QUARKUS_','MP_JWT_','TOOLGATE_'))}))"))
+            platform_file=folder/'platform-password';platform_file.write_text(db['CONTROL_TEST_PASSWORD'],encoding='utf-8');platform_file.chmod(0o600)
+            run(['docker','run','--rm','--user','0','-v',volume+':/data','-v',str(platform_file)+':/credential:ro','--entrypoint','/bin/sh',helper_image,
+                '-c','cp /credential /data/platform-password && chown 65532:65532 /data/platform-password && chmod 0400 /data/platform-password'],capture_output=True)
             env.update(TOOLGATE_QUICKSTART_ENABLED='false',QUARKUS_PROFILE='prod',
                 QUARKUS_FLYWAY_ACTIVE='true',QUARKUS_FLYWAY_MIGRATE_AT_START='true',
                 QUARKUS_DATASOURCE_ACTIVE='true',QUARKUS_DATASOURCE_HEALTH_ENABLED='true',
                 QUARKUS_DATASOURCE_JDBC_URL='jdbc:postgresql://127.0.0.1:5432/control?sslmode=disable',
                 QUARKUS_DATASOURCE_USERNAME='control_app',QUARKUS_DATASOURCE_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                 QUARKUS_FLYWAY_USERNAME='control_migrator',QUARKUS_FLYWAY_PASSWORD=db['CONTROL_TEST_PASSWORD'],
+                TOOLGATE_CONTROL_PLATFORM_USERNAME='control_provisioner',TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH='/data/platform-password',
                 QUARKUS_MANAGEMENT_HOST='0.0.0.0',TOOLGATE_CONTROL_DEVELOPMENT_MODE='true',
                 TOOLGATE_CONTROL_FLEET_ENABLED='false',TOOLGATE_CONTROL_ENDPOINT_ENABLED='false',
                 TOOLGATE_QUICKSTART_DATABASE_MODE='postgresql')

@@ -19,6 +19,7 @@ import java.util.*;
 /** Disabled by default. Deployment requires explicit external signer, release keyring and artifact mirror. */
 @ApplicationScoped
 public class FleetBootstrap {
+    @Inject TenancyConfiguration tenancy;
     @Inject Config config; @Inject ContractCodec codec; @Inject PostgresStore store; @Inject EndpointService endpoints;
     private FleetService service; private ArtifactStore artifacts;
     private String setting(String name){return config.getValue("toolgate.control.fleet."+name,String.class);}
@@ -33,7 +34,7 @@ public class FleetBootstrap {
     }
     private void load(){
         boolean enabled=config.getValue("toolgate.control.fleet.enabled",Boolean.class);
-        FleetCrypto crypto=null;String tenant="disabled",server="disabled";artifacts=(digest,size)->{throw Failure.unavailable();};
+        FleetCrypto crypto=null;String tenant="00000000-0000-0000-0000-000000000000",server="disabled";artifacts=(digest,size)->{throw Failure.unavailable();};
         if(enabled)try{
             if(!config.getValue("toolgate.control.endpoint.enabled",Boolean.class))throw new IllegalArgumentException();
             var factory=KeyFactory.getInstance("RSA");
@@ -60,7 +61,7 @@ public class FleetBootstrap {
                 && config.getOptionalValue("toolgate.control.fleet.artifact-origin",String.class).orElse("").equals("https://localhost:8443/artifacts")
                 ? new LocalArtifactStore(Path.of(config.getValue("toolgate.quickstart.artifact-directory",String.class)))
                 : new HttpsArtifactStore(setting("artifact-origin"),token,tls);
-            tenant=config.getValue("toolgate.control.endpoint.tenant-id",String.class);server=config.getValue("toolgate.control.endpoint.server-id",String.class);
+            tenant=tenancy.defaultId().value();server=config.getValue("toolgate.control.endpoint.server-id",String.class);
         }catch(Exception failure){throw new IllegalStateException("Fleet deployment requires dedicated external trust keys, endpoint identity and fixed HTTPS artifact store");}
         service=new FleetService(store,codec,crypto,endpoints,java.time.Clock.systemUTC(),enabled,tenant,server);
     }

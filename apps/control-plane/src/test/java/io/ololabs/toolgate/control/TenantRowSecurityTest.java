@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Real runtime-role proof: deliberately omit SQL filters and reuse one pooled connection. */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 final class TenantRowSecurityTest {
-    private static final Ids.TenantId A = new Ids.TenantId("rls-a"), B = new Ids.TenantId("rls-b");
+    private static final Ids.TenantId A = io.ololabs.toolgate.control.fixtures.Tenants.id("rls-a"), B = io.ololabs.toolgate.control.fixtures.Tenants.id("rls-b");
     private AgroalDataSource pool;
     private PostgresStore store;
     private String url, password;
@@ -39,7 +39,7 @@ final class TenantRowSecurityTest {
             .connectionFactoryConfiguration(f -> f.connectionProviderClass(org.postgresql.Driver.class).jdbcUrl(url)
                 .principal(new io.agroal.api.security.NamePrincipal("control_app"))
                 .credential(new io.agroal.api.security.SimplePassword(password)))));
-        var codec = new ContractCodec(); store = new PostgresStore(pool, codec);
+        var codec = new ContractCodec(); store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(pool), codec);
         TestSupport.seed(store, codec, A, "a-user"); TestSupport.seed(store, codec, B, "b-user");
         for (var tenant : List.of(A, B)) try (var c = scoped(tenant); var s = c.prepareStatement(
                 "INSERT INTO control_secrets(tenant_id,name,tool_group_id,device_group_id,cipher) VALUES (?,'same-name','tools','devices',?)")) {
@@ -73,26 +73,27 @@ final class TenantRowSecurityTest {
             c.rollback();
         }
         try (var c = pool.getConnection()) { assertEquals(0, count(c, "control_records")); assertEquals(0, count(c, "control_secrets")); }
-        try (var c = scoped(new Ids.TenantId("unregistered"))) { assertEquals(0, count(c, "control_records")); c.rollback(); }
-        try (var c = scoped(new Ids.TenantId("unregistered")); var s = c.createStatement()) {
+        try (var c = scoped(io.ololabs.toolgate.control.fixtures.Tenants.id("unregistered"))) { assertEquals(0, count(c, "control_records")); c.rollback(); }
+        try (var c = scoped(io.ololabs.toolgate.control.fixtures.Tenants.id("unregistered")); var s = c.createStatement()) {
             s.execute("SELECT set_config('app.tenant_id', '', true)"); assertEquals(0, count(c, "control_secrets")); c.rollback();
         }
     }
     @Test void crossTenantInsertUpdateAndOwnershipChangeAreDenied() throws Exception {
         try (var c = scoped(A); var s = c.createStatement()) {
-            assertEquals(0, s.executeUpdate("UPDATE control_secrets SET cipher='changed' WHERE tenant_id='rls-b'"));
-            assertEquals(0, s.executeUpdate("DELETE FROM control_records WHERE tenant_id='rls-b'")); c.rollback();
+            assertEquals(0, s.executeUpdate("UPDATE control_secrets SET cipher='changed' WHERE tenant_id='1830f913-d738-39b7-b4ae-55e6c6d28ad4'"));
+            assertEquals(0, s.executeUpdate("DELETE FROM control_records WHERE tenant_id='1830f913-d738-39b7-b4ae-55e6c6d28ad4'")); c.rollback();
         }
         for (String sql : List.of(
-                "INSERT INTO control_secrets VALUES('rls-b','other','tools','devices','cipher')",
-                "UPDATE control_secrets SET tenant_id='rls-b' WHERE name='same-name'")) {
-            try (var c = scoped(A); var s = c.createStatement()) {
-                assertEquals("42501", assertThrows(SQLException.class, () -> s.executeUpdate(sql)).getSQLState()); c.rollback();
+                "INSERT INTO control_secrets VALUES(?,'other','tools','devices','cipher')",
+                "UPDATE control_secrets SET tenant_id=? WHERE name='same-name'")) {
+            try (var c = scoped(A); var s = c.prepareStatement(sql)) {
+                s.setString(1,B.value());
+                assertEquals(sql.startsWith("UPDATE") ? "P0001" : "42501", assertThrows(SQLException.class, s::executeUpdate).getSQLState()); c.rollback();
             }
         }
         try (var c = pool.getConnection(); var s = c.createStatement()) {
             assertEquals("42501", assertThrows(SQLException.class, () -> s.executeUpdate(
-                "INSERT INTO control_secrets VALUES('rls-a','no-context','tools','devices','cipher')")).getSQLState());
+                "INSERT INTO control_secrets VALUES('d53602a5-45fe-3cc8-95a4-b9e525e2d6c8','no-context','tools','devices','cipher')")).getSQLState());
         }
     }
     @Test void storeContextClearsOnCommitRollbackAndReadOnlyPoolReuse() throws Exception {
@@ -115,7 +116,7 @@ final class TenantRowSecurityTest {
             s.execute("CREATE POLICY extra_permissive ON control_secrets USING (true) WITH CHECK (true)");
             try {
                 assertEquals(0, count(c, "control_secrets"));
-                c.setAutoCommit(false); s.execute("SELECT set_config('app.tenant_id', 'rls-a', true)");
+                c.setAutoCommit(false); s.execute("SELECT set_config('app.tenant_id', 'd53602a5-45fe-3cc8-95a4-b9e525e2d6c8', true)");
                 assertEquals(1, count(c, "control_secrets")); c.rollback(); c.setAutoCommit(true);
             } finally { s.execute("DROP POLICY extra_permissive ON control_secrets"); }
         }
@@ -137,10 +138,10 @@ final class TenantRowSecurityTest {
                         assertEquals(forced, r.getBoolean(1), name); assertEquals(forced, r.getBoolean(2), name); assertFalse(r.getBoolean(3), name);
                     }
                 }
-                try (var q = c.prepareStatement("SELECT is_nullable,data_type,character_maximum_length FROM information_schema.columns WHERE table_schema='public' AND table_name=? AND column_name='tenant_id'")) {
+                try (var q = c.prepareStatement("SELECT NOT attnotnull,format_type(atttypid,atttypmod) FROM pg_attribute WHERE attrelid=?::regclass AND attname='tenant_id'")) {
                     q.setString(1, name); try (var r = q.executeQuery()) {
-                        assertTrue(r.next(), name); assertEquals("NO", r.getString(1), name);
-                        assertEquals(table.get("postgresTenantType").asText(), r.getString(2).equals("text") ? "text" : "varchar(" + r.getInt(3) + ")", name);
+                        assertTrue(r.next(), name); assertFalse(r.getBoolean(1), name);
+                        assertEquals(table.get("postgresTenantType").asText().replace("varchar", "character varying"), r.getString(2), name);
                     }
                 }
                 var primaryKey = new TreeMap<Short, String>();

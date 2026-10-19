@@ -147,7 +147,7 @@ configuration file. These variables remain:
 | `TOOLGATE_SETTINGS_AUTO_APPROVE_OWNER` | Owner user ID for auto-approved devices |
 | `TOOLGATE_GATEWAY_NAME` | Gateway name used until settings are saved |
 | `TOOLGATE_CONFIG_REQUIRED_REVIEWS` | `0`, `1` or `2` (default `2`), used until settings are saved |
-| `TOOLGATE_CONFIG_IMPORT_OVERWRITE` | Default `false`: the auto-approval values seed settings only when none were saved. `true` applies them on every start |
 
-The seed writes a `SERVER_SETTINGS_IMPORT` audit entry for the tenant in
-`TOOLGATE_CONTROL_ENDPOINT_TENANT_ID`. An invalid value stops startup.
+The provisioning coordinator applies these inputs once, together with the tenant's initial configuration, receipt and activation. Subsequent starts preserve saved settings. The seed writes a tenant-scoped `SERVER_SETTINGS_IMPORT` audit entry.
+
+`TOOLGATE_DEFAULT_TENANT_ALIAS` selects the default provisioning record; runtime identity is its persisted UUID. `TOOLGATE_CONTROL_ENDPOINT_TENANT_ID`, `TOOLGATE_DEFAULT_TENANT_ID` and `TOOLGATE_CONFIG_IMPORT_OVERWRITE` are unsupported and rejected, including an overwrite value of `false`. Later settings changes use the reviewed runtime workflow.

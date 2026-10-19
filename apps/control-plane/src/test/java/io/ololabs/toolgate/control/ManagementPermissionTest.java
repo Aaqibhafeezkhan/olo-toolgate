@@ -15,10 +15,10 @@ import static org.junit.jupiter.api.Assertions.*;
 final class ManagementPermissionTest {
  @TempDir Path directory;
  private final ContractCodec codec=new ContractCodec();
- private final Ids.TenantId tenant=new Ids.TenantId("permissions");
+ private final Ids.TenantId tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("permissions");
  private EnterpriseConditions conditions(){return new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);}
  private PostgresStore setup(String... permissions){
-  var store=new PostgresStore(SqliteState.open(directory.resolve(UUID.randomUUID()+".sqlite")),codec);TestSupport.seed(store,codec,tenant,"root");
+  var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve(UUID.randomUUID()+".sqlite"))),codec);TestSupport.seed(store,codec,tenant,"root");
   store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
    TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("viewer","Viewer",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"viewer");
    TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("viewer-role","Viewer role",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of(new EnterpriseManagementRule(List.of(permissions),EnterpriseGroupType.TEAM,new GroupSelection(List.of(),true),List.of(),conditions(),null))));

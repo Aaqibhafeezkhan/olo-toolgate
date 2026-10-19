@@ -65,6 +65,9 @@ val enterpriseTests = sourceSets.create("enterpriseTest") {
     compileClasspath += sourceSets.main.get().output
     runtimeClasspath += sourceSets.main.get().output
 }
+sourceSets.test { java.srcDir("src/sharedTest/java") }
+sourceSets.test { resources.srcDir("src/enterpriseTest/resources") }
+enterpriseTests.java.srcDir("src/sharedTest/java")
 configurations[enterpriseTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
 configurations[enterpriseTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 tasks.register<Test>("enterpriseTest") {

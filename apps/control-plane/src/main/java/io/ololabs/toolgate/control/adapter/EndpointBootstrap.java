@@ -15,6 +15,7 @@ import java.nio.file.*;
 /** Opt-in direct TLS enrollment; missing external CA/TLS settings stop startup. */
 @ApplicationScoped
 public class EndpointBootstrap {
+    @Inject TenancyConfiguration tenancy;
     @Inject Config config;
     @Inject ContractCodec codec;
     @Inject PostgresStore store;
@@ -27,7 +28,7 @@ public class EndpointBootstrap {
     }
     private EndpointService load(){
         boolean enabled=config.getValue("toolgate.control.endpoint.enabled",Boolean.class);DeviceIssuer issuer=null;
-        String tenant="disabled",server="disabled",organization="disabled",control="https://disabled.invalid",gateway="https://disabled.invalid";
+        String tenant="00000000-0000-0000-0000-000000000000",server="disabled",organization="disabled",control="https://disabled.invalid",gateway="https://disabled.invalid";
         if(enabled)try{
             if((!config.getValue("quarkus.http.insecure-requests",String.class).equalsIgnoreCase("disabled") && !config.getOptionalValue("toolgate.quickstart.enabled",Boolean.class).orElse(false))
                 || !config.getValue("quarkus.http.ssl.client-auth",String.class).equalsIgnoreCase("request")
@@ -46,7 +47,7 @@ public class EndpointBootstrap {
                 var policy=(java.security.interfaces.RSAPrivateCrtKey)keyFactory.generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(java.util.Base64.getDecoder().decode(policyPem.replace("-----BEGIN "+"PRIVATE KEY-----","").replace("-----END "+"PRIVATE KEY-----","").replaceAll("\\s",""))));
                 if(caKey.getModulus().equals(policy.getModulus()))throw new IllegalArgumentException();
             }
-            tenant=Ids.valid(setting("tenant-id"));server=Ids.valid(setting("server-id"));organization=setting("organization");control=setting("control-url");gateway=setting("gateway-url");
+            tenant=tenancy.defaultId().value();server=Ids.valid(setting("server-id"));organization=setting("organization");control=setting("control-url");gateway=setting("gateway-url");
         }catch(Exception failure){throw new IllegalStateException("Endpoint enrollment requires dedicated external CA and direct HTTPS with requested client certificates");}
         ClientCheckInPolicy checkIn;
         try{checkIn=ClientCheckInPolicy.configure(config.getOptionalValue("toolgate.control.client-check-in.check-in-ms",Long.class).orElse(null),
