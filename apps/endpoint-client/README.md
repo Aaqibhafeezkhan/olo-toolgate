@@ -38,7 +38,10 @@ token needs the `toolgate-enroller` role, `tenant_id`, and an enabled `user_id`.
 The browser never receives the device code or private key.
 
 Installer setup verifies v2 discovery over authenticated HTTPS and persists `tenantId`
-with the canonical Control origin. The protected service anchors this configuration
+with the canonical Control origin. Setup also accepts `--tenant-id <canonical-UUID>`
+as an optional assertion. Browser setup always carries its verified UUID into the elevated
+installer; a fresh HTTPS discovery fetch must still match before installation writes state.
+The protected service anchors this configuration
 and generates a P-256 key locally. Verified v2 discovery and its key ring are persisted before enrollment;
 the service then submits a signed PKCS#10 request. Control verifies possession, binds the key to the approved user/device,
 and signs a client-only certificate for at most 24 hours. Heartbeats renew it

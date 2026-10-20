@@ -23,6 +23,21 @@ pub struct Installation {
     /// Loopback console that published `ca_certificate_pem`.
     pub console_url: Option<String>,
 }
+/// Reassert the browser-verified UUID after elevation and before installation can write any state.
+pub async fn installation_expected(value: &str, expected: Option<&str>) -> Result<Installation> {
+    if let Some(tenant) = expected {
+        crate::contracts::Contracts::shared()?.encode("TenantUuid", &tenant)?;
+    }
+    let result = installation(value).await?;
+    check_installation_tenant(&result, expected)?;
+    Ok(result)
+}
+fn check_installation_tenant(value: &Installation, expected: Option<&str>) -> Result<()> {
+    if expected.is_some_and(|tenant| tenant != value.tenant_id) {
+        return Err(Failure::TenantMismatch);
+    }
+    Ok(())
+}
 /// Bootstrap local quickstart trust through loopback only, then verify HTTPS before installation.
 pub async fn installation(value: &str) -> Result<Installation> {
     let server_url = installation_server(value).await?;
@@ -241,10 +256,7 @@ async fn configure_client(
     source: String,
     expected_tenant: Option<&str>,
 ) -> Result<String> {
-    let installation = installation(&source).await?;
-    if expected_tenant.is_some_and(|tenant| tenant != installation.tenant_id) {
-        return Err(Failure::TenantMismatch);
-    }
+    let installation = installation_expected(&source, expected_tenant).await?;
     if installation.server_url != server {
         return Err(Failure::Validation);
     }
@@ -310,7 +322,10 @@ async fn configure_client(
     } else {
         "install"
     };
-    let parameters = format!("{operation} --server \"{source}\" --peer \"{peer}\"");
+    let parameters = format!(
+        "{operation} --server \"{source}\" --peer \"{peer}\" --tenant-id {}",
+        installation.tenant_id
+    );
     elevate(&cli, &parameters)?;
     if operation == "configure" && connected(&crate::install::ipc_endpoint()).await == Some(false) {
         let response = crate::ipc::console_call(
@@ -501,6 +516,23 @@ mod tests {
         let (origin, server) = local_configuration(response(&"x".repeat(4097))).await;
         assert!(installation_server(&origin).await.is_err());
         server.await.unwrap();
+    }
+    #[test]
+    fn a_reassigned_origin_cannot_change_the_tenant_after_elevation() {
+        let installation = Installation {
+            tenant_id: "10000000-0000-4000-8000-000000000002".into(),
+            server_url: "https://gate.example".into(),
+            ca_certificate_pem: None,
+            console_url: None,
+        };
+        assert_eq!(
+            check_installation_tenant(&installation, Some("10000000-0000-4000-8000-000000000001")),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(
+            check_installation_tenant(&installation, Some(&installation.tenant_id)),
+            Ok(())
+        );
     }
     #[test]
     fn only_https_console_origins_are_accepted() {

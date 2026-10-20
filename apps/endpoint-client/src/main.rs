@@ -207,13 +207,11 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             );
             Ok(())
         }
-        "install" | "reinstall" | "configure"
-            if (arguments.len() == 3 || arguments.len() == 5)
-                && arguments[1] == "--server"
-                && (arguments.len() == 3 || arguments[3] == "--peer") =>
-        {
-            let peer = arguments.get(4).map(String::as_str);
-            let installation = olo_toolgate_client::browser::installation(&arguments[2]).await?;
+        "install" | "reinstall" | "configure" => {
+            let (peer, expected_tenant) = installation_options(&arguments)?;
+            let installation =
+                olo_toolgate_client::browser::installation_expected(&arguments[2], expected_tenant)
+                    .await?;
             let server = &installation.server_url;
             let ca = installation.ca_certificate_pem.as_deref();
             let console = installation.console_url.as_deref();
@@ -347,5 +345,61 @@ fn build_label() -> String {
     match (option_env!("GITHUB_RUN_NUMBER"), option_env!("GITHUB_SHA")) {
         (Some(run), Some(sha)) => format!("{run} ({})", &sha[..sha.len().min(7)]),
         _ => "local".into(),
+    }
+}
+
+/// Closed setup options; the browser's UUID survives the privilege boundary and fresh HTTPS fetch.
+fn installation_options(arguments: &[String]) -> Result<(Option<&str>, Option<&str>)> {
+    if ![3, 5, 7].contains(&arguments.len()) || arguments[1] != "--server" {
+        return Err(Failure::Validation);
+    }
+    let (mut peer, mut tenant) = (None, None);
+    for pair in arguments[3..].chunks_exact(2) {
+        match pair[0].as_str() {
+            "--peer" if peer.is_none() => peer = Some(pair[1].as_str()),
+            "--tenant-id" if tenant.is_none() => {
+                olo_toolgate_client::contracts::Contracts::shared()?
+                    .encode("TenantUuid", &pair[1])?;
+                tenant = Some(pair[1].as_str());
+            }
+            _ => return Err(Failure::Validation),
+        }
+    }
+    Ok((peer, tenant))
+}
+#[cfg(test)]
+mod setup_tests {
+    use super::*;
+    #[test]
+    fn setup_preserves_the_expected_uuid_and_rejects_duplicate_or_unknown_options() {
+        let tenant = "10000000-0000-4000-8000-000000000001";
+        let parse = |options: &[&str]| {
+            let mut args = vec![
+                "install".to_owned(),
+                "--server".into(),
+                "https://gate.example".into(),
+            ];
+            args.extend(options.iter().map(|value| (*value).to_owned()));
+            installation_options(&args)
+                .map(|(peer, id)| (peer.map(str::to_owned), id.map(str::to_owned)))
+        };
+        assert_eq!(parse(&[]).unwrap(), (None, None));
+        assert_eq!(
+            parse(&["--tenant-id", tenant]).unwrap(),
+            (None, Some(tenant.into()))
+        );
+        assert_eq!(
+            parse(&["--peer", "user", "--tenant-id", tenant]).unwrap(),
+            (Some("user".into()), Some(tenant.into()))
+        );
+        for options in [
+            vec!["--tenant-id", "quickstart"],
+            vec!["--tenant-id", tenant, "--tenant-id", tenant],
+            vec!["--peer", "user", "--peer", "other"],
+            vec!["--unknown", tenant],
+            vec!["--tenant-id"],
+        ] {
+            assert_eq!(parse(&options), Err(Failure::Validation));
+        }
     }
 }
