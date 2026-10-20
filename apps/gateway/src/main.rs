@@ -78,7 +78,7 @@ async fn run() -> Result<(), &'static str> {
             }
         }
     });
-    let state = AppState::new(gateway, auth, config.clone());
+    let state = AppState::new(gateway, auth, config.clone())?;
     let state = Arc::new(state);
     // SIGHUP: the administrator replaced the credential file atomically. Validate it whole, then swap.
     #[cfg(unix)]

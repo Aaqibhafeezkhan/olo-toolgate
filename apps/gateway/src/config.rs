@@ -41,6 +41,7 @@ impl Default for Limits {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
+    pub tenant_hosts: Vec<String>,
     pub control: crate::relay::RelayConfig,
     pub listen: SocketAddr,
     pub management_listen: SocketAddr,
@@ -57,6 +58,17 @@ impl Config {
     /// Invalid or unbounded configuration prevents startup.
     pub fn validate(&self, _contracts: &Contracts, _now: u64) -> Result<(), &'static str> {
         self.control.validate()?;
+        if self.tenant_hosts.is_empty() || self.tenant_hosts.len() > 16 {
+            return Err("explicit tenant authorities required");
+        }
+        let mut authorities = std::collections::BTreeSet::new();
+        for host in &self.tenant_hosts {
+            if !authorities
+                .insert(crate::tenancy::authority(host).map_err(|_| "invalid tenant authority")?)
+            {
+                return Err("duplicate tenant authority");
+            }
+        }
         if self.tool_hosts.len() > 64 {
             return Err("at most 64 Tool Hosts");
         }

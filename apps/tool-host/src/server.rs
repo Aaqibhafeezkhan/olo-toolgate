@@ -62,6 +62,7 @@ impl Host {
                 keys,
                 &config.permit_issuer,
                 &config.host_id,
+                &config.control.tenant_id,
                 config.limits.max_permit_window_ms,
             ),
             store: Store::new(config.store_dir.clone(), config.work_dir.clone()),

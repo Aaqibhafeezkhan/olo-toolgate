@@ -58,7 +58,12 @@ pub(crate) struct CredentialDeadline(pub(crate) u64);
 
 impl AppState {
     /// Construct only after startup validation and credential loading.
-    pub fn new(gateway: Gateway, auth: Authenticator, config: Config) -> Self {
+    pub fn new(
+        gateway: Gateway,
+        auth: Authenticator,
+        config: Config,
+    ) -> Result<Self, &'static str> {
+        let auth = auth.for_tenant(config.control.tenant_id.clone())?;
         let instance = digest(
             format!(
                 "{}-{}-{:?}",
@@ -68,7 +73,7 @@ impl AppState {
             )
             .as_bytes(),
         );
-        Self {
+        Ok(Self {
             admission: Semaphore::new(config.limits.max_concurrent_requests),
             rate: RateLimit::new(config.limits.requests_per_second),
             tool_hosts: crate::toolhost::ToolHosts::new(&config.tool_hosts),
@@ -79,7 +84,7 @@ impl AppState {
             draining: AtomicBool::new(false),
             sequence: AtomicU64::new(1),
             instance,
-        }
+        })
     }
 
     /// Readiness includes freshness, credentials, audit and the drain state.
@@ -183,10 +188,11 @@ fn valid_traceparent(v: &str) -> bool {
 
 pub(crate) fn status(code: &ErrorCode) -> StatusCode {
     match code {
-        ErrorCode::Validation => StatusCode::BAD_REQUEST,
+        ErrorCode::Validation | ErrorCode::InvalidTenantId => StatusCode::BAD_REQUEST,
         ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
-        ErrorCode::Forbidden => StatusCode::FORBIDDEN,
-        ErrorCode::NotFound => StatusCode::NOT_FOUND,
+        ErrorCode::Forbidden | ErrorCode::TenantMismatch => StatusCode::FORBIDDEN,
+        ErrorCode::NotFound | ErrorCode::TenantUnavailable => StatusCode::NOT_FOUND,
+        ErrorCode::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
         ErrorCode::Timeout => StatusCode::GATEWAY_TIMEOUT,
         ErrorCode::DependencyUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         ErrorCode::Unsupported => StatusCode::NOT_IMPLEMENTED,
@@ -231,6 +237,14 @@ async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next)
             *r.status_mut() = StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE;
             return r;
         }
+        if let Err(code) = crate::tenancy::check(
+            request.headers(),
+            request.uri(),
+            &s.config.tenant_hosts,
+            &s.config.control.tenant_id,
+        ) {
+            return error(code, &correlation.request_id);
+        }
         if s.draining.load(Ordering::Acquire) {
             return error(ErrorCode::DependencyUnavailable, &correlation.request_id);
         }
@@ -263,6 +277,9 @@ async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next)
         let Some((context, credential_expiry)) = context else {
             return error(ErrorCode::Unauthorized, &correlation.request_id);
         };
+        if context.tenant_id != s.config.control.tenant_id {
+            return error(ErrorCode::TenantMismatch, &correlation.request_id);
+        }
         request.extensions_mut().insert(context);
         request
             .extensions_mut()

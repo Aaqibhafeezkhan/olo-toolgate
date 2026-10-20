@@ -36,14 +36,17 @@ const RETRY_MS: u64 = 5_000;
 /// What survives a restart: the certificate Control issued, an enrollment still waiting for
 /// approval, and the last check-in sequence Control acknowledged.
 #[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Journal {
+    format_version: u64,
+    tenant_id: String,
     identity: Option<DeviceIdentity>,
     challenge: Option<EndpointEnrollmentChallenge>,
     sequence: u64,
 }
 
 pub struct Device {
+    tenant: String,
     host_id: String,
     pool_id: String,
     store_dir: PathBuf,
@@ -59,13 +62,52 @@ pub struct Device {
 impl Device {
     /// Opens the identity directory, creating the device key on first start.
     pub fn open(config: &Config, control: Arc<Control>) -> Result<Device, String> {
+        config.validate()?;
         let enrollment = config
             .enrollment
             .as_ref()
             .ok_or("the configuration has no enrollment")?;
         let dir = enrollment.identity_dir.clone();
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        let journal_path = dir.join("device.json");
+        let (journal, fresh): (Journal, bool) = match std::fs::read(&journal_path) {
+            Ok(bytes) => (
+                serde_json::from_slice(&bytes)
+                    .map_err(|_| "unsupported Tool Host identity state")?,
+                false,
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+                Journal {
+                    format_version: 2,
+                    tenant_id: config.control.tenant_id.clone(),
+                    ..Journal::default()
+                },
+                true,
+            ),
+            Err(_) => return Err("Tool Host identity state unavailable".into()),
+        };
+        if journal.format_version != 2
+            || journal.tenant_id != config.control.tenant_id
+            || journal.identity.as_ref().is_some_and(|identity| {
+                identity.tenant_id != journal.tenant_id || identity.device_id != config.host_id
+            })
+        {
+            return Err("Tool Host tenant identity mismatch".into());
+        }
         let key_path = dir.join("device-key.pem");
+        if fresh && key_path.exists() {
+            return Err("unsupported Tool Host identity state".into());
+        }
+        if !key_path.exists() && (journal.identity.is_some() || journal.challenge.is_some()) {
+            return Err("Tool Host device key is missing".into());
+        }
+        if fresh {
+            write_atomic(
+                &journal_path,
+                &serde_json::to_vec(&journal)
+                    .map_err(|_| "Tool Host identity serialization failed")?,
+            )?;
+        }
         let key = match std::fs::read_to_string(&key_path) {
             Ok(pem) => rcgen::KeyPair::from_pem(&pem)
                 .map_err(|e| format!("{}: {e}", key_path.display()))?,
@@ -76,14 +118,8 @@ impl Device {
             }
             Err(e) => return Err(format!("{}: {e}", key_path.display())),
         };
-        let journal_path = dir.join("device.json");
-        let journal = match std::fs::read(&journal_path) {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .map_err(|e| format!("{}: {e}", journal_path.display()))?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Journal::default(),
-            Err(e) => return Err(format!("{}: {e}", journal_path.display())),
-        };
-        Ok(Device {
+        let device = Device {
+            tenant: config.control.tenant_id.clone(),
             host_id: config.host_id.clone(),
             pool_id: enrollment.pool_id.clone(),
             store_dir: config.store_dir.clone(),
@@ -93,7 +129,9 @@ impl Device {
             journal,
             presented: None,
             registered: false,
-        })
+        };
+        device.save()?;
+        Ok(device)
     }
 
     /// Enrolls, then keeps the store and Control's view of this host current, until the process stops.
@@ -128,7 +166,11 @@ impl Device {
         match self.sync().await {
             Err(Failure::Control(ControlError::Refused(410))) => {
                 // The device was deleted in Control: start over with a fresh approval.
-                self.journal = Journal::default();
+                self.journal = Journal {
+                    format_version: 2,
+                    tenant_id: self.tenant.clone(),
+                    ..Journal::default()
+                };
                 self.registered = false;
                 self.save()?;
                 Err("Control no longer knows this device; enrolling again".into())
@@ -375,6 +417,7 @@ impl Device {
         let (_, certificate) = parse_x509_certificate(&pem.contents)
             .map_err(|_| "the issued certificate is invalid")?;
         if identity.device_id != self.host_id
+            || identity.tenant_id != self.tenant
             || certificate.public_key().raw != self.key.subject_public_key_info().as_slice()
         {
             return Err("the issued certificate is not for this host's key".into());

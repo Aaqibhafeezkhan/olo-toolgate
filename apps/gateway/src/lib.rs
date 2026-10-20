@@ -10,6 +10,7 @@ pub mod limits;
 mod mcp;
 pub mod relay;
 pub mod server;
+pub mod tenancy;
 pub mod toolhost;
 pub mod validation;
 

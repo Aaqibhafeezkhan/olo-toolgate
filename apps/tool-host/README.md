@@ -42,12 +42,16 @@ One JSON file, refused at startup if anything is wrong.
 | `permitIssuer` | The `iss` a permit must carry. |
 | `storeDir` | The content store (below). |
 | `workDir` | Unpacked packages and one directory per running invocation. |
-| `control` | `{url, clientCertificatePath?, clientKeyPath?, caCertificatePath?, developmentLoopbackHttp?}`. `url` is https, or http to loopback with `developmentLoopbackHttp`. The certificate and key are the host's workload identity; leave them out with `enrollment`. |
+| `control` | `{tenantId, url, clientCertificatePath?, clientKeyPath?, caCertificatePath?, developmentLoopbackHttp?}`. `tenantId` is the canonical UUID this host belongs to. `url` is https, or http to loopback with `developmentLoopbackHttp`. The certificate and key are the host's workload identity; leave them out with `enrollment`. |
 | `enrollment` | `{identityDir, poolId?}`: enroll with Control as a device and fetch assignments (below). `identityDir` holds the device key, its certificate and the check-in sequence. |
 | `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). A bare name is looked up on the host's `PATH` at startup, because tool processes start with an empty environment. |
 | `runtimes.pythonPath` | Python 3.10+ for SDK `tool.pyz` artifacts (default `python3`, or `python` on Windows). Resolved at startup and launched with `-I` in the same clean environment and v2 broker protocol as Java. |
 | `limits` | `maxConcurrent`, `maxInputBytes`, `maxOutputBytes`, `syncDeadlineMs`, `memoryBytes`, `maxPermitWindowMs`. Each may only be lowered below the platform ceiling (platform-requirements.md §13.5). |
 | `developmentLoopbackHttp` | Lets the broker send plain http to loopback destinations. For development and tests only. |
+
+Every accepted permit must name `control.tenantId`, even when another tenant uses the same host ID and signing authority. The check occurs before nonce consumption, secret delivery or sandbox execution. Requests to Control carry the same UUID assertion. Use dedicated tenant credential files, identity/store/work directories and execution pools; a shared content digest is not permission to access another tenant's artifacts.
+
+Enrolled hosts persist a versioned UUID binding before creating a device key or contacting Control. Changing the configured tenant fails without rewriting that state or key. Expiry, device deletion and renewed enrollment retain the UUID. Unsupported development journals or orphaned older keys are rejected unchanged; use an explicitly fresh identity directory rather than converting or deleting them automatically. Discovery v2/device-CA trust verification still belongs to the coordinated cutover before shared release qualification.
 
 ## Dispatch
 

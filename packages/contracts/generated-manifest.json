@@ -8,7 +8,7 @@
     "packages/contracts/schemas/v1/deployment.schema.json": "cd3bbc59d25050b3fd820cb2a635a73a9959f8260eda06a408646a5d52e4c7f1",
     "packages/contracts/schemas/v1/endpoint.schema.json": "690d922c14defa8a449c76c66e64508aadf69eaaea2df9cf76ce7d176aab51c7",
     "packages/contracts/schemas/v1/enterprise.schema.json": "f80dc4844c08714b3c90d3ef6cc05b41934f1b924e65112216362e319eeca98b",
-    "packages/contracts/schemas/v1/error.schema.json": "e5e47c3ce1e0ce16f0a69e29b57f83b44a383a4a742a21fbb5a1b560f9d6f5d5",
+    "packages/contracts/schemas/v1/error.schema.json": "8c96d747e297adde54a12f5d094479ae6df6772df61eda4535572f5113cd9f7f",
     "packages/contracts/schemas/v1/execution.schema.json": "971ce434980977142da4cb09654f526a4f943be92b3d1214e3b678b877db8a23",
     "packages/contracts/schemas/v1/fleet.schema.json": "e0ab0824a27051ced977c6578a29cc0208ff3c601be75208ddb3598d203c26a5",
     "packages/contracts/schemas/v1/identifiers.schema.json": "fd8b4b562759eb901085f920da4581311cac691d87f9ed5e871d6d81f2430e8f",

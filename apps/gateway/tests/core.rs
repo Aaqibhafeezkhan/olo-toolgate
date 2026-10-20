@@ -31,7 +31,7 @@ fn fixtures() -> Value {
     .unwrap()
 }
 fn context() -> RequestContext {
-    serde_json::from_value(json!({"requestId":"operation","tenantId":"tenant-demo","mode":"DELEGATED","userId":"user-demo","agentId":"agent-demo","workloadBindingId":"workload","chain":[],"sessionEpoch":1,"credentialEpoch":1,"credentialKind":"STATIC_TOKEN","bindingId":"binding","credentialSha256":digest(TOKEN.as_bytes())})).unwrap()
+    serde_json::from_value(json!({"requestId":"operation","tenantId":"10000000-0000-4000-8000-000000000001","mode":"DELEGATED","userId":"user-demo","agentId":"agent-demo","workloadBindingId":"workload","chain":[],"sessionEpoch":1,"credentialEpoch":1,"credentialKind":"STATIC_TOKEN","bindingId":"binding","credentialSha256":digest(TOKEN.as_bytes())})).unwrap()
 }
 fn credential() -> Credential {
     Credential {
@@ -41,10 +41,82 @@ fn credential() -> Credential {
     }
 }
 fn config() -> Config {
-    serde_json::from_value(json!({"listen":"127.0.0.1:8081","managementListen":"127.0.0.1:9091","trustedTlsProxy":false,"allowedOrigins":[],"control":{"url":"http://127.0.0.1:8080/","tokenPath":"/run/control-token","developmentLoopbackHttp":true},"limits":{"maxBodyBytes":65536,"maxHeaderBytes":8192,"maxConcurrentRequests":4,"maxConnections":8,"requestsPerSecond":1000,"requestTimeoutMs":10000,"connectionTimeoutMs":12000,"shutdownTimeoutMs":15000,"auditQueueCapacity":256}})).unwrap()
+    serde_json::from_value(json!({"tenantHosts":["gate.example.test"],"listen":"127.0.0.1:8081","managementListen":"127.0.0.1:9091","trustedTlsProxy":false,"allowedOrigins":[],"control":{"tenantId":"10000000-0000-4000-8000-000000000001","url":"http://127.0.0.1:8080/","tokenPath":"/run/control-token","developmentLoopbackHttp":true},"limits":{"maxBodyBytes":65536,"maxHeaderBytes":8192,"maxConcurrentRequests":4,"maxConnections":8,"requestsPerSecond":1000,"requestTimeoutMs":10000,"connectionTimeoutMs":12000,"shutdownTimeoutMs":15000,"auditQueueCapacity":256}})).unwrap()
 }
 fn payload() -> Value {
     json!({"toolId":"files.read","action":"read","arguments":{"path":"data/report.txt"}})
+}
+#[test]
+fn tenant_bound_credentials_reject_foreign_mounts_and_keep_the_old_set_on_reload_failure() {
+    let contracts = Contracts::new().unwrap();
+    let now = unix_ms().unwrap();
+    let tenant = config().control.tenant_id;
+    let auth = Authenticator::new(vec![credential()], &contracts, now)
+        .unwrap()
+        .for_tenant(tenant.clone())
+        .unwrap();
+    let before = auth.loaded();
+    let mut foreign = credential();
+    foreign.context.tenant_id = "10000000-0000-4000-8000-000000000002".into();
+    assert!(Authenticator::new(vec![foreign.clone()], &contracts, now)
+        .unwrap()
+        .for_tenant(tenant)
+        .is_err());
+    assert!(auth
+        .reload(
+            &serde_json::to_vec(&vec![foreign]).unwrap(),
+            &contracts,
+            now
+        )
+        .is_err());
+    assert_eq!(auth.loaded(), before);
+    assert!(auth
+        .authenticate(TOKEN, "still-owned".into(), now)
+        .is_some());
+}
+#[tokio::test]
+async fn host_and_expected_uuid_fences_run_before_authority_calls() {
+    let authority = Arc::new(Authority::default());
+    let router = runtime_router(state(authority.clone()));
+    let mut request = req("/access/invocations", payload());
+    request
+        .headers_mut()
+        .insert("host", "other.example.test".parse().unwrap());
+    request.headers_mut().insert(
+        "toolgate-tenant-id",
+        "10000000-0000-4000-8000-000000000002".parse().unwrap(),
+    );
+    let (status, body) = call(router.clone(), request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "TENANT_UNAVAILABLE");
+    let mut request = req("/access/invocations", payload());
+    request.headers_mut().insert(
+        "toolgate-tenant-id",
+        "10000000-0000-4000-8000-000000000002".parse().unwrap(),
+    );
+    let (status, body) = call(router.clone(), request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "TENANT_MISMATCH");
+    for value in [
+        "quickstart",
+        "10000000-0000-4000-8000-000000000001,10000000-0000-4000-8000-000000000002",
+    ] {
+        let mut request = req("/access/invocations", payload());
+        request
+            .headers_mut()
+            .insert("toolgate-tenant-id", value.parse().unwrap());
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["code"], "INVALID_TENANT_ID");
+    }
+    let mut request = req("/access/invocations", payload());
+    *request.uri_mut() = "https://other.example.test/access/invocations"
+        .parse()
+        .unwrap();
+    let (status, body) = call(router, request).await;
+    assert_eq!(status, StatusCode::MISDIRECTED_REQUEST);
+    assert_eq!(body["code"], "MISDIRECTED_REQUEST");
+    assert_eq!(authority.reservations.load(Ordering::SeqCst), 0);
 }
 #[derive(Default)]
 struct Authority {
@@ -261,19 +333,23 @@ fn state(a: Arc<Authority>) -> Arc<AppState> {
 fn state_with(a: Arc<Authority>, config: Config) -> Arc<AppState> {
     let contracts = Contracts::new().unwrap();
     let auth = Authenticator::new(vec![credential()], &contracts, unix_ms().unwrap()).unwrap();
-    Arc::new(AppState::new(
-        Gateway {
-            contracts,
-            authority: a,
-        },
-        auth,
-        config,
-    ))
+    Arc::new(
+        AppState::new(
+            Gateway {
+                contracts,
+                authority: a,
+            },
+            auth,
+            config,
+        )
+        .unwrap(),
+    )
 }
 fn req(path: &str, body: Value) -> Request<Body> {
     Request::builder()
         .method("POST")
         .uri(path)
+        .header("host", "gate.example.test")
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {TOKEN}"))
         .header("idempotency-key", "logical-request")
@@ -599,7 +675,7 @@ async fn tcp_service_and_graceful_shutdown_use_the_current_wire() {
     ));
     let body = payload().to_string();
     let mut connection = TcpStream::connect(address).await.unwrap();
-    connection.write_all(format!("POST /access/invocations HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {TOKEN}\r\nIdempotency-Key: logical-request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+    connection.write_all(format!("POST /access/invocations HTTP/1.1\r\nHost: gate.example.test\r\nAuthorization: Bearer {TOKEN}\r\nIdempotency-Key: logical-request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
     let mut bytes = vec![];
     connection.read_to_end(&mut bytes).await.unwrap();
     let text = String::from_utf8(bytes).unwrap();
@@ -671,6 +747,7 @@ async fn session_era_clients_are_refused_with_the_supported_version() {
             Request::builder()
                 .method("GET")
                 .uri("/mcp")
+                .header("host", "gate.example.test")
                 .header("authorization", format!("Bearer {TOKEN}"))
                 .header("accept", "text/event-stream")
                 .body(Body::empty())

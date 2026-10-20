@@ -2161,6 +2161,8 @@ pub enum ErrorCode {
     TenantUnavailable,
     #[serde(rename = "MISDIRECTED_REQUEST")]
     MisdirectedRequest,
+    #[serde(rename = "INVALID_TENANT_ID")]
+    InvalidTenantId,
 }
 /// Machine-readable error without exception text or caller-controlled detail.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

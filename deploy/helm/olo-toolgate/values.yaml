@@ -18,6 +18,7 @@ gateway:
     managementListen: 0.0.0.0:9091
     trustedTlsProxy: true
     allowedOrigins: []
+    tenantHosts: []
     limits:
       maxBodyBytes: 65536
       maxHeaderBytes: 8192
@@ -78,6 +79,7 @@ gateway:
     labels: {}
     interval: 30s
   control:
+    tenantId: ''
     url: https://control.example.invalid
     tokenSecret: ''
     tokenKey: access-token

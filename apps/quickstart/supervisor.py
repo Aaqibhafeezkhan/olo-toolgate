@@ -562,11 +562,11 @@ def configure():
     accounts()
     gateway_credentials()
     config = {'listen':'127.0.0.1:8081','managementListen':'127.0.0.1:9091',
-              'trustedTlsProxy':False,'allowedOrigins':[],
+              'trustedTlsProxy':False,'allowedOrigins':[],'tenantHosts':['127.0.0.1:8081'],
               'limits':{'maxBodyBytes':65536,'maxHeaderBytes':8192,'maxConcurrentRequests':128,
                         'maxConnections':256,'requestsPerSecond':1000,'requestTimeoutMs':20000,
                         'connectionTimeoutMs':35000,'shutdownTimeoutMs':35000,'auditQueueCapacity':256},
-              'control':{'url':'http://127.0.0.1:8082','tokenPath':'/data/run/machine-token',
+              'control':{'tenantId':TENANT,'url':'http://127.0.0.1:8082','tokenPath':'/data/run/machine-token',
                          'developmentLoopbackHttp':True},
               'toolHosts':[{'hostId':TOOL_HOST,'url':'http://127.0.0.1:8095'}]}
     atomic(DATA/'run/gateway.json',json.dumps(config))
@@ -574,12 +574,12 @@ def configure():
     atomic(DATA/'run/tool-host.json',json.dumps(dict(hostId=TOOL_HOST,listen='127.0.0.1:8095',
            permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
            storeDir=str(DATA/'tool-host/store'),workDir=str(DATA/'tool-host/work'),
-           control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           control=dict(tenantId=TENANT,url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host')),runtimes=dict(javaPath='java'))))
     atomic(DATA/'run/tool-host-remote.json',json.dumps(dict(hostId=REMOTE_TOOL_HOST,listen='127.0.0.1:8096',
            permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
            storeDir=str(DATA/'tool-host-remote/store'),workDir=str(DATA/'tool-host-remote/work'),
-           control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           control=dict(tenantId=TENANT,url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host-remote')),runtimes=dict(javaPath='java'))))
     machine()
     env = dict(os.environ)
@@ -925,7 +925,7 @@ def main():
                 if time.monotonic()>deadline: raise ValueError('Control readiness timeout')
                 stop.wait(.2)
             bridges=tls_bridges()
-            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_', 'TOOLGATE_CONTROL_PLATFORM_', 'TOOLGATE_CONTROL_VAULT_'))}
+            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_', 'TOOLGATE_CONTROL_PLATFORM_', 'TOOLGATE_CONTROL_VAULT_', 'TOOLGATE_CONTROL_IDENTITY_'))}
             gateway_env = dict(child_env, TOOLGATE_GATEWAY_CONFIG='/data/run/gateway.json',TOOLGATE_GATEWAY_CREDENTIALS='/data/run/credentials.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env))
             host_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host.json')

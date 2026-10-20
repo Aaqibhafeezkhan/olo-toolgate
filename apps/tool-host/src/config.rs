@@ -47,6 +47,8 @@ pub struct PermitKey {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ControlConfig {
+    /// Immutable owner of this host, its device identity and every accepted permit.
+    pub tenant_id: String,
     /// Control's base URL, such as `https://control:8443`.
     pub url: String,
     /// This host's workload certificate and key (PEM), presented to Control.
@@ -157,6 +159,18 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        let tenant = &self.control.tenant_id;
+        if tenant.len() != 36
+            || !tenant.bytes().enumerate().all(|(i, b)| {
+                if [8, 13, 18, 23].contains(&i) {
+                    b == b'-'
+                } else {
+                    b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
+                }
+            })
+        {
+            return Err("control.tenantId must be a canonical tenant UUID".into());
+        }
         if self.host_id.is_empty() || self.permit_issuer.is_empty() || self.permit_keys.is_empty() {
             return Err("hostId, permitIssuer and permitKeys are required".into());
         }

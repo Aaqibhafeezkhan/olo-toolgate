@@ -32,6 +32,7 @@ struct Loaded {
 /// The live set is swapped whole: a request sees either the previous or the new set, never a mix.
 pub struct Authenticator {
     loaded: RwLock<Arc<Loaded>>,
+    tenant: Option<String>,
 }
 impl Authenticator {
     pub fn new(
@@ -42,6 +43,7 @@ impl Authenticator {
         let sha256 = digest(&serde_json::to_vec(&credentials).map_err(|_| "invalid workload")?);
         let credentials = validate(credentials, contracts, now)?;
         Ok(Self {
+            tenant: None,
             loaded: RwLock::new(Arc::new(Loaded {
                 credentials,
                 sha256,
@@ -51,8 +53,23 @@ impl Authenticator {
     /// Parse a mounted credential file; its digest identifies exactly which file is loaded.
     pub fn from_bytes(bytes: &[u8], contracts: &Contracts, now: u64) -> Result<Self, &'static str> {
         Ok(Self {
+            tenant: None,
             loaded: RwLock::new(Arc::new(parse(bytes, contracts, now)?)),
         })
+    }
+    /// Bind once at application construction; reloads must keep every credential in this tenant.
+    pub fn for_tenant(mut self, tenant: String) -> Result<Self, &'static str> {
+        if !crate::tenancy::canonical_uuid(&tenant)
+            || self
+                .current()
+                .credentials
+                .iter()
+                .any(|credential| credential.context.tenant_id != tenant)
+        {
+            return Err("credential tenant mismatch");
+        }
+        self.tenant = Some(tenant);
+        Ok(self)
     }
     /// Replace the set only after the whole new file validates; any error keeps the current set.
     pub fn reload(
@@ -62,6 +79,13 @@ impl Authenticator {
         now: u64,
     ) -> Result<usize, &'static str> {
         let next = Arc::new(parse(bytes, contracts, now)?);
+        if self.tenant.as_ref().is_some_and(|tenant| {
+            next.credentials
+                .iter()
+                .any(|credential| credential.context.tenant_id != *tenant)
+        }) {
+            return Err("credential tenant mismatch");
+        }
         let count = next.credentials.len();
         *self.loaded.write().unwrap_or_else(PoisonError::into_inner) = next;
         Ok(count)

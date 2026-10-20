@@ -362,7 +362,7 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *,
         "permitIssuer": "control",
         "storeDir": store,
         "workDir": dir.join("work"),
-        "control": {"url": format!("http://127.0.0.1:{control_port}"), "developmentLoopbackHttp": true},
+        "control": {"tenantId":"10000000-0000-4000-8000-000000000001","url": format!("http://127.0.0.1:{control_port}"), "developmentLoopbackHttp": true},
         "runtimes": {"javaPath": runtime, "pythonPath": python},
         "limits": {"maxConcurrent": 4, "maxInputBytes": 65536, "maxOutputBytes": 1048576, "syncDeadlineMs": 20000, "memoryBytes": 268435456, "maxPermitWindowMs": 30000},
         "developmentLoopbackHttp": true
@@ -405,7 +405,7 @@ fn permit(rig: &Rig, arguments: &Value, edit: impl FnOnce(&mut Value)) -> (Strin
         "jti": format!("jti-{id}"), "iss": "control", "aud": "host-1",
         "iat": now, "nbf": now, "exp": now + 20_000, "nonce": format!("n-{id}"),
         "invocationId": id, "attempt": 1,
-        "identity": {"tenantId": "t1", "mode": "HUMAN", "userId": "u1", "chain": [], "authorizationEpoch": 1, "claims": {"UserName": "ada"}},
+        "identity": {"tenantId": "10000000-0000-4000-8000-000000000001", "mode": "HUMAN", "userId": "u1", "chain": [], "authorizationEpoch": 1, "claims": {"UserName": "ada"}},
         "target": rig.target,
         "catalogRevision": "rev-1",
         "argumentsDigest": tool_host::digest::jcs(arguments).unwrap(),
@@ -584,6 +584,19 @@ async fn bad_permits_are_refused_before_anything_runs() {
     let rig = rig!();
     let arguments = json!({"orderId": "123456"});
     let refused = |lines: &[Value]| lines[0]["reason"].as_str().unwrap().to_string();
+
+    let (foreign, _) = permit(&rig, &arguments, |claims| {
+        claims["identity"]["tenantId"] = json!("10000000-0000-4000-8000-000000000002")
+    });
+    assert_eq!(
+        refused(&dispatch(&rig, &foreign, &arguments).await),
+        "PERMIT_INVALID",
+        "A valid signature and repeated host ID cannot authorize another tenant"
+    );
+    assert!(
+        rig.seen.lock().unwrap().consumed.is_empty(),
+        "Foreign permits are rejected before contacting Control"
+    );
 
     let (jws, _) = permit(&rig, &arguments, |_| {});
     assert_eq!(

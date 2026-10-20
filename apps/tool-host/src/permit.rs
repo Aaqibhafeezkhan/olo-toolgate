@@ -26,6 +26,7 @@ pub struct Verifier {
     keys: HashMap<String, Vec<u8>>,
     issuer: String,
     audience: String,
+    tenant: String,
     max_window_ms: u64,
     seen: Mutex<HashMap<String, u64>>,
 }
@@ -36,12 +37,14 @@ impl Verifier {
         keys: HashMap<String, Vec<u8>>,
         issuer: &str,
         audience: &str,
+        tenant: &str,
         max_window_ms: u64,
     ) -> Verifier {
         Verifier {
             keys,
             issuer: issuer.into(),
             audience: audience.into(),
+            tenant: tenant.into(),
             max_window_ms,
             seen: Mutex::new(HashMap::new()),
         }
@@ -85,6 +88,9 @@ impl Verifier {
         }
         if claims.aud != self.audience {
             return Err(invalid("the permit is addressed to another Tool Host"));
+        }
+        if claims.identity.tenant_id != self.tenant {
+            return Err(invalid("the permit belongs to another tenant"));
         }
         if claims.exp < claims.iat
             || claims.nbf > claims.exp

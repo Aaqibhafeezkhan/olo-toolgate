@@ -43,8 +43,8 @@ public class TenantRequestResolver {
         }
         var tenant=activeHost.apply(authority.host());if(tenant==null)throw Failure.tenantUnavailable();
         if(expectedTenant!=null&&!expectedTenant.isEmpty()) {
-            if(expectedTenant.size()!=1)throw Failure.validation();
-            TenantId expected;try{expected=new TenantId(expectedTenant.getFirst());}catch(IllegalArgumentException invalid){throw Failure.validation();}
+            if(expectedTenant.size()!=1)throw invalidTenant();
+            TenantId expected;try{expected=new TenantId(expectedTenant.getFirst());}catch(IllegalArgumentException invalid){throw invalidTenant();}
             if(!tenant.equals(expected))throw mismatch();
         }
         return new Context(tenant,authority);
@@ -56,5 +56,6 @@ public class TenantRequestResolver {
         if(!context.tenant().equals(tenant))throw mismatch();
     }
     static Failure mismatch(){return new Failure(ErrorCode.TENANT_MISMATCH,403,"TENANT_MISMATCH");}
+    static Failure invalidTenant(){return new Failure(ErrorCode.INVALID_TENANT_ID,400,"INVALID_TENANT_ID");}
     static Failure misdirected(){return new Failure(ErrorCode.MISDIRECTED_REQUEST,421,"MISDIRECTED_REQUEST");}
 }

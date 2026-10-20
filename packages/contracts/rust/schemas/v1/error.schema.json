@@ -19,7 +19,8 @@
         "UNSUPPORTED",
         "TENANT_MISMATCH",
         "TENANT_UNAVAILABLE",
-        "MISDIRECTED_REQUEST"
+        "MISDIRECTED_REQUEST",
+        "INVALID_TENANT_ID"
       ]
     },
     "ErrorEnvelope": {

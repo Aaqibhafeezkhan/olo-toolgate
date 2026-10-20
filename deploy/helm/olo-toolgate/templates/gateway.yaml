@@ -4,12 +4,13 @@
 {{- $name := include "olo-toolgate.gatewayName" . }}
 {{- $config := deepCopy $g.config }}
 {{- if lt (int $g.config.limits.requestTimeoutMs) 10000 }}{{ fail "online authority requires at least a ten second ingress deadline" }}{{ end }}
-{{- $_ := set $config "control" (dict "url" $g.control.url "tokenPath" "/etc/toolgate/control-auth/access-token" "developmentLoopbackHttp" false) }}
+{{- $_ := set $config "control" (dict "tenantId" (required "Gateway requires its provisioned tenant UUID" $g.control.tenantId) "url" $g.control.url "tokenPath" "/etc/toolgate/control-auth/access-token" "developmentLoopbackHttp" false) }}
 {{- if and $g.networkPolicy.enabled (or (not $g.networkPolicy.controlTo) (not $g.networkPolicy.dnsTo)) }}{{ fail "online authority requires explicit controlTo and dnsTo egress peers" }}{{ end }}
 {{- if or (ne $g.config.listen "0.0.0.0:8081") (ne $g.config.managementListen "0.0.0.0:9091") }}
 {{- fail "Helm requires the fixed internal runtime/management listeners" }}
 {{- end }}
 {{- if not $g.config.trustedTlsProxy }}{{ fail "Helm requires trusted TLS termination" }}{{ end }}
+{{- if and $g.ingress.enabled (not (or (has $g.ingress.host $g.config.tenantHosts) (has (printf "%s:443" $g.ingress.host) $g.config.tenantHosts))) }}{{ fail "Gateway ingress must name one of its configured tenant authorities" }}{{ end }}
 {{- if le (int $g.terminationGracePeriodSeconds) (div (int $g.config.limits.shutdownTimeoutMs) 1000) }}{{ fail "termination grace must exceed application drain deadline" }}{{ end }}
 {{- if and $g.autoscaling.enabled (gt (int $g.autoscaling.minReplicas) (int $g.autoscaling.maxReplicas)) }}{{ fail "HPA minimum must not exceed maximum" }}{{ end }}
 apiVersion: v1

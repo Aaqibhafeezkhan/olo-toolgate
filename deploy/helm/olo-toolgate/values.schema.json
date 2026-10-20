@@ -130,7 +130,8 @@
             "managementListen",
             "trustedTlsProxy",
             "allowedOrigins",
-            "limits"
+            "limits",
+            "tenantHosts"
           ],
           "properties": {
             "listen": {
@@ -212,6 +213,17 @@
                   "minimum": 1,
                   "maximum": 4096
                 }
+              }
+            },
+            "tenantHosts": {
+              "type": "array",
+              "maxItems": 16,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 260,
+                "pattern": "^[A-Za-z0-9.:\\[\\]-]+$"
               }
             }
           }
@@ -521,7 +533,8 @@
             "url",
             "tokenSecret",
             "tokenKey",
-            "controlPort"
+            "controlPort",
+            "tenantId"
           ],
           "properties": {
             "url": {
@@ -543,6 +556,10 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 65535
+            },
+            "tenantId": {
+              "type": "string",
+              "pattern": "^$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
             }
           }
         }
@@ -568,6 +585,16 @@
                 "properties": {
                   "tokenSecret": {
                     "minLength": 1
+                  },
+                  "tenantId": {
+                    "minLength": 36
+                  }
+                }
+              },
+              "config": {
+                "properties": {
+                  "tenantHosts": {
+                    "minItems": 1
                   }
                 }
               }
@@ -1323,7 +1350,7 @@
         "clientCheckIn": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Env-owned Phase A client check-in (platform-requirements.md Â§17.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
+          "description": "Env-owned Phase A client check-in (platform-requirements.md \u00c2\u00a717.2). checkInMs is the job pickup latency; check-in plus jitter plus 5 s must fit the 30 s sync deadline. offlineAfterMs 0 means max(120000, 6 x checkInMs).",
           "required": [
             "checkInMs",
             "jitterPct",
@@ -1851,18 +1878,58 @@
           ]
         },
         "tenancy": {
-          "type": "object", "additionalProperties": false,
-          "required": ["mode", "hosts", "initializationSecret", "initializationItems"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "hosts",
+            "initializationSecret",
+            "initializationItems"
+          ],
           "properties": {
-            "mode": {"type": "string", "enum": ["single", "subdomain"]},
-            "hosts": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 253}},
-            "initializationSecret": {"type": "string", "maxLength": 253},
+            "mode": {
+              "type": "string",
+              "enum": [
+                "single",
+                "subdomain"
+              ]
+            },
+            "hosts": {
+              "type": "array",
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 253
+              }
+            },
+            "initializationSecret": {
+              "type": "string",
+              "maxLength": 253
+            },
             "initializationItems": {
-              "type": "array", "maxItems": 1024,
-              "items": {"type": "object", "additionalProperties": false, "required": ["key", "path"], "properties": {
-                "key": {"type": "string", "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,252}$"},
-                "path": {"type": "string", "maxLength": 1024, "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*$"}
-              }}
+              "type": "array",
+              "maxItems": 1024,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "path"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,252}$"
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*$"
+                  }
+                }
+              }
             }
           }
         },

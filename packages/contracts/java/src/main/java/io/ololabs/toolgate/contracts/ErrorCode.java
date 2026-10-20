@@ -28,5 +28,7 @@ public enum ErrorCode {
     /** Canonical TENANT_UNAVAILABLE value. */
     TENANT_UNAVAILABLE,
     /** Canonical MISDIRECTED_REQUEST value. */
-    MISDIRECTED_REQUEST
+    MISDIRECTED_REQUEST,
+    /** Canonical INVALID_TENANT_ID value. */
+    INVALID_TENANT_ID
 }

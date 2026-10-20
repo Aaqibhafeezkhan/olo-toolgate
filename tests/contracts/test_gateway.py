@@ -29,6 +29,9 @@ class GatewayAssetsTests(unittest.TestCase):
         values['gateway']['credentialsSecret']='gateway-runtime'
         with self.assertRaises(ValidationError): Draft7Validator(schema).validate(values)
         values['gateway']['control']['tokenSecret']='gateway-authority'
+        with self.assertRaises(ValidationError): Draft7Validator(schema).validate(values)
+        values['gateway']['control']['tenantId']='10000000-0000-4000-8000-000000000001'
+        values['gateway']['config']['tenantHosts']=['gateway.example.com']
         values['gateway']['networkPolicy'].update(controlTo=[{'podSelector':{'matchLabels':{'app':'control'}}}],dnsTo=[{'namespaceSelector':{'matchLabels':{'kubernetes.io/metadata.name':'kube-system'}}}])
         Draft7Validator(schema).validate(values)
         values['gateway']['securityContext']['allowPrivilegeEscalation']=True

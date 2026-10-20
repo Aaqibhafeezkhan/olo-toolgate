@@ -23,7 +23,8 @@ final class TenantRequestResolverTest {
         assertEquals(403,assertThrows(Failure.class,()->TenantRequestResolver.principal(context,b.value())).status());
         assertEquals(401,assertThrows(Failure.class,()->TenantRequestResolver.principal(context,null)).status());
         assertEquals(403,assertThrows(Failure.class,()->resolver.resolve(List.of("a.example.com"),443,null,List.of(b.value()))).status());
-        assertEquals(400,assertThrows(Failure.class,()->resolver.resolve(List.of("a.example.com"),443,null,List.of("default"))).status());
+        var malformed=assertThrows(Failure.class,()->resolver.resolve(List.of("a.example.com"),443,null,List.of("default")));
+        assertEquals(400,malformed.status());assertEquals(io.ololabs.toolgate.contracts.ErrorCode.INVALID_TENANT_ID,malformed.code());
         assertEquals(400,assertThrows(Failure.class,()->resolver.resolve(List.of("a.example.com"),443,null,List.of(a.value(),a.value()))).status());
         assertEquals(421,assertThrows(Failure.class,()->resolver.resolve(List.of("b.example.com"),443,"a.example.com",List.of())).status());
         assertEquals(404,assertThrows(Failure.class,()->resolver.resolve(List.of("unknown.example.com"),443,null,List.of(a.value()))).status());

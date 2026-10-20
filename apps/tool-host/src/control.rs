@@ -40,6 +40,7 @@ impl std::fmt::Display for ControlError {
 }
 
 pub struct Control {
+    tenant: String,
     url: String,
     roots: Option<Vec<reqwest::Certificate>>,
     client: std::sync::RwLock<reqwest::Client>,
@@ -67,6 +68,7 @@ impl Control {
         }
         let client = build(roots.as_ref(), identity.as_deref())?;
         Ok(Control {
+            tenant: config.tenant_id.clone(),
             url: config.url.trim_end_matches('/').to_string(),
             roots,
             client: std::sync::RwLock::new(client),
@@ -211,6 +213,7 @@ impl Control {
         for (name, value) in headers {
             request = request.header(*name, *value);
         }
+        request = request.header("Toolgate-Tenant-ID", &self.tenant);
         let mut response = request
             .send()
             .await
