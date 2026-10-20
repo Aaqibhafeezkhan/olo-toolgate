@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Tenant discovery v2",
+  "$ref": "#/$defs/SignedTenantDiscovery",
+  "$defs": {
+    "TenantUuid": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+      "minLength": 36,
+      "maxLength": 36
+    },
+    "DiscoveryKeyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "maxLength": 128
+    },
+    "DiscoveryHeader": {
+      "type": "object",
+      "description": "Protected JWS header. Algorithm, message purpose and key selection are authenticated; no unprotected or remote-key headers.",
+      "additionalProperties": false,
+      "properties": {
+        "alg": {
+          "type": "string",
+          "const": "RS256"
+        },
+        "typ": {
+          "type": "string",
+          "const": "toolgate-discovery+jws"
+        },
+        "kid": {
+          "$ref": "#/$defs/DiscoveryKeyId"
+        }
+      },
+      "required": [
+        "alg",
+        "typ",
+        "kid"
+      ]
+    },
+    "DiscoveryPublicKey": {
+      "type": "object",
+      "description": "Public-only RSA JWK, restricted to 3072/4096-bit RS256 keys with exponent 65537. No private parameters or key URLs.",
+      "additionalProperties": false,
+      "properties": {
+        "kty": {
+          "type": "string",
+          "const": "RSA"
+        },
+        "use": {
+          "type": "string",
+          "const": "sig"
+        },
+        "alg": {
+          "type": "string",
+          "const": "RS256"
+        },
+        "kid": {
+          "$ref": "#/$defs/DiscoveryKeyId"
+        },
+        "n": {
+          "type": "string",
+          "minLength": 512,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "maxLength": 683
+        },
+        "e": {
+          "type": "string",
+          "const": "AQAB"
+        }
+      },
+      "required": [
+        "kty",
+        "use",
+        "alg",
+        "kid",
+        "n",
+        "e"
+      ]
+    },
+    "DiscoveryKeySet": {
+      "type": "object",
+      "description": "Bounded tenant discovery JWK Set. Application validation requires unique key IDs and moduli.",
+      "additionalProperties": false,
+      "properties": {
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/DiscoveryPublicKey"
+          }
+        }
+      },
+      "required": [
+        "keys"
+      ]
+    },
+    "DiscoveryAuthorityState": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "READ_ONLY"
+      ]
+    },
+    "DiscoveryDeviceAuthority": {
+      "type": "object",
+      "description": "Tenant device CA. keyId is SHA-256 of certificate DER; its subject binds the same tenant UUID. It cannot reuse a discovery signing key.",
+      "additionalProperties": false,
+      "properties": {
+        "keyId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "state": {
+          "$ref": "#/$defs/DiscoveryAuthorityState"
+        },
+        "certificatePem": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        }
+      },
+      "required": [
+        "keyId",
+        "state",
+        "certificatePem"
+      ]
+    },
+    "TenantDiscovery": {
+      "type": "object",
+      "description": "Signed tenant discovery v2. Exact HTTPS origins, configured/pinned UUID, lifetime, key continuity, CA purposes and active issuer are verified before enrollment or local identity access.",
+      "additionalProperties": false,
+      "properties": {
+        "protocolVersion": {
+          "type": "integer",
+          "const": 2
+        },
+        "tenantId": {
+          "$ref": "#/$defs/TenantUuid"
+        },
+        "issuer": {
+          "type": "string",
+          "pattern": "^urn:toolgate:tenant:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+          "maxLength": 128
+        },
+        "audiences": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 2048,
+            "pattern": "^https://[^\\s]+$"
+          }
+        },
+        "serverId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "organization": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "controlUrl": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 2048,
+          "pattern": "^https://[^\\s]+$"
+        },
+        "gatewayUrl": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 2048,
+          "pattern": "^https://[^\\s]+$"
+        },
+        "verificationUri": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 2048,
+          "pattern": "^https://[^\\s]+$"
+        },
+        "minimumClientVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "issuedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "keySetVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "discoveryKeys": {
+          "$ref": "#/$defs/DiscoveryKeySet"
+        },
+        "deviceIssuerKeyId": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "deviceAuthorities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/DiscoveryDeviceAuthority"
+          }
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "tenantId",
+        "issuer",
+        "audiences",
+        "serverId",
+        "organization",
+        "controlUrl",
+        "gatewayUrl",
+        "verificationUri",
+        "minimumClientVersion",
+        "issuedAtUnixMs",
+        "expiresAtUnixMs",
+        "keySetVersion",
+        "discoveryKeys",
+        "deviceIssuerKeyId",
+        "deviceAuthorities"
+      ]
+    },
+    "SignedTenantDiscovery": {
+      "type": "object",
+      "description": "RFC 7515 compact RS256 JWS with a protected toolgate-discovery+jws header and TenantDiscovery v2 payload. No v1 or alternate-algorithm fallback.",
+      "additionalProperties": false,
+      "properties": {
+        "jws": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 131072,
+          "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$"
+        }
+      },
+      "required": [
+        "jws"
+      ]
+    }
+  }
+}

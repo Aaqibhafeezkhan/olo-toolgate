@@ -3010,6 +3010,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/descriptor.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
+        include_str!("../schemas/v2/discovery.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",
         include_str!("../schemas/v2/identifiers.schema.json"),
     ),

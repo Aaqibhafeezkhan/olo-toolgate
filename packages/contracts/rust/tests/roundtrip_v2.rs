@@ -58,6 +58,11 @@ fn v2_fixture_round_trips() {
         DeploymentTarget,
         DestinationDeclaration,
         DestinationScheme,
+        DiscoveryAuthorityState,
+        DiscoveryDeviceAuthority,
+        DiscoveryHeader,
+        DiscoveryKeySet,
+        DiscoveryPublicKey,
         DeviceApproval,
         Dispatch,
         EffectApproval,
@@ -192,6 +197,8 @@ fn v2_fixture_round_trips() {
         ToolLimits,
         ToolVariables,
         TransitionActor,
+        SignedTenantDiscovery,
+        TenantDiscovery,
         ValueSource,
         ValueType,
     );
@@ -209,6 +216,12 @@ fn v2_constants_and_renamed_values_are_enforced() {
     let mut frame = fixtures["ProgressFrame"].clone();
     frame["kind"] = json!("RESULT");
     assert!(serde_json::from_value::<ProgressFrame>(frame).is_err());
+    let mut discovery = fixtures["TenantDiscovery"].clone();
+    discovery["protocolVersion"] = json!(1);
+    assert!(serde_json::from_value::<TenantDiscovery>(discovery).is_err());
+    let mut header = fixtures["DiscoveryHeader"].clone();
+    header["alg"] = json!("HS256");
+    assert!(serde_json::from_value::<DiscoveryHeader>(header).is_err());
     let issuer: KillIssuer = serde_json::from_str("\"control-breakglass\"").unwrap();
     assert_eq!(issuer, KillIssuer::ControlBreakglass);
     assert_eq!(

@@ -87,7 +87,7 @@ pub fn certificate_der(pem: &str) -> Result<Vec<u8>> {
     }
     Ok(pem.contents)
 }
-fn valid_ca(cert: &X509Certificate<'_>, now: u64) -> Result<()> {
+pub(crate) fn valid_ca(cert: &X509Certificate<'_>, now: u64) -> Result<()> {
     let time = ASN1Time::from_timestamp((now / 1000) as i64).map_err(|_| Failure::Validation)?;
     if !cert.validity().is_valid_at(time)
         || !cert.is_ca()

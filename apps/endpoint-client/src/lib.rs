@@ -8,6 +8,7 @@ pub mod connections;
 pub mod contracts;
 pub mod deployment;
 pub mod diagnostics;
+pub mod discovery;
 pub mod execution;
 pub mod files;
 pub mod identity;
