@@ -42,6 +42,13 @@ class RestoreTests(unittest.TestCase):
   self.proofs=[dict(keyId='reviewer-'+str(n),signature=encode(k.sign(restore.DOMAIN+restore.canonical(self.authorization),padding.PKCS1v15(),hashes.SHA256()))) for n,k in enumerate(self.keys)]
   restore.write(self.root/'review.json',dict(authorization=self.authorization,proofs=self.proofs))
  def tearDown(self):self.temp.cleanup()
+ def test_single_tenant_review_cannot_quarantine_a_shared_database(self):
+  with closing(sqlite3.connect(self.data/'state/control.sqlite')) as c,c:
+   c.execute("INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('00000000-0000-4000-8000-000000000002','other','Other','ACTIVE',1,1)")
+   c.execute("INSERT INTO control_tenant_authority(tenant_id,revision,authorization_epoch) VALUES('00000000-0000-4000-8000-000000000002',1,1)")
+   before=c.execute('SELECT * FROM control_tenant_authority ORDER BY tenant_id').fetchall()
+   with self.assertRaises(ValueError):restore.quarantine_connection(c,self.authorization,self.now)
+   self.assertEqual(before,c.execute('SELECT * FROM control_tenant_authority ORDER BY tenant_id').fetchall())
  def test_external_floors_quarantine_sessions_credentials_effects_and_management(self):
   restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
   with closing(sqlite3.connect(self.target/'state/control.sqlite')) as c,c:

@@ -104,8 +104,11 @@ def quarantine(database,a,now):
         quarantine_connection(db,a,now)
 
 
-def quarantine_connection(db,a,now):
-    tenants=db.execute('SELECT tenant_id,revision,authorization_epoch FROM control_tenant_authority').fetchall()
+def quarantine_connection(db,a,now,multiple=False):
+    if not multiple:
+        declared=db.execute('SELECT tenant_id FROM control_tenants').fetchall()
+        if len(declared)!=1 or declared[0][0]!=a['tenantId']:raise ValueError('Shared databases require complete fleet recovery reviews')
+    tenants=db.execute('SELECT tenant_id,revision,authorization_epoch FROM control_tenant_authority'+(' WHERE tenant_id=?' if multiple else ''),(a['tenantId'],) if multiple else ()).fetchall()
     if len(tenants)!=1 or tenants[0][0]!=a['tenantId']:raise ValueError('Single declared enterprise tenant required')
     tenant,revision,epoch=tenants[0];revision=max(revision,a['directoryRevisionFloor'])+1;epoch=max(epoch,a['authorizationEpochFloor'])+1
     if max(revision,epoch)>=LIMIT:raise ValueError('Authority exhausted')
@@ -131,9 +134,16 @@ def quarantine_connection(db,a,now):
     for table,key in [('control_enterprise_invocations','invocation_id'),('control_enterprise_approvals','approval_id'),('control_configuration_changes','change_id')]:
         for rid,raw in db.execute(f'SELECT {key},document FROM {table} WHERE tenant_id=?',(tenant,)).fetchall():
             doc=json.loads(raw)
-            if doc['state'] in ('PENDING','PENDING_APPROVAL','DRAFT','APPROVED','QUEUED','RESERVED','EXECUTING'):
-                doc['state']='OUTCOME_UNKNOWN' if doc['state']=='EXECUTING' else ('REVOKED' if table!='control_enterprise_invocations' else 'EXPIRED');doc['revision']+=1
-                db.execute(f'UPDATE {table} SET revision=?,document=?'+(',state=?' if table=='control_enterprise_invocations' else '')+f' WHERE tenant_id=? AND {key}=?',(doc['revision'],canonical(doc).decode(),*([doc['state']] if table=='control_enterprise_invocations' else []),tenant,rid))
+            if doc['state'] in ('PENDING','PENDING_APPROVAL','DRAFT','APPROVED','QUEUED','RESERVED','DISPATCHED','EXECUTING'):
+                doc['state']='OUTCOME_UNKNOWN' if doc['state'] in ('DISPATCHED','EXECUTING') else ('REVOKED' if table!='control_enterprise_invocations' else 'EXPIRED');doc['revision']+=1
+                if table=='control_enterprise_invocations':
+                    task=db.execute('SELECT task_id,task_document FROM control_enterprise_invocations WHERE tenant_id=? AND invocation_id=?',(tenant,rid)).fetchone()
+                    task_state=doc['state'] if task[0] is not None else None
+                    task_document=task[1]
+                    if task_document is not None:
+                        value=json.loads(task_document);value['state']=task_state;task_document=canonical(value).decode()
+                    db.execute('UPDATE control_enterprise_invocations SET revision=?,document=?,state=?,task_state=?,task_document=?,lease_holder=NULL,lease_expires_at=NULL WHERE tenant_id=? AND invocation_id=?',(doc['revision'],canonical(doc).decode(),doc['state'],task_state,task_document,tenant,rid))
+                else:db.execute(f'UPDATE {table} SET revision=?,document=? WHERE tenant_id=? AND {key}=?',(doc['revision'],canonical(doc).decode(),tenant,rid))
     # Tool Host dispatches follow their invocations: an open one is expired, never run after restore; a finished one keeps
     # the result a repeated call returns. Packages with their bytes, deployments, deployment profile status and fleet
     # releases are restored exactly; Control's provisioning service reconciles them, installing nothing anew.
@@ -178,6 +188,7 @@ def main():
     p=sub.add_parser('prepare');p.add_argument('--manifest',required=True);p.add_argument('--floors',required=True);p.add_argument('--reason-file',required=True);p.add_argument('--output',required=True)
     p=sub.add_parser('sign');p.add_argument('--authorization',required=True);p.add_argument('--private-key',required=True);p.add_argument('--key-id',required=True);p.add_argument('--output',required=True)
     p=sub.add_parser('assemble');p.add_argument('--authorization',required=True);p.add_argument('--proofs',nargs='+',required=True);p.add_argument('--output',required=True)
+    p=sub.add_parser('bundle');p.add_argument('--reviews',nargs='+',required=True);p.add_argument('--output',required=True)
     args=parser.parse_args()
     if args.command=='prepare':
         a=read(args.floors);now=int(time.time()*1000);a.update(formatVersion=1,backupManifestDigest=hashlib.sha256(canonical(read(args.manifest))).hexdigest(),reasonDigest=hashlib.sha256(Path(args.reason_file).read_bytes()).hexdigest(),issuedAtUnixMs=now,expiresAtUnixMs=now+900000);write(args.output,a)
@@ -187,6 +198,7 @@ def main():
         key=serialization.load_pem_private_key(path.read_bytes(),None)
         if not isinstance(key,rsa.RSAPrivateKey) or not 2048<=key.key_size<=8192:raise ValueError('RSA reviewer required')
         proof=key.sign(DOMAIN+canonical(read(args.authorization)),padding.PKCS1v15(),hashes.SHA256());write(args.output,dict(keyId=args.key_id,signature=base64.urlsafe_b64encode(proof).rstrip(b'=').decode()))
-    else:write(args.output,dict(authorization=read(args.authorization),proofs=[read(p) for p in args.proofs]))
+    elif args.command=='assemble':write(args.output,dict(authorization=read(args.authorization),proofs=[read(p) for p in args.proofs]))
+    else:write(args.output,dict(reviews=[read(p) for p in args.reviews]))
     print('Restore review written; offline restore validates external trust and quarantines all prior authority.')
 if __name__=='__main__':main()

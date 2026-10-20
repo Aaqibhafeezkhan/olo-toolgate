@@ -10,12 +10,14 @@ END='-- END TENANT CAPACITY\n'
 TRACKED={
  'control_builder':(['document'],"{row}.kind='TEST' AND {state} IN ('QUEUED','RUNNING')"),
  'control_mcp_requests':(['record','task','result'],"{row}.state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED')"),
- 'control_enterprise_invocations':(['document'],"{row}.state IN ('PENDING','PENDING_APPROVAL','QUEUED','RESERVED','EXECUTING')"),
+ 'control_enterprise_invocations':(['document'],"{row}.state IN ('PENDING','PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING')"),
  'control_tool_host_dispatches':(['document'],"{row}.state IN ('QUEUED','CLAIMED','ADMITTED')"),
  'control_server_packages':(['document','content'],None),
  'control_server_documents':(['document'],None),
  'control_secrets':(['cipher'],None),
  'control_invocation_events':(['document'],None),
+ 'control_invocation_results':(['payload'],None),
+ 'control_policy_bundles':(['document','policy'],None),
 }
 
 def expression(row,fields,queued,postgres):

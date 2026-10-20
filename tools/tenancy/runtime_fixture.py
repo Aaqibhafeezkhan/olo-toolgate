@@ -221,6 +221,16 @@ try:
     assert request(2,'/api/control/v1/settings',token=late_token)[0]==200
     assert request(2,'/api/control/v1/settings',token=admin(0))[0]==403
     assert request(2,'/.well-known/olo-toolgate-client')[0]==200
+    before_b=operator('capacity','second');limits=root/'capacity.json'
+    s.atomic(limits,json.dumps(dict(maxStoredBytes=536870912,maxStoredRows=100000,maxQueuedRows=128)))
+    updated=operator('capacity','quickstart',a,str(limits))
+    assert updated['maxStoredBytes']==536870912 and updated['maxQueuedRows']==128
+    assert operator('capacity','second')==before_b
+    wrong=subprocess.run(['java','-cp','/app/app/*:/app/lib/main/*:/app/lib/boot/*','io.ololabs.toolgate.control.adapter.TenantOperator','capacity',str(operator_file),'quickstart',b,str(limits)],capture_output=True,timeout=30)
+    assert wrong.returncode!=0 and operator('capacity','quickstart')==updated
+    with sqlite3.connect('/data/state/control.sqlite') as db:
+        assert db.execute("SELECT count(*) FROM control_audit WHERE tenant_id=? AND operation='TENANT_CAPACITY_UPDATE'",(a,)).fetchone()[0]==1
+    print('Protected UUID-confirmed capacity update, audit and unchanged second-tenant limits passed.',flush=True)
     print('Protected operator preview, late one-time provisioning, identity publication, inspect and audited suspend/resume passed.',flush=True)
     evidence.update(oldIdentityA=old_a,newIdentityA=new_a,identityB=identity_b)
     s.atomic(Path('/data/evidence.json'),json.dumps(evidence))

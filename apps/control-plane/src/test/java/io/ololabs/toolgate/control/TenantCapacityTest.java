@@ -72,6 +72,17 @@ final class TenantCapacityTest {
             assertThrows(SQLException.class,()->sql(f,a,"UPDATE control_tenant_capacity SET stored_bytes=0 WHERE tenant_id=?",a.value()));
             assertThrows(SQLException.class,()->sql(f,a,insert,b.value(),overflow,"denied"));
         }}
+        sql(f,a,"INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,authorization_epoch,created_at,expires_at,revision,document) VALUES(?,'result',?,'SUCCEEDED',1,1,2,1,?)",a.value(),"a".repeat(64),"{\"state\":\"SUCCEEDED\"}");
+        var bytesBefore=f.registry.capacity(a).storedBytes();var rowsBefore=f.registry.capacity(a).storedRows();
+        String resultInsert="INSERT INTO control_invocation_results(tenant_id,invocation_id,fencing_nonce,result_digest,byte_length,payload,created_at,retain_until) VALUES(?,'result','nonce',?,123,?,1,2)";
+        f.registry.capacity(a,33554432,rowsBefore,1);
+        assertThrows(SQLException.class,()->sql(f,a,resultInsert,a.value(),"sha256:"+"c".repeat(64),new byte[123]));
+        assertEquals(bytesBefore,f.registry.capacity(a).storedBytes());
+        f.registry.capacity(a,33554432,10,1);
+        sql(f,a,resultInsert,a.value(),"sha256:"+"c".repeat(64),new byte[123]);
+        assertEquals(bytesBefore+123,f.registry.capacity(a).storedBytes());
+        sql(f,a,"UPDATE control_invocation_results SET payload=NULL,purged_at=3 WHERE tenant_id=? AND invocation_id='result'",a.value());
+        assertEquals(bytesBefore,f.registry.capacity(a).storedBytes());
         var ready=new java.util.concurrent.CountDownLatch(8);var release=new java.util.concurrent.CountDownLatch(1);
         try(var threads=java.util.concurrent.Executors.newFixedThreadPool(8)){
             var results=new ArrayList<java.util.concurrent.Future<?>>();
