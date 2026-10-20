@@ -13,7 +13,9 @@ def checks():
         'control.database.caSecret':'db-ca','control.endpoint.enabled':'true','control.defaultTenantAlias':'tenant',
         'control.endpoint.serverId':'server','control.endpoint.organization':'Organization',
         'control.endpoint.controlUrl':'https://control.example.test','control.endpoint.gatewayUrl':'https://gateway.example.test',
-        'control.endpoint.deviceCaSecret':'device-ca','control.endpoint.tlsSecret':'tls','control.endpoint.trustStoreSecret':'device-trust',
+        'control.endpoint.identityCustodySecret':'tenant-identity',
+        'control.endpoint.identityKeyFiles[0].key':'discovery-a','control.endpoint.identityKeyFiles[0].path':'10000000-0000-4000-8000-000000000001/DISCOVERY/discovery-a.pk8.pem',
+        'control.endpoint.identityKeyFiles[1].key':'device-ca','control.endpoint.identityKeyFiles[1].path':'10000000-0000-4000-8000-000000000001/DEVICE_CA/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pk8.pem','control.endpoint.tlsSecret':'tls','control.endpoint.trustStoreSecret':'device-trust',
         'control.fleet.enabled':'true','control.fleet.keyId':'organization','control.fleet.signingSecret':'fleet-signing',
         'control.fleet.trustSecret':'fleet-trust','control.fleet.artifactOrigin':'https://artifacts.example.test',
         'control.fleet.artifactSecret':'mirror','control.networkPolicy.artifactTo[0].ipBlock.cidr':'192.0.2.0/24'}

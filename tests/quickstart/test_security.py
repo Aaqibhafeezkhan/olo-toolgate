@@ -77,12 +77,12 @@ class SecurityTests(unittest.TestCase):
         gateway='https://127.0.0.1:18450'
         with patch.dict(os.environ,{'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL':control,
                                     'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL':gateway},clear=True):
-            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
+            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')),patch.object(quickstart,'tenant_certificates'):
                 settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],control)
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],gateway)
         with patch.dict(os.environ,{},clear=True):
-            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
+            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')),patch.object(quickstart,'tenant_certificates'):
                 settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],'https://localhost:8443')
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],'https://localhost:8443')
@@ -97,6 +97,26 @@ class SecurityTests(unittest.TestCase):
         original = (quickstart.DATA/'keys/fleet.pem').read_bytes()
         quickstart.fleet_keys()
         self.assertEqual(original, (quickstart.DATA/'keys/fleet.pem').read_bytes())
+    def test_tenant_signing_keys_are_disjoint_persistent_and_publication_is_bound(self):
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+        def keytool(arguments,**kwargs):
+            Path(arguments[arguments.index('-keystore')+1]).write_bytes(b'public-store-test-double')
+        with patch.object(quickstart.subprocess,'run',side_effect=keytool):
+            quickstart.tenant_certificates(quickstart.TENANT)
+            root=quickstart.DATA/'tenant-identity'
+            before={str(path.relative_to(root)):path.read_bytes() for path in root.rglob('*.pk8.pem')}
+            self.assertEqual(len(before),2)
+            moduli=[serialization.load_pem_private_key(pem,password=None).public_key().public_numbers().n for pem in before.values()]
+            self.assertNotEqual(*moduli)
+            packet=json.loads((root/'publication.json').read_text())
+            self.assertNotIn('PRIVATE KEY',json.dumps(packet))
+            authority=next(row for row in packet['publications'][0]['keys'] if row['purpose']=='DEVICE_CA')
+            certificate=x509.load_pem_x509_certificate(authority['certificatePem'].encode())
+            self.assertEqual(certificate.subject.get_attributes_for_oid(x509.NameOID.ORGANIZATIONAL_UNIT_NAME)[0].value,quickstart.TENANT)
+            quickstart.tenant_certificates(quickstart.TENANT)
+            self.assertEqual(before,{str(path.relative_to(root)):path.read_bytes() for path in root.rglob('*.pk8.pem')})
+            with self.assertRaises(ValueError):quickstart.tenant_certificates('10000000-0000-4000-8000-000000000001')
 
     def test_password_policy_rotation_signature_and_stale_generation(self):
         for password in ('','short','a'*32,'abc def ghi jkl mno','é'*32,123):

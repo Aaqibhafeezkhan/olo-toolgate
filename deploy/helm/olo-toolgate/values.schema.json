@@ -1381,11 +1381,12 @@
             "enabled",
             "serverId",
             "organization",
-            "deviceCaSecret",
             "tlsSecret",
             "trustStoreSecret",
             "controlUrl",
-            "gatewayUrl"
+            "gatewayUrl",
+            "identityCustodySecret",
+            "identityKeyFiles"
           ],
           "properties": {
             "enabled": {
@@ -1396,10 +1397,6 @@
               "maxLength": 128
             },
             "organization": {
-              "type": "string",
-              "maxLength": 128
-            },
-            "deviceCaSecret": {
               "type": "string",
               "maxLength": 128
             },
@@ -1418,6 +1415,32 @@
             "gatewayUrl": {
               "type": "string",
               "maxLength": 2048
+            },
+            "identityCustodySecret": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "identityKeyFiles": {
+              "type": "array",
+              "maxItems": 1536,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "path"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9._-]{1,253}$"
+                  },
+                  "path": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/(DISCOVERY|DEVICE_CA)/[a-zA-Z0-9_-]{1,128}\\.pk8\\.pem$"
+                  }
+                }
+              }
             }
           },
           "allOf": [
@@ -1437,9 +1460,6 @@
                   "organization": {
                     "minLength": 1
                   },
-                  "deviceCaSecret": {
-                    "minLength": 1
-                  },
                   "tlsSecret": {
                     "minLength": 1
                   },
@@ -1451,6 +1471,12 @@
                   },
                   "gatewayUrl": {
                     "pattern": "^https://[^/@?#]+/?$"
+                  },
+                  "identityCustodySecret": {
+                    "minLength": 1
+                  },
+                  "identityKeyFiles": {
+                    "minItems": 2
                   }
                 }
               }

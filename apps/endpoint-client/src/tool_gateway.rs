@@ -149,15 +149,16 @@ impl HttpsGateway {
         }
         let identity: DeviceIdentity = serde_json::from_value(journal["identity"].clone())
             .map_err(|_| Failure::Unauthorized)?;
-        let manifest: ClientDiscovery = serde_json::from_value(journal["manifest"].clone())
-            .map_err(|_| Failure::Unauthorized)?;
+        let manifest: olo_toolgate_contracts::v2::TenantDiscovery =
+            serde_json::from_value(journal["manifest"].clone())
+                .map_err(|_| Failure::Unauthorized)?;
         if crate::config::origin(&manifest.control_url)?
             != crate::config::origin(&self.config.server_url)?
             || identity.device_id != self.settings.device_id
         {
             return Err(Failure::Unauthorized);
         }
-        crate::identity::verify_identity(
+        crate::identity::verify_tenant_identity(
             &identity,
             &manifest,
             &key,

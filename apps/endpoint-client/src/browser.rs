@@ -17,6 +17,7 @@ struct LocalTrust {
     ca_certificate_pem: String,
 }
 pub struct Installation {
+    pub tenant_id: String,
     pub server_url: String,
     pub ca_certificate_pem: Option<String>,
     /// Loopback console that published `ca_certificate_pem`.
@@ -45,8 +46,17 @@ pub async fn installation(value: &str) -> Result<Installation> {
             None
         };
     let Some(console) = console else {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .https_only(true)
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|_| Failure::Unavailable)?;
+        let manifest = installation_discovery(&client, &server_url).await?;
         return Ok(Installation {
-            server_url,
+            tenant_id: manifest.tenant_id,
+            server_url: manifest.control_url,
             ca_certificate_pem: None,
             console_url: None,
         });
@@ -86,18 +96,27 @@ pub async fn installation(value: &str) -> Result<Installation> {
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|_| Failure::Unavailable)?;
-    // Verify the selected HTTPS gateway with this CA before persisting trust.
-    fetch(
-        &verified,
-        &format!("{server_url}/.well-known/olo-toolgate-client"),
-        16384,
-    )
-    .await?;
+    let manifest = installation_discovery(&verified, &server_url).await?;
     Ok(Installation {
-        server_url,
+        tenant_id: manifest.tenant_id,
+        server_url: manifest.control_url,
         ca_certificate_pem: Some(trust.ca_certificate_pem),
         console_url: Some(console),
     })
+}
+async fn installation_discovery(
+    client: &reqwest::Client,
+    origin: &str,
+) -> Result<olo_toolgate_contracts::v2::TenantDiscovery> {
+    let bytes = fetch(
+        client,
+        &format!("{origin}/.well-known/olo-toolgate-client"),
+        98304,
+    )
+    .await?;
+    let envelope =
+        crate::contracts::Contracts::shared()?.decode("SignedTenantDiscovery", &bytes)?;
+    Ok(crate::discovery::verify(&envelope, origin, None, None, crate::now())?.manifest)
 }
 pub fn console_origin(value: &str) -> Result<String> {
     let mut url = reqwest::Url::parse(value).map_err(|_| Failure::Validation)?;
@@ -134,11 +153,14 @@ async fn fetch(client: &reqwest::Client, url: &str, limit: u64) -> Result<Vec<u8
     }
     Ok(bytes)
 }
-pub async fn connect(console_url: &str) -> Result<String> {
+pub async fn connect(console_url: &str, expected_tenant: Option<&str>) -> Result<String> {
     let origin = console_origin(console_url)?;
     let installed = crate::install::config_path();
     let configured = if installed.exists() {
         let settings = crate::config::Config::load(&installed)?;
+        if expected_tenant.is_some_and(|tenant| settings.tenant_id.as_deref() != Some(tenant)) {
+            return Err(Failure::TenantMismatch);
+        }
         authorize_console(&settings, console_url)?;
         Some(settings)
     } else {
@@ -156,13 +178,14 @@ pub async fn connect(console_url: &str) -> Result<String> {
     } else {
         server.clone()
     };
-    configure_client(server, source).await
+    configure_client(server, source, expected_tenant).await
 }
 /// Only protected installation configuration grants an origin access to local device state.
 pub fn authorize_console(config: &crate::config::Config, console_url: &str) -> Result<()> {
     let origin = console_origin(console_url)?;
     if origin != crate::config::origin(&config.server_url)?
         && config.local_console_url.as_deref() != Some(origin.as_str())
+        && !crate::service::saved_console_audience(config, &origin)?
     {
         return Err(Failure::TenantMismatch);
     }
@@ -213,8 +236,15 @@ async fn site_server(origin: &str) -> Result<String> {
         serde_json::from_slice(&document).map_err(|_| Failure::Validation)?;
     crate::config::origin(&config.server_url)
 }
-async fn configure_client(server: String, source: String) -> Result<String> {
+async fn configure_client(
+    server: String,
+    source: String,
+    expected_tenant: Option<&str>,
+) -> Result<String> {
     let installation = installation(&source).await?;
+    if expected_tenant.is_some_and(|tenant| tenant != installation.tenant_id) {
+        return Err(Failure::TenantMismatch);
+    }
     if installation.server_url != server {
         return Err(Failure::Validation);
     }
@@ -229,7 +259,9 @@ async fn configure_client(server: String, source: String) -> Result<String> {
     let installed = crate::install::config_path();
     let operation = if installed.exists() {
         let settings = crate::config::Config::load(&installed)?;
-        if crate::config::origin(&settings.server_url)? != server {
+        if crate::config::origin(&settings.server_url)? != server
+            || settings.tenant_id.as_deref() != Some(installation.tenant_id.as_str())
+        {
             return Err(Failure::TenantMismatch);
         }
         if crate::config::origin(&settings.server_url)? == server
@@ -280,12 +312,16 @@ async fn configure_client(server: String, source: String) -> Result<String> {
     };
     let parameters = format!("{operation} --server \"{source}\" --peer \"{peer}\"");
     elevate(&cli, &parameters)?;
-    // Switching back can resume an enrollment this gateway has since forgotten.
     if operation == "configure" && connected(&crate::install::ipc_endpoint()).await == Some(false) {
-        elevate(
-            &cli,
-            &format!("reenroll --server \"{source}\" --peer \"{peer}\""),
-        )?;
+        let response = crate::ipc::console_call(
+            &crate::install::ipc_endpoint(),
+            olo_toolgate_contracts::v2::ConsoleClientOperation::Enroll,
+            &format!("{server}/console/"),
+        )
+        .await?;
+        if response.error.is_some() {
+            return Err(Failure::Unavailable);
+        }
     }
     Ok(server)
 }

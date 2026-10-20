@@ -218,11 +218,29 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             let ca = installation.ca_certificate_pem.as_deref();
             let console = installation.console_url.as_deref();
             if operation == "configure" {
-                olo_toolgate_client::install::configure_with_ca(server, peer, ca, console)
+                olo_toolgate_client::install::configure_with_ca(
+                    server,
+                    peer,
+                    ca,
+                    console,
+                    Some(&installation.tenant_id),
+                )
             } else if operation == "reinstall" {
-                olo_toolgate_client::install::reinstall_with_ca(server, peer, ca, console)
+                olo_toolgate_client::install::reinstall_with_ca(
+                    server,
+                    peer,
+                    ca,
+                    console,
+                    Some(&installation.tenant_id),
+                )
             } else {
-                olo_toolgate_client::install::install_for_peer_with_ca(server, peer, ca, console)
+                olo_toolgate_client::install::install_for_peer_with_ca(
+                    server,
+                    peer,
+                    ca,
+                    console,
+                    Some(&installation.tenant_id),
+                )
             }
         }
         "uninstall" if arguments.len() == 1 || arguments == ["uninstall", "--purge"] => {

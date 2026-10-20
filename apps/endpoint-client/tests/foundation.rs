@@ -11,6 +11,7 @@ use olo_toolgate_client::{
     transport::{Call, ControlPort},
     Failure,
 };
+use olo_toolgate_contracts::v2::SignedTenantDiscovery;
 use olo_toolgate_contracts::*;
 use std::{path::PathBuf, sync::Arc};
 struct Directory(PathBuf);
@@ -178,7 +179,7 @@ impl ControlPort for Offline {
     fn ping(&self, _: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
         Box::pin(async { Err(Failure::Unavailable) })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery> {
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery> {
         Box::pin(async { Err(Failure::Unavailable) })
     }
     fn start(&self, _: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge> {
@@ -193,6 +194,7 @@ impl ControlPort for Offline {
 }
 fn config(directory: &Directory) -> Config {
     Config {
+        tenant_id: None,
         deployment: None,
         execution: None,
         gateway: None,
@@ -238,7 +240,7 @@ fn journal_binds_origin_before_key_creation_and_rejects_repointing_without_mutat
     let store = directory.store();
     let before = store.read("journal.json").unwrap().unwrap();
     let journal: serde_json::Value = serde_json::from_slice(&before).unwrap();
-    assert_eq!(journal["formatVersion"], 2);
+    assert_eq!(journal["formatVersion"], 3);
     assert_eq!(journal["serverUrl"], config(&directory).server_url);
     let key_hash = olo_toolgate_client::digest(&store.read("device-key").unwrap().unwrap());
     drop(initial);
@@ -261,6 +263,33 @@ fn journal_binds_origin_before_key_creation_and_rejects_repointing_without_mutat
             Offline
         )))
         .is_ok()
+    );
+}
+#[test]
+fn administrator_uuid_is_persisted_before_transport_and_cannot_be_replaced() {
+    let directory = Directory::new();
+    let mut settings = config(&directory);
+    settings.tenant_id = Some("10000000-0000-4000-8000-000000000001".into());
+    let initial = ClientService::open(settings.clone(), directory.store(), |_| {
+        let bytes = directory.store().read("journal.json")?.unwrap();
+        let journal: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(journal["tenantId"], settings.tenant_id.as_deref().unwrap());
+        Ok(Arc::new(Offline))
+    })
+    .unwrap();
+    drop(initial);
+    let before = directory.store().read("journal.json").unwrap().unwrap();
+    settings.tenant_id = Some("10000000-0000-4000-8000-000000000002".into());
+    assert_eq!(
+        ClientService::open(settings, directory.store(), |_| panic!(
+            "foreign UUID cannot construct transport"
+        ))
+        .err(),
+        Some(Failure::TenantMismatch)
+    );
+    assert_eq!(
+        directory.store().read("journal.json").unwrap().unwrap(),
+        before
     );
 }
 #[test]

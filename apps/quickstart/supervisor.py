@@ -279,6 +279,41 @@ def certificates():
         for name in ('device-ca.crt', 'server.crt'): atomic(DATA/'keys'/name, trust(name).read_bytes())
 
 
+def tenant_certificates(tenant):
+    """Independent discovery and device signing custody; the original root is TLS-only."""
+    root=DATA/'tenant-identity'
+    packet=root/'publication.json'
+    if root.is_symlink(): raise ValueError('Unsafe tenant identity custody')
+    root.mkdir(exist_ok=True,mode=0o700);root.chmod(0o700)
+    if not packet.exists():
+        # A partial set is refused, never silently replaced after a failed bring-up.
+        if any(root.iterdir()): raise ValueError('Incomplete tenant identity custody')
+        now=datetime.datetime.now(datetime.timezone.utc);references=[]
+        for purpose in ('DISCOVERY','DEVICE_CA'):
+            private=rsa.generate_private_key(public_exponent=65537,key_size=3072)
+            reference=dict(purpose=purpose,keyId='discovery-1',state='ACTIVE')
+            if purpose=='DEVICE_CA':
+                name=x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME,'ToolGate tenant device CA'),x509.NameAttribute(x509.NameOID.ORGANIZATIONAL_UNIT_NAME,tenant)])
+                certificate=x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(private.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=3650)).add_extension(x509.BasicConstraints(ca=True,path_length=0),critical=True).add_extension(x509.KeyUsage(False,False,False,False,False,True,True,False,False),critical=True).sign(private,hashes.SHA256())
+                reference.update(keyId=hashlib.sha256(certificate.public_bytes(serialization.Encoding.DER)).hexdigest(),certificatePem=certificate.public_bytes(serialization.Encoding.PEM).decode())
+            directory=root/tenant/purpose;directory.mkdir(parents=True,mode=0o700)
+            atomic(directory/(reference['keyId']+'.pk8.pem'),private.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
+            references.append(reference)
+        atomic(packet,json.dumps(dict(formatVersion=1,publications=[dict(tenantId=tenant,generation=1,keys=references)])))
+    value=strict(packet.read_bytes())
+    publication=value['publications']
+    if value['formatVersion']!=1 or len(publication)!=1 or publication[0]['tenantId']!=tenant: raise ValueError('Tenant identity publication mismatch')
+    # Rebuild the public client trust store from retained tenant CAs before opening TLS.
+    # No TLS issuer is trusted to authenticate a device.
+    store=root/'device-trust.p12';partial=root/'device-trust.p12.partial';partial.unlink(missing_ok=True)
+    for reference in publication[0]['keys']:
+        if reference['purpose']!='DEVICE_CA' or reference['state'] not in ('ACTIVE','READ_ONLY'): continue
+        certificate=root/(reference['keyId']+'.crt');atomic(certificate,reference['certificatePem'])
+        subprocess.run(['keytool','-importcert','-noprompt','-alias',reference['keyId'],'-file',str(certificate),'-keystore',str(partial),'-storetype','PKCS12','-storepass','changeit'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    if not partial.exists(): raise ValueError('Tenant client trust required')
+    partial.replace(store)
+
+
 def issue():
     now = datetime.datetime.now(datetime.timezone.utc)
     ca_key = key('device-ca'); server_key = key('server-tls')
@@ -556,6 +591,7 @@ def tenant_identity():
 def configure():
     global TENANT
     TENANT = tenant_identity()
+    tenant_certificates(TENANT)
     runtime_path=DATA/'run/runtime-token'
     if not runtime_path.exists(): atomic(runtime_path,secrets.token_urlsafe(48))
     packet, review_trust = prepare(DATA,TENANT,ISSUER,key,atomic)
@@ -588,7 +624,9 @@ def configure():
                 'QUARKUS_HTTP_HOST': '0.0.0.0', 'QUARKUS_HTTP_PORT': '8082', 'QUARKUS_HTTP_SSL_PORT': '8443',
                 'QUARKUS_HTTP_INSECURE_REQUESTS': 'enabled', 'QUARKUS_MANAGEMENT_HOST': '127.0.0.1',
                 'QUARKUS_HTTP_SSL_CERTIFICATE_FILES': str(trust('server.crt')), 'QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES': str(trust('server.key')),
-                'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE': str(trust('device-trust.p12')), 'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_PASSWORD': 'changeit',
+                'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE': str(DATA/'tenant-identity/device-trust.p12'), 'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_PASSWORD': 'changeit',
+                'TOOLGATE_CONTROL_IDENTITY_CUSTODY_ROOT': str(DATA/'tenant-identity'),
+                'TOOLGATE_CONTROL_IDENTITY_PUBLICATION_PATH': str(DATA/'tenant-identity/publication.json'),
                 'MP_JWT_VERIFY_ISSUER': ISSUER, 'MP_JWT_VERIFY_AUDIENCES': 'toolgate-control', 'MP_JWT_VERIFY_PUBLICKEY_LOCATION': '/data/keys/identity-public.pem',
                 'TOOLGATE_CONTROL_BUNDLE_ENABLED': 'true', 'TOOLGATE_CONTROL_BUNDLE_KEY_ID': 'policy-local', 'TOOLGATE_CONTROL_BUNDLE_PRIVATE_KEY_PATH': '/data/keys/policy.pem',
                 'TOOLGATE_QUICKSTART_ARTIFACT_DIRECTORY': '/data/artifacts',

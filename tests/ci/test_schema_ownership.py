@@ -26,7 +26,17 @@ class SchemaOwnershipTests(unittest.TestCase):
         self.assertEqual({'PostgresStore', 'TenantRegistry'}, platform)
         for path in sources.rglob('*.java'):
             if path.stem != 'TenancyConfiguration':
-                self.assertNotIn('.defaultId()', path.read_text(), str(path))
+                if path.stem == 'SdkBuilderBootstrap':
+                    # The explicitly single-tenant local worker is pinned once, after
+                    # rejecting shared/production mode; request services never use it.
+                    source=path.read_text()
+                    guard='if(!tenancy.mode().equals("single")||!config.getOptionalValue("toolgate.quickstart.enabled",Boolean.class).orElse(false))'
+                    self.assertEqual(source.count('.defaultId()'),1)
+                    self.assertIn(guard,source)
+                    self.assertLess(source.index(guard),source.index('owner=tenancy.defaultId();'))
+                    self.assertIn('if(data!=null&&!tenant.equals(owner))throw Failure.unavailable();',source)
+                else:
+                    self.assertNotIn('.defaultId()', path.read_text(), str(path))
                 self.assertNotIn('toolgate.control.endpoint.tenant-id', path.read_text(), str(path))
                 self.assertNotIn('toolgate.default-tenant-id', path.read_text(), str(path))
                 self.assertNotRegex(path.read_text(), r'["\']tenant-id["\']', str(path))

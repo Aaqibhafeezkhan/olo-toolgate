@@ -519,13 +519,21 @@ pub async fn console_call(
     operation: olo_toolgate_contracts::v2::ConsoleClientOperation,
     console_url: &str,
 ) -> Result<ClientIpcResponse> {
+    console_call_expected(endpoint, operation, console_url, None).await
+}
+pub async fn console_call_expected(
+    endpoint: &str,
+    operation: olo_toolgate_contracts::v2::ConsoleClientOperation,
+    console_url: &str,
+    expected_tenant_id: Option<&str>,
+) -> Result<ClientIpcResponse> {
     let contracts = Contracts::shared()?;
     let request = olo_toolgate_contracts::v2::ConsoleClientRequest {
         kind: "console-tenant-state".into(),
         request_id: crate::identity::nonce()?,
         operation,
         console_url: console_url.into(),
-        expected_tenant_id: None,
+        expected_tenant_id: expected_tenant_id.map(str::to_owned),
     };
     let bytes = contracts.encode("ConsoleClientRequest", &request)?;
     let bytes = exchange(endpoint, &bytes, 16384).await?;

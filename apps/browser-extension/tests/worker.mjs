@@ -30,6 +30,18 @@ test('already enrolled clients are not enrolled again',async()=>{
   nativeResponse={health:{state:'ACTIVE',ready:true},serverUrl:origin};
   await request('connect');assert.equal(nativeCalls.length,1);
 });
+test('optional UUID assertion reaches native calls and is retained for later status',async()=>{
+  const tenant='10000000-0000-4000-8000-000000000001';
+  nativeResponse={health:{state:'ACTIVE',ready:true},serverUrl:origin};
+  const send=message=>new Promise(resolve=>listener(message,{tab:{id:2,url:origin+'/console/'}},resolve));
+  assert.equal((await send({operation:'connect',expectedTenantId:tenant})).phase,'ready');
+  assert.equal(nativeCalls[0].expectedTenantId,tenant);
+  await send({operation:'status'});assert.equal(nativeCalls[1].expectedTenantId,tenant);
+  const count=nativeCalls.length;
+  assert.equal((await send({operation:'status',expectedTenantId:'10000000-0000-4000-8000-000000000002'})).error,'TENANT_MISMATCH');
+  assert.equal(nativeCalls.length,count);
+  assert.equal((await send({operation:'status',expectedTenantId:'quickstart'})).error,'INVALID_TENANT_ID');
+});
 test('a completed repair replaces a stale enrollment code in an open tab',async()=>{
   state[origin]={approved:true,phase:'ready',serverUrl:origin,userCode:'1111111111111111'};
   nativeResponse={health:{state:'UNENROLLED',ready:false},serverUrl:origin};

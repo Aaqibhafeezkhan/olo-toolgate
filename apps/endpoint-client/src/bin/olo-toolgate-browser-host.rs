@@ -17,6 +17,7 @@ struct Request {
     operation: Operation,
     console_url: Option<String>,
     nonce: Option<String>,
+    expected_tenant_id: Option<String>,
 }
 fn read_frame(input: &mut impl Read) -> std::io::Result<Request> {
     let mut size = [0; 4];
@@ -29,6 +30,11 @@ fn read_frame(input: &mut impl Read) -> std::io::Result<Request> {
     input.read_exact(&mut bytes)?;
     let request: Request =
         serde_json::from_slice(&bytes).map_err(|_| std::io::ErrorKind::InvalidData)?;
+    if let Some(tenant) = &request.expected_tenant_id {
+        olo_toolgate_client::contracts::Contracts::shared()
+            .and_then(|contracts| contracts.encode("TenantUuid", tenant))
+            .map_err(|_| std::io::ErrorKind::InvalidData)?;
+    }
     if request
         .console_url
         .as_deref()
@@ -57,6 +63,19 @@ fn main() {
                     &config,
                     request.console_url.as_deref().unwrap_or(""),
                 )?;
+                let checked = olo_toolgate_client::ipc::console_call_expected(
+                    &config.ipc_endpoint,
+                    olo_toolgate_contracts::v2::ConsoleClientOperation::Health,
+                    request.console_url.as_deref().unwrap_or(""),
+                    request.expected_tenant_id.as_deref(),
+                )
+                .await?;
+                if checked.error == Some(olo_toolgate_contracts::ErrorCode::TenantMismatch) {
+                    return Err(olo_toolgate_client::Failure::TenantMismatch);
+                }
+                if checked.error.is_some() {
+                    return Err(olo_toolgate_client::Failure::Unavailable);
+                }
                 tokio::time::timeout(
                     std::time::Duration::from_secs(20),
                     olo_toolgate_client::ipc::console_proof(
@@ -92,16 +111,18 @@ fn main() {
                 server_url = Some(
                     olo_toolgate_client::browser::connect(
                         request.console_url.as_deref().unwrap_or(""),
+                        request.expected_tenant_id.as_deref(),
                     )
                     .await?,
                 );
             }
             tokio::time::timeout(std::time::Duration::from_secs(20), async {
                 loop {
-                    let response = olo_toolgate_client::ipc::console_call(
+                    let response = olo_toolgate_client::ipc::console_call_expected(
                         &olo_toolgate_client::install::ipc_endpoint(),
                         operation.clone(),
                         request.console_url.as_deref().unwrap_or(""),
+                        request.expected_tenant_id.as_deref(),
                     )
                     .await;
                     if !connecting

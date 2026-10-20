@@ -65,11 +65,17 @@ final class EndpointTest {
     private EndpointEnrollmentResult poll(Setup s,EndpointEnrollmentChallenge challenge){return codec.model(s.service.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class);}
     private java.security.cert.X509Certificate certificate(DeviceIdentity identity)throws Exception{return (java.security.cert.X509Certificate)java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(identity.certificatePem().getBytes(java.nio.charset.StandardCharsets.US_ASCII)));}
     @Test void discoveryUsesProductClientVersion()throws Exception{
-        var service=new EndpointService(null,codec,issuer(),new MutableClock(),true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server","Organization","https://control.example.test","https://gateway.example.test");
-        var envelope=codec.model(service.discovery().body(),SignedClientDiscovery.class);
-        var payload=new String(Base64.getUrlDecoder().decode(envelope.payload()),java.nio.charset.StandardCharsets.UTF_8);
-        var discovery=codec.model(payload,ClientDiscovery.class);
+        var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint");
+        var profile=new Store.RuntimeProfile("server","Organization","https://control.example.test","https://gateway.example.test");
+        var fixture=new TenantIdentityFixtures(codec,tenant,profile);long now=System.currentTimeMillis();
+        var bound=fixture.custody.bind(tenant,profile,fixture.custody.prepare(tenant,profile,1,fixture.references,now),now);
+        var service=new EndpointService(null,codec,bound.issuer(),Clock.systemUTC(),true,tenant.value(),profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl())
+            .discoverySigner((minimum,time)->bound.discovery(codec,tenant,profile,minimum,time));
+        var envelope=codec.model(service.discovery().body(),io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery.class);
+        var discovery=RsaTenantDiscovery.verify(codec,envelope,profile.controlUrl(),tenant,null,System.currentTimeMillis()).manifest();
         assertEquals(System.getProperty("toolgate.productVersion"),discovery.minimumClientVersion());
+        var unsigned=new EndpointService(null,codec,issuer(),Clock.systemUTC(),true,tenant.value(),profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl());
+        assertEquals(503,assertThrows(Failure.class,unsigned::discovery).status());
     }
     @Test void queuedDeploymentCannotOutliveItsCreatorsGroupAuthority()throws Exception{
         var s=setup();

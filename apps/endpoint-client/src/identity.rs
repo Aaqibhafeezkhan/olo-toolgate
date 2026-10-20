@@ -149,9 +149,9 @@ pub fn verify_discovery(
     Ok(manifest)
 }
 /// Match issuer, exact enrollment identities, key possession and client-only X.509 privileges.
-pub fn verify_identity(
+pub fn verify_tenant_identity(
     identity: &DeviceIdentity,
-    manifest: &ClientDiscovery,
+    manifest: &olo_toolgate_contracts::v2::TenantDiscovery,
     key: &DeviceKey,
     device: &str,
     now: u64,
@@ -160,7 +160,10 @@ pub fn verify_identity(
         || identity.tenant_id != manifest.tenant_id
         || identity.server_id != manifest.server_id
         || identity.user_id.is_empty()
-        || identity.issuer_certificate_pem != manifest.issuer_certificate_pem
+        || !manifest
+            .device_authorities
+            .iter()
+            .any(|authority| authority.certificate_pem == identity.issuer_certificate_pem)
         || identity.expires_at_unix_ms <= now
     {
         return Err(Failure::Unauthorized);
@@ -171,6 +174,30 @@ pub fn verify_identity(
     let der = certificate_der(&identity.certificate_pem)?;
     let (_, certificate) = parse_x509_certificate(&der).map_err(|_| Failure::Validation)?;
     let time = ASN1Time::from_timestamp((now / 1000) as i64).map_err(|_| Failure::Validation)?;
+    let names = certificate.subject();
+    let single = |oid: &str, expected: &str| -> bool {
+        let values: Vec<_> = names
+            .iter_attributes()
+            .filter(|attribute| attribute.attr_type().to_id_string() == oid)
+            .collect();
+        values.len() == 1 && values[0].as_str().is_ok_and(|value| value == expected)
+    };
+    let expected_uri = format!(
+        "urn:toolgate:device:{}",
+        crate::digest(
+            format!(
+                "{}\n{}\n{}\n{}",
+                identity.server_id, identity.tenant_id, identity.user_id, identity.device_id
+            )
+            .as_bytes()
+        )
+    );
+    if names.iter_attributes().count() != 3
+        || !single("2.5.4.3", &identity.device_id)
+        || !single("2.5.4.11", &identity.tenant_id)
+        || !single("2.5.4.10", &identity.server_id)
+        || !certificate.subject_alternative_name().map_err(|_|Failure::Validation)?.is_some_and(|names| names.value.general_names.len() == 1 && matches!(&names.value.general_names[0], GeneralName::URI(uri) if *uri == expected_uri))
+    {return Err(Failure::Unauthorized);}
     let end = certificate.validity().not_after.timestamp();
     let start = certificate.validity().not_before.timestamp();
     if certificate.issuer() != ca.subject()

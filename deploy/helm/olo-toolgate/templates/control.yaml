@@ -139,8 +139,8 @@ data:
   TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL: {{ required "control.endpoint.controlUrl required" $g.endpoint.controlUrl | quote }}
   TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL: {{ required "control.endpoint.gatewayUrl required" $g.endpoint.gatewayUrl | quote }}
   {{- end }}
-  TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH: /etc/toolgate/device-ca/private.pem
-  TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH: /etc/toolgate/device-ca/ca.pem
+  TOOLGATE_CONTROL_IDENTITY_CUSTODY_ROOT: /etc/toolgate/tenant-identity
+  TOOLGATE_CONTROL_IDENTITY_PUBLICATION_PATH: /etc/toolgate/tenant-identity/publication.json
   QUARKUS_HTTP_INSECURE_REQUESTS: disabled
   QUARKUS_HTTP_SSL_PORT: "8082"
   QUARKUS_HTTP_SSL_CLIENT_AUTH: request
@@ -307,7 +307,7 @@ spec:
             - {name: identity, mountPath: /etc/toolgate/identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
             {{- if $g.endpoint.enabled }}
-            - {name: device-ca, mountPath: /etc/toolgate/device-ca, readOnly: true}
+            - {name: tenant-identity, mountPath: /etc/toolgate/tenant-identity, readOnly: true}
             - {name: server-tls, mountPath: /etc/toolgate/server-tls, readOnly: true}
             - {name: device-trust, mountPath: /etc/toolgate/device-trust, readOnly: true}
             {{- end }}
@@ -431,11 +431,15 @@ spec:
         {{- end }}
         {{- end }}
         {{- if $g.endpoint.enabled }}
-        - name: device-ca
+        - name: tenant-identity
           secret:
-            secretName: {{ required "control.endpoint.deviceCaSecret required" $g.endpoint.deviceCaSecret | quote }}
+            secretName: {{ required "control.endpoint.identityCustodySecret required" $g.endpoint.identityCustodySecret | quote }}
             defaultMode: 0440
-            items: [{key: private.pem, path: private.pem}, {key: ca.pem, path: ca.pem}]
+            items:
+              - {key: publication.json, path: publication.json}
+              {{- range $item := $g.endpoint.identityKeyFiles }}
+              - {key: {{ $item.key | quote }}, path: {{ $item.path | quote }}}
+              {{- end }}
         - name: server-tls
           secret:
             secretName: {{ required "control.endpoint.tlsSecret required" $g.endpoint.tlsSecret | quote }}

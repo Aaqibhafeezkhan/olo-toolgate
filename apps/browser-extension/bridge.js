@@ -7,9 +7,10 @@ if (location.pathname.startsWith('/console/')) {
     const m = event.data;
     if (event.source !== window || event.origin !== location.origin || m?.channel !== 'toolgate-connect-request'
       || !/^[a-f0-9-]{36}$/.test(m.id) || !['hello', 'connect', 'status', 'cancel','proof'].includes(m.operation)
+      || (m.expectedTenantId!==undefined&&(typeof m.expectedTenantId!=='string'||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.test(m.expectedTenantId)))
       || (m.operation==='proof'&&!/^[a-f0-9]{64}$/.test(m.nonce))) return;
     try {
-      const result = await chrome.runtime.sendMessage({operation:m.operation,...(m.operation==='proof'?{nonce:m.nonce}:{})});
+      const result = await chrome.runtime.sendMessage({operation:m.operation,...(m.expectedTenantId===undefined?{}:{expectedTenantId:m.expectedTenantId}),...(m.operation==='proof'?{nonce:m.nonce}:{})});
       window.postMessage({channel:'toolgate-connect-response',id:m.id,...result},location.origin);
     } catch { /* Reloading/upgrading invalidates old content scripts; Retry recovers. */ }
   };

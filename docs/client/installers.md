@@ -135,3 +135,5 @@ rolling diagnostic history supplements the server authorization audit.
 branding and license information. The interactive Windows installer displays the
 bundled Apache-2.0 license and requires acceptance before installation. Native
 installer silent mode retains the existing administrator automation behavior.
+
+Setup verifies discovery v2 over HTTPS before saving the canonical tenant UUID (`tenantId`) and Control origin. A separate signed tenant device CA authenticates enrollment; it is independent of the local TLS bootstrap root. Existing development journal formats are unsupported and are never converted or silently rebound.

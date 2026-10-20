@@ -113,52 +113,62 @@ pub fn install(server: &str) -> Result<()> {
     install_for_peer(server, None)
 }
 pub fn install_for_peer(server: &str, peer: Option<&str>) -> Result<()> {
-    install_for_peer_with_ca(server, peer, None, None)
+    install_for_peer_with_ca(server, peer, None, None, None)
 }
 pub fn install_for_peer_with_ca(
     server: &str,
     peer: Option<&str>,
     ca: Option<&str>,
     console: Option<&str>,
+    tenant: Option<&str>,
 ) -> Result<()> {
-    install_config(server, peer, None, ca, console)
+    install_config(server, peer, None, ca, console, tenant)
 }
 pub fn reinstall(server: &str, peer: Option<&str>) -> Result<()> {
-    reinstall_with_ca(server, peer, None, None)
+    reinstall_with_ca(server, peer, None, None, None)
 }
 pub fn reinstall_with_ca(
     server: &str,
     peer: Option<&str>,
     ca: Option<&str>,
     console: Option<&str>,
+    tenant: Option<&str>,
 ) -> Result<()> {
     admin()?;
     validate_peer(peer)?;
     #[cfg(windows)]
     if ca.is_some() {
         // Reconcile persisted enrollment too: the config may already contain a replacement CA.
-        configure_with_ca(server, peer, ca, console)?;
+        configure_with_ca(server, peer, ca, console, tenant)?;
     }
     let previous = Config::load(&config_path())?;
-    if crate::config::origin(server)? != previous.server_url {
+    if crate::config::origin(server)? != previous.server_url
+        || tenant.is_some_and(|tenant| previous.tenant_id.as_deref() != Some(tenant))
+    {
         return Err(Failure::TenantMismatch);
     }
     let saved = crate::storage::ProtectedStore::open(previous.state_directory.clone())?;
     crate::service::validate_saved_binding(&previous, &saved)?;
     remove(false)?;
-    install_config(server, peer, Some(previous), ca, console)
+    install_config(server, peer, Some(previous), ca, console, tenant)
 }
 #[cfg(not(windows))]
 pub fn configure(_: &str, _: Option<&str>) -> Result<()> {
     Err(Failure::Unsupported)
 }
 #[cfg(not(windows))]
-pub fn configure_with_ca(_: &str, _: Option<&str>, _: Option<&str>, _: Option<&str>) -> Result<()> {
+pub fn configure_with_ca(
+    _: &str,
+    _: Option<&str>,
+    _: Option<&str>,
+    _: Option<&str>,
+    _: Option<&str>,
+) -> Result<()> {
     Err(Failure::Unsupported)
 }
 #[cfg(windows)]
 pub fn configure(server: &str, peer: Option<&str>) -> Result<()> {
-    configure_with_ca(server, peer, None, None)
+    configure_with_ca(server, peer, None, None, None)
 }
 /// Repairs the installed organization only; switching requires explicit uninstall and purge.
 #[cfg(windows)]
@@ -167,8 +177,9 @@ pub fn configure_with_ca(
     peer: Option<&str>,
     ca: Option<&str>,
     console: Option<&str>,
+    tenant: Option<&str>,
 ) -> Result<()> {
-    reconfigure(server, peer, ca, console)
+    reconfigure(server, peer, ca, console, tenant)
 }
 #[cfg(windows)]
 fn reconfigure(
@@ -176,13 +187,16 @@ fn reconfigure(
     peer: Option<&str>,
     ca: Option<&str>,
     console: Option<&str>,
+    tenant: Option<&str>,
 ) -> Result<()> {
     admin()?;
     validate_peer(peer)?;
     let server = crate::config::origin(server)?;
     let console = console.map(crate::config::local_console).transpose()?;
     let previous = Config::load(&config_path())?;
-    if previous.server_url != server {
+    if previous.server_url != server
+        || tenant.is_some_and(|tenant| previous.tenant_id.as_deref() != Some(tenant))
+    {
         return Err(Failure::TenantMismatch);
     }
     let saved = crate::storage::ProtectedStore::open(previous.state_directory.clone())?;
@@ -291,8 +305,7 @@ fn validate_peer(peer: Option<&str>) -> Result<()> {
     }
     Ok(())
 }
-/// Only installer-verified local quickstart trust is supplied here. Its CA is also
-/// the device issuer, so a recreated gateway invalidates enrollment even when its URL is unchanged.
+/// Compare installer-verified local TLS trust. Tenant device CAs are an independent domain.
 #[cfg(any(windows, test))]
 fn local_gateway_trust_changed(settings: &Config, ca: Option<&str>) -> Result<bool> {
     let Some(ca) = ca else { return Ok(false) };
@@ -302,26 +315,6 @@ fn local_gateway_trust_changed(settings: &Config, ca: Option<&str>) -> Result<bo
         let current = std::str::from_utf8(&current).map_err(|_| Failure::Validation)?;
         if crate::identity::certificate_der(current)? != expected {
             return Ok(true);
-        }
-    }
-    let journal_path = settings.state_directory.join("journal.json");
-    if journal_path
-        .try_exists()
-        .map_err(|_| Failure::Unavailable)?
-    {
-        let bytes = crate::storage::read_owned(&journal_path, 131072, true)?;
-        let journal: serde_json::Value =
-            serde_json::from_slice(&bytes).map_err(|_| Failure::Validation)?;
-        for field in ["manifest", "identity"] {
-            if let Some(saved) = journal.get(field).filter(|value| !value.is_null()) {
-                let issuer = saved
-                    .get("issuerCertificatePem")
-                    .and_then(|value| value.as_str())
-                    .ok_or(Failure::Validation)?;
-                if crate::identity::certificate_der(issuer)? != expected {
-                    return Ok(true);
-                }
-            }
         }
     }
     Ok(false)
@@ -462,6 +455,7 @@ fn install_config(
     previous: Option<Config>,
     ca: Option<&str>,
     console: Option<&str>,
+    tenant: Option<&str>,
 ) -> Result<()> {
     admin()?;
     let origin = crate::config::origin(server)?;
@@ -504,6 +498,7 @@ fn install_config(
         false,
     )?;
     let mut settings = previous.unwrap_or(Config {
+        tenant_id: None,
         deployment: None,
         execution: None,
         gateway: None,
@@ -515,6 +510,17 @@ fn install_config(
         request_timeout_seconds: 10,
         local_console_url: None,
     });
+    if tenant.is_some_and(|tenant| {
+        settings
+            .tenant_id
+            .as_deref()
+            .is_some_and(|old| old != tenant)
+    }) {
+        return Err(Failure::TenantMismatch);
+    }
+    if let Some(tenant) = tenant {
+        settings.tenant_id = Some(tenant.into());
+    }
     let saved = crate::storage::ProtectedStore::open(settings.state_directory.clone())?;
     crate::service::validate_saved_binding(&settings, &saved)?;
     #[cfg(windows)]
@@ -842,7 +848,7 @@ fn purge_device(state: &Path, config_directory: &Path) -> Result<()> {
 mod tests {
     use super::*;
     #[test]
-    fn repair_detects_stale_enrollment_after_config_ca_was_already_updated() {
+    fn repair_compares_tls_trust_independently_of_device_issuer() {
         #[cfg(windows)]
         let base = PathBuf::from(std::env::var_os("ProgramData").unwrap());
         #[cfg(target_os = "macos")]
@@ -867,6 +873,7 @@ mod tests {
         #[cfg(windows)]
         crate::platform::windows::protect_acl(&path).unwrap();
         let settings = Config {
+            tenant_id: None,
             deployment: None,
             execution: None,
             gateway: None,
@@ -886,8 +893,8 @@ mod tests {
             .unwrap()
         };
         store.write("journal.json", &journal(&old)).unwrap();
-        // This was missed when setup compared only its already-updated config CA.
-        assert!(local_gateway_trust_changed(&settings, Some(&new)).unwrap());
+        // The device issuer is separate from the TLS bootstrap root.
+        assert!(!local_gateway_trust_changed(&settings, Some(&new)).unwrap());
         assert!(!local_gateway_trust_changed(&settings, None).unwrap());
         store.write("journal.json", &journal(&new)).unwrap();
         assert!(!local_gateway_trust_changed(&settings, Some(&new.replace('\n', "\r\n"))).unwrap());

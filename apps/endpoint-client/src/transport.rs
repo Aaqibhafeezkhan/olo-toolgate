@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fixed-path bounded HTTPS transport; identity/private material never enters error strings.
 use crate::{config::Config, contracts::Contracts, identity::DeviceKey, Failure, Result};
+use olo_toolgate_contracts::v2::SignedTenantDiscovery;
 use olo_toolgate_contracts::*;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 pub type Call<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
@@ -14,6 +15,7 @@ mod tenant_tests {
         let store = crate::storage::ProtectedStore::open(directory.clone()).unwrap();
         let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
         let config = Config {
+            tenant_id: None,
             deployment: None,
             execution: None,
             gateway: None,
@@ -137,7 +139,7 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, Vec<u8>> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery>;
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery>;
     fn start(&self, request: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge>;
     fn request_approval(
         &self,
@@ -666,12 +668,12 @@ impl ControlPort for HttpsControl {
             Ok(bytes)
         })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery> {
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery> {
         Box::pin(self.request(
             &self.client,
             "/.well-known/olo-toolgate-client",
             None,
-            "SignedClientDiscovery",
+            "SignedTenantDiscovery",
         ))
     }
     fn start(&self, request: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge> {

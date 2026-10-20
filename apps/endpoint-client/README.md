@@ -37,8 +37,9 @@ the public code and key fingerprint in the browser. The enroller's signed IdP
 token needs the `toolgate-enroller` role, `tenant_id`, and an enabled `user_id`.
 The browser never receives the device code or private key.
 
-The protected service anchors its configured HTTPS origin and generates a P-256
-key locally. Verified discovery binds the canonical tenant UUID before enrollment;
+Installer setup verifies v2 discovery over authenticated HTTPS and persists `tenantId`
+with the canonical Control origin. The protected service anchors this configuration
+and generates a P-256 key locally. Verified v2 discovery and its key ring are persisted before enrollment;
 the service then submits a signed PKCS#10 request. Control verifies possession, binds the key to the approved user/device,
 and signs a client-only certificate for at most 24 hours. Heartbeats renew it
 when less than 12 hours remain. The active device and owner are checked on every

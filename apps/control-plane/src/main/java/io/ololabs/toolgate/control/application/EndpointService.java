@@ -28,6 +28,9 @@ public final class EndpointService {
     private final boolean enabled;
     private ClientCheckInPolicy checkInPolicy=ClientCheckInPolicy.QUICKSTART;
     private EnterpriseOperations operations;
+    private java.util.function.BiFunction<String,Long,io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery> discoverySigner;
+    /** Discovery has its own tenant key domain, independent of the device CA. */
+    public EndpointService discoverySigner(java.util.function.BiFunction<String,Long,io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery> signer){discoverySigner=Objects.requireNonNull(signer);return this;}
     /** Env-owned check-in policy; the 2 s Quickstart default applies until configured. */
     public EndpointService checkInPolicy(ClientCheckInPolicy value){checkInPolicy=java.util.Objects.requireNonNull(value);if(operations!=null)operations.checkInPolicy(value);return this;}
     public ClientCheckInPolicy checkInPolicy(){return checkInPolicy;}
@@ -41,7 +44,10 @@ public final class EndpointService {
     }
     /** A request gets an immutable tenant binding; failed-code budgets survive request/service recreation. */
     public EndpointService forTenant(Ids.TenantId id,Store.RuntimeProfile profile) {
-        var scoped=new EndpointService(store,codec,issuer,clock,enabled&&profile!=null,id.value(),
+        return forTenant(id,profile,issuer);
+    }
+    public EndpointService forTenant(Ids.TenantId id,Store.RuntimeProfile profile,DeviceIssuer tenantIssuer) {
+        var scoped=new EndpointService(store,codec,tenantIssuer,clock,enabled&&profile!=null,id.value(),
             profile==null?"disabled":profile.serverId(),profile==null?"disabled":profile.organization(),
             profile==null?"https://disabled.invalid":profile.controlUrl(),profile==null?"https://disabled.invalid":profile.gatewayUrl());
         scoped.failures=failures;scoped.checkInPolicy(checkInPolicy);if(operations!=null)scoped.operations(operations);return scoped;
@@ -112,8 +118,8 @@ public final class EndpointService {
     private static String random(int bytes){byte[] value=new byte[bytes];new java.security.SecureRandom().nextBytes(value);return HexFormat.of().formatHex(value);}
     private String verification(){return control+"/console/#enroll";}
     public Store.Reply discovery(){available();long now=clock.millis();
-        var manifest=new ClientDiscovery(1L,server,organization,tenant.value(),control,gateway,verification(),MINIMUM_CLIENT_VERSION,now,now+300000,issuer.issuerCertificate());
-        return reply(issuer.discovery(codec.json(manifest)),0);
+        if(discoverySigner==null)throw Failure.unavailable();
+        return reply(discoverySigner.apply(MINIMUM_CLIENT_VERSION,now),0);
     }
     /** A signed CSR proves the announced key even before enrollment or after certificate expiry. */
     public Store.Reply ping(String body){

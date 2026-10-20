@@ -203,7 +203,9 @@ control:
     organization: ''
     controlUrl: ''
     gatewayUrl: ''
-    deviceCaSecret: ''
+    identityCustodySecret: ''
+    # Secret items: publication.json plus explicit UUID/purpose/key-ID private-key projections.
+    identityKeyFiles: []
     tlsSecret: ''
     trustStoreSecret: ''
   publicKeySecret: ''
