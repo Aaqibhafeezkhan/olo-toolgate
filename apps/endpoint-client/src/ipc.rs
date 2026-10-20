@@ -256,7 +256,13 @@ async fn handle<S: AsyncWrite + Unpin>(
             connections: None,
             power: None,
         };
-        let mut state = service.try_lock().map_err(|_| Failure::Conflict)?;
+        let mut state = match service.try_lock() {
+            Ok(state) => state,
+            Err(_) => {
+                response.error = Some(ErrorCode::Conflict);
+                return write(stream, &contracts.encode("ClientIpcResponse", &response)?).await;
+            }
+        };
         let result = match state
             .authorize_console(&request.console_url, request.expected_tenant_id.as_deref())
         {
@@ -267,7 +273,7 @@ async fn handle<S: AsyncWrite + Unpin>(
                     Ok(())
                 }
                 ConsoleClientOperation::Enroll if !off => state
-                    .enroll()
+                    .request_approval()
                     .await
                     .map(|prompt| response.challenge = Some(prompt)),
                 _ => Err(Failure::Unavailable),

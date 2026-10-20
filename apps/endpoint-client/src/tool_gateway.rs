@@ -136,6 +136,7 @@ impl HttpsGateway {
         crate::storage::ProtectedStore,
     )> {
         let store = crate::storage::ProtectedStore::open(self.config.state_directory.clone())?;
+        crate::service::validate_saved_binding(&self.config, &store)?;
         if store.read("device-key")?.is_none() {
             return Err(Failure::Unauthorized);
         }
@@ -163,11 +164,10 @@ impl HttpsGateway {
             &identity.device_id,
             crate::now(),
         )?;
-        Ok((
-            identity,
-            crate::transport::HttpsControl::new(self.config.clone(), key, self.contracts.clone())?,
-            store,
-        ))
+        let control =
+            crate::transport::HttpsControl::new(self.config.clone(), key, self.contracts.clone())?;
+        crate::transport::ControlPort::bind_tenant(&control, &identity.tenant_id)?;
+        Ok((identity, control, store))
     }
     /// The signed managed registration for this request; nothing else is executable on a device.
     fn installed(&self, request: &AuthorizationRequest) -> Result<LocalToolInfo> {

@@ -229,6 +229,9 @@ async fn configure_client(server: String, source: String) -> Result<String> {
     let installed = crate::install::config_path();
     let operation = if installed.exists() {
         let settings = crate::config::Config::load(&installed)?;
+        if crate::config::origin(&settings.server_url)? != server {
+            return Err(Failure::TenantMismatch);
+        }
         if crate::config::origin(&settings.server_url)? == server
             && settings.authorized_peers.contains(&peer)
         {
@@ -248,16 +251,27 @@ async fn configure_client(server: String, source: String) -> Result<String> {
             if trust_matches {
                 match connected(&settings.ipc_endpoint).await {
                     Some(true) => return Ok(server),
-                    // This gateway no longer accepts the enrollment: start a fresh one.
+                    // Ask Control for a governed review while retaining the UUID/key anchor.
                     Some(false) => {
-                        elevate(
-                            &cli,
-                            &format!("reenroll --server \"{source}\" --peer \"{peer}\""),
-                        )?;
+                        let response = crate::ipc::console_call(
+                            &settings.ipc_endpoint,
+                            olo_toolgate_contracts::v2::ConsoleClientOperation::Enroll,
+                            &format!("{server}/console/"),
+                        )
+                        .await?;
+                        match response.error {
+                            Some(olo_toolgate_contracts::ErrorCode::TenantMismatch) => {
+                                return Err(Failure::TenantMismatch)
+                            }
+                            Some(_) => return Err(Failure::Unavailable),
+                            None => {}
+                        }
                         return Ok(server);
                     }
                     None => {}
                 }
+            } else {
+                return Err(Failure::TenantMismatch);
             }
         }
         "configure"

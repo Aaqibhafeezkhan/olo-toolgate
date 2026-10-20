@@ -207,7 +207,7 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             );
             Ok(())
         }
-        "install" | "reinstall" | "configure" | "reenroll"
+        "install" | "reinstall" | "configure"
             if (arguments.len() == 3 || arguments.len() == 5)
                 && arguments[1] == "--server"
                 && (arguments.len() == 3 || arguments[3] == "--peer") =>
@@ -219,8 +219,6 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             let console = installation.console_url.as_deref();
             if operation == "configure" {
                 olo_toolgate_client::install::configure_with_ca(server, peer, ca, console)
-            } else if operation == "reenroll" {
-                olo_toolgate_client::install::reenroll_with_ca(server, peer, ca, console)
             } else if operation == "reinstall" {
                 olo_toolgate_client::install::reinstall_with_ca(server, peer, ca, console)
             } else {

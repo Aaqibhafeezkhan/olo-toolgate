@@ -15,6 +15,9 @@ use std::{sync::Arc, time::Instant};
 #[derive(Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Journal {
+    format_version: u64,
+    server_url: String,
+    tenant_id: Option<String>,
     manifest: Option<ClientDiscovery>,
     challenge: Option<EndpointEnrollmentChallenge>,
     identity: Option<DeviceIdentity>,
@@ -82,27 +85,78 @@ fn local_authorization(
     })
 }
 
+fn read_journal(config: &Config, store: &ProtectedStore) -> Result<Journal> {
+    let journal: Journal = match store.read("journal.json")? {
+        Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| Failure::Validation)?,
+        None => {
+            if store.read("device-key")?.is_some() {
+                return Err(Failure::Validation);
+            }
+            Journal {
+                format_version: 2,
+                server_url: crate::config::origin(&config.server_url)?,
+                ..Journal::default()
+            }
+        }
+    };
+    if journal.format_version != 2 {
+        return Err(Failure::Validation);
+    }
+    if journal.server_url != crate::config::origin(&config.server_url)? {
+        return Err(Failure::TenantMismatch);
+    }
+    if let Some(tenant) = &journal.tenant_id {
+        crate::contracts::Contracts::shared()?.encode("TenantUuid", tenant)?;
+        if journal
+            .manifest
+            .as_ref()
+            .is_none_or(|manifest| &manifest.tenant_id != tenant)
+        {
+            return Err(Failure::TenantMismatch);
+        }
+    } else if journal.manifest.is_some()
+        || journal.identity.is_some()
+        || journal.challenge.is_some()
+    {
+        return Err(Failure::Validation);
+    }
+    if (journal.identity.is_some() || journal.challenge.is_some())
+        && store.read("device-key")?.is_none()
+    {
+        return Err(Failure::Validation);
+    }
+    if let Some(manifest) = &journal.manifest {
+        if crate::config::origin(&manifest.control_url)?
+            != crate::config::origin(&config.server_url)?
+        {
+            return Err(Failure::TenantMismatch);
+        }
+    }
+    Ok(journal)
+}
+pub(crate) fn validate_saved_binding(config: &Config, store: &ProtectedStore) -> Result<()> {
+    read_journal(config, store).map(|_| ())
+}
+
 impl ClientService {
     pub fn open(
         config: Config,
         store: ProtectedStore,
-        key: Arc<DeviceKey>,
-        control: Arc<dyn ControlPort>,
+        connect: impl FnOnce(Arc<DeviceKey>) -> Result<Arc<dyn ControlPort>>,
     ) -> Result<Self> {
         config.validate()?;
         let lease = store.lease()?;
-        let journal: Journal = match store.read("journal.json")? {
-            Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| Failure::Validation)?,
-            None => Journal::default(),
-        };
+        let journal = read_journal(&config, &store)?;
         let observed = crate::now().max(journal.observed_time);
-        if let Some(manifest) = &journal.manifest {
-            if crate::config::origin(&manifest.control_url)?
-                != crate::config::origin(&config.server_url)?
-            {
-                return Err(Failure::Unauthorized);
-            }
+        // Persist the initial origin anchor under the service lease before generating a key.
+        // Unsupported or foreign state above is never rewritten or adopted.
+        if store.read("journal.json")?.is_none() {
+            store.write(
+                "journal.json",
+                &serde_json::to_vec(&journal).map_err(|_| Failure::Validation)?,
+            )?;
         }
+        let key = Arc::new(DeviceKey::load_or_create(&store)?);
         if let (Some(identity), Some(manifest)) = (&journal.identity, &journal.manifest) {
             verify_identity(
                 identity,
@@ -115,6 +169,10 @@ impl ClientService {
         if (journal.identity.is_some() || journal.challenge.is_some()) && journal.manifest.is_none()
         {
             return Err(Failure::Validation);
+        }
+        let control = connect(key.clone())?;
+        if let Some(tenant) = &journal.tenant_id {
+            control.bind_tenant(tenant)?;
         }
         let state = if journal.revoked {
             EndpointState::Revoked
@@ -720,6 +778,7 @@ impl ClientService {
             now,
             pin.as_deref(),
         )?;
+        self.bind_discovery(&manifest)?;
         let request = self.announcement()?;
         let challenge = if requested_sequence.is_some() {
             self.control.request_approval(request).await?
@@ -744,6 +803,22 @@ impl ClientService {
         self.state = EndpointState::Pending;
         self.save()?;
         Ok(self.prompt(&challenge))
+    }
+    /// Called only after cryptographic discovery verification, before requesting enrollment.
+    fn bind_discovery(&mut self, manifest: &ClientDiscovery) -> Result<()> {
+        crate::contracts::Contracts::shared()?.encode("TenantUuid", &manifest.tenant_id)?;
+        if self
+            .journal
+            .tenant_id
+            .as_ref()
+            .is_some_and(|tenant| tenant != &manifest.tenant_id)
+        {
+            return Err(Failure::TenantMismatch);
+        }
+        self.control.bind_tenant(&manifest.tenant_id)?;
+        self.journal.tenant_id = Some(manifest.tenant_id.clone());
+        self.journal.manifest = Some(manifest.clone());
+        self.save()
     }
     fn announcement(&self) -> Result<EndpointEnrollmentStart> {
         Ok(EndpointEnrollmentStart {
@@ -1269,7 +1344,6 @@ mod tests {
             crate::identity::nonce().unwrap()
         ));
         let store = ProtectedStore::open(directory.clone()).unwrap();
-        let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
         let config = Config {
             deployment: None,
             execution: None,
@@ -1316,7 +1390,7 @@ mod tests {
             consumption: std::sync::Mutex::new(None),
             reports: std::sync::Mutex::new(vec![]),
         });
-        let service = ClientService::open(config, store, key, gateway.clone()).unwrap();
+        let service = ClientService::open(config, store, |_| Ok(gateway.clone())).unwrap();
         (service, gateway, directory)
     }
     #[test]
@@ -1368,6 +1442,41 @@ mod tests {
         assert_eq!(service.journal.manifest.as_ref().unwrap().tenant_id, tenant);
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
         drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn verified_discovery_cannot_replace_owner_after_reset_or_restart() {
+        let (mut service, gateway, directory) = test_service();
+        let mut manifest: ClientDiscovery =
+            serde_json::from_value(fixtures()["ClientDiscovery"].clone()).unwrap();
+        manifest.tenant_id = "10000000-0000-4000-8000-000000000001".into();
+        manifest.control_url = service.config.server_url.clone();
+        service.bind_discovery(&manifest).unwrap();
+        service.reset_enrollment();
+        service.save().unwrap();
+        let config = service.config.clone();
+        let before = service.store.read("journal.json").unwrap().unwrap();
+        let key = service.key.fingerprint();
+        manifest.tenant_id = "10000000-0000-4000-8000-000000000002".into();
+        assert_eq!(
+            service.bind_discovery(&manifest),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(service.store.read("journal.json").unwrap().unwrap(), before);
+        drop(service);
+        let store = ProtectedStore::open(directory.clone()).unwrap();
+        let mut restarted = ClientService::open(config, store, |_| Ok(gateway.clone())).unwrap();
+        assert_eq!(restarted.key.fingerprint(), key);
+        assert_eq!(
+            restarted.bind_discovery(&manifest),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(
+            restarted.store.read("journal.json").unwrap().unwrap(),
+            before
+        );
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        drop(restarted);
         std::fs::remove_dir_all(directory).unwrap();
     }
     fn fixtures() -> serde_json::Value {

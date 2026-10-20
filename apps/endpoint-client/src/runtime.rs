@@ -5,7 +5,6 @@ use crate::{
     config::Config,
     connections::{Connection, Connections},
     contracts::Contracts,
-    identity::DeviceKey,
     service::ClientService,
     storage::ProtectedStore,
     transport::HttpsControl,
@@ -25,14 +24,14 @@ pub fn executor() -> Result<tokio::runtime::Runtime> {
 pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -> Result<()> {
     crate::platform::require_service_identity()?;
     let store = ProtectedStore::open(config.state_directory.clone())?;
-    let key = Arc::new(DeviceKey::load_or_create(&store)?);
     let contracts = Arc::new(Contracts::new()?);
-    let control = Arc::new(HttpsControl::new(
-        config.clone(),
-        key.clone(),
-        contracts.clone(),
-    )?);
-    let service = ClientService::open(config.clone(), store, key.clone(), control)?;
+    let service = ClientService::open(config.clone(), store, |key| {
+        Ok(Arc::new(HttpsControl::new(
+            config.clone(),
+            key,
+            contracts.clone(),
+        )?))
+    })?;
     // One owner switch for the focused gateway and every background connection.
     let power = crate::power::Power::open(config.state_directory.clone())?;
     let service = Arc::new(tokio::sync::Mutex::new(service.with_power(power.clone())));
@@ -43,37 +42,7 @@ pub async fn run(config: Config, shutdown: tokio::sync::watch::Receiver<bool>) -
     let connections = Arc::new(Connections::default());
     let focused = Connection::new(&*service.lock().await, true);
     connections.add(focused.clone());
-    let mut heartbeats = vec![heartbeat(service.clone(), focused, shutdown.clone())];
-    // Gateways the device switched away from stay connected; one failing never blocks the others.
-    for background in crate::connections::background(&config) {
-        let server = background.server_url.clone();
-        let open = |background: Config| {
-            let store = ProtectedStore::open(background.state_directory.clone())?;
-            let control = Arc::new(HttpsControl::new(
-                background.clone(),
-                key.clone(),
-                contracts.clone(),
-            )?);
-            ClientService::open(background, store, key.clone(), control)
-                .map(|state| state.with_power(power.clone()))
-        };
-        let opened = open(background);
-        match opened {
-            Ok(state) => {
-                let connection = Connection::new(&state, false);
-                connections.add(connection.clone());
-                heartbeats.push(heartbeat(
-                    Arc::new(tokio::sync::Mutex::new(state)),
-                    connection,
-                    shutdown.clone(),
-                ));
-            }
-            Err(failure) => {
-                tracing::warn!(event="background_gateway",server=%server,error=?failure);
-                activity.event("Background gateway", &format!("{:?}", failure));
-            }
-        }
-    }
+    let heartbeats = vec![heartbeat(service.clone(), focused, shutdown.clone())];
     tracing::info!(
         event = "client_service",
         result = "started",

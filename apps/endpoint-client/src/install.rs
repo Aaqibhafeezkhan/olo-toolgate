@@ -141,9 +141,11 @@ pub fn reinstall_with_ca(
     }
     let previous = Config::load(&config_path())?;
     if crate::config::origin(server)? != previous.server_url {
-        return Err(Failure::Conflict);
+        return Err(Failure::TenantMismatch);
     }
-    remove(false, false)?;
+    let saved = crate::storage::ProtectedStore::open(previous.state_directory.clone())?;
+    crate::service::validate_saved_binding(&previous, &saved)?;
+    remove(false)?;
     install_config(server, peer, Some(previous), ca, console)
 }
 #[cfg(not(windows))]
@@ -154,17 +156,11 @@ pub fn configure(_: &str, _: Option<&str>) -> Result<()> {
 pub fn configure_with_ca(_: &str, _: Option<&str>, _: Option<&str>, _: Option<&str>) -> Result<()> {
     Err(Failure::Unsupported)
 }
-#[cfg(not(windows))]
-pub fn reenroll_with_ca(_: &str, _: Option<&str>, _: Option<&str>, _: Option<&str>) -> Result<()> {
-    Err(Failure::Unsupported)
-}
 #[cfg(windows)]
 pub fn configure(server: &str, peer: Option<&str>) -> Result<()> {
     configure_with_ca(server, peer, None, None)
 }
-/// Switches focus or repairs the gateway. The leaving gateway's enrollment is parked in a
-/// profile that stays connected in the background, so switching back resumes it unless
-/// that gateway was since recreated.
+/// Repairs the installed organization only; switching requires explicit uninstall and purge.
 #[cfg(windows)]
 pub fn configure_with_ca(
     server: &str,
@@ -172,23 +168,7 @@ pub fn configure_with_ca(
     ca: Option<&str>,
     console: Option<&str>,
 ) -> Result<()> {
-    reconfigure(server, peer, ca, console, false)
-}
-/// Starts a fresh enrollment with the focused gateway when its current enrollment no
-/// longer connects (the gateway forgot or revoked this device). The gateway must still
-/// approve the new request; tool settings are kept.
-#[cfg(windows)]
-pub fn reenroll_with_ca(
-    server: &str,
-    peer: Option<&str>,
-    ca: Option<&str>,
-    console: Option<&str>,
-) -> Result<()> {
-    let server = crate::config::origin(server)?;
-    if Config::load(&config_path())?.server_url != server {
-        return Err(Failure::Conflict);
-    }
-    reconfigure(&server, peer, ca, console, true)
+    reconfigure(server, peer, ca, console)
 }
 #[cfg(windows)]
 fn reconfigure(
@@ -196,42 +176,24 @@ fn reconfigure(
     peer: Option<&str>,
     ca: Option<&str>,
     console: Option<&str>,
-    fresh: bool,
 ) -> Result<()> {
     admin()?;
     validate_peer(peer)?;
     let server = crate::config::origin(server)?;
     let console = console.map(crate::config::local_console).transpose()?;
     let previous = Config::load(&config_path())?;
-    let switching = previous.server_url != server;
-    let trust_changed = !switching && local_gateway_trust_changed(&previous, ca)?;
+    if previous.server_url != server {
+        return Err(Failure::TenantMismatch);
+    }
+    let saved = crate::storage::ProtectedStore::open(previous.state_directory.clone())?;
+    crate::service::validate_saved_binding(&previous, &saved)?;
+    if local_gateway_trust_changed(&previous, ca)? {
+        return Err(Failure::TenantMismatch);
+    }
     let mut settings = previous.clone();
     let path = config_path();
-    let mut moves = Vec::new();
-    let mut retired = Vec::new();
     let update = (|| {
         stop_windows_service()?;
-        if switching {
-            archive_profile(&previous, &mut moves)?;
-            settings.server_url = server.clone();
-            match restore_profile(&previous.state_directory, &server, ca, &mut moves)? {
-                Some((saved, snapshot)) => {
-                    settings.gateway = saved.gateway;
-                    settings.execution = saved.execution;
-                    settings.deployment = saved.deployment;
-                    settings.ca_certificate_path = saved.ca_certificate_path;
-                    settings.local_console_url = saved.local_console_url;
-                    retired.push(snapshot);
-                }
-                None => clear_gateway_settings(&mut settings),
-            }
-        } else if trust_changed {
-            // The same URL now serves a recreated gateway; its old enrollment is unusable.
-            clear_gateway_settings(&mut settings);
-            retire_gateway_state(&settings.state_directory, &mut moves, &mut retired)?;
-        } else if fresh {
-            retire_gateway_state(&settings.state_directory, &mut moves, &mut retired)?;
-        }
         if let Some(console) = &console {
             settings.local_console_url = Some(console.clone());
         }
@@ -247,19 +209,13 @@ fn reconfigure(
         write_config(&path, &settings)
     })();
     if let Err(failure) = update {
-        for (source, destination) in moves.iter().rev() {
-            let _ = std::fs::rename(destination, source);
-        }
         let _ = command(
             r"C:\Windows\System32\sc.exe",
             &["start", "OloToolGateClient"],
         );
         return Err(failure);
     }
-    for file in retired {
-        std::fs::remove_file(file).map_err(|_| Failure::Unavailable)?;
-    }
-    if let Err(failure) = record_gateway(&settings, switching.then_some(&previous)) {
+    if let Err(failure) = record_gateway(&settings) {
         tracing::warn!(event="gateway_index",error=?failure);
     }
     let registry = command(
@@ -412,26 +368,6 @@ fn save_ca(ca: &str) -> Result<PathBuf> {
     std::fs::rename(&temporary, &path).map_err(|_| Failure::Unavailable)?;
     Ok(path)
 }
-/// Gateway-scoped protected state. The device key, activity and packet logs belong to the device.
-#[cfg(any(windows, test))]
-const GATEWAY_STATE: [&str; 7] = [
-    "journal.json",
-    "permissions.json",
-    "remote-journal.json",
-    "effect-journal.json",
-    "adoption.json",
-    "fleet-intent.json",
-    "fleet-active.json",
-];
-/// These settings contain gateway destinations, pins and credentials from the old site.
-#[cfg(windows)]
-fn clear_gateway_settings(settings: &mut Config) {
-    settings.gateway = None;
-    settings.execution = None;
-    settings.deployment = None;
-    settings.ca_certificate_path = None;
-    settings.local_console_url = None;
-}
 fn write_new(path: &Path, bytes: &[u8], public: bool) -> Result<()> {
     use std::io::Write;
     let mut options = std::fs::OpenOptions::new();
@@ -472,220 +408,7 @@ fn write_config(path: &Path, settings: &Config) -> Result<()> {
         &serde_json::to_vec_pretty(settings).map_err(|_| Failure::Validation)?,
     )
 }
-#[cfg(any(windows, test))]
-fn profile_directory(state: &Path, server: &str) -> PathBuf {
-    state
-        .join("profiles")
-        .join(crate::connections::profile_name(server))
-}
-#[cfg(any(windows, test))]
-fn move_owned(
-    source: &Path,
-    destination: &Path,
-    moves: &mut Vec<(PathBuf, PathBuf)>,
-) -> Result<()> {
-    if source.try_exists().map_err(|_| Failure::Unavailable)? {
-        crate::storage::check_owned(source, true)?;
-        std::fs::rename(source, destination).map_err(|_| Failure::Unavailable)?;
-        moves.push((source.to_owned(), destination.to_owned()));
-    }
-    Ok(())
-}
-#[cfg(any(windows, test))]
-fn discard_profile(profile: &Path) -> Result<()> {
-    // The background connection also keeps its own lease, activity and packet logs here.
-    for name in GATEWAY_STATE.into_iter().chain([
-        "client.json",
-        "service.lock",
-        "activity.json",
-        "packets.jsonl",
-    ]) {
-        let path = profile.join(name);
-        if path.try_exists().map_err(|_| Failure::Unavailable)? {
-            crate::storage::check_owned(&path, true)?;
-            std::fs::remove_file(path).map_err(|_| Failure::Unavailable)?;
-        }
-    }
-    match std::fs::remove_dir(profile) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(Failure::Unavailable),
-        _ => Ok(()),
-    }
-}
-/// Parks the active gateway's settings and enrollment so a later switch back resumes it.
-#[cfg(any(windows, test))]
-fn archive_profile(settings: &Config, moves: &mut Vec<(PathBuf, PathBuf)>) -> Result<()> {
-    let profile = profile_directory(&settings.state_directory, &settings.server_url);
-    directory(profile.parent().ok_or(Failure::Validation)?, true)?;
-    // Any older parked copy of this gateway is superseded by the active state.
-    discard_profile(&profile)?;
-    directory(&profile, true)?;
-    write_new(
-        &profile.join("client.json"),
-        &serde_json::to_vec_pretty(settings).map_err(|_| Failure::Validation)?,
-        false,
-    )?;
-    for name in GATEWAY_STATE {
-        move_owned(
-            &settings.state_directory.join(name),
-            &profile.join(name),
-            moves,
-        )?;
-    }
-    Ok(())
-}
-/// Resumes a parked gateway unless the gateway was recreated with another CA since then.
-/// Returns its saved settings and the snapshot file to retire once the switch commits.
-#[cfg(any(windows, test))]
-fn restore_profile(
-    state: &Path,
-    server: &str,
-    ca: Option<&str>,
-    moves: &mut Vec<(PathBuf, PathBuf)>,
-) -> Result<Option<(Config, PathBuf)>> {
-    let profile = profile_directory(state, server);
-    let snapshot = profile.join("client.json");
-    if !snapshot.try_exists().map_err(|_| Failure::Unavailable)? {
-        return Ok(None);
-    }
-    let saved = Config::load(&snapshot)
-        .ok()
-        .filter(|saved| saved.server_url == server && saved.state_directory == state)
-        .filter(|saved| {
-            let parked = Config {
-                state_directory: profile.clone(),
-                ..saved.clone()
-            };
-            !local_gateway_trust_changed(&parked, ca).unwrap_or(true)
-        });
-    let Some(saved) = saved else {
-        discard_profile(&profile)?;
-        return Ok(None);
-    };
-    for name in GATEWAY_STATE {
-        move_owned(&profile.join(name), &state.join(name), moves)?;
-    }
-    Ok(Some((saved, snapshot)))
-}
-/// A fresh install reuses the state directory an earlier uninstall kept, whose enrollment
-/// belongs to whichever gateway was focused then. That enrollment is parked for its own
-/// gateway, which stays connected in the background, or retired when the target gateway
-/// was recreated; a parked enrollment for the target gateway is resumed. Without this the
-/// new gateway inherits the old enrollment and never receives an enrollment request.
-/// Returns the files to remove once the installation commits.
-#[cfg(any(windows, test))]
-fn adopt_kept_state(
-    settings: &mut Config,
-    ca: Option<&str>,
-    config_directory: &Path,
-    moves: &mut Vec<(PathBuf, PathBuf)>,
-) -> Result<Vec<PathBuf>> {
-    let state = settings.state_directory.clone();
-    let mut retired = Vec::new();
-    match kept_gateway(&state)? {
-        None => {}
-        Some(Some(kept)) if kept != settings.server_url => {
-            let parked = Config {
-                deployment: None,
-                execution: None,
-                gateway: None,
-                ca_certificate_path: kept_ca(&state, &kept, config_directory),
-                local_console_url: known_gateways()
-                    .into_iter()
-                    .find(|gateway| gateway.server_url == kept)
-                    .and_then(|gateway| gateway.console_url),
-                server_url: kept,
-                ..settings.clone()
-            };
-            archive_profile(&parked, moves)?;
-        }
-        // The target gateway's own enrollment resumes in place.
-        Some(Some(_)) if !local_gateway_trust_changed(settings, ca).unwrap_or(true) => {
-            return Ok(retired)
-        }
-        // A recreated target gateway, or a journal naming no gateway, has nothing to resume.
-        Some(_) => retire_gateway_state(&state, moves, &mut retired)?,
-    }
-    if let Some((saved, snapshot)) = restore_profile(&state, &settings.server_url, ca, moves)? {
-        settings.gateway = saved.gateway;
-        settings.execution = saved.execution;
-        settings.deployment = saved.deployment;
-        settings.ca_certificate_path = saved.ca_certificate_path;
-        settings.local_console_url = saved.local_console_url;
-        retired.push(snapshot);
-    }
-    Ok(retired)
-}
-/// `None` when no enrollment was kept, otherwise the gateway that issued it, if readable.
-#[cfg(any(windows, test))]
-fn kept_gateway(state: &Path) -> Result<Option<Option<String>>> {
-    let journal = state.join("journal.json");
-    if !journal.try_exists().map_err(|_| Failure::Unavailable)? {
-        return Ok(None);
-    }
-    let bytes = crate::storage::read_owned(&journal, 131072, true)?;
-    Ok(Some(
-        serde_json::from_slice::<serde_json::Value>(&bytes)
-            .ok()
-            .and_then(|journal| {
-                journal
-                    .get("manifest")?
-                    .get("controlUrl")?
-                    .as_str()
-                    .map(str::to_owned)
-            })
-            .and_then(|url| crate::config::origin(&url).ok()),
-    ))
-}
-/// The saved CA for a kept local gateway. A local gateway's CA also issued the device identity.
-#[cfg(any(windows, test))]
-fn kept_ca(state: &Path, server: &str, config_directory: &Path) -> Option<PathBuf> {
-    if !crate::config::loopback(server) {
-        return None;
-    }
-    let bytes = crate::storage::read_owned(&state.join("journal.json"), 131072, true).ok()?;
-    let journal: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    let issuer = journal
-        .get("manifest")?
-        .get("issuerCertificatePem")?
-        .as_str()?;
-    let issuer = crate::identity::certificate_der(issuer).ok()?;
-    let mut saved: Vec<PathBuf> = std::fs::read_dir(config_directory)
-        .ok()?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("gateway-ca-") && name.ends_with(".crt"))
-        })
-        .collect();
-    saved.sort();
-    saved.into_iter().find(|path| {
-        crate::storage::read_owned(path, 16384, false)
-            .ok()
-            .and_then(|pem| String::from_utf8(pem).ok())
-            .and_then(|pem| crate::identity::certificate_der(&pem).ok())
-            .as_ref()
-            == Some(&issuer)
-    })
-}
-/// Moves gateway state aside; the caller removes the backups once it commits.
-#[cfg(any(windows, test))]
-fn retire_gateway_state(
-    state: &Path,
-    moves: &mut Vec<(PathBuf, PathBuf)>,
-    retired: &mut Vec<PathBuf>,
-) -> Result<()> {
-    for name in GATEWAY_STATE {
-        let source = state.join(name);
-        if source.try_exists().map_err(|_| Failure::Unavailable)? {
-            let backup = source.with_extension(format!("{}.json", crate::identity::nonce()?));
-            move_owned(&source, &backup, moves)?;
-            retired.push(backup);
-        }
-    }
-    Ok(())
-}
-/// Public list of gateways this device has used, so the tray can offer one-click switching.
+/// Public organization shortcut. It carries no device identity or credentials.
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct KnownGateway {
@@ -723,25 +446,11 @@ pub fn remembered_console(server: &str) -> Option<String> {
         .find(|gateway| gateway.server_url == server)
         .and_then(|gateway| gateway.console_url)
 }
-fn record_gateway(current: &Config, previous: Option<&Config>) -> Result<()> {
-    let mut gateways = known_gateways();
-    for config in previous.into_iter().chain([current]) {
-        let console = config.local_console_url.clone().or_else(|| {
-            gateways
-                .iter()
-                .find(|gateway| gateway.server_url == config.server_url)
-                .and_then(|gateway| gateway.console_url.clone())
-        });
-        gateways.retain(|gateway| gateway.server_url != config.server_url);
-        gateways.insert(
-            0,
-            KnownGateway {
-                server_url: config.server_url.clone(),
-                console_url: console,
-            },
-        );
-    }
-    gateways.truncate(16);
+fn record_gateway(current: &Config) -> Result<()> {
+    let gateways = [KnownGateway {
+        server_url: current.server_url.clone(),
+        console_url: current.local_console_url.clone(),
+    }];
     replace_public(
         &gateway_index_path(),
         &serde_json::to_vec_pretty(&gateways).map_err(|_| Failure::Validation)?,
@@ -794,8 +503,6 @@ fn install_config(
             .ok_or(Failure::Validation)?,
         false,
     )?;
-    #[cfg(windows)]
-    let fresh = previous.is_none();
     let mut settings = previous.unwrap_or(Config {
         deployment: None,
         execution: None,
@@ -808,18 +515,12 @@ fn install_config(
         request_timeout_seconds: 10,
         local_console_url: None,
     });
-    // Reinstall keeps its own enrollment; a fresh install sorts out what uninstall kept.
+    let saved = crate::storage::ProtectedStore::open(settings.state_directory.clone())?;
+    crate::service::validate_saved_binding(&settings, &saved)?;
     #[cfg(windows)]
-    let retired = if fresh {
-        let mut moves = Vec::new();
-        adopt_kept_state(&mut settings, ca, &config_directory, &mut moves).inspect_err(|_| {
-            for (source, destination) in moves.iter().rev() {
-                let _ = std::fs::rename(destination, source);
-            }
-        })?
-    } else {
-        Vec::new()
-    };
+    if local_gateway_trust_changed(&settings, ca)? {
+        return Err(Failure::TenantMismatch);
+    }
     if let Some(peer) = peer {
         if !settings.authorized_peers.iter().any(|value| value == peer) {
             settings.authorized_peers.push(peer.to_owned());
@@ -914,13 +615,7 @@ fn install_config(
             &["start", "OloToolGateClient"],
         )?;
     }
-    #[cfg(windows)]
-    for file in retired {
-        if let Err(error) = std::fs::remove_file(&file) {
-            tracing::warn!(event="retired_state",file=%file.display(),error=%error);
-        }
-    }
-    if let Err(failure) = record_gateway(&settings, None) {
+    if let Err(failure) = record_gateway(&settings) {
         tracing::warn!(event="gateway_index",error=?failure);
     }
     Ok(())
@@ -943,7 +638,7 @@ fn write_definition(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 /// Uninstall retains enrollment custody by default; purge deletes only the fixed protected state directory.
 pub fn uninstall(purge: bool) -> Result<()> {
-    remove(purge, true)
+    remove(purge)
 }
 /// Unloads the launchd job and waits until launchd no longer knows it. bootout answers 36 (operation now in progress)
 /// while the daemon is still stopping, which is not a failure.
@@ -975,10 +670,9 @@ fn launchd_bootout() -> Result<()> {
     }
 }
 
-/// `park` moves the active gateway's enrollment into its profile, so a later install for
-/// another gateway keeps it connected in the background instead of inheriting it.
+/// Uninstall retains its tenant journal unless the operator explicitly requests purge.
 #[cfg(not(windows))]
-fn remove(purge: bool, park: bool) -> Result<()> {
+fn remove(purge: bool) -> Result<()> {
     admin()?;
     let config = Config::load(&config_path())?;
     #[cfg(target_os = "linux")]
@@ -997,8 +691,6 @@ fn remove(purge: bool, park: bool) -> Result<()> {
         std::fs::remove_file("/Library/LaunchDaemons/io.ololabs.toolgate.client.plist")
             .map_err(|_| Failure::Unavailable)?;
     }
-    #[cfg(not(windows))]
-    let _ = park;
     if purge {
         #[cfg(target_os = "linux")]
         let expected = PathBuf::from("/var/lib/olo-toolgate");
@@ -1020,22 +712,11 @@ fn remove(purge: bool, park: bool) -> Result<()> {
 }
 
 #[cfg(windows)]
-fn remove(purge: bool, park: bool) -> Result<()> {
+fn remove(purge: bool) -> Result<()> {
     admin()?;
     // Removal uses only fixed installation paths, even after a partial uninstall
     // removed the configuration or service. Never follow a custom state path.
     remove_windows_service()?;
-    if park && !purge {
-        if let Ok(config) = Config::load(&config_path()) {
-            let mut moves = Vec::new();
-            if let Err(failure) = archive_profile(&config, &mut moves) {
-                for (source, destination) in moves.iter().rev() {
-                    let _ = std::fs::rename(destination, source);
-                }
-                tracing::warn!(event="park_gateway",error=?failure);
-            }
-        }
-    }
     if purge {
         purge_device(
             Path::new(r"C:\ProgramData\OLO\ToolGate\state"),
@@ -1109,9 +790,8 @@ fn remove_windows_service() -> Result<()> {
     }
 }
 
-/// Complete uninstall: every enrollment (focused and parked), logs, local tool settings and
-/// remembered gateways and CAs. Only the device key stays, so a gateway that already
-/// approved this device recognises it after a reinstall. Links inside the state directory
+/// Explicit purge removes enrollment, device keys, logs, local tool settings and
+/// remembered gateways and CAs. Links inside the state directory
 /// are deleted, never followed (`remove_dir_all` deletes links, never their targets).
 fn purge_device(state: &Path, config_directory: &Path) -> Result<()> {
     if state.try_exists().map_err(|_| Failure::Unavailable)? {
@@ -1125,9 +805,6 @@ fn purge_device(state: &Path, config_directory: &Path) -> Result<()> {
         crate::storage::check_owned(state, true)?;
         for entry in std::fs::read_dir(state).map_err(|_| Failure::Unavailable)? {
             let entry = entry.map_err(|_| Failure::Unavailable)?;
-            if entry.file_name() == "device-key" {
-                continue;
-            }
             let kind = entry.file_type().map_err(|_| Failure::Unavailable)?;
             let path = entry.path();
             if kind.is_dir() {
@@ -1220,212 +897,9 @@ mod tests {
         std::fs::remove_file(directory.join("journal.json")).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }
-    // Windows profile directories require installer (SYSTEM/Administrators-only) custody,
-    // which an ordinary test process cannot create; the file logic is platform-neutral.
     #[cfg(unix)]
     #[test]
-    fn switching_gateways_parks_and_resumes_enrollment_until_the_gateway_is_recreated() {
-        #[cfg(target_os = "macos")]
-        let base = PathBuf::from("/private/tmp");
-        #[cfg(all(unix, not(target_os = "macos")))]
-        let base = std::env::temp_dir();
-        let directory = base.join(format!(
-            "toolgate-profile-test-{}",
-            crate::identity::nonce().unwrap()
-        ));
-        let store = crate::storage::ProtectedStore::open(directory.clone()).unwrap();
-        let ca = |name: &str| {
-            let pem = rcgen::generate_simple_self_signed(vec!["localhost".into()])
-                .unwrap()
-                .cert
-                .pem();
-            let path = directory.join(name);
-            std::fs::write(&path, &pem).unwrap();
-            (pem, path)
-        };
-        let (first_ca, first_path) = ca("first.crt");
-        let first = Config {
-            deployment: None,
-            execution: None,
-            gateway: None,
-            server_url: "https://localhost:18450".into(),
-            state_directory: directory.clone(),
-            ipc_endpoint: ipc_endpoint(),
-            authorized_peers: vec!["0".into()],
-            ca_certificate_path: Some(first_path),
-            request_timeout_seconds: 10,
-            local_console_url: Some("http://127.0.0.1:18090".into()),
-        };
-        let journal = |issuer: &str| {
-            serde_json::to_vec(
-                &serde_json::json!({"identity":{"issuerCertificatePem":issuer},"manifest":null}),
-            )
-            .unwrap()
-        };
-        store.write("journal.json", &journal(&first_ca)).unwrap();
-        store.write("adoption.json", b"first").unwrap();
-        store.write("device-key", b"device").unwrap();
-        let second = "https://localhost:18451";
-        let mut moves = Vec::new();
-        archive_profile(&first, &mut moves).unwrap();
-        assert!(restore_profile(&directory, second, None, &mut moves)
-            .unwrap()
-            .is_none());
-        assert_eq!(store.read("journal.json").unwrap(), None);
-        assert_eq!(store.read("adoption.json").unwrap(), None);
-        // The device key is not gateway state and never moves.
-        assert_eq!(store.read("device-key").unwrap().unwrap(), b"device");
-        // Rolling back a failed switch restores the active gateway exactly.
-        for (source, destination) in moves.iter().rev() {
-            std::fs::rename(destination, source).unwrap();
-        }
-        assert_eq!(store.read("adoption.json").unwrap().unwrap(), b"first");
-        let mut moves = Vec::new();
-        archive_profile(&first, &mut moves).unwrap();
-        // Switching back with the same gateway CA resumes enrollment and settings.
-        let (saved, snapshot) =
-            restore_profile(&directory, &first.server_url, Some(&first_ca), &mut moves)
-                .unwrap()
-                .unwrap();
-        assert_eq!(saved.local_console_url, first.local_console_url);
-        assert_eq!(saved.ca_certificate_path, first.ca_certificate_path);
-        assert_eq!(store.read("adoption.json").unwrap().unwrap(), b"first");
-        std::fs::remove_file(snapshot).unwrap();
-        // A recreated gateway (new CA) invalidates the parked enrollment.
-        archive_profile(&first, &mut Vec::new()).unwrap();
-        let (recreated, _) = ca("recreated.crt");
-        assert!(restore_profile(
-            &directory,
-            &first.server_url,
-            Some(&recreated),
-            &mut Vec::new()
-        )
-        .unwrap()
-        .is_none());
-        assert!(!profile_directory(&directory, &first.server_url).exists());
-        assert_eq!(store.read("journal.json").unwrap(), None);
-        for name in ["first.crt", "recreated.crt", "device-key"] {
-            std::fs::remove_file(directory.join(name)).unwrap();
-        }
-        std::fs::remove_dir(directory.join("profiles")).unwrap();
-        std::fs::remove_dir(directory).unwrap();
-    }
-    #[cfg(unix)]
-    #[test]
-    fn fresh_install_enrolls_with_its_own_gateway_and_keeps_the_kept_one_connected() {
-        #[cfg(target_os = "macos")]
-        let base = PathBuf::from("/private/tmp");
-        #[cfg(all(unix, not(target_os = "macos")))]
-        let base = std::env::temp_dir();
-        let root = base.join(format!(
-            "toolgate-fresh-test-{}",
-            crate::identity::nonce().unwrap()
-        ));
-        std::fs::create_dir(&root).unwrap();
-        let directory = root.join("state");
-        let store = crate::storage::ProtectedStore::open(directory.clone()).unwrap();
-        let pem = || {
-            rcgen::generate_simple_self_signed(vec!["localhost".into()])
-                .unwrap()
-                .cert
-                .pem()
-        };
-        let journal = |server: &str, issuer: &str| {
-            serde_json::to_vec(&serde_json::json!({
-                "identity": {"issuerCertificatePem": issuer},
-                "manifest": {"controlUrl": server, "issuerCertificatePem": issuer}
-            }))
-            .unwrap()
-        };
-        let (kept_ca, target_ca) = (pem(), pem());
-        let kept_ca_path = root.join("gateway-ca-kept.crt");
-        std::fs::write(&kept_ca_path, &kept_ca).unwrap();
-        let kept = "https://localhost:18451";
-        let fresh = |ca: Option<PathBuf>| Config {
-            deployment: None,
-            execution: None,
-            gateway: None,
-            server_url: "https://localhost:18450".into(),
-            state_directory: directory.clone(),
-            ipc_endpoint: ipc_endpoint(),
-            authorized_peers: vec!["0".into()],
-            ca_certificate_path: ca,
-            request_timeout_seconds: 10,
-            local_console_url: None,
-        };
-        // Uninstall left the LangChain gateway's enrollment behind.
-        store
-            .write("journal.json", &journal(kept, &kept_ca))
-            .unwrap();
-        store.write("adoption.json", b"kept").unwrap();
-        store.write("device-key", b"device").unwrap();
-        let mut settings = fresh(None);
-        let mut moves = Vec::new();
-        let retired = adopt_kept_state(&mut settings, Some(&target_ca), &root, &mut moves).unwrap();
-        assert!(retired.is_empty());
-        // The new gateway starts unenrolled, so enrollment reaches it.
-        assert_eq!(store.read("journal.json").unwrap(), None);
-        assert_eq!(store.read("adoption.json").unwrap(), None);
-        assert_eq!(store.read("device-key").unwrap().unwrap(), b"device");
-        assert_eq!(settings.server_url, "https://localhost:18450");
-        // The kept gateway stays connected in the background with its own CA.
-        let background = crate::connections::background(&settings);
-        assert_eq!(background.len(), 1);
-        assert_eq!(background[0].server_url, kept);
-        assert_eq!(
-            background[0].ca_certificate_path,
-            Some(kept_ca_path.clone())
-        );
-        let profile = profile_directory(&directory, kept);
-        assert_eq!(
-            std::fs::read(profile.join("adoption.json")).unwrap(),
-            b"kept"
-        );
-
-        // Installing for the kept gateway again resumes its enrollment and settings.
-        let mut settings = Config {
-            server_url: kept.into(),
-            ..fresh(None)
-        };
-        let retired =
-            adopt_kept_state(&mut settings, Some(&kept_ca), &root, &mut Vec::new()).unwrap();
-        assert_eq!(retired, vec![profile.join("client.json")]);
-        std::fs::remove_file(&retired[0]).unwrap();
-        assert_eq!(settings.ca_certificate_path, Some(kept_ca_path.clone()));
-        assert_eq!(store.read("adoption.json").unwrap().unwrap(), b"kept");
-
-        // The same gateway with its CA unchanged keeps the enrollment in place.
-        let before = store.read("journal.json").unwrap();
-        assert!(
-            adopt_kept_state(&mut settings, Some(&kept_ca), &root, &mut Vec::new())
-                .unwrap()
-                .is_empty()
-        );
-        assert_eq!(store.read("journal.json").unwrap(), before);
-
-        // A recreated gateway (new CA) retires the stale enrollment instead of reusing it.
-        let mut settings = Config {
-            server_url: kept.into(),
-            ..fresh(None)
-        };
-        let retired =
-            adopt_kept_state(&mut settings, Some(&target_ca), &root, &mut Vec::new()).unwrap();
-        assert_eq!(retired.len(), 2);
-        assert_eq!(store.read("journal.json").unwrap(), None);
-        assert_eq!(store.read("adoption.json").unwrap(), None);
-        for file in retired {
-            std::fs::remove_file(file).unwrap();
-        }
-        std::fs::remove_file(directory.join("device-key")).unwrap();
-        std::fs::remove_dir(profile).unwrap();
-        std::fs::remove_dir(directory.join("profiles")).unwrap();
-        std::fs::remove_dir(directory).unwrap();
-        std::fs::remove_file(kept_ca_path).unwrap();
-        std::fs::remove_dir(root).unwrap();
-    }
-    #[cfg(unix)]
-    #[test]
-    fn complete_uninstall_removes_everything_but_the_device_key() {
+    fn explicit_purge_removes_identity_and_key_before_another_tenant_can_be_installed() {
         let root = std::env::temp_dir().join(format!(
             "toolgate-purge-test-{}",
             crate::identity::nonce().unwrap()
@@ -1452,12 +926,12 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700)).unwrap();
         purge_device(&state, &root).unwrap();
-        // Only the device key stays, so an approved device is recognised after a reinstall.
+        // A new tenant gets a fresh device key after an explicit purge.
         let left: Vec<_> = std::fs::read_dir(&state)
             .unwrap()
             .map(|entry| entry.unwrap().file_name())
             .collect();
-        assert_eq!(left, ["device-key"]);
+        assert!(left.is_empty());
         assert!(!root.join("gateways.json").exists());
         assert!(!root.join("gateway-ca-1.crt").exists());
         // The configuration and binary are removed by uninstall itself.
@@ -1467,7 +941,7 @@ mod tests {
         purge_device(&state, &root).unwrap();
         remove_file_if_present(&root.join("client.json")).unwrap();
         remove_file_if_present(&root.join("client.json")).unwrap();
-        assert!(state.join("device-key").exists());
+        assert!(!state.join("device-key").exists());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

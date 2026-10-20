@@ -229,8 +229,80 @@ fn config(directory: &Directory) -> Config {
 }
 fn service(directory: &Directory) -> ClientService {
     let store = directory.store();
-    let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
-    ClientService::open(config(directory), store, key, Arc::new(Offline)).unwrap()
+    ClientService::open(config(directory), store, |_| Ok(Arc::new(Offline))).unwrap()
+}
+#[test]
+fn journal_binds_origin_before_key_creation_and_rejects_repointing_without_mutation() {
+    let directory = Directory::new();
+    let initial = service(&directory);
+    let store = directory.store();
+    let before = store.read("journal.json").unwrap().unwrap();
+    let journal: serde_json::Value = serde_json::from_slice(&before).unwrap();
+    assert_eq!(journal["formatVersion"], 2);
+    assert_eq!(journal["serverUrl"], config(&directory).server_url);
+    let key_hash = olo_toolgate_client::digest(&store.read("device-key").unwrap().unwrap());
+    drop(initial);
+    let mut foreign = config(&directory);
+    foreign.server_url = "https://foreign.example".into();
+    assert_eq!(
+        ClientService::open(foreign, directory.store(), |_| panic!(
+            "foreign state must not construct transport"
+        ))
+        .err(),
+        Some(Failure::TenantMismatch)
+    );
+    assert_eq!(store.read("journal.json").unwrap().unwrap(), before);
+    assert_eq!(
+        olo_toolgate_client::digest(&store.read("device-key").unwrap().unwrap()),
+        key_hash
+    );
+    assert!(
+        ClientService::open(config(&directory), directory.store(), |_| Ok(Arc::new(
+            Offline
+        )))
+        .is_ok()
+    );
+}
+#[test]
+fn unsupported_journal_is_left_unchanged_without_creating_a_key() {
+    for bytes in [
+        br#"{}"#.as_slice(),
+        br#"{"formatVersion":1,"serverUrl":"https://control.example.test","tenantId":null}"#
+            .as_slice(),
+    ] {
+        let directory = Directory::new();
+        let store = directory.store();
+        store.write("journal.json", bytes).unwrap();
+        assert_eq!(
+            ClientService::open(config(&directory), directory.store(), |_| panic!(
+                "unsupported state must not construct transport"
+            ))
+            .err(),
+            Some(Failure::Validation)
+        );
+        assert_eq!(store.read("journal.json").unwrap().unwrap(), bytes);
+        assert!(store.read("device-key").unwrap().is_none());
+    }
+}
+#[test]
+fn orphan_key_cannot_be_adopted_into_a_new_tenant_journal() {
+    let directory = Directory::new();
+    let store = directory.store();
+    let key = DeviceKey::load_or_create(&store).unwrap();
+    let fingerprint = key.fingerprint();
+    drop(key);
+    assert_eq!(
+        ClientService::open(config(&directory), directory.store(), |_| panic!(
+            "orphan state must not construct transport"
+        ))
+        .err(),
+        Some(Failure::Validation)
+    );
+    assert!(store.read("journal.json").unwrap().is_none());
+    assert_eq!(
+        DeviceKey::load_or_create(&store).unwrap().fingerprint(),
+        fingerprint
+    );
 }
 /// Signed releases do not need the local Gateway credential: relayed calls are authorized by Control (ADR 027).
 #[test]
@@ -491,6 +563,55 @@ async fn console_ipc_denies_foreign_context_before_health_or_enrollment() {
         );
         assert_eq!(directory.store().read("journal.json").unwrap(), before);
     }
+}
+
+#[tokio::test]
+async fn busy_console_requests_receive_a_correlated_conflict_frame() {
+    use olo_toolgate_contracts::v2::{ConsoleClientOperation, ConsoleClientRequest};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let directory = Directory::new();
+    let service = Arc::new(tokio::sync::Mutex::new(service(&directory)));
+    let contracts = Contracts::new().unwrap();
+    let activity = service.lock().await.activity.clone();
+    let guard = service.lock().await;
+    for operation in [
+        ConsoleClientOperation::Health,
+        ConsoleClientOperation::Enroll,
+    ] {
+        let request = ConsoleClientRequest {
+            kind: "console-tenant-state".into(),
+            request_id: "busy-console".into(),
+            operation,
+            console_url: "https://control.example.test/console/".into(),
+            expected_tenant_id: None,
+        };
+        let bytes = contracts.encode("ConsoleClientRequest", &request).unwrap();
+        let (mut stream, mut peer) = tokio::io::duplex(16384);
+        peer.write_u32(bytes.len() as u32).await.unwrap();
+        peer.write_all(&bytes).await.unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            ipc::connection(
+                &mut stream,
+                "authorized",
+                &["authorized".into()],
+                &service,
+                &contracts,
+                &activity,
+            ),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let size = peer.read_u32().await.unwrap();
+        let mut bytes = vec![0; size as usize];
+        peer.read_exact(&mut bytes).await.unwrap();
+        let response: ClientIpcResponse = contracts.decode("ClientIpcResponse", &bytes).unwrap();
+        assert_eq!(response.request_id, request.request_id);
+        assert_eq!(response.error, Some(ErrorCode::Conflict));
+        assert!(response.health.is_none() && response.challenge.is_none());
+    }
+    drop(guard);
 }
 
 #[tokio::test]
