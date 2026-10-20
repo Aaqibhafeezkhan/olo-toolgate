@@ -230,6 +230,9 @@ control:
     caKey: ca.crt
   limits:
     maxRecords: 512
+    requestsPerSecond: 1000
+    httpConcurrency: 64
+    databaseConcurrency: 8
     maxConfigBytes: 1048576
   # OLO Orgs Marketplace (marketplace docs/api.md §4). Environment-owned: a configuration import can't change these.
   # keys lists keyId:base64RawEd25519PublicKey pairs; Control logs and shows their fingerprints. caSecret optionally

@@ -20,10 +20,12 @@ public class TenantRouting {
     @Inject PostgresStore store;
     @Inject ContractCodec codec;
     @Inject Config config;
+    private record Admitted(TenantRequestResolver.Context context,TenantAdmission.Lease lease){}
     static boolean tenantPath(String path){return !path.equals("/q")&&!path.startsWith("/q/");}
     void routes(@Observes Router router){
         if(config.getOptionalValue("quarkus.http.proxy.proxy-address-forwarding",Boolean.class).orElse(false))
             throw new IllegalStateException("Tenant routing requires direct authority; forwarded address rewriting is unsupported");
+        var admission=new TenantAdmission(config.getOptionalValue("toolgate.capacity.requests-per-second",Integer.class).orElse(1000),config.getOptionalValue("toolgate.capacity.http-concurrency",Integer.class).orElse(64));
         router.route().order(-2000).handler(context->{
             if(!tenantPath(context.normalizedPath())){context.next();return;}
             // Capture transport inputs on the event loop. Database work runs on the worker pool.
@@ -40,14 +42,20 @@ public class TenantRouting {
                 String sni=sni(request.sslSession());boolean ssl=request.isSSL();
                 context.vertx().executeBlocking(()->{
                     var bound=resolver.resolve(hosts,ssl?443:80,sni,expected);
+                    var lease=admission.enter(bound.tenant());
+                    try {
                     if(!origins.isEmpty()){
                         var profile=store.transaction(bound.tenant(),false,Store.Session::runtimeProfile);
                         checkOrigin(bound,profile,origins,ssl,config.getOptionalValue("toolgate.quickstart.enabled",Boolean.class).orElse(false));
                     }
-                    return bound;
+                    return new Admitted(bound,lease);
+                    }catch(RuntimeException failure){lease.close();throw failure;}
                 }).onComplete(result->{
                     if(result.failed()){reject(context,result.cause());return;}
-                    context.put(TenantRequest.KEY,result.result());context.next();
+                    var admitted=result.result();
+                    if(context.response().ended()||context.response().closed()){admitted.lease().close();return;}
+                    context.addEndHandler(ignored->admitted.lease().close());
+                    context.put(TenantRequest.KEY,admitted.context());context.next();
                 });
             }catch(RuntimeException invalid){reject(context,invalid);}
         });
@@ -73,7 +81,8 @@ public class TenantRouting {
     }
     private void reject(RoutingContext context,Throwable error){
         var failure=error instanceof Failure known?known:Failure.unavailable();
+        if(failure.status()==429)context.response().putHeader("Retry-After","1");
         context.response().setStatusCode(failure.status()).putHeader("Content-Type","application/json")
-            .putHeader("Cache-Control","no-store").end(codec.json(new ErrorEnvelope(failure.code(),UUID.randomUUID().toString(),failure.status()==503)));
+            .putHeader("Cache-Control","no-store").end(codec.json(new ErrorEnvelope(failure.code(),UUID.randomUUID().toString(),failure.status()==503||failure.status()==429)));
     }
 }

@@ -50,6 +50,9 @@ data:
   TOOLGATE_CONTROL_BUILDER_DATA_DIRECTORY: /data/builder
   TOOLGATE_CONTROL_MAX_RECORDS: {{ printf "%d" (int $g.limits.maxRecords) | quote }}
   TOOLGATE_CONTROL_MAX_CONFIG_BYTES: {{ printf "%d" (int $g.limits.maxConfigBytes) | quote }}
+  TOOLGATE_CAPACITY_REQUESTS_PER_SECOND: {{ printf "%d" (int $g.limits.requestsPerSecond) | quote }}
+  TOOLGATE_CAPACITY_HTTP_CONCURRENCY: {{ printf "%d" (int $g.limits.httpConcurrency) | quote }}
+  TOOLGATE_CAPACITY_DATABASE_CONCURRENCY: {{ printf "%d" (int $g.limits.databaseConcurrency) | quote }}
   TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED: {{ $g.tracing.enabled | quote }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {{ printf "https://%s:%v" $g.tracing.host $g.tracing.port | quote }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: {{ $g.tracing.protocol | quote }}

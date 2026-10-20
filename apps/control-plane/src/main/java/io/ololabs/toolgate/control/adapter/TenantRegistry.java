@@ -227,6 +227,22 @@ public class TenantRegistry {
             return true;
         });
     }
+    public record Capacity(long storedBytes,long storedRows,long queuedRows,long maxStoredBytes,long maxStoredRows,long maxQueuedRows){}
+    public Capacity capacity(TenantId tenant){return platformStore().platformTransaction(tenant,(c,tx)->{
+        try(var s=c.prepareStatement("SELECT stored_bytes,stored_rows,queued_rows,max_stored_bytes,max_stored_rows,max_queued_rows FROM control_tenant_capacity WHERE tenant_id=?")){
+            s.setString(1,tenant.value());try(var row=s.executeQuery()){if(!row.next())throw Failure.unavailable();return new Capacity(row.getLong(1),row.getLong(2),row.getLong(3),row.getLong(4),row.getLong(5),row.getLong(6));}
+        }catch(SQLException failure){throw Failure.unavailable();}
+    });}
+    public void capacity(TenantId tenant,long bytes,long rows,long queued){
+        if(bytes<4096||bytes>1099511627776L||rows<1||rows>1000000||queued<1||queued>100000)throw Failure.validation();
+        platformStore().platformTransaction(tenant,(c,tx)->{
+            try(var s=c.prepareStatement("UPDATE control_tenant_capacity SET max_stored_bytes=?,max_stored_rows=?,max_queued_rows=? WHERE tenant_id=?")){
+                s.setLong(1,bytes);s.setLong(2,rows);s.setLong(3,queued);s.setString(4,tenant.value());if(s.executeUpdate()!=1)throw Failure.unavailable();
+                var before=tx.load();tx.save(before,new io.ololabs.toolgate.control.domain.Directory(before.revision()+1,before.entries()));
+                tx.audit(DirectoryService.digest("platform-capacity"),"TENANT_CAPACITY_UPDATE","tenant",before.revision()+1,"capacity-"+UUID.randomUUID(),DirectoryService.digest(bytes+":"+rows+":"+queued));return null;
+            }catch(SQLException failure){throw Failure.conflict();}
+        });
+    }
     public void suspended(TenantId tenant, boolean suspended) {
         platformStore().platformTransaction(tenant, (c, tx) -> {
             try (var s = c.prepareStatement("UPDATE control_tenants SET status=?,updated_at=? WHERE tenant_id=? AND status=?")) {

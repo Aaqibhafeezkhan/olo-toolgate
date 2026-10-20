@@ -12,6 +12,9 @@ DB = ROOT / 'apps/control-plane/src/main/resources/db'
 
 
 class SchemaOwnershipTests(unittest.TestCase):
+    def test_capacity_triggers_match_the_reviewed_generator(self):
+        import subprocess, sys
+        subprocess.run([sys.executable,str(ROOT/'tools/tenancy/capacity_schema.py'),'--check'],check=True)
     def test_java_runtime_context_has_one_approved_transaction_boundary(self):
         sources = ROOT / 'apps/control-plane/src/main/java'
         setters = {path.relative_to(sources).as_posix() for path in sources.rglob('*.java')

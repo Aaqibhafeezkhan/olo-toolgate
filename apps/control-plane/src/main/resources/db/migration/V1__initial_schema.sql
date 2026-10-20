@@ -676,6 +676,123 @@ FOR EACH ROW EXECUTE FUNCTION control_tenant_lifecycle_guard();
 
 -- Customer data is denied without the transaction-local context and current lifecycle.
 -- Keep this explicit list aligned with db/schema-ownership.json; CI rejects drift.
+-- BEGIN TENANT CAPACITY
+CREATE TABLE control_tenant_capacity(
+ tenant_id varchar(128) NOT NULL PRIMARY KEY,
+ stored_bytes bigint NOT NULL DEFAULT 0 CHECK(stored_bytes>=0),
+ stored_rows bigint NOT NULL DEFAULT 0 CHECK(stored_rows>=0),
+ queued_rows bigint NOT NULL DEFAULT 0 CHECK(queued_rows>=0),
+ max_stored_bytes bigint NOT NULL DEFAULT 1073741824 CHECK(max_stored_bytes BETWEEN 4096 AND 1099511627776),
+ max_stored_rows bigint NOT NULL DEFAULT 100000 CHECK(max_stored_rows BETWEEN 1 AND 1000000),
+ max_queued_rows bigint NOT NULL DEFAULT 256 CHECK(max_queued_rows BETWEEN 1 AND 100000),
+ CHECK(stored_rows<=max_stored_rows AND queued_rows<=max_queued_rows AND stored_bytes+queued_rows*16777216<=max_stored_bytes));
+
+GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_tenant_capacity TO toolgate_control_platform;
+
+CREATE FUNCTION control_capacity_seed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN INSERT INTO public.control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id);RETURN NEW;END;$$;
+REVOKE ALL ON FUNCTION control_capacity_seed() FROM PUBLIC;
+CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_capacity_seed();
+
+CREATE FUNCTION control_builder_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.kind='TEST' AND (NEW.document::jsonb->>'state') IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.kind='TEST' AND (OLD.document::jsonb->>'state') IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_builder_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_builder FOR EACH ROW EXECUTE FUNCTION control_builder_capacity();
+
+CREATE FUNCTION control_mcp_requests_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.record),0)+COALESCE(octet_length(NEW.task),0)+COALESCE(octet_length(NEW.result),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.record),0)+COALESCE(octet_length(OLD.task),0)+COALESCE(octet_length(OLD.result),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_mcp_requests_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_mcp_requests FOR EACH ROW EXECUTE FUNCTION control_mcp_requests_capacity();
+
+CREATE FUNCTION control_enterprise_invocations_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('PENDING','PENDING_APPROVAL','QUEUED','RESERVED','EXECUTING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('PENDING','PENDING_APPROVAL','QUEUED','RESERVED','EXECUTING') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_enterprise_invocations_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_enterprise_invocations FOR EACH ROW EXECUTE FUNCTION control_enterprise_invocations_capacity();
+
+CREATE FUNCTION control_tool_host_dispatches_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_tool_host_dispatches_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_tool_host_dispatches FOR EACH ROW EXECUTE FUNCTION control_tool_host_dispatches_capacity();
+
+CREATE FUNCTION control_server_packages_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.content),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.content),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_server_packages_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_server_packages FOR EACH ROW EXECUTE FUNCTION control_server_packages_capacity();
+
+CREATE FUNCTION control_server_documents_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_server_documents_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_server_documents FOR EACH ROW EXECUTE FUNCTION control_server_documents_capacity();
+
+CREATE FUNCTION control_secrets_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.cipher),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.cipher),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_secrets_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_secrets FOR EACH ROW EXECUTE FUNCTION control_secrets_capacity();
+
+CREATE FUNCTION control_invocation_events_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_invocation_events_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_invocation_events FOR EACH ROW EXECUTE FUNCTION control_invocation_events_capacity();
+-- END TENANT CAPACITY
+
 DO $tenant_policies$
 DECLARE
     tenant_table text;
@@ -725,6 +842,7 @@ BEGIN
         ,'control_tenant_vault_keys'
         ,'control_tenant_runtime_profiles'
         ,'control_tenant_identity_keys'
+        ,'control_tenant_capacity'
     ] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
         EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);

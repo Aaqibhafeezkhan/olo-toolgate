@@ -11,12 +11,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app', type=Path, required=True)
     parser.add_argument('--connection', type=Path, required=True)
-    parser.add_argument('command', choices=['preview', 'provision', 'inspect', 'suspend', 'resume', 'publish-identity'])
+    parser.add_argument('command', choices=['preview', 'provision', 'inspect', 'suspend', 'resume', 'publish-identity', 'capacity'])
     parser.add_argument('target', help='Manifest/publication path or registered alias')
     parser.add_argument('--expected-uuid', help='Required for suspend/resume')
+    parser.add_argument('--limits-file',type=Path,help='Protected capacity limits JSON')
     args = parser.parse_args()
-    if (args.command in ('suspend', 'resume')) != bool(args.expected_uuid):
-        parser.error('Only lifecycle commands require --expected-uuid')
+    if (args.command in ('suspend', 'resume') or args.command=='capacity' and args.limits_file is not None) != bool(args.expected_uuid):
+        parser.error('Lifecycle and capacity updates require --expected-uuid')
+    if args.limits_file is not None and args.command!='capacity':parser.error('--limits-file is for capacity updates')
     roots = [args.app/'app', args.app/'lib/main', args.app/'lib/boot']
     if not all(root.is_dir() for root in roots):
         parser.error('A matching packaged quarkus-app directory is required')
@@ -25,6 +27,7 @@ def main():
                args.command, str(args.connection.resolve()), args.target]
     if args.expected_uuid:
         command.append(args.expected_uuid)
+    if args.limits_file is not None:command.append(str(args.limits_file.resolve()))
     raise SystemExit(subprocess.run(command).returncode)
 
 

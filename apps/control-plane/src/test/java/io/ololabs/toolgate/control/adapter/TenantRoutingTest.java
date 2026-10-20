@@ -14,9 +14,30 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class TenantRoutingTest {
     private static org.eclipse.microprofile.config.Config config(){
+        return config(Map.of());
+    }
+    private static org.eclipse.microprofile.config.Config config(Map<String,Object> values){
         return (org.eclipse.microprofile.config.Config)java.lang.reflect.Proxy.newProxyInstance(TenantRoutingTest.class.getClassLoader(),new Class<?>[]{org.eclipse.microprofile.config.Config.class},(proxy,method,args)->{
-            if(method.getName().equals("getOptionalValue"))return Optional.empty();throw new UnsupportedOperationException();
+            if(method.getName().equals("getOptionalValue"))return Optional.ofNullable(values.get(args[0]));throw new UnsupportedOperationException();
         });
+    }
+    @Test void aSaturatedHttpTenantCannotConsumeTheOtherTenantSlot()throws Exception {
+        var a=TenantId.create();var b=TenantId.create();var vertx=Vertx.vertx();var router=Router.router(vertx);
+        var routing=new TenantRouting();routing.codec=new ContractCodec();routing.config=config(Map.of("toolgate.capacity.http-concurrency",1));
+        routing.resolver=new TenantRequestResolver(Map.of("a.example.com",a,"b.example.com",b)::get);routing.routes(router);
+        var held=new java.util.concurrent.CompletableFuture<io.vertx.ext.web.RoutingContext>();
+        router.route().handler(ctx->{if(ctx.normalizedPath().equals("/held"))held.complete(ctx);else ctx.response().end("available");});
+        var server=vertx.createHttpServer().requestHandler(router).listen(0,"127.0.0.1").toCompletionStage().toCompletableFuture().get(10,TimeUnit.SECONDS);
+        try(var socket=new java.net.Socket("127.0.0.1",server.actualPort())){
+            socket.getOutputStream().write("GET /held HTTP/1.1\r\nHost: a.example.com\r\nConnection: close\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            var first=held.get(10,TimeUnit.SECONDS);
+            var denied=raw(server.actualPort(),"a.example.com","/other","");
+            assertTrue(denied.startsWith("HTTP/1.1 429"));assertTrue(denied.toLowerCase().contains("retry-after: 1"));
+            assertTrue(raw(server.actualPort(),"b.example.com","/other","").endsWith("available"));
+            var ended=new java.util.concurrent.CompletableFuture<Void>();vertx.runOnContext(ignored->first.response().end("done").onComplete(result->ended.complete(null)));ended.get(10,TimeUnit.SECONDS);
+            socket.getInputStream().readAllBytes();
+            assertTrue(raw(server.actualPort(),"a.example.com","/other","").endsWith("available"));
+        }finally{server.close().toCompletionStage().toCompletableFuture().get(10,TimeUnit.SECONDS);vertx.close().toCompletionStage().toCompletableFuture().get(10,TimeUnit.SECONDS);}
     }
     @Test void realRouterBindsBeforeStaticAndSocketRoutesAndIgnoresForwardedHosts()throws Exception {
         var a=TenantId.create();var b=TenantId.create();var vertx=Vertx.vertx();

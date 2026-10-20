@@ -1128,6 +1128,31 @@
       ]
     },
     {
+      "name": "control_tenant_capacity",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "SELECT"
+      ]
+    },
+    {
       "name": "control_tenant_hosts",
       "classification": "platform-hostname",
       "tenantColumn": "tenant_id",

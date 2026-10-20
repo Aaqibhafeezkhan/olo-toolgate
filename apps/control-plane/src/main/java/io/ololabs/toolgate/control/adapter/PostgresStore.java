@@ -25,12 +25,17 @@ public class PostgresStore implements Store {
     private final ContractCodec codec;
     private final DirectoryCache directoryCache;
     private boolean ownsDataSource;
+    private TenantAdmission admission=new TenantAdmission(0,8);
     @Inject
     public PostgresStore(jakarta.enterprise.inject.Instance<AgroalDataSource> dataSource, ContractCodec codec, org.eclipse.microprofile.config.Config config) {
         this(config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
             && !config.getOptionalValue("toolgate.quickstart.storage", String.class).orElse("sqlite").equals("postgresql")
             ? SqliteState.openPooled(java.nio.file.Path.of(config.getValue("toolgate.quickstart.database", String.class))) : (javax.sql.DataSource) dataSource.get(), codec,
             DirectoryCacheConfig.create(config, codec));
+        int pool=config.getOptionalValue("quarkus.datasource.jdbc.max-size",Integer.class).orElse(16);
+        int cap=config.getOptionalValue("toolgate.capacity.database-concurrency",Integer.class).orElse(Math.max(1,Math.min(8,pool/2)));
+        if(pool<2||cap<1||cap>=pool)throw new IllegalStateException("Tenant database concurrency must reserve connections for other tenants");
+        admission=new TenantAdmission(0,cap);
         ownsDataSource = config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
             && !config.getOptionalValue("toolgate.quickstart.storage", String.class).orElse("sqlite").equals("postgresql");
     }
@@ -47,8 +52,9 @@ public class PostgresStore implements Store {
     <T> T platformTransaction(TenantId tenant, java.util.function.BiFunction<Connection, Session, T> work) {
         return transaction(tenant, true, true, work);
     }
+    @SuppressWarnings("try") // The admission lease releases its slot on every transaction exit.
     private <T> T transaction(TenantId tenant, boolean write, boolean platform, java.util.function.BiFunction<Connection, Session, T> work) {
-        try (var connection = dataSource.getConnection()) {
+        try (var lease=platform?null:admission.enter(tenant);var connection = dataSource.getConnection()) {
             boolean local = SqliteState.local(connection);
             if (local) {
                 // WAL readers use a stable snapshot without reserving the single writer.

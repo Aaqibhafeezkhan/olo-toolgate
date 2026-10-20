@@ -1224,11 +1224,29 @@
               "type": "integer",
               "minimum": 1024,
               "maximum": 1048576
+            },
+            "requestsPerSecond": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "httpConcurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
+            },
+            "databaseConcurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
             }
           },
           "required": [
             "maxRecords",
-            "maxConfigBytes"
+            "maxConfigBytes",
+            "requestsPerSecond",
+            "httpConcurrency",
+            "databaseConcurrency"
           ]
         },
         "tracing": {

@@ -6,7 +6,7 @@ Status: implementation started; multitenant support is not complete. Revised aga
 
 Working branch: `feature/multitenant-support-gap`. Commit each verified milestone on this branch and report its commit, overall completed percentage, pending percentage and next milestone. Stage only files belonging to this work; unrelated workspace content is excluded.
 
-Overall progress: **86% complete, 14% pending**. This is a weighted planning estimate of accepted implementation gates, not a measure of production readiness. The fixed weights below total 100; credit a row only when its stated implementation and verification gate passes. Phase 1 is split so each foundation gate is credited independently. Record any future scope/weight change explicitly rather than silently changing the denominator.
+Overall progress: **91% complete, 9% pending**. This is a weighted planning estimate of accepted implementation gates, not a measure of production readiness. The fixed weights below total 100; credit a row only when its stated implementation and verification gate passes. Phase 1 is split so each foundation gate is credited independently. Record any future scope/weight change explicitly rather than silently changing the denominator.
 
 Milestone allocation update: the former 19% phase 1b allocation is now split into 5% for the ownership inventory/customer-data RLS gate and 14% for the remaining registry, UUID, lifecycle and ownership-constraint gates. The original phase 1b total and the overall 100% denominator are unchanged. The registry/authority split is now complete: registry and hostname metadata use platform-only privileges; authority and customer data use tenant RLS.
 
@@ -21,10 +21,10 @@ Milestone allocation update: the former 19% phase 1b allocation is now split int
 | 3: Tenant resolution, service/deployment refactor and CI guards | 16% | Implemented and verified | 16% |
 | 4: Device/Gateway binding and discovery v2 cutover | 18% | Implemented and verified; shared deployment/release qualification remains in phases 5 and 8 | 18% |
 | 5: Deployment and tenant administration | 5% | Implemented and verified | 5% |
-| 6: Capacity and background isolation | 5% | Pending | 0% |
+| 6: Capacity and background isolation | 5% | Implemented and verified | 5% |
 | 7: Recovery qualification | 5% | Pending | 0% |
 | 8: Release qualification and documentation | 4% | Pending | 0% |
-| Total | 100% | In progress | 86% |
+| Total | 100% | In progress | 91% |
 
 - Phase 0 is implemented: secret delivery requires the current consumed permit nonce, matching invocation/device/epoch and live authority before secret lookup/decryption. The HTTP adapter, endpoint transport and OpenAPI header contract carry the fence. Regression coverage includes missing/invalid/foreign fences, a replaced attempt, wrong device/tenant, revoked grants and rejection before ciphertext decryption.
 - Phase 1 has begun with removal of the unused `quickstart_vault` table/grants from both V1 schemas. Quickstart's PostgreSQL adapter now takes a tenant-namespaced transaction advisory lock instead; SQLite keeps `BEGIN IMMEDIATE`.
@@ -610,3 +610,5 @@ These are official vendor, standards and security-community sources. They establ
 | [RFC 9110, 421 semantics](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.20) | Avoid treating a tenant authorization denial as a transport-routing retry |
 
 Release evidence must include the complete V1 table/privilege audit, fresh-schema and unsupported-database tests, adversarial two-tenant integration tests, explicit provisioning/authority-update tests, discovery-v2 client cutover, device enrollment/rotation, secret custody, saturation and same-release recovery results. Until those pass, describe the implementation as under development rather than production-proven.
+
+- Phase 6 verification: tenant HTTP/rate admission and pre-borrow database concurrency are bounded per replica; deterministic lease/map tests and real HTTP/database saturation leave tenant B usable while tenant A is full. RLS-protected capacity rows and owner triggers atomically account payload bytes, stored rows and queued work with completion reservations. SQLite/PostgreSQL tests cover overflow rollback, supported retention reclamation, queued completion, foreign writes, runtime counter tampering and rejected limit reductions. Protected UUID-confirmed operator limit updates are audited. The complete Control/enterprise suites and privileged PostgreSQL owner restore passed; ownership/generator checks and Helm lint passed. Dedicated pools enforce CPU/memory/process limits, and actual tenant-A memory exhaustion leaves tenant B serving. See docs/control-plane/tenant-capacity.md for replica-local limits, physical disk/retention boundaries and deployment settings. Existing paginated watchdog/provisioning and platform-only enumeration gates remain verified. Phase 6 earns 5%, bringing progress to 91% complete and 9% pending. Continue directly to phase 7 recovery.

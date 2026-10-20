@@ -14,10 +14,10 @@ public final class TenantOperator {
         catch(Exception denied) { System.err.println("Tenant operator command rejected; consult protected configuration and tenant status"); System.exit(1); }
     }
     static String run(String... args) throws Exception {
-        if(args.length<3||args.length>4)throw Failure.validation();
+        if(args.length<3||args.length>5)throw Failure.validation();
         var command=args[0];
-        if(!Set.of("preview","provision","inspect","suspend","resume","publish-identity").contains(command))throw Failure.validation();
-        if(args.length==4&&!Set.of("suspend","resume").contains(command))throw Failure.validation();
+        if(!Set.of("preview","provision","inspect","suspend","resume","publish-identity","capacity").contains(command))throw Failure.validation();
+        if(args.length>3&&!Set.of("suspend","resume","capacity").contains(command))throw Failure.validation();
         var codec=new ContractCodec();
         var node=codec.configuration(ProtectedCustody.privateText(Path.of(args[1]),16384),false);
         if(!node.isObject()||!node.has("properties")||!node.get("properties").isObject()
@@ -53,6 +53,16 @@ public final class TenantOperator {
                 return "{\"published\":true}";
             }
             var tenant=registry.find(args[2]);if(tenant==null)throw Failure.tenantUnavailable();
+            if(command.equals("capacity")){
+                if(args.length!=3){
+                    if(args.length!=5||!tenant.id().value().equals(args[3]))throw Failure.validation();
+                    var limits=codec.configuration(ProtectedCustody.privateText(Path.of(args[4]),4096),false);
+                    if(!limits.isObject()||limits.size()!=3)throw Failure.validation();
+                    for(var field:List.of("maxStoredBytes","maxStoredRows","maxQueuedRows"))if(!limits.path(field).isIntegralNumber()||!limits.path(field).canConvertToLong())throw Failure.validation();
+                    registry.capacity(tenant.id(),limits.path("maxStoredBytes").asLong(),limits.path("maxStoredRows").asLong(),limits.path("maxQueuedRows").asLong());
+                }
+                return codec.json(registry.capacity(tenant.id()));
+            }
             if(command.equals("suspend")||command.equals("resume")){
                 if(args.length!=4||!tenant.id().value().equals(args[3]))throw Failure.validation();
                 registry.suspended(tenant.id(),command.equals("suspend"));tenant=registry.find(args[2]);
