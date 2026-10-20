@@ -153,6 +153,15 @@ export interface ConnectionRequirement {
   readonly provider: string;
   readonly scopes: ReadonlyArray<string>;
 }
+export type ConsoleClientOperation = "HEALTH" | "ENROLL";
+/** OS-authenticated native request scoped to a console origin and optional expected UUID. The service validates protected local tenant/origin binding before reading health or starting enrollment. */
+export interface ConsoleClientRequest {
+  readonly kind: "console-tenant-state";
+  readonly requestId: string;
+  readonly operation: ConsoleClientOperation;
+  readonly consoleUrl: string;
+  readonly expectedTenantId?: string;
+}
 /** Identifies the shared contract set. */
 export interface ContractSet {
   readonly name: "olo-toolgate-contracts";

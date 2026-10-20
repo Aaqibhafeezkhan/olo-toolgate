@@ -255,6 +255,44 @@
       "required": [
         "jws"
       ]
+    },
+    "ConsoleClientOperation": {
+      "type": "string",
+      "enum": [
+        "HEALTH",
+        "ENROLL"
+      ]
+    },
+    "ConsoleClientRequest": {
+      "description": "OS-authenticated native request scoped to a console origin and optional expected UUID. The service validates protected local tenant/origin binding before reading health or starting enrollment.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "console-tenant-state"
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "operation": {
+          "$ref": "#/$defs/ConsoleClientOperation"
+        },
+        "consoleUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "expectedTenantId": {
+          "$ref": "#/$defs/TenantUuid"
+        }
+      },
+      "required": [
+        "kind",
+        "requestId",
+        "operation",
+        "consoleUrl"
+      ]
     }
   }
 }

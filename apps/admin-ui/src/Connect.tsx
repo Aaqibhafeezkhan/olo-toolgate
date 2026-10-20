@@ -56,6 +56,12 @@ export function Connect({onCode,onCancel,client}:{onCode:(code:string)=>void;onC
           setMessage('Upgrade the Chrome extension below. This page will detect the new version automatically.');
         else {
           detected=true;
+          if(status.phase==='tenant-mismatch'||status.error==='TENANT_MISMATCH'){
+            if(previousCode){previousCode='';onCancel?.();}
+            setInstaller(undefined);setRelease(undefined);
+            setMessage('This computer is bound to another organization. Open its organization URL, or ask your administrator to change its tenant.');
+            return;
+          }
           if(status.phase==='installation-detected')requested=false;
           // This page is trying to connect: a client on another gateway, or one this gateway no
           // longer accepts after this page's Connect, is a wrong configuration. Retry once from scratch; an already

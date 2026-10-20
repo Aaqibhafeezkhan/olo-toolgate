@@ -136,7 +136,20 @@ async fn fetch(client: &reqwest::Client, url: &str, limit: u64) -> Result<Vec<u8
 }
 pub async fn connect(console_url: &str) -> Result<String> {
     let origin = console_origin(console_url)?;
+    let installed = crate::install::config_path();
+    let configured = if installed.exists() {
+        let settings = crate::config::Config::load(&installed)?;
+        authorize_console(&settings, console_url)?;
+        Some(settings)
+    } else {
+        None
+    };
     let server = site_server(&origin).await?;
+    if let Some(settings) = &configured {
+        if crate::config::origin(&settings.server_url)? != server {
+            return Err(Failure::TenantMismatch);
+        }
+    }
     // A local console also publishes its gateway's CA, so any local stack connects in one click.
     let source = if origin.starts_with("http://") {
         origin
@@ -144,6 +157,16 @@ pub async fn connect(console_url: &str) -> Result<String> {
         server.clone()
     };
     configure_client(server, source).await
+}
+/// Only protected installation configuration grants an origin access to local device state.
+pub fn authorize_console(config: &crate::config::Config, console_url: &str) -> Result<()> {
+    let origin = console_origin(console_url)?;
+    if origin != crate::config::origin(&config.server_url)?
+        && config.local_console_url.as_deref() != Some(origin.as_str())
+    {
+        return Err(Failure::TenantMismatch);
+    }
+    Ok(())
 }
 /// Setup can use the local console address while service traffic remains HTTPS.
 pub async fn installation_server(value: &str) -> Result<String> {
@@ -206,7 +229,9 @@ async fn configure_client(server: String, source: String) -> Result<String> {
     let installed = crate::install::config_path();
     let operation = if installed.exists() {
         let settings = crate::config::Config::load(&installed)?;
-        if settings.server_url == server && settings.authorized_peers.contains(&peer) {
+        if crate::config::origin(&settings.server_url)? == server
+            && settings.authorized_peers.contains(&peer)
+        {
             let trust_matches = match (
                 installation.ca_certificate_pem.as_deref(),
                 settings.ca_certificate_path.as_ref(),

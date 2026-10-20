@@ -63,6 +63,8 @@ fn v2_fixture_round_trips() {
         DiscoveryHeader,
         DiscoveryKeySet,
         DiscoveryPublicKey,
+        ConsoleClientOperation,
+        ConsoleClientRequest,
         DeviceApproval,
         Dispatch,
         EffectApproval,

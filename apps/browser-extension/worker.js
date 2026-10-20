@@ -17,9 +17,16 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const result = {protocol,version:chrome.runtime.getManifest().version_name,chromeVersion:chrome.runtime.getManifest().version,client:null};
     if (message.operation === 'hello') return {...result,phase:'available'};
     const state = (await chrome.storage.local.get(origin))[origin];
+    const currentSession=async()=>{const current=(await chrome.storage.local.get(origin))[origin];return current?.approved&&current.phase==='ready'&&current.operationId===state?.operationId&&current.serverUrl===state?.serverUrl;};
+    const mismatch=async()=>{
+      await chrome.storage.local.set({[origin]:{approved:true,phase:'tenant-mismatch',waitForInstallation:false}});
+      return {...result,client:null,phase:'tenant-mismatch',error:'TENANT_MISMATCH'};
+    };
     if (message.operation==='proof') {
       if(!state?.approved||state.phase!=='ready'||!/^[a-f0-9]{64}$/.test(message.nonce))return {...result,error:'CONNECT_REQUIRED'};
       const proof=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'proof',consoleUrl:sender.tab.url,nonce:message.nonce});
+      if(!await currentSession())return {...result,error:'CONNECT_REQUIRED'};
+      if(proof.error==='TENANT_MISMATCH')return mismatch();
       return proof.error?{...result,error:'PROOF_UNAVAILABLE'}:{...result,proof:proof.proof};
     }
     if (message.operation === 'cancel') {
@@ -35,23 +42,28 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
           operation:'connect',consoleUrl:sender.tab.url
         });
         if ((await chrome.storage.local.get(origin))[origin]?.operationId !== operationId) return {...result,phase:'cancelled'};
+        if(client.error==='TENANT_MISMATCH'||(!client.error&&client.consoleOrigin!==origin))return mismatch();
         if (client.error || !client.health) throw Error('Client unavailable');
         let userCode;
         if (['UNENROLLED','PENDING'].includes(client.health.state)) {
-          const enrollment = await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'enroll'});
+          const enrollment = await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'enroll',consoleUrl:sender.tab.url});
+          if ((await chrome.storage.local.get(origin))[origin]?.operationId !== operationId) return {...result,phase:'cancelled'};
+          if(enrollment.error==='TENANT_MISMATCH'||(!enrollment.error&&enrollment.consoleOrigin!==origin))return mismatch();
           if (!enrollment.error && enrollment.challenge) userCode = enrollment.challenge.userCode;
         }
         if ((await chrome.storage.local.get(origin))[origin]?.operationId !== operationId) return {...result,phase:'cancelled'};
-        await chrome.storage.local.set({[origin]:{approved:true,phase:'ready',serverUrl:client.serverUrl,userCode}});
+        await chrome.storage.local.set({[origin]:{approved:true,phase:'ready',operationId,serverUrl:client.serverUrl,userCode}});
         return {...result,phase:'ready',client,userCode};
       } catch {
         let waitForInstallation=true;
         try {
-          const health=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'health'});
+          const health=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'health',consoleUrl:sender.tab.url});
+          if ((await chrome.storage.local.get(origin))[origin]?.operationId !== operationId) return {...result,phase:'cancelled'};
+          if(health.error==='TENANT_MISMATCH'||(!health.error&&health.consoleOrigin!==origin))return mismatch();
           waitForInstallation=Boolean(health.error)||!health.health;
         } catch { /* A missing host or service can appear after the combined EXE is opened. */ }
         if ((await chrome.storage.local.get(origin))[origin]?.operationId === operationId)
-          await chrome.storage.local.set({[origin]:{approved:true,phase:'setup-required',waitForInstallation}});
+          await chrome.storage.local.set({[origin]:{approved:true,phase:'setup-required',operationId,waitForInstallation}});
         return {...result,phase:'setup-required'};
       }
     }
@@ -59,25 +71,30 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     if (!state?.approved) return {...result,phase:'available'};
     if (state.phase==='setup-required'&&state.waitForInstallation) {
       try {
-        const health=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'health'});
+        const health=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'health',consoleUrl:sender.tab.url});
+        const current=(await chrome.storage.local.get(origin))[origin];
+        if(!current?.approved||current.phase!=='setup-required'||current.operationId!==state.operationId)return {...result,phase:'cancelled'};
+        if(health.error==='TENANT_MISMATCH'||(!health.error&&health.consoleOrigin!==origin))return mismatch();
         if(!health.error&&health.health) {
           await chrome.storage.local.set({[origin]:{approved:true,phase:'available'}});
           return {...result,phase:'installation-detected'};
         }
       } catch { /* Keep waiting for installation without reopening Windows prompts. */ }
     }
+    if(state.phase==='tenant-mismatch')return {...result,phase:'tenant-mismatch',error:'TENANT_MISMATCH'};
     if (state.phase !== 'ready') return {...result,phase:state.phase === 'connecting' && Date.now() - (state.started ?? Date.now()) >= 900000 ? 'setup-required' : state.phase};
     // Chrome terminates one-shot host after its response. Host itself enforces a 20s IPC deadline.
     try {
-      result.client = await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'health'});
+      result.client = await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'health',consoleUrl:sender.tab.url});
     } catch { /* Missing host, denied OS peer or stopped client remains unavailable. */ }
-    if (result.client?.health && state.serverUrl && result.client.serverUrl !== state.serverUrl)
-      return {...result,client:null,phase:'gateway-changed'};
+    if(!await currentSession())return {...result,client:null,phase:'cancelled'};
+    if(result.client?.error==='TENANT_MISMATCH'||(result.client?.health&&result.client.consoleOrigin!==origin))return mismatch();
     if (!result.client?.error && ['UNENROLLED','PENDING'].includes(result.client?.health?.state)) {
-      const enrollment=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'enroll'});
+      const enrollment=await chrome.runtime.sendNativeMessage('io.ololabs.toolgate.connect',{operation:'enroll',consoleUrl:sender.tab.url});
       // A completed installer repair can replace an expired enrollment while this tab remains open.
       const current=(await chrome.storage.local.get(origin))[origin];
-      if(!current?.approved||current.phase!=='ready'||current.serverUrl!==state.serverUrl)return {...result,client:null,phase:'cancelled'};
+      if(!await currentSession())return {...result,client:null,phase:'cancelled'};
+      if(enrollment.error==='TENANT_MISMATCH'||(!enrollment.error&&enrollment.consoleOrigin!==origin))return mismatch();
       if(!enrollment.error&&enrollment.challenge) {
         state.userCode=enrollment.challenge.userCode;
         await chrome.storage.local.set({[origin]:state});

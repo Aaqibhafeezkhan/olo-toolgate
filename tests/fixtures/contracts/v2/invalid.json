@@ -2600,5 +2600,43 @@
         "header": {}
       }
     }
+  ],
+  "ConsoleClientOperation": [
+    {
+      "case": "no execution operations",
+      "value": "INVOKE"
+    }
+  ],
+  "ConsoleClientRequest": [
+    {
+      "case": "closed tenant assertion",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "consoleUrl": "https://tenant.example.test/console/",
+        "expectedTenantId": "quickstart"
+      }
+    },
+    {
+      "case": "origin required",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "expectedTenantId": "10000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "case": "no credentials from local caller",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "consoleUrl": "https://tenant.example.test/console/",
+        "expectedTenantId": "10000000-0000-4000-8000-000000000001",
+        "credential": "unexpected"
+      }
+    }
   ]
 }

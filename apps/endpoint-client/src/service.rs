@@ -475,11 +475,33 @@ impl ClientService {
     fn device(&self) -> String {
         format!("device-{}", &self.key.fingerprint()[..32])
     }
+    /// Checked inside the service lock before any console-scoped health, enrollment or proof.
+    pub fn authorize_console(
+        &self,
+        console_url: &str,
+        expected_tenant: Option<&str>,
+    ) -> Result<()> {
+        crate::browser::authorize_console(&self.config, console_url)?;
+        if let Some(expected) = expected_tenant {
+            crate::contracts::Contracts::shared()?.encode("TenantUuid", &expected)?;
+            if self
+                .journal
+                .manifest
+                .as_ref()
+                .map(|manifest| manifest.tenant_id.as_str())
+                != Some(expected)
+            {
+                return Err(Failure::TenantMismatch);
+            }
+        }
+        Ok(())
+    }
     pub fn console_device_proof(
         &self,
         console_url: &str,
         nonce: &str,
     ) -> Result<ConsoleDeviceProof> {
+        self.authorize_console(console_url, None)?;
         let origin = crate::browser::console_origin(console_url)?;
         let local = self
             .config
@@ -1316,6 +1338,34 @@ mod tests {
         assert!(service
             .console_device_proof("http://localhost:18103/console/", &nonce)
             .is_err());
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn console_scope_requires_the_configured_origin_and_verified_uuid_without_changing_binding() {
+        let (mut service, gateway, directory) = test_service();
+        let allowed = format!("{}/console/", service.config.server_url);
+        assert_eq!(service.authorize_console(&allowed, None), Ok(()));
+        assert_eq!(
+            service.authorize_console("https://foreign.example/console/", None),
+            Err(Failure::TenantMismatch)
+        );
+        let tenant = "10000000-0000-4000-8000-000000000001";
+        assert_eq!(
+            service.authorize_console(&allowed, Some(tenant)),
+            Err(Failure::TenantMismatch)
+        );
+        let mut manifest: ClientDiscovery =
+            serde_json::from_value(fixtures()["ClientDiscovery"].clone()).unwrap();
+        manifest.tenant_id = tenant.into();
+        service.journal.manifest = Some(manifest);
+        assert_eq!(service.authorize_console(&allowed, Some(tenant)), Ok(()));
+        assert_eq!(
+            service.authorize_console(&allowed, Some("10000000-0000-4000-8000-000000000002")),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(service.journal.manifest.as_ref().unwrap().tenant_id, tenant);
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();

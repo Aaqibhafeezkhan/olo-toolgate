@@ -324,6 +324,26 @@ pub struct ConnectionRequirement {
     pub provider: String,
     pub scopes: Vec<String>,
 }
+/// Canonical ConsoleClientOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConsoleClientOperation {
+    #[serde(rename = "HEALTH")]
+    Health,
+    #[serde(rename = "ENROLL")]
+    Enroll,
+}
+/// OS-authenticated native request scoped to a console origin and optional expected UUID. The service validates protected local tenant/origin binding before reading health or starting enrollment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleClientRequest {
+    #[serde(deserialize_with = "const_console_client_request_kind")]
+    pub kind: String,
+    pub request_id: String,
+    pub operation: ConsoleClientOperation,
+    pub console_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_tenant_id: Option<String>,
+}
 /// Identifies the shared contract set.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2209,6 +2229,11 @@ pub enum ValueType {
 }
 const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
 const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");
+const_field!(
+    const_console_client_request_kind,
+    String,
+    "console-tenant-state"
+);
 const_field!(const_contract_set_name, String, "olo-toolgate-contracts");
 const_field!(const_control_server_settings_format_version, u64, 2);
 const_field!(const_control_settings_view_format_version, u64, 2);

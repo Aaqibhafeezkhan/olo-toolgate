@@ -414,6 +414,84 @@ async fn unauthorized_ipc_rejected_before_reading_payload() {
         Err(Failure::Unauthorized)
     );
 }
+#[tokio::test]
+async fn console_ipc_denies_foreign_context_before_health_or_enrollment() {
+    use olo_toolgate_contracts::v2::{ConsoleClientOperation, ConsoleClientRequest};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let directory = Directory::new();
+    let service = Arc::new(tokio::sync::Mutex::new(service(&directory)));
+    let contracts = Contracts::new().unwrap();
+    let activity = service.lock().await.activity.clone();
+    for (operation, console, expected, allowed) in [
+        (
+            ConsoleClientOperation::Health,
+            "https://other.example/console/",
+            None,
+            false,
+        ),
+        (
+            ConsoleClientOperation::Enroll,
+            "https://other.example/console/",
+            None,
+            false,
+        ),
+        (
+            ConsoleClientOperation::Health,
+            "https://control.example.test/console/",
+            None,
+            true,
+        ),
+        (
+            ConsoleClientOperation::Health,
+            "https://control.example.test/console/",
+            Some("10000000-0000-4000-8000-000000000001"),
+            false,
+        ),
+    ] {
+        let before = directory.store().read("journal.json").unwrap();
+        let request = ConsoleClientRequest {
+            kind: "console-tenant-state".into(),
+            request_id: "context-check".into(),
+            operation,
+            console_url: console.into(),
+            expected_tenant_id: expected.map(str::to_owned),
+        };
+        let bytes = contracts.encode("ConsoleClientRequest", &request).unwrap();
+        let (mut stream, mut peer) = tokio::io::duplex(16384);
+        peer.write_u32(bytes.len() as u32).await.unwrap();
+        peer.write_all(&bytes).await.unwrap();
+        ipc::connection(
+            &mut stream,
+            "authorized",
+            &["authorized".into()],
+            &service,
+            &contracts,
+            &activity,
+        )
+        .await
+        .unwrap();
+        let size = peer.read_u32().await.unwrap() as usize;
+        let mut bytes = vec![0; size];
+        peer.read_exact(&mut bytes).await.unwrap();
+        let reply: ClientIpcResponse = contracts.decode("ClientIpcResponse", &bytes).unwrap();
+        assert_eq!(
+            reply.error,
+            if allowed {
+                None
+            } else {
+                Some(ErrorCode::TenantMismatch)
+            }
+        );
+        assert_eq!(reply.health.is_some(), allowed);
+        assert!(
+            reply.challenge.is_none()
+                && reply.activity.is_none()
+                && reply.connections.is_none()
+                && reply.power.is_none()
+        );
+        assert_eq!(directory.store().read("journal.json").unwrap(), before);
+    }
+}
 
 #[tokio::test]
 async fn health_waits_for_poll_but_enrollment_retains_immediate_backpressure() {
