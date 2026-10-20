@@ -57,9 +57,15 @@ Test action, not the SDK compilation queue.
 
 ## Configure the worker
 
-Deployment supplies the fixed SDK distribution, JDK, canonical CLI and a private
-data directory. Configure these Quarkus settings (or their normal uppercase
-underscore environment equivalents):
+Embedded builds are supported only in the local single-tenant Quickstart composition.
+Shared and production Control reject the embedded worker at startup, and Helm rejects
+`control.builder.enabled=true`. Build packages in isolated external workers and publish
+verified packages through the package import flow. A directory per UUID and a clean
+environment do not isolate a compiler subprocess from Control's platform credentials.
+
+Quickstart supplies the fixed SDK distribution, JDK, canonical CLI and a private
+data directory. Its Quarkus settings (or their normal uppercase
+underscore environment equivalents) are:
 
 ```properties
 toolgate.control.builder.enabled=true
@@ -70,12 +76,9 @@ toolgate.control.builder.data-directory=/data/builder
 ```
 
 The Control image includes the pinned JDK, SDK distribution and canonical CLI.
-The worker is disabled by default. Enable it with
-`TOOLGATE_CONTROL_BUILDER_ENABLED=true`; Quickstart retains its files under
-`/data/builder`, and GatewayControl mounts a dedicated `builder-data` volume.
-For Helm set `control.builder.enabled=true` and
-`control.builder.existingClaim` to an operator-provisioned persistent claim.
-Multiple Control replicas need shared read/write storage for these artifacts.
+The worker is disabled by default. Quickstart retains its files under
+`/data/builder`; its worker is pinned to the persisted default tenant UUID and
+never enumerates other tenants or opens their artifact directories.
 Budget an additional 512 MiB heap plus compiler/native overhead for each active
 worker; adjust the container memory limit and Control heap accordingly.
 Authors cannot select executables, classpaths, compiler options or runtime

@@ -17,7 +17,7 @@ import java.util.concurrent.*;
  *  and the core inventory check. An invalid profile or lock stops startup before any package changes. A profile waiting
  *  for a Tool Host, or one whose required package failed, keeps Control running for repair and is reapplied — an
  *  idempotent no-op once nothing changes — until it is READY. A profile that names device groups is reapplied every
- *  minute even when READY, so devices that join a group later receive its client releases. The profile selects; it never
+ *  minute in bounded tenant pages even when READY, so devices that join a group later receive its client releases. The profile selects; it never
  *  mints an identity or grant. */
 @ApplicationScoped
 public class PackageProvisioningBootstrap {
@@ -57,9 +57,10 @@ public class PackageProvisioningBootstrap {
             service = service(); service.followsDevices(profile);
         } catch (Exception invalid) { throw new IllegalStateException("Deployment profile rejected; verify the profile file and the sealed core package lock", invalid); }
         tenants.active(tenant -> apply(service,tenant,profile,true));
+        var sweep=tenants.bounded(32,tenant -> apply(service,tenant,profile,false));
         executor = Executors.newSingleThreadScheduledExecutor(r -> { var t = new Thread(r, "toolgate-profile-provisioning"); t.setDaemon(true); return t; });
         executor.scheduleWithFixedDelay(() -> {
-            try {tenants.active(tenant -> apply(service,tenant,profile,false));}
+            try {sweep.tick();}
             catch(RuntimeException unavailable){LOG.warn("profile_provisioning enumeration unavailable");}
         },15,60,TimeUnit.SECONDS);
     }

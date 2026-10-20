@@ -13,17 +13,17 @@ import io.quarkus.runtime.ShutdownEvent;
 import org.eclipse.microprofile.config.Config;
 import java.nio.file.*;
 
-/** Fixed toolchains, UUID-separated work/artifacts and explicit tenant-bound background jobs. */
+/** Embedded builds are restricted to the local, single-tenant Quickstart composition. */
 @ApplicationScoped
 public class SdkBuilderBootstrap {
     @Inject TenantRequest request;
-    @Inject TenantRegistry registry;
+    @Inject TenancyConfiguration tenancy;
     @Inject Config config;
     @Inject ContractCodec codec;
     @Inject PostgresStore store;
     private java.util.concurrent.ScheduledExecutorService loop;
     private Path data;
-    private String cursor="";
+    private TenantId owner;
     private String setting(String key){return config.getValue("toolgate.control.builder."+key,String.class);}
     private Path directory(Path path)throws java.io.IOException {
         if(Files.isSymbolicLink(path))throw new java.io.IOException("Invalid Builder directory");
@@ -35,6 +35,7 @@ public class SdkBuilderBootstrap {
         return new JsonSdkProcessWorker(Path.of(setting("java-executable")),Path.of(setting("sdk-libraries")),Path.of(setting("cli-executable")),root,java.time.Duration.ofMinutes(2));
     }
     public SdkBuilderService forTenant(TenantId tenant){
+        if(data!=null&&!tenant.equals(owner))throw Failure.unavailable();
         SdkBuildWorker worker=null;BuilderArtifacts artifacts=null;
         if(data!=null)try {
             Path own=directory(data.resolve(tenant.value()));
@@ -45,14 +46,16 @@ public class SdkBuilderBootstrap {
     }
     void start(@Observes StartupEvent event){
         if(!config.getValue("toolgate.control.builder.enabled",Boolean.class))return;
+        // Paths and environment filtering cannot contain hostile build code running as Control.
+        if(!tenancy.mode().equals("single")||!config.getOptionalValue("toolgate.quickstart.enabled",Boolean.class).orElse(false))
+            throw new IllegalStateException("Embedded SDK builds require single-tenant Quickstart; use isolated external builds for shared or production Control");
+        owner=tenancy.defaultId();
         try{data=directory(Path.of(setting("data-directory")).toAbsolutePath().normalize());worker(data);}
         catch(java.io.IOException invalid){throw new IllegalStateException("SDK Builder requires a fixed JDK, SDK distribution, CLI and private data directory",invalid);}
         loop=java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r->{var thread=new Thread(r,"sdk-package-builder");thread.setDaemon(true);return thread;});
         loop.scheduleWithFixedDelay(()->{
             try {
-                var page=registry.activeAfter(cursor,16);
-                for(var tenant:page){cursor=tenant.value();TenantWork.run(tenant,id->forTenant(id).workOne());}
-                if(page.size()<16)cursor="";
+                TenantWork.run(owner,id->forTenant(id).workOne());
             }catch(RuntimeException failure){org.jboss.logging.Logger.getLogger(SdkBuilderBootstrap.class).warn("SDK Builder enumeration unavailable");}
         },1,1,java.util.concurrent.TimeUnit.SECONDS);
     }

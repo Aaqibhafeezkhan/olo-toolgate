@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 @ApplicationScoped
 public class TenantWork {
     @Inject TenantRegistry registry;
+    TenantSweep bounded(int limit,Consumer<TenantId> action){return new TenantSweep(limit,registry::activeAfter,action);}
     public void active(Consumer<TenantId> action){
         String cursor="";
         while(true){var page=registry.activeAfter(cursor,128);for(var tenant:page){run(tenant,action);cursor=tenant.value();}if(page.size()<128)return;}

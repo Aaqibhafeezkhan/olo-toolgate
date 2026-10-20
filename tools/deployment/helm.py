@@ -35,12 +35,7 @@ def checks():
         invalid = dict(settings); invalid[key]=value; render(invalid,True)
     invalid = dict(settings); del invalid['control.networkPolicy.artifactTo[0].ipBlock.cidr']; render(invalid,True)
     render(dict(settings, **{'control.builder.enabled':'true'}), True)
-    builder = list(yaml.safe_load_all(render(dict(settings, **{'control.builder.enabled':'true','control.builder.existingClaim':'sdk-artifacts'})).stdout))
-    builder_config = next(d for d in builder if d['kind']=='ConfigMap')['data']
-    assert builder_config['TOOLGATE_CONTROL_BUILDER_ENABLED']=='true'
-    builder_pod = next(d for d in builder if d['kind']=='Deployment')['spec']['template']['spec']
-    assert next(v for v in builder_pod['volumes'] if v['name']=='builder-data')['persistentVolumeClaim']['claimName']=='sdk-artifacts'
-    assert next(v for v in builder_pod['containers'][0]['volumeMounts'] if v['name']=='builder-data')['mountPath']=='/data/builder'
-    print('Fleet external secret/store render and five negative configurations passed')
+    render(dict(settings, **{'control.builder.enabled':'true','control.builder.existingClaim':'sdk-artifacts'}),True)
+    print('Fleet external secret/store render and seven negative configurations passed')
 
 if __name__=='__main__': checks()

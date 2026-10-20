@@ -1,6 +1,7 @@
 {{/* Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 */}}
 {{- if .Values.control.enabled }}
 {{- $g := .Values.control }}
+{{- if $g.builder.enabled }}{{ fail "Embedded SDK builds are restricted to local single-tenant Quickstart; deploy isolated external builds and publish verified packages" }}{{- end }}
 {{- $name := include "olo-toolgate.controlName" . }}
 {{- $c := $g.clientCheckIn }}
 {{- if eq $g.cache.mode "redis" }}
