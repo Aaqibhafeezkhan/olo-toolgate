@@ -100,7 +100,14 @@ public class ContractCodec implements Codec {
             if (definition.isMissingNode()) throw new IllegalStateException("Unsupported canonical schema reference");
             definition.findValuesAsText("$ref").forEach(ref -> {
                 int split = ref.indexOf("#/$defs/");
-                pending.add(java.util.Map.entry(split <= 0 ? next.getKey() : ref.substring(0, split), ref.substring(split + 8)));
+                if (split < 0) throw new IllegalStateException("Unsupported canonical schema reference");
+                var target = ref.substring(split + 8);
+                if (ref.startsWith("../v1/")) {
+                    // These closed v1 definitions were loaded from the same bundled canonical artifact.
+                    if (!definitions.has(target)) throw new IllegalStateException("Unsupported canonical v1 reference");
+                    return;
+                }
+                pending.add(java.util.Map.entry(split == 0 ? next.getKey() : ref.substring(0, split), target));
             });
             var local = localReferences(definition.deepCopy());
             if (definitions.has(name) && !withoutDescriptions(definitions.get(name)).equals(withoutDescriptions(local))) {

@@ -3,9 +3,8 @@
 //! Device key custody and cryptographic discovery/identity validation.
 use crate::{storage::ProtectedStore, Failure, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use olo_toolgate_contracts::{ClientDiscovery, DeviceIdentity, SignedClientDiscovery};
+use olo_toolgate_contracts::DeviceIdentity;
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair, PublicKeyData};
-use x509_parser::prelude::*;
 
 /// No Debug/Serialize implementation: only CSR/public material crosses service boundaries.
 pub struct DeviceKey {
@@ -80,75 +79,8 @@ pub fn nonce() -> Result<String> {
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 pub fn certificate_der(pem: &str) -> Result<Vec<u8>> {
-    let (remaining, pem) =
-        x509_parser::pem::parse_x509_pem(pem.as_bytes()).map_err(|_| Failure::Validation)?;
-    if pem.label != "CERTIFICATE" || remaining.iter().any(|b| !b.is_ascii_whitespace()) {
-        return Err(Failure::Validation);
-    }
-    Ok(pem.contents)
+    olo_toolgate_tenant_identity::certificate_der(pem).map_err(Into::into)
 }
-pub(crate) fn valid_ca(cert: &X509Certificate<'_>, now: u64) -> Result<()> {
-    let time = ASN1Time::from_timestamp((now / 1000) as i64).map_err(|_| Failure::Validation)?;
-    if !cert.validity().is_valid_at(time)
-        || !cert.is_ca()
-        || !cert
-            .key_usage()
-            .map_err(|_| Failure::Validation)?
-            .is_some_and(|k| k.value.key_cert_sign())
-    {
-        return Err(Failure::Unauthorized);
-    }
-    Ok(())
-}
-/// HTTPS-authenticated discovery bootstraps a dedicated device CA; exact bytes are signed.
-pub fn verify_discovery(
-    envelope: &SignedClientDiscovery,
-    origin: &str,
-    now: u64,
-    pinned_ca: Option<&str>,
-) -> Result<ClientDiscovery> {
-    let bytes = URL_SAFE_NO_PAD
-        .decode(&envelope.payload)
-        .map_err(|_| Failure::Validation)?;
-    if bytes.len() > 32768 || URL_SAFE_NO_PAD.encode(&bytes) != envelope.payload {
-        return Err(Failure::Validation);
-    }
-    let manifest: ClientDiscovery =
-        crate::contracts::Contracts::new()?.decode("ClientDiscovery", &bytes)?;
-    if manifest.protocol_version != 1
-        || crate::config::origin(&manifest.control_url)? != origin
-        || manifest.verification_uri != format!("{origin}/console/#enroll")
-        || manifest.issued_at_unix_ms > now
-        || manifest.expires_at_unix_ms <= now
-        || manifest.expires_at_unix_ms - manifest.issued_at_unix_ms > 300000
-        || semver::Version::parse(&manifest.minimum_client_version)
-            .map_err(|_| Failure::Validation)?
-            > semver::Version::parse(env!("CARGO_PKG_VERSION")).map_err(|_| Failure::Validation)?
-    {
-        return Err(Failure::Unauthorized);
-    }
-    crate::config::origin(&manifest.gateway_url)?;
-    let der = certificate_der(&manifest.issuer_certificate_pem)?;
-    let (_, ca) = parse_x509_certificate(&der).map_err(|_| Failure::Validation)?;
-    valid_ca(&ca, now)?;
-    if pinned_ca.is_some_and(|p| p != crate::digest(&der)) {
-        return Err(Failure::Unauthorized);
-    }
-    let signature = URL_SAFE_NO_PAD
-        .decode(&envelope.signature)
-        .map_err(|_| Failure::Validation)?;
-    if signature.len() > 1024 || URL_SAFE_NO_PAD.encode(&signature) != envelope.signature {
-        return Err(Failure::Validation);
-    }
-    let key = ca.public_key().subject_public_key.data.as_ref();
-    let mut message = b"toolgate-client-discovery-v1\0".to_vec();
-    message.extend_from_slice(&bytes);
-    ring::signature::UnparsedPublicKey::new(&ring::signature::RSA_PKCS1_2048_8192_SHA256, key)
-        .verify(&message, &signature)
-        .map_err(|_| Failure::Unauthorized)?;
-    Ok(manifest)
-}
-/// Match issuer, exact enrollment identities, key possession and client-only X.509 privileges.
 pub fn verify_tenant_identity(
     identity: &DeviceIdentity,
     manifest: &olo_toolgate_contracts::v2::TenantDiscovery,
@@ -156,72 +88,14 @@ pub fn verify_tenant_identity(
     device: &str,
     now: u64,
 ) -> Result<()> {
-    if identity.device_id != device
-        || identity.tenant_id != manifest.tenant_id
-        || identity.server_id != manifest.server_id
-        || identity.user_id.is_empty()
-        || !manifest
-            .device_authorities
-            .iter()
-            .any(|authority| authority.certificate_pem == identity.issuer_certificate_pem)
-        || identity.expires_at_unix_ms <= now
-    {
-        return Err(Failure::Unauthorized);
-    }
-    let ca_der = certificate_der(&identity.issuer_certificate_pem)?;
-    let (_, ca) = parse_x509_certificate(&ca_der).map_err(|_| Failure::Validation)?;
-    valid_ca(&ca, now)?;
-    let der = certificate_der(&identity.certificate_pem)?;
-    let (_, certificate) = parse_x509_certificate(&der).map_err(|_| Failure::Validation)?;
-    let time = ASN1Time::from_timestamp((now / 1000) as i64).map_err(|_| Failure::Validation)?;
-    let names = certificate.subject();
-    let single = |oid: &str, expected: &str| -> bool {
-        let values: Vec<_> = names
-            .iter_attributes()
-            .filter(|attribute| attribute.attr_type().to_id_string() == oid)
-            .collect();
-        values.len() == 1 && values[0].as_str().is_ok_and(|value| value == expected)
-    };
-    let expected_uri = format!(
-        "urn:toolgate:device:{}",
-        crate::digest(
-            format!(
-                "{}\n{}\n{}\n{}",
-                identity.server_id, identity.tenant_id, identity.user_id, identity.device_id
-            )
-            .as_bytes()
-        )
-    );
-    if names.iter_attributes().count() != 3
-        || !single("2.5.4.3", &identity.device_id)
-        || !single("2.5.4.11", &identity.tenant_id)
-        || !single("2.5.4.10", &identity.server_id)
-        || !certificate.subject_alternative_name().map_err(|_|Failure::Validation)?.is_some_and(|names| names.value.general_names.len() == 1 && matches!(&names.value.general_names[0], GeneralName::URI(uri) if *uri == expected_uri))
-    {return Err(Failure::Unauthorized);}
-    let end = certificate.validity().not_after.timestamp();
-    let start = certificate.validity().not_before.timestamp();
-    if certificate.issuer() != ca.subject()
-        || !certificate.validity().is_valid_at(time)
-        || certificate.is_ca()
-        || end - start > 86400
-        || end < 0
-        || end as u64 * 1000 != identity.expires_at_unix_ms / 1000 * 1000
-        || crate::digest(certificate.public_key().raw) != key.fingerprint()
-        || !certificate
-            .extended_key_usage()
-            .map_err(|_| Failure::Validation)?
-            .is_some_and(|e| e.value.client_auth && !e.value.server_auth && !e.value.any)
-        || !certificate
-            .key_usage()
-            .map_err(|_| Failure::Validation)?
-            .is_some_and(|e| e.value.digital_signature() && !e.value.key_cert_sign())
-    {
-        return Err(Failure::Unauthorized);
-    }
-    certificate
-        .verify_signature(Some(ca.public_key()))
-        .map_err(|_| Failure::Unauthorized)?;
-    Ok(())
+    olo_toolgate_tenant_identity::verify_tenant_identity(
+        identity,
+        manifest,
+        &key.fingerprint(),
+        device,
+        now,
+    )
+    .map_err(Into::into)
 }
 
 #[cfg(test)]

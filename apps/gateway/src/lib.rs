@@ -5,6 +5,7 @@ pub mod application;
 pub mod auth;
 pub mod config;
 mod diagnostics;
+pub mod discovery;
 pub mod http;
 pub mod limits;
 mod mcp;

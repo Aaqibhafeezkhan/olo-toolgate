@@ -22,6 +22,8 @@ public class TenancyConfiguration {
         defaultAlias();
     }
     public String mode(){return config.getOptionalValue("toolgate.tenancy.mode",String.class).orElse("single");}
+    public void checkManifestTenants(int count){if(mode().equals("single")&&count!=1)throw new IllegalStateException("Multiple tenants require subdomain mode");}
+    public void checkSingleRegistry(){if(mode().equals("single")&&registry.hasOtherTenant(defaultId()))throw new IllegalStateException("Single-tenant mode requires a registry containing only its default tenant");}
     void manifestDefault(String alias){manifestDefault=TenantRegistry.alias(alias);defaultAlias();}
     public String defaultAlias(){
         var explicit=config.getOptionalValue("toolgate.default-tenant-alias",String.class);

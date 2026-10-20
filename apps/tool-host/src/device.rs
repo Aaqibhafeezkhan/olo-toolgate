@@ -40,6 +40,9 @@ const RETRY_MS: u64 = 5_000;
 struct Journal {
     format_version: u64,
     tenant_id: String,
+    server_url: String,
+    manifest: Option<olo_toolgate_contracts::v2::TenantDiscovery>,
+    discovery_trust: Option<olo_toolgate_tenant_identity::Trust>,
     identity: Option<DeviceIdentity>,
     challenge: Option<EndpointEnrollmentChallenge>,
     sequence: u64,
@@ -78,16 +81,33 @@ impl Device {
             ),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
                 Journal {
-                    format_version: 2,
+                    format_version: 3,
                     tenant_id: config.control.tenant_id.clone(),
+                    server_url: olo_toolgate_tenant_identity::origin(&config.control.url)
+                        .map_err(|_| "HTTPS discovery origin required")?,
                     ..Journal::default()
                 },
                 true,
             ),
             Err(_) => return Err("Tool Host identity state unavailable".into()),
         };
-        if journal.format_version != 2
+        if journal.format_version != 3
             || journal.tenant_id != config.control.tenant_id
+            || journal.server_url
+                != olo_toolgate_tenant_identity::origin(&config.control.url)
+                    .map_err(|_| "HTTPS discovery origin required")?
+            || journal.manifest.is_some() != journal.discovery_trust.is_some()
+            || journal.manifest.as_ref().is_some_and(|manifest| {
+                manifest.tenant_id != journal.tenant_id
+                    || manifest.control_url != journal.server_url
+            })
+            || journal.discovery_trust.as_ref().is_some_and(|trust| {
+                trust.tenant_id != journal.tenant_id
+                    || journal.manifest.as_ref().is_none_or(|manifest| {
+                        trust.version != manifest.key_set_version
+                            || trust.issued_at != manifest.issued_at_unix_ms
+                    })
+            })
             || journal.identity.as_ref().is_some_and(|identity| {
                 identity.tenant_id != journal.tenant_id || identity.device_id != config.host_id
             })
@@ -152,6 +172,14 @@ impl Device {
     pub async fn step(&mut self) -> Result<u64, String> {
         if self
             .journal
+            .manifest
+            .as_ref()
+            .is_none_or(|manifest| manifest.expires_at_unix_ms <= now_ms().saturating_add(60000))
+        {
+            self.refresh_discovery().await?;
+        }
+        if self
+            .journal
             .identity
             .as_ref()
             .is_some_and(|identity| identity.expires_at_unix_ms <= now_ms())
@@ -162,15 +190,14 @@ impl Device {
         let Some(identity) = self.journal.identity.clone() else {
             return self.enroll().await;
         };
+        self.accept(identity.clone())?;
         self.present(&identity)?;
         match self.sync().await {
             Err(Failure::Control(ControlError::Refused(410))) => {
                 // The device was deleted in Control: start over with a fresh approval.
-                self.journal = Journal {
-                    format_version: 2,
-                    tenant_id: self.tenant.clone(),
-                    ..Journal::default()
-                };
+                self.journal.identity = None;
+                self.journal.challenge = None;
+                self.journal.sequence = 0;
                 self.registered = false;
                 self.save()?;
                 Err("Control no longer knows this device; enrolling again".into())
@@ -265,6 +292,9 @@ impl Device {
         }
         self.journal.sequence = ack.sequence;
         if let Some(identity) = ack.identity {
+            self.refresh_for_identity(&identity)
+                .await
+                .map_err(Failure::Local)?;
             self.accept(identity).map_err(Failure::Local)?;
         }
         self.save().map_err(Failure::Local)?;
@@ -357,6 +387,7 @@ impl Device {
             EnrollmentState::Consumed => {
                 let identity = result.identity.ok_or("Control issued no certificate")?;
                 self.journal.challenge = None;
+                self.refresh_for_identity(&identity).await?;
                 self.accept(identity)?;
                 self.save()?;
                 tracing::info!(host_id = %self.host_id, "tool host enrolled");
@@ -408,20 +439,55 @@ impl Device {
         })
     }
 
-    /// Keeps a certificate only when it names this host and holds this host's key.
+    async fn refresh_discovery(&mut self) -> Result<(), String> {
+        let bytes = self
+            .control
+            .discovery()
+            .await
+            .map_err(|_| "Tenant discovery unavailable")?;
+        let verified = olo_toolgate_tenant_identity::verify_https_refresh(
+            &bytes,
+            &self.journal.server_url,
+            &self.tenant,
+            self.journal.discovery_trust.as_ref(),
+            now_ms(),
+        )
+        .map_err(|_| "Tenant discovery verification failed")?;
+        if verified.manifest.control_url != self.journal.server_url {
+            return Err("Tenant Control origin mismatch".into());
+        }
+        self.journal.manifest = Some(verified.manifest);
+        self.journal.discovery_trust = Some(verified.trust);
+        self.save()
+    }
+    async fn refresh_for_identity(&mut self, identity: &DeviceIdentity) -> Result<(), String> {
+        if self.journal.manifest.as_ref().is_none_or(|manifest| {
+            !manifest
+                .device_authorities
+                .iter()
+                .any(|authority| authority.certificate_pem == identity.issuer_certificate_pem)
+        }) {
+            self.refresh_discovery().await?;
+        }
+        Ok(())
+    }
+    /// Verify tenant CA, certificate identity, private-key possession and client-only privileges.
     fn accept(&mut self, identity: DeviceIdentity) -> Result<(), String> {
         use rcgen::PublicKeyData;
-        use x509_parser::prelude::*;
-        let (_, pem) = x509_parser::pem::parse_x509_pem(identity.certificate_pem.as_bytes())
-            .map_err(|_| "the issued certificate is not PEM")?;
-        let (_, certificate) = parse_x509_certificate(&pem.contents)
-            .map_err(|_| "the issued certificate is invalid")?;
-        if identity.device_id != self.host_id
-            || identity.tenant_id != self.tenant
-            || certificate.public_key().raw != self.key.subject_public_key_info().as_slice()
-        {
-            return Err("the issued certificate is not for this host's key".into());
-        }
+        let manifest = self
+            .journal
+            .manifest
+            .as_ref()
+            .ok_or("Verified tenant discovery required")?;
+        let fingerprint = olo_toolgate_tenant_identity::digest(&self.key.subject_public_key_info());
+        olo_toolgate_tenant_identity::verify_tenant_identity(
+            &identity,
+            manifest,
+            &fingerprint,
+            &self.host_id,
+            now_ms(),
+        )
+        .map_err(|_| "Issued tenant certificate rejected")?;
         self.journal.identity = Some(identity);
         Ok(())
     }

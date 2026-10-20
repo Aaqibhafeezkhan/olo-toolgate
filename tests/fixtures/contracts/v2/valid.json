@@ -2244,5 +2244,17 @@
     "operation": "HEALTH",
     "consoleUrl": "https://tenant.example.test/console/",
     "expectedTenantId": "10000000-0000-4000-8000-000000000001"
+  },
+  "ConsoleClientResponse": {
+    "requestId": "console-response",
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "health": {
+      "state": "UNENROLLED",
+      "ready": false,
+      "uptimeSeconds": 1,
+      "successfulCheckIns": 1,
+      "failedCheckIns": 1,
+      "reportSequence": 1
+    }
   }
 }

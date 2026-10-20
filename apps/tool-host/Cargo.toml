@@ -17,6 +17,7 @@ name = "olo-toolgate-tool-host"
 path = "src/main.rs"
 
 [dependencies]
+olo-toolgate-tenant-identity.workspace = true
 olo-toolgate-contracts.workspace = true
 toolgate-cli = { path = "../../tool-sdk/cli" }
 serde.workspace = true

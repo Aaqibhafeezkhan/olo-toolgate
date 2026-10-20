@@ -344,6 +344,20 @@ pub struct ConsoleClientRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_tenant_id: Option<String>,
 }
+/// Requester-scoped device state and optional verified tenant UUID. Errors carry no installation or device metadata. The service enforces the error-only response invariant before serialization.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleClientResponse {
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health: Option<crate::ClientHealth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenge: Option<crate::EndpointEnrollmentPrompt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<crate::ErrorCode>,
+}
 /// Identifies the shared contract set.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

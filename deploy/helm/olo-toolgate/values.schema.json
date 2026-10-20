@@ -65,7 +65,8 @@
         "networkPolicy",
         "ingress",
         "serviceMonitor",
-        "control"
+        "control",
+        "publicOrigin"
       ],
       "properties": {
         "enabled": {
@@ -534,12 +535,13 @@
             "tokenSecret",
             "tokenKey",
             "controlPort",
-            "tenantId"
+            "tenantId",
+            "caSecret"
           ],
           "properties": {
             "url": {
               "type": "string",
-              "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"
+              "pattern": "^$|^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"
             },
             "tokenSecret": {
               "type": "string",
@@ -560,8 +562,18 @@
             "tenantId": {
               "type": "string",
               "pattern": "^$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            },
+            "caSecret": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
             }
           }
+        },
+        "publicOrigin": {
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^$|^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"
         }
       },
       "allOf": [
@@ -588,6 +600,9 @@
                   },
                   "tenantId": {
                     "minLength": 36
+                  },
+                  "url": {
+                    "minLength": 1
                   }
                 }
               },
@@ -597,6 +612,9 @@
                     "minItems": 1
                   }
                 }
+              },
+              "publicOrigin": {
+                "minLength": 1
               }
             }
           }
@@ -632,6 +650,16 @@
                   },
                   "dnsTo": {
                     "minItems": 1
+                  }
+                }
+              },
+              "publicOrigin": {
+                "minLength": 1
+              },
+              "control": {
+                "properties": {
+                  "url": {
+                    "minLength": 1
                   }
                 }
               }

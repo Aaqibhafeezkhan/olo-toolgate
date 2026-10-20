@@ -245,22 +245,26 @@ async fn handle<S: AsyncWrite + Unpin>(
         return Err(Failure::Validation);
     }
     if envelope.get("kind").and_then(serde_json::Value::as_str) == Some("console-tenant-state") {
-        use olo_toolgate_contracts::v2::{ConsoleClientOperation, ConsoleClientRequest};
+        use olo_toolgate_contracts::v2::{
+            ConsoleClientOperation, ConsoleClientRequest, ConsoleClientResponse,
+        };
         let request: ConsoleClientRequest = contracts.decode("ConsoleClientRequest", bytes)?;
-        let mut response = ClientIpcResponse {
+        let mut response = ConsoleClientResponse {
             request_id: request.request_id,
             health: None,
             challenge: None,
-            activity: None,
+            tenant_id: None,
             error: None,
-            connections: None,
-            power: None,
         };
         let mut state = match service.try_lock() {
             Ok(state) => state,
             Err(_) => {
                 response.error = Some(ErrorCode::Conflict);
-                return write(stream, &contracts.encode("ClientIpcResponse", &response)?).await;
+                return write(
+                    stream,
+                    &contracts.encode("ConsoleClientResponse", &response)?,
+                )
+                .await;
             }
         };
         let result = match state
@@ -281,9 +285,17 @@ async fn handle<S: AsyncWrite + Unpin>(
         };
         if let Err(failure) = result {
             response.error = Some(code(failure));
+            response.health = None;
+            response.challenge = None;
+        } else {
+            response.tenant_id = state.tenant_id().map(str::to_owned);
         }
         drop(state);
-        return write(stream, &contracts.encode("ClientIpcResponse", &response)?).await;
+        return write(
+            stream,
+            &contracts.encode("ConsoleClientResponse", &response)?,
+        )
+        .await;
     }
     if serde_json::from_slice::<serde_json::Value>(bytes)
         .ok()
@@ -518,7 +530,7 @@ pub async fn console_call(
     endpoint: &str,
     operation: olo_toolgate_contracts::v2::ConsoleClientOperation,
     console_url: &str,
-) -> Result<ClientIpcResponse> {
+) -> Result<olo_toolgate_contracts::v2::ConsoleClientResponse> {
     console_call_expected(endpoint, operation, console_url, None).await
 }
 pub async fn console_call_expected(
@@ -526,7 +538,7 @@ pub async fn console_call_expected(
     operation: olo_toolgate_contracts::v2::ConsoleClientOperation,
     console_url: &str,
     expected_tenant_id: Option<&str>,
-) -> Result<ClientIpcResponse> {
+) -> Result<olo_toolgate_contracts::v2::ConsoleClientResponse> {
     let contracts = Contracts::shared()?;
     let request = olo_toolgate_contracts::v2::ConsoleClientRequest {
         kind: "console-tenant-state".into(),
@@ -537,7 +549,8 @@ pub async fn console_call_expected(
     };
     let bytes = contracts.encode("ConsoleClientRequest", &request)?;
     let bytes = exchange(endpoint, &bytes, 16384).await?;
-    let response: ClientIpcResponse = contracts.decode("ClientIpcResponse", &bytes)?;
+    let response: olo_toolgate_contracts::v2::ConsoleClientResponse =
+        contracts.decode("ConsoleClientResponse", &bytes)?;
     if response.request_id != request.request_id {
         return Err(Failure::Unauthorized);
     }

@@ -6,6 +6,7 @@ FROM rust:1.94.1-alpine@sha256:77237dd363a0b127bb5ef532c2d64c0deb380b738e43a9c4b
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
+COPY packages/tenant-identity/rust packages/tenant-identity/rust
 COPY apps/gateway apps/gateway
 COPY apps/endpoint-client apps/endpoint-client
 COPY apps/tool-host apps/tool-host
@@ -15,7 +16,7 @@ COPY TOOL-SDK-GUIDE.md TOOL-SDK-GUIDE.md
 COPY tools/gateway/collect-notices.sh /src/collect-notices.sh
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-quickstart-musl,target=/src/target,sharing=locked \
-    find apps/gateway/src apps/endpoint-client/src apps/tool-host/src tool-sdk/cli/src packages/contracts/rust/src -type f -exec touch {} + && \
+    find apps/gateway/src apps/endpoint-client/src apps/tool-host/src tool-sdk/cli/src packages/contracts/rust/src packages/tenant-identity/rust/src -type f -exec touch {} + && \
     cargo build --release --locked -p olo-toolgate-gateway --bin olo-toolgate-gateway -p olo-toolgate-tool-host --bin olo-toolgate-tool-host && \
     cp target/release/olo-toolgate-gateway target/release/olo-toolgate-tool-host /usr/local/bin/ && \
     sh /src/collect-notices.sh /licenses

@@ -15,6 +15,7 @@ pub mod permit;
 pub mod runner;
 pub mod server;
 pub mod store;
+mod workload_identity;
 
 /// Milliseconds since the Unix epoch.
 pub fn now_ms() -> u64 {

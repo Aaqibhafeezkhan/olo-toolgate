@@ -35,6 +35,7 @@ use tracing::Instrument;
 
 /// Per-process safety state; no distributed authorization state is held here.
 pub struct AppState {
+    pub public_discovery: Option<crate::discovery::PublicDiscovery>,
     pub gateway: Gateway,
     pub auth: Authenticator,
     pub config: Config,
@@ -74,6 +75,17 @@ impl AppState {
             .as_bytes(),
         );
         Ok(Self {
+            public_discovery: config
+                .public_discovery
+                .clone()
+                .map(|settings| {
+                    crate::discovery::PublicDiscovery::new(
+                        settings,
+                        config.control.tenant_id.clone(),
+                        config.control.ca_certificate_path.as_deref(),
+                    )
+                })
+                .transpose()?,
             admission: Semaphore::new(config.limits.max_concurrent_requests),
             rate: RateLimit::new(config.limits.requests_per_second),
             tool_hosts: crate::toolhost::ToolHosts::new(&config.tool_hosts),
@@ -122,6 +134,11 @@ impl AppState {
 /// Runtime ingress only. Management endpoints are deliberately absent here.
 pub fn runtime_router(state: Arc<AppState>) -> Router {
     Router::new()
+        .route("/.well-known/olo-toolgate-client", get(public_discovery))
+        .route(
+            "/api/public/v1/clients/configuration",
+            get(public_configuration),
+        )
         .route("/access/invocations", post(authorize))
         .route("/access/catalog", post(catalog))
         .route("/mcp", post(crate::mcp::ingress))
@@ -131,6 +148,36 @@ pub fn runtime_router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
+async fn public_document(s: &AppState) -> Result<crate::discovery::Document, ErrorCode> {
+    let source = s
+        .public_discovery
+        .as_ref()
+        .ok_or(ErrorCode::TenantUnavailable)?;
+    source.fetch().await.map_err(|failure| match failure {
+        crate::discovery::Refused::TenantUnavailable => ErrorCode::TenantUnavailable,
+        crate::discovery::Refused::Unavailable => ErrorCode::DependencyUnavailable,
+    })
+}
+async fn public_discovery(
+    State(s): State<Arc<AppState>>,
+    axum::extract::Extension(c): axum::extract::Extension<Correlation>,
+) -> Response {
+    match public_document(&s).await {
+        Ok(document) => ([("content-type", "application/json")], document.bytes).into_response(),
+        Err(code) => error(code, &c.request_id),
+    }
+}
+async fn public_configuration(
+    State(s): State<Arc<AppState>>,
+    axum::extract::Extension(c): axum::extract::Extension<Correlation>,
+) -> Response {
+    match public_document(&s).await {
+        Ok(document) => {
+            Json(serde_json::json!({"serverUrl":document.manifest.control_url})).into_response()
+        }
+        Err(code) => error(code, &c.request_id),
+    }
+}
 /// Bind this router to a separately restricted management listener.
 pub fn management_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -268,6 +315,19 @@ async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next)
                 .is_some_and(|v| s.config.allowed_origins.iter().any(|o| o == v))
         {
             return error(ErrorCode::Forbidden, &correlation.request_id);
+        }
+        if request.method() == axum::http::Method::GET
+            && matches!(
+                request.uri().path(),
+                "/.well-known/olo-toolgate-client" | "/api/public/v1/clients/configuration"
+            )
+        {
+            return timeout(
+                Duration::from_millis(s.config.limits.request_timeout_ms),
+                next.run(request),
+            )
+            .await
+            .unwrap_or_else(|_| error(ErrorCode::Timeout, &correlation.request_id));
         }
         let bearer = single_header(request.headers(), "authorization")
             .and_then(|v| v.strip_prefix("Bearer "));

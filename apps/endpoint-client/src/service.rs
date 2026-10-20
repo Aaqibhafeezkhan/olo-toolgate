@@ -569,6 +569,10 @@ impl ClientService {
     fn device(&self) -> String {
         format!("device-{}", &self.key.fingerprint()[..32])
     }
+    /// Protected installation binding; callers must authorize console context first.
+    pub fn tenant_id(&self) -> Option<&str> {
+        self.journal.tenant_id.as_deref()
+    }
     /// Checked inside the service lock before any console-scoped health, enrollment or proof.
     pub fn authorize_console(
         &self,
@@ -801,18 +805,7 @@ impl ClientService {
                 return Ok(self.prompt(challenge));
             }
         }
-        let envelope = self.control.discovery().await?;
-        // Signed issuance occurs after the outgoing request. Validate against receipt time.
-        let now = self.clock()?;
-        let verified = crate::discovery::verify(
-            &envelope,
-            &crate::config::origin(&self.config.server_url)?,
-            self.journal.tenant_id.as_deref(),
-            self.journal.discovery_trust.as_ref(),
-            now,
-        )?;
-        let manifest = verified.manifest;
-        self.bind_discovery(&manifest, &verified.trust)?;
+        let manifest = self.refresh_discovery().await?;
         let request = self.announcement()?;
         let challenge = if requested_sequence.is_some() {
             self.control.request_approval(request).await?
@@ -837,6 +830,41 @@ impl ClientService {
         self.state = EndpointState::Pending;
         self.save()?;
         Ok(self.prompt(&challenge))
+    }
+    async fn refresh_discovery(&mut self) -> Result<TenantDiscovery> {
+        let envelope = self.control.discovery().await?;
+        let now = self.clock()?;
+        let origin = crate::config::origin(&self.config.server_url)?;
+        let verified = if let Some(tenant) = self.journal.tenant_id.as_deref() {
+            let bytes = crate::contracts::Contracts::shared()?
+                .encode("SignedTenantDiscovery", &envelope)?;
+            olo_toolgate_tenant_identity::verify_https_refresh(
+                &bytes,
+                &origin,
+                tenant,
+                self.journal.discovery_trust.as_ref(),
+                now,
+            )
+            .map_err(Failure::from)?
+        } else {
+            crate::discovery::verify(&envelope, &origin, None, None, now)?
+        };
+        if verified.manifest.control_url != origin {
+            return Err(Failure::TenantMismatch);
+        }
+        self.bind_discovery(&verified.manifest, &verified.trust)?;
+        Ok(verified.manifest)
+    }
+    async fn refresh_for_identity(&mut self, identity: &DeviceIdentity) -> Result<()> {
+        if self.journal.manifest.as_ref().is_none_or(|manifest| {
+            !manifest
+                .device_authorities
+                .iter()
+                .any(|authority| authority.certificate_pem == identity.issuer_certificate_pem)
+        }) {
+            self.refresh_discovery().await?;
+        }
+        Ok(())
     }
     /// Called only after cryptographic discovery verification, before requesting enrollment.
     fn bind_discovery(
@@ -926,6 +954,14 @@ impl ClientService {
     }
     async fn tick_inner(&mut self) -> Result<()> {
         let now = self.clock()?;
+        if self
+            .journal
+            .manifest
+            .as_ref()
+            .is_some_and(|manifest| manifest.expires_at_unix_ms <= now.saturating_add(60000))
+        {
+            self.refresh_discovery().await?;
+        }
         // Presence continues in every local state. Only Control decides the next action.
         let directive = self.control.ping(self.presence()?).await?;
         if directive.device_id != self.device()
@@ -992,6 +1028,7 @@ impl ClientService {
             match result.state {
                 EnrollmentState::Consumed => {
                     let identity = result.identity.ok_or(Failure::Unauthorized)?;
+                    self.refresh_for_identity(&identity).await?;
                     let manifest = self
                         .journal
                         .manifest
@@ -1091,6 +1128,8 @@ impl ClientService {
         self.check_in_interval_ms = interval_ms;
         self.remember_server_name(ack.server_name.as_deref());
         if let Some(identity) = ack.identity {
+            self.refresh_for_identity(&identity).await?;
+            let now = self.clock()?;
             verify_identity(
                 &identity,
                 self.journal
@@ -1487,6 +1526,55 @@ mod tests {
         );
         assert_eq!(service.journal.manifest.as_ref().unwrap().tenant_id, tenant);
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn scoped_console_health_exposes_only_its_verified_tenant_uuid() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut service, _, directory) = test_service();
+        let tenant = "10000000-0000-4000-8000-000000000001";
+        let console = format!("{}/console/", service.config.server_url);
+        service.journal.tenant_id = Some(tenant.into());
+        let activity = service.activity.clone();
+        let service = std::sync::Arc::new(tokio::sync::Mutex::new(service));
+        let contracts = crate::contracts::Contracts::shared().unwrap();
+        let request = olo_toolgate_contracts::v2::ConsoleClientRequest {
+            kind: "console-tenant-state".into(),
+            request_id: "tenant-health".into(),
+            operation: olo_toolgate_contracts::v2::ConsoleClientOperation::Health,
+            console_url: console,
+            expected_tenant_id: Some(tenant.into()),
+        };
+        let bytes = contracts.encode("ConsoleClientRequest", &request).unwrap();
+        let (mut stream, mut peer) = tokio::io::duplex(16384);
+        peer.write_u32(bytes.len() as u32).await.unwrap();
+        peer.write_all(&bytes).await.unwrap();
+        crate::ipc::connection(
+            &mut stream,
+            "console",
+            &["console".into()],
+            &service,
+            contracts,
+            &activity,
+        )
+        .await
+        .unwrap();
+        let size = peer.read_u32().await.unwrap();
+        let mut bytes = vec![0; size as usize];
+        peer.read_exact(&mut bytes).await.unwrap();
+        let reply: olo_toolgate_contracts::v2::ConsoleClientResponse =
+            contracts.decode("ConsoleClientResponse", &bytes).unwrap();
+        assert_eq!(reply.tenant_id.as_deref(), Some(tenant));
+        assert!(reply.error.is_none() && reply.health.is_some());
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .len(),
+            3
+        );
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
     }

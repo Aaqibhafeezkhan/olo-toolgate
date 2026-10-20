@@ -75,6 +75,67 @@ fn tenant_bound_credentials_reject_foreign_mounts_and_keep_the_old_set_on_reload
         .is_some());
 }
 #[tokio::test]
+async fn public_metadata_is_anonymous_but_keeps_host_and_uuid_fences_and_fixed_tls_source() {
+    let authority = Arc::new(Authority::default());
+    let mut settings = config();
+    settings.public_discovery = Some(olo_toolgate_gateway::discovery::Settings {
+        control_origin: "https://127.0.0.1:1".into(),
+        gateway_origin: "https://gate.example.test".into(),
+    });
+    let router = runtime_router(state_with(authority.clone(), settings));
+    for path in [
+        "/.well-known/olo-toolgate-client",
+        "/api/public/v1/clients/configuration",
+    ] {
+        let request = Request::builder()
+            .uri(path)
+            .header("host", "gate.example.test")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body["code"], "DEPENDENCY_UNAVAILABLE");
+        let request = Request::builder()
+            .uri(path)
+            .header("host", "foreign.example.test")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["code"], "TENANT_UNAVAILABLE");
+        let request = Request::builder()
+            .uri(path)
+            .header("host", "gate.example.test")
+            .header("Toolgate-Tenant-ID", "10000000-0000-4000-8000-000000000002")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "TENANT_MISMATCH");
+    }
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 0);
+}
+#[test]
+fn production_discovery_requires_canonical_owned_origins() {
+    let contracts = Contracts::new().unwrap();
+    let mut settings = config();
+    settings.control.url = "https://control.example.test".into();
+    settings.control.development_loopback_http = false;
+    assert!(settings.validate(&contracts, 1).is_err());
+    settings.public_discovery = Some(olo_toolgate_gateway::discovery::Settings {
+        control_origin: settings.control.url.clone(),
+        gateway_origin: "https://gate.example.test".into(),
+    });
+    assert!(settings.validate(&contracts, 1).is_ok());
+    settings.public_discovery.as_mut().unwrap().gateway_origin =
+        "https://foreign.example.test".into();
+    assert!(settings.validate(&contracts, 1).is_err());
+    settings.public_discovery.as_mut().unwrap().gateway_origin = "https://gate.example.test".into();
+    settings.public_discovery.as_mut().unwrap().control_origin =
+        "https://foreign.example.test".into();
+    assert!(settings.validate(&contracts, 1).is_err());
+}
+#[tokio::test]
 async fn host_and_expected_uuid_fences_run_before_authority_calls() {
     let authority = Arc::new(Authority::default());
     let router = runtime_router(state(authority.clone()));

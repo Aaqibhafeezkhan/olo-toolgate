@@ -4,7 +4,10 @@
 {{- $name := include "olo-toolgate.gatewayName" . }}
 {{- $config := deepCopy $g.config }}
 {{- if lt (int $g.config.limits.requestTimeoutMs) 10000 }}{{ fail "online authority requires at least a ten second ingress deadline" }}{{ end }}
-{{- $_ := set $config "control" (dict "tenantId" (required "Gateway requires its provisioned tenant UUID" $g.control.tenantId) "url" $g.control.url "tokenPath" "/etc/toolgate/control-auth/access-token" "developmentLoopbackHttp" false) }}
+{{- $control := dict "tenantId" (required "Gateway requires its provisioned tenant UUID" $g.control.tenantId) "url" (required "Gateway requires its canonical tenant Control origin" $g.control.url) "tokenPath" "/etc/toolgate/control-auth/access-token" "developmentLoopbackHttp" false }}
+{{- if $g.control.caSecret }}{{- $_ := set $control "caCertificatePath" "/etc/toolgate/control-ca/ca.pem" }}{{- end }}
+{{- $_ := set $config "control" $control }}
+{{- $_ := set $config "publicDiscovery" (dict "controlOrigin" $g.control.url "gatewayOrigin" (required "Gateway requires its canonical publicOrigin" $g.publicOrigin)) }}
 {{- if and $g.networkPolicy.enabled (or (not $g.networkPolicy.controlTo) (not $g.networkPolicy.dnsTo)) }}{{ fail "online authority requires explicit controlTo and dnsTo egress peers" }}{{ end }}
 {{- if or (ne $g.config.listen "0.0.0.0:8081") (ne $g.config.managementListen "0.0.0.0:9091") }}
 {{- fail "Helm requires the fixed internal runtime/management listeners" }}
@@ -121,7 +124,17 @@ spec:
             - {name: config, mountPath: /etc/toolgate/config, readOnly: true}
             - {name: credentials, mountPath: /etc/toolgate/credentials, readOnly: true}
             - {name: control-auth, mountPath: /etc/toolgate/control-auth, readOnly: true}
+            {{- if $g.control.caSecret }}
+            - {name: control-ca, mountPath: /etc/toolgate/control-ca, readOnly: true}
+            {{- end }}
       volumes:
+        {{- if $g.control.caSecret }}
+        - name: control-ca
+          secret:
+            secretName: {{ $g.control.caSecret | quote }}
+            defaultMode: 0444
+            items: [{key: ca.pem, path: ca.pem}]
+        {{- end }}
         - name: config
           configMap:
             name: {{ $name }}

@@ -2638,5 +2638,34 @@
         "credential": "unexpected"
       }
     }
+  ],
+  "ConsoleClientResponse": [
+    {
+      "case": "activity cannot be exported",
+      "value": {
+        "requestId": "console-response",
+        "activity": {}
+      }
+    },
+    {
+      "case": "UUID must be canonical",
+      "value": {
+        "requestId": "console-response",
+        "tenantId": "quickstart"
+      }
+    },
+    {
+      "case": "request correlation required",
+      "value": {
+        "error": "TENANT_MISMATCH"
+      }
+    },
+    {
+      "case": "unknown error rejected",
+      "value": {
+        "requestId": "console-response",
+        "error": "UNKNOWN"
+      }
+    }
   ]
 }

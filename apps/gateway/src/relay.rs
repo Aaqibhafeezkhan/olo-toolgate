@@ -21,6 +21,8 @@ use tokio::io::AsyncReadExt;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RelayConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_certificate_path: Option<PathBuf>,
     pub tenant_id: String,
     pub url: String,
     pub token_path: PathBuf,
@@ -122,13 +124,23 @@ impl HttpRelay {
     pub fn new(config: RelayConfig) -> Result<Self, &'static str> {
         config.validate()?;
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let client = reqwest::Client::builder()
+        let mut client = reqwest::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .tls_sslkeylogfile(false)
             .timeout(Duration::from_secs(3))
             .connect_timeout(Duration::from_secs(2))
-            .pool_max_idle_per_host(1)
+            .pool_max_idle_per_host(1);
+        if let Some(path) = &config.ca_certificate_path {
+            let bytes = crate::config::read_bytes(path)?;
+            let roots = reqwest::Certificate::from_pem_bundle(&bytes)
+                .map_err(|_| "Control TLS roots required")?;
+            if roots.is_empty() {
+                return Err("Control TLS roots required");
+            }
+            client = client.tls_certs_only(roots);
+        }
+        let client = client
             .build()
             .map_err(|_| "local MCP transport unavailable")?;
         Ok(Self {

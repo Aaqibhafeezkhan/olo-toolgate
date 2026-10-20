@@ -40,6 +40,8 @@ def helm_checks():
         if rendered.stdout.strip(): raise SystemExit('Disabled chart emitted resources')
     base = ['--set','gateway.enabled=true','--set','gateway.credentialsSecret=gateway-runtime',
             '--set','gateway.control.tokenSecret=gateway-authority',
+            '--set','gateway.control.url=https://control.gateway.example.invalid',
+            '--set','gateway.publicOrigin=https://gateway.example.invalid',
             '--set','gateway.control.tenantId=10000000-0000-4000-8000-000000000001',
             '--set','gateway.config.tenantHosts[0]=gateway.example.invalid',
             '--set','gateway.networkPolicy.controlTo[0].podSelector.matchLabels.app=control',

@@ -54,6 +54,7 @@ public class EndpointBootstrap {
         var records=store.transaction(tenant,false,Store.Session::identityKeys);
         var bound=provider.bind(tenant,profile,records,System.currentTimeMillis());
         return template.forTenant(tenant,profile,new TenantPeerTrust(bound.issuer(),tenant,listenerRoots))
+            .identityGeneration(bound.generation())
             .discoverySigner((minimum,now)->bound.discovery(codec,tenant,profile,minimum,now));
     }
     public ClientCheckInPolicy checkInPolicy(){return template().checkInPolicy();}

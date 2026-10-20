@@ -11,5 +11,9 @@
   },
   "tenantHosts": [
     "gateway.example.com"
-  ]
+  ],
+  "publicDiscovery": {
+    "controlOrigin": "https://control.example.com",
+    "gatewayOrigin": "https://gateway.example.com"
+  }
 }

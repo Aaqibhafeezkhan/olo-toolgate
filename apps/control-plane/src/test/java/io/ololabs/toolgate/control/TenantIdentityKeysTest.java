@@ -39,6 +39,24 @@ final class TenantIdentityKeysTest {
         return RsaTenantDiscovery.verify(codec,bound.discovery(codec,tenant.tenant,tenant.profile,"0.0.0",now),tenant.profile.controlUrl(),tenant.tenant,pin,now);
     }
     @Test void sqliteCustodyIsolationRotationAndRollback()throws Exception{isolation(fixture(false));}
+    @Test void sqliteStaleEndpointCannotSignAfterKeyPublication()throws Exception{staleEndpoint(fixture(false));}
+    @Test void postgresStaleEndpointCannotSignAfterKeyPublication()throws Exception{staleEndpoint(fixture(true));}
+    private void staleEndpoint(Fixture f)throws Exception{
+        var tenant=tenant(f,"snapshot-tenant");
+        f.registry.installIdentity(tenant.tenant,tenant.custody,1,tenant.references,"first");
+        long now=System.currentTimeMillis();var bound=tenant.custody.bind(tenant.tenant,tenant.profile,keys(f,tenant.tenant),now);
+        var endpoint=new EndpointService(f.store,codec,bound.issuer(),java.time.Clock.systemUTC(),true,tenant.tenant.value(),tenant.profile.serverId(),tenant.profile.organization(),tenant.profile.controlUrl(),tenant.profile.gatewayUrl())
+            .identityGeneration(bound.generation()).discoverySigner((minimum,time)->bound.discovery(codec,tenant.tenant,tenant.profile,minimum,time));
+        assertEquals(200,endpoint.discovery().status());
+        f.registry.installIdentity(tenant.tenant,tenant.custody,2,tenant.announced(),"announce");
+        assertEquals(503,assertThrows(Failure.class,endpoint::discovery).status());
+        var generator=java.security.KeyPairGenerator.getInstance("EC");generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));var key=generator.generateKeyPair();
+        var csr=new org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder(new org.bouncycastle.asn1.x500.X500Name("CN=device"),key.getPublic()).build(new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withECDSA").build(key.getPrivate()));
+        var text=new java.io.StringWriter();try(var writer=new org.bouncycastle.openssl.jcajce.JcaPEMWriter(text)){writer.writeObject(csr);}
+        var request=new io.ololabs.toolgate.contracts.EndpointEnrollmentStart("device","0.10.0-dev",io.ololabs.toolgate.contracts.ClientPlatform.LINUX,text.toString(),List.of("endpoint.identity.v1"));
+        assertEquals(503,assertThrows(Failure.class,()->endpoint.start(codec.json(request),"stale-request")).status());
+        long pending=f.store.transaction(tenant.tenant,false,tx->tx.pendingEnrollments(System.currentTimeMillis()));assertEquals(0L,pending);
+    }
     @Test void postgresCustodyIsolationRotationAndRollback()throws Exception{isolation(fixture(true));}
     private void isolation(Fixture f)throws Exception{
         var a=tenant(f,"tenant-a");var b=tenant(f,"tenant-b");

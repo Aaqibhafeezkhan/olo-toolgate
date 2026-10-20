@@ -1281,6 +1281,7 @@ dependencies = [
  "jsonschema",
  "libc",
  "olo-toolgate-contracts",
+ "olo-toolgate-tenant-identity",
  "rcgen",
  "reqwest",
  "ring",
@@ -1317,6 +1318,7 @@ dependencies = [
  "hyper-util",
  "jsonschema",
  "olo-toolgate-contracts",
+ "olo-toolgate-tenant-identity",
  "reqwest",
  "ring",
  "rustls",
@@ -1331,6 +1333,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "olo-toolgate-tenant-identity"
+version = "0.10.0-dev"
+dependencies = [
+ "base64 0.22.1",
+ "jsonschema",
+ "olo-toolgate-contracts",
+ "rcgen",
+ "reqwest",
+ "ring",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "x509-parser",
+]
+
+[[package]]
 name = "olo-toolgate-tool-host"
 version = "0.10.0-dev"
 dependencies = [
@@ -1338,6 +1357,7 @@ dependencies = [
  "base64 0.22.1",
  "futures-util",
  "olo-toolgate-contracts",
+ "olo-toolgate-tenant-identity",
  "rand 0.8.8",
  "rcgen",
  "regex",

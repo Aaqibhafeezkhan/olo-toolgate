@@ -26,6 +26,7 @@ async fn readiness_uses_authenticated_runtime_route_without_relying_on_managemen
         stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 14\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"ready\":true}").await.unwrap();
     });
     let relay = HttpRelay::new(RelayConfig {
+        ca_certificate_path: None,
         tenant_id: "10000000-0000-4000-8000-000000000001".into(),
         url: format!("http://{address}"),
         token_path: path.clone(),

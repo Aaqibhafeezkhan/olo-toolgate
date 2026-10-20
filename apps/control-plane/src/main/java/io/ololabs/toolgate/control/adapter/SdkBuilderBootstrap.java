@@ -49,7 +49,7 @@ public class SdkBuilderBootstrap {
         // Paths and environment filtering cannot contain hostile build code running as Control.
         if(!tenancy.mode().equals("single")||!config.getOptionalValue("toolgate.quickstart.enabled",Boolean.class).orElse(false))
             throw new IllegalStateException("Embedded SDK builds require single-tenant Quickstart; use isolated external builds for shared or production Control");
-        owner=tenancy.defaultId();
+        tenancy.checkSingleRegistry();owner=tenancy.defaultId();
         try{data=directory(Path.of(setting("data-directory")).toAbsolutePath().normalize());worker(data);}
         catch(java.io.IOException invalid){throw new IllegalStateException("SDK Builder requires a fixed JDK, SDK distribution, CLI and private data directory",invalid);}
         loop=java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r->{var thread=new Thread(r,"sdk-package-builder");thread.setDaemon(true);return thread;});

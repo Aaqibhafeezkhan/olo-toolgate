@@ -293,6 +293,31 @@
         "operation",
         "consoleUrl"
       ]
+    },
+    "ConsoleClientResponse": {
+      "type": "object",
+      "description": "Requester-scoped device state and optional verified tenant UUID. Errors carry no installation or device metadata. The service enforces the error-only response invariant before serialization.",
+      "additionalProperties": false,
+      "properties": {
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "tenantId": {
+          "$ref": "#/$defs/TenantUuid"
+        },
+        "health": {
+          "$ref": "../v1/endpoint.schema.json#/$defs/ClientHealth"
+        },
+        "challenge": {
+          "$ref": "../v1/endpoint.schema.json#/$defs/EndpointEnrollmentPrompt"
+        },
+        "error": {
+          "$ref": "../v1/error.schema.json#/$defs/ErrorCode"
+        }
+      },
+      "required": [
+        "requestId"
+      ]
     }
   }
 }

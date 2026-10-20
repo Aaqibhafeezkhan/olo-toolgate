@@ -18,6 +18,7 @@ final class SdkBuilderBootstrapTest {
         bootstrap.tenancy=new TenancyConfiguration(){
             @Override public String mode(){return mode;}
             @Override public TenantId defaultId(){return new TenantId("10000000-0000-4000-8000-000000000001");}
+            @Override public void checkSingleRegistry(){}
         };
         bootstrap.config=(org.eclipse.microprofile.config.Config)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{org.eclipse.microprofile.config.Config.class},(proxy,method,args)->{
             if(method.getName().equals("getOptionalValue")&&args[0].equals("toolgate.quickstart.enabled"))return Optional.of(quickstart);

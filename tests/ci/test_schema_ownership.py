@@ -34,6 +34,7 @@ class SchemaOwnershipTests(unittest.TestCase):
                     self.assertEqual(source.count('.defaultId()'),1)
                     self.assertIn(guard,source)
                     self.assertLess(source.index(guard),source.index('owner=tenancy.defaultId();'))
+                    self.assertLess(source.index('tenancy.checkSingleRegistry();'),source.index('owner=tenancy.defaultId();'))
                     self.assertIn('if(data!=null&&!tenant.equals(owner))throw Failure.unavailable();',source)
                 else:
                     self.assertNotIn('.defaultId()', path.read_text(), str(path))

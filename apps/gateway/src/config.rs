@@ -41,6 +41,8 @@ impl Default for Limits {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
+    #[serde(default)]
+    pub public_discovery: Option<crate::discovery::Settings>,
     pub tenant_hosts: Vec<String>,
     pub control: crate::relay::RelayConfig,
     pub listen: SocketAddr,
@@ -68,6 +70,24 @@ impl Config {
             {
                 return Err("duplicate tenant authority");
             }
+        }
+        if let Some(discovery) = &self.public_discovery {
+            discovery.validate()?;
+            if !self.control.development_loopback_http
+                && (self.control.url.trim_end_matches('/') != discovery.control_origin
+                    || !authorities.contains(
+                        &crate::tenancy::authority(
+                            discovery.gateway_origin.trim_start_matches("https://"),
+                        )
+                        .map_err(|_| "invalid public Gateway authority")?,
+                    ))
+            {
+                return Err(
+                    "discovery must bind the configured Control origin and owned Gateway authority",
+                );
+            }
+        } else if !self.control.development_loopback_http {
+            return Err("public tenant discovery required");
         }
         if self.tool_hosts.len() > 64 {
             return Err("at most 64 Tool Hosts");

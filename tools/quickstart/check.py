@@ -146,7 +146,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             exec_text('/opt/quickstart-python/bin/python','-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json;"
                 "c=json.loads((s.DATA/'run/gateway.json').read_text());c['listen']='0.0.0.0:8084';c['trustedTlsProxy']=True;"
-                "c['managementListen']='0.0.0.0:9094';s.atomic(s.DATA/'run/external-gateway.json',json.dumps(c))")
+                "c['managementListen']='0.0.0.0:9094';c['tenantHosts']=['127.0.0.1:8084',"+repr('127.0.0.1:'+info['NetworkSettings']['Ports']['8084/tcp'][0]['HostPort'])+"];s.atomic(s.DATA/'run/external-gateway.json',json.dumps(c))")
             exec_text('/opt/quickstart-python/bin/python','-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json,time;"
                 "db=s.Database();identities=[json.loads(r[0]) if isinstance(r[0],str) else r[0] for r in db.execute(\"SELECT document FROM control_records WHERE kind='IDENTITY_BINDING'\").fetchall()];db.connection.close();"
@@ -203,6 +203,17 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             member={'agentGroups':'agentIds','toolGroups':'toolIds','deviceGroups':'deviceIds'}[key]
             assert all(not row[member] for row in snapshot[key] if row['id']!=default)
         mark('fresh reviewed installation/independent identities/default groups/zero runtime rights')
+        # Hit the Gateway listener directly: no supervisor forwarding or runtime bearer token.
+        public=json.loads(exec_text('/opt/quickstart-python/bin/python','-c',
+            "import json,urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8081/.well-known/olo-toolgate-client',timeout=10).read().decode())"))
+        import base64
+        encoded=public['jws'].split('.')[1]
+        manifest=json.loads(base64.urlsafe_b64decode(encoded+'='*((-len(encoded))%4)))
+        assert manifest['tenantId']==snapshot['tenantId'] and manifest['protocolVersion']==2
+        configuration=json.loads(exec_text('/opt/quickstart-python/bin/python','-c',
+            "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8081/api/public/v1/clients/configuration',timeout=10).read().decode())"))
+        assert configuration=={'serverUrl':manifest['controlUrl']}
+        mark('anonymous Gateway tenant v2 discovery/fixed verified Control configuration')
         # Quickstart has no native client: its execution identities are its two Tool Hosts, approved like any device.
         # The fresh profile then deploys Hello World to tool-host-local and enables server_greet; nobody may run it yet.
         owner=admin
@@ -232,6 +243,13 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         def catalog(token=None):
             return {t['toolId'] for t in ok(api('/api/control/v1/access/human/catalog',token or human,target,'POST'))['tools']}
         assert catalog()==set()
+        for identity_dir in ('tool-host','tool-host-remote'):
+            journal=json.loads(exec_text('cat','/data/state/'+identity_dir+'/device.json'))
+            assert journal['formatVersion']==3 and journal['sequence']>0
+            assert journal['tenantId']==journal['identity']['tenantId']==snapshot['tenantId']
+            assert journal['manifest']['protocolVersion']==2
+            assert journal['discoveryTrust']['tenantId']==snapshot['tenantId']
+            assert journal['identity']['issuerCertificatePem'].strip()!=exec_text('cat','/data/keys/device-ca.crt')
         mark('Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery')
         # The bootstrap account must retain Super Admin authority. Keep it as the installation owner;
         # the two other local accounts become ordinary administrators for maker/checker and HUMAN tests.

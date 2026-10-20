@@ -31,7 +31,7 @@ public class TenancyBootstrap {
                 if(tenancy.mode().equals("subdomain"))throw new IllegalStateException("Subdomain mode requires an initialization manifest");
                 var packet=config.getOptionalValue("toolgate.control.recovery.packet-path",String.class);
                 if(packet.isEmpty()){
-                    registry.allocate(tenancy.defaultAlias(),"Default organization");return;
+                    registry.allocate(tenancy.defaultAlias(),"Default organization");tenancy.checkSingleRegistry();return;
                 }
                 var layers=new ArrayList<TenantInitialization.Layer>();
                 var initial=config.getOptionalValue("toolgate.control.initialize.path",String.class);
@@ -45,7 +45,7 @@ public class TenancyBootstrap {
                 manifest=new InitializationManifest(tenancy.defaultAlias(),List.of(new InitializationManifest.Spec(tenancy.defaultAlias(),config.getOptionalValue("toolgate.control.endpoint.organization",String.class).orElse("Default organization"),List.copyOf(hosts),
                     ProtectedCustody.text(Path.of(packet.get()),2097152),ProtectedCustody.text(Path.of(config.getValue("toolgate.control.recovery.trust-path",String.class)),16384),List.copyOf(layers),endpoints)));
             }
-            tenancy.manifestDefault(manifest.defaultAlias());
+            tenancy.checkManifestTenants(manifest.tenants().size());tenancy.manifestDefault(manifest.defaultAlias());
             var checkIn=ClientCheckInPolicy.configure(config.getOptionalValue("toolgate.control.client-check-in.check-in-ms",Long.class).orElse(null),config.getOptionalValue("toolgate.control.client-check-in.jitter-pct",Integer.class).orElse(null),config.getOptionalValue("toolgate.control.client-check-in.offline-after-ms",Long.class).orElse(null));
             var initializer=new TenantInitialization(codec,checkIn);var prepared=new ArrayList<Prepared>();var environment=inputs.environment();
             // No registration/configuration writes before all newly requested inputs validate.
@@ -78,6 +78,7 @@ public class TenancyBootstrap {
                 try{registry.initialize(item.id(),item.effectiveDigest(),provenance,spec.hosts(),item.profile(),unit->initializer.apply(unit,item.id(),spec.packet(),item.trust(),spec.layers(),environment));}
                 catch(RuntimeException invalid){org.jboss.logging.Logger.getLogger(TenancyBootstrap.class).error(codec.json(Map.of("event","tenant_initialization_failed","tenantId",item.id().value(),"code","INITIALIZATION_FAILED")));}
             }
+            tenancy.checkSingleRegistry();
         }catch(Exception invalid){throw new IllegalStateException("Tenant initialization manifest or protected provisioning material rejected",invalid);}
     }
 }

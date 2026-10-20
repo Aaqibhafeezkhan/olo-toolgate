@@ -5,6 +5,7 @@ global:
   imagePullSecrets: []
 gateway:
   enabled: false
+  publicOrigin: ''
   replicaCount: 2
   image:
     repository: olo-toolgate-gateway
@@ -80,7 +81,8 @@ gateway:
     interval: 30s
   control:
     tenantId: ''
-    url: https://control.example.invalid
+    url: ''
+    caSecret: ''
     tokenSecret: ''
     tokenKey: access-token
     controlPort: 443

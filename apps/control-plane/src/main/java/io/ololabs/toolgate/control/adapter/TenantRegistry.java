@@ -48,6 +48,12 @@ public class TenantRegistry {
             }
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
+    /** Single-tenant execution must exclude suspended/provisioning customer custody too. */
+    public boolean hasOtherTenant(TenantId owner){
+        try(var c=source().getConnection();var s=c.prepareStatement("SELECT 1 FROM control_tenants WHERE tenant_id<>? LIMIT 1")){
+            s.setString(1,owner.value());try(var rows=s.executeQuery()){return rows.next();}
+        }catch(SQLException unavailable){throw Failure.unavailable();}
+    }
     /** Public routing sees only an active binding, never the reason an unavailable host was rejected. */
     public TenantId activeHost(String hostname) {
         var normalized=TenantHosts.normalize(hostname);

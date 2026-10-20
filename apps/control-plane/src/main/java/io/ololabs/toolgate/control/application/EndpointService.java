@@ -28,6 +28,9 @@ public final class EndpointService {
     private final boolean enabled;
     private ClientCheckInPolicy checkInPolicy=ClientCheckInPolicy.QUICKSTART;
     private EnterpriseOperations operations;
+    private long identityGeneration;
+    public EndpointService identityGeneration(long generation){if(generation<1||generation>9007199254740991L)throw Failure.validation();identityGeneration=generation;return this;}
+    private void currentIdentity(Store.Session tx){if(identityGeneration>0){var keys=tx.identityKeys();if(keys.isEmpty()||keys.stream().anyMatch(key->key.generation()!=identityGeneration))throw Failure.unavailable();}}
     private java.util.function.BiFunction<String,Long,io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery> discoverySigner;
     /** Discovery has its own tenant key domain, independent of the device CA. */
     public EndpointService discoverySigner(java.util.function.BiFunction<String,Long,io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery> signer){discoverySigner=Objects.requireNonNull(signer);return this;}
@@ -64,7 +67,7 @@ public final class EndpointService {
     private static final class Observation {long time=-1;}
     private <T> T transaction(java.util.function.BiFunction<Store.Session,Long,T> action) {
         available();var observation=new Observation();
-        try {return store.transaction(tenant,true,tx->{long now=clock.millis();if(now<0||now>9007199254740991L)throw Failure.unavailable();
+        try {return store.transaction(tenant,true,tx->{currentIdentity(tx);long now=clock.millis();if(now<0||now>9007199254740991L)throw Failure.unavailable();
             observation.time=Math.max(now,tx.approvalClock(now));if(observation.time>now)throw Failure.unavailable();return action.apply(tx,now);});}
         catch(RuntimeException failure){if(observation.time>=0)store.transaction(tenant,true,tx->{tx.approvalClock(observation.time);return null;});throw failure;}
     }
@@ -119,6 +122,7 @@ public final class EndpointService {
     private String verification(){return control+"/console/#enroll";}
     public Store.Reply discovery(){available();long now=clock.millis();
         if(discoverySigner==null)throw Failure.unavailable();
+        if(identityGeneration>0)return store.transaction(tenant,false,tx->{currentIdentity(tx);return reply(discoverySigner.apply(MINIMUM_CLIENT_VERSION,now),0);});
         return reply(discoverySigner.apply(MINIMUM_CLIENT_VERSION,now),0);
     }
     /** A signed CSR proves the announced key even before enrollment or after certificate expiry. */

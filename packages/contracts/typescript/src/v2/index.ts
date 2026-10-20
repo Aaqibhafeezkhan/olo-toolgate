@@ -1,6 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
+import type * as V1 from "../index.js";
 /** Verified delegation chain entry; never caller-asserted. */
 export interface ActorHop {
   readonly agentId: string;
@@ -161,6 +162,14 @@ export interface ConsoleClientRequest {
   readonly operation: ConsoleClientOperation;
   readonly consoleUrl: string;
   readonly expectedTenantId?: string;
+}
+/** Requester-scoped device state and optional verified tenant UUID. Errors carry no installation or device metadata. The service enforces the error-only response invariant before serialization. */
+export interface ConsoleClientResponse {
+  readonly requestId: string;
+  readonly tenantId?: string;
+  readonly health?: V1.ClientHealth;
+  readonly challenge?: V1.EndpointEnrollmentPrompt;
+  readonly error?: V1.ErrorCode;
 }
 /** Identifies the shared contract set. */
 export interface ContractSet {

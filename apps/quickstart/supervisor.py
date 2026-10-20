@@ -599,10 +599,11 @@ def configure():
     gateway_credentials()
     config = {'listen':'127.0.0.1:8081','managementListen':'127.0.0.1:9091',
               'trustedTlsProxy':False,'allowedOrigins':[],'tenantHosts':['127.0.0.1:8081'],
+              'publicDiscovery':dict(controlOrigin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443'),gatewayOrigin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL','https://localhost:8443')),
               'limits':{'maxBodyBytes':65536,'maxHeaderBytes':8192,'maxConcurrentRequests':128,
                         'maxConnections':256,'requestsPerSecond':1000,'requestTimeoutMs':20000,
                         'connectionTimeoutMs':35000,'shutdownTimeoutMs':35000,'auditQueueCapacity':256},
-              'control':{'tenantId':TENANT,'url':'http://127.0.0.1:8082','tokenPath':'/data/run/machine-token',
+              'control':{'tenantId':TENANT,'url':'http://127.0.0.1:8082','caCertificatePath':str(DATA/'keys/device-ca.crt'),'tokenPath':'/data/run/machine-token',
                          'developmentLoopbackHttp':True},
               'toolHosts':[{'hostId':TOOL_HOST,'url':'http://127.0.0.1:8095'}]}
     atomic(DATA/'run/gateway.json',json.dumps(config))
