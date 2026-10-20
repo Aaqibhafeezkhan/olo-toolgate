@@ -22,9 +22,15 @@ QUICKSTART = ROOT/'apps/control-plane/src/main/resources/db/quickstart'
 D = 'sha256:' + 'a'*64
 H = 'b'*64
 T = '0123456789abcdefABCDEF_-'
+TENANT = '10000000-0000-4000-8000-000000000001'
+PROVISION = [
+    f"INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('{TENANT}','specifications','Specification tenant','PROVISIONING',1000,1000)",
+    f"INSERT INTO control_tenant_authority(tenant_id) VALUES('{TENANT}')",
+    f"UPDATE control_tenants SET status='ACTIVE' WHERE tenant_id='{TENANT}'",
+]
 
 INVOCATION = ("INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,"
-              "authorization_epoch,created_at,expires_at,revision,document{cols}) VALUES('t1','{id}','" + 'c'*64 +
+              "authorization_epoch,created_at,expires_at,revision,document{cols}) VALUES('10000000-0000-4000-8000-000000000001','{id}','" + 'c'*64 +
               "','{state}',1,1000,90000,1,'{{}}'{vals})")
 
 
@@ -44,13 +50,13 @@ def task(id, state, task_state, **extra):
 def key(identity='agent-1', namespace='AGENT', invocation_id='i2', source='HEADER', created=1000, expires=None):
     return ("INSERT INTO control_business_keys(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,source,"
             "fingerprint,caller_agent_id,invocation_id,created_at,dedupe_expires_at,retain_until) VALUES("
-            f"'t1','acme.orders-lookup','{namespace}','{identity}','{H}','{source}','{D}','agent-1','{invocation_id}',"
+            f"'10000000-0000-4000-8000-000000000001','acme.orders-lookup','{namespace}','{identity}','{H}','{source}','{D}','agent-1','{invocation_id}',"
             f"{created},{'NULL' if expires is None else expires},2000000)")
 
 
 KEY = "UPDATE control_business_keys SET {} WHERE business_key_hash='" + H + "' AND namespace='{}'"
 RESULT = ("INSERT INTO control_invocation_results(tenant_id,invocation_id,fencing_nonce,result_digest,byte_length,payload,"
-          "created_at,retain_until) VALUES('t1','i2','n1','" + D + "',2,{},1000,5000)")
+          "created_at,retain_until) VALUES('10000000-0000-4000-8000-000000000001','i2','n1','" + D + "',2,{},1000,5000)")
 
 # (statement, should it succeed?) in order; each failure must leave the database unchanged.
 SCENARIOS = [
@@ -99,7 +105,7 @@ SCENARIOS = [
 ]
 
 KILL = ("INSERT INTO control_kill_events(tenant_id,event_id,issuer,issuer_counter,event_kind,scope_kind,scope_value,"
-        "mode,authorization_epoch,issued_at,document) VALUES('t1','{issuer}:{n}','{issuer}',{n},'{kind}',{scope},"
+        "mode,authorization_epoch,issued_at,document) VALUES('10000000-0000-4000-8000-000000000001','{issuer}:{n}','{issuer}',{n},'{kind}',{scope},"
         "{value},{mode},{n},1000,'{{}}')")
 
 
@@ -111,8 +117,8 @@ def recovery(n, issuer='control'):
     return kill(n, issuer, 'RECOVERY', 'NULL', 'NULL', 'NULL')
 
 
-SUPERSEDE = "INSERT INTO control_kill_supersessions VALUES('t1','{}','{}')"
-ACK = ("INSERT INTO control_kill_acks VALUES('t1','TOOL_HOST','host-1',{0},{0},'PUSH') "
+SUPERSEDE = "INSERT INTO control_kill_supersessions VALUES('10000000-0000-4000-8000-000000000001','{}','{}')"
+ACK = ("INSERT INTO control_kill_acks VALUES('10000000-0000-4000-8000-000000000001','TOOL_HOST','host-1',{0},{0},'PUSH') "
        "ON CONFLICT(tenant_id,component_kind,component_id) DO UPDATE SET acked_epoch=excluded.acked_epoch,"
        "acked_at=excluded.acked_at,delivery_path=excluded.delivery_path")
 
@@ -128,8 +134,8 @@ KILL_SCENARIOS = [
     (SUPERSEDE.format('control:4', 'control:1'), False),                   # a recovery isn't a kill
     (SUPERSEDE.format('control:1', 'control-breakglass:1'), False),        # a kill can't supersede
     (SUPERSEDE.format('control:1', 'control:4'), True),
-    ("INSERT INTO control_kill_archive VALUES('t1','control:2',5000)", False),   # still effective
-    ("INSERT INTO control_kill_archive VALUES('t1','control:1',5000)", True),
+    ("INSERT INTO control_kill_archive VALUES('10000000-0000-4000-8000-000000000001','control:2',5000)", False),   # still effective
+    ("INSERT INTO control_kill_archive VALUES('10000000-0000-4000-8000-000000000001','control:1',5000)", True),
     ("UPDATE control_kill_events SET mode='STOP_NEW' WHERE event_id='control:2'", False),
     ("DELETE FROM control_kill_events WHERE event_id='control:2'", False),
     ("DELETE FROM control_kill_supersessions", False),
@@ -166,6 +172,8 @@ class SqliteRun:
         for path in files:
             for statement in statements(path):
                 self.db.execute(statement)
+        for statement in PROVISION:
+            self.db.execute(statement)
 
     def run(self, statement):
         try:
@@ -184,8 +192,12 @@ class PostgresRun:
         self.base += ['-d', 'toolgate_d2']
         self.psql(['-c', "DO $$BEGIN CREATE ROLE toolgate_control_runtime; "
                          "EXCEPTION WHEN duplicate_object THEN NULL; END$$"])
+        self.psql(['-c', "DO $$BEGIN CREATE ROLE toolgate_control_platform; "
+                         "EXCEPTION WHEN duplicate_object THEN NULL; END$$"])
         for path in files:
             self.psql(['-1', '-f', str(path)])
+        for statement in PROVISION:
+            self.psql(['-c',statement])
 
     def psql(self, args):
         return subprocess.run(self.base + args, capture_output=True, text=True, check=True)
