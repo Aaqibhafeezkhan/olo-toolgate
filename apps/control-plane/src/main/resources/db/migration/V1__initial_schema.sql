@@ -60,6 +60,30 @@ CREATE TABLE control_tenant_hosts (
     tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id)
 );
 CREATE INDEX control_tenant_hosts_owner ON control_tenant_hosts(tenant_id);
+CREATE TABLE control_tenant_identity_keys(
+    tenant_id varchar(128) NOT NULL,
+    purpose varchar(16) NOT NULL CHECK(purpose IN ('DISCOVERY','DEVICE_CA')),
+    key_id varchar(128) NOT NULL CHECK(length(key_id) BETWEEN 1 AND 128),
+    state varchar(16) NOT NULL CHECK(state IN ('ACTIVE','READ_ONLY','RETIRED')),
+    provider_reference varchar(512) NOT NULL,
+    public_material text NOT NULL CHECK(octet_length(public_material)<=16384),
+    key_fingerprint varchar(64) NOT NULL UNIQUE CHECK(key_fingerprint ~ '^[a-f0-9]{64}$'),
+    generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),
+    PRIMARY KEY(tenant_id,purpose,key_id)
+);
+CREATE UNIQUE INDEX control_tenant_identity_keys_active ON control_tenant_identity_keys(tenant_id,purpose) WHERE state='ACTIVE';
+CREATE FUNCTION control_tenant_identity_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'identity key retention requires explicit offboarding'; END IF;
+    IF NEW.tenant_id<>OLD.tenant_id OR NEW.purpose<>OLD.purpose OR NEW.key_id<>OLD.key_id OR
+       NEW.provider_reference<>OLD.provider_reference OR NEW.public_material<>OLD.public_material OR NEW.key_fingerprint<>OLD.key_fingerprint OR
+       NEW.generation<OLD.generation OR (OLD.state='RETIRED' AND NEW.state<>'RETIRED') THEN RAISE EXCEPTION 'invalid identity key transition'; END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER control_tenant_identity_key_guard BEFORE UPDATE OR DELETE ON control_tenant_identity_keys FOR EACH ROW EXECUTE FUNCTION control_tenant_identity_key_guard();
+GRANT SELECT ON control_tenant_identity_keys TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON control_tenant_identity_keys TO toolgate_control_platform;
+
 CREATE TABLE control_tenant_runtime_profiles(
     tenant_id varchar(128) NOT NULL PRIMARY KEY,
     server_id varchar(128) NOT NULL,
@@ -700,6 +724,7 @@ BEGIN
         ,'control_tenant_initializations'
         ,'control_tenant_vault_keys'
         ,'control_tenant_runtime_profiles'
+        ,'control_tenant_identity_keys'
     ] LOOP
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
         EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);

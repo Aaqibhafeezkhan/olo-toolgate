@@ -185,11 +185,50 @@ public class TenantRegistry {
             var reply=new Store.Reply(200,codec.json(Map.of("keyVersion",keys.current(tx).version())),before.revision()+1);tx.remember(actor,requestId,digest,reply);return reply;
         });
     }
+    /** Protected operator input. Preflight proves custody/profile binding before atomic publication. */
+    public boolean installIdentity(TenantId tenant,TenantIdentityCustody custody,long generation,List<TenantIdentityCustody.Reference> references,String requestId){
+        io.ololabs.toolgate.control.domain.Ids.valid(requestId);
+        return platformStore().platformTransaction(tenant,(c,tx)->{
+            try(var s=c.prepareStatement("SELECT status FROM control_tenants WHERE tenant_id=?"+(SqliteState.local(c)?"":" FOR UPDATE"))){
+                s.setString(1,tenant.value());try(var r=s.executeQuery()){if(!r.next()||!Set.of("PROVISIONING","ACTIVE").contains(r.getString(1)))throw Failure.tenantUnavailable();}
+            }catch(SQLException failure){throw Failure.unavailable();}
+            var desired=custody.prepare(tenant,tx.runtimeProfile(),generation,references,System.currentTimeMillis());
+            var old=tx.identityKeys();var live=old.stream().filter(key->!key.state().equals("RETIRED")).toList();
+            if(new HashSet<>(desired).equals(new HashSet<>(live)))return false;
+            long previous=old.stream().mapToLong(Store.IdentityKey::generation).max().orElse(0);
+            if(generation!=previous+1||old.size()+desired.size()>4096)throw Failure.conflict();
+            var byId=new HashMap<String,Store.IdentityKey>();for(var row:old)byId.put(row.purpose()+"/"+row.keyId(),row);
+            for(var row:desired){var existing=byId.get(row.purpose()+"/"+row.keyId());
+                if(existing!=null&&(existing.state().equals("RETIRED")||!existing.providerReference().equals(row.providerReference())||!existing.publicMaterial().equals(row.publicMaterial())||!existing.fingerprint().equals(row.fingerprint())))throw Failure.conflict();
+            }
+            // A replacement signer must have appeared in the previous signed discovery ring.
+            var nextSigner=desired.stream().filter(key->key.purpose().equals("DISCOVERY")&&key.state().equals("ACTIVE")).findFirst().orElseThrow(Failure::validation);
+            if(!old.isEmpty()&&live.stream().noneMatch(key->key.purpose().equals("DISCOVERY")&&key.keyId().equals(nextSigner.keyId())))throw Failure.conflict();
+            try{
+                // Free the active slots before installing replacements; readers see only the final commit.
+                try(var s=c.prepareStatement("UPDATE control_tenant_identity_keys SET state='READ_ONLY',generation=? WHERE tenant_id=? AND state='ACTIVE'")){s.setLong(1,generation);s.setString(2,tenant.value());s.executeUpdate();}
+                var desiredIds=desired.stream().map(key->key.purpose()+"/"+key.keyId()).collect(java.util.stream.Collectors.toSet());
+                for(var row:old)if(!desiredIds.contains(row.purpose()+"/"+row.keyId())){
+                    try(var s=c.prepareStatement("UPDATE control_tenant_identity_keys SET state='RETIRED',generation=? WHERE tenant_id=? AND purpose=? AND key_id=?")){s.setLong(1,generation);s.setString(2,tenant.value());s.setString(3,row.purpose());s.setString(4,row.keyId());s.executeUpdate();}
+                }
+                for(var row:desired){
+                    if(!byId.containsKey(row.purpose()+"/"+row.keyId()))tx.initializeIdentityKey(row);
+                    else try(var s=c.prepareStatement("UPDATE control_tenant_identity_keys SET state=?,generation=? WHERE tenant_id=? AND purpose=? AND key_id=?")){s.setString(1,row.state());s.setLong(2,generation);s.setString(3,tenant.value());s.setString(4,row.purpose());s.setString(5,row.keyId());s.executeUpdate();}
+                }
+            }catch(SQLException failure){throw Failure.unavailable();}
+            var before=tx.load();tx.save(before,new io.ololabs.toolgate.control.domain.Directory(before.revision()+1,before.entries()));
+            tx.audit(DirectoryService.digest("platform-identity"),"TENANT_IDENTITY_PUBLISH","tenant-identity",before.revision()+1,requestId,DirectoryService.digest(codec.json(desired)));
+            return true;
+        });
+    }
     public void suspended(TenantId tenant, boolean suspended) {
         platformStore().platformTransaction(tenant, (c, tx) -> {
             try (var s = c.prepareStatement("UPDATE control_tenants SET status=?,updated_at=? WHERE tenant_id=? AND status=?")) {
                 s.setString(1, suspended ? "SUSPENDED" : "ACTIVE"); s.setLong(2, System.currentTimeMillis()); s.setString(3, tenant.value());
-                s.setString(4, suspended ? "ACTIVE" : "SUSPENDED"); if (s.executeUpdate() != 1) throw Failure.conflict(); return null;
+                s.setString(4, suspended ? "ACTIVE" : "SUSPENDED"); if (s.executeUpdate() != 1) throw Failure.conflict();
+                var before=tx.load();tx.save(before,new io.ololabs.toolgate.control.domain.Directory(before.revision()+1,before.entries()));
+                tx.audit(DirectoryService.digest("platform-lifecycle"),suspended?"TENANT_SUSPEND":"TENANT_RESUME","tenant",before.revision()+1,"lifecycle-"+java.util.UUID.randomUUID(),DirectoryService.digest(tenant.value()+":"+suspended));
+                return null;
             } catch (SQLException failure) { throw Failure.unavailable(); }
         });
     }

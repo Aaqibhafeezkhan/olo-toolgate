@@ -11,6 +11,9 @@ public interface Store {
     <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work);
     record ConsoleDeviceRecord(String sessionId,String userId,String deviceId,String nonceDigest,String codeDigest,String csr,String fingerprint,long expiresAt,long verifiedAt){}
     interface Session {
+        default java.util.List<IdentityKey> identityKeys(){throw Failure.unavailable();}
+        /** Platform provisioning only; the runtime database role has SELECT access. */
+        default void initializeIdentityKey(IdentityKey key){throw Failure.unavailable();}
         default RuntimeProfile runtimeProfile(){return null;}
         default void initializeRuntimeProfile(RuntimeProfile profile){throw Failure.unavailable();}
         default EnterpriseStore enterprise() { throw Failure.unavailable(); }
@@ -53,6 +56,14 @@ public interface Store {
         /** Current tenant settings document, or null before the first save. */
         default String serverSettings() { throw Failure.unavailable(); }
         default void saveServerSettings(long revision, String document) { throw Failure.unavailable(); }
+    }
+    /** Public identity metadata and protected custody references; never private key bytes. */
+    record IdentityKey(String purpose,String keyId,String state,String providerReference,String publicMaterial,String fingerprint,long generation) {
+        public IdentityKey {
+            if(!java.util.Set.of("DISCOVERY","DEVICE_CA").contains(purpose)||keyId==null||!keyId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+                ||!java.util.Set.of("ACTIVE","READ_ONLY","RETIRED").contains(state)||providerReference==null||providerReference.length()>512
+                ||publicMaterial==null||publicMaterial.length()>16384||fingerprint==null||!fingerprint.matches("[a-f0-9]{64}")||generation<1||generation>9007199254740991L)throw Failure.validation();
+        }
     }
     record RuntimeProfile(String serverId,String organization,String controlUrl,String gatewayUrl) {
         public RuntimeProfile {

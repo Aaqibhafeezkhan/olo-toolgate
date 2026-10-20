@@ -1151,6 +1151,33 @@
       "runtimePrivileges": []
     },
     {
+      "name": "control_tenant_identity_keys",
+      "classification": "tenant-identity-key-metadata",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "purpose",
+        "key_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "SELECT"
+      ]
+    },
+    {
       "name": "control_tenant_initializations",
       "classification": "tenant-initialization-metadata",
       "tenantColumn": "tenant_id",

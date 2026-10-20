@@ -10,6 +10,16 @@ CREATE TABLE control_tenant_hosts(hostname TEXT NOT NULL PRIMARY KEY CHECK(hostn
 -- statement
 CREATE TABLE control_tenant_initializations(tenant_id TEXT NOT NULL PRIMARY KEY REFERENCES control_tenants(tenant_id),version INTEGER NOT NULL CHECK(version=1),effective_digest TEXT NOT NULL CHECK(length(effective_digest)=64 AND effective_digest NOT GLOB '*[^a-f0-9]*'),provenance TEXT NOT NULL CHECK(length(CAST(provenance AS BLOB))<=65536),completed_at INTEGER NOT NULL CHECK(completed_at>=0));
 -- statement
+CREATE TABLE control_tenant_identity_keys(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),purpose TEXT NOT NULL CHECK(purpose IN ('DISCOVERY','DEVICE_CA')),key_id TEXT NOT NULL CHECK(length(key_id) BETWEEN 1 AND 128),state TEXT NOT NULL CHECK(state IN ('ACTIVE','READ_ONLY','RETIRED')),provider_reference TEXT NOT NULL CHECK(length(provider_reference)<=512),public_material TEXT NOT NULL CHECK(length(CAST(public_material AS BLOB))<=16384),key_fingerprint TEXT NOT NULL UNIQUE CHECK(length(key_fingerprint)=64 AND key_fingerprint NOT GLOB '*[^a-f0-9]*'),generation INTEGER NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),PRIMARY KEY(tenant_id,purpose,key_id));
+-- statement
+CREATE UNIQUE INDEX control_tenant_identity_keys_active ON control_tenant_identity_keys(tenant_id,purpose) WHERE state='ACTIVE';
+-- statement
+CREATE TRIGGER control_tenant_identity_key_guard BEFORE UPDATE ON control_tenant_identity_keys WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.purpose<>OLD.purpose OR NEW.key_id<>OLD.key_id OR NEW.provider_reference<>OLD.provider_reference OR NEW.public_material<>OLD.public_material OR NEW.key_fingerprint<>OLD.key_fingerprint OR NEW.generation<OLD.generation OR (OLD.state='RETIRED' AND NEW.state<>'RETIRED') BEGIN SELECT RAISE(ABORT,'invalid identity key transition'); END;
+-- statement
+CREATE TRIGGER control_tenant_identity_keys_no_delete BEFORE DELETE ON control_tenant_identity_keys BEGIN SELECT RAISE(ABORT,'identity key retention requires explicit offboarding'); END;
+-- statement
+CREATE TRIGGER control_tenant_identity_keys_tenant_immutable BEFORE UPDATE OF tenant_id ON control_tenant_identity_keys WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
 CREATE TABLE control_tenant_runtime_profiles(tenant_id TEXT NOT NULL PRIMARY KEY REFERENCES control_tenants(tenant_id),server_id TEXT NOT NULL CHECK(length(server_id) BETWEEN 1 AND 128),organization TEXT NOT NULL CHECK(length(organization) BETWEEN 1 AND 256),control_url TEXT NOT NULL CHECK(length(CAST(control_url AS BLOB))<=2048),gateway_url TEXT NOT NULL CHECK(length(CAST(gateway_url AS BLOB))<=2048));
 -- statement
 CREATE TRIGGER control_tenant_runtime_profiles_tenant_immutable BEFORE UPDATE OF tenant_id ON control_tenant_runtime_profiles WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;

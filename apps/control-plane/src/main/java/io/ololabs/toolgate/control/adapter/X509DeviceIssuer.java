@@ -88,6 +88,9 @@ public final class X509DeviceIssuer implements DeviceIssuer {
         } catch(GeneralSecurityException e){throw Failure.unavailable();}
     }
     public DeviceIssuer.Peer verifyPeer(X509Certificate peer,long now) {
+        return verifyPeer(ca,peer,now);
+    }
+    static DeviceIssuer.Peer verifyPeer(X509Certificate ca,X509Certificate peer,long now) {
         try {
             ca.checkValidity(new Date(now));peer.checkValidity(new Date(now));peer.verify(ca.getPublicKey());
             if (!peer.getIssuerX500Principal().equals(ca.getSubjectX500Principal()) || peer.getBasicConstraints()!=-1

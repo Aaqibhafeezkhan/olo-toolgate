@@ -118,6 +118,15 @@ public class PostgresStore implements Store {
             directoryDirty = true; directoryEntry = null; directoryCache.invalidate(tenant);
         }
         JdbcSession(Connection connection, String tenant) { this.connection = connection; this.tenant = tenant; }
+        public java.util.List<IdentityKey> identityKeys(){
+            try(var s=statement("SELECT purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation FROM control_tenant_identity_keys WHERE tenant_id=? ORDER BY purpose,key_id LIMIT 4097");var r=s.executeQuery()){
+                var keys=new java.util.ArrayList<IdentityKey>();while(r.next())keys.add(new IdentityKey(r.getString(1),r.getString(2),r.getString(3),r.getString(4),r.getString(5),r.getString(6),r.getLong(7)));return java.util.List.copyOf(keys);
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void initializeIdentityKey(IdentityKey key){
+            try(var s=statement("INSERT INTO control_tenant_identity_keys(tenant_id,purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation) VALUES(?,?,?,?,?,?,?,?)",key.purpose(),key.keyId(),key.state(),key.providerReference(),key.publicMaterial(),key.fingerprint(),key.generation())){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
         public RuntimeProfile runtimeProfile(){
             try(var s=statement("SELECT server_id,organization,control_url,gateway_url FROM control_tenant_runtime_profiles WHERE tenant_id=?");var r=s.executeQuery()){
                 return r.next()?new RuntimeProfile(r.getString(1),r.getString(2),r.getString(3),r.getString(4)):null;

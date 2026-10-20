@@ -85,11 +85,13 @@ final class TenantLifecycleTest {
         long revision = f.store.transaction(tenant.id(),false,tx->tx.load().revision()); assertEquals(1,revision,"Rolled-back seed must not survive");
         assertFalse(f.registry.initialize(tenant.id(),"b".repeat(64),"changed-source",unit->{throw new AssertionError("Never replay bootstrap");}));
         assertEquals(revision,f.store.<Long>transaction(tenant.id(),false,tx->tx.load().revision()).longValue());
+        long epoch=f.store.transaction(tenant.id(),false,tx->tx.enterprise().authorizationEpoch());
         f.registry.suspended(tenant.id(),true); unavailable(f,tenant.id(),404);
         assertNull(f.registry.activeHost("default.example.test"));assertNull(f.registry.activeHost("unknown.example.test"));
         assertTrue(f.registry.activeAfter("",256).isEmpty());
         f.registry.suspended(tenant.id(),false);
-        assertEquals(revision,f.store.<Long>transaction(tenant.id(),false,tx->tx.load().revision()).longValue());
+        assertEquals(revision+2,f.store.<Long>transaction(tenant.id(),false,tx->tx.load().revision()).longValue());
+        assertTrue(f.store.transaction(tenant.id(),false,tx->tx.enterprise().authorizationEpoch())>=epoch+2,"Suspension and resume never revive old permits");
         var before = f.store.transaction(tenant.id(),false,Store.Session::load);
         f.store.transaction(tenant.id(),true,tx->{tx.save(before,new Directory(before.revision()+1,before.entries()));return null;});
         assertEquals(409,assertThrows(Failure.class,()->f.store.transaction(tenant.id(),true,tx->{tx.save(before,new Directory(before.revision()+1,before.entries()));return null;})).status());
