@@ -67,6 +67,7 @@ jobs:
           docker run --rm -e PYTHONPATH=/opt/quickstart --entrypoint /opt/quickstart-python/bin/python -v "$PWD:/work:ro" -w /work olo-toolgate-quickstart:module11 -m unittest discover -s tests/quickstart -v
           python tools/quickstart/check.py --image olo-toolgate-quickstart:module11 --postgresql --no-browser
           python tools/tenancy/check.py --image olo-toolgate-quickstart:module11 --output build/quickstart/tenant-runtime-evidence.json
+          python tools/tenancy/deployment_check.py --image olo-toolgate-quickstart:module11
           TOOLGATE_TENANT_RUNTIME_EVIDENCE="$PWD/build/quickstart/tenant-runtime-evidence.json" cargo test --locked -p olo-toolgate-tenant-identity --test runtime_cutover -- --ignored
           python tools/check.py --scans
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-quickstart:module11

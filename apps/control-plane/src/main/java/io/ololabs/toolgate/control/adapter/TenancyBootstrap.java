@@ -45,6 +45,13 @@ public class TenancyBootstrap {
                 manifest=new InitializationManifest(tenancy.defaultAlias(),List.of(new InitializationManifest.Spec(tenancy.defaultAlias(),config.getOptionalValue("toolgate.control.endpoint.organization",String.class).orElse("Default organization"),List.copyOf(hosts),
                     ProtectedCustody.text(Path.of(packet.get()),2097152),ProtectedCustody.text(Path.of(config.getValue("toolgate.control.recovery.trust-path",String.class)),16384),List.copyOf(layers),endpoints)));
             }
+            apply(manifest,false);
+        }catch(Exception invalid){throw new IllegalStateException("Tenant initialization manifest or protected provisioning material rejected",invalid);}
+    }
+    public record Preview(String tenantId,String alias,String action,String effectiveDigest) {}
+    /** The same fully validated one-time coordinator serves startup and the protected operator CLI. */
+    public List<Preview> apply(InitializationManifest manifest,boolean preview){
+        tenancy.validate();
             tenancy.checkManifestTenants(manifest.tenants().size());tenancy.manifestDefault(manifest.defaultAlias());
             var checkIn=ClientCheckInPolicy.configure(config.getOptionalValue("toolgate.control.client-check-in.check-in-ms",Long.class).orElse(null),config.getOptionalValue("toolgate.control.client-check-in.jitter-pct",Integer.class).orElse(null),config.getOptionalValue("toolgate.control.client-check-in.offline-after-ms",Long.class).orElse(null));
             var initializer=new TenantInitialization(codec,checkIn);var prepared=new ArrayList<Prepared>();var environment=inputs.environment();
@@ -67,7 +74,7 @@ public class TenancyBootstrap {
                 }
                 prepared.add(new Prepared(spec,id,List.copyOf(trust),initialized,effectiveDigest,profile));
             }
-            for(var item:prepared){
+            if(!preview)for(var item:prepared){
                 if(item.initialized())continue;
                 var spec=item.spec();registry.allocate(spec.alias(),spec.name(),item.id());
                 var sources=new ArrayList<Map<String,String>>();sources.add(StandardAccessPresets.provenance(codec));sources.add(Map.of("source","reviewed-administrator","digest",DirectoryService.digest(spec.packet())));
@@ -78,7 +85,7 @@ public class TenancyBootstrap {
                 try{registry.initialize(item.id(),item.effectiveDigest(),provenance,spec.hosts(),item.profile(),unit->initializer.apply(unit,item.id(),spec.packet(),item.trust(),spec.layers(),environment));}
                 catch(RuntimeException invalid){org.jboss.logging.Logger.getLogger(TenancyBootstrap.class).error(codec.json(Map.of("event","tenant_initialization_failed","tenantId",item.id().value(),"code","INITIALIZATION_FAILED")));}
             }
-            tenancy.checkSingleRegistry();
-        }catch(Exception invalid){throw new IllegalStateException("Tenant initialization manifest or protected provisioning material rejected",invalid);}
+            if(!preview)tenancy.checkSingleRegistry();
+            return prepared.stream().map(item->new Preview(item.id().value(),item.spec().alias(),item.initialized()?"ALREADY_INITIALIZED":preview?"INITIALIZE":registry.initialized(item.id())?"INITIALIZED":"INITIALIZATION_FAILED",item.effectiveDigest())).toList();
     }
 }

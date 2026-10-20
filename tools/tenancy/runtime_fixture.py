@@ -51,6 +51,18 @@ tls_key=s.key('device-ca');server_key=s.key('server-tls')
 leaf=x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME,hosts[0])])).issuer_name(tls_ca.subject).public_key(server_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=7)).add_extension(x509.BasicConstraints(ca=False,path_length=None),True).add_extension(x509.SubjectAlternativeName([x509.DNSName(host) for host in hosts]),False).add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]),False).sign(tls_key,hashes.SHA256())
 s.atomic(root/'server.crt',leaf.public_bytes(serialization.Encoding.PEM))
 env.update(TOOLGATE_TENANCY_MODE='subdomain',TOOLGATE_INITIALIZE_MANIFEST=str(root/'manifest.json'),TOOLGATE_CONTROL_BUILDER_ENABLED='false',QUARKUS_HTTP_SSL_CERTIFICATE_FILES=str(root/'server.crt'),QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE=str(store),TOOLGATE_CONTROL_IDENTITY_PUBLICATION_PATH=str(root/'publication.json'))
+operator_properties={
+ 'toolgate.tenancy.mode':'subdomain','toolgate.quickstart.enabled':'true','toolgate.quickstart.database':'/data/state/control.sqlite',
+ 'toolgate.control.vault.wrapping-key-ring-path':'/data/keys/vault-wrapping.json',
+ 'toolgate.control.identity.custody-root':str(custody),'toolgate.control.identity.publication-path':str(root/'publication.json'),
+ 'mp.jwt.verify.publickey.location':'/data/keys/identity-public.pem','quarkus.http.ssl.certificate.files':str(root/'server.crt'),
+ 'toolgate.control.bundle.private-key-path':'/data/keys/policy.pem','toolgate.control.fleet.private-key-path':'/data/keys/fleet.pem',
+ 'toolgate.control.package-release.private-key-path':'/data/keys/package-release.pem'}
+operator_file=root/'operator.json';s.atomic(operator_file,json.dumps(dict(properties=operator_properties,developmentSqlite=True)))
+def operator(command,target,*extra):
+    result=subprocess.run(['java','-cp','/app/app/*:/app/lib/main/*:/app/lib/boot/*','io.ololabs.toolgate.control.adapter.TenantOperator',command,str(operator_file),str(target),*extra],capture_output=True,text=True,timeout=30)
+    assert result.returncode==0,'Protected operator command failed: '+command
+    return json.loads(result.stdout.strip().splitlines()[-1])
 tls=ssl.create_default_context(cafile='/data/keys/device-ca.crt')
 assert tls.check_hostname
 opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=tls))
@@ -184,16 +196,32 @@ try:
     assert request(0,'/api/control/v1/endpoint/check-in',report_a,context=ca)[0] in (401,403)
     new_report['sequence']=2;ok(request(0,'/api/control/v1/endpoint/check-in',new_report,context=new_ca))
     report_b['sequence']=2;ok(request(1,'/api/control/v1/endpoint/check-in',report_b,context=cb))
-    # Test-only platform lifecycle mutation; operator administration is qualified separately.
+    # Protected platform lifecycle command; no public administration route or fixture SQL mutation.
     import sqlite3
-    with sqlite3.connect('/data/state/control.sqlite') as db:db.execute("UPDATE control_tenants SET status='SUSPENDED' WHERE tenant_id=?",(a,))
+    assert operator('suspend','quickstart',a)['status']=='SUSPENDED'
     unknown=request(2,'/.well-known/olo-toolgate-client')
     suspended=request(0,'/.well-known/olo-toolgate-client')
     assert unknown[0]==suspended[0]==404 and unknown[1]['code']==suspended[1]['code']=='TENANT_UNAVAILABLE'
     assert set(unknown[1])==set(suspended[1])
     assert gateway_request(0,'/.well-known/olo-toolgate-client')[0]==404
     assert gateway_request(1,'/.well-known/olo-toolgate-client')[0]==200
-    with sqlite3.connect('/data/state/control.sqlite') as db:db.execute("UPDATE control_tenants SET status='ACTIVE' WHERE tenant_id=?",(a,))
+    assert operator('resume','quickstart',a)['status']=='ACTIVE'
+    late=str(uuid.uuid4());own=root/'late';own.mkdir(mode=0o700);(own/'state').mkdir(mode=0o700)
+    packet,trust=s.prepare(own,late,s.ISSUER,s.key,s.atomic);shutil.copyfile(packet,own/'packet.json');shutil.copyfile(trust,own/'trust.json')
+    late_manifest=root/'late-manifest.json'
+    s.atomic(late_manifest,json.dumps(dict(formatVersion=1,defaultTenantAlias='late',tenants=[dict(alias='late',name='Late tenant',hosts=[hosts[2]],administratorProvisioningRef='late',endpoints=dict(serverId='late-server',controlUrl=origins[2],gatewayUrl=origins[2]))])))
+    assert operator('preview',late_manifest)[0]['action']=='INITIALIZE'
+    with sqlite3.connect('/data/state/control.sqlite') as db:assert db.execute('SELECT count(*) FROM control_tenants').fetchone()[0]==2
+    assert operator('provision',late_manifest)[0]['action']=='INITIALIZED'
+    assert operator('provision',late_manifest)[0]['action']=='ALREADY_INITIALIZED'
+    assert operator('inspect','late')['tenantId']==late
+    publication=json.loads((root/'publication.json').read_text());publication['publications'].append(dict(tenantId=late,generation=1,keys=[generate(late,'DISCOVERY','late-1'),generate(late,'DEVICE_CA','unused')]))
+    s.atomic(root/'publication.json',json.dumps(publication));assert operator('publish-identity',root/'publication.json')['published']
+    s.TENANT=late;late_token=s.jwt(s.GROUPS,'admin')
+    assert request(2,'/api/control/v1/settings',token=late_token)[0]==200
+    assert request(2,'/api/control/v1/settings',token=admin(0))[0]==403
+    assert request(2,'/.well-known/olo-toolgate-client')[0]==200
+    print('Protected operator preview, late one-time provisioning, identity publication, inspect and audited suspend/resume passed.',flush=True)
     evidence.update(oldIdentityA=old_a,newIdentityA=new_a,identityB=identity_b)
     s.atomic(Path('/data/evidence.json'),json.dumps(evidence))
     print('Live preannouncement, signer/CA activation, overlap, retirement and unaffected second-tenant certificate passed.',flush=True)

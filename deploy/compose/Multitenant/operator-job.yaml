@@ -1,0 +1,55 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Replace the image digest and prepare this operator-only Secret before creating the Job.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: toolgate-tenant-operator-
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels: {app: toolgate-tenant-operator}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: operator
+          image: ghcr.io/olo-labs/olo-toolgate-control@sha256:REPLACE_WITH_QUALIFIED_DIGEST
+          command: [java, -cp, "/app/app/*:/app/lib/main/*:/app/lib/boot/*", io.ololabs.toolgate.control.adapter.TenantOperator]
+          args: [preview, /etc/operator/operator.json, /etc/operator/new-tenants/manifest.json]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          volumeMounts:
+            - {name: operator-custody, mountPath: /etc/operator, readOnly: true}
+            - {name: temporary, mountPath: /tmp}
+      volumes:
+        - name: operator-custody
+          secret: {secretName: tenant-operator-inputs, defaultMode: 0440}
+        - name: temporary
+          emptyDir: {medium: Memory, sizeLimit: 128Mi}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: toolgate-tenant-operator}
+spec:
+  podSelector: {matchLabels: {app: toolgate-tenant-operator}}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: [{podSelector: {matchLabels: {app: toolgate-postgres}}}]
+      ports: [{protocol: TCP, port: 5432}]
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
