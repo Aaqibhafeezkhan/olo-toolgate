@@ -16,7 +16,12 @@ from qualification import record
 from discovery_fixture import installation
 
 
-def run(arguments):return subprocess.run(arguments,check=True,capture_output=True,text=True)
+def run(arguments):
+    result=subprocess.run(arguments,capture_output=True,text=True)
+    if result.returncode:
+        print(result.stdout+result.stderr,flush=True)
+        raise subprocess.CalledProcessError(result.returncode,arguments,result.stdout,result.stderr)
+    return result
 
 
 def windows_install(installer, server=None):
@@ -32,7 +37,7 @@ def windows_install(installer, server=None):
 
 def check(target):
     if os.environ.get('GITHUB_ACTIONS')!='true':raise RuntimeError('Disposable native CI only')
-    with installation() as site:binary,installer=check_server(target,site)
+    with installation(standard_ports=True) as site:binary,installer=check_server(target,site)
     record('installer',binary,target,installer)
 
 def check_server(target,site):
@@ -46,11 +51,11 @@ def check_server(target,site):
         if system=='Windows':
             run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
                  '-STA','-File',str(ROOT/'tools/client/tray_status_test.ps1')])
-            windows_install(installer,site.console)
+            windows_install(installer,site.origin)
             installed=True
         elif system=='Linux':
             run(['/bin/sh',str(installer),'--verify'])
-            run(['sudo','-n','/bin/sh',str(installer),'--elevated',site.console,str(os.getuid())])
+            run(['sudo','-n','/bin/sh',str(installer),'--elevated',site.origin,str(os.getuid())])
             installed=True
         else:
             # The native GUI app is compiled into the disk image. Execute its exact payload
@@ -60,7 +65,7 @@ def check_server(target,site):
                 try:
                     source=Path(temporary)/'Install ToolGate.app/Contents/Resources/payload/olo-toolgate-client'
                     if hashlib.sha256(source.read_bytes()).digest()!=hashlib.sha256(binary.read_bytes()).digest():raise ValueError('Disk image native payload drift')
-                    run(['sudo','-n',str(source),'install','--server',site.console]);installed=True
+                    run(['sudo','-n',str(source),'install','--server',site.origin]);installed=True
                 finally:run(['/usr/bin/hdiutil','detach',temporary])
         deadline=time.monotonic()+45
         while True:
@@ -81,7 +86,7 @@ def check_server(target,site):
             state=config.parent/'state'
             device_key_digest=hashlib.sha256((state/'device-key').read_bytes()).hexdigest()
             # Configured anonymous web downloads still work without a URL argument.
-            hint=site.console.encode().hex()
+            hint=site.origin.encode().hex()
             with tempfile.TemporaryDirectory(prefix='toolgate-configured-') as temporary:
                 configured=Path(temporary)/f'olo-toolgate-client-{target}--{hint}.setup.exe'
                 shutil.copyfile(installer,configured)

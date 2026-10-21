@@ -18,7 +18,7 @@ Site=namedtuple('Site','console origin tenant')
 
 
 @contextmanager
-def installation():
+def installation(standard_ports=False):
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -67,10 +67,10 @@ def installation():
         cert.write_bytes(leaf.public_bytes(serialization.Encoding.PEM)+tls_ca.public_bytes(serialization.Encoding.PEM));cert.chmod(0o600)
         key.write_bytes(leaf_key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()));key.chmod(0o600)
         try:
-            https=ThreadingHTTPServer(('127.0.0.1',0),Handler);servers.append(https)
+            https=ThreadingHTTPServer(('127.0.0.1',18450 if standard_ports else 0),Handler);servers.append(https)
             context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.minimum_version=ssl.TLSVersion.TLSv1_2;context.load_cert_chain(cert,key)
             https.socket=context.wrap_socket(https.socket,server_side=True);origin='https://127.0.0.1:'+str(https.server_port)
-            http=ThreadingHTTPServer(('127.0.0.1',0),Handler);servers.append(http)
+            http=ThreadingHTTPServer(('127.0.0.1',18090 if standard_ports else 0),Handler);servers.append(http)
             for server in servers:
                 thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();threads.append(thread)
             yield Site('http://127.0.0.1:'+str(http.server_port),origin,tenant)
