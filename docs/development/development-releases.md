@@ -9,24 +9,23 @@ separate [two-job release guide](how-to-release.md).
 
 1. Open [Manual development release](https://github.com/olo-labs/olo-toolgate/actions/workflows/manual-development-release.yml)
    in Actions and select **Run workflow**.
-2. Keep **Use workflow from: main**. These are the reviewed workflow controls.
+2. Choose the repository branch containing the workflow controls under **Use workflow from**.
+   Feature branches are supported; environment protection rules still apply.
 3. Enter **source_branch**: `main`, a `release/*` branch, or any existing feature
    branch in this repository. Fork branches must first be pushed to this repository.
-4. Set **source_commit** to `latest` or a full 40-character lowercase commit SHA.
-   A specific SHA must be in the selected branch's history. `latest` is resolved
-   once at the beginning; all builders use that pinned SHA even if the branch moves.
+4. There is no commit input. The source branch's latest commit is resolved once
+   at the beginning; all builders use that pinned SHA even if the branch moves.
 5. Run the workflow and inspect its version/source summary. Download packages
    from the resulting GitHub prerelease.
 
 CLI examples:
 
 ```sh
-gh workflow run manual-development-release.yml --ref main -f source_branch=main -f source_commit=latest
+gh workflow run manual-development-release.yml --ref main -f source_branch=main
 
-gh workflow run manual-development-release.yml --ref main -f source_branch=feature/my-change -f source_commit=latest
+gh workflow run manual-development-release.yml --ref feature/my-change -f source_branch=feature/my-change
 
-# Replace this example SHA with an ancestor commit from your source branch.
-gh workflow run manual-development-release.yml --ref main -f source_branch=release/1.0.0-beta.42 -f source_commit=0123456789abcdef0123456789abcdef01234567
+gh workflow run manual-development-release.yml --ref main -f source_branch=release/1.0.0-beta.42
 ```
 
 The workflow builds and publishes without CI admission, lint, tests, smoke tests,

@@ -81,7 +81,8 @@ succeed. Development publication remains independent of Maven.
 
 Product releases and automatic CI both enable `run_tests` and complete foundation,
 native and image verification. Only product releases publish afterward. Manual
-development release keeps its workflow controls on main, accepts any source branch,
+development release permits workflow controls on any repository branch, accepts
+only a source branch input and pins its latest commit once,
 and sets `run_tests: false`: it builds and publishes without tests, scans or
 smoke checks. Its image/GitHub and npm publisher jobs depend on source selection
 and the completed build.

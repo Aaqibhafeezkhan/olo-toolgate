@@ -1,12 +1,12 @@
 # CI pause and RC admission
 
-**ToolGate CI** (`ci.yml`) is the only main push/dispatch validation entry point.
+**ToolGate CI** (`ci.yml`) is the only branch push/dispatch validation entry point.
 It does not publish development packages. Admission runs once, then preflight,
 foundation, six native platform builds and production image checks retain their
 existing validation gates. See [check ownership](ci-check-ownership.md).
 
 The shared admission workflow allocates a runner only when repository variable
-`TOOLGATE_CI_ENABLED` is exactly `true`. It requires the merged PR title to start
+`TOOLGATE_CI_ENABLED` is exactly `true`. On main it requires the merged PR title to start
 with the exact, case-sensitive prefix `RC:`. Leave the variable absent or set it
 to `false` to pause automatic CI; there is no automatic re-enable schedule.
 
@@ -16,9 +16,10 @@ Set the variable under GitHub Settings > Secrets and variables > Actions > Varia
   and checks its title. Merge, squash and rebase commits use the same rule; the
   commit message is not checked. A direct push without a merged PR is not admitted.
 - Manual CI dispatch: the same merged-PR title check applies to the selected main
-  commit. There is no comment input or override. Dispatching CI on another branch
-  creates a skipped run.
-- Pull requests, comments, other branch pushes and version tags do not trigger CI.
+  commit. Other branch pushes and manual dispatches run checks without a merged PR.
+  There is no comment input or override.
+- Pull requests, comments and version tags do not trigger CI. A merge's push
+  triggers one run, avoiding a duplicate pull-request run.
   Product releases use the separate [two manual jobs](how-to-release.md), with
   their own immutable-source selection and complete validation gates.
 - Reusable component workflows have no independent automatic triggers. Compatibility
@@ -32,12 +33,12 @@ omitted scopes in a job-level permission map become `none`. Ownership tests
 validate these permissions before hosted execution.
 
 [Manual development release](development-releases.md#run-a-development-release)
-is explicitly dispatched using workflow controls from **main**. Its `source_branch`
-input accepts any repository branch and its `source_commit` input accepts `latest`
-or a full ancestor SHA. It does not require `RC:` or enable automatic CI. It builds
+is explicitly dispatched using workflow controls from any repository branch. Its
+only input, `source_branch`, accepts any repository branch and pins its latest
+commit once. It does not require `RC:` or enable automatic CI. It builds
 and publishes without tests, scans or CI verification; compilation and packaging
 checks still apply. Main CI never invokes its publisher.
 
-These changes take effect after merging the workflow files. Existing runs are not
+These changes take effect on branches containing the updated workflow files. Existing runs are not
 stopped. Local `debug/start.bat` remains usable while CI is paused and does not
 commit or push.

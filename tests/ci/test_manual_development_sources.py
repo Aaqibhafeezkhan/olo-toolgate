@@ -154,14 +154,24 @@ class ManualSourceTests(unittest.TestCase):
             self.assertEqual(json.loads((destination/'development-source.json').read_text()), info)
             self.assertTrue((destination/'tools/release/manual_development.py').is_file())
 
-    def test_workflows_keep_controller_on_main_and_stamp_every_builder(self):
+    def test_manual_workflow_accepts_only_branch_and_stamps_every_builder(self):
         def workflow(name):
             return yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())
         ci = workflow('ci')
         self.assertNotIn('release', ci['jobs'])
         self.assertTrue(all(level == 'read' for level in ci['permissions'].values()))
         manual_flow = workflow('manual-development-release')
-        self.assertEqual(set(manual_flow['on']['workflow_dispatch']['inputs']), {'source_branch','source_commit'})
+        self.assertEqual(set(manual_flow['on']['workflow_dispatch']['inputs']), {'source_branch'})
+        for job in manual_flow['jobs'].values():
+            self.assertEqual(job['if'], "github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')")
+        source_step=next(s for s in manual_flow['jobs']['select']['steps'] if s.get('id')=='source')
+        self.assertEqual(source_step['env']['SOURCE_COMMIT'],'latest')
+        self.assertEqual(source_step['env']['SOURCE_BRANCH'],'${{ inputs.source_branch }}')
+        image_condition=workflow('release-images')['jobs']['publish']['if']
+        self.assertIn("inputs.manual && github.event_name == 'workflow_dispatch'",image_condition)
+        self.assertIn("!inputs.manual && (github.ref == 'refs/heads/main'",image_condition)
+        self.assertEqual(workflow('release-typescript')['jobs']['publish']['if'],
+                         "github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')")
         self.assertNotIn('secrets', manual_flow['jobs']['native'])
         for name in ('client','images'):
             for job in workflow(name)['jobs'].values():

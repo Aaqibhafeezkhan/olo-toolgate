@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   select:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-24.04
     outputs:
       source_sha: ${{ steps.source.outputs.sourceCommit }}
@@ -27,7 +27,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         SOURCE_BRANCH: ${{ inputs.source_branch }}
-        SOURCE_COMMIT: ${{ inputs.source_commit }}
+        SOURCE_COMMIT: latest
       run: python tools/release/development_source.py select
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       id: selection
@@ -37,7 +37,7 @@ jobs:
         if-no-files-found: error
   prepare:
     needs: select
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -66,7 +66,7 @@ jobs:
         if-no-files-found: error
   native:
     needs: [select, prepare]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
     uses: ./.github/workflows/client.yml
     with:
       source_sha: ${{ needs.select.outputs.source_sha }}
@@ -77,7 +77,7 @@ jobs:
   build:
     name: Build publication artifacts
     needs: [select, native]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
     uses: ./.github/workflows/images.yml
     secrets: inherit
     with:
@@ -87,7 +87,7 @@ jobs:
   publish:
     name: Publish images, Helm and GitHub release
     needs: [select, build]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
     uses: ./.github/workflows/release-images.yml
     secrets: inherit
     with:
@@ -102,7 +102,7 @@ jobs:
   publish-typescript:
     name: Publish TypeScript library
     needs: [select, build]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
     uses: ./.github/workflows/release-typescript.yml
     with:
       selection_artifact_id: ${{ needs.select.outputs.selection_artifact_id }}
@@ -119,9 +119,4 @@ jobs:
         description: Source branch (main, release/* or any feature branch)
         type: string
         default: main
-        required: true
-      source_commit:
-        description: latest or a full commit SHA from the source branch history
-        type: string
-        default: latest
         required: true

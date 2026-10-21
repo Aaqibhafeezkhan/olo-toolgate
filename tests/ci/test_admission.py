@@ -76,7 +76,7 @@ class AdmissionTests(unittest.TestCase):
                 # Explicit operator-only publishing is exempt; automatic workflows stay gated.
                 self.assertEqual(set(events),{'workflow_dispatch'})
                 for job in jobs.values():
-                    self.assertEqual(job['if'],"github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'")
+                    self.assertEqual(job['if'],"github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')")
                 self.assertNotIn('admission',jobs)
                 continue
             self.assertEqual(jobs['admission']['uses'],'./.github/workflows/admission.yml')
