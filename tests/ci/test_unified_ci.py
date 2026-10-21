@@ -153,6 +153,14 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         downloads = [s['with'] for s in steps if s.get('with',{}).get('name')=='foundation-evidence']
         self.assertEqual(downloads, [dict(name='foundation-evidence', path='.')])
 
+    def test_image_stage_retains_browser_diagnostics_after_failure(self):
+        steps = workflow('images.yml')['jobs']['verify']['steps']
+        diagnostics = next(step for step in steps if step.get('with', {}).get('name') == 'browser-diagnostics')
+        self.assertEqual(diagnostics['if'], '${{ always() && inputs.run_tests }}')
+        self.assertEqual(diagnostics['with']['path'].splitlines(),
+                         ['build/ui/browser-results.json', 'build/ui/browser-output/'])
+        self.assertEqual(diagnostics['with']['if-no-files-found'], 'ignore')
+
     def test_shared_helm_lint_has_one_owner(self):
         # Standalone helper scripts share the basename "check". Other fixtures
         # may have loaded Control's script under that name; isolate this import.

@@ -137,6 +137,15 @@ jobs:
         python manage.py setup --bootstrap-local --approve-linux-device --target linux
         docker compose run --rm -T agent --target linux --smoke
       if: ${{ inputs.run_tests }}
+    - name: Preserve browser diagnostics
+      if: ${{ always() && inputs.run_tests }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: browser-diagnostics
+        path: |
+          build/ui/browser-results.json
+          build/ui/browser-output/
+        if-no-files-found: ignore
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: quickstart-evidence

@@ -12,6 +12,7 @@ import ssl
 import sys
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
 import urllib.error
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from cryptography.x509.oid import NameOID
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'tools'))
 from client import downloads
+from control import container
 
 
 @contextmanager
@@ -80,6 +82,39 @@ def https_fixture():
 
 
 class DownloadTlsTests(unittest.TestCase):
+    def test_control_fixture_initializes_the_profile_with_the_published_browser_origin(self):
+        db = dict(container='postgres', tlsPort='53183', replicaTlsPort='53184',
+                  managementPort='53185', replicaManagementPort='53186', CONTROL_TEST_PASSWORD='fixture-only')
+        expected = {name:'https://127.0.0.1:53183' for name in
+                    ('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL')}
+        initialized = []
+        replicas = []
+        def docker(args, **kwargs):
+            if '--entrypoint' in args and args[args.index('--entrypoint')+1].endswith('/python'):
+                values = dict(args[index+1].split('=', 1) for index, arg in enumerate(args) if arg == '--env')
+                self.assertEqual(values, expected)
+                if 's.initialize()' in args[-1]:
+                    initialized.append(values)
+                    return SimpleNamespace(stdout=json.dumps(values))
+                if 's.trust(name)' in args[-1]:
+                    return SimpleNamespace(stdout=json.dumps({'device-ca.crt':'fixture-ca', 'server.crt':'fixture-server'}))
+                return SimpleNamespace(stdout='fixture-token')
+            if '-d' in args:
+                self.assertEqual(initialized, [expected])
+                values = dict(line.split('=', 1) for line in Path(args[args.index('--env-file')+1]).read_text().splitlines())
+                replicas.append(values)
+                return SimpleNamespace(stdout='replica-'+str(len(replicas)))
+            return SimpleNamespace(stdout='')
+        with patch.object(container, 'database', return_value=nullcontext(db)), \
+             patch.object(container, 'run', side_effect=docker), \
+             patch.object(container, 'ready'), patch.object(container.ssl, 'create_default_context'), \
+             patch.object(container.subprocess, 'run'):
+            with container.fixture('control-test', replicas=2) as installed:
+                self.assertEqual(installed['origins'], ['https://127.0.0.1:53183', 'https://127.0.0.1:53184'])
+                self.assertEqual(len(replicas), 2)
+                for values in replicas:
+                    self.assertEqual({name:values[name] for name in expected}, expected)
+
     def test_all_download_checks_use_the_fixture_ca_and_pass_scoped_browser_trust(self):
         with https_fixture() as installed:
             def browser(*args, **kwargs):

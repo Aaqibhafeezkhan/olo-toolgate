@@ -75,9 +75,13 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
     name='toolgate-control-proof-'+secrets.token_hex(6);volume=name+'-custody';containers=[]
     with database() as db,tempfile.TemporaryDirectory(prefix='toolgate-control-custody-') as temp:
         folder=Path(temp);run(['docker','volume','create',volume],capture_output=True)
+        origin='https://127.0.0.1:'+db['tlsPort']
         def helper(code,envfile=None):
             return run(['docker','run','--rm','--network','container:'+db['container'],
                 *(['--env-file',str(envfile)] if envfile else []),'-v',volume+':/data',
+                # Seed the tenant profile with the published browser authority.
+                '--env','TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL='+origin,
+                '--env','TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL='+origin,
                 '--entrypoint','/opt/quickstart-python/bin/python',helper_image,'-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;"+code],
                 capture_output=True,text=True).stdout.strip()
@@ -116,7 +120,7 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
                 ready('http://127.0.0.1:'+db['managementPort' if index==0 else 'replicaManagementPort'])
             save_env(env)
             tokens={user:helper("print(s.jwt(s.GROUPS,'"+user+"'))",envfile) for user in ('admin','reviewer-1','reviewer-2')}
-            origins=['https://127.0.0.1:'+db['tlsPort']]
+            origins=[origin]
             if replicas==2:origins.append('https://127.0.0.1:'+db['replicaTlsPort'])
             yield dict(containers=containers,origins=origins,tokens=tokens,db=db,folder=folder,sslContext=tls,
                        caCertificatePath=ca_file,serverCertificatePath=server_file)
