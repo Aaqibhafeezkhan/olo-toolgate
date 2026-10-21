@@ -42,6 +42,12 @@ class SecurityTests(unittest.TestCase):
             with self.assertRaises(ValueError):quickstart.tenant_identity()
         (quickstart.DATA/'state/tenant.json').unlink()
         with self.assertRaises(ValueError):quickstart.tenant_identity()
+    def test_unfinished_restore_cannot_initialize_or_create_an_archive(self):
+        quickstart.atomic(quickstart.DATA/'restore.pending','{}')
+        with self.assertRaisesRegex(ValueError,'Unfinished restore'):quickstart.initialize()
+        archive=self.root/'incomplete'
+        with self.assertRaisesRegex(ValueError,'Unfinished restore'):quickstart.backup(str(archive))
+        self.assertFalse(archive.exists())
     def test_deployment_metadata_preserves_enrollment_and_observed_addresses(self):
         (quickstart.DATA/'run').mkdir()
         record=dict(executionKind='TOOL_HOST_DIRECT',containerId='a'*64,containerName='quickstart-1',
@@ -246,13 +252,15 @@ class SecurityTests(unittest.TestCase):
         quickstart.atomic(quickstart.DATA/'layout.json','{"layoutVersion":1}')
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
             db.execute('PRAGMA journal_mode=WAL')
-            db.execute('CREATE TABLE records(id INTEGER PRIMARY KEY,value TEXT)');db.execute("INSERT INTO records VALUES(1,'persistent')")
+            tenant=quickstart.TENANT
+            db.execute('INSERT INTO control_server_documents VALUES(?,?,?)',(tenant,'sha256:'+'a'*64,'persistent'))
         backup=self.root/'snapshot';quickstart.backup(str(backup))
         target=self.root/'restored';target.mkdir();quickstart.DATA=target
         manifest=json.loads((backup/'manifest.json').read_text(encoding='utf-8'))
         import hashlib
         self.assertEqual(manifest['files']['state/control.sqlite'],hashlib.sha256((backup/'data/state/control.sqlite').read_bytes()).hexdigest())
-        with sqlite3.connect(backup/'data/state/control.sqlite') as db:self.assertEqual(db.execute('SELECT value FROM records').fetchone()[0],'persistent')
+        with sqlite3.connect(backup/'data/state/control.sqlite') as db:self.assertEqual(db.execute('SELECT document FROM control_server_documents').fetchone()[0],'persistent')
+        self.assertEqual(manifest['tenantRecovery']['tenantId'],tenant)
         # A consistent archive never authorizes restoration of its own credentials.
         with self.assertRaises(ValueError):quickstart.restore(str(backup))
         self.assertEqual(list(target.iterdir()),[])

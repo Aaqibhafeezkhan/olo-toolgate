@@ -328,6 +328,7 @@ def issue():
 
 
 def initialize():
+    if (DATA/'restore.pending').exists(): raise ValueError('Unfinished restore; recover into a new empty data volume')
     password_disabled(); mode = database_mode()
     os.umask(0o077)
     DATA.mkdir(exist_ok=True)
@@ -922,6 +923,7 @@ def deployment_details(page):
 def backup(destination):
     """Offline backup under the exclusive data lock; includes all trust/vault custody."""
     import shutil
+    if (DATA/'restore.pending').exists(): raise ValueError('Unfinished restore cannot be backed up')
     if database_mode() != 'sqlite': raise ValueError('External PostgreSQL requires pg_dump plus matching custody backup')
     destination = Path(destination)
     if destination.exists() or not destination.is_absolute() or destination.is_relative_to(DATA): raise ValueError('Backup must be a new absolute path outside /data')
@@ -932,7 +934,17 @@ def backup(destination):
         # sqlite3's transaction context does not close a connection. Close both
         # before hashing: a WAL checkpoint can remove sidecars at close time.
         with closing(sqlite3.connect(DATA/'state/control.sqlite')) as source, closing(sqlite3.connect(destination/'data/state/control.sqlite')) as target: source.backup(target)
-    atomic(destination/'manifest.json', json.dumps({'layoutVersion':1, 'files': {p.relative_to(destination/'data').as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in (destination/'data').rglob('*') if p.is_file()}}))
+    with closing(sqlite3.connect(destination/'data/state/control.sqlite')) as archived:
+        tenants=archived.execute('SELECT tenant_id FROM control_tenants').fetchall()
+        if len(tenants)!=1:raise ValueError('Quickstart backup requires one registered tenant')
+        tenant=tenants[0][0]
+        def rows(table,columns):
+            return [dict(zip(columns,row)) for row in archived.execute('SELECT '+','.join(columns)+' FROM '+table+' WHERE tenant_id=?',(tenant,))]
+        generation=archived.execute('SELECT directory_cache_generation FROM control_tenant_authority WHERE tenant_id=?',(tenant,)).fetchone()
+        clock=archived.execute('SELECT observed_at FROM control_approval_clocks WHERE tenant_id=?',(tenant,)).fetchone()
+        recovery=dict(tenantId=tenant,identityKeys=rows('control_tenant_identity_keys',['purpose','key_id','state','provider_reference','public_material','key_fingerprint','generation']),
+            vaultKeys=rows('control_tenant_vault_keys',['version','state','provider_reference','wrapped_encryption_key','wrapped_retry_key']),cacheGenerationFloor=generation[0],approvalClockFloor=clock[0] if clock else 0)
+    atomic(destination/'manifest.json', json.dumps({'layoutVersion':1,'tenantRecovery':recovery, 'files': {p.relative_to(destination/'data').as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in (destination/'data').rglob('*') if p.is_file()}}))
 
 
 def restore(source,review=None,trust=None):

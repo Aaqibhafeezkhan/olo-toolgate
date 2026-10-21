@@ -9,6 +9,13 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes,serialization
 from cryptography.hazmat.primitives.asymmetric import rsa,ec,padding
 os.umask(0o077)
+postgres=os.environ.get('TOOLGATE_TEST_POSTGRESQL')=='true'
+if postgres:
+    deadline=time.monotonic()+90
+    while not Path('/data/postgres-ready').exists():
+        if time.monotonic()>deadline:raise TimeoutError('Shared database provisioning timeout')
+        time.sleep(.2)
+    s.atomic(Path('/data/platform-password'),os.environ['TOOLGATE_TEST_PLATFORM_PASSWORD'])
 s.initialize(); env=s.configure()
 root=Path('/data/shared-v2');root.mkdir(mode=0o700)
 a=s.TENANT;b=str(uuid.uuid4());owners=[a,b]
@@ -58,7 +65,21 @@ operator_properties={
  'mp.jwt.verify.publickey.location':'/data/keys/identity-public.pem','quarkus.http.ssl.certificate.files':str(root/'server.crt'),
  'toolgate.control.bundle.private-key-path':'/data/keys/policy.pem','toolgate.control.fleet.private-key-path':'/data/keys/fleet.pem',
  'toolgate.control.package-release.private-key-path':'/data/keys/package-release.pem'}
-operator_file=root/'operator.json';s.atomic(operator_file,json.dumps(dict(properties=operator_properties,developmentSqlite=True)))
+if postgres:
+    operator_properties.update({'toolgate.quickstart.enabled':'false','toolgate.control.development-mode':'true',
+        'quarkus.datasource.jdbc.url':os.environ['QUARKUS_DATASOURCE_JDBC_URL'],'quarkus.datasource.username':'control_app',
+        'quarkus.flyway.username':'control_migrator','toolgate.control.platform.username':'control_provisioner',
+        'toolgate.control.platform.password-path':'/data/platform-password'})
+operator_file=root/'operator.json';s.atomic(operator_file,json.dumps(dict(properties=operator_properties,developmentSqlite=not postgres,developmentLoopback=postgres)))
+
+def metadata(statement,values=(),tenant=None):
+    if postgres:
+        import psycopg
+        with psycopg.connect(host='127.0.0.1',dbname='control',user='control_provisioner',password=os.environ['TOOLGATE_TEST_PLATFORM_PASSWORD'],sslmode='disable') as connection:
+            connection.execute("SELECT set_config('app.tenant_id',%s,true)",(tenant or a,))
+            return connection.execute(statement.replace('?','%s'),values).fetchone()[0]
+    import sqlite3
+    with sqlite3.connect('/data/state/control.sqlite') as connection:return connection.execute(statement,values).fetchone()[0]
 def operator(command,target,*extra):
     result=subprocess.run(['java','-cp','/app/app/*:/app/lib/main/*:/app/lib/boot/*','io.ololabs.toolgate.control.adapter.TenantOperator',command,str(operator_file),str(target),*extra],capture_output=True,text=True,timeout=30)
     assert result.returncode==0,'Protected operator command failed: '+command
@@ -156,7 +177,13 @@ def gateway_request(index,path,headers=None):
 
 def check_gateways(generation):
     for index in (0,1):
-        reply=ok(gateway_request(index,'/.well-known/olo-toolgate-client'))
+        deadline=time.monotonic()+20
+        while True:
+            result=gateway_request(index,'/.well-known/olo-toolgate-client')
+            if result[0]!=503:break
+            assert time.monotonic()<deadline,'Gateway did not recover after Control restart'
+            time.sleep(.25)
+        reply=ok(result)
         encoded=reply['jws'].split('.')[1];payload=json.loads(base64.urlsafe_b64decode(encoded+'='*((-len(encoded))%4)))
         assert payload['tenantId']==owners[index] and payload['keySetVersion']==(generation if index==0 else 1)
         assert ok(gateway_request(index,'/api/public/v1/clients/configuration'))=={'serverUrl':origins[index]}
@@ -211,7 +238,7 @@ try:
     late_manifest=root/'late-manifest.json'
     s.atomic(late_manifest,json.dumps(dict(formatVersion=1,defaultTenantAlias='late',tenants=[dict(alias='late',name='Late tenant',hosts=[hosts[2]],administratorProvisioningRef='late',endpoints=dict(serverId='late-server',controlUrl=origins[2],gatewayUrl=origins[2]))])))
     assert operator('preview',late_manifest)[0]['action']=='INITIALIZE'
-    with sqlite3.connect('/data/state/control.sqlite') as db:assert db.execute('SELECT count(*) FROM control_tenants').fetchone()[0]==2
+    assert metadata('SELECT count(*) FROM control_tenants')==2
     assert operator('provision',late_manifest)[0]['action']=='INITIALIZED'
     assert operator('provision',late_manifest)[0]['action']=='ALREADY_INITIALIZED'
     assert operator('inspect','late')['tenantId']==late
@@ -228,8 +255,7 @@ try:
     assert operator('capacity','second')==before_b
     wrong=subprocess.run(['java','-cp','/app/app/*:/app/lib/main/*:/app/lib/boot/*','io.ololabs.toolgate.control.adapter.TenantOperator','capacity',str(operator_file),'quickstart',b,str(limits)],capture_output=True,timeout=30)
     assert wrong.returncode!=0 and operator('capacity','quickstart')==updated
-    with sqlite3.connect('/data/state/control.sqlite') as db:
-        assert db.execute("SELECT count(*) FROM control_audit WHERE tenant_id=? AND operation='TENANT_CAPACITY_UPDATE'",(a,)).fetchone()[0]==1
+    assert metadata("SELECT count(*) FROM control_audit WHERE tenant_id=? AND operation='TENANT_CAPACITY_UPDATE'",(a,),a)==1
     print('Protected UUID-confirmed capacity update, audit and unchanged second-tenant limits passed.',flush=True)
     print('Protected operator preview, late one-time provisioning, identity publication, inspect and audited suspend/resume passed.',flush=True)
     evidence.update(oldIdentityA=old_a,newIdentityA=new_a,identityB=identity_b)

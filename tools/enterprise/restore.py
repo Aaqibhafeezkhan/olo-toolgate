@@ -98,10 +98,59 @@ def retire_records(db,tenant,a):
             db.execute('DELETE FROM control_records WHERE tenant_id=? AND kind=? AND record_id=?',(tenant,kind,rid))
         else:db.execute('UPDATE control_records SET document=? WHERE tenant_id=? AND kind=? AND record_id=?',(canonical(doc).decode(),tenant,kind,rid))
 
-def quarantine(database,a,now):
+def validate_key_inventory(inventory):
+    for key in ('cacheGenerationFloor','approvalClockFloor'):
+        if type(inventory[key]) is not int or not 0<=inventory[key]<LIMIT-1:raise ValueError('Bounded external cache/approval floor required')
+    identities=inventory['identityKeys'];vault=inventory['vaultKeys']
+    if not isinstance(identities,list) or len(identities)>1024 or not isinstance(vault,list) or len(vault)>1024:raise ValueError('Bounded key inventory required')
+    seen=set()
+    for row in identities:
+        if set(row)!={'purpose','key_id','state','provider_reference','public_material','key_fingerprint','generation'} or row['purpose'] not in ('DISCOVERY','DEVICE_CA') or row['state'] not in ('ACTIVE','READ_ONLY','RETIRED'):raise ValueError('Exact identity key row required')
+        if type(row['generation']) is not int or not 1<=row['generation']<LIMIT-1 or not re.fullmatch('[a-f0-9]{64}',row['key_fingerprint']):raise ValueError('Identity floor required')
+        key=(row['purpose'],row['key_id'])
+        if key in seen:raise ValueError('Duplicate identity key')
+        seen.add(key)
+    versions=set()
+    for row in vault:
+        if set(row)!={'version','state','provider_reference','wrapped_encryption_key','wrapped_retry_key'} or type(row['version']) is not int or not 1<=row['version']<=1024 or row['state'] not in ('ACTIVE','READ_ONLY','RETIRED') or row['version'] in versions:raise ValueError('Exact vault key inventory required')
+        versions.add(row['version'])
+    if sum(row['state']=='ACTIVE' for row in vault)>1:raise ValueError('Multiple active vault keys')
+
+
+def quarantine_keys(connection,tenant,inventory):
+    identities=inventory['identityKeys'];by_id={(r['purpose'],r['key_id']):r for r in identities}
+    old=connection.execute('SELECT purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation FROM control_tenant_identity_keys WHERE tenant_id=?',(tenant,)).fetchall()
+    for purpose,kid,state,provider,public,fingerprint,generation in old:
+        row=by_id.get((purpose,kid))
+        if row is None or (provider,public,fingerprint)!=(row['provider_reference'],row['public_material'],row['key_fingerprint']) or generation>row['generation'] or state=='RETIRED' and row['state']!='RETIRED':raise ValueError('Live identity inventory cannot omit or roll back backup keys')
+    generation=max([r['generation'] for r in identities]+[0])+1
+    # Restored CAs/signers never become active merely by resuming the tenant.
+    for row in identities:
+        connection.execute("INSERT INTO control_tenant_identity_keys(tenant_id,purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation) VALUES(?,?,?,'RETIRED',?,?,?,?) ON CONFLICT(tenant_id,purpose,key_id) DO UPDATE SET state='RETIRED',generation=excluded.generation",(tenant,row['purpose'],row['key_id'],row['provider_reference'],row['public_material'],row['key_fingerprint'],generation))
+    vault={r['version']:r for r in inventory['vaultKeys']}
+    old=connection.execute('SELECT version,state,provider_reference,wrapped_encryption_key,wrapped_retry_key FROM control_tenant_vault_keys WHERE tenant_id=? ORDER BY version',(tenant,)).fetchall()
+    for version,state,provider,encryption,retry in old:
+        row=vault.get(version)
+        if row is None or state=='RETIRED' and (row['state']!='RETIRED' or (provider,encryption,retry)!=(row['provider_reference'],row['wrapped_encryption_key'],row['wrapped_retry_key'])) or state=='READ_ONLY' and row['state']=='ACTIVE':raise ValueError('Live vault inventory cannot omit or revive backup keys')
+        if state=='ACTIVE' and row['state']!='ACTIVE':connection.execute("UPDATE control_tenant_vault_keys SET state='READ_ONLY' WHERE tenant_id=? AND version=?",(tenant,version))
+    for row in vault.values():
+        if row['state']=='RETIRED' and connection.execute('SELECT 1 FROM control_secrets WHERE tenant_id=? AND key_version=? LIMIT 1',(tenant,row['version'])).fetchone():raise ValueError('Backup ciphertext uses a retired key; obtain a reviewed re-encrypted backup')
+        existing=next((r for r in old if r[0]==row['version']),None)
+        if existing and existing[1]=='RETIRED':continue
+        connection.execute('INSERT INTO control_tenant_vault_keys(tenant_id,version,state,provider_reference,wrapped_encryption_key,wrapped_retry_key) VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,version) DO UPDATE SET state=excluded.state,provider_reference=excluded.provider_reference,wrapped_encryption_key=excluded.wrapped_encryption_key,wrapped_retry_key=excluded.wrapped_retry_key',(tenant,row['version'],row['state'],row['provider_reference'],row['wrapped_encryption_key'],row['wrapped_retry_key']))
+
+
+
+def quarantine(database,a,now,inventory):
     with closing(sqlite3.connect(database)) as db,db:
         db.execute('BEGIN IMMEDIATE')
+        if inventory['tenantId']!=a['tenantId']:raise ValueError('Recovery inventory tenant mismatch')
+        quarantine_keys(db,a['tenantId'],inventory)
         quarantine_connection(db,a,now)
+        tenant=a['tenantId']
+        db.execute('UPDATE control_tenant_authority SET directory_cache_generation=max(directory_cache_generation,?)+1 WHERE tenant_id=?',(inventory['cacheGenerationFloor'],tenant))
+        db.execute('INSERT INTO control_approval_clocks(tenant_id,observed_at) VALUES(?,?) ON CONFLICT(tenant_id) DO UPDATE SET observed_at=max(control_approval_clocks.observed_at,excluded.observed_at)',(tenant,inventory['approvalClockFloor']+1))
+        db.execute("UPDATE control_tenants SET status='SUSPENDED',updated_at=max(updated_at,?) WHERE tenant_id=?",(now,tenant))
 
 
 def quarantine_connection(db,a,now,multiple=False):
@@ -150,6 +199,14 @@ def quarantine_connection(db,a,now,multiple=False):
     for rid,raw in db.execute("SELECT invocation_id,document FROM control_tool_host_dispatches WHERE tenant_id=? AND state IN ('QUEUED','CLAIMED','ADMITTED')",(tenant,)).fetchall():
         doc=json.loads(raw);doc['status']['state']='EXPIRED'
         db.execute("UPDATE control_tool_host_dispatches SET state='EXPIRED',document=? WHERE tenant_id=? AND invocation_id=?",(canonical(doc).decode(),tenant,rid))
+    for rid,old,raw in db.execute("SELECT record_id,revision,document FROM control_builder WHERE tenant_id=? AND kind='TEST'",(tenant,)).fetchall():
+        doc=json.loads(raw)
+        if doc.get('state') in ('QUEUED','RUNNING'):
+            doc.update(state='FAILED',revision=old+1,error='EXPIRED')
+            db.execute("UPDATE control_builder SET revision=?,document=? WHERE tenant_id=? AND kind='TEST' AND record_id=?",(old+1,canonical(doc).decode(),tenant,rid))
+    for rid,raw in db.execute("SELECT request_id,record FROM control_mcp_requests WHERE tenant_id=? AND state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED')",(tenant,)).fetchall():
+        doc=json.loads(raw);doc.update(state='EXPIRED',completedAtUnixMs=now)
+        db.execute("UPDATE control_mcp_requests SET state='EXPIRED',record=? WHERE tenant_id=? AND request_id=?",(canonical(doc).decode(),tenant,rid))
     db.execute('UPDATE control_tenant_authority SET revision=?,authorization_epoch=? WHERE tenant_id=?',(revision,epoch,tenant))
     db.execute('INSERT INTO control_recovery_floors VALUES(?,?) ON CONFLICT(tenant_id) DO UPDATE SET snapshot_sequence=max(snapshot_sequence,excluded.snapshot_sequence)',(tenant,a['snapshotSequenceFloor']))
     db.execute('INSERT INTO control_authorization_outbox VALUES(?,?,?,?,NULL)',(tenant,revision,epoch,now))
@@ -164,22 +221,29 @@ def restore(source,target,review_path,trust_path,now=None):
     trust_file=Path(trust_path).resolve();review_file=Path(review_path).resolve()
     if trust_file.is_relative_to(source) or trust_file.is_relative_to(target):raise ValueError('External pinned restore trust required')
     manifest=read(source/'manifest.json');a=validate(read(review_file),read(trust_file),manifest,now)
-    if manifest['layoutVersion']!=1:raise ValueError('Unsupported backup layout')
+    if manifest['layoutVersion']!=1 or set(manifest)!={'layoutVersion','files','tenantRecovery'}:raise ValueError('Complete current SQLite backup and external key inventory required')
+    inventory=manifest['tenantRecovery']
+    if set(inventory)!={'tenantId','identityKeys','vaultKeys','cacheGenerationFloor','approvalClockFloor'}:raise ValueError('Complete SQLite recovery key inventory required')
+    if inventory['tenantId']!=a['tenantId'] or any(type(inventory[key]) is not int or not 0<=inventory[key]<LIMIT-1 for key in ('cacheGenerationFloor','approvalClockFloor')):raise ValueError('Explicit bounded tenant recovery floors required')
+    validate_key_inventory(inventory)
     if any(p.is_symlink() for p in (source/'data').rglob('*')):raise ValueError('Unsafe backup link')
     actual={p.relative_to(source/'data').as_posix() for p in (source/'data').rglob('*') if p.is_file()}
     if actual!=set(manifest['files']):raise ValueError('Backup inventory mismatch')
     for name,digest in manifest['files'].items():
         path=source/'data'/name
         if Path(name).is_absolute() or '..' in Path(name).parts or hashlib.sha256(path.read_bytes()).hexdigest()!=digest:raise ValueError('Backup integrity failure')
-    # Validate and quarantine a sibling staging directory before touching the empty destination.
-    stage=target.parent/(target.name+'-quarantine-'+os.urandom(8).hex());stage.mkdir(mode=0o700)
+    # Stage on the writable destination volume: its parent is read-only in the production image.
+    # The marker prevents a partial file publication from being mistaken for a fresh installation.
+    stage=target/('.quarantine-'+os.urandom(8).hex());stage.mkdir(mode=0o700)
     try:
-        shutil.copytree(source/'data',stage,dirs_exist_ok=True);quarantine(stage/'state/control.sqlite',a,now)
+        shutil.copytree(source/'data',stage,dirs_exist_ok=True);quarantine(stage/'state/control.sqlite',a,now,inventory)
         for filename in ('identity.json','identity-reviewer-1.json','identity-reviewer-2.json'):
             path=stage/filename
             if path.exists():doc=read(path);doc['generation']=doc.get('generation',1)+1;path.write_bytes(canonical(doc)+b'\n')
         for path in stage.rglob('*'):path.chmod(0o700 if path.is_dir() else 0o600)
+        marker=target/'restore.pending';write(marker,dict(formatVersion=1,backupManifestDigest=a['backupManifestDigest']))
         for child in stage.iterdir():shutil.move(str(child),target/child.name)
+        marker.unlink()
     finally:shutil.rmtree(stage)
     return a
 

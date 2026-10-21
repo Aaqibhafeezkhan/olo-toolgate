@@ -4,6 +4,7 @@
 from contextlib import closing
 import base64,hashlib,importlib.util,json,sqlite3,tempfile,unittest
 from pathlib import Path
+from unittest.mock import patch
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding,rsa
 ROOT=Path(__file__).resolve().parents[2]
@@ -33,7 +34,7 @@ class RestoreTests(unittest.TestCase):
    for invocation,state in (('queued','QUEUED'),('claimed','CLAIMED'),('admitted','ADMITTED'),('finished','FINISHED')):
     c.execute("INSERT INTO control_tool_host_dispatches(tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES('00000000-0000-4000-8000-000000000001',?,'host',?,9,1,?)",
               (invocation,state,json.dumps(dict(status=dict(invocationId=invocation,hostId='host',state=state,**({'result':{'outcome':'COMPLETED'}} if state=='FINISHED' else {}))))))
-  self.manifest=dict(layoutVersion=1,files={p.relative_to(self.data).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.data.rglob('*') if p.is_file()});restore.write(self.source/'manifest.json',self.manifest)
+  self.manifest=dict(layoutVersion=1,tenantRecovery=dict(tenantId='00000000-0000-4000-8000-000000000001',identityKeys=[],vaultKeys=[],cacheGenerationFloor=90,approvalClockFloor=self.now),files={p.relative_to(self.data).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.data.rglob('*') if p.is_file()});restore.write(self.source/'manifest.json',self.manifest)
   self.keys=[rsa.generate_private_key(public_exponent=65537,key_size=2048) for _ in range(2)]
   encode=lambda b:base64.urlsafe_b64encode(b).rstrip(b'=').decode()
   number=lambda n:encode(n.to_bytes((n.bit_length()+7)//8,'big'))
@@ -42,6 +43,46 @@ class RestoreTests(unittest.TestCase):
   self.proofs=[dict(keyId='reviewer-'+str(n),signature=encode(k.sign(restore.DOMAIN+restore.canonical(self.authorization),padding.PKCS1v15(),hashes.SHA256()))) for n,k in enumerate(self.keys)]
   restore.write(self.root/'review.json',dict(authorization=self.authorization,proofs=self.proofs))
  def tearDown(self):self.temp.cleanup()
+ def key_inventory(self):
+  tenant=self.authorization['tenantId'];inventory=self.manifest['tenantRecovery']
+  identity=dict(purpose='DISCOVERY',key_id='before-backup',state='ACTIVE',provider_reference='external:signer-1',public_material='public-1',key_fingerprint='1'*64,generation=1)
+  vault=dict(version=1,state='ACTIVE',provider_reference='external:kek-1',wrapped_encryption_key='wrapped-encryption',wrapped_retry_key='wrapped-retry')
+  with closing(sqlite3.connect(self.data/'state/control.sqlite')) as c,c:
+   c.execute('INSERT INTO control_tenant_identity_keys VALUES(?,?,?,?,?,?,?,?)',(tenant,*identity.values()))
+   c.execute('INSERT INTO control_tenant_vault_keys VALUES(?,?,?,?,?,?)',(tenant,*vault.values()))
+   c.execute('INSERT INTO control_secrets VALUES(?,?,?,?,?,?,?)',(tenant,'retained-secret','default-tools','default-devices',1,1,'opaque-encrypted-bytes'))
+  inventory['identityKeys']=[{**identity,'state':'RETIRED','generation':2},{**identity,'key_id':'after-backup','provider_reference':'external:signer-2','public_material':'public-2','key_fingerprint':'2'*64,'generation':2}]
+  inventory['vaultKeys']=[{**vault,'state':'READ_ONLY'},{**vault,'version':2,'provider_reference':'external:kek-2'}]
+  return inventory
+ def refresh_review(self):
+  self.manifest['files']={p.relative_to(self.data).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.data.rglob('*') if p.is_file()}
+  self.authorization['backupManifestDigest']=hashlib.sha256(restore.canonical(self.manifest)).hexdigest()
+  proofs=[dict(keyId='reviewer-'+str(n),signature=base64.urlsafe_b64encode(k.sign(restore.DOMAIN+restore.canonical(self.authorization),padding.PKCS1v15(),hashes.SHA256())).rstrip(b'=').decode()) for n,k in enumerate(self.keys)]
+  (self.source/'manifest.json').write_bytes(restore.canonical(self.manifest))
+  (self.root/'review.json').write_bytes(restore.canonical(dict(authorization=self.authorization,proofs=proofs)))
+ def test_live_key_retirements_and_cache_floors_survive_sqlite_restore(self):
+  self.key_inventory();self.refresh_review()
+  restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
+  with closing(sqlite3.connect(self.target/'state/control.sqlite')) as c:
+   self.assertEqual(c.execute('SELECT status FROM control_tenants').fetchone()[0],'SUSPENDED')
+   self.assertEqual(c.execute('SELECT state,generation FROM control_tenant_identity_keys ORDER BY key_id').fetchall(),[('RETIRED',3),('RETIRED',3)])
+   self.assertEqual(c.execute('SELECT version,state FROM control_tenant_vault_keys ORDER BY version').fetchall(),[(1,'READ_ONLY'),(2,'ACTIVE')])
+   self.assertEqual(c.execute('SELECT cipher FROM control_secrets').fetchone()[0],'opaque-encrypted-bytes')
+   self.assertEqual(c.execute('SELECT directory_cache_generation FROM control_tenant_authority').fetchone()[0],91)
+   self.assertGreater(c.execute('SELECT observed_at FROM control_approval_clocks').fetchone()[0],self.now)
+ def test_retired_secret_ciphertext_never_touches_restore_destination(self):
+  inventory=self.key_inventory();inventory['vaultKeys'][0]['state']='RETIRED';self.refresh_review()
+  with self.assertRaisesRegex(ValueError,'retired key'):restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
+  self.assertEqual(list(self.target.iterdir()),[])
+ def test_omitted_live_key_never_touches_restore_destination(self):
+  inventory=self.key_inventory();inventory['identityKeys']=[];self.refresh_review()
+  with self.assertRaisesRegex(ValueError,'omit'):restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
+  self.assertEqual(list(self.target.iterdir()),[])
+ def test_failed_file_publication_leaves_a_startup_fence(self):
+  with patch.object(restore.shutil,'move',side_effect=OSError('injected destination failure')):
+   with self.assertRaises(OSError):restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
+  self.assertTrue((self.target/'restore.pending').is_file())
+  with self.assertRaisesRegex(ValueError,'Empty independent'):restore.restore(self.source,self.target,self.root/'review.json',self.root/'trust.json',self.now)
  def test_single_tenant_review_cannot_quarantine_a_shared_database(self):
   with closing(sqlite3.connect(self.data/'state/control.sqlite')) as c,c:
    c.execute("INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES('00000000-0000-4000-8000-000000000002','other','Other','ACTIVE',1,1)")
