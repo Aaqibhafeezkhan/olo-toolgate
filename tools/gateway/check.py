@@ -68,7 +68,9 @@ def helm_checks():
                 raise SystemExit('Gateway security defaults weakened')
             if {p['containerPort'] for p in container['ports']} != {8081,9091}: raise SystemExit('Wrong ports')
             config = json.loads(next(d for d in docs if d['kind'] == 'ConfigMap')['data']['gateway.json'])
-            if not config['trustedTlsProxy'] or set(config)!={'listen','managementListen','trustedTlsProxy','allowedOrigins','limits','control','tenantHosts'}: raise SystemExit('Closed online authority configuration required')
+            if not config['trustedTlsProxy'] or set(config)!={'listen','managementListen','trustedTlsProxy','allowedOrigins','limits','control','tenantHosts','publicDiscovery'}: raise SystemExit('Closed online authority configuration required')
+            if config['publicDiscovery'] != {'controlOrigin':config['control']['url'], 'gatewayOrigin':'https://gateway.example.invalid'}:
+                raise SystemExit('Public discovery must bind the configured Control and Gateway origins')
             if config['control']['tokenPath']!='/etc/toolgate/control-auth/access-token' or config['control']['developmentLoopbackHttp']:raise SystemExit('Protected service authority required')
             if any(v['name'] in ('permit-signing','bundle-keys','approval-auth') for v in pod['volumes']):raise SystemExit('Gateway cannot hold effect signing custody')
             monitor = next((d for d in docs if d['kind'] == 'ServiceMonitor'), None)
