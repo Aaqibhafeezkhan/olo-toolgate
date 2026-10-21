@@ -43,6 +43,21 @@ class AdmissionTests(unittest.TestCase):
             events=document.get('on',document.get(True,{}))
             if not any(event in events for event in ('push','pull_request','workflow_dispatch','workflow_run','schedule','issue_comment')):
                 continue
+            if path.name=='tenant-qualification.yml':
+                # Approved feature-only qualification cannot publish or change the main/tag RC admission path.
+                self.assertEqual(set(events),{'push','workflow_dispatch'})
+                self.assertEqual(events['push']['branches'],['feature/multitenant-support-gap'])
+                self.assertEqual(document['permissions'],{'contents':'read','pull-requests':'read'})
+                jobs=document['jobs'];self.assertEqual(set(jobs),{'native','evidence'})
+                self.assertEqual(jobs['native']['if'],"vars.TOOLGATE_CI_ENABLED == 'true' && github.ref == 'refs/heads/feature/multitenant-support-gap'")
+                self.assertEqual(jobs['native']['uses'],'./.github/workflows/client.yml')
+                self.assertEqual(jobs['native']['with'],{'run_tests':True})
+                self.assertEqual(jobs['evidence']['needs'],'native')
+                commands=[s['run'] for s in jobs['evidence']['steps'] if 'run' in s]
+                self.assertEqual(commands,['python tools/tenancy/native_evidence.py --directory build/tenant-native --assets deploy/client-assets/release --output build/tenant-native-qualified.json'])
+                for job in jobs.values():
+                    self.assertNotIn('secrets',job);self.assertNotIn('permissions',job);self.assertNotIn('environment',job)
+                continue
             jobs=document['jobs']
             if path.name in ('create-release-branch.yml','build-release.yml'):
                 # Operator-selected product releases have their own immutable-source

@@ -61,7 +61,7 @@ pub async fn installation(value: &str) -> Result<Installation> {
             None
         };
     let Some(console) = console else {
-        let client = reqwest::Client::builder()
+        let client = crate::transport::tls_client_builder()
             .no_proxy()
             .https_only(true)
             .redirect(reqwest::redirect::Policy::none())
@@ -76,8 +76,7 @@ pub async fn installation(value: &str) -> Result<Installation> {
             console_url: None,
         });
     };
-    let _ = rustls::crypto::ring::default_provider().install_default();
-    let client = reqwest::Client::builder()
+    let client = crate::transport::tls_client_builder()
         .no_proxy()
         // This loopback HTTP bootstrap must also work on fresh systems without OS CA roots.
         .tls_certs_only(std::iter::empty())
@@ -103,7 +102,7 @@ pub async fn installation(value: &str) -> Result<Installation> {
     }
     let root = reqwest::Certificate::from_pem(trust.ca_certificate_pem.as_bytes())
         .map_err(|_| Failure::Validation)?;
-    let verified = reqwest::Client::builder()
+    let verified = crate::transport::tls_client_builder()
         .no_proxy()
         .https_only(true)
         .tls_certs_only([root])
@@ -232,8 +231,7 @@ pub async fn installation_server(value: &str) -> Result<String> {
     site_server(url.as_str().trim_end_matches('/')).await
 }
 async fn site_server(origin: &str) -> Result<String> {
-    let _ = rustls::crypto::ring::default_provider().install_default();
-    let mut builder = reqwest::Client::builder()
+    let mut builder = crate::transport::tls_client_builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(15));

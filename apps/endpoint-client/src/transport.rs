@@ -6,6 +6,11 @@ use olo_toolgate_contracts::v2::SignedTenantDiscovery;
 use olo_toolgate_contracts::*;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 pub type Call<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
+/// Discovery can run before a device transport exists (including fresh installers).
+pub(crate) fn tls_client_builder() -> reqwest::ClientBuilder {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::builder()
+}
 pub trait ControlPort: Send + Sync {
     /// Assertion only: it cannot change the configured destination or authenticate a request.
     fn bind_tenant(&self, _tenant: &str) -> Result<()> {
@@ -151,8 +156,7 @@ impl HttpsControl {
         })
     }
     fn builder(config: &Config) -> Result<reqwest::ClientBuilder> {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        let mut builder = reqwest::Client::builder()
+        let mut builder = tls_client_builder()
             .https_only(true)
             .http1_only()
             .redirect(reqwest::redirect::Policy::none())

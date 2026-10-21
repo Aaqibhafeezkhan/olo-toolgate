@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   native:
-    if: vars.TOOLGATE_CI_ENABLED == 'true'
+    if: vars.TOOLGATE_CI_ENABLED == 'true' && github.ref == 'refs/heads/feature/multitenant-support-gap'
     uses: ./.github/workflows/client.yml
     with:
       run_tests: true
