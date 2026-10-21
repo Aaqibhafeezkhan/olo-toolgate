@@ -87,11 +87,15 @@ class SecurityTests(unittest.TestCase):
                 settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],control)
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],gateway)
+            for name in ('tool-host.json','tool-host-remote.json'):
+                self.assertEqual(json.loads((quickstart.DATA/'run'/name).read_text())['control']['url'],control)
         with patch.dict(os.environ,{},clear=True):
             with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')),patch.object(quickstart,'tenant_certificates'):
                 settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],'https://localhost:8443')
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],'https://localhost:8443')
+            for name in ('tool-host.json','tool-host-remote.json'):
+                self.assertEqual(json.loads((quickstart.DATA/'run'/name).read_text())['control']['url'],'https://localhost:8443')
     def test_fleet_keys_are_persistent_and_disjoint(self):
         quickstart.fleet_keys()
         organization = json.loads((quickstart.DATA/'keys/organization-keys.json').read_text(encoding='utf-8'))[0]

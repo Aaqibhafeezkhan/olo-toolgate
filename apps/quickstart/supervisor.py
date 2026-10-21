@@ -612,12 +612,12 @@ def configure():
     atomic(DATA/'run/tool-host.json',json.dumps(dict(hostId=TOOL_HOST,listen='127.0.0.1:8095',
            permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
            storeDir=str(DATA/'tool-host/store'),workDir=str(DATA/'tool-host/work'),
-           control=dict(tenantId=TENANT,url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           control=dict(tenantId=TENANT,url=tool_host_control_url(DATA/'state/tool-host'),caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host')),runtimes=dict(javaPath='java'))))
     atomic(DATA/'run/tool-host-remote.json',json.dumps(dict(hostId=REMOTE_TOOL_HOST,listen='127.0.0.1:8096',
            permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
            storeDir=str(DATA/'tool-host-remote/store'),workDir=str(DATA/'tool-host-remote/work'),
-           control=dict(tenantId=TENANT,url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           control=dict(tenantId=TENANT,url=tool_host_control_url(DATA/'state/tool-host-remote'),caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host-remote')),runtimes=dict(javaPath='java'))))
     machine()
     env = dict(os.environ)
@@ -667,6 +667,23 @@ def configure():
     env.update(settings)
     return env
 
+
+def tool_host_control_url(identity_dir):
+    """Use the signed published origin, including its port, for local Tool Host discovery."""
+    url = os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443').rstrip('/')
+    path = Path(identity_dir)/'device.json'
+    if path.exists() and not path.is_symlink():
+        state = strict(path.read_bytes())
+        # Earlier compositions wrote the internal port before ever verifying discovery.
+        # Only an unbound journal may adopt the operator-configured published origin;
+        # established trust, pending approvals, keys and identity facts remain untouched.
+        if (url != 'https://localhost:8443' and state.get('formatVersion') == 3
+                and state.get('tenantId') == TENANT and state.get('serverUrl') == 'https://localhost:8443'
+                and state.get('sequence') == 0
+                and all(state.get(name) is None for name in ('manifest', 'discoveryTrust', 'identity', 'challenge'))):
+            state['serverUrl'] = url
+            private(path, state)
+    return url
 
 def fleet_keys():
     """Persistent disjoint package release and desired-state trust domains."""
