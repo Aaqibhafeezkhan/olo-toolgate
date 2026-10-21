@@ -6,65 +6,6 @@ use olo_toolgate_contracts::v2::SignedTenantDiscovery;
 use olo_toolgate_contracts::*;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 pub type Call<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
-#[cfg(test)]
-mod tenant_tests {
-    use super::*;
-    #[test]
-    fn transport_assertion_is_optional_then_immutable_and_canonical() {
-        let directory = crate::storage::test_directory("tenant-http");
-        let store = crate::storage::ProtectedStore::open(directory.clone()).unwrap();
-        let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
-        let config = Config {
-            tenant_id: None,
-            deployment: None,
-            execution: None,
-            gateway: None,
-            server_url: "https://control.example.test".into(),
-            state_directory: directory.clone(),
-            ipc_endpoint: crate::install::ipc_endpoint(),
-            authorized_peers: vec![{
-                #[cfg(unix)]
-                {
-                    unsafe { libc::geteuid() }.to_string()
-                }
-                #[cfg(windows)]
-                {
-                    crate::platform::windows::current_sid().unwrap()
-                }
-            }],
-            ca_certificate_path: None,
-            request_timeout_seconds: 5,
-            local_console_url: None,
-        };
-        let transport =
-            HttpsControl::new(config, key, Arc::new(Contracts::new().unwrap())).unwrap();
-        let headers = || {
-            transport
-                .tenant_request(transport.client.get("https://control.example.test/ping"))
-                .unwrap()
-                .build()
-                .unwrap()
-                .headers()
-                .clone()
-        };
-        assert!(!headers().contains_key("Toolgate-Tenant-ID"));
-        assert_eq!(
-            transport.bind_tenant("quickstart"),
-            Err(Failure::Validation)
-        );
-        let owner = "10000000-0000-4000-8000-000000000001";
-        transport.bind_tenant(owner).unwrap();
-        transport.bind_tenant(owner).unwrap();
-        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
-        assert_eq!(
-            transport.bind_tenant("10000000-0000-4000-8000-000000000002"),
-            Err(Failure::TenantMismatch)
-        );
-        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
-        drop(transport);
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-}
 pub trait ControlPort: Send + Sync {
     /// Assertion only: it cannot change the configured destination or authenticate a request.
     fn bind_tenant(&self, _tenant: &str) -> Result<()> {
@@ -752,5 +693,65 @@ impl ControlPort for HttpsControl {
             }
             Ok(response)
         })
+    }
+}
+
+#[cfg(test)]
+mod tenant_tests {
+    use super::*;
+    #[test]
+    fn transport_assertion_is_optional_then_immutable_and_canonical() {
+        let directory = crate::storage::test_directory("tenant-http");
+        let store = crate::storage::ProtectedStore::open(directory.clone()).unwrap();
+        let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
+        let config = Config {
+            tenant_id: None,
+            deployment: None,
+            execution: None,
+            gateway: None,
+            server_url: "https://control.example.test".into(),
+            state_directory: directory.clone(),
+            ipc_endpoint: crate::install::ipc_endpoint(),
+            authorized_peers: vec![{
+                #[cfg(unix)]
+                {
+                    unsafe { libc::geteuid() }.to_string()
+                }
+                #[cfg(windows)]
+                {
+                    crate::platform::windows::current_sid().unwrap()
+                }
+            }],
+            ca_certificate_path: None,
+            request_timeout_seconds: 5,
+            local_console_url: None,
+        };
+        let transport =
+            HttpsControl::new(config, key, Arc::new(Contracts::new().unwrap())).unwrap();
+        let headers = || {
+            transport
+                .tenant_request(transport.client.get("https://control.example.test/ping"))
+                .unwrap()
+                .build()
+                .unwrap()
+                .headers()
+                .clone()
+        };
+        assert!(!headers().contains_key("Toolgate-Tenant-ID"));
+        assert_eq!(
+            transport.bind_tenant("quickstart"),
+            Err(Failure::Validation)
+        );
+        let owner = "10000000-0000-4000-8000-000000000001";
+        transport.bind_tenant(owner).unwrap();
+        transport.bind_tenant(owner).unwrap();
+        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
+        assert_eq!(
+            transport.bind_tenant("10000000-0000-4000-8000-000000000002"),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
+        drop(transport);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

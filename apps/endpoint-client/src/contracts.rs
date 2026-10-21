@@ -32,18 +32,11 @@ impl Contracts {
                 "/builder.schema.json",
                 "/runtime.schema.json",
                 "/enterprise.schema.json",
+                "/v2/discovery.schema.json",
             ]
             .iter()
             .any(|suffix| uri.ends_with(suffix))
             {
-                for name in value["$defs"]
-                    .as_object()
-                    .ok_or(Failure::Validation)?
-                    .keys()
-                {
-                    definitions.push((name.clone(), uri.to_string()));
-                }
-            } else if uri.ends_with("/v2/discovery.schema.json") {
                 for name in value["$defs"]
                     .as_object()
                     .ok_or(Failure::Validation)?
