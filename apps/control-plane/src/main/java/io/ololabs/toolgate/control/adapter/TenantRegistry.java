@@ -195,21 +195,30 @@ public class TenantRegistry {
     public boolean installIdentity(TenantId tenant,TenantIdentityCustody custody,long generation,List<TenantIdentityCustody.Reference> references,String requestId){
         io.ololabs.toolgate.control.domain.Ids.valid(requestId);
         return platformStore().platformTransaction(tenant,(c,tx)->{
+            String status;
             try(var s=c.prepareStatement("SELECT status FROM control_tenants WHERE tenant_id=?"+(SqliteState.local(c)?"":" FOR UPDATE"))){
-                s.setString(1,tenant.value());try(var r=s.executeQuery()){if(!r.next()||!Set.of("PROVISIONING","ACTIVE").contains(r.getString(1)))throw Failure.tenantUnavailable();}
+                s.setString(1,tenant.value());try(var r=s.executeQuery()){if(!r.next()||!Set.of("PROVISIONING","ACTIVE","SUSPENDED").contains(r.getString(1)))throw Failure.tenantUnavailable();status=r.getString(1);}
             }catch(SQLException failure){throw Failure.unavailable();}
             var desired=custody.prepare(tenant,tx.runtimeProfile(),generation,references,System.currentTimeMillis());
             var old=tx.identityKeys();var live=old.stream().filter(key->!key.state().equals("RETIRED")).toList();
             if(new HashSet<>(desired).equals(new HashSet<>(live)))return false;
+            boolean recovery=false;
+            if(status.equals("SUSPENDED")&&!old.isEmpty()&&live.isEmpty()){
+                try(var s=c.prepareStatement("SELECT 1 FROM control_recovery_floors f WHERE f.tenant_id=? AND EXISTS (SELECT 1 FROM control_audit a WHERE a.tenant_id=f.tenant_id AND a.operation='RESTORE_QUARANTINE')")){
+                    s.setString(1,tenant.value());try(var r=s.executeQuery()){recovery=r.next();}
+                }catch(SQLException failure){throw Failure.unavailable();}
+            }
+            if(status.equals("SUSPENDED")&&!recovery)throw Failure.tenantUnavailable();
             long previous=old.stream().mapToLong(Store.IdentityKey::generation).max().orElse(0);
             if(generation!=previous+1||old.size()+desired.size()>4096)throw Failure.conflict();
             var byId=new HashMap<String,Store.IdentityKey>();for(var row:old)byId.put(row.purpose()+"/"+row.keyId(),row);
             for(var row:desired){var existing=byId.get(row.purpose()+"/"+row.keyId());
                 if(existing!=null&&(existing.state().equals("RETIRED")||!existing.providerReference().equals(row.providerReference())||!existing.publicMaterial().equals(row.publicMaterial())||!existing.fingerprint().equals(row.fingerprint())))throw Failure.conflict();
             }
-            // A replacement signer must have appeared in the previous signed discovery ring.
+            // Normal rotation requires preannouncement. Reviewed recovery has no surviving trust ring;
+            // only a suspended, fully retired inventory can receive fresh, never-retired key IDs.
             var nextSigner=desired.stream().filter(key->key.purpose().equals("DISCOVERY")&&key.state().equals("ACTIVE")).findFirst().orElseThrow(Failure::validation);
-            if(!old.isEmpty()&&live.stream().noneMatch(key->key.purpose().equals("DISCOVERY")&&key.keyId().equals(nextSigner.keyId())))throw Failure.conflict();
+            if(!old.isEmpty()&&!recovery&&live.stream().noneMatch(key->key.purpose().equals("DISCOVERY")&&key.keyId().equals(nextSigner.keyId())))throw Failure.conflict();
             try{
                 // Free the active slots before installing replacements; readers see only the final commit.
                 try(var s=c.prepareStatement("UPDATE control_tenant_identity_keys SET state='READ_ONLY',generation=? WHERE tenant_id=? AND state='ACTIVE'")){s.setLong(1,generation);s.setString(2,tenant.value());s.executeUpdate();}
@@ -248,6 +257,11 @@ public class TenantRegistry {
             try (var s = c.prepareStatement("UPDATE control_tenants SET status=?,updated_at=? WHERE tenant_id=? AND status=?")) {
                 s.setString(1, suspended ? "SUSPENDED" : "ACTIVE"); s.setLong(2, System.currentTimeMillis()); s.setString(3, tenant.value());
                 s.setString(4, suspended ? "ACTIVE" : "SUSPENDED"); if (s.executeUpdate() != 1) throw Failure.conflict();
+                if(!suspended){
+                    var identity=tx.identityKeys();
+                    if(!identity.isEmpty()&&(!identity.stream().anyMatch(key->key.purpose().equals("DISCOVERY")&&key.state().equals("ACTIVE"))
+                        ||!identity.stream().anyMatch(key->key.purpose().equals("DEVICE_CA")&&key.state().equals("ACTIVE"))))throw Failure.conflict();
+                }
                 var before=tx.load();tx.save(before,new io.ololabs.toolgate.control.domain.Directory(before.revision()+1,before.entries()));
                 tx.audit(DirectoryService.digest("platform-lifecycle"),suspended?"TENANT_SUSPEND":"TENANT_RESUME","tenant",before.revision()+1,"lifecycle-"+java.util.UUID.randomUUID(),DirectoryService.digest(tenant.value()+":"+suspended));
                 return null;

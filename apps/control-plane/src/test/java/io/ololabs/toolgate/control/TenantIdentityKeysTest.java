@@ -15,17 +15,19 @@ import static org.junit.jupiter.api.Assertions.*;
 final class TenantIdentityKeysTest {
     @TempDir Path temp;
     private final ContractCodec codec=new ContractCodec();
-    private record Fixture(javax.sql.DataSource runtime,javax.sql.DataSource platform,PostgresStore store,TenantRegistry registry){}
+    private record Fixture(javax.sql.DataSource runtime,javax.sql.DataSource platform,javax.sql.DataSource owner,PostgresStore store,TenantRegistry registry){}
     private Fixture fixture(boolean postgres)throws Exception{
-        javax.sql.DataSource runtime,platform;
+        javax.sql.DataSource runtime,platform,owner;
         if(postgres){
             var base=Objects.requireNonNull(System.getenv("CONTROL_TEST_URL"));var password=Objects.requireNonNull(System.getenv("CONTROL_TEST_PASSWORD"));var name="identity_"+UUID.randomUUID().toString().replace("-","");
             try(var c=DriverManager.getConnection(base,"control_migrator",password);var s=c.createStatement()){s.execute("CREATE DATABASE "+name);}
             var url=base.replace("/control?","/"+name+"?");org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
             var app=new org.postgresql.ds.PGSimpleDataSource();app.setURL(url);app.setUser("control_app");app.setPassword(password);runtime=app;
             var operator=new org.postgresql.ds.PGSimpleDataSource();operator.setURL(url);operator.setUser("control_provisioner");operator.setPassword(password);platform=operator;
-        }else{runtime=SqliteState.open(temp.resolve(UUID.randomUUID()+".sqlite"));platform=runtime;}
-        return new Fixture(runtime,platform,new PostgresStore(runtime,codec),new TenantRegistry(platform,codec));
+            // Fixture-only administrator stages quarantine; publication uses the nonsuperuser platform role.
+            var offline=new org.postgresql.ds.PGSimpleDataSource();offline.setURL(url);offline.setUser("postgres");offline.setPassword(password);owner=offline;
+        }else{runtime=SqliteState.open(temp.resolve(UUID.randomUUID()+".sqlite"));platform=runtime;owner=runtime;}
+        return new Fixture(runtime,platform,owner,new PostgresStore(runtime,codec),new TenantRegistry(platform,codec));
     }
     private TenantIdentityFixtures tenant(Fixture f,String alias)throws Exception{
         var tenant=f.registry.allocate(alias,alias);String origin="https://"+alias+".example.test";
@@ -39,6 +41,43 @@ final class TenantIdentityKeysTest {
         return RsaTenantDiscovery.verify(codec,bound.discovery(codec,tenant.tenant,tenant.profile,"0.0.0",now),tenant.profile.controlUrl(),tenant.tenant,pin,now);
     }
     @Test void sqliteCustodyIsolationRotationAndRollback()throws Exception{isolation(fixture(false));}
+    @Test void sqliteReviewedRecoveryRequiresFreshKeysBeforeResume()throws Exception{recovery(fixture(false));}
+    @Test void postgresReviewedRecoveryRequiresFreshKeysBeforeResume()throws Exception{recovery(fixture(true));}
+    private void recovery(Fixture f)throws Exception{
+        var a=tenant(f,"recovered");var b=tenant(f,"unaffected");
+        f.registry.installIdentity(a.tenant,a.custody,1,a.references,"publish-a");
+        f.registry.installIdentity(b.tenant,b.custody,1,b.references,"publish-b");var other=keys(f,b.tenant);
+        f.registry.suspended(a.tenant,true);
+        assertFalse(f.registry.installIdentity(a.tenant,a.custody,1,a.references,"suspended-restart"));
+        assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,2,a.announced(),"suspended-rotation"));
+        recoverySql(f,a.tenant,"UPDATE control_tenant_identity_keys SET state='RETIRED',generation=2 WHERE tenant_id=?");
+        assertThrows(Failure.class,()->f.registry.suspended(a.tenant,false));
+        assertEquals("SUSPENDED",f.registry.find("recovered").status());
+        var fresh=List.of(new TenantIdentityCustody.Reference("DISCOVERY","discovery-b","ACTIVE",null),a.addAuthority());
+        assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,3,fresh,"missing-review"));
+        recoverySql(f,a.tenant,"INSERT INTO control_recovery_floors VALUES(?,1000)");
+        assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,3,fresh,"missing-audit"));
+        // The separately verified offline restore creates both the floor and this retained audit.
+        recoverySql(f,a.tenant,"INSERT INTO control_audit(tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES(?,'reviewer','RESTORE_QUARANTINE','directory',1,'restore-proof','review-digest')");
+        assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,3,a.references,"revive-retired"));
+        assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,2,fresh,"old-generation"));
+        assertTrue(f.registry.installIdentity(a.tenant,a.custody,3,fresh,"recover-fresh"));
+        assertFalse(f.registry.installIdentity(a.tenant,a.custody,3,fresh,"recovered-restart"));
+        assertEquals("SUSPENDED",f.registry.find("recovered").status());
+        assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,4,fresh,"repeat-reset"));
+        f.registry.suspended(a.tenant,false);
+        assertDoesNotThrow(()->document(f,a,null));
+        assertTrue(keys(f,a.tenant).stream().filter(key->key.keyId().equals("discovery-a")).allMatch(key->key.state().equals("RETIRED")));
+        assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,4,a.references,"revive-after-resume"));
+        assertEquals(other,keys(f,b.tenant));assertDoesNotThrow(()->document(f,b,null));
+    }
+    private void recoverySql(Fixture f,Ids.TenantId tenant,String sql)throws Exception{
+        try(var c=f.owner.getConnection()){
+            c.setAutoCommit(false);
+            if(f.runtime!=f.platform)try(var s=c.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){s.setString(1,tenant.value());s.execute();}
+            try(var s=c.prepareStatement(sql)){s.setString(1,tenant.value());s.executeUpdate();}c.commit();
+        }
+    }
     @Test void sqliteStaleEndpointCannotSignAfterKeyPublication()throws Exception{staleEndpoint(fixture(false));}
     @Test void postgresStaleEndpointCannotSignAfterKeyPublication()throws Exception{staleEndpoint(fixture(true));}
     private void staleEndpoint(Fixture f)throws Exception{

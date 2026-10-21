@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "status": "UUID registry, tenant RLS, wrapped vault custody and tenant-owned endpoint configuration; request routing and release qualification remain in plan.md.",
+  "status": "UUID registry, forced tenant RLS, wrapped vault custody, tenant endpoint routing and identity lifecycle implemented; qualification evidence is tracked in plan.md.",
   "runtimeRole": "toolgate_control_runtime",
   "tenantSetting": "app.tenant_id",
   "metadataExceptions": [
