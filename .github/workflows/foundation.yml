@@ -70,7 +70,7 @@ jobs:
         cp docs/architecture/compatibility.md build/release/foundation-upgrades.md
         cp docs/gateway/upgrades.md build/release/gateway-upgrades.md
         cp docs/control-plane/upgrades.md build/release/control-upgrades.md
-        docker run --rm -v "$PWD:/repo" aquasec/trivy:0.61.1 fs --no-progress --include-dev-deps --format cyclonedx --scanners vuln --skip-dirs '.dev,**/build,**/node_modules,target,.gradle,.git' --output /repo/build/release/sbom.cdx.json /repo
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v "$PWD:/repo" aquasec/trivy:0.61.1 fs --no-progress --include-dev-deps --format cyclonedx --scanners vuln --skip-dirs '.dev,**/build,**/node_modules,target,.gradle,.git' --output /repo/build/release/sbom.cdx.json /repo
         python tools/release/bundle.py --checksums-only
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:

@@ -65,8 +65,8 @@ jobs:
         python tools/quickstart/check.py --build --image olo-toolgate-quickstart:module11 --client-assets deploy/client-assets/release --prebuilt-ui
         docker run --rm -e PYTHONPATH=/opt/quickstart --entrypoint /opt/quickstart-python/bin/python -v "$PWD:/work:ro" -w /work olo-toolgate-quickstart:module11 -m unittest discover -s tests/quickstart -v
         python tools/quickstart/check.py --image olo-toolgate-quickstart:module11 --postgresql --no-browser
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-quickstart:module11
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/quickstart:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/quickstart-sbom.cdx.json olo-toolgate-quickstart:module11
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-quickstart:module11
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/quickstart:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/quickstart-sbom.cdx.json olo-toolgate-quickstart:module11
         python tools/ui/merge_sbom.py --image-sbom build/quickstart/quickstart-sbom.cdx.json
         docker save olo-toolgate-quickstart:module11 -o build/quickstart/image.tar
         cp CHANGELOG.md docs/deployment/quickstart.md build/quickstart/
@@ -79,8 +79,8 @@ jobs:
         docker tag olo-toolgate-control:module05 olo-toolgate-control:enterprise-production
         python tools/enterprise/restore_check.py
         python tools/client/downloads.py --image olo-toolgate-control:module05
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-control:module05
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/control:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/control-sbom.cdx.json olo-toolgate-control:module05
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-control:module05
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/control:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/control-sbom.cdx.json olo-toolgate-control:module05
         python tools/ui/merge_sbom.py
         cp -r build/enterprise build/control/enterprise-evidence
         cp -r build/quickstart build/control/quickstart-evidence
@@ -94,8 +94,8 @@ jobs:
         docker build -f apps/gateway/Dockerfile --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$RELEASE_SHA" -t olo-toolgate-gateway:module05 .
         python tools/gateway/container.py --no-build
         python tools/gateway/benchmark.py
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-gateway:module05
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/gateway:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/gateway-sbom.cdx.json olo-toolgate-gateway:module05
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-gateway:module05
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/gateway:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/gateway-sbom.cdx.json olo-toolgate-gateway:module05
         docker save olo-toolgate-gateway:module05 -o build/gateway/image.tar
         cp CHANGELOG.md docs/gateway/upgrades.md build/gateway/
         (cd build/gateway && sha256sum image.tar gateway-sbom.cdx.json > SHA256SUMS)
@@ -104,8 +104,8 @@ jobs:
       run: |
         docker build -f apps/device/Dockerfile --build-arg QUICKSTART_IMAGE=olo-toolgate-quickstart:module11 --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$RELEASE_SHA" -t olo-toolgate-device:module11 .
         python tools/device/check.py
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-device:module11
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/device-sbom.cdx.json olo-toolgate-device:module11
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-device:module11
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/device-sbom.cdx.json olo-toolgate-device:module11
         docker save olo-toolgate-device:module11 -o build/device/image.tar
         cp docs/deployment/device.md build/device/
         (cd build/device && sha256sum image.tar device-sbom.cdx.json > SHA256SUMS)
@@ -114,8 +114,8 @@ jobs:
       run: |
         docker build -f apps/device/secured.Dockerfile --build-arg DEVICE_IMAGE=olo-toolgate-device:module11 -t olo-toolgate-linux-secured-device:module11 .
         python tools/device/secured_check.py
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-linux-secured-device:module11
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/secured_device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/secured-device-sbom.cdx.json olo-toolgate-linux-secured-device:module11
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-linux-secured-device:module11
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/secured_device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/secured-device-sbom.cdx.json olo-toolgate-linux-secured-device:module11
         docker save olo-toolgate-linux-secured-device:module11 -o build/secured_device/image.tar
         cp docs/deployment/secured-device.md build/secured_device/
         (cd build/secured_device && sha256sum image.tar secured-device-sbom.cdx.json > SHA256SUMS)

@@ -41,13 +41,13 @@ class ImagePublicationTests(unittest.TestCase):
         _,calls,_=self.publish(current=False)
         self.assertFalse(any(args==('docker','push','namespace/gateway:dev') for args,_ in calls))
 
-    def test_branch_channel_only_follows_current_non_main_development_builds(self):
+    def test_branch_channel_follows_completed_non_main_builds_even_after_branch_advances(self):
         for branch in ('main','feature/test','release/1.0.0-beta.1'):
             for current in (True,False):
                 with self.subTest(branch=branch,current=current):
                     _,calls,_=self.publish(current=current,source_branch=branch)
                     pushes=[args[2] for args,_ in calls if args[:2]==('docker','push')]
-                    self.assertEqual('namespace/gateway:dev-branch' in pushes,current and branch!='main')
+                    self.assertEqual('namespace/gateway:dev-branch' in pushes,branch!='main')
                     self.assertEqual('namespace/gateway:dev' in pushes,current and branch=='main')
 
     def test_push_failure_still_logs_out(self):

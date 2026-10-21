@@ -165,6 +165,17 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         gateway.assert_called_once_with()
         control.assert_called_once_with(lint=False)
 
+    def test_active_trivy_scans_reuse_database_cache_without_skipping_updates(self):
+        for name,job in (('foundation.yml','check'),('images.yml','verify')):
+            scripts='\n'.join(step.get('run','') for step in workflow(name)['jobs'][job]['steps'])
+            scans=[line for line in scripts.splitlines() if 'aquasec/trivy:0.61.1' in line]
+            self.assertTrue(scans,name)
+            for scan in scans:
+                with self.subTest(workflow=name,scan=scan):
+                    self.assertIn('$PWD/.dev/trivy-cache:/root/.cache/trivy',scan)
+                    self.assertIn('TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2',scan)
+                    self.assertNotIn('--skip-db-update',scan)
+
 
 if __name__ == '__main__':
     unittest.main()
