@@ -92,7 +92,7 @@ class ManualSourceTests(unittest.TestCase):
                 images.publish(run, 'owner/repo', SHA, 'owner', {'gateway':('local','gateway')}, 'unique',
                                source_branch='feature/test', branch_alias='dev-feature-test')
             pushes = [args[2] for args in calls if args[:2] == ('docker','push')]
-            self.assertEqual(pushes, ['owner/gateway:unique']+(['owner/gateway:dev-feature-test'] if current else []))
+            self.assertEqual(pushes, ['owner/gateway:unique']+(['owner/gateway:dev-feature-test','owner/gateway:dev-branch'] if current else []))
             self.assertTrue(any('heads/feature%2Ftest' in args[-1] for args in calls if args[0] == 'gh'))
 
     def test_npm_publishes_exact_prepared_version_and_restricts_dev_alias(self):

@@ -85,7 +85,10 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
             env=json.loads(helper("s.initialize();import json;print(json.dumps({k:v for k,v in s.configure().items() if k.startswith(('QUARKUS_','MP_JWT_','TOOLGATE_'))}))"))
             # The helper's Quickstart-only profile file is absent from standalone Control.
             env.pop('TOOLGATE_CONTROL_PROFILE_PATH',None)
-            tls=ssl.create_default_context(cadata=helper("print(s.trust('device-ca.crt').read_text())"))
+            certificates=json.loads(helper("import json;print(json.dumps({name:s.trust(name).read_text() for name in ('device-ca.crt','server.crt')}))"))
+            ca_file=folder/'device-ca.crt';ca_file.write_text(certificates['device-ca.crt'],encoding='utf-8')
+            server_file=folder/'server.crt';server_file.write_text(certificates['server.crt'],encoding='utf-8')
+            tls=ssl.create_default_context(cafile=str(ca_file))
             platform_file=folder/'platform-password';platform_file.write_text(db['CONTROL_TEST_PASSWORD'],encoding='utf-8');platform_file.chmod(0o600)
             run(['docker','run','--rm','--user','0','-v',volume+':/data','-v',str(platform_file)+':/credential:ro','--entrypoint','/bin/sh',helper_image,
                 '-c','cp /credential /data/platform-password && chown 65532:65532 /data/platform-password && chmod 0400 /data/platform-password'],capture_output=True)
@@ -115,7 +118,8 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
             tokens={user:helper("print(s.jwt(s.GROUPS,'"+user+"'))",envfile) for user in ('admin','reviewer-1','reviewer-2')}
             origins=['https://127.0.0.1:'+db['tlsPort']]
             if replicas==2:origins.append('https://127.0.0.1:'+db['replicaTlsPort'])
-            yield dict(containers=containers,origins=origins,tokens=tokens,db=db,folder=folder,sslContext=tls)
+            yield dict(containers=containers,origins=origins,tokens=tokens,db=db,folder=folder,sslContext=tls,
+                       caCertificatePath=ca_file,serverCertificatePath=server_file)
         except Exception:
             output=ROOT/'build/control';output.mkdir(parents=True,exist_ok=True)
             for index,container in enumerate(containers):

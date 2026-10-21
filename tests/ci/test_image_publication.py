@@ -10,7 +10,7 @@ from tools.release import images
 
 
 class ImagePublicationTests(unittest.TestCase):
-    def publish(self,current=True,fail=False):
+    def publish(self,current=True,fail=False,source_branch=None):
         calls=[]
         def run(*args,**kwargs):
             calls.append((args,kwargs))
@@ -22,7 +22,8 @@ class ImagePublicationTests(unittest.TestCase):
         prepare=Mock()
         with patch.dict(os.environ,{'DOCKERHUB_USERNAME':'publisher','DOCKERHUB_TOKEN':'fixture-token'}):
             result=images.publish(run,'olo-labs/olo-toolgate','a'*40,'namespace',
-                {'gateway':('gateway:prepared','gateway')},'dev-run',aliases=('dev-commit',),prepare=prepare)
+                {'gateway':('gateway:prepared','gateway')},'dev-run',aliases=('dev-commit',),prepare=prepare,
+                source_branch=source_branch)
         return result,calls,prepare
 
     def test_current_main_publishes_exact_image_and_both_development_aliases(self):
@@ -39,6 +40,15 @@ class ImagePublicationTests(unittest.TestCase):
     def test_older_commit_does_not_overwrite_current_main_alias(self):
         _,calls,_=self.publish(current=False)
         self.assertFalse(any(args==('docker','push','namespace/gateway:dev') for args,_ in calls))
+
+    def test_branch_channel_only_follows_current_non_main_development_builds(self):
+        for branch in ('main','feature/test','release/1.0.0-beta.1'):
+            for current in (True,False):
+                with self.subTest(branch=branch,current=current):
+                    _,calls,_=self.publish(current=current,source_branch=branch)
+                    pushes=[args[2] for args,_ in calls if args[:2]==('docker','push')]
+                    self.assertEqual('namespace/gateway:dev-branch' in pushes,current and branch!='main')
+                    self.assertEqual('namespace/gateway:dev' in pushes,current and branch=='main')
 
     def test_push_failure_still_logs_out(self):
         run=Mock(side_effect=[subprocess.CompletedProcess([],0,stdout=json.dumps({'object':{'sha':'a'*40}})),

@@ -27,6 +27,7 @@ def publish(run, repo, commit, namespace, images, tag, aliases=(), prepare=None,
             if source_branch is not None:
                 current = current_head(run, repo, source_branch, commit)
             for alias in [*aliases, *([branch_alias] if branch_alias and current else []),
+                          *(['dev-branch'] if current and source_branch not in (None, 'main') else []),
                           *(['dev'] if current and source_branch in (None, 'main') else [])]:
                 destination = f'{namespace}/{name}:{alias}'
                 if destination != target:

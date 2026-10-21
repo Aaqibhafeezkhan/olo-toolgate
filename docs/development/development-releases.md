@@ -50,7 +50,13 @@ key and run identity. Branch keys use a readable slug plus a hash, so similar
 branch names cannot share an alias.
 
 Docker and npm expose a `dev-<branch-key>` alias only when the selected SHA is still
-the current head of that branch. The shared `dev` alias is updated only by a manual
+the current head of that branch. Docker also exposes `dev-branch` for the latest
+published development build from a non-main branch at its current head. This
+channel moves between feature/release branches as their builds publish; use the
+versioned tag or `dev-<branch-key>` to select a particular build or branch.
+For example, `ololab/olo-toolgate-quickstart:dev-branch` follows branch development
+builds, while the release metadata records the source branch, commit and version.
+The shared `dev` alias is updated only by a manual
 release selecting **main** at its current head. A feature or release branch cannot
 update shared `dev`, even if its SHA equals main. Older commits still publish their
 unique version without advancing branch aliases. Production `latest` is unchanged.
