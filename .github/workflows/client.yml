@@ -32,6 +32,7 @@ jobs:
     timeout-minutes: 45
     env:
       TOOLGATE_RELEASE_BUILD: ${{ inputs.build_number }}
+      TOOLGATE_QUALIFICATION_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
@@ -115,6 +116,13 @@ jobs:
       if: inputs.run_tests && runner.os == 'Windows'
       shell: powershell
       run: ./tools/client/uninstall_test.ps1
+    - name: Retain native qualification evidence
+      if: ${{ inputs.run_tests }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: native-qualification-${{ matrix.target }}
+        path: build/client/qualification/
+        if-no-files-found: error
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: endpoint-client-${{ matrix.target }}

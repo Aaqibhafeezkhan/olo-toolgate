@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 from package import ROOT
+from qualification import record
 
 
 def run(arguments):return subprocess.run(arguments,check=True,capture_output=True,text=True)
@@ -129,6 +130,7 @@ def check(target):
                     except FileNotFoundError:continue
                     raise ValueError('Uninstall left tray startup or Chrome bridge registration')
             else:run(['sudo','-n',str(binary),'uninstall','--purge'])
+    record('installer',binary,target,installer)
 
 
 if __name__=='__main__':

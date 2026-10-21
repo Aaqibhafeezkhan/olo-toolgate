@@ -1,0 +1,53 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: Tenant native qualification (no publication)
+'on':
+  workflow_dispatch: null
+  push:
+    branches: ['feature/multitenant-support-gap']
+    paths:
+      - '.github/workflows/tenant-qualification.yml'
+      - '.github/workflows/client.yml'
+      - 'apps/endpoint-client/**'
+      - 'apps/tool-host/**'
+      - 'packages/tenant-identity/**'
+      - 'tools/client/**'
+      - 'tools/tenancy/native_evidence.py'
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: tenant-native-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native:
+    if: vars.TOOLGATE_CI_ENABLED == 'true'
+    uses: ./.github/workflows/client.yml
+    with:
+      run_tests: true
+  evidence:
+    needs: native
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: native-qualification-*
+          path: build/tenant-native
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: public-client-bundle
+          path: deploy/client-assets/release
+      - name: Require all six native services and installers from this source
+        run: python tools/tenancy/native_evidence.py --directory build/tenant-native --assets deploy/client-assets/release --output build/tenant-native-qualified.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tenant-native-qualified
+          path: build/tenant-native-qualified.json
+          if-no-files-found: error

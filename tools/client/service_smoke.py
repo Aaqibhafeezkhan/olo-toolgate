@@ -8,6 +8,7 @@ import platform
 import subprocess
 import time
 from pathlib import Path
+from qualification import record
 
 def run(arguments):
     result=subprocess.run(arguments,capture_output=True,text=True)
@@ -48,6 +49,7 @@ def check(binary):
         print('System service remains live after installer and caller exits; unauthenticated protected mode remains unready')
     finally:
         if installed:run([*command,'uninstall','--purge'])
+    record('service',binary)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--binary',type=Path,required=True);check(parser.parse_args().binary)
