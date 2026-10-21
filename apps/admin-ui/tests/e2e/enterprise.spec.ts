@@ -93,7 +93,11 @@ test('real group administration, inherited provenance and review impact are acce
       await page.getByRole('button',{name:'Approve exact configuration'}).click();
       await expect(page.getByRole('alert')).toBeVisible();
       for(const reviewer of reviewers.slice(0,requiredReviews!)){
-        await reviewer.goto(origin+'/console/'+href);
+        const [detail]=await Promise.all([
+          reviewer.waitForResponse(response=>new URL(response.url()).pathname==='/api/control/v1/configuration-changes/'+new URLSearchParams(href.split('?')[1]).get('id')&&response.request().method()==='GET'),
+          reviewer.goto(origin+'/console/'+href)
+        ]);
+        expect(detail.status(),'Independent reviewer can read the exact submitted change').toBe(200);
         await reviewer.getByLabel(confirmation).check();
         await reviewer.getByRole('button',{name:'Approve exact configuration'}).click();
         await expect(reviewer.getByLabel(confirmation)).not.toBeChecked();

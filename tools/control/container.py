@@ -11,9 +11,22 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from control.check import ROOT,database,ready,request,run
 from access.presets import load as initial_configuration
+
+
+def runtime_ready(origin,context):
+    # Management health may be ready before the public TLS listener after restart.
+    deadline=time.monotonic()+60
+    while True:
+        try:
+            if request(origin+'/api/control/v1/users',context=context)[0]==401:return
+        except (urllib.error.URLError,TimeoutError,ConnectionError):pass
+        if time.monotonic()>=deadline:raise RuntimeError('Pinned Control TLS readiness deadline exceeded')
+        time.sleep(.2)
 
 
 def protected_defaults(baseline):
@@ -48,12 +61,12 @@ def scoped_reviewers(api,baseline):
     """Keep one installation owner while testing ordinary maker/checker authority."""
     management=next(role for role in baseline['roles'] if role['id']=='installation-management')
     assert management['portalRole']=='SUPER_ADMIN'
-    owner={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1,'managementRules':[]}
-    assert api('/api/control/v1/roles',body=owner,method='POST')[0]==201
-    assert api('/api/control/v1/teams',body=dict(id='smoke-super-team',name='Smoke installation owners',
-        enabled=True,revision=1,userIds=['reviewer-2'],roleIds=[owner['id']]),method='POST')[0]==201
-    assert api('/api/control/v1/roles/'+management['id'],body={**management,'portalRole':'ADMINISTRATOR'},
-        method='PUT',revision=management['revision'])[0]==200
+    restricted={**management,'id':'smoke-restricted-management','name':'Smoke scoped administrator','revision':1,'portalRole':'ADMINISTRATOR'}
+    assert api('/api/control/v1/roles',body=restricted,method='POST')[0]==201
+    assert api('/api/control/v1/teams',body=dict(id='smoke-makers',name='Smoke makers',
+        enabled=True,revision=1,userIds=['reviewer-1','reviewer-2'],roleIds=[restricted['id']]),method='POST')[0]==201
+    owners=next(team for team in baseline['teams'] if team['id']=='installation-administrators')
+    assert api('/api/control/v1/teams/'+owners['id'],body={**owners,'userIds':['admin']},method='PUT',revision=owners['revision'])[0]==200
 
 
 @contextmanager
@@ -118,7 +131,7 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
 def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',replicas=2):
     with fixture(image,helper_image,replicas) as f:
         origins=f['origins'];tokens=f['tokens'];secret_values=list(tokens.values())+[f['db']['CONTROL_TEST_PASSWORD']]
-        def api(path,user='admin',body=None,method='GET',key=None,origin=0,revision=None):
+        def api(path,user='reviewer-1',body=None,method='GET',key=None,origin=0,revision=None):
             headers={'Idempotency-Key':key or secrets.token_hex(16)} if body is not None else {}
             if revision is not None:headers['If-Match']='"'+str(revision)+'"'
             status,raw,_=request(origins[origin]+path,tokens.get(user),body,method,
@@ -133,14 +146,14 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
         with ThreadPoolExecutor(max_workers=4) as pool:
             responses=list(pool.map(lambda n:api('/api/control/v1/users',body=entity,method='POST',key=key,origin=n%len(origins)),range(4)))
         changes=[ok(value,202) for value in responses];assert len({c['id'] for c in changes})==1;change=changes[0]
-        def transition(action,user='admin',origin=0):
+        def transition(action,user='reviewer-1',origin=0):
             nonlocal change
             change=ok(api('/api/control/v1/configuration-changes/'+change['id']+'/transition',user,
                 dict(action=action,expectedRevision=change['revision']),'POST',origin=origin))
         transition('SUBMIT')
         assert api('/api/control/v1/configuration-changes/'+change['id']+'/transition',body=dict(action='APPROVE',expectedRevision=change['revision']),method='POST')[0]==403
         # The review threshold in force at creation decides how many independent reviewers approve.
-        for index,reviewer in enumerate(('reviewer-1','reviewer-2')[:change['requiredReviews']]):
+        for index,reviewer in enumerate(('reviewer-2','admin')[:change['requiredReviews']]):
             transition('APPROVE',reviewer,(len(origins)-1-index)%len(origins))
         transition('APPLY')
         for origin in range(len(origins)):
@@ -154,6 +167,7 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
             management='http://127.0.0.1:'+f['db']['managementPort' if index==0 else 'replicaManagementPort']
             assert request(management+'/q/metrics')[0]==200
             run(['docker','restart','-t','30',container],capture_output=True);ready(management)
+            runtime_ready(origins[index],f['sslContext'])
             assert ok(api('/api/control/v1/access/status',origin=index))['authorizationEpoch']>=epoch
             assert ok(api('/api/control/v1/users/'+entity['id'],origin=index))['enabled'] is False
             run(['docker','stop','-t','30',container],capture_output=True)
