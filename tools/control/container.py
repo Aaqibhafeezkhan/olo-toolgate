@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import json
 from pathlib import Path
 import secrets
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -69,6 +70,9 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
                 capture_output=True,text=True).stdout.strip()
         try:
             env=json.loads(helper("s.initialize();import json;print(json.dumps({k:v for k,v in s.configure().items() if k.startswith(('QUARKUS_','MP_JWT_','TOOLGATE_'))}))"))
+            # The helper's Quickstart-only profile file is absent from standalone Control.
+            env.pop('TOOLGATE_CONTROL_PROFILE_PATH',None)
+            tls=ssl.create_default_context(cadata=helper("print(s.trust('device-ca.crt').read_text())"))
             platform_file=folder/'platform-password';platform_file.write_text(db['CONTROL_TEST_PASSWORD'],encoding='utf-8');platform_file.chmod(0o600)
             run(['docker','run','--rm','--user','0','-v',volume+':/data','-v',str(platform_file)+':/credential:ro','--entrypoint','/bin/sh',helper_image,
                 '-c','cp /credential /data/platform-password && chown 65532:65532 /data/platform-password && chmod 0400 /data/platform-password'],capture_output=True)
@@ -79,8 +83,9 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
                 QUARKUS_DATASOURCE_USERNAME='control_app',QUARKUS_DATASOURCE_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                 QUARKUS_FLYWAY_USERNAME='control_migrator',QUARKUS_FLYWAY_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                 TOOLGATE_CONTROL_PLATFORM_USERNAME='control_provisioner',TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH='/data/platform-password',
-                QUARKUS_MANAGEMENT_HOST='0.0.0.0',TOOLGATE_CONTROL_DEVELOPMENT_MODE='true',
-                TOOLGATE_CONTROL_FLEET_ENABLED='false',TOOLGATE_CONTROL_ENDPOINT_ENABLED='false',
+                QUARKUS_MANAGEMENT_HOST='0.0.0.0',TOOLGATE_CONTROL_DEVELOPMENT_MODE='true',QUARKUS_HTTP_INSECURE_REQUESTS='disabled',
+                # Identity publication validates the tenant's provisioned endpoint profile.
+                TOOLGATE_CONTROL_FLEET_ENABLED='false',
                 TOOLGATE_QUICKSTART_DATABASE_MODE='postgresql')
             envfile=folder/'runtime.env'
             def save_env(values):
@@ -95,9 +100,9 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
                 ready('http://127.0.0.1:'+db['managementPort' if index==0 else 'replicaManagementPort'])
             save_env(env)
             tokens={user:helper("print(s.jwt(s.GROUPS,'"+user+"'))",envfile) for user in ('admin','reviewer-1','reviewer-2')}
-            origins=['http://127.0.0.1:'+db['runtimePort']]
-            if replicas==2:origins.append('http://127.0.0.1:'+db['replicaRuntimePort'])
-            yield dict(containers=containers,origins=origins,tokens=tokens,db=db,folder=folder)
+            origins=['https://127.0.0.1:'+db['tlsPort']]
+            if replicas==2:origins.append('https://127.0.0.1:'+db['replicaTlsPort'])
+            yield dict(containers=containers,origins=origins,tokens=tokens,db=db,folder=folder,sslContext=tls)
         except Exception:
             output=ROOT/'build/control';output.mkdir(parents=True,exist_ok=True)
             for index,container in enumerate(containers):
@@ -117,7 +122,7 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
             headers={'Idempotency-Key':key or secrets.token_hex(16)} if body is not None else {}
             if revision is not None:headers['If-Match']='"'+str(revision)+'"'
             status,raw,_=request(origins[origin]+path,tokens.get(user),body,method,
-                headers or None)
+                headers or None,context=f['sslContext'])
             return status,json.loads(raw) if raw else None
         def ok(value,status=200):assert value[0]==status,(value[0],value[1]);return value[1]
         assert api('/api/control/v1/users','anonymous')[0]==401
@@ -145,7 +150,7 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
         for index,container in enumerate(f['containers']):
             inspect=json.loads(run(['docker','inspect',container],capture_output=True,text=True).stdout)[0]
             assert inspect['Config']['User']=='65532:65532' and inspect['HostConfig']['ReadonlyRootfs']
-            assert request(origins[index]+'/q/health/ready')[0]==404
+            assert request(origins[index]+'/q/health/ready',context=f['sslContext'])[0]==404
             management='http://127.0.0.1:'+f['db']['managementPort' if index==0 else 'replicaManagementPort']
             assert request(management+'/q/metrics')[0]==200
             run(['docker','restart','-t','30',container],capture_output=True);ready(management)

@@ -53,7 +53,7 @@ floors=dict(tenantId=tenant,directoryRevisionFloor=revision,authorizationEpochFl
 print(json.dumps(dict(manifest=manifest,floors=floors)))
 """]))
         manifest=captured['manifest'];floors=captured['floors'];now=int(time.time()*1000)
-        authorization=dict(floors,formatVersion=1,backupManifestDigest=hashlib.sha256(canonical(manifest)).hexdigest(),issuedAtUnixMs=now-1000,expiresAtUnixMs=now+900000,reasonDigest=hashlib.sha256(b'disposable image recovery qualification').hexdigest())
+        authorization=dict(floors,formatVersion=1,backupManifestDigest=hashlib.sha256(canonical(manifest)).hexdigest(),issuedAtUnixMs=now-1000,expiresAtUnixMs=now+899000,reasonDigest=hashlib.sha256(b'disposable image recovery qualification').hexdigest())
         keys=[rsa.generate_private_key(public_exponent=65537,key_size=3072) for _ in range(2)]
         encode=lambda value:base64.urlsafe_b64encode(value).rstrip(b'=').decode()
         number=lambda value:encode(value.to_bytes((value.bit_length()+7)//8,'big'))
@@ -62,7 +62,9 @@ print(json.dumps(dict(manifest=manifest,floors=floors)))
         documents=dict(trust=trust,review=dict(authorization=authorization,proofs=proofs),incomplete=dict(authorization=authorization,proofs=proofs[:1]))
         job([(reviews,'/reviews','rw')],['-c',"import json,sys;from pathlib import Path;docs=json.load(sys.stdin);[(Path('/reviews')/(name+'.json')).write_text(json.dumps(value)) for name,value in docs.items()];[p.chmod(0o600) for p in Path('/reviews').iterdir()]"],json.dumps(documents))
         mounts=[(archive,'/archive','ro'),(reviews,'/reviews','ro'),(restored,'/data','rw')]
-        arguments=['/opt/quickstart/supervisor.py','--restore','/archive/snapshot','--restore-trust','/reviews/trust.json','--restore-review']
+        # Invoke the packaged CLI main with its normal parser/volume lock, while allowing this
+        # privileged test process to retain a traceback instead of the public startup error envelope.
+        arguments=['-c',"import sys;sys.path.insert(0,'/opt/quickstart');import supervisor;sys.argv=sys.argv[1:];supervisor.main()",'/opt/quickstart/supervisor.py','--restore','/archive/snapshot','--restore-trust','/reviews/trust.json','--restore-review']
         job(mounts,[*arguments,'/reviews/incomplete.json'],expected_success=False)
         job(mounts,['-c',"from pathlib import Path;assert {p.name for p in Path('/data').iterdir()}<={'service.lock'}"])
         job(mounts,[*arguments,'/reviews/review.json'])

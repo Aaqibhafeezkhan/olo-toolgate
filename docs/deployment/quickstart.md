@@ -1,6 +1,6 @@
 # Quickstart deployment and recovery
 
-Quickstart runs Control, Gateway, the console and a real native executor in one non-HA local evaluation image. SQLite is the default; external PostgreSQL is supported with separate migration/runtime roles. All execution requires current Control. There is no local policy ALLOW or Redis authorization fallback.
+Quickstart runs Control, Gateway, the console and a real native executor in one non-HA local evaluation image. SQLite is the default; external PostgreSQL uses separate migration, runtime and protected platform principals. All execution requires current Control. There is no local policy ALLOW or Redis authorization fallback. See [multitenant deployment and qualification](multitenant.md) for UUID initialization, shared subdomains and release gates.
 
 Build and verify with `python tools/quickstart/check.py --build`. Use `--image IMAGE`, `--postgresql`, `--no-browser` or `--client-assets VERIFIED_DIRECTORY` as needed. The isolated gate records installation, real native CSR/mTLS, verified disabled-user intake, independently reviewed grants, HUMAN/SERVICE/ASK effects, exact retry, revocation, reviewed import/shadow, restart and browser accessibility. Small-fixture latency is measured in `build/quickstart/smoke.json`; it is not an enterprise throughput promise.
 

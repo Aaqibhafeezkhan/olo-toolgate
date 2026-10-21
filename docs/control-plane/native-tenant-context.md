@@ -14,4 +14,4 @@ Successful native health/enrollment replies carry the validated `consoleOrigin`.
 
 The console stops polling on tenant mismatch, clears a previously displayed code, hides setup links and gives an organization-URL message. It does not automatically retry Connect for this error. Availability probes remain public extension/version information and do not query local device state.
 
-These are independently enforced native/service boundaries. The remaining coordinated discovery v2, immutable UUID configuration, installer and Gateway cutover is still required; this change does not enable shared production tenant hosting.
+These are independently enforced native/service boundaries. Discovery v2, immutable UUID configuration and Gateway binding are implemented together. See the [deployment qualification guide](../deployment/multitenant.md) for the native installer matrix, source-bound artifacts and operational rollout requirements.

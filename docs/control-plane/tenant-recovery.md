@@ -1,4 +1,16 @@
-# Shared and individual tenant recovery
+# Tenant recovery
+
+Quickstart SQLite recovery and PostgreSQL recovery both require two independent signed reviews, a matching release schema, and externally retained live authority and key-retirement records. Recovery leaves each restored UUID SUSPENDED. Private custody and archives require separate access controls; a successful restore does not authorize runtime traffic.
+
+## Default-tenant SQLite
+
+Use Quickstart's packaged `--backup` and `--restore` commands described in [the deployment guide](../deployment/quickstart.md). Stop and fence the source before the final backup and review. Restore into a different, empty data volume with the same image release. The layout-1 manifest must include `tenantRecovery`: the canonical `tenantId`, complete `identityKeys` and `vaultKeys`, `cacheGenerationFloor` and `approvalClockFloor`. Retain the live ledger independently and review its current values, including retirements after the backup. Inventory-free development archives are rejected.
+
+The packaged restore validates the archive and both reviewers before publishing data. It stages quarantine inside the writable destination volume so the container root can remain read-only. A `restore.pending` marker fences a partially published destination: normal startup and backup refuse it. Discard a failed destination and restore into another empty volume after resolving the failure. Do not delete the marker to start a partial restore.
+
+The same authority, key-retirement, uncertain-work and activation rules below apply. `tools/tenancy/sqlite_recovery_check.py` qualifies the packaged command against a stopped disposable image volume; the full Quickstart image check invokes it automatically.
+
+## PostgreSQL
 
 Shared PostgreSQL recovery uses a consistent custom-format archive, the matching release schema, externally pinned reviewers, and live authority/key-retirement records. Restore into a **different, empty, offline database**. Individual recovery restores selected UUIDs into that separate deployment; it never merges a snapshot into the running shared database. Other source tenants continue using their existing database and executors.
 
@@ -8,7 +20,7 @@ The restore operator is a privileged platform custodian with access to the entir
 
 1. Capture a consistent `pg_dump -Fc` using the platform backup principal authorized to read every tenant through forced RLS. Do not grant BYPASSRLS or backup privileges to runtime credentials. Use matching PostgreSQL major client/server versions; qualification exercises PostgreSQL 17.
 2. Retain source authority floors and retirement ledgers independently of the archive. Before an actual tenant cutover, suspend its source UUID through the protected operator and drain or reconcile in-flight work. Fence its old Gateway and Tool Host pool. Capture final floors after fencing so no later source write can outrun the review. Other source tenants remain active. Disaster recovery requires the independently retained ledger if the source is unavailable.
-3. Construct a layout-3 manifest with exactly `layoutVersion: 3`, `databaseSha256`, `schemaSha256`, `tenants` and `keyInventory`. Hash the custom-format archive and the exact release's `apps/control-plane/src/main/resources/db/migration/V1__initial_schema.sql` file bytes. Include every archived canonical UUID in `tenants`, even for an individual recovery. No old development schema, migration, compatibility adapter or backfill is accepted by this fleet path. Only ACTIVE/SUSPENDED tenants can be selected; exclude unfinished PROVISIONING tenants and explicitly provision them later.
+3. Construct a layout-3 manifest with exactly `layoutVersion: 3`, `databaseSha256`, `schemaSha256`, `tenants` and `keyInventory`. Hash the custom-format archive and the exact release's `apps/control-plane/src/main/resources/db/migration/V1__initial_schema.sql` file bytes. Include every archived canonical UUID in `tenants`, even for an individual recovery. All PostgreSQL recovery, including a database containing one UUID, uses this format. Inventory-free layout-2 archives, old development schemas, compatibility adapters and backfills are rejected. Only ACTIVE/SUSPENDED tenants can be selected; exclude unfinished PROVISIONING tenants and explicitly provision them later.
 
 `keyInventory` maps each UUID to exactly `identityKeys`, `vaultKeys`, `cacheGenerationFloor` and `approvalClockFloor`. Export the complete current key rows, including post-backup keys and retired tombstones, through the live platform boundary under its transaction-local tenant context:
 

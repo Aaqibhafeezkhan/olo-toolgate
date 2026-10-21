@@ -14,7 +14,7 @@ import subprocess
 import time
 import psycopg
 from psycopg import sql
-from restore import canonical, read, validate, quarantine_connection
+from restore import canonical, read
 import tenant_recovery
 
 
@@ -32,17 +32,14 @@ def restore(archive, manifest_path, review_path, trust_path, connection_path, pg
     archive=Path(archive);now=int(time.time()*1000) if live_clock else now
     if archive.is_symlink() or not archive.is_file():raise ValueError('Regular PostgreSQL archive required')
     manifest=read(manifest_path)
-    fleet=manifest.get('layoutVersion')==3
-    if not fleet and (set(manifest)!={'layoutVersion','databaseSha256'} or manifest['layoutVersion']!=2):raise ValueError('Exact PostgreSQL manifest required')
-    if tenants is not None and not fleet:raise ValueError('Tenant selection requires a reviewed fleet manifest')
+    if manifest.get('layoutVersion')!=3:raise ValueError('Current PostgreSQL manifest with complete tenant/key inventory required')
     with archive.open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
     if digest!=manifest['databaseSha256']:raise ValueError('Reviewed archive integrity failure')
     # Public trust and target credentials must be mounted separately from the archive directory.
     for external in (trust_path,connection_path):
         if Path(external).resolve().is_relative_to(archive.parent.resolve()):raise ValueError('Independent mounted trust and target configuration required')
     review=read(review_path);trust=read(trust_path)
-    if fleet:approvals,selected=tenant_recovery.reviewed(manifest,review,trust,now,tenants)
-    else:a=validate(review,trust,manifest,now)
+    approvals,selected=tenant_recovery.reviewed(manifest,review,trust,now,tenants)
     target=read(connection_path)
     if set(target)-{'host','port','dbname','user','password','sslmode','sslrootcert'} or not {'host','dbname','user','password','sslmode'}<=set(target):raise ValueError('Explicit protected target connection required')
     if target['sslmode']!='verify-full' and not (development and target['host'] in ('localhost','127.0.0.1') and target['sslmode']=='disable'):raise ValueError('Verified database TLS required')
@@ -53,7 +50,7 @@ def restore(archive, manifest_path, review_path, trust_path, connection_path, pg
         owner=connection.execute('SELECT pg_get_userbyid(datdba),current_user FROM pg_database WHERE datname=current_database()').fetchone()
         if owner[0]!=owner[1]:raise ValueError('Isolated target database owner required')
         if connection.execute('SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user').fetchone()[0]:raise ValueError('Restore owner must not bypass tenant RLS')
-        if fleet and not connection.execute("SELECT pg_has_role(session_user,'toolgate_control_platform','MEMBER')").fetchone()[0]:raise ValueError('Fleet restore owner requires the platform role')
+        if not connection.execute("SELECT pg_has_role(session_user,'toolgate_control_platform','MEMBER')").fetchone()[0]:raise ValueError('Fleet restore owner requires the platform role')
         if connection.execute("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp%'").fetchone()[0]:raise ValueError('Empty restore database required')
         database=sql.Identifier(target['dbname'])
         connection.execute(sql.SQL('REVOKE CONNECT ON DATABASE {} FROM PUBLIC').format(database))
@@ -69,19 +66,11 @@ def restore(archive, manifest_path, review_path, trust_path, connection_path, pg
         if result.returncode:raise ValueError('Archive restore failed; keep target offline and inspect restricted database diagnostics')
         # Large imports must not carry an expired authorization into quarantine.
         now=int(time.time()*1000) if live_clock else now
-        if fleet:approvals,selected=tenant_recovery.reviewed(manifest,review,trust,now,tenants)
-        else:a=validate(review,trust,manifest,now)
+        approvals,selected=tenant_recovery.reviewed(manifest,review,trust,now,tenants)
         with connection.transaction():
-            if fleet:
-                ownership=read(tenant_recovery.SCHEMA.parent.parent/'schema-ownership.json')
-                tenant_recovery.quarantine(connection,manifest,approvals,selected,ownership,Connection,now)
-                return dict(tenantIds=sorted(selected),reviewDigest=hashlib.sha256(canonical(approvals)).hexdigest(),runtimeConnectEnabled=False)
-            # Quarantine is a separate, offline owner boundary; FORCE RLS still requires scope.
-            connection.execute("SELECT set_config('app.tenant_id', %s, true)",(a['tenantId'],))
-            tables=('control_tenants','control_tenant_authority','control_tenant_initializations','control_tenant_hosts','control_records','control_endpoints','control_enterprise_invocations','control_enterprise_approvals','control_configuration_changes','control_recovery_floors','control_tool_host_dispatches')
-            connection.execute(sql.SQL('LOCK TABLE {} IN ACCESS EXCLUSIVE MODE').format(sql.SQL(',').join(map(sql.Identifier,tables))))
-            quarantine_connection(Connection(connection),a,now)
-    return dict(tenantId=a['tenantId'],reviewDigest=hashlib.sha256(canonical(a)).hexdigest(),runtimeConnectEnabled=False)
+            ownership=read(tenant_recovery.SCHEMA.parent.parent/'schema-ownership.json')
+            tenant_recovery.quarantine(connection,manifest,approvals,selected,ownership,Connection,now)
+            return dict(tenantIds=sorted(selected),reviewDigest=hashlib.sha256(canonical(approvals)).hexdigest(),runtimeConnectEnabled=False)
 
 
 def main():

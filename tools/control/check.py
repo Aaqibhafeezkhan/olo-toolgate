@@ -37,7 +37,8 @@ def database():
     env = dict(os.environ, POSTGRES_PASSWORD=password)
     container = run(['docker', 'run', '-d', '--memory=512m', '--cpus=2', '-e', 'POSTGRES_PASSWORD',
                      '-p', '127.0.0.1::5432', '-p', '127.0.0.1::8082', '-p', '127.0.0.1::9092',
-                     '-p', '127.0.0.1::8085', '-p', '127.0.0.1::9095', '-p', '127.0.0.1::8081', '-p', '127.0.0.1::9091', POSTGRES], env=env, capture_output=True, text=True).stdout.strip()
+                     '-p', '127.0.0.1::8085', '-p', '127.0.0.1::9095', '-p', '127.0.0.1::8443', '-p', '127.0.0.1::8444',
+                     '-p', '127.0.0.1::8081', '-p', '127.0.0.1::9091', POSTGRES], env=env, capture_output=True, text=True).stdout.strip()
     try:
         deadline = time.monotonic() + 60
         # The image's temporary init server accepts Unix sockets before initialization finishes.
@@ -58,6 +59,8 @@ CREATE DATABASE control OWNER control_migrator;"""
         yield {'CONTROL_TEST_URL':f'jdbc:postgresql://127.0.0.1:{port}/control?sslmode=disable', 'CONTROL_TEST_PASSWORD':password,
                'container':container, 'port':port,
                'runtimePort':info['NetworkSettings']['Ports']['8082/tcp'][0]['HostPort'],
+               'tlsPort':info['NetworkSettings']['Ports']['8443/tcp'][0]['HostPort'],
+               'replicaTlsPort':info['NetworkSettings']['Ports']['8444/tcp'][0]['HostPort'],
                'managementPort':info['NetworkSettings']['Ports']['9092/tcp'][0]['HostPort'],
                'replicaRuntimePort':info['NetworkSettings']['Ports']['8085/tcp'][0]['HostPort'],
                'replicaManagementPort':info['NetworkSettings']['Ports']['9095/tcp'][0]['HostPort'],
@@ -67,13 +70,13 @@ CREATE DATABASE control OWNER control_migrator;"""
         run(['docker', 'rm', '-f', container], capture_output=True)
 
 
-def request(url, token=None, body=None, method='GET', headers=None):
+def request(url, token=None, body=None, method='GET', headers=None, *, context=None):
     fields = {'Content-Type':'application/json', **(headers or {})}
     if token: fields['Authorization'] = 'Bearer ' + token
     data = body if isinstance(body, bytes) else json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method, headers=fields)
     try:
-        with urllib.request.urlopen(req, timeout=20) as response: return response.status, response.read(), dict(response.headers)
+        with urllib.request.urlopen(req, timeout=20, context=context) as response: return response.status, response.read(), dict(response.headers)
     except urllib.error.HTTPError as error: return error.code, error.read(), dict(error.headers)
 
 

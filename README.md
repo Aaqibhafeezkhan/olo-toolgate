@@ -9,7 +9,8 @@ auditable execution.
 
 [Get started](docs/getting-started/one-minute-quickstart.md) ·
 [Documentation](docs/README.md) · [Build a tool](TOOL-SDK-GUIDE.md) ·
-[Contribute](CONTRIBUTING.md) · [Enterprise evaluation](docs/enterprise-access-control/README.md)
+[Contribute](CONTRIBUTING.md) · [Enterprise evaluation](docs/enterprise-access-control/README.md) ·
+[Multitenant deployment](docs/deployment/multitenant.md)
 
 <p align="center">
   <a href="https://github.com/olo-labs/olo-toolgate/raw/refs/heads/main/docs/media/toolgate-overview.mp4"><img src="docs/media/toolgate-overview.gif" width="100%" alt="ToolGate overview: agent requests, group access, Allow/Ask/Block and device activity"></a>
