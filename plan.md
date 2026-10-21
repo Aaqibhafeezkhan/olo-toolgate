@@ -6,7 +6,7 @@ Status: implementation started; multitenant support is not complete. Revised aga
 
 Working branch: `feature/multitenant-support-gap`. Commit each verified milestone on this branch and report its commit, overall completed percentage, pending percentage and next milestone. Stage only files belonging to this work; unrelated workspace content is excluded.
 
-Overall progress: **98% complete, 2% pending**. This is a weighted planning estimate of accepted implementation gates, not a measure of production readiness. The fixed weights below total 100; credit a row only when its stated implementation and verification gate passes. Phase 1 is split so each foundation gate is credited independently. Record any future scope/weight change explicitly rather than silently changing the denominator.
+Overall progress: **99% complete, 1% pending**. This is a weighted planning estimate of accepted implementation gates, not a measure of production readiness. The fixed weights below total 100; credit a row only when its stated implementation and verification gate passes. Phase 1 is split so each foundation gate is credited independently. Record any future scope/weight change explicitly rather than silently changing the denominator.
 
 Milestone allocation update: the former 19% phase 1b allocation is now split into 5% for the ownership inventory/customer-data RLS gate and 14% for the remaining registry, UUID, lifecycle and ownership-constraint gates. The original phase 1b total and the overall 100% denominator are unchanged. The registry/authority split is now complete: registry and hostname metadata use platform-only privileges; authority and customer data use tenant RLS.
 
@@ -24,10 +24,10 @@ Milestone allocation update: the former 19% phase 1b allocation is now split int
 | 6: Capacity and background isolation | 5% | Implemented and verified | 5% |
 | 7: Recovery qualification | 5% | Implemented and verified | 5% |
 | 8a: Fresh SQLite full runtime, shared PostgreSQL TLS isolation and deployment checks | 1% | Implemented and verified | 1% |
-| 8b: Final client-bundle images, PostgreSQL full flow, browser and offline SQLite image recovery | 1% | In progress | 0% |
+| 8b: Final client-bundle images, PostgreSQL full flow, browser and offline SQLite image recovery | 1% | Implemented and verified | 1% |
 | 8c: Six native client/service/installer targets and matching artifact evidence | 1% | Implemented and verified | 1% |
 | 8d: Deployment/recovery rollout guide, final qualification evidence and PR | 1% | In progress | 0% |
-| Total | 100% | In progress | 98% |
+| Total | 100% | In progress | 99% |
 
 Gate 8c passed in [native qualification run 39555926749](https://github.com/olo-labs/olo-toolgate/actions/runs/39555926749), from source `1000948763f3e91e98c6661f67b90095d362eb58`. All six native services, packaged installers, uninstalls and the matching-source/hash collector passed. Genuine assets were downloaded and independently rechecked before final image assembly. This feature workflow publishes no release and leaves RC admission unchanged.
 
