@@ -112,12 +112,16 @@ def check_server(target,site):
             allowed='chrome-extension://emmemldedebhbloibichmmdlbpjakfkf/'
             if host_manifest['allowed_origins']!=[allowed] or host_manifest['name']!='io.ololabs.toolgate.connect':raise ValueError('Native host registration drift')
             host=Path(host_manifest['path'])
-            request=b'{"operation":"health"}'
+            request=json.dumps(dict(operation='health',consoleUrl=site.console+'/console/',expectedTenantId=site.tenant)).encode()
             frame=len(request).to_bytes(4,'little')+request
             result=subprocess.run([str(host),allowed],input=frame,capture_output=True,timeout=25,check=True)
             if len(result.stdout)<4 or int.from_bytes(result.stdout[:4],'little')!=len(result.stdout)-4:raise ValueError('Native frame corruption')
             browser_health=json.loads(result.stdout[4:])
-            if browser_health.get('error') or browser_health['health']['state']!='UNENROLLED':raise ValueError('Native host cannot reach protected service')
+            if browser_health.get('error') or browser_health['health']['state']!='UNENROLLED' or browser_health.get('consoleOrigin')!=site.console:raise ValueError('Native host cannot reach its scoped protected service')
+            foreign=json.dumps(dict(operation='health',consoleUrl=site.console+'/console/',expectedTenantId='00000000-0000-4000-8000-000000000001')).encode()
+            denied_tenant=subprocess.run([str(host),allowed],input=len(foreign).to_bytes(4,'little')+foreign,capture_output=True,timeout=25,check=True)
+            refusal=json.loads(denied_tenant.stdout[4:])
+            if refusal.get('error')!='TENANT_MISMATCH' or refusal.get('health') is not None:raise ValueError('Foreign tenant exposed local health')
             denied=subprocess.run([str(host),'chrome-extension://'+'a'*32+'/'],input=frame,capture_output=True,timeout=25)
             if denied.returncode==0 or denied.stdout:raise ValueError('Wrong Chrome extension accepted')
         print('Packaged installer started the system service; protected mode remains unenrolled')
@@ -133,7 +137,7 @@ def check_server(target,site):
                 query=subprocess.run(['sc.exe','query','OloToolGateClient'],capture_output=True,text=True)
                 if query.returncode!=1060:raise ValueError('Uninstall left a service registration')
                 if config.exists() or (Path(os.environ['ProgramFiles'])/'OLO/ToolGate/olo-toolgate-client.exe').exists():raise ValueError('Uninstall left the client configuration or service executable')
-                if {path.name for path in state.iterdir()}!={'device-key'} or hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Uninstall did not remove every enrollment while retaining the device key')
+                if state.exists() and any(state.iterdir()):raise ValueError('Explicit GUI uninstall purge left a key, journal or local data')
                 if int(run([powershell,'-NoProfile','-NonInteractive','-Command',tray_query]).stdout.strip())!=0:raise ValueError('Uninstall left the tray running')
                 for registry_path, value in [(r'Software\Microsoft\Windows\CurrentVersion\Run','OloToolGateTray'),(r'Software\Google\Chrome\NativeMessagingHosts\io.ololabs.toolgate.connect',None)]:
                     try:
