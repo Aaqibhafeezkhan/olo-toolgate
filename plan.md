@@ -1,6 +1,6 @@
 # Default tenant and subdomain multitenancy implementation plan
 
-Status: implementation started; multitenant support is not complete. Revised against the official architecture guidance linked in section 13. The recommendations below apply established patterns to this repository; they are not a claim that this implementation is already production-proven.
+Status: implementation and functional qualification passed; final review evidence and PR are in progress. Revised against the official architecture guidance linked in section 13. The recommendations below apply established patterns to this repository; they are not a claim that this implementation is already production-proven.
 
 ### Implementation checkpoint
 
@@ -19,7 +19,7 @@ Milestone allocation update: the former 19% phase 1b allocation is now split int
 | 2: Default tenant and layered initialization | 12% | Implemented and verified | 12% |
 | 2a: Tenant vault keys and secret custody | 10% | Implemented and verified | 10% |
 | 3: Tenant resolution, service/deployment refactor and CI guards | 16% | Implemented and verified | 16% |
-| 4: Device/Gateway binding and discovery v2 cutover | 18% | Implemented and verified; shared deployment/release qualification remains in phases 5 and 8 | 18% |
+| 4: Device/Gateway binding and discovery v2 cutover | 18% | Implemented and verified | 18% |
 | 5: Deployment and tenant administration | 5% | Implemented and verified | 5% |
 | 6: Capacity and background isolation | 5% | Implemented and verified | 5% |
 | 7: Recovery qualification | 5% | Implemented and verified | 5% |
@@ -30,6 +30,8 @@ Milestone allocation update: the former 19% phase 1b allocation is now split int
 | Total | 100% | In progress | 99% |
 
 Gate 8c passed in [native qualification run 39555926749](https://github.com/olo-labs/olo-toolgate/actions/runs/39555926749), from source `1000948763f3e91e98c6661f67b90095d362eb58`. All six native services, packaged installers, uninstalls and the matching-source/hash collector passed. Genuine assets were downloaded and independently rechecked before final image assembly. This feature workflow publishes no release and leaves RC admission unchanged.
+
+Gate 8b passed with final images built from application source `7b3456c591927002686ca1ce8fa649df31c4afcb` and the genuine qualified client bundle: full SQLite/browser/offline image recovery, full PostgreSQL runtime and two production-profile Control replicas. Final SQLite/shared PostgreSQL TLS fixtures, production-verifier replays, PostgreSQL 17 shared/selected recovery, pool isolation/memory exhaustion and strict Helm variants passed. All 334 Java tests have zero failures with seven existing skips; CI has 294 tests with one tooling skip. npm and both pinned Python dependency audits report zero known vulnerabilities. The [public qualification record](docs/deployment/multitenant-qualification.json) retains exact source revisions, image IDs, native records, outcomes and evidence digests. Remaining gate 8d is publication of the final reviewed PR; no release, merge or customer rollout is authorized by this milestone.
 
 The chronological notes below record each milestone's earlier state; the table above records current accepted gate credit.
 

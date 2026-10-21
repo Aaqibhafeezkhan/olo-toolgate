@@ -40,6 +40,8 @@ SQLite stages on the destination volume, so recovery works with a read-only cont
 
 ## Qualification evidence
 
+The [2026-10-21 qualification record](multitenant-qualification.json) records the six native results, exact application/native source revisions, immutable local image IDs, embedded client manifest hashes, runtime/recovery outcomes and evidence digests. Application images were built from `7b3456c591927002686ca1ce8fa649df31c4afcb`; the genuine native bundle was qualified at `1000948763f3e91e98c6661f67b90095d362eb58`. The native sources did not change between those revisions. Later changes affect qualification fixtures and documentation.
+
 Run from a clean checkout with matching genuine six-target client assets. The commands create only disposable test containers/databases/volumes; service installation runs only on disposable native CI runners.
 
 ```sh
