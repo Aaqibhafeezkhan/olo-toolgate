@@ -19,7 +19,7 @@ RC_TITLE = 'RC: Tool SDK: MRTR requestState in the Java runtime (M0 part 6, adap
 
 
 class AdmissionTests(unittest.TestCase):
-    def run_admission(self, enabled, payload=None, event_name='push', ref='refs/heads/main'):
+    def run_admission(self, enabled, payload=None, event_name='push', ref='refs/heads/main', branch_checks='false'):
         with tempfile.TemporaryDirectory() as directory:
             event=Path(directory)/'event.json'
             output=Path(directory)/'output.txt'
@@ -28,7 +28,7 @@ class AdmissionTests(unittest.TestCase):
             event.write_text(json.dumps(payload),encoding='utf-8')
             environment={'GITHUB_EVENT_PATH':str(event),'GITHUB_EVENT_NAME':event_name,
                          'GITHUB_OUTPUT':str(output),'GITHUB_REPOSITORY':REPOSITORY,
-                         'GITHUB_SHA':MERGE_SHA,'GITHUB_REF':ref}
+                         'GITHUB_SHA':MERGE_SHA,'GITHUB_REF':ref,'BRANCH_CHECKS':branch_checks}
             if enabled is not None:
                 environment['CI_ENABLED']=enabled
             # Isolate credentials and refs from the launching process.
@@ -44,9 +44,8 @@ class AdmissionTests(unittest.TestCase):
             if not any(event in events for event in ('push','pull_request','workflow_dispatch','workflow_run','schedule','issue_comment')):
                 continue
             if path.name=='tenant-qualification.yml':
-                # Approved feature-only qualification cannot publish or change the main/tag RC admission path.
-                self.assertEqual(set(events),{'push','workflow_dispatch'})
-                self.assertEqual(events['push']['branches'],['feature/multitenant-support-gap'])
+                # Manual evidence collection; automatic native checks belong to CI.
+                self.assertEqual(set(events),{'workflow_dispatch'})
                 self.assertEqual(document['permissions'],{'contents':'read','pull-requests':'read'})
                 jobs=document['jobs'];self.assertEqual(set(jobs),{'native','evidence'})
                 self.assertEqual(jobs['native']['if'],"vars.TOOLGATE_CI_ENABLED == 'true' && github.ref == 'refs/heads/feature/multitenant-support-gap'")
@@ -148,7 +147,8 @@ class AdmissionTests(unittest.TestCase):
         document=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         events=document.get('on',document.get(True,{}))
         self.assertEqual(set(events),{'push','workflow_dispatch'})
-        self.assertEqual(events['push'],{'branches':['main']})
+        self.assertEqual(events['push'],{'branches':['**']})
+        self.assertTrue(document['jobs']['admission']['with']['branch_checks'])
         self.assertNotIn('main_only',document['jobs']['admission'].get('with',{}))
 
     def test_main_only_admission_is_opt_in_for_compatibility_callers(self):
@@ -159,7 +159,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertIs(events['workflow_call']['inputs']['main_only']['default'],False)
         release=yaml.safe_load((root/'.github/workflows/ci.yml').read_text())
         events=release.get('on',release.get(True,{}))
-        self.assertEqual(events['push'],{'branches':['main']})
+        self.assertEqual(events['push'],{'branches':['**']})
         self.assertNotIn('main_only',release['jobs']['admission'].get('with',{}))
 
     def test_main_entrypoint_requires_exact_enabled_variable(self):
@@ -241,6 +241,44 @@ class AdmissionTests(unittest.TestCase):
         with patch('tools.ci.admission.merged_pr_title',return_value=RC_TITLE) as lookup:
             self.assertEqual(self.run_admission('true',payload={'after':'b'*40},ref='refs/tags/v1.0.0'),'allow=true\n')
         lookup.assert_called_once_with(REPOSITORY,MERGE_SHA)
+
+    def test_opt_in_branch_checks_admit_push_and_manual_without_pr_lookup(self):
+        for event in ('push','workflow_dispatch'):
+            for branch in ('feature/multitenant-support-gap','develop','release/1.0'):
+                with self.subTest(event=event,branch=branch), patch('tools.ci.admission.merged_pr_title') as lookup:
+                    self.assertEqual(self.run_admission('true',event_name=event,
+                        ref='refs/heads/'+branch,branch_checks='true'),'allow=true\n')
+                    lookup.assert_not_called()
+
+    def test_branch_opt_in_preserves_pause_and_main_rc_gate(self):
+        with patch('tools.ci.admission.merged_pr_title',return_value='fix: ordinary PR') as lookup:
+            self.assertEqual(self.run_admission('false',ref='refs/heads/feature/test',branch_checks='true'),'allow=false\n')
+            lookup.assert_not_called()
+            self.assertEqual(self.run_admission('true',branch_checks='true'),'allow=false\n')
+            lookup.assert_called_once_with(REPOSITORY,MERGE_SHA)
+        with patch('tools.ci.admission.merged_pr_title',return_value=RC_TITLE):
+            self.assertEqual(self.run_admission('true',branch_checks='true'),'allow=true\n')
+
+    def test_branch_opt_in_does_not_admit_pr_or_workflow_run_events(self):
+        for event in ('pull_request','workflow_run'):
+            with self.subTest(event=event), patch('tools.ci.admission.merged_pr_title') as lookup:
+                self.assertEqual(self.run_admission('true',event_name=event,
+                    ref='refs/heads/feature/test',branch_checks='true'),'allow=false\n')
+                lookup.assert_not_called()
+
+    def test_branch_opt_in_cannot_bypass_tag_or_invalid_ref_admission(self):
+        for ref in ('refs/tags/v1.0.0','refs/pull/176/merge',''):
+            with self.subTest(ref=ref), patch('tools.ci.admission.merged_pr_title',return_value='fix: ordinary PR'):
+                self.assertEqual(self.run_admission('true',ref=ref,branch_checks='true'),'allow=false\n')
+
+    def test_branch_checks_are_opt_in_and_main_only_takes_precedence(self):
+        document=yaml.safe_load((Path(__file__).resolve().parents[2]/'.github/workflows/admission.yml').read_text())
+        inputs=document.get('on',document.get(True))['workflow_call']['inputs']
+        self.assertIs(inputs['branch_checks']['default'],False)
+        job=document['jobs']['admit']
+        self.assertIn('inputs.branch_checks && !inputs.main_only',job['if'])
+        self.assertEqual(job['steps'][1]['env']['BRANCH_CHECKS'],
+                         '${{ inputs.branch_checks && !inputs.main_only }}')
 
     def test_release_uses_upstream_sha_and_merged_pr_title(self):
         event={'workflow_run':{'event':'push','conclusion':'success','head_sha':MERGE_SHA,'head_branch':'main',

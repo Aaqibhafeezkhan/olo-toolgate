@@ -237,8 +237,8 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
     def test_one_tag_entry_and_one_environment_preserve_all_attestations(self):
         workflows={p.stem:yaml.safe_load(p.read_text()) for p in (ROOT/'.github/workflows').glob('*.yml')}
         automatic=[name for name,doc in workflows.items() if 'push' in doc.get('on',{})]
-        self.assertEqual([name for name in automatic if name!='tenant-qualification'],['ci'])
-        self.assertEqual(workflows['tenant-qualification']['on']['push']['branches'],['feature/multitenant-support-gap'])
+        self.assertEqual(automatic,['ci'])
+        self.assertEqual(set(workflows['tenant-qualification']['on']),{'workflow_dispatch'})
         self.assertNotIn('release-foundation',workflows)
         for name in ('control','gateway','quickstart'):
             self.assertNotIn('publish',workflows[name]['jobs'])

@@ -3,16 +3,6 @@
 name: Tenant native qualification (no publication)
 'on':
   workflow_dispatch: null
-  push:
-    branches: ['feature/multitenant-support-gap']
-    paths:
-      - '.github/workflows/tenant-qualification.yml'
-      - '.github/workflows/client.yml'
-      - 'apps/endpoint-client/**'
-      - 'apps/tool-host/**'
-      - 'packages/tenant-identity/**'
-      - 'tools/client/**'
-      - 'tools/tenancy/native_evidence.py'
 permissions:
   contents: read
   pull-requests: read
