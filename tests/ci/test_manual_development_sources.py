@@ -144,8 +144,11 @@ class ManualSourceTests(unittest.TestCase):
             for name in ('VERSION','packages/contracts/VERSION'):
                 self.assertEqual((destination/name).read_text().strip(), info['version'])
             lock = tomllib.loads((destination/'Cargo.lock').read_text())
-            local = [p['version'] for p in lock['package'] if p['name'] in ('olo-toolgate-client','toolgate-cli','olo-toolgate-tool-host','olo-toolgate-gateway','olo-toolgate-contracts') and 'source' not in p]
+            local = [p['version'] for p in lock['package'] if 'source' not in p]
             self.assertEqual(set(local), {info['version']})
+            original = tomllib.loads((ROOT/'Cargo.lock').read_text())
+            self.assertEqual([p for p in lock['package'] if 'source' in p],
+                             [p for p in original['package'] if 'source' in p])
             npm = json.loads((destination/'package-lock.json').read_text())
             self.assertEqual({npm['packages'][p]['version'] for p in ('','apps/admin-ui','packages/contracts/typescript')}, {info['version']})
             extension = json.loads((destination/'apps/browser-extension/manifest.json').read_text())
