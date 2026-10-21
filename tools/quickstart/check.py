@@ -150,7 +150,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             exec_text('/opt/quickstart-python/bin/python','-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json,time;"
                 "db=s.Database();identities=[json.loads(r[0]) if isinstance(r[0],str) else r[0] for r in db.execute(\"SELECT document FROM control_records WHERE kind='IDENTITY_BINDING'\").fetchall()];db.connection.close();"
-                "i=next(i for i in identities if i['subject']=='admin');values=json.loads((s.DATA/'run/credentials.json').read_text());"
+                "i=next(i for i in identities if i['subject']=='reviewer-1');values=json.loads((s.DATA/'run/credentials.json').read_text());"
                 "c={**values[0]['context'],'mode':'DELEGATED','workloadBindingId':'workload-delegated','userId':i['userId'],'sessionEpoch':i['sessionEpoch'],'credentialSha256':"+repr(delegated_digest)+"};"
                 "values.append(dict(tokenSha256="+repr(delegated_digest)+",context=c,expiresAtUnixMs=int(time.time()*1000)+3600000));"
                 "s.atomic(s.DATA/'run/external-credentials.json',json.dumps(values))")
