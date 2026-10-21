@@ -29,7 +29,9 @@ pub struct Config {
 }
 impl Config {
     pub fn validate(&self) -> Result<()> {
-        if let Some(tenant)=&self.tenant_id {crate::contracts::Contracts::shared()?.encode("TenantUuid",tenant)?;}
+        if let Some(tenant) = &self.tenant_id {
+            crate::contracts::Contracts::shared()?.encode("TenantUuid", tenant)?;
+        }
         if let Some(deployment) = &self.deployment {
             deployment.validate()?;
             if self.execution.is_none() {
