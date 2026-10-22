@@ -39,6 +39,29 @@ activating it.
 
 ## Usage
 
+On Windows, the root-level [`testci.bat`](../../testci.bat) uses this same runner:
+
+```bat
+testci.bat
+testci.bat plan
+testci.bat audit
+testci.bat run --replayable
+testci.bat run --job foundation.check --act "C:\Tools\act.exe"
+```
+
+Complete the setup above first. The batch file prefers `TOOLGATE_CI_PYTHON`,
+then `.venv\Scripts\python.exe`, then `py`, then `python`. The override must be
+an executable path, without surrounding quotes. It checks Python and PyYAML
+before starting, works from any current directory, and preserves the runner's
+exit code. All arguments are forwarded to `local.py`.
+
+With no arguments it runs the audit and every supported job body, and reports
+all remaining coverage gaps. It returns **2** if any requested job cannot be
+verified locally, even when the supported checks pass. `run --replayable`
+requests only supported bodies and can return **0** for that narrower scope.
+Neither result guarantees hosted CI success; native matrices, artifact consumers
+and publishing still require GitHub validation.
+
 ```sh
 # List actual GitHub triggers, job dependencies, matrices and local coverage.
 python tools/ci/local.py plan
