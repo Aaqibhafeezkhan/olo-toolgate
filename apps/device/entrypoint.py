@@ -172,7 +172,10 @@ def main():
         return
     if saved is None:
         print('Available gateway: '+server+'; installing the published client.', flush=True)
-        subprocess.run([SOURCE, 'install', '--server', server], check=True, timeout=60)
+        # Install verifies signed discovery over HTTPS before any config exists, so the
+        # private gateway CA must already be the trust root for that one command.
+        environment = dict(os.environ, SSL_CERT_FILE=ca) if ca else None
+        subprocess.run([SOURCE, 'install', '--server', server], check=True, timeout=60, env=environment)
         if ca:
             settings = json.loads(CONFIG.read_text())
             installed_ca = CONFIG.parent/'gateway-trust.crt'
