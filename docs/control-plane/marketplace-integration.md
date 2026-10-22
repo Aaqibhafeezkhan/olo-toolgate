@@ -58,5 +58,5 @@ mark each version compatible or not, and installs the newest compatible one.
 
 **Server packages** shows a Marketplace section when it is enabled: catalog cards, a version's description, tools,
 required settings, links and digests, and its publisher. Images load through
-`GET /api/control/v1/marketplace/media/{id}`, which passes through only PNG or JPEG up to 1 MiB from the configured
+`GET /api/control/v1/marketplace/media/{mediaId}`, which passes through only PNG or JPEG up to 1 MiB from the configured
 origin, so the console keeps `img-src 'self'`. Install asks for confirmation with the text of design §8.1.

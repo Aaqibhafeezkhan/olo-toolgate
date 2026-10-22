@@ -13,14 +13,16 @@ digest. Disabled users, devices, teams, policies and tools narrow this configura
 Clients keep it in their protected application state directory as `permissions.json`.
 A discovery snapshot grants no execution permission.
 
-Enable the optional Gateway relay with this administrator configuration:
+The Gateway reaches Control through the required `control` block of its
+[configuration](../gateway/configuration.md); there is no separate relay switch:
 
 ```json
 {
-  "localMcp": {
+  "control": {
     "url": "https://control.example.test",
     "tokenPath": "/etc/toolgate/relay-auth/access-token",
-    "developmentLoopbackHttp": false
+    "developmentLoopbackHttp": false,
+    "tenantId": "10000000-0000-4000-8000-000000000001"
   }
 }
 ```
@@ -35,12 +37,13 @@ client, and Windows setup asks for no credentials.
 Set Gateway request/connection/shutdown timeouts to 30000/35000/35000 milliseconds
 to leave time for client polls and execution. Relay mode requires a request timeout
 of at least ten seconds. Requests expire within thirty seconds and before their
-runtime credential expires. Quickstart enables the relay automatically; an agent's
-runtime credential must name an enrolled device to see client tools. Unenrolled
-device bindings return an empty catalog.
+runtime credential expires. Quickstart configures this automatically. An agent's
+runtime credential names no device: Control places each call on one online device
+of the execution binding's device group (the caller's own device first). An agent
+without an applicable binding and enrolled device sees an empty catalog.
 
-Helm supports `gateway.localMcp.enabled`, `url`, `tokenSecret`, `tokenKey` and
-`controlPort`. Enable signed bundle mode, provide explicit Control/DNS egress peers
+Helm supports `gateway.control.tenantId`, `url`, `caSecret`, `tokenSecret`,
+`tokenKey` and `controlPort`. Provide explicit Control/DNS egress peers
 and adjust the Gateway timeouts and termination grace. The token Secret is mounted
 read-only and contains no runtime agent credentials. Control endpoint enrollment
 and direct client mutual TLS must also be configured using the endpoint guide.
@@ -56,7 +59,8 @@ next client poll delivers its exact request and lease. The client rechecks curre
 authorization with its device certificate immediately before a protected effect,
 runs the signed package tool in its managed sandbox, and posts the result.
 Control checks the agent scope and current permission again before returning the
-result. ASK remains blocked on MCP; approvals use the existing permit flow.
+result. ASK runs nothing: MCP returns an `isError` result naming the
+`PENDING_APPROVAL` invocation, and approvals use the existing permit flow.
 
 The Admin dashboard and **Client tool requests** page refresh every two seconds:
 

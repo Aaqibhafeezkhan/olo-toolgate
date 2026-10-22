@@ -3,6 +3,7 @@
 Use the checked-in [OpenAPI contracts](../../packages/contracts/openapi/README.md)
 and [schemas](../../packages/contracts/schemas/README.md) for exact fields and paths.
 
+- [HTTP and MCP API reference](api-reference.md) — every Gateway and Control route with examples
 - [Gateway API](gateway-api.md)
 - [Control Plane API](control-plane-api.md)
 - [Client API](client-api.md)

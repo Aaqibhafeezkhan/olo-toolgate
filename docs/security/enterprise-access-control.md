@@ -738,6 +738,19 @@ Proposed additions, subject to canonical API design:
 /api/control/v1/users/{id}/activation
 ```
 
+Current implementation status of these proposals (see the
+[API reference](../api/api-reference.md#7-control-directory-collections)):
+
+| Proposal | Served today as |
+|---|---|
+| `tool-groups`, `agent-groups`, `device-groups` (and `/{id}`) | Implemented at these paths |
+| `agents/{id}/groups`, `devices/{id}/groups` | Implemented, plus `users/{id}/groups` and `tools/{id}/groups` |
+| `access-grants`, `agent-groups/{id}/capabilities` | `/api/control/v1/grants` (`purpose` `CAPABILITY` for Agent Group capabilities) |
+| `agent-groups/{id}/delegations` | `/api/control/v1/delegations` and `/api/control/v1/agent-delegations` |
+| `effective-access/evaluate` | `GET /{users,agents,tools,devices}/{id}/effective-access` and `POST /access/simulate` |
+| `users/{id}/activation` | `POST /api/control/v1/users/{id}/enable` and `/disable` |
+| `access-reviews` | Not implemented; configuration review uses `/api/control/v1/configuration-changes` |
+
 List and explain endpoints require inventory/inspection permission and bounded
 pagination. Mutations require management permission, revision guards and exact
 retry keys. An effective-access simulator must use the same decision logic as
