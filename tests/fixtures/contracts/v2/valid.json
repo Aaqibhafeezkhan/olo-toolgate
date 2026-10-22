@@ -2256,5 +2256,348 @@
       "failedCheckIns": 1,
       "reportSequence": 1
     }
-  }
+  },
+  "McpServerSlug": "orders",
+  "McpServerUrl": "https://mcp.example.com/mcp",
+  "McpSpkiPin": "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  "McpAuthScheme": "HEADER",
+  "McpUpstreamAuth": {
+    "secretName": "ORDERS_MCP_KEY",
+    "scheme": "HEADER",
+    "header": "X-Api-Key"
+  },
+  "McpServerState": "SCANNED",
+  "McpVerificationStatus": "UNVERIFIED",
+  "McpCheckFailure": "PIN_MISMATCH",
+  "McpVerification": {
+    "status": "UNVERIFIED",
+    "approvalSequence": 2,
+    "checkedAtUnixMs": 1792000000000,
+    "failure": "UPSTREAM_UNREACHABLE"
+  },
+  "McpQuarantineReason": "OUTPUT_INVALID",
+  "McpQuarantine": {
+    "reason": "DEFINITION_CHANGED",
+    "evidenceId": "scan-7",
+    "toolIds": [
+      "mcp.orders/get-order"
+    ],
+    "serverWide": false,
+    "atUnixMs": 1792000000000,
+    "approvalSequence": 2
+  },
+  "McpServerRegistrationRequest": {
+    "slug": "orders",
+    "url": "https://mcp.example.com/mcp",
+    "auth": {
+      "secretName": "ORDERS_MCP_TOKEN",
+      "scheme": "BEARER"
+    },
+    "bindingId": "orders-binding",
+    "strict": true
+  },
+  "McpServerRegistration": {
+    "slug": "orders",
+    "url": "https://mcp.example.com/mcp",
+    "auth": {
+      "secretName": "ORDERS_MCP_TOKEN",
+      "scheme": "BEARER"
+    },
+    "bindingId": "orders-binding",
+    "strict": false,
+    "state": "QUARANTINED",
+    "revision": 3,
+    "createdAtUnixMs": 1792000000000,
+    "latestSnapshotRevision": 2,
+    "approvalSequence": 2,
+    "verification": {
+      "status": "CURRENT",
+      "approvalSequence": 2,
+      "checkedAtUnixMs": 1792000000000
+    },
+    "quarantine": {
+      "reason": "DEFINITION_CHANGED",
+      "evidenceId": "scan-7",
+      "toolIds": [
+        "mcp.orders/get-order"
+      ],
+      "serverWide": false,
+      "atUnixMs": 1792000000000,
+      "approvalSequence": 2
+    }
+  },
+  "McpServerRegistrationPage": {
+    "items": [
+      {
+        "slug": "orders",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "ORDERS_MCP_TOKEN",
+          "scheme": "BEARER"
+        },
+        "bindingId": "orders-binding",
+        "strict": false,
+        "state": "APPROVED",
+        "revision": 3,
+        "createdAtUnixMs": 1792000000000,
+        "latestSnapshotRevision": 2,
+        "approvalSequence": 2,
+        "verification": {
+          "status": "CURRENT",
+          "approvalSequence": 2,
+          "checkedAtUnixMs": 1792000000000
+        }
+      }
+    ]
+  },
+  "McpServerInfo": {
+    "name": "orders-mcp",
+    "version": "1.4.0",
+    "title": "Orders"
+  },
+  "McpUpstreamTool": {
+    "name": "get_order",
+    "description": "Read one order.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "title": "Get order",
+    "outputSchema": {
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  "McpToolDefinition": {
+    "tool": {
+      "name": "get_order",
+      "description": "Read one order.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "McpSnapshot": {
+    "revision": 2,
+    "scanId": "scan-7",
+    "serverInfo": {
+      "name": "orders-mcp",
+      "version": "1.4.0"
+    },
+    "protocolVersion": "2025-11-25",
+    "spkiPin": "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "scannedAtUnixMs": 1792000000000,
+    "tools": [
+      {
+        "tool": {
+          "name": "get_order",
+          "description": "Read one order.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "McpScanPurpose": "REFRESH",
+  "McpScanState": "ADMITTED",
+  "McpScanJob": {
+    "scanId": "scan-7",
+    "slug": "orders",
+    "purpose": "REFRESH",
+    "state": "FINISHED",
+    "hostId": "tool-host-local",
+    "createdAtUnixMs": 1792000000000,
+    "deadlineUnixMs": 1792000030000,
+    "approvalSequence": 2,
+    "snapshotRevision": 3
+  },
+  "McpScanClaims": {
+    "jti": "scan-permit-1",
+    "iss": "control",
+    "aud": "tool-host-local",
+    "iat": 1792000000000,
+    "exp": 1792000010000,
+    "scanId": "scan-7",
+    "slug": "orders",
+    "registrationRevision": 3,
+    "bindingId": "orders-binding",
+    "purpose": "REFRESH",
+    "url": "https://mcp.example.com/mcp",
+    "auth": {
+      "secretName": "ORDERS_MCP_TOKEN",
+      "scheme": "BEARER"
+    },
+    "spkiPins": [
+      "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    ],
+    "approvalSequence": 2,
+    "fencingToken": "fence-7",
+    "deadlineUnixMs": 1792000030000
+  },
+  "McpScanDispatch": {
+    "scanId": "scan-7",
+    "permit": "eyJhbGciOiJSUzI1NiJ9.eyJzY2FuSWQiOiJzY2FuLTcifQ.c2ln"
+  },
+  "McpScanResult": {
+    "scanId": "scan-7",
+    "fencingToken": "fence-7",
+    "serverInfo": {
+      "name": "orders-mcp",
+      "version": "1.4.0"
+    },
+    "protocolVersion": "2025-11-25",
+    "spkiPin": "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "tools": [
+      {
+        "name": "get_order",
+        "description": "Read one order.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      }
+    ]
+  },
+  "McpScanFailureReport": {
+    "scanId": "scan-7",
+    "fencingToken": "fence-7",
+    "failure": "PIN_MISMATCH",
+    "observedSpkiPin": "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  },
+  "McpToolApproval": {
+    "upstreamName": "get_order",
+    "name": "get-order"
+  },
+  "McpApprovalRequest": {
+    "snapshotRevision": 2,
+    "tools": [
+      {
+        "upstreamName": "get_order",
+        "name": "get-order"
+      }
+    ]
+  },
+  "McpApprovedTool": {
+    "toolId": "mcp.orders/get-order",
+    "upstreamName": "get_order",
+    "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "McpApproval": {
+    "sequence": 2,
+    "snapshotRevision": 2,
+    "tools": [
+      {
+        "toolId": "mcp.orders/get-order",
+        "upstreamName": "get_order",
+        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "spkiPins": [
+      "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    ],
+    "packageId": "mcp.orders",
+    "packageVersion": "1.0.2",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "approvedAtUnixMs": 1792000000000
+  },
+  "McpApprovalPage": {
+    "items": [
+      {
+        "sequence": 2,
+        "snapshotRevision": 2,
+        "tools": [
+          {
+            "toolId": "mcp.orders/get-order",
+            "upstreamName": "get_order",
+            "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "spkiPins": [
+          "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        ],
+        "packageId": "mcp.orders",
+        "packageVersion": "1.0.2",
+        "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "approvedAtUnixMs": 1792000000000
+      }
+    ]
+  },
+  "McpProxyServer": {
+    "slug": "orders",
+    "serverInfo": {
+      "name": "orders-mcp",
+      "version": "1.4.0"
+    },
+    "spkiPins": [
+      "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    ]
+  },
+  "McpProxyDocument": {
+    "formatVersion": 1,
+    "server": {
+      "slug": "orders",
+      "serverInfo": {
+        "name": "orders-mcp",
+        "version": "1.4.0"
+      },
+      "spkiPins": [
+        "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      ]
+    },
+    "approvalSequence": 2,
+    "strict": false,
+    "tools": [
+      {
+        "toolId": "mcp.orders/get-order",
+        "upstreamName": "get_order",
+        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "McpQuarantineReport": {
+    "invocationId": "inv-42",
+    "fencingToken": "fence-42",
+    "reason": "OUTPUT_INVALID"
+  },
+  "McpPermitVerification": {
+    "status": "CURRENT",
+    "approvalSequence": 2,
+    "checkedAtUnixMs": 1792000000000
+  },
+  "ResultProvenance": "UNTRUSTED_UPSTREAM"
 }

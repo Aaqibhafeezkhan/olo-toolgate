@@ -178,6 +178,9 @@
         },
         "error": {
           "$ref": "protocol.schema.json#/$defs/ToolErrorBody"
+        },
+        "provenance": {
+          "$ref": "protocol.schema.json#/$defs/ResultProvenance"
         }
       },
       "required": [
@@ -185,6 +188,14 @@
         "resultType",
         "content",
         "isError"
+      ]
+    },
+    "ResultProvenance": {
+      "type": "string",
+      "description": "Where a result came from. UNTRUSTED_UPSTREAM marks output an MCP_PROXY executor relayed from an upstream server; the Gateway adds io.toolgate/untrusted-upstream to the MCP result _meta, also on replays.",
+      "enum": [
+        "TOOL",
+        "UNTRUSTED_UPSTREAM"
       ]
     },
     "ProgressFrame": {

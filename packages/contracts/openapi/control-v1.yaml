@@ -8542,6 +8542,446 @@ paths:
           description: Not found
         '409':
           description: Not admitted by this host
+  /api/control/v1/mcp-servers:
+    get:
+      operationId: listMcpServers
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. The upstream MCP servers registered in the routed tenant.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistrationPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+    post:
+      operationId: registerMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register plus scoped authority over the binding's Tool Group and Device Group. Registers an upstream
+        MCP server in the routed tenant; the secret must belong to exactly the binding's groups. Contacts nothing.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistrationRequest
+      responses:
+        '200':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}:
+    get:
+      operationId: getMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. One registration with its state, verification and quarantine.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+    delete:
+      operationId: deleteMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register with scoped authority. Undeploys the generated package and disables its tools; history is kept.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '204':
+          description: Unregistered
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}/scans:
+    post:
+      operationId: scanMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register with scoped authority. Queues a DISCOVER scan on a Tool Host of the binding Device Group;
+        the host contacts the upstream, never Control.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}/snapshots/{revision}:
+    get:
+      operationId: getMcpSnapshot
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. One immutable snapshot with recomputed definition digests.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: revision
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpSnapshot
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}/approvals:
+    get:
+      operationId: listMcpApprovals
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. Approvals of one registration, newest first.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpApprovalPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+    post:
+      operationId: approveMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register with scoped authority. Approves at most 64 tools of one snapshot as the next approval sequence,
+        generates and deploys the tenant's MCP_PROXY package, and retires omitted tools. A retry with the same key and request
+        returns the original approval.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpApprovalRequest
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpApproval
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/next:
+    post:
+      operationId: nextMcpScan
+      security:
+      - deviceCertificate: []
+      description: The oldest queued scan for this Tool Host, which must be an administered member of the registration's binding
+        Device Group. Control marks it claimed and returns its scan permit. 204 when none is queued.
+      responses:
+        '200':
+          description: The claimed scan
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanDispatch
+        '204':
+          description: Nothing queued
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/consume:
+    post:
+      operationId: consumeMcpScan
+      security:
+      - deviceCertificate: []
+      description: The lease holder consumes the scan permit before the signed deadline; only then may it redeem the secret.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanClaims
+      responses:
+        '200':
+          description: Admitted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/result:
+    post:
+      operationId: postMcpScanResult
+      security:
+      - deviceCertificate: []
+      description: The lease holder reports what it observed, once and before the deadline. Control recomputes every digest.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanResult
+      responses:
+        '200':
+          description: Finished
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/failure:
+    post:
+      operationId: postMcpScanFailure
+      security:
+      - deviceCertificate: []
+      description: The lease holder reports a failed scan, once and before the deadline. A failed refresh makes verification UNVERIFIED.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanFailureReport
+      responses:
+        '200':
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-quarantines:
+    post:
+      operationId: reportMcpQuarantine
+      security:
+      - deviceCertificate: []
+      description: The lease holder of one invocation or scan reports a quarantine. Control derives the targets from that evidence
+        and applies it only to the current approval; a stale report is audited and changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpQuarantineReport
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
 components:
   securitySchemes:
     adminAccessToken:

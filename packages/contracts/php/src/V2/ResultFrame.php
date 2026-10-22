@@ -13,12 +13,13 @@ final readonly class ResultFrame implements \JsonSerializable {
         public array $content,
         public bool $isError,
         public ?\stdClass $structuredContent = null,
-        public ?ToolErrorBody $error = null
+        public ?ToolErrorBody $error = null,
+        public ?ResultProvenance $provenance = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['kind', 'resultType', 'content', 'structuredContent', 'isError', 'error']) || array_diff(['kind', 'resultType', 'content', 'isError'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['kind', 'resultType', 'content', 'structuredContent', 'isError', 'error', 'provenance']) || array_diff(['kind', 'resultType', 'content', 'isError'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         if ($data['kind'] !== 'RESULT') {
@@ -30,7 +31,8 @@ final readonly class ResultFrame implements \JsonSerializable {
             array_map(static fn ($item) => (object) $item, $data['content']),
             $data['isError'],
             array_key_exists('structuredContent', $data) ? (object) $data['structuredContent'] : null,
-            array_key_exists('error', $data) ? ToolErrorBody::fromArray($data['error']) : null
+            array_key_exists('error', $data) ? ToolErrorBody::fromArray($data['error']) : null,
+            array_key_exists('provenance', $data) ? ResultProvenance::from($data['provenance']) : null
         );
     }
 

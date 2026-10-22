@@ -220,6 +220,19 @@ export const operations = {
   nextToolHostDispatch: { method: 'POST', path: '/api/control/v1/tool-hosts/dispatches/next' },
   postToolHostAdmission: { method: 'POST', path: '/api/control/v1/tool-hosts/dispatches/{id}/admission' },
   postToolHostResult: { method: 'POST', path: '/api/control/v1/tool-hosts/dispatches/{id}/result' },
+  listMcpServers: { method: 'GET', path: '/api/control/v1/mcp-servers' },
+  registerMcpServer: { method: 'POST', path: '/api/control/v1/mcp-servers' },
+  getMcpServer: { method: 'GET', path: '/api/control/v1/mcp-servers/{slug}' },
+  deleteMcpServer: { method: 'DELETE', path: '/api/control/v1/mcp-servers/{slug}' },
+  scanMcpServer: { method: 'POST', path: '/api/control/v1/mcp-servers/{slug}/scans' },
+  getMcpSnapshot: { method: 'GET', path: '/api/control/v1/mcp-servers/{slug}/snapshots/{revision}' },
+  listMcpApprovals: { method: 'GET', path: '/api/control/v1/mcp-servers/{slug}/approvals' },
+  approveMcpServer: { method: 'POST', path: '/api/control/v1/mcp-servers/{slug}/approvals' },
+  nextMcpScan: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/next' },
+  consumeMcpScan: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/consume' },
+  postMcpScanResult: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/result' },
+  postMcpScanFailure: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/failure' },
+  reportMcpQuarantine: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-quarantines' },
 } as const;
 export interface DirectoryRecords {
   agentDelegations: ControlAgentDelegation;

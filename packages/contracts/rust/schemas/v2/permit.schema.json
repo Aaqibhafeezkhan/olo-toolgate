@@ -236,6 +236,9 @@
         },
         "deadlineUnixMs": {
           "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "mcpVerification": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpPermitVerification"
         }
       },
       "required": [

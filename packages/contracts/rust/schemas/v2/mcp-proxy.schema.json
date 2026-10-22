@@ -1,0 +1,866 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/mcp-proxy.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "MCP proxy",
+  "description": "Upstream MCP server registrations, scans, snapshots, approvals and the MCP_PROXY package document (docs/planning/mcp-proxy/plan.md).",
+  "$ref": "#/$defs/McpServerRegistration",
+  "$defs": {
+    "McpServerSlug": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,30}$",
+      "description": "Registration slug, unique per tenant; exactly one PackageId component, so mcp.{slug} is a valid package id."
+    },
+    "McpServerUrl": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^https://[^\\s/?#@]+(/[^\\s#]*)?$",
+      "description": "Streamable HTTP endpoint of the upstream MCP server; HTTPS only, no user info or fragment."
+    },
+    "McpSpkiPin": {
+      "type": "string",
+      "pattern": "^sha256/[A-Za-z0-9+/]{43}=$",
+      "description": "SHA-256 of the leaf certificate SubjectPublicKeyInfo, base64 (as in HTTP public key pinning)."
+    },
+    "McpAuthScheme": {
+      "type": "string",
+      "description": "How the upstream secret is sent: BEARER as Authorization: Bearer, HEADER in the named header.",
+      "enum": [
+        "BEARER",
+        "HEADER"
+      ]
+    },
+    "McpUpstreamAuth": {
+      "type": "object",
+      "description": "Upstream credential for scans and calls. The secret is a tenant vault entry whose Tool Group and Device Group equal the registration binding.",
+      "additionalProperties": false,
+      "properties": {
+        "secretName": {
+          "$ref": "identifiers.schema.json#/$defs/VariableName"
+        },
+        "scheme": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpAuthScheme"
+        },
+        "header": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9-]{1,128}$"
+        }
+      },
+      "required": [
+        "secretName",
+        "scheme"
+      ]
+    },
+    "McpServerState": {
+      "type": "string",
+      "description": "Registration lifecycle.",
+      "enum": [
+        "REGISTERED",
+        "SCANNING",
+        "SCANNED",
+        "APPROVED",
+        "QUARANTINED"
+      ]
+    },
+    "McpVerificationStatus": {
+      "type": "string",
+      "description": "CURRENT only when the most recent check of the deployed approval succeeded within the maximum check age.",
+      "enum": [
+        "CURRENT",
+        "UNVERIFIED"
+      ]
+    },
+    "McpCheckFailure": {
+      "type": "string",
+      "description": "Why a scan or check failed.",
+      "enum": [
+        "PIN_MISMATCH",
+        "TLS_ERROR",
+        "UPSTREAM_UNREACHABLE",
+        "UPSTREAM_ERROR",
+        "PROTOCOL_ERROR",
+        "SCAN_LIMIT_EXCEEDED",
+        "DEADLINE_EXCEEDED",
+        "DEFINITION_CHANGED",
+        "TOOL_MISSING",
+        "SERVER_CHANGED"
+      ]
+    },
+    "McpVerification": {
+      "type": "object",
+      "description": "The latest check of a registration against its approval; a failure replaces an earlier success.",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpVerificationStatus"
+        },
+        "approvalSequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "checkedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "failure": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpCheckFailure"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "McpQuarantineReason": {
+      "type": "string",
+      "description": "Why tools or a server were quarantined.",
+      "enum": [
+        "OUTPUT_INVALID",
+        "DEFINITION_CHANGED",
+        "TOOL_MISSING",
+        "SERVER_CHANGED",
+        "SERVER_VERSION_CHANGED",
+        "PIN_MISMATCH"
+      ]
+    },
+    "McpQuarantine": {
+      "type": "object",
+      "description": "A recorded quarantine and the evidence that caused it.",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpQuarantineReason"
+        },
+        "evidenceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/ToolId"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "serverWide": {
+          "type": "boolean"
+        },
+        "atUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "approvalSequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        }
+      },
+      "required": [
+        "reason",
+        "evidenceId",
+        "toolIds",
+        "serverWide",
+        "atUnixMs",
+        "approvalSequence"
+      ]
+    },
+    "McpServerRegistrationRequest": {
+      "type": "object",
+      "description": "Registers an upstream MCP server in the routed tenant. The pool is the binding Device Group.",
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerSlug"
+        },
+        "url": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerUrl"
+        },
+        "auth": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpUpstreamAuth"
+        },
+        "bindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Check the upstream tools/list before every call."
+        }
+      },
+      "required": [
+        "slug",
+        "url",
+        "auth",
+        "bindingId",
+        "strict"
+      ]
+    },
+    "McpServerRegistration": {
+      "type": "object",
+      "description": "A registered upstream MCP server of the routed tenant.",
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerSlug"
+        },
+        "url": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerUrl"
+        },
+        "auth": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpUpstreamAuth"
+        },
+        "bindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerState"
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "createdAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "latestSnapshotRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "approvalSequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "verification": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpVerification"
+        },
+        "quarantine": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpQuarantine"
+        }
+      },
+      "required": [
+        "slug",
+        "url",
+        "auth",
+        "bindingId",
+        "strict",
+        "state",
+        "revision",
+        "createdAtUnixMs",
+        "verification"
+      ]
+    },
+    "McpServerRegistrationPage": {
+      "type": "object",
+      "description": "Registrations of the routed tenant.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpServerRegistration"
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "McpServerInfo": {
+      "type": "object",
+      "description": "The upstream serverInfo from initialize.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "McpUpstreamTool": {
+      "type": "object",
+      "description": "One tool exactly as the upstream tools/list returned it, within the scan limits.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 8192
+        },
+        "inputSchema": {
+          "type": "object",
+          "description": "A JSON Schema object exactly as the upstream returned it; bounded by the scan limits.",
+          "maxProperties": 256
+        },
+        "outputSchema": {
+          "type": "object",
+          "description": "A JSON Schema object exactly as the upstream returned it; bounded by the scan limits.",
+          "maxProperties": 256
+        },
+        "annotations": {
+          "type": "object",
+          "maxProperties": 64
+        }
+      },
+      "required": [
+        "name",
+        "inputSchema"
+      ]
+    },
+    "McpToolDefinition": {
+      "type": "object",
+      "description": "A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy).",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpUpstreamTool"
+        },
+        "definitionDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "tool",
+        "definitionDigest"
+      ]
+    },
+    "McpSnapshot": {
+      "type": "object",
+      "description": "An immutable scan result; Control recomputes every digest.",
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "scanId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "serverInfo": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerInfo"
+        },
+        "protocolVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "spkiPin": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpSpkiPin"
+        },
+        "scannedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpToolDefinition"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "revision",
+        "scanId",
+        "serverInfo",
+        "protocolVersion",
+        "spkiPin",
+        "scannedAtUnixMs",
+        "tools"
+      ]
+    },
+    "McpScanPurpose": {
+      "type": "string",
+      "description": "DISCOVER is an administrator scan that may observe a new pin; REFRESH checks the current approval under its pinned keys.",
+      "enum": [
+        "DISCOVER",
+        "REFRESH"
+      ]
+    },
+    "McpScanState": {
+      "type": "string",
+      "description": "Scan job lifecycle; the lease ends at the signed deadline.",
+      "enum": [
+        "QUEUED",
+        "CLAIMED",
+        "ADMITTED",
+        "FINISHED",
+        "FAILED",
+        "EXPIRED"
+      ]
+    },
+    "McpScanJob": {
+      "type": "object",
+      "description": "A scan of one registration on one Tool Host of its binding Device Group.",
+      "additionalProperties": false,
+      "properties": {
+        "scanId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "slug": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerSlug"
+        },
+        "purpose": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpScanPurpose"
+        },
+        "state": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpScanState"
+        },
+        "hostId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "createdAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "deadlineUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "approvalSequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "snapshotRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "failure": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpCheckFailure"
+        }
+      },
+      "required": [
+        "scanId",
+        "slug",
+        "purpose",
+        "state",
+        "createdAtUnixMs",
+        "deadlineUnixMs"
+      ]
+    },
+    "McpScanClaims": {
+      "type": "object",
+      "description": "Claims of a scan permit (typ toolgate-mcp-scan-permit+jws), signed in the effect-signing domain. exp - iat is at most 10 s (admission); deadlineUnixMs bounds the whole scan. spkiPins is required for REFRESH.",
+      "additionalProperties": false,
+      "properties": {
+        "jti": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "iss": {
+          "type": "string",
+          "const": "control"
+        },
+        "aud": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "iat": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "exp": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "scanId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "slug": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerSlug"
+        },
+        "registrationRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "bindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "purpose": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpScanPurpose"
+        },
+        "url": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerUrl"
+        },
+        "auth": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpUpstreamAuth"
+        },
+        "spkiPins": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpSpkiPin"
+          },
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "approvalSequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "deadlineUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "jti",
+        "iss",
+        "aud",
+        "iat",
+        "exp",
+        "scanId",
+        "slug",
+        "registrationRevision",
+        "bindingId",
+        "purpose",
+        "url",
+        "auth",
+        "spkiPins",
+        "fencingToken",
+        "deadlineUnixMs"
+      ]
+    },
+    "McpScanDispatch": {
+      "type": "object",
+      "description": "A scan a Tool Host fetched: the signed scan permit for its admission.",
+      "additionalProperties": false,
+      "properties": {
+        "scanId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "permit": {
+          "$ref": "identifiers.schema.json#/$defs/CompactJws"
+        }
+      },
+      "required": [
+        "scanId",
+        "permit"
+      ]
+    },
+    "McpScanResult": {
+      "type": "object",
+      "description": "What the scanning host observed, reported once by the lease holder before the deadline.",
+      "additionalProperties": false,
+      "properties": {
+        "scanId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "serverInfo": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerInfo"
+        },
+        "protocolVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "spkiPin": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpSpkiPin"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpUpstreamTool"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "scanId",
+        "fencingToken",
+        "serverInfo",
+        "protocolVersion",
+        "spkiPin",
+        "tools"
+      ]
+    },
+    "McpScanFailureReport": {
+      "type": "object",
+      "description": "A failed scan, reported by the lease holder before the deadline.",
+      "additionalProperties": false,
+      "properties": {
+        "scanId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "failure": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpCheckFailure"
+        },
+        "observedSpkiPin": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpSpkiPin"
+        }
+      },
+      "required": [
+        "scanId",
+        "fencingToken",
+        "failure"
+      ]
+    },
+    "McpToolApproval": {
+      "type": "object",
+      "description": "One approved upstream tool and the ToolGate local name it gets (mcp.{slug}/{name}).",
+      "additionalProperties": false,
+      "properties": {
+        "upstreamName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "name": {
+          "$ref": "identifiers.schema.json#/$defs/ToolLocalName"
+        }
+      },
+      "required": [
+        "upstreamName",
+        "name"
+      ]
+    },
+    "McpApprovalRequest": {
+      "type": "object",
+      "description": "Approves tools of one snapshot; at most 64, the package and deployment limit.",
+      "additionalProperties": false,
+      "properties": {
+        "snapshotRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpToolApproval"
+          },
+          "maxItems": 64,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "snapshotRevision",
+        "tools"
+      ]
+    },
+    "McpApprovedTool": {
+      "type": "object",
+      "description": "A tool of an approval.",
+      "additionalProperties": false,
+      "properties": {
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "upstreamName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "definitionDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "toolId",
+        "upstreamName",
+        "definitionDigest"
+      ]
+    },
+    "McpApproval": {
+      "type": "object",
+      "description": "An accepted approval: one per approval sequence, with its generated package.",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "snapshotRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpApprovedTool"
+          },
+          "maxItems": 64,
+          "minItems": 1
+        },
+        "spkiPins": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpSpkiPin"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "packageVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "approvedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "sequence",
+        "snapshotRevision",
+        "tools",
+        "spkiPins",
+        "packageId",
+        "packageVersion",
+        "packageDigest",
+        "approvedAtUnixMs"
+      ]
+    },
+    "McpApprovalPage": {
+      "type": "object",
+      "description": "Approvals of one registration, newest first.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpApproval"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "McpProxyServer": {
+      "type": "object",
+      "description": "The upstream an MCP_PROXY package proxies.",
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerSlug"
+        },
+        "serverInfo": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerInfo"
+        },
+        "spkiPins": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpSpkiPin"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "slug",
+        "serverInfo",
+        "spkiPins"
+      ]
+    },
+    "McpProxyDocument": {
+      "type": "object",
+      "description": "mcp-proxy.json, the one artifact of an MCP_PROXY package (media type application/vnd.ololabs.toolgate.mcp-proxy+json).",
+      "additionalProperties": false,
+      "properties": {
+        "formatVersion": {
+          "type": "integer",
+          "const": 1
+        },
+        "server": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpProxyServer"
+        },
+        "approvalSequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "strict": {
+          "type": "boolean"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/McpApprovedTool"
+          },
+          "maxItems": 64,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "formatVersion",
+        "server",
+        "approvalSequence",
+        "strict",
+        "tools"
+      ]
+    },
+    "McpQuarantineReport": {
+      "type": "object",
+      "description": "Sent by the lease holder of exactly one invocation (a call) or one scan (a refresh); Control derives the targets from that evidence and applies it only to the current approval.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "scanId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "reason": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpQuarantineReason"
+        },
+        "observedDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "observedServerInfo": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerInfo"
+        }
+      },
+      "required": [
+        "fencingToken",
+        "reason"
+      ]
+    },
+    "McpPermitVerification": {
+      "type": "object",
+      "description": "Freshness evidence an invocation permit carries for an MCP_PROXY tool.",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpVerificationStatus"
+        },
+        "approvalSequence": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "checkedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "status",
+        "approvalSequence"
+      ]
+    }
+  }
+}

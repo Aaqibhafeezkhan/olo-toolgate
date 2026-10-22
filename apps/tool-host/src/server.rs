@@ -293,6 +293,7 @@ fn error_frame(code: &str, message: &str, retryable: bool) -> ResultFrame {
             retryable,
             data: None,
         }),
+        provenance: None,
     }
 }
 

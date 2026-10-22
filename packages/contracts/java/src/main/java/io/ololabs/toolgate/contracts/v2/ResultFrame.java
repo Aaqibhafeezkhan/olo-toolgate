@@ -11,6 +11,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param structuredContent canonical structuredContent value
  * @param isError canonical isError value
  * @param error canonical error value
+ * @param provenance canonical provenance value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ResultFrame(
@@ -19,7 +20,8 @@ public record ResultFrame(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "content", required = true) java.util.List<java.util.Map<String, com.fasterxml.jackson.databind.JsonNode>> content,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "structuredContent", required = false) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> structuredContent,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "isError", required = true) Boolean isError,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "error", required = false) ToolErrorBody error
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "error", required = false) ToolErrorBody error,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "provenance", required = false) ResultProvenance provenance
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +31,7 @@ public record ResultFrame(
      * @param structuredContent canonical structuredContent value
      * @param isError canonical isError value
      * @param error canonical error value
+     * @param provenance canonical provenance value
      */
     public ResultFrame {
         java.util.Objects.requireNonNull(kind, "kind");

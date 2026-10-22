@@ -22,5 +22,6 @@ The v2 set is self-contained: no `$ref` points into `v1`. Since contract set `1.
 | `settings.schema.json` | `ControlServerSettings` format version 2, `ClientCheckIn` | ADR 021 |
 | `profile.schema.json` | `DeploymentProfile`, `ProvisioningStatus`: pinned deployment-time package provisioning | plan.md §7, §8 |
 | `discovery.schema.json` | `SignedTenantDiscovery`, `TenantDiscovery`, protected JWS header, public key ring, tenant device authorities and console-scoped native requests | plan.md §7.3; serving cutover remains gated |
+| `mcp-proxy.schema.json` | `McpServerRegistration`, `McpSnapshot`, `McpScanClaims`, `McpApproval`, `McpProxyDocument`, `McpQuarantineReport`: upstream MCP servers governed as generated `MCP_PROXY` packages | [MCP proxy plan](../../../../docs/planning/mcp-proxy/plan.md) |
 
 Definitions owned by a D2 ADR are written here because D1 freezes the wire shapes; D2 reviews their trust and persistence semantics and may amend them before D2 passes.

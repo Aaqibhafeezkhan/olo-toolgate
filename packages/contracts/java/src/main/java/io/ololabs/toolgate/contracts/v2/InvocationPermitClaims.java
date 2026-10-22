@@ -27,6 +27,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param businessKeyNamespace canonical businessKeyNamespace value
  * @param approvalIds canonical approvalIds value
  * @param deadlineUnixMs canonical deadlineUnixMs value
+ * @param mcpVerification canonical mcpVerification value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record InvocationPermitClaims(
@@ -51,7 +52,8 @@ public record InvocationPermitClaims(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "businessKeyHash", required = false) String businessKeyHash,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "businessKeyNamespace", required = false) KeyNamespace businessKeyNamespace,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "approvalIds", required = true) java.util.List<String> approvalIds,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "deadlineUnixMs", required = true) Long deadlineUnixMs
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "deadlineUnixMs", required = true) Long deadlineUnixMs,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "mcpVerification", required = false) McpPermitVerification mcpVerification
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -77,6 +79,7 @@ public record InvocationPermitClaims(
      * @param businessKeyNamespace canonical businessKeyNamespace value
      * @param approvalIds canonical approvalIds value
      * @param deadlineUnixMs canonical deadlineUnixMs value
+     * @param mcpVerification canonical mcpVerification value
      */
     public InvocationPermitClaims {
         java.util.Objects.requireNonNull(jti, "jti");

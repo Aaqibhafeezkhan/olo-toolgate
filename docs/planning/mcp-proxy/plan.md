@@ -1,8 +1,8 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # MCP proxy: govern existing MCP servers through ToolGate
 
-Plan for [olo-labs/olo-toolgate#129](https://github.com/olo-labs/olo-toolgate/issues/129). Status: proposed, not
-implemented. Revision 5 (22 October 2026):
+Plan for [olo-labs/olo-toolgate#129](https://github.com/olo-labs/olo-toolgate/issues/129). Status: in progress
+(M1 done; see §10). Revision 5 (22 October 2026):
 
 - **Revision 2** adopted the multitenancy model merged in #176 ([ADR 029](../../adr/029-tenant-ownership-and-trust-boundaries.md)).
 - **Revision 3** resolves the first review: admission for native execution and scans, quarantine binding, pool
@@ -98,7 +98,8 @@ the authenticated invocation or scan that observed the problem, and only for the
   unrepresentable names are refused at approval, never silently renamed. The proxy document maps every tool id to its
   exact upstream name.
 - **Definition digest** (one spec, Java and Rust): `sha256` over the canonical JSON of `{name, title?, description?,
-  inputSchema, outputSchema?, annotations?}` as returned. Shared vectors in `tool-sdk/conformance/mcp-proxy/`.
+  inputSchema, outputSchema?, annotations?}` as returned. Spec and shared vectors in
+  [`tool-sdk/spec/mcp-proxy/`](../../../tool-sdk/spec/mcp-proxy/README.md).
 - **Limits.** The host enforces them **before** aggregating anything (it stops reading and reports
   `SCAN_LIMIT_EXCEEDED`), and Control enforces them again on receipt.
 
@@ -289,7 +290,8 @@ T2 digest ────┼─> T3 Control register/scan ─> T4 approve/package/q
 - **Done when:** the contract checks and the Python contract tests pass.
 
 ### T2. Definition digest specification
-- Vectors in `tool-sdk/conformance/mcp-proxy/definition-digest.json`; Java (`McpDefinitions.digest`) and Rust
+- Spec and vectors in `tool-sdk/spec/mcp-proxy/` (`definition-digest.json`, beside the other spec vectors: files under
+  `tool-sdk/conformance/<suite>/` are conformance cases); Java (`McpDefinitions.digest`) and Rust
   (`mcp::definition_digest`) implementations, each tested against them.
 - **Depends on:** nothing.
 
@@ -460,7 +462,8 @@ T2 digest ────┼─> T3 Control register/scan ─> T4 approve/package/q
 - **A commit after every milestone:** each milestone below ends with its tests passing locally and one commit (or a
   small series) pushed to `feature/mcp-proxy`. The commit message names the milestone (for example `M2: pool
   targeting, result provenance, streaming egress`). The milestone table in this section is updated in the same
-  commit: its Status column moves to **Done** with the commit id.
+  commit: its Status column moves to **Done**, and the next milestone's commit adds that commit's id (a commit cannot
+  name itself).
 - **Staying current:** before each milestone starts, `main` is merged into `feature/mcp-proxy`, so conflicts surface
   early and the multitenancy and other main changes are always under test.
 - **One pull request** from `feature/mcp-proxy` to `main` opens once M1 lands (as a draft, so CI runs on every
@@ -477,7 +480,7 @@ Effort is the estimated share of the whole feature (code, tests and docs), from 
 | Milestone | Tasks | What it delivers | Effort | Cumulative | Status |
 |---|---|---|---|---|---|
 | M0 | Plan | This plan, reviewed through revision 5 | — | 0% | Done (7c35a000) |
-| M1 Foundations | T1, T2, T8a | Contracts and bindings for every later step; the definition-digest spec with Java and Rust implementations; the fixture MCP server every later test uses | 14% | 14% | Planned |
+| M1 Foundations | T1, T2, T8a | Contracts and bindings for every later step; the definition-digest spec with Java and Rust implementations; the fixture MCP server every later test uses | 14% | 14% | Done |
 | M2 Platform extensions | TP, TR, T5s | Device-Group-targeted Tool Host deployments; result provenance through Control, replay and the Gateway; the streaming egress client | 25% | 39% | Planned |
 | M3 Register and scan | T3 | MCP server registrations, scoped secret authority, scan jobs and permits with deadlines, snapshots, tenant-owned tables with RLS | 14% | 53% | Planned |
 | M4 Approve and package | T4 | Approval sequence, generated `MCP_PROXY` packages through the real pipeline, retiring omitted tools, evidence-bound quarantine, recovery | 12% | 65% | Planned |

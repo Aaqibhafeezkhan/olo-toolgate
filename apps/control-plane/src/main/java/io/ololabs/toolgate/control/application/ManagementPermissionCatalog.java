@@ -159,6 +159,8 @@ public final class ManagementPermissionCatalog {
   "package.delete",
   "tool_builder.read",
   "tool_builder.build",
+  "mcp_server.read",
+  "mcp_server.register",
   "secret.read",
   "secret.read_value",
   "secret.write",

@@ -11,6 +11,7 @@ pub mod device;
 pub mod digest;
 pub mod egress;
 pub mod events;
+pub mod mcp;
 pub mod permit;
 pub mod runner;
 pub mod server;
