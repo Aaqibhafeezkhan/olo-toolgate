@@ -49,8 +49,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def ready(opener, server):
     try:
         with opener.open(server+'/.well-known/olo-toolgate-client', timeout=3) as response:
-            document = json.loads(response.read(16385))
-            return response.status == 200 and isinstance(document, dict) and 'signature' in document
+            document = json.loads(response.read(131200))
+            # Tenant discovery v2 is a compact JWS envelope; the client verifies it before enrollment.
+            return (response.status == 200 and isinstance(document, dict) and
+                    isinstance(document.get('jws'), str) and document['jws'].count('.') == 2)
     except (OSError, ValueError):
         return False
 
