@@ -1,7 +1,7 @@
 -- Copyright 2026 OLO Labs
 -- SPDX-License-Identifier: Apache-2.0
 -- Initial release schema. Initialize an empty database; pre-release schemas are unsupported.
--- Provision the NOLOGIN role toolgate_control_runtime before initialization.
+-- Provision the NOLOGIN roles toolgate_control_runtime and toolgate_control_platform before initialization.
 
 CREATE TABLE control_records (
     tenant_id varchar(128) NOT NULL,
@@ -36,11 +36,64 @@ GRANT SELECT, INSERT ON control_audit TO toolgate_control_runtime;
 GRANT USAGE ON SEQUENCE control_audit_sequence_seq TO toolgate_control_runtime;
 
 CREATE TABLE control_tenants (
-    tenant_id varchar(128) PRIMARY KEY,
+    tenant_id varchar(128) PRIMARY KEY CHECK(tenant_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
+    alias varchar(63) NOT NULL UNIQUE CHECK(alias ~ '^[a-z0-9][a-z0-9-]{0,62}$'),
+    display_name text NOT NULL CHECK(length(display_name) BETWEEN 1 AND 256),
+    status varchar(16) NOT NULL CHECK(status IN ('PROVISIONING','ACTIVE','SUSPENDED')),
+    created_at bigint NOT NULL CHECK(created_at>=0),
+    updated_at bigint NOT NULL CHECK(updated_at>=created_at),
+    initialization_failure_code varchar(32) CHECK(initialization_failure_code='INITIALIZATION_FAILED'),
+    initialization_failed_at bigint CHECK(initialization_failed_at>=0),
+    CHECK((initialization_failure_code IS NULL)=(initialization_failed_at IS NULL)),
+    CHECK(status='PROVISIONING' OR initialization_failure_code IS NULL)
+);
+
+CREATE TABLE control_tenant_authority (
+    tenant_id varchar(128) PRIMARY KEY REFERENCES control_tenants(tenant_id),
     revision bigint NOT NULL DEFAULT 0 CHECK (revision BETWEEN 0 AND 9007199254740991),
     authorization_epoch bigint NOT NULL DEFAULT 0 CHECK(authorization_epoch BETWEEN 0 AND 9007199254740991),
     directory_cache_generation bigint NOT NULL DEFAULT 0 CHECK(directory_cache_generation>=0)
 );
+
+CREATE TABLE control_tenant_hosts (
+    hostname varchar(253) PRIMARY KEY CHECK(hostname=lower(hostname) AND length(hostname)>0),
+    tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id)
+);
+CREATE INDEX control_tenant_hosts_owner ON control_tenant_hosts(tenant_id);
+CREATE TABLE control_tenant_identity_keys(
+    tenant_id varchar(128) NOT NULL,
+    purpose varchar(16) NOT NULL CHECK(purpose IN ('DISCOVERY','DEVICE_CA')),
+    key_id varchar(128) NOT NULL CHECK(length(key_id) BETWEEN 1 AND 128),
+    state varchar(16) NOT NULL CHECK(state IN ('ACTIVE','READ_ONLY','RETIRED')),
+    provider_reference varchar(512) NOT NULL,
+    public_material text NOT NULL CHECK(octet_length(public_material)<=16384),
+    key_fingerprint varchar(64) NOT NULL UNIQUE CHECK(key_fingerprint ~ '^[a-f0-9]{64}$'),
+    generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),
+    PRIMARY KEY(tenant_id,purpose,key_id)
+);
+CREATE UNIQUE INDEX control_tenant_identity_keys_active ON control_tenant_identity_keys(tenant_id,purpose) WHERE state='ACTIVE';
+CREATE FUNCTION control_tenant_identity_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'identity key retention requires explicit offboarding'; END IF;
+    IF NEW.tenant_id<>OLD.tenant_id OR NEW.purpose<>OLD.purpose OR NEW.key_id<>OLD.key_id OR
+       NEW.provider_reference<>OLD.provider_reference OR NEW.public_material<>OLD.public_material OR NEW.key_fingerprint<>OLD.key_fingerprint OR
+       NEW.generation<OLD.generation OR (OLD.state='RETIRED' AND NEW.state<>'RETIRED') THEN RAISE EXCEPTION 'invalid identity key transition'; END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER control_tenant_identity_key_guard BEFORE UPDATE OR DELETE ON control_tenant_identity_keys FOR EACH ROW EXECUTE FUNCTION control_tenant_identity_key_guard();
+GRANT SELECT ON control_tenant_identity_keys TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON control_tenant_identity_keys TO toolgate_control_platform;
+
+CREATE TABLE control_tenant_runtime_profiles(
+    tenant_id varchar(128) NOT NULL PRIMARY KEY,
+    server_id varchar(128) NOT NULL,
+    organization text NOT NULL CHECK(length(organization) BETWEEN 1 AND 256),
+    control_url text NOT NULL CHECK(octet_length(control_url)<=2048),
+    gateway_url text NOT NULL CHECK(octet_length(gateway_url)<=2048)
+);
+GRANT SELECT ON control_tenant_runtime_profiles TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON control_tenant_runtime_profiles TO toolgate_control_platform;
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_tenant_hosts TO toolgate_control_platform;
 
 CREATE TABLE control_idempotency (
     tenant_id varchar(128) NOT NULL,
@@ -65,7 +118,10 @@ CREATE TABLE control_record_ids (
 
 GRANT SELECT, INSERT ON control_record_ids TO toolgate_control_runtime;
 
-GRANT SELECT, INSERT, UPDATE ON control_tenants TO toolgate_control_runtime;
+GRANT USAGE ON SCHEMA public TO toolgate_control_platform;
+GRANT SELECT,INSERT,UPDATE ON control_tenants TO toolgate_control_platform;
+GRANT SELECT,UPDATE ON control_tenant_authority TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON control_tenant_authority TO toolgate_control_platform;
 
 GRANT SELECT, INSERT, DELETE ON control_idempotency TO toolgate_control_runtime;
 
@@ -175,10 +231,6 @@ CREATE TRIGGER control_builder_guard BEFORE UPDATE OR DELETE ON control_builder 
 
 GRANT SELECT,INSERT,UPDATE,DELETE ON control_builder TO toolgate_control_runtime;
 
-CREATE TABLE quickstart_vault(name TEXT PRIMARY KEY CHECK(length(name) BETWEEN 1 AND 128),cipher BYTEA NOT NULL CHECK(octet_length(cipher)<=32800));
-
-GRANT SELECT,INSERT,UPDATE ON quickstart_vault TO toolgate_control_runtime;
-
 CREATE TABLE control_endpoint_configurations (
     tenant_id varchar(128) NOT NULL,
     device_id varchar(128) NOT NULL,
@@ -268,9 +320,9 @@ CREATE TABLE control_enterprise_nonces(tenant_id varchar(128) NOT NULL,nonce var
 
 CREATE TABLE control_enterprise_adoptions(tenant_id varchar(128) NOT NULL,actor_type varchar(16) NOT NULL,actor_id varchar(128) NOT NULL,directory_revision bigint NOT NULL,snapshot_sequence bigint NOT NULL,graph_digest char(64) NOT NULL,observed_at bigint NOT NULL,PRIMARY KEY(tenant_id,actor_type,actor_id),authorization_epoch bigint NOT NULL DEFAULT 0);
 
-CREATE FUNCTION control_epoch_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.revision<OLD.revision OR NEW.authorization_epoch<OLD.authorization_epoch THEN RAISE EXCEPTION 'authorization cannot move backwards'; END IF; RETURN NEW; END $$;
+CREATE FUNCTION control_epoch_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id<>OLD.tenant_id OR NEW.revision<OLD.revision OR NEW.authorization_epoch<OLD.authorization_epoch OR NEW.directory_cache_generation<OLD.directory_cache_generation THEN RAISE EXCEPTION 'authorization cannot move backwards or change ownership'; END IF; RETURN NEW; END $$;
 
-CREATE TRIGGER control_epoch_guard BEFORE UPDATE ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_epoch_guard();
+CREATE TRIGGER control_epoch_guard BEFORE UPDATE ON control_tenant_authority FOR EACH ROW EXECUTE FUNCTION control_epoch_guard();
 
 GRANT SELECT,INSERT,UPDATE ON control_authorization_outbox,control_enterprise_invocations,control_enterprise_approvals,control_enterprise_nonces,control_enterprise_adoptions TO toolgate_control_runtime;
 
@@ -292,7 +344,35 @@ CREATE TABLE control_configuration_changes(tenant_id varchar(128) NOT NULL,chang
 
 GRANT SELECT,INSERT,UPDATE ON control_configuration_changes TO toolgate_control_runtime;
 
-CREATE TABLE control_secrets(tenant_id varchar(128) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,cipher text NOT NULL CHECK(octet_length(cipher)<=65536),PRIMARY KEY(tenant_id,name));
+CREATE TABLE control_tenant_vault_keys(
+    tenant_id varchar(128) NOT NULL,
+    version bigint NOT NULL CHECK(version BETWEEN 1 AND 1024),
+    state varchar(16) NOT NULL CHECK(state IN('ACTIVE','READ_ONLY','RETIRED')),
+    provider_reference varchar(128) NOT NULL,
+    wrapped_encryption_key text NOT NULL CHECK(octet_length(wrapped_encryption_key)<=1024),
+    wrapped_retry_key text NOT NULL CHECK(octet_length(wrapped_retry_key)<=1024),
+    PRIMARY KEY(tenant_id,version)
+);
+CREATE UNIQUE INDEX control_tenant_vault_keys_current ON control_tenant_vault_keys(tenant_id) WHERE state='ACTIVE';
+GRANT SELECT ON control_tenant_vault_keys TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON control_tenant_vault_keys TO toolgate_control_platform;
+CREATE FUNCTION control_vault_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'vault key retention requires explicit offboarding'; END IF;
+    IF NEW.version<>OLD.version OR NEW.tenant_id<>OLD.tenant_id OR OLD.state='RETIRED' OR
+       (NEW.state<>OLD.state AND NOT ((OLD.state='ACTIVE' AND NEW.state='READ_ONLY') OR (OLD.state='READ_ONLY' AND NEW.state='RETIRED'))) OR
+       (NEW.state='RETIRED' AND EXISTS(SELECT 1 FROM control_secrets WHERE tenant_id=OLD.tenant_id AND key_version=OLD.version))
+       THEN RAISE EXCEPTION 'invalid vault key transition'; END IF;
+    RETURN NEW;
+END $$;
+CREATE TABLE control_secrets(tenant_id varchar(128) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,version bigint NOT NULL CHECK(version BETWEEN 1 AND 9007199254740991),key_version bigint NOT NULL,cipher text NOT NULL CHECK(octet_length(cipher)<=65536),PRIMARY KEY(tenant_id,name),FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version));
+CREATE TRIGGER control_vault_key_guard BEFORE UPDATE OR DELETE ON control_tenant_vault_keys FOR EACH ROW EXECUTE FUNCTION control_vault_key_guard();
+CREATE FUNCTION control_secret_version_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.name<>OLD.name OR NEW.version<>OLD.version+1 THEN RAISE EXCEPTION 'invalid secret version transition'; END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER control_secret_version_guard BEFORE UPDATE ON control_secrets FOR EACH ROW EXECUTE FUNCTION control_secret_version_guard();
 
 GRANT SELECT,INSERT,UPDATE ON control_secrets TO toolgate_control_runtime;
 
@@ -471,12 +551,12 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON control_tool_host_dispatches TO toolgate_co
 CREATE FUNCTION control_invalidate_directory_cache() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     IF TG_OP <> 'INSERT' THEN
-        INSERT INTO control_tenants(tenant_id,revision,directory_cache_generation) VALUES(OLD.tenant_id,0,1)
-        ON CONFLICT(tenant_id) DO UPDATE SET directory_cache_generation=control_tenants.directory_cache_generation+1;
+        UPDATE public.control_tenant_authority SET directory_cache_generation=directory_cache_generation+1 WHERE tenant_id=OLD.tenant_id;
+        IF NOT FOUND THEN RAISE EXCEPTION 'tenant authority missing'; END IF;
     END IF;
     IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND NEW.tenant_id<>OLD.tenant_id) THEN
-        INSERT INTO control_tenants(tenant_id,revision,directory_cache_generation) VALUES(NEW.tenant_id,0,1)
-        ON CONFLICT(tenant_id) DO UPDATE SET directory_cache_generation=control_tenants.directory_cache_generation+1;
+        UPDATE public.control_tenant_authority SET directory_cache_generation=directory_cache_generation+1 WHERE tenant_id=NEW.tenant_id;
+        IF NOT FOUND THEN RAISE EXCEPTION 'tenant authority missing'; END IF;
     END IF;
     RETURN NULL;
 END;
@@ -529,3 +609,280 @@ CREATE TABLE control_package_provisioning(tenant_id varchar(128) NOT NULL,profil
     document text NOT NULL CHECK(octet_length(document)<=262144),PRIMARY KEY(tenant_id,profile_id));
 
 GRANT SELECT,INSERT,UPDATE ON control_package_provisioning TO toolgate_control_runtime;
+
+-- Registry access is available only through narrow helpers to tenant runtime.
+CREATE TABLE control_tenant_initializations(
+    tenant_id varchar(128) PRIMARY KEY REFERENCES control_tenants(tenant_id),
+    version integer NOT NULL CHECK(version=1),effective_digest char(64) NOT NULL CHECK(effective_digest ~ '^[a-f0-9]{64}$'),
+    provenance text NOT NULL CHECK(octet_length(provenance)<=65536),completed_at bigint NOT NULL CHECK(completed_at>=0)
+);
+GRANT SELECT ON control_tenant_initializations TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON control_tenant_initializations TO toolgate_control_platform;
+CREATE TRIGGER control_tenant_initializations_immutable BEFORE UPDATE OR DELETE ON control_tenant_initializations
+FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
+
+-- Fixed search paths and qualified tables prevent caller-controlled object resolution.
+CREATE FUNCTION control_tenant_admit(tenant text, write_lock boolean) RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE state text;
+BEGIN
+    IF tenant IS DISTINCT FROM NULLIF(current_setting('app.tenant_id',true),'') THEN RETURN false; END IF;
+    IF write_lock THEN
+        SELECT status INTO state FROM public.control_tenants WHERE tenant_id=tenant FOR SHARE;
+    ELSE
+        SELECT status INTO state FROM public.control_tenants WHERE tenant_id=tenant;
+    END IF;
+    RETURN COALESCE(state='ACTIVE',false);
+END;
+$$;
+
+CREATE FUNCTION control_tenant_access(write_lock boolean) RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE state text;
+BEGIN
+    IF write_lock THEN
+        SELECT status INTO state FROM public.control_tenants
+          WHERE tenant_id=NULLIF(current_setting('app.tenant_id',true),'') FOR SHARE;
+    ELSE
+        SELECT status INTO state FROM public.control_tenants
+          WHERE tenant_id=NULLIF(current_setting('app.tenant_id',true),'');
+    END IF;
+    RETURN COALESCE(state='ACTIVE' OR (state IS NOT NULL AND pg_has_role(session_user,'toolgate_control_platform','MEMBER')),false);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION control_tenant_admit(text,boolean),control_tenant_access(boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION control_tenant_admit(text,boolean),control_tenant_access(boolean) TO toolgate_control_runtime,toolgate_control_platform;
+
+CREATE FUNCTION control_tenant_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP='DELETE' OR NEW.tenant_id<>OLD.tenant_id THEN RAISE EXCEPTION 'tenant identity is immutable'; END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER control_tenant_identity_guard BEFORE UPDATE OR DELETE ON control_tenants
+FOR EACH ROW EXECUTE FUNCTION control_tenant_identity_guard();
+
+CREATE FUNCTION control_tenant_lifecycle_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.created_at<>OLD.created_at OR NEW.updated_at<OLD.updated_at OR (NEW.status<>OLD.status AND NOT (
+        (OLD.status='PROVISIONING' AND NEW.status='ACTIVE') OR (OLD.status='ACTIVE' AND NEW.status='SUSPENDED') OR
+        (OLD.status='SUSPENDED' AND NEW.status='ACTIVE'))) THEN RAISE EXCEPTION 'invalid tenant lifecycle transition'; END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER control_tenant_lifecycle_guard BEFORE UPDATE ON control_tenants
+FOR EACH ROW EXECUTE FUNCTION control_tenant_lifecycle_guard();
+
+-- Customer data is denied without the transaction-local context and current lifecycle.
+-- Keep this explicit list aligned with db/schema-ownership.json; CI rejects drift.
+-- BEGIN TENANT CAPACITY
+CREATE TABLE control_tenant_capacity(
+ tenant_id varchar(128) NOT NULL PRIMARY KEY,
+ stored_bytes bigint NOT NULL DEFAULT 0 CHECK(stored_bytes>=0),
+ stored_rows bigint NOT NULL DEFAULT 0 CHECK(stored_rows>=0),
+ queued_rows bigint NOT NULL DEFAULT 0 CHECK(queued_rows>=0),
+ max_stored_bytes bigint NOT NULL DEFAULT 1073741824 CHECK(max_stored_bytes BETWEEN 4096 AND 1099511627776),
+ max_stored_rows bigint NOT NULL DEFAULT 100000 CHECK(max_stored_rows BETWEEN 1 AND 1000000),
+ max_queued_rows bigint NOT NULL DEFAULT 256 CHECK(max_queued_rows BETWEEN 1 AND 100000),
+ CHECK(stored_rows<=max_stored_rows AND queued_rows<=max_queued_rows AND stored_bytes+queued_rows*16777216<=max_stored_bytes));
+
+GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_tenant_capacity TO toolgate_control_platform;
+
+CREATE FUNCTION control_capacity_seed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN INSERT INTO public.control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id);RETURN NEW;END;$$;
+REVOKE ALL ON FUNCTION control_capacity_seed() FROM PUBLIC;
+CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_capacity_seed();
+
+CREATE FUNCTION control_builder_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.kind='TEST' AND (NEW.document::jsonb->>'state') IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.kind='TEST' AND (OLD.document::jsonb->>'state') IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_builder_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_builder FOR EACH ROW EXECUTE FUNCTION control_builder_capacity();
+
+CREATE FUNCTION control_mcp_requests_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.record),0)+COALESCE(octet_length(NEW.task),0)+COALESCE(octet_length(NEW.result),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.record),0)+COALESCE(octet_length(OLD.task),0)+COALESCE(octet_length(OLD.result),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_mcp_requests_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_mcp_requests FOR EACH ROW EXECUTE FUNCTION control_mcp_requests_capacity();
+
+CREATE FUNCTION control_enterprise_invocations_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('PENDING','PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('PENDING','PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_enterprise_invocations_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_enterprise_invocations FOR EACH ROW EXECUTE FUNCTION control_enterprise_invocations_capacity();
+
+CREATE FUNCTION control_tool_host_dispatches_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_tool_host_dispatches_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_tool_host_dispatches FOR EACH ROW EXECUTE FUNCTION control_tool_host_dispatches_capacity();
+
+CREATE FUNCTION control_server_packages_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.content),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.content),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_server_packages_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_server_packages FOR EACH ROW EXECUTE FUNCTION control_server_packages_capacity();
+
+CREATE FUNCTION control_server_documents_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_server_documents_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_server_documents FOR EACH ROW EXECUTE FUNCTION control_server_documents_capacity();
+
+CREATE FUNCTION control_secrets_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.cipher),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.cipher),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_secrets_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_secrets FOR EACH ROW EXECUTE FUNCTION control_secrets_capacity();
+
+CREATE FUNCTION control_invocation_events_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_invocation_events_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_invocation_events FOR EACH ROW EXECUTE FUNCTION control_invocation_events_capacity();
+
+CREATE FUNCTION control_invocation_results_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.payload),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.payload),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_invocation_results_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_invocation_results FOR EACH ROW EXECUTE FUNCTION control_invocation_results_capacity();
+
+CREATE FUNCTION control_policy_bundles_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.policy),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.policy),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_policy_bundles_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_policy_bundles FOR EACH ROW EXECUTE FUNCTION control_policy_bundles_capacity();
+-- END TENANT CAPACITY
+
+DO $tenant_policies$
+DECLARE
+    tenant_table text;
+    operation text;
+BEGIN
+    FOREACH tenant_table IN ARRAY ARRAY[
+        'control_approval_clocks',
+        'control_audit',
+        'control_authorization_outbox',
+        'control_bootstrap_admins',
+        'control_builder',
+        'control_business_keys',
+        'control_configuration_changes',
+        'control_console_devices',
+        'control_credential_history',
+        'control_endpoint_configurations',
+        'control_endpoints',
+        'control_enrollments',
+        'control_enterprise_adoptions',
+        'control_enterprise_approvals',
+        'control_enterprise_invocations',
+        'control_enterprise_nonces',
+        'control_execution_budgets',
+        'control_fleet',
+        'control_idempotency',
+        'control_invocation_event_streams',
+        'control_invocation_events',
+        'control_invocation_results',
+        'control_mcp_requests',
+        'control_outcome_reconciliations',
+        'control_package_provisioning',
+        'control_policy_bundles',
+        'control_queued_authority',
+        'control_record_ids',
+        'control_records',
+        'control_recovery_floors',
+        'control_reviewed_recovery',
+        'control_secrets',
+        'control_server_deployments',
+        'control_server_documents',
+        'control_server_packages',
+        'control_server_settings',
+        'control_tool_host_dispatches',
+        'control_tool_hosts'
+        ,'control_tenant_authority'
+        ,'control_tenant_initializations'
+        ,'control_tenant_vault_keys'
+        ,'control_tenant_runtime_profiles'
+        ,'control_tenant_identity_keys'
+        ,'control_tenant_capacity'
+    ] LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
+        EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);
+        IF tenant_table NOT IN ('control_tenant_authority','control_tenant_initializations') THEN
+            EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id)', tenant_table,tenant_table || '_tenant_owner');
+        END IF;
+        EXECUTE format('CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.%I FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard()',tenant_table);
+        -- Table GRANTs still control the available operations. The restrictive
+        -- fence cannot be widened by an additional permissive policy.
+        EXECUTE format('CREATE POLICY tenant_access ON public.%I AS PERMISSIVE FOR ALL TO PUBLIC USING (true) WITH CHECK (true)', tenant_table);
+        EXECUTE format('CREATE POLICY tenant_fence ON public.%I AS RESTRICTIVE FOR ALL TO PUBLIC USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''') AND public.control_tenant_access(false)) WITH CHECK (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''') AND public.control_tenant_access(true))', tenant_table);
+        FOREACH operation IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE'] LOOP
+            IF has_table_privilege('toolgate_control_runtime',format('public.%I',tenant_table),operation) THEN
+                EXECUTE format('GRANT %s ON public.%I TO toolgate_control_platform',operation,tenant_table);
+            END IF;
+        END LOOP;
+    END LOOP;
+END;
+$tenant_policies$;

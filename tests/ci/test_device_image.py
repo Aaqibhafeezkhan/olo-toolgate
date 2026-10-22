@@ -88,6 +88,18 @@ class DeviceImageTests(unittest.TestCase):
                 patch.object(device.STOP, 'wait', side_effect=lambda _: device.STOP.set()):
             self.assertIsNone(module.select_gateway(['https://gateway.example'], Mock()))
 
+    def test_readiness_accepts_only_the_v2_signed_discovery_envelope(self):
+        def opener(document):
+            response = Mock(status=200)
+            response.read.return_value = json.dumps(document).encode()
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+            return Mock(open=Mock(return_value=response))
+        self.assertTrue(module.ready(opener({'jws': 'header.payload.signature'}), 'https://gateway.example'))
+        for document in ({'signature': 'v1'}, {'jws': 'not-compact'}, {'jws': 1}, ['jws']):
+            with self.subTest(document=document):
+                self.assertFalse(module.ready(opener(document), 'https://gateway.example'))
+
     def test_redirects_are_not_followed(self):
         self.assertIsNone(module.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://other.example'))
 

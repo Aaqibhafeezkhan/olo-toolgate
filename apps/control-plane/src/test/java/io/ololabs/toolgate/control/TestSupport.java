@@ -8,6 +8,13 @@ import java.util.*;
 
 /** Explicit reviewed group graph for storage/enrollment tests; never a runtime authorization bypass. */
 final class TestSupport {
+    /** Explicit raw-SQL fixture boundary; the application uses PostgresStore.transaction. */
+    static void scope(java.sql.Connection connection, Ids.TenantId tenant) throws java.sql.SQLException {
+        connection.setAutoCommit(false);
+        try (var statement = connection.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+            statement.setString(1, tenant.value()); statement.execute();
+        }
+    }
     static DirectoryService.Actor seed(Store store,Codec codec,Ids.TenantId tenant,String user) {
         store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());GroupGraph.defaults(entries,codec);
             put(entries,codec,Ids.Kind.USER,new ControlUser(user,"Reviewed administrator",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,user);

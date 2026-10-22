@@ -6,6 +6,14 @@
   "control": {
     "url": "https://control.example.com",
     "tokenPath": "/run/secrets/gateway-service-token",
-    "developmentLoopbackHttp": false
+    "developmentLoopbackHttp": false,
+    "tenantId": "10000000-0000-4000-8000-000000000001"
+  },
+  "tenantHosts": [
+    "gateway.example.com"
+  ],
+  "publicDiscovery": {
+    "controlOrigin": "https://control.example.com",
+    "gatewayOrigin": "https://gateway.example.com"
   }
 }

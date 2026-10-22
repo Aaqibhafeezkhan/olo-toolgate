@@ -1,5 +1,13 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+pluginManagement {
+    repositories {
+        // Quarkus plugin dependencies are published directly to Maven Central.
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = "olo-toolgate"
 
 include(":sdk-json")

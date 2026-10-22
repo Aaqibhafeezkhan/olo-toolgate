@@ -37,9 +37,13 @@ the public code and key fingerprint in the browser. The enroller's signed IdP
 token needs the `toolgate-enroller` role, `tenant_id`, and an enabled `user_id`.
 The browser never receives the device code or private key.
 
-The protected service discovers its configured HTTPS origin, verifies its signed
-discovery document, generates a P-256 key locally and submits a signed PKCS#10
-request. Control verifies possession, binds the key to the approved user/device,
+Installer setup verifies v2 discovery over authenticated HTTPS and persists `tenantId`
+with the canonical Control origin. Setup also accepts `--tenant-id <canonical-UUID>`
+as an optional assertion. Browser setup always carries its verified UUID into the elevated
+installer; a fresh HTTPS discovery fetch must still match before installation writes state.
+The protected service anchors this configuration
+and generates a P-256 key locally. Verified v2 discovery and its key ring are persisted before enrollment;
+the service then submits a signed PKCS#10 request. Control verifies possession, binds the key to the approved user/device,
 and signs a client-only certificate for at most 24 hours. Heartbeats renew it
 when less than 12 hours remain. The active device and owner are checked on every
 check-in. Administrative revocation blocks protected access and renewal. Revoked
@@ -102,7 +106,10 @@ second polling limit. Existing Control readiness/metrics and HA remain in use.
 Uninstall stops/removes the OS service and retains identity by default.
 `uninstall --purge` explicitly deletes only the fixed protected identity/state files.
 Documents outside the fixed state directory are preserved. A complete installer
-purge removes local data inside that directory and retains only the device key.
+purge removes local data and the device key inside that directory. A new organization
+gets a new key after explicit purge. The service journal uses format version 2 and
+binds one configured origin and one verified tenant UUID; unsupported pre-release
+state is rejected unchanged. Saved background profiles are never connected.
 Revoke the identity in Control before retiring a machine. A failed partial
 installation requires administrator recovery of the fixed service/config paths;
 partial installation repair may require administrator action. Current clients
@@ -137,7 +144,7 @@ including `unins001.exe` after reinstall. Cleanup starts after confirmation;
 cancelling preserves the tray and service. Removal waits for the service to stop
 and disappear from SCM before deleting the fixed runtime/config files. Retrying
 after partial cleanup tolerates already absent files/services. Installer uninstall
-purges all gateway enrollments and local data while preserving the device key.
+purges tenant enrollment, local data and the device key.
 Failures appear in the installer/tray instead of silently doing nothing.
 
 The protected service and user-session tray have separate lifetimes. A connected

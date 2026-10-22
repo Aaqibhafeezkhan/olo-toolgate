@@ -40,7 +40,7 @@ final class PolicyBundleTest {
     }
     @Test void compilerIsDeterministicAndGroupSnapshotDoesNotFlattenIndividuals() {
         var entries=new HashMap<Ids.RecordId,Directory.Entry>();GroupGraph.defaults(entries,codec);
-        var directory=new Directory(0,entries);var compiler=new PolicyCompiler(codec);var tenant=new Ids.TenantId("tenant");
+        var directory=new Directory(0,entries);var compiler=new PolicyCompiler(codec);var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("tenant");
         assertEquals(compiler.compile(tenant,directory),compiler.compile(tenant,new Directory(0,new TreeMap<>(Comparator.comparing(Object::toString)){{putAll(entries);}})));
         var snapshot=codec.model(compiler.compile(tenant,directory),ControlSnapshot.class);
         assertEquals(2L,snapshot.formatVersion());assertTrue(snapshot.grants().isEmpty());
@@ -77,8 +77,8 @@ final class PolicyBundleTest {
         assertEquals(0,flyway.migrate().migrationsExecuted);
         flyway.validate();
         var source=new org.postgresql.ds.PGSimpleDataSource(); source.setURL(url);source.setUser("control_app");source.setPassword(password);
-        var store=new PostgresStore(source,codec); var directory=new DirectoryService(store,codec,512,1048576);
-        var actor=TestSupport.seed(store,codec,new Ids.TenantId("bundle-tenant"),"root");
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec); var directory=new DirectoryService(store,codec,512,1048576);
+        var actor=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("bundle-tenant"),"root");
         var keys=keys(); var service=new BundleService(store,codec,signer(keys,"bundle-key"),"control","gateway",clock);
         assertThrows(Failure.class,()->service.current(actor));
         directory.mutate(actor,Ids.Kind.USER,"alice","CREATE",DomainTest.user("alice",1),0,"user","req");
@@ -97,7 +97,7 @@ final class PolicyBundleTest {
         var third=rotation.publish(actor,publish(2,2,1L),"rollback","req"); var payload=verify(third.body(),rotated);
         assertEquals(3,payload.sequence());assertEquals(1,payload.rollbackOf());assertEquals(verify(second.body(),keys).graphBase64(),payload.graphBase64());
         assertEquals(second.body(),service.get(actor,2).body());
-        var other=new DirectoryService.Actor(new Ids.TenantId("other"),actor.id(),true);assertThrows(Failure.class,()->service.get(other,1));
+        var other=new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),actor.id(),true);assertThrows(Failure.class,()->service.get(other,1));
         var failing=new BundleService(store,codec,p->{throw Failure.unavailable();},"control","gateway",clock);
         assertThrows(Failure.class,()->failing.publish(actor,publish(2,3,null),"failure","req"));assertEquals(3,service.current(actor).revision());
         try(var connection=source.getConnection();var statement=connection.createStatement()) {
@@ -112,8 +112,11 @@ final class PolicyBundleTest {
             statement.execute("ALTER TABLE control_audit DROP CONSTRAINT bundle_audit_failure");
         }
         assertEquals(4,service.publish(actor,publish(2,3,null),"failure","req").revision());
-        try(var connection=source.getConnection();var statement=connection.createStatement();var rows=statement.executeQuery("SELECT count(*) FROM control_audit WHERE operation LIKE 'BUNDLE_%' AND revision=2")) {
-            rows.next();assertEquals(4,rows.getLong(1));
+        try(var connection=source.getConnection();var statement=connection.createStatement()) {
+            TestSupport.scope(connection, actor.tenant());
+            try(var rows=statement.executeQuery("SELECT count(*) FROM control_audit WHERE operation LIKE 'BUNDLE_%' AND revision=2")) {
+                rows.next();assertEquals(4,rows.getLong(1));
+            }
         }
         assertThrows(Failure.class,()->service.publish(actor,publish(0,4,null),"stale-directory","req"));
         assertThrows(Failure.class,()->service.publish(actor,publish(2,4,5L),"future-rollback","req"));

@@ -40,6 +40,10 @@ def helm_checks():
         if rendered.stdout.strip(): raise SystemExit('Disabled chart emitted resources')
     base = ['--set','gateway.enabled=true','--set','gateway.credentialsSecret=gateway-runtime',
             '--set','gateway.control.tokenSecret=gateway-authority',
+            '--set','gateway.control.url=https://control.gateway.example.invalid',
+            '--set','gateway.publicOrigin=https://gateway.example.invalid',
+            '--set','gateway.control.tenantId=10000000-0000-4000-8000-000000000001',
+            '--set','gateway.config.tenantHosts[0]=gateway.example.invalid',
             '--set','gateway.networkPolicy.controlTo[0].podSelector.matchLabels.app=control',
             '--set',r'gateway.networkPolicy.dnsTo[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=kube-system']
     variants = {
@@ -64,7 +68,9 @@ def helm_checks():
                 raise SystemExit('Gateway security defaults weakened')
             if {p['containerPort'] for p in container['ports']} != {8081,9091}: raise SystemExit('Wrong ports')
             config = json.loads(next(d for d in docs if d['kind'] == 'ConfigMap')['data']['gateway.json'])
-            if not config['trustedTlsProxy'] or set(config)!={'listen','managementListen','trustedTlsProxy','allowedOrigins','limits','control'}: raise SystemExit('Closed online authority configuration required')
+            if not config['trustedTlsProxy'] or set(config)!={'listen','managementListen','trustedTlsProxy','allowedOrigins','limits','control','tenantHosts','publicDiscovery'}: raise SystemExit('Closed online authority configuration required')
+            if config['publicDiscovery'] != {'controlOrigin':config['control']['url'], 'gatewayOrigin':'https://gateway.example.invalid'}:
+                raise SystemExit('Public discovery must bind the configured Control and Gateway origins')
             if config['control']['tokenPath']!='/etc/toolgate/control-auth/access-token' or config['control']['developmentLoopbackHttp']:raise SystemExit('Protected service authority required')
             if any(v['name'] in ('permit-signing','bundle-keys','approval-auth') for v in pod['volumes']):raise SystemExit('Gateway cannot hold effect signing custody')
             monitor = next((d for d in docs if d['kind'] == 'ServiceMonitor'), None)

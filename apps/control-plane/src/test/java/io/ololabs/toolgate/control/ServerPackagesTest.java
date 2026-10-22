@@ -115,8 +115,8 @@ final class ServerPackagesTest {
     }
 
     @Test void aToolHostPermitIsRefusedForAClientToolEvenWhenTheRequestIsForged() throws Exception {
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("forged.sqlite")), codec);
-        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("forged.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
         var operations = new EnterpriseOperations(store, codec, null, java.time.Clock.systemUTC(), "control", "toolgate-client", 60000, 256);
         var packages = new ServerPackages(store, codec, operations, java.time.Clock.systemUTC());
         String digest = node(packages.upload(actor, zip(mixed()), "upload-mixed").body()).get("packageDigest").asText();
@@ -147,8 +147,8 @@ final class ServerPackagesTest {
     }
 
     @Test void clientOnlyPackagesCannotBeDeployedToServerHosts() throws Exception {
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("client-package.sqlite")), codec);
-        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("client-package.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
         var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
         String digest = node(packages.upload(actor, zip(files(false, "CLIENT")), "upload-client").body()).get("packageDigest").asText();
         assertEquals(422, assertThrows(Failure.class, () -> packages.deploy(actor,
@@ -157,8 +157,8 @@ final class ServerPackagesTest {
     }
 
     @Test void deploymentWritesDisabledToolsAndTheHostFetchesThem() throws Exception {
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("packages.sqlite")), codec);
-        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("packages.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
         var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
         var files = files(); byte[] data = zip(files);
         var uploaded = packages.upload(actor, data, "request-1");
@@ -220,8 +220,8 @@ final class ServerPackagesTest {
     }
 
     @Test void aDeploymentRunsOnTheHostsItNamesAndHostsFetchRelayedCalls() throws Exception {
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("targets.sqlite")), codec);
-        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("targets.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
         var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
         String digest = node(packages.upload(actor, zip(files()), "request-1").body()).get("packageDigest").asText();
         var hosts = new HashMap<String, EndpointDeviceRecord>();

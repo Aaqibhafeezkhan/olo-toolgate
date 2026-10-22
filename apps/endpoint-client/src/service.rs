@@ -3,11 +3,14 @@
 //! Durable identity/check-in state machine. Only this protected process owns network credentials.
 use crate::{
     config::Config,
-    identity::{verify_discovery, verify_identity, DeviceKey},
+    identity::{verify_tenant_identity as verify_identity, DeviceKey},
     storage::{ProtectedStore, ServiceLease},
     transport::ControlPort,
     Failure, Result,
 };
+#[cfg(test)]
+use olo_toolgate_contracts::v2::SignedTenantDiscovery;
+use olo_toolgate_contracts::v2::TenantDiscovery;
 use olo_toolgate_contracts::*;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Instant};
@@ -15,7 +18,11 @@ use std::{sync::Arc, time::Instant};
 #[derive(Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Journal {
-    manifest: Option<ClientDiscovery>,
+    format_version: u64,
+    server_url: String,
+    tenant_id: Option<String>,
+    manifest: Option<TenantDiscovery>,
+    discovery_trust: Option<crate::discovery::Trust>,
     challenge: Option<EndpointEnrollmentChallenge>,
     identity: Option<DeviceIdentity>,
     sequence: u64,
@@ -82,27 +89,110 @@ fn local_authorization(
     })
 }
 
+fn read_journal(config: &Config, store: &ProtectedStore) -> Result<Journal> {
+    let journal: Journal = match store.read("journal.json")? {
+        Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| Failure::Validation)?,
+        None => {
+            if store.read("device-key")?.is_some() {
+                return Err(Failure::Validation);
+            }
+            Journal {
+                format_version: 3,
+                server_url: crate::config::origin(&config.server_url)?,
+                tenant_id: config.tenant_id.clone(),
+                ..Journal::default()
+            }
+        }
+    };
+    if journal.format_version != 3 {
+        return Err(Failure::Validation);
+    }
+    if journal.server_url != crate::config::origin(&config.server_url)? {
+        return Err(Failure::TenantMismatch);
+    }
+    if config
+        .tenant_id
+        .as_ref()
+        .is_some_and(|tenant| journal.tenant_id.as_ref() != Some(tenant))
+    {
+        return Err(Failure::TenantMismatch);
+    }
+    if let Some(tenant) = &journal.tenant_id {
+        crate::contracts::Contracts::shared()?.encode("TenantUuid", tenant)?;
+        if journal
+            .manifest
+            .as_ref()
+            .is_some_and(|manifest| &manifest.tenant_id != tenant)
+        {
+            return Err(Failure::TenantMismatch);
+        }
+    } else if journal.manifest.is_some()
+        || journal.identity.is_some()
+        || journal.challenge.is_some()
+    {
+        return Err(Failure::Validation);
+    }
+    if (journal.identity.is_some() || journal.challenge.is_some())
+        && store.read("device-key")?.is_none()
+    {
+        return Err(Failure::Validation);
+    }
+    if journal.manifest.is_some() != journal.discovery_trust.is_some() {
+        return Err(Failure::Validation);
+    }
+    if let (Some(manifest), Some(trust)) = (&journal.manifest, &journal.discovery_trust) {
+        crate::contracts::Contracts::shared()?.encode("TenantDiscovery", manifest)?;
+        if trust.tenant_id != manifest.tenant_id
+            || trust.version != manifest.key_set_version
+            || trust.issued_at != manifest.issued_at_unix_ms
+            || serde_json::to_value(&trust.keys).map_err(|_| Failure::Validation)?
+                != serde_json::to_value(&manifest.discovery_keys)
+                    .map_err(|_| Failure::Validation)?
+        {
+            return Err(Failure::Validation);
+        }
+    }
+    if let Some(manifest) = &journal.manifest {
+        if crate::config::origin(&manifest.control_url)?
+            != crate::config::origin(&config.server_url)?
+        {
+            return Err(Failure::TenantMismatch);
+        }
+    }
+    Ok(journal)
+}
+pub(crate) fn validate_saved_binding(config: &Config, store: &ProtectedStore) -> Result<()> {
+    read_journal(config, store).map(|_| ())
+}
+pub(crate) fn saved_console_audience(config: &Config, origin: &str) -> Result<bool> {
+    if !config.state_directory.exists() {
+        return Ok(false);
+    }
+    let store = ProtectedStore::open(config.state_directory.clone())?;
+    Ok(read_journal(config, &store)?
+        .manifest
+        .is_some_and(|manifest| manifest.audiences.iter().any(|audience| audience == origin)))
+}
+
 impl ClientService {
     pub fn open(
         config: Config,
         store: ProtectedStore,
-        key: Arc<DeviceKey>,
-        control: Arc<dyn ControlPort>,
+        connect: impl FnOnce(Arc<DeviceKey>) -> Result<Arc<dyn ControlPort>>,
     ) -> Result<Self> {
         config.validate()?;
         let lease = store.lease()?;
-        let journal: Journal = match store.read("journal.json")? {
-            Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| Failure::Validation)?,
-            None => Journal::default(),
-        };
+        let journal = read_journal(&config, &store)?;
         let observed = crate::now().max(journal.observed_time);
-        if let Some(manifest) = &journal.manifest {
-            if crate::config::origin(&manifest.control_url)?
-                != crate::config::origin(&config.server_url)?
-            {
-                return Err(Failure::Unauthorized);
-            }
+        // Persist the initial origin anchor under the service lease before generating a key.
+        // Unsupported or foreign state above is never rewritten or adopted.
+        if store.read("journal.json")?.is_none() {
+            store.write(
+                "journal.json",
+                &serde_json::to_vec(&journal).map_err(|_| Failure::Validation)?,
+            )?;
         }
+        let key = Arc::new(DeviceKey::load_or_create(&store)?);
         if let (Some(identity), Some(manifest)) = (&journal.identity, &journal.manifest) {
             verify_identity(
                 identity,
@@ -115,6 +205,10 @@ impl ClientService {
         if (journal.identity.is_some() || journal.challenge.is_some()) && journal.manifest.is_none()
         {
             return Err(Failure::Validation);
+        }
+        let control = connect(key.clone())?;
+        if let Some(tenant) = &journal.tenant_id {
+            control.bind_tenant(tenant)?;
         }
         let state = if journal.revoked {
             EndpointState::Revoked
@@ -475,22 +569,53 @@ impl ClientService {
     fn device(&self) -> String {
         format!("device-{}", &self.key.fingerprint()[..32])
     }
+    /// Protected installation binding; callers must authorize console context first.
+    pub fn tenant_id(&self) -> Option<&str> {
+        self.journal.tenant_id.as_deref()
+    }
+    /// Checked inside the service lock before any console-scoped health, enrollment or proof.
+    pub fn authorize_console(
+        &self,
+        console_url: &str,
+        expected_tenant: Option<&str>,
+    ) -> Result<()> {
+        let origin = crate::browser::console_origin(console_url)?;
+        let signed_audience = self.journal.manifest.as_ref().is_some_and(|manifest| {
+            manifest
+                .audiences
+                .iter()
+                .any(|audience| audience == &origin)
+        });
+        if !signed_audience {
+            crate::browser::authorize_console(&self.config, console_url)?;
+        }
+        if let Some(expected) = expected_tenant {
+            crate::contracts::Contracts::shared()?.encode("TenantUuid", &expected)?;
+            if self.journal.tenant_id.as_deref() != Some(expected) {
+                return Err(Failure::TenantMismatch);
+            }
+        }
+        Ok(())
+    }
     pub fn console_device_proof(
         &self,
         console_url: &str,
         nonce: &str,
     ) -> Result<ConsoleDeviceProof> {
+        self.authorize_console(console_url, None)?;
         let origin = crate::browser::console_origin(console_url)?;
         let local = self
             .config
             .local_console_url
             .as_ref()
             .map(|url| url.trim_end_matches('/').to_owned());
-        let verified =
-            self.journal.manifest.as_ref().and_then(|manifest| {
-                crate::browser::console_origin(&manifest.verification_uri).ok()
-            });
-        if local.as_ref() != Some(&origin) && verified.as_ref() != Some(&origin) {
+        let verified = self.journal.manifest.as_ref().is_some_and(|manifest| {
+            manifest
+                .audiences
+                .iter()
+                .any(|audience| audience == &origin)
+        });
+        if local.as_ref() != Some(&origin) && !verified {
             return Err(Failure::Unauthorized);
         }
         Ok(ConsoleDeviceProof {
@@ -680,24 +805,7 @@ impl ClientService {
                 return Ok(self.prompt(challenge));
             }
         }
-        let envelope = self.control.discovery().await?;
-        // Signed issuance occurs after the outgoing request. Validate against receipt time.
-        let now = self.clock()?;
-        let pin = self
-            .journal
-            .manifest
-            .as_ref()
-            .map(|m| {
-                crate::identity::certificate_der(&m.issuer_certificate_pem)
-                    .map(|b| crate::digest(&b))
-            })
-            .transpose()?;
-        let manifest = verify_discovery(
-            &envelope,
-            &crate::config::origin(&self.config.server_url)?,
-            now,
-            pin.as_deref(),
-        )?;
+        let manifest = self.refresh_discovery().await?;
         let request = self.announcement()?;
         let challenge = if requested_sequence.is_some() {
             self.control.request_approval(request).await?
@@ -722,6 +830,68 @@ impl ClientService {
         self.state = EndpointState::Pending;
         self.save()?;
         Ok(self.prompt(&challenge))
+    }
+    async fn refresh_discovery(&mut self) -> Result<TenantDiscovery> {
+        let envelope = self.control.discovery().await?;
+        let now = self.clock()?;
+        let origin = crate::config::origin(&self.config.server_url)?;
+        let verified = if let Some(tenant) = self.journal.tenant_id.as_deref() {
+            let bytes = crate::contracts::Contracts::shared()?
+                .encode("SignedTenantDiscovery", &envelope)?;
+            olo_toolgate_tenant_identity::verify_https_refresh(
+                &bytes,
+                &origin,
+                tenant,
+                self.journal.discovery_trust.as_ref(),
+                now,
+            )
+            .map_err(Failure::from)?
+        } else {
+            crate::discovery::verify(&envelope, &origin, None, None, now)?
+        };
+        if verified.manifest.control_url != origin {
+            return Err(Failure::TenantMismatch);
+        }
+        self.bind_discovery(&verified.manifest, &verified.trust)?;
+        Ok(verified.manifest)
+    }
+    async fn refresh_for_identity(&mut self, identity: &DeviceIdentity) -> Result<()> {
+        if self.journal.manifest.as_ref().is_none_or(|manifest| {
+            !manifest
+                .device_authorities
+                .iter()
+                .any(|authority| authority.certificate_pem == identity.issuer_certificate_pem)
+        }) {
+            self.refresh_discovery().await?;
+        }
+        Ok(())
+    }
+    /// Called only after cryptographic discovery verification, before requesting enrollment.
+    fn bind_discovery(
+        &mut self,
+        manifest: &TenantDiscovery,
+        trust: &crate::discovery::Trust,
+    ) -> Result<()> {
+        crate::contracts::Contracts::shared()?.encode("TenantUuid", &manifest.tenant_id)?;
+        if self
+            .journal
+            .tenant_id
+            .as_ref()
+            .is_some_and(|tenant| tenant != &manifest.tenant_id)
+        {
+            return Err(Failure::TenantMismatch);
+        }
+        self.control.bind_tenant(&manifest.tenant_id)?;
+        if trust.tenant_id != manifest.tenant_id
+            || trust.version != manifest.key_set_version
+            || trust.issued_at != manifest.issued_at_unix_ms
+        {
+            return Err(Failure::Validation);
+        }
+        self.journal.discovery_trust = Some(trust.clone());
+        self.journal.tenant_id = Some(manifest.tenant_id.clone());
+        self.journal.manifest = Some(manifest.clone());
+        self.save()
     }
     fn announcement(&self) -> Result<EndpointEnrollmentStart> {
         Ok(EndpointEnrollmentStart {
@@ -784,6 +954,14 @@ impl ClientService {
     }
     async fn tick_inner(&mut self) -> Result<()> {
         let now = self.clock()?;
+        if self
+            .journal
+            .manifest
+            .as_ref()
+            .is_some_and(|manifest| manifest.expires_at_unix_ms <= now.saturating_add(60000))
+        {
+            self.refresh_discovery().await?;
+        }
         // Presence continues in every local state. Only Control decides the next action.
         let directive = self.control.ping(self.presence()?).await?;
         if directive.device_id != self.device()
@@ -850,6 +1028,7 @@ impl ClientService {
             match result.state {
                 EnrollmentState::Consumed => {
                     let identity = result.identity.ok_or(Failure::Unauthorized)?;
+                    self.refresh_for_identity(&identity).await?;
                     let manifest = self
                         .journal
                         .manifest
@@ -949,6 +1128,8 @@ impl ClientService {
         self.check_in_interval_ms = interval_ms;
         self.remember_server_name(ack.server_name.as_deref());
         if let Some(identity) = ack.identity {
+            self.refresh_for_identity(&identity).await?;
+            let now = self.clock()?;
             verify_identity(
                 &identity,
                 self.journal
@@ -1108,6 +1289,7 @@ mod tests {
         revoked: AtomicBool,
         deleted: AtomicBool,
         blocked: AtomicBool,
+        tenant_mismatch: AtomicBool,
         authorizations: AtomicU64,
         deadline: AtomicU64,
         interval_ms: AtomicU64,
@@ -1161,7 +1343,7 @@ mod tests {
                 Ok(value)
             })
         }
-        fn discovery(&self) -> Call<'_, SignedClientDiscovery> {
+        fn discovery(&self) -> Call<'_, SignedTenantDiscovery> {
             Box::pin(async { Err(Failure::Unsupported) })
         }
         fn start(&self, _: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge> {
@@ -1195,6 +1377,9 @@ mod tests {
                 }
                 if self.blocked.load(Ordering::SeqCst) {
                     return Err(Failure::Unavailable);
+                }
+                if self.tenant_mismatch.load(Ordering::SeqCst) {
+                    return Err(Failure::TenantMismatch);
                 }
                 Ok(EndpointCheckInAck {
                     device_id: report.report.device_id,
@@ -1243,8 +1428,8 @@ mod tests {
             crate::identity::nonce().unwrap()
         ));
         let store = ProtectedStore::open(directory.clone()).unwrap();
-        let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
         let config = Config {
+            tenant_id: None,
             deployment: None,
             execution: None,
             gateway: None,
@@ -1283,13 +1468,14 @@ mod tests {
             revoked: AtomicBool::new(false),
             deleted: AtomicBool::new(false),
             blocked: AtomicBool::new(false),
+            tenant_mismatch: AtomicBool::new(false),
             authorizations: AtomicU64::new(0),
             deadline: AtomicU64::new(crate::now() + 29000),
             interval_ms: AtomicU64::new(500),
             consumption: std::sync::Mutex::new(None),
             reports: std::sync::Mutex::new(vec![]),
         });
-        let service = ClientService::open(config, store, key, gateway.clone()).unwrap();
+        let service = ClientService::open(config, store, |_| Ok(gateway.clone())).unwrap();
         (service, gateway, directory)
     }
     #[test]
@@ -1314,6 +1500,134 @@ mod tests {
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn console_scope_requires_the_configured_origin_and_verified_uuid_without_changing_binding() {
+        let (mut service, gateway, directory) = test_service();
+        let allowed = format!("{}/console/", service.config.server_url);
+        assert_eq!(service.authorize_console(&allowed, None), Ok(()));
+        assert_eq!(
+            service.authorize_console("https://foreign.example/console/", None),
+            Err(Failure::TenantMismatch)
+        );
+        let tenant = "10000000-0000-4000-8000-000000000001";
+        assert_eq!(
+            service.authorize_console(&allowed, Some(tenant)),
+            Err(Failure::TenantMismatch)
+        );
+        let mut manifest = tenant_manifest();
+        manifest.tenant_id = tenant.into();
+        service.journal.manifest = Some(manifest);
+        service.journal.tenant_id = Some(tenant.into());
+        assert_eq!(service.authorize_console(&allowed, Some(tenant)), Ok(()));
+        assert_eq!(
+            service.authorize_console(&allowed, Some("10000000-0000-4000-8000-000000000002")),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(service.journal.manifest.as_ref().unwrap().tenant_id, tenant);
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn scoped_console_health_exposes_only_its_verified_tenant_uuid() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut service, _, directory) = test_service();
+        let tenant = "10000000-0000-4000-8000-000000000001";
+        let console = format!("{}/console/", service.config.server_url);
+        service.journal.tenant_id = Some(tenant.into());
+        let activity = service.activity.clone();
+        let service = std::sync::Arc::new(tokio::sync::Mutex::new(service));
+        let contracts = crate::contracts::Contracts::shared().unwrap();
+        let request = olo_toolgate_contracts::v2::ConsoleClientRequest {
+            kind: "console-tenant-state".into(),
+            request_id: "tenant-health".into(),
+            operation: olo_toolgate_contracts::v2::ConsoleClientOperation::Health,
+            console_url: console,
+            expected_tenant_id: Some(tenant.into()),
+        };
+        let bytes = contracts.encode("ConsoleClientRequest", &request).unwrap();
+        let (mut stream, mut peer) = tokio::io::duplex(16384);
+        peer.write_u32(bytes.len() as u32).await.unwrap();
+        peer.write_all(&bytes).await.unwrap();
+        crate::ipc::connection(
+            &mut stream,
+            "console",
+            &["console".into()],
+            &service,
+            contracts,
+            &activity,
+        )
+        .await
+        .unwrap();
+        let size = peer.read_u32().await.unwrap();
+        let mut bytes = vec![0; size as usize];
+        peer.read_exact(&mut bytes).await.unwrap();
+        let reply: olo_toolgate_contracts::v2::ConsoleClientResponse =
+            contracts.decode("ConsoleClientResponse", &bytes).unwrap();
+        assert_eq!(reply.tenant_id.as_deref(), Some(tenant));
+        assert!(reply.error.is_none() && reply.health.is_some());
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .len(),
+            3
+        );
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn verified_discovery_cannot_replace_owner_after_reset_or_restart() {
+        let (mut service, gateway, directory) = test_service();
+        let mut manifest = tenant_manifest();
+        manifest.tenant_id = "10000000-0000-4000-8000-000000000001".into();
+        manifest.control_url = service.config.server_url.clone();
+        service
+            .bind_discovery(&manifest, &tenant_trust(&manifest))
+            .unwrap();
+        service.reset_enrollment();
+        service.save().unwrap();
+        let config = service.config.clone();
+        let before = service.store.read("journal.json").unwrap().unwrap();
+        let key = service.key.fingerprint();
+        manifest.tenant_id = "10000000-0000-4000-8000-000000000002".into();
+        assert_eq!(
+            service.bind_discovery(&manifest, &tenant_trust(&manifest)),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(service.store.read("journal.json").unwrap().unwrap(), before);
+        drop(service);
+        let store = ProtectedStore::open(directory.clone()).unwrap();
+        let mut restarted = ClientService::open(config, store, |_| Ok(gateway.clone())).unwrap();
+        assert_eq!(restarted.key.fingerprint(), key);
+        assert_eq!(
+            restarted.bind_discovery(&manifest, &tenant_trust(&manifest)),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(
+            restarted.store.read("journal.json").unwrap().unwrap(),
+            before
+        );
+        assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
+        drop(restarted);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    fn tenant_manifest() -> TenantDiscovery {
+        let fixtures: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/contracts/v2/valid.json"
+        ))
+        .unwrap();
+        serde_json::from_value(fixtures["TenantDiscovery"].clone()).unwrap()
+    }
+    fn tenant_trust(manifest: &TenantDiscovery) -> crate::discovery::Trust {
+        crate::discovery::Trust {
+            tenant_id: manifest.tenant_id.clone(),
+            version: manifest.key_set_version,
+            keys: manifest.discovery_keys.clone(),
+            issued_at: manifest.issued_at_unix_ms,
+        }
     }
     fn fixtures() -> serde_json::Value {
         serde_json::from_str(include_str!(
@@ -1395,6 +1709,37 @@ mod tests {
         service.tick().await.unwrap();
         assert_eq!(service.journal.sequence, 1);
         assert!(service.journal.pending_report.is_none());
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[tokio::test]
+    async fn tenant_mismatch_keeps_the_bound_identity_and_report_for_the_correct_gateway() {
+        let (mut service, gateway, directory) = test_service();
+        let mut identity: DeviceIdentity =
+            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
+        identity.expires_at_unix_ms = crate::now() + 60000;
+        let tenant = identity.tenant_id.clone();
+        let device = identity.device_id.clone();
+        let fingerprint = service.key.fingerprint();
+        service.journal.identity = Some(identity);
+        gateway.tenant_mismatch.store(true, Ordering::SeqCst);
+        assert_eq!(service.tick().await, Err(Failure::TenantMismatch));
+        assert_eq!(service.health().state, EndpointState::Offline);
+        assert!(!service.journal.revoked);
+        assert!(!service.journal.reenrollment);
+        assert_eq!(service.journal.identity.as_ref().unwrap().tenant_id, tenant);
+        assert_eq!(service.journal.identity.as_ref().unwrap().device_id, device);
+        assert_eq!(service.key.fingerprint(), fingerprint);
+        assert_eq!(service.journal.pending_report.as_ref().unwrap().sequence, 1);
+        let persisted: Journal =
+            serde_json::from_slice(&service.store.read("journal.json").unwrap().unwrap()).unwrap();
+        assert!(!persisted.revoked);
+        assert_eq!(persisted.identity.as_ref().unwrap().tenant_id, tenant);
+        gateway.tenant_mismatch.store(false, Ordering::SeqCst);
+        service.tick().await.unwrap();
+        assert_eq!(service.journal.sequence, 1);
+        assert!(service.journal.pending_report.is_none());
+        assert_eq!(service.health().state, EndpointState::Active);
         drop(service);
         std::fs::remove_dir_all(directory).unwrap();
     }

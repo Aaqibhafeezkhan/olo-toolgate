@@ -23,13 +23,16 @@ final class PostgresBootstrapAdministratorTest {
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         var codec=new ContractCodec();var user=new ControlUser("admin","Existing owner",true,1L,"existing@example.com",null,null);
         var binding=new ControlIdentityBinding("installed-admin","Reviewed identity",true,1L,"admin","https://quickstart.local","admin",1L,1L,1L,1L,"REVIEWED_INSTALLATION",0L);
-        try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES('upgrade',?,?,1,?::jsonb)")) {
+        try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES('2e7a227d-83fc-39a0-aa45-a486d145c2d6',?,?,1,?::jsonb)")) {
+            io.ololabs.toolgate.control.fixtures.Tenants.provision(c);
+            TestSupport.scope(c, io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade"));
             s.setString(1,"USER");s.setString(2,"admin");s.setString(3,codec.json(user));s.executeUpdate();
             s.setString(1,"IDENTITY_BINDING");s.setString(2,"installed-admin");s.setString(3,codec.json(binding));s.executeUpdate();
+            c.commit();
         }
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
-        var store=new PostgresStore(source,codec);var tenant=new Ids.TenantId("upgrade");
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade");
         store.transaction(tenant,true,tx->{tx.protectBootstrapAdmin("admin");return null;});
         store.transaction(tenant,false,tx->{assertEquals("admin",tx.bootstrapAdminUserId());assertEquals(user,codec.model(tx.load().entries().get(Kind.USER.id("admin")).document(),ControlUser.class));return null;});
         for(boolean remove:List.of(false,true))assertEquals(409,assertThrows(Failure.class,()->store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());if(remove)entries.remove(Kind.USER.id("admin"));else entries.put(Kind.USER.id("admin"),codec.entry(Kind.USER,codec.json(new ControlUser("admin",user.name(),false,2L,user.email(),null,null))));tx.save(before,new Directory(before.revision()+1,entries));return null;})).status());
@@ -37,7 +40,7 @@ final class PostgresBootstrapAdministratorTest {
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_bootstrap_admins SET user_id='replacement'"));
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("DELETE FROM control_bootstrap_admins"));
         }
-        var fresh=new Ids.TenantId("fresh");store.transaction(fresh,true,tx->{tx.protectBootstrapAdmin("first");tx.protectBootstrapAdmin("first");assertThrows(Failure.class,()->tx.protectBootstrapAdmin("replacement"));return null;});
-        assertEquals("first",new PostgresStore(source,codec).transaction(fresh,false,tx->tx.bootstrapAdminUserId()));
+        var fresh=io.ololabs.toolgate.control.fixtures.Tenants.id("fresh");store.transaction(fresh,true,tx->{tx.protectBootstrapAdmin("first");tx.protectBootstrapAdmin("first");assertThrows(Failure.class,()->tx.protectBootstrapAdmin("replacement"));return null;});
+        assertEquals("first",new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec).transaction(fresh,false,tx->tx.bootstrapAdminUserId()));
     }
 }

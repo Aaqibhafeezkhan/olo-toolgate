@@ -9,13 +9,13 @@ ROOT=Path(__file__).resolve().parents[2]
 
 class ReferenceIntegrity(unittest.TestCase):
     def test_every_reference_has_a_local_file_and_pointer(self):
-        # Keyed by path under schemas/; v1 may reference v2 (`../v2/...`), v2 is self-contained.
+        # Keyed by path under schemas/; references can cross only the two bundled versions.
         schemas={p.parent.name+'/'+p.name:json.loads(p.read_text(encoding='utf-8')) for v in ('v1','v2') for p in (ROOT/'packages/contracts/schemas'/v).glob('*.json')}
         def resolve(file,filename):
             if not file:return filename
             version=filename.split('/')[0]
             if file.startswith('../'):
-                self.assertEqual('v1',version,(filename,file))
+                self.assertRegex(file, r'^\.\./v[12]/[a-z-]+\.schema\.json$', (filename,file))
                 return file[3:]
             return version+'/'+file
         def visit(value,filename):

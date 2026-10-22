@@ -32,8 +32,8 @@ public final class PackageProvisioning {
 
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private final Store store; private final Codec codec; private final ServerPackages packages; private final Marketplace marketplace; private final CoreArtifacts core;
-    private final ClientReleases clients; private final FleetService fleet; private final Clock clock;
-    public PackageProvisioning(Store store, Codec codec, ServerPackages packages, Marketplace marketplace, CoreArtifacts core, ClientReleases clients, FleetService fleet, Clock clock) {
+    private final ClientReleases clients; private final java.util.function.Function<io.ololabs.toolgate.control.domain.Ids.TenantId,FleetService> fleet; private final Clock clock;
+    public PackageProvisioning(Store store, Codec codec, ServerPackages packages, Marketplace marketplace, CoreArtifacts core, ClientReleases clients, java.util.function.Function<io.ololabs.toolgate.control.domain.Ids.TenantId,FleetService> fleet, Clock clock) {
         this.store = store; this.codec = codec; this.packages = packages; this.marketplace = marketplace; this.core = core; this.clients = clients; this.fleet = fleet; this.clock = clock;
     }
 
@@ -188,10 +188,10 @@ public final class PackageProvisioning {
             var groupIds = status.putArray("deviceGroupIds"); groups.forEach(groupIds::add);
             if (clients == null || !clients.configured()) throw refused("Devices need client images configured (TOOLGATE_CONTROL_CLIENT_IMAGES_*) to receive " + p.packageId());
             if (!clients.signs()) throw refused("Devices need the package-release key (TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH) to sign " + p.packageId());
-            var document = fleet.document(actor, p.packageId(), p.version());
+            var document = fleet.apply(actor.tenant()).document(actor, p.packageId(), p.version());
             if (document == null) {
                 clients.release(actor, codec.json(JSON.objectNode().put("packageDigest", digest)), "profile-release-" + hex(digest).substring(0, 32));
-                document = fleet.document(actor, p.packageId(), p.version());
+                document = fleet.apply(actor.tenant()).document(actor, p.packageId(), p.version());
                 if (document == null) throw refused("The client release of " + p.packageId() + " " + p.version() + " was not recorded");
             }
             for (var tool : document.tools()) {
@@ -199,13 +199,13 @@ public final class PackageProvisioning {
                 toolIds.add(tool.toolId()); expected.put(tool.toolId(), managed); allowed.add(managed);
             }
             status.put("step", "ROLLOUT");
-            var targets = fleet.targets(actor, p.packageId(), p.version(), groups);
+            var targets = fleet.apply(actor.tenant()).targets(actor, p.packageId(), p.version(), groups);
             var missing = targets.members().stream().filter(d -> !targets.assigned().contains(d)).toList();
             if (!missing.isEmpty()) {
                 String id = "profile-" + DirectoryService.digest(p.packageId() + "\n" + p.version() + "\n" + String.join(",", missing)).substring(0, 40);
                 var request = JSON.objectNode().put("id", id).put("packageId", p.packageId()).put("version", p.version()).put("desiredPresence", true).put("percentage", 100);
                 var devices = request.putArray("deviceIds"); missing.forEach(devices::add);
-                fleet.rollout(actor, codec.json(request), id, id);
+                fleet.apply(actor.tenant()).rollout(actor, codec.json(request), id, id);
             }
             var deviceIds = status.putArray("deviceIds"); targets.members().forEach(deviceIds::add);
             waitingForDevice = targets.members().isEmpty();

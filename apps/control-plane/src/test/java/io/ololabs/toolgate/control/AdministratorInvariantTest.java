@@ -17,9 +17,9 @@ import static org.junit.jupiter.api.Assertions.*;
 final class AdministratorInvariantTest {
     @TempDir Path directory;
     private final ContractCodec codec=new ContractCodec();
-    private final Ids.TenantId tenant=new Ids.TenantId("invariant");
+    private final Ids.TenantId tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("invariant");
     private PostgresStore store(boolean protect){
-        var store=new PostgresStore(SqliteState.open(directory.resolve(UUID.randomUUID()+".sqlite")),codec);
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve(UUID.randomUUID()+".sqlite"))),codec);
         TestSupport.seed(store,codec,tenant,"setup");
         if(protect)store.transaction(tenant,true,tx->{tx.protectBootstrapAdmin("setup");return null;});
         return store;

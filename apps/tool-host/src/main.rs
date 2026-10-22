@@ -30,6 +30,10 @@ async fn main() -> ExitCode {
             return ExitCode::from(78);
         }
     };
+    if let Err(failure) = host.control().qualify().await {
+        eprintln!("workload identity refused: {failure}");
+        return ExitCode::from(78);
+    }
     if config.enrollment.is_some() {
         match tool_host::device::Device::open(&config, host.control()) {
             Ok(device) => {

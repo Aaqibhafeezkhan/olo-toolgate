@@ -66,13 +66,18 @@ jobs:
           python tools/ui/package.py
           docker run --rm -e PYTHONPATH=/opt/quickstart --entrypoint /opt/quickstart-python/bin/python -v "$PWD:/work:ro" -w /work olo-toolgate-quickstart:module11 -m unittest discover -s tests/quickstart -v
           python tools/quickstart/check.py --image olo-toolgate-quickstart:module11 --postgresql --no-browser
+          python tools/tenancy/check.py --image olo-toolgate-quickstart:module11 --output build/quickstart/tenant-runtime-evidence.json
+          python tools/tenancy/check.py --postgresql --image olo-toolgate-quickstart:module11 --output build/quickstart/tenant-postgresql-runtime-evidence.json
+          python tools/tenancy/deployment_check.py --image olo-toolgate-quickstart:module11
+          TOOLGATE_TENANT_RUNTIME_EVIDENCE="$PWD/build/quickstart/tenant-runtime-evidence.json" cargo test --locked -p olo-toolgate-tenant-identity --test runtime_cutover -- --ignored
+          TOOLGATE_TENANT_RUNTIME_EVIDENCE="$PWD/build/quickstart/tenant-postgresql-runtime-evidence.json" cargo test --locked -p olo-toolgate-tenant-identity --test runtime_cutover -- --ignored
           python tools/check.py --scans
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-quickstart:module11
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/quickstart:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/quickstart-sbom.cdx.json olo-toolgate-quickstart:module11
           python tools/ui/merge_sbom.py --image-sbom build/quickstart/quickstart-sbom.cdx.json
           docker save olo-toolgate-quickstart:module11 -o build/quickstart/image.tar
           cp CHANGELOG.md docs/deployment/quickstart.md build/quickstart/
-          (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json > SHA256SUMS)
+          (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json tenant-runtime-evidence.json tenant-postgresql-runtime-evidence.json sqlite-recovery-evidence.json > SHA256SUMS)
       - name: Build and verify the matching Linux device image
         run: |
           docker build -f apps/device/Dockerfile --build-arg QUICKSTART_IMAGE=olo-toolgate-quickstart:module11 --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$GITHUB_SHA" -t olo-toolgate-device:module11 .

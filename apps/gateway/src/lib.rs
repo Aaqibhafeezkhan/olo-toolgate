@@ -5,11 +5,13 @@ pub mod application;
 pub mod auth;
 pub mod config;
 mod diagnostics;
+pub mod discovery;
 pub mod http;
 pub mod limits;
 mod mcp;
 pub mod relay;
 pub mod server;
+pub mod tenancy;
 pub mod toolhost;
 pub mod validation;
 

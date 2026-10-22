@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Normative vectors for complete group witnesses; no legacy ACL fixture authorizes these tests. */
 class EnterpriseConformanceTest {
-    static final Ids.TenantId TENANT=new Ids.TenantId("enterprise");
+    static final Ids.TenantId TENANT=io.ololabs.toolgate.control.fixtures.Tenants.id("enterprise");
     static final long NOW=1791450000000L;
     /** Enrolls an online endpoint for a directory device, so Control can place calls on it. */
     static void online(PostgresStore store,Codec codec,String id){endpoint(store,codec,id,NOW);}
@@ -95,13 +95,13 @@ class EnterpriseConformanceTest {
         assertEquals(EnterpriseDecisionReason.IDENTITY_DISABLED,decide(c).reason());
     }
     @Test void olderTokenWithoutEpochCannotSurviveUserReenablement() {
-        var store=new PostgresStore(SqliteState.open(temp.resolve("session.sqlite")),codec);
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("session.sqlite"))),codec);
         add(Kind.IDENTITY_BINDING,new ControlIdentityBinding("identity-alice","Alice identity",true,2L,"alice","https://identity.example","alice-subject",2L,NOW-1000,NOW,1L,"REVIEWED",NOW));
         store.transaction(TENANT,true,tx->{tx.save(tx.load(),directory());return null;});var intake=new IdentityIntake(store,codec);
         assertThrows(Failure.class,()->intake.observe(TENANT,"https://identity.example","alice-subject",null,null,NOW-1000,NOW+60000,NOW));
         assertTrue(intake.observe(TENANT,"https://identity.example","alice-subject",null,null,NOW,NOW+60000,NOW).enabled());
     }
-    @Test void crossTenantCannotUseSameIdentifiers() {var d=new EnterpriseEvaluator(codec).evaluate(new Ids.TenantId("other"),directory(),input(context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt"))));assertEquals(EnterpriseDecisionReason.INVALID_CONTEXT,d.reason());}
+    @Test void crossTenantCannotUseSameIdentifiers() {var d=new EnterpriseEvaluator(codec).evaluate(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),directory(),input(context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt"))));assertEquals(EnterpriseDecisionReason.INVALID_CONTEXT,d.reason());}
     @Test void everyAffectedResourceNeedsCompletePermission() {var r=input(context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/source.txt"),new ResourceDescriptor(ResourceKind.FILE,"private/destination.txt")));assertEquals(Decision.BLOCK,new EnterpriseEvaluator(codec).evaluate(TENANT,directory(),r).decision());}
     @Test void resourcePrefixRespectsSegmentBoundary() {assertFalse(EnterpriseEvaluator.resource(new EnterpriseResourceRule(ResourceKind.FILE,"data",EnterpriseResourceMatch.PREFIX),new ResourceDescriptor(ResourceKind.FILE,"database/private.txt")));}
     @Test void emptySelectorsDoNotMeanWildcard() {var s=scope("tools-a","devices-a");grant("human","team-a",EnterpriseSourceType.TEAM,EnterpriseGrantPurpose.HUMAN,new EnterpriseScope(new GroupSelection(List.of(),false),s.deviceGroups(),s.actions(),s.allActions(),s.resources(),s.conditions()));assertEquals(Decision.BLOCK,decide(context(RequestMode.HUMAN,"binding-a")).decision());}
@@ -125,8 +125,8 @@ class EnterpriseConformanceTest {
     @Test void deterministicDecisionDoesNotDependOnMapIterationOrder() {var expected=codec.json(decide(context(RequestMode.DELEGATED,"binding-a")));var reverse=new ArrayList<>(entries.entrySet());Collections.reverse(reverse);entries=new LinkedHashMap<>();for(var e:reverse)entries.put(e.getKey(),e.getValue());assertEquals(expected,codec.json(decide(context(RequestMode.DELEGATED,"binding-a"))));}
     @Test void legacyIndividualAssignmentsAreRejected() {assertThrows(Failure.class,()->codec.entry(Kind.USER,"{\"id\":\"user\",\"name\":\"User\",\"enabled\":true,\"revision\":1,\"access\":{\"role\":\"SUPER_ADMIN\"}}"));assertThrows(Failure.class,()->codec.entry(Kind.AGENT,"{\"id\":\"agent\",\"name\":\"Agent\",\"enabled\":true,\"revision\":1,\"ownerUserId\":\"alice\",\"allowedToolIds\":[]}"));}
     @Test void concurrentVerifiedIntakeCreatesOneDisabledIdentityWithMembership() throws Exception {
-        var source=SqliteState.open(temp.resolve("intake.sqlite"));var store=new PostgresStore(source,codec);var intake=new IdentityIntake(store,codec);var executor=Executors.newFixedThreadPool(4);
+        var source=SqliteState.open(temp.resolve("intake.sqlite"));var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);var intake=new IdentityIntake(store,codec);var executor=Executors.newFixedThreadPool(4);
         try {var futures=new ArrayList<Future<IdentityIntake.Identity>>();for(int i=0;i<4;i++)futures.add(executor.submit(()->intake.observe(TENANT,"https://identity.example","new-subject",null,null,NOW-1000,NOW+60000,NOW)));var ids=new HashSet<String>();for(var f:futures){var identity=f.get();assertFalse(identity.enabled());ids.add(identity.userId());}assertEquals(1,ids.size());store.transaction(TENANT,false,tx->{var d=tx.load();assertEquals(1,d.entries().values().stream().filter(e->e.id().kind()==Kind.USER).count());assertEquals(List.of("team-default"),GroupGraph.memberships(d,codec,Kind.USER,ids.iterator().next(),false));return null;});}finally{executor.shutdownNow();}
     }
-    @Test void invalidAuthenticationDoesNotCreateUsers() {var source=SqliteState.open(temp.resolve("invalid.sqlite"));var store=new PostgresStore(source,codec);assertThrows(Failure.class,()->new IdentityIntake(store,codec).observe(TENANT,"https://identity.example","subject",null,null,NOW-1000,NOW-1,NOW));int size=store.transaction(TENANT,false,tx->tx.load().entries().size());assertEquals(0,size);}
+    @Test void invalidAuthenticationDoesNotCreateUsers() {var source=SqliteState.open(temp.resolve("invalid.sqlite"));var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);assertThrows(Failure.class,()->new IdentityIntake(store,codec).observe(TENANT,"https://identity.example","subject",null,null,NOW-1000,NOW-1,NOW));int size=store.transaction(TENANT,false,tx->tx.load().entries().size());assertEquals(0,size);}
 }

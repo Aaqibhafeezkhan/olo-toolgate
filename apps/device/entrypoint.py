@@ -49,8 +49,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def ready(opener, server):
     try:
         with opener.open(server+'/.well-known/olo-toolgate-client', timeout=3) as response:
-            document = json.loads(response.read(16385))
-            return response.status == 200 and isinstance(document, dict) and 'signature' in document
+            document = json.loads(response.read(131200))
+            # Tenant discovery v2 is a compact JWS envelope; the client verifies it before enrollment.
+            return (response.status == 200 and isinstance(document, dict) and
+                    isinstance(document.get('jws'), str) and document['jws'].count('.') == 2)
     except (OSError, ValueError):
         return False
 
@@ -170,7 +172,10 @@ def main():
         return
     if saved is None:
         print('Available gateway: '+server+'; installing the published client.', flush=True)
-        subprocess.run([SOURCE, 'install', '--server', server], check=True, timeout=60)
+        # Install verifies signed discovery over HTTPS before any config exists, so the
+        # private gateway CA must already be the trust root for that one command.
+        environment = dict(os.environ, SSL_CERT_FILE=ca) if ca else None
+        subprocess.run([SOURCE, 'install', '--server', server], check=True, timeout=60, env=environment)
         if ca:
             settings = json.loads(CONFIG.read_text())
             installed_ca = CONFIG.parent/'gateway-trust.crt'

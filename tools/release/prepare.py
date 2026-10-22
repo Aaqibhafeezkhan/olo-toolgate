@@ -194,7 +194,8 @@ def stamp_versions(root, info):
     write_json(lock, document)
     # Update only workspace versions in Cargo.lock; external pins/checksums remain untouched.
     cargo = root/'Cargo.lock'
-    workspace = {'olo-toolgate-contracts', 'olo-toolgate-gateway', 'olo-toolgate-client', 'olo-toolgate-tool-host', 'toolgate-cli'}
+    workspace = {'olo-toolgate-contracts', 'olo-toolgate-gateway', 'olo-toolgate-client',
+                 'olo-toolgate-tenant-identity', 'olo-toolgate-tool-host', 'toolgate-cli'}
     blocks = cargo.read_text().split('[[package]]')
     for i, block in enumerate(blocks[1:], 1):
         name = re.search(r'(?m)^name = "([^"]+)"$', block)

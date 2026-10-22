@@ -28,8 +28,8 @@ class InitialSchemaTest {
             assertTrue(rows.next());assertEquals("1",rows.getString(1));assertFalse(rows.next());
         }
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
-        var codec=new ContractCodec();var store=new PostgresStore(source,codec);
-        var tenant=new Ids.TenantId("initial");
+        var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);
+        var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("initial");
         store.transaction(tenant,true,tx->{
             var before=tx.load();var entries=new java.util.HashMap<>(before.entries());
             GroupGraph.defaults(entries,codec);
@@ -38,11 +38,15 @@ class InitialSchemaTest {
         var intake=new IdentityIntake(store,codec);long now=System.currentTimeMillis();
         intake.observe(tenant,"https://identity.example","new",null,null,now-1000,now+60000,now);
         try(var c=source.getConnection();var s=c.createStatement()) {
-            try(var rows=s.executeQuery("SELECT t.revision,t.authorization_epoch,o.authorization_epoch FROM control_tenants t JOIN control_authorization_outbox o USING(tenant_id,revision) WHERE t.tenant_id='initial'")){
+            c.setAutoCommit(false);s.execute("SELECT set_config('app.tenant_id', '1d800192-ef48-30b6-bf10-81fc1f4ae68f', true)");
+            try(var rows=s.executeQuery("SELECT t.revision,t.authorization_epoch,o.authorization_epoch FROM control_tenant_authority t JOIN control_authorization_outbox o USING(tenant_id,revision) WHERE t.tenant_id='1d800192-ef48-30b6-bf10-81fc1f4ae68f'")){
                 assertTrue(rows.next());assertEquals(rows.getLong(1),rows.getLong(2));assertEquals(rows.getLong(2),rows.getLong(3));
             }
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("DELETE FROM control_audit"));
-            assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_tenants SET authorization_epoch=0 WHERE tenant_id='initial'"));
+            c.rollback();
+            s.execute("SELECT set_config('app.tenant_id', '1d800192-ef48-30b6-bf10-81fc1f4ae68f', true)");
+            assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_tenant_authority SET authorization_epoch=0 WHERE tenant_id='1d800192-ef48-30b6-bf10-81fc1f4ae68f'"));
+            c.rollback();
             for(var table:java.util.List.of("control_access_migration_archive","control_approvals","control_permit_leases")){
                 try(var rows=s.executeQuery("SELECT to_regclass('"+table+"')")){assertTrue(rows.next());assertNull(rows.getString(1));}
             }

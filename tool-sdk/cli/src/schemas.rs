@@ -23,15 +23,19 @@ fn schemas() -> Result<&'static Schemas, Error> {
 fn build() -> Result<Schemas, String> {
     let mut registry = jsonschema::Registry::new();
     let mut definitions = Vec::new();
-    for (uri, content) in olo_toolgate_contracts::v2::CANONICAL_SCHEMAS {
+    // Register both bundled versions so v2 can reuse closed endpoint health records.
+    // Only v2 names are exposed by this validator; no network resolution is enabled.
+    for (uri, content) in olo_toolgate_contracts::CANONICAL_SCHEMAS {
         let schema: Value = serde_json::from_str(content).map_err(|_| "invalid embedded schema")?;
-        for name in schema["$defs"]
-            .as_object()
-            .into_iter()
-            .flatten()
-            .map(|(n, _)| n)
-        {
-            definitions.push((name.clone(), uri.to_string()));
+        if uri.contains("/v2/") {
+            for name in schema["$defs"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(n, _)| n)
+            {
+                definitions.push((name.clone(), uri.to_string()));
+            }
         }
         registry = registry
             .add(*uri, schema)

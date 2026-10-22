@@ -40,7 +40,10 @@ impl std::fmt::Display for ControlError {
 }
 
 pub struct Control {
+    tenant: String,
     url: String,
+    bootstrap: reqwest::Client,
+    workload: Option<crate::workload_identity::Workload>,
     roots: Option<Vec<reqwest::Certificate>>,
     client: std::sync::RwLock<reqwest::Client>,
 }
@@ -59,22 +62,81 @@ impl Control {
             None => None,
         };
         let mut identity = None;
+        let mut workload = None;
         if let (Some(cert), Some(key)) = (&config.client_certificate_path, &config.client_key_path)
         {
-            let mut pem = std::fs::read(cert).map_err(|e| format!("{}: {e}", cert.display()))?;
-            pem.extend(std::fs::read(key).map_err(|e| format!("{}: {e}", key.display()))?);
+            let pem = std::fs::read(cert).map_err(|_| "Workload public certificate unavailable")?;
+            let certificate = std::str::from_utf8(&pem)
+                .map_err(|_| "Workload public certificate required")?
+                .to_owned();
+            if olo_toolgate_tenant_identity::certificate_tenant(&certificate)
+                .map_err(|_| "Workload tenant certificate required")?
+                != config.tenant_id
+            {
+                return Err("Workload tenant identity mismatch".into());
+            }
+            let private =
+                std::fs::read_to_string(key).map_err(|_| "Workload private key unavailable")?;
+            workload = Some(crate::workload_identity::Workload::open(
+                config,
+                certificate,
+                &private,
+            )?);
+            let mut pem = pem;
+            pem.extend(private.as_bytes());
             identity = Some(pem);
         }
         let client = build(roots.as_ref(), identity.as_deref())?;
+        let bootstrap = build(roots.as_ref(), None)?;
         Ok(Control {
+            tenant: config.tenant_id.clone(),
+            bootstrap,
+            workload,
             url: config.url.trim_end_matches('/').to_string(),
             roots,
             client: std::sync::RwLock::new(client),
         })
     }
 
+    pub fn validate_host(&self, host: &str) -> Result<(), String> {
+        if self
+            .workload
+            .as_ref()
+            .is_some_and(|workload| workload.host_id != host)
+        {
+            return Err("Workload host identity mismatch".into());
+        }
+        Ok(())
+    }
+    pub async fn qualify(&self) -> Result<(), ControlError> {
+        if let Some(workload) = &self.workload {
+            workload
+                .qualify(self)
+                .await
+                .map_err(ControlError::Unavailable)?;
+        }
+        Ok(())
+    }
+    /// Fixed HTTPS discovery never presents a device or preprovisioned workload certificate.
+    pub async fn discovery(&self) -> Result<Vec<u8>, ControlError> {
+        olo_toolgate_tenant_identity::origin(&self.url)
+            .map_err(|_| ControlError::Unavailable("HTTPS discovery origin required".into()))?;
+        self.send_via(
+            self.bootstrap.clone(),
+            "/.well-known/olo-toolgate-client",
+            None,
+            &[],
+            131072,
+        )
+        .await
+    }
     /// Presents this certificate chain and key (PEM) on every later call.
     pub fn use_identity(&self, pem: &[u8]) -> Result<(), String> {
+        if self.workload.is_some() {
+            return Err(
+                "Operator-provisioned workload identity cannot be replaced by enrollment".into(),
+            );
+        }
         let client = build(self.roots.as_ref(), Some(pem))?;
         *self.client.write().unwrap_or_else(|e| e.into_inner()) = client;
         Ok(())
@@ -199,8 +261,18 @@ impl Control {
         headers: &[(&str, &str)],
         max: usize,
     ) -> Result<Vec<u8>, ControlError> {
+        self.qualify().await?;
+        self.send_via(self.client(), path, body, headers, max).await
+    }
+    async fn send_via(
+        &self,
+        client: reqwest::Client,
+        path: &str,
+        body: Option<Vec<u8>>,
+        headers: &[(&str, &str)],
+        max: usize,
+    ) -> Result<Vec<u8>, ControlError> {
         let url = format!("{}{path}", self.url);
-        let client = self.client();
         let mut request = match body {
             Some(body) => client
                 .post(url)
@@ -211,6 +283,7 @@ impl Control {
         for (name, value) in headers {
             request = request.header(*name, *value);
         }
+        request = request.header("Toolgate-Tenant-ID", &self.tenant);
         let mut response = request
             .send()
             .await

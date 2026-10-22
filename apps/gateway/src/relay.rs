@@ -21,12 +21,18 @@ use tokio::io::AsyncReadExt;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RelayConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_certificate_path: Option<PathBuf>,
+    pub tenant_id: String,
     pub url: String,
     pub token_path: PathBuf,
     pub development_loopback_http: bool,
 }
 impl RelayConfig {
     pub fn validate(&self) -> Result<(), &'static str> {
+        if !crate::tenancy::canonical_uuid(&self.tenant_id) {
+            return Err("canonical Control tenant UUID required");
+        }
         let url = reqwest::Url::parse(&self.url).map_err(|_| "invalid local MCP origin")?;
         let loopback = matches!(url.host_str(), Some("127.0.0.1" | "[::1]"));
         let unsafe_host = url.host_str().is_none_or(|host| {
@@ -118,13 +124,23 @@ impl HttpRelay {
     pub fn new(config: RelayConfig) -> Result<Self, &'static str> {
         config.validate()?;
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let client = reqwest::Client::builder()
+        let mut client = reqwest::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .tls_sslkeylogfile(false)
             .timeout(Duration::from_secs(3))
             .connect_timeout(Duration::from_secs(2))
-            .pool_max_idle_per_host(1)
+            .pool_max_idle_per_host(1);
+        if let Some(path) = &config.ca_certificate_path {
+            let bytes = crate::config::read_bytes(path)?;
+            let roots = reqwest::Certificate::from_pem_bundle(&bytes)
+                .map_err(|_| "Control TLS roots required")?;
+            if roots.is_empty() {
+                return Err("Control TLS roots required");
+            }
+            client = client.tls_certs_only(roots);
+        }
+        let client = client
             .build()
             .map_err(|_| "local MCP transport unavailable")?;
         Ok(Self {
@@ -174,6 +190,15 @@ impl HttpRelay {
         model: &str,
         max: usize,
     ) -> Result<R, ErrorCode> {
+        if let Some(request) = request {
+            let value = serde_json::to_value(request).map_err(|_| ErrorCode::Validation)?;
+            if value.get("context").is_some_and(|context| {
+                context.get("tenantId").and_then(serde_json::Value::as_str)
+                    != Some(self.config.tenant_id.as_str())
+            }) {
+                return Err(ErrorCode::TenantMismatch);
+            }
+        }
         let token = self.token().await?;
         let correlation = crate::digest(
             format!(
@@ -206,6 +231,7 @@ impl HttpRelay {
         };
         let mut response = builder
             .bearer_auth(token)
+            .header("Toolgate-Tenant-ID", &self.config.tenant_id)
             .header("Accept", "application/json")
             .header("X-Request-ID", correlation)
             .send()
@@ -341,6 +367,7 @@ impl RelayPort for HttpRelay {
                     self.config.url.trim_end_matches('/')
                 ))
                 .bearer_auth(self.token().await?)
+                .header("Toolgate-Tenant-ID", &self.config.tenant_id)
                 .send()
                 .await
                 .map_err(|_| ErrorCode::DependencyUnavailable)?;

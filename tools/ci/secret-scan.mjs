@@ -40,6 +40,17 @@ try {
   writeFileSync(identity, generateKeyPairSync('rsa', { modulusLength: 2048,
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } }).privateKey);
   scan(proof, 1);
+  // A discovery vector is public signature data; the allowance is limited to its jws field.
+  const vector = join(proof, 'tests/fixtures/tenant-discovery/v2.json');
+  mkdirSync(join(proof, 'tests/fixtures/tenant-discovery'), {recursive:true});
+  const discovery = JSON.parse(readFileSync(join(staged, 'tests/fixtures/tenant-discovery/v2.json'))).cases.initial;
+  writeFileSync(identity, publicIdentity);
+  writeFileSync(vector, JSON.stringify(discovery, null, 2));
+  scan(proof);
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const token = encode({alg:'HS256',typ:'JWT'})+'.'+encode({iss:'https://fixture.invalid',sub:'scanner',aud:'fixture',exp:2000000000})+'.'+randomBytes(32).toString('base64url');
+  writeFileSync(vector, JSON.stringify({...discovery,credential:token},null,2));
+  scan(proof,1);
   console.log('Staged secret scan and public-key/credential/private-key regression checks passed.');
 } finally {
   // Only remove the temporary directory created above.

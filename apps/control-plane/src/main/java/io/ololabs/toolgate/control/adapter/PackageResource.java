@@ -14,6 +14,7 @@ import io.vertx.ext.web.RoutingContext;
 /** Server packages for administrators, and their content for Tool Hosts, which present their device certificate. */
 @Path("/api/control/v1") @Produces("application/json") @Blocking @PermitAll
 public class PackageResource {
+    @Inject TenantRequest request;
     public static final String PACKAGE_MEDIA_TYPE = "application/vnd.ololabs.toolgate.package+zip";
     @Inject ServerPackages packages;@Inject PackageProvisioningBootstrap provisioning;@Inject ClientReleases clientReleases;@Inject VerifiedActors actors;@Inject EndpointService endpoints;@Inject RoutingContext routing;@Inject Correlation correlation;
 
@@ -27,7 +28,7 @@ public class PackageResource {
         try{peer=(java.security.cert.X509Certificate)routing.request().sslSession().getPeerCertificates()[0];}catch(Exception failure){throw new Failure(ErrorCode.UNAUTHORIZED,401,"Device certificate required");}
         return tx->endpoints.authenticate(tx,peer,System.currentTimeMillis());
     }
-    private io.ololabs.toolgate.control.domain.Ids.TenantId tenant(){return new io.ololabs.toolgate.control.domain.Ids.TenantId(org.eclipse.microprofile.config.ConfigProvider.getConfig().getValue("toolgate.control.endpoint.tenant-id",String.class));}
+    private io.ololabs.toolgate.control.domain.Ids.TenantId tenant(){return request.tenant();}
 
     @POST @Path("packages/uploads") @Consumes(PACKAGE_MEDIA_TYPE) @io.quarkus.security.Authenticated
     public Response upload(java.io.InputStream input){

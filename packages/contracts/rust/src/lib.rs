@@ -2155,6 +2155,14 @@ pub enum ErrorCode {
     Internal,
     #[serde(rename = "UNSUPPORTED")]
     Unsupported,
+    #[serde(rename = "TENANT_MISMATCH")]
+    TenantMismatch,
+    #[serde(rename = "TENANT_UNAVAILABLE")]
+    TenantUnavailable,
+    #[serde(rename = "MISDIRECTED_REQUEST")]
+    MisdirectedRequest,
+    #[serde(rename = "INVALID_TENANT_ID")]
+    InvalidTenantId,
 }
 /// Machine-readable error without exception text or caller-controlled detail.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3002,6 +3010,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/descriptor.schema.json",
         include_str!("../schemas/v2/descriptor.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
+        include_str!("../schemas/v2/discovery.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",

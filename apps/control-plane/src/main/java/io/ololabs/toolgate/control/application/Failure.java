@@ -28,4 +28,5 @@ public final class Failure extends RuntimeException {
     public static Failure validation() { return new Failure(ErrorCode.VALIDATION, 400, "Invalid request"); }
     public static Failure conflict() { return new Failure(ErrorCode.CONFLICT, 409, "Revision or configuration conflict"); }
     public static Failure unavailable() { return new Failure(ErrorCode.DEPENDENCY_UNAVAILABLE, 503, "Persistence unavailable"); }
+    public static Failure tenantUnavailable() { return new Failure(ErrorCode.TENANT_UNAVAILABLE, 404, "TENANT_UNAVAILABLE"); }
 }

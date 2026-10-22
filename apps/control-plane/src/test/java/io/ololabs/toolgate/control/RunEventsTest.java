@@ -22,8 +22,8 @@ final class RunEventsTest {
     private record Rig(PostgresStore store, ContractCodec codec, Ids.TenantId tenant, DirectoryService.Actor admin, RunEvents events) {}
 
     private Rig rig() {
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("events.sqlite")), codec);
-        var tenant = new Ids.TenantId("tenant"); var admin = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("events.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var admin = TestSupport.seed(store, codec, tenant, "root");
         store.transaction(tenant, true, tx -> { var before = tx.load(); var entries = new HashMap<>(before.entries());
             TestSupport.put(entries, codec, Ids.Kind.BINDING, new ControlExecutionBinding("bind-1", "Hello", true, 1L, "default-tools", "default-devices", List.of(), List.of(), false, false));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null; });

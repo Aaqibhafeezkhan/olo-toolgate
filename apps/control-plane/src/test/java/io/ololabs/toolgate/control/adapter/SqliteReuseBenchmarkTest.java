@@ -12,11 +12,11 @@ import org.junit.jupiter.api.io.TempDir;
 class SqliteReuseBenchmarkTest {
     @TempDir Path temp;
     @Test void compareDurableTransactionsWithAndWithoutConnectionReuse() throws Exception {
-        var codec = new ContractCodec(); var tenant = new TenantId("benchmark");
+        var codec = new ContractCodec(); var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("benchmark");
         for (boolean pooled : new boolean[] {false, true}) {
             var source = SqliteState.open(temp.resolve(pooled ? "pooled.sqlite" : "unpooled.sqlite"), pooled);
             try {
-                var store = new PostgresStore(source, codec);
+                var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec);
                 for (int i = 0; i < 10; i++) store.transaction(tenant, true, tx -> tx.approvalClock(1));
                 long start = System.nanoTime();
                 for (int i = 0; i < 200; i++) { final long value = i + 2; long observed = store.transaction(tenant, true, tx -> tx.approvalClock(value)); assertEquals(value, observed); }

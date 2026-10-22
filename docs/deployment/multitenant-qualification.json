@@ -1,0 +1,416 @@
+{
+  "formatVersion": 1,
+  "status": "QUALIFIED_FOR_REVIEW",
+  "recordedAtUtc": "2026-10-21T10:39:11.181959+00:00",
+  "applicationSourceSha": "7b3456c591927002686ca1ce8fa649df31c4afcb",
+  "nativeBinarySourcesUnchangedSinceQualification": true,
+  "applicationSourcesUnchangedSinceImageBuild": true,
+  "nativeQualification": {
+    "workflowRun": "https://github.com/olo-labs/olo-toolgate/actions/runs/39555926749",
+    "summary": {
+      "formatVersion": 1,
+      "sourceSha": "1000948763f3e91e98c6661f67b90095d362eb58",
+      "nativeTargets": [
+        "aarch64-apple-darwin",
+        "aarch64-pc-windows-msvc",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "allNativeServiceAndInstallerGatesPassed": true
+    },
+    "records": [
+      {
+        "formatVersion": 1,
+        "sourceSha": "1000948763f3e91e98c6661f67b90095d362eb58",
+        "target": "aarch64-apple-darwin",
+        "system": "Darwin",
+        "binarySha256": "cfad37905b50e899447da7f1a29b44c731268acf0f35ce1564681068e049c8b5",
+        "stages": {
+          "service": {
+            "passed": true,
+            "cleanupPassed": true
+          },
+          "installer": {
+            "passed": true,
+            "cleanupPassed": true,
+            "filename": "olo-toolgate-client-0.10.0-dev-aarch64-apple-darwin.dmg",
+            "sha256": "8bc228637170b764735a47b9613c27a43d32ce3b15b6733578b6170ccd41078a"
+          }
+        }
+      },
+      {
+        "formatVersion": 1,
+        "sourceSha": "1000948763f3e91e98c6661f67b90095d362eb58",
+        "target": "aarch64-pc-windows-msvc",
+        "system": "Windows",
+        "binarySha256": "fec8deeb62cd84602a98e1699d6fe65a8e9572c769db7214ef139a204346f68d",
+        "stages": {
+          "service": {
+            "passed": true,
+            "cleanupPassed": true
+          },
+          "installer": {
+            "passed": true,
+            "cleanupPassed": true,
+            "filename": "olo-toolgate-client-0.10.0-dev-aarch64-pc-windows-msvc.setup.exe",
+            "sha256": "273d502ffe7bc56d3406b620674cb93d8de391ab8c4d160723ca046e37c6b293"
+          }
+        }
+      },
+      {
+        "formatVersion": 1,
+        "sourceSha": "1000948763f3e91e98c6661f67b90095d362eb58",
+        "target": "aarch64-unknown-linux-gnu",
+        "system": "Linux",
+        "binarySha256": "fe0bc7fb041bf5eedbb321aca4d0baa40ca189868cb1bef1d0b4f19614872ebf",
+        "stages": {
+          "service": {
+            "passed": true,
+            "cleanupPassed": true
+          },
+          "installer": {
+            "passed": true,
+            "cleanupPassed": true,
+            "filename": "olo-toolgate-client-0.10.0-dev-aarch64-unknown-linux-gnu.run",
+            "sha256": "99f6ef792487708a26a64773388a7f584a996d6a4df1f1c3196b910c30719ec8"
+          }
+        }
+      },
+      {
+        "formatVersion": 1,
+        "sourceSha": "1000948763f3e91e98c6661f67b90095d362eb58",
+        "target": "x86_64-apple-darwin",
+        "system": "Darwin",
+        "binarySha256": "ed97fa4eb67f519dee9fb8de4566d932ff4d86a3cdd7190a6feaa0a45a1f0dbc",
+        "stages": {
+          "service": {
+            "passed": true,
+            "cleanupPassed": true
+          },
+          "installer": {
+            "passed": true,
+            "cleanupPassed": true,
+            "filename": "olo-toolgate-client-0.10.0-dev-x86_64-apple-darwin.dmg",
+            "sha256": "428543a36e90d2aa133f2652f7cd73bdabcf2a142089439917fa36523fe66abb"
+          }
+        }
+      },
+      {
+        "formatVersion": 1,
+        "sourceSha": "1000948763f3e91e98c6661f67b90095d362eb58",
+        "target": "x86_64-pc-windows-msvc",
+        "system": "Windows",
+        "binarySha256": "6d67f86de8598649fc9a690e9c1910e0945b4e4c28a224a697ce8ecd21de0ecd",
+        "stages": {
+          "service": {
+            "passed": true,
+            "cleanupPassed": true
+          },
+          "installer": {
+            "passed": true,
+            "cleanupPassed": true,
+            "filename": "olo-toolgate-client-0.10.0-dev-x86_64-pc-windows-msvc.setup.exe",
+            "sha256": "e1f78103b9a99129f5f302ffda7652c198c0c7dffd5858e27df98c90d559b174"
+          }
+        }
+      },
+      {
+        "formatVersion": 1,
+        "sourceSha": "1000948763f3e91e98c6661f67b90095d362eb58",
+        "target": "x86_64-unknown-linux-gnu",
+        "system": "Linux",
+        "binarySha256": "158f99c9bb4aaefb16b77747c09b39525ad2c24c5216c7572677fd814e411f70",
+        "stages": {
+          "service": {
+            "passed": true,
+            "cleanupPassed": true
+          },
+          "installer": {
+            "passed": true,
+            "cleanupPassed": true,
+            "filename": "olo-toolgate-client-0.10.0-dev-x86_64-unknown-linux-gnu.run",
+            "sha256": "6b9034e1e3ea49044d4d955faef64a4dccdc029df744744789542c3a82ba88dc"
+          }
+        }
+      }
+    ]
+  },
+  "images": [
+    {
+      "localTag": "olo-toolgate-control:tenant-shared-final",
+      "imageConfigId": "sha256:3d03bf7d7d1b5f735754b7ef790c328400b6d3eb8f6a65167c624ada412fe8f5",
+      "sourceSha": "7b3456c591927002686ca1ce8fa649df31c4afcb",
+      "profile": "prod",
+      "applicationBinaryOverrides": false,
+      "clientManifestSha256": "3ca31eb4ca3c7fda86a80f2b8914b346e518a71fd75c8d22a8f41e19255fbaab",
+      "installerManifestSha256": "adec40f90eff314df308f8c25eaf5c027de3f441defcc00993cdabaa0254bf13"
+    },
+    {
+      "localTag": "olo-toolgate-quickstart:tenant-final",
+      "imageConfigId": "sha256:04ba32d1fe7cdc63cb88638051b71977056ed1d20231f3cb6d19d934831ee987",
+      "sourceSha": "7b3456c591927002686ca1ce8fa649df31c4afcb",
+      "profile": "quickstart",
+      "applicationBinaryOverrides": false,
+      "clientManifestSha256": "3ca31eb4ca3c7fda86a80f2b8914b346e518a71fd75c8d22a8f41e19255fbaab",
+      "installerManifestSha256": "adec40f90eff314df308f8c25eaf5c027de3f441defcc00993cdabaa0254bf13"
+    }
+  ],
+  "checks": {
+    "java": {
+      "tests": 334,
+      "failures": 0,
+      "existingSkips": 7
+    },
+    "ci": {
+      "tests": 294,
+      "failures": 0,
+      "toolingSkips": 1
+    },
+    "realBrowser": {
+      "expected": 1,
+      "unexpected": 0,
+      "skipped": 0,
+      "flaky": 0
+    },
+    "productionVerifierSqlite": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "productionVerifierPostgresql": {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    "tenantTlsIsolationAndRotation": {
+      "sqlite": true,
+      "postgresql": true
+    },
+    "dedicatedPoolMountsAndNetworkIsolation": true,
+    "tenantBAvailableDuringTenantAMemoryExhaustion": true,
+    "strictHelmInstallUpgradeAndNegativeCases": true,
+    "productionControlArchiveRestore": true,
+    "actionlint": true,
+    "knownDependencyVulnerabilities": {
+      "npm": 0,
+      "toolsPython": 0,
+      "quickstartPython": 0
+    }
+  },
+  "ownership": {
+    "applicationTables": 46,
+    "forcedTenantRlsTables": 44,
+    "platformExceptions": [
+      "control_tenant_hosts",
+      "control_tenants"
+    ]
+  },
+  "runtimeReports": {
+    "sqliteBrowserAndFullRuntime": {
+      "image": "olo-toolgate-quickstart:tenant-final",
+      "storage": "SQLite",
+      "gates": [
+        "fresh reviewed installation/independent identities/default groups/zero runtime rights",
+        "anonymous Gateway tenant v2 discovery/fixed verified Control configuration",
+        "Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery",
+        "verified JWT creates one disabled User/default Team/invalid JWT creates none/reviewed activation",
+        "HTTP maker/checker/idempotent drafts/self-review rejection/complete grant discovery",
+        "measured current-authority HTTP discovery latency",
+        "Java/Python Hello World parity: same MCP calls/defaults/output/exact retry, changing only tool name",
+        "real authenticated Gateway SERVICE/group capability/Tool Host effect/exact retry/live revocation",
+        "verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation",
+        "Java/Python HUMAN invocation/Tool Host effect/signed permit/durable result/exact retry conflict",
+        "ASK discovery/exact operation approval/independent reviewer/approved effect",
+        "live revocation hides discovery/blocks execution/retries/result retrieval",
+        "current status/fresh bounds/no-effect simulation/configuration shadow/scoped rejection/Super Admin import",
+        "restart preserves identity/key/revocation/monotonic epoch/no installation reseeding",
+        "real accessible enterprise administration browser",
+        "real image offline SQLite backup/independent signed restore/key and runtime quarantine"
+      ],
+      "firstBootSeconds": 19.48,
+      "discoveryPerformance": {
+        "samples": 100,
+        "warmup": 8,
+        "p50Ms": 233.153,
+        "p95Ms": 296.235,
+        "p99Ms": 307.036,
+        "cpuLimit": 2,
+        "memoryLimitMiB": 1536,
+        "toolCount": 2,
+        "transport": "loopback HTTP via identity adapter",
+        "storage": "SQLite",
+        "catalogGrants": 1,
+        "interpretation": "Observed small-fixture latency; no enterprise capacity claim"
+      },
+      "helloWorldParity": {
+        "tools": [
+          "ololabs.hello-world-python/server_greet",
+          "ololabs.hello-world/server_greet"
+        ],
+        "arguments": [
+          {},
+          {
+            "text": "Ada"
+          }
+        ],
+        "outputs": [
+          {
+            "message": "Hello World"
+          },
+          {
+            "message": "Hello Ada"
+          }
+        ],
+        "transport": "Gateway MCP -> Control permit -> Tool Host"
+      }
+    },
+    "postgresqlFullRuntime": {
+      "image": "olo-toolgate-quickstart:tenant-final",
+      "storage": "PostgreSQL",
+      "gates": [
+        "fresh reviewed installation/independent identities/default groups/zero runtime rights",
+        "anonymous Gateway tenant v2 discovery/fixed verified Control configuration",
+        "Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery",
+        "verified JWT creates one disabled User/default Team/invalid JWT creates none/reviewed activation",
+        "HTTP maker/checker/idempotent drafts/self-review rejection/complete grant discovery",
+        "measured current-authority HTTP discovery latency",
+        "Java/Python Hello World parity: same MCP calls/defaults/output/exact retry, changing only tool name",
+        "real authenticated Gateway SERVICE/group capability/Tool Host effect/exact retry/live revocation",
+        "verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation",
+        "Java/Python HUMAN invocation/Tool Host effect/signed permit/durable result/exact retry conflict",
+        "ASK discovery/exact operation approval/independent reviewer/approved effect",
+        "live revocation hides discovery/blocks execution/retries/result retrieval",
+        "current status/fresh bounds/no-effect simulation/configuration shadow/scoped rejection/Super Admin import",
+        "restart preserves identity/key/revocation/monotonic epoch/no installation reseeding"
+      ],
+      "firstBootSeconds": 21.31,
+      "discoveryPerformance": {
+        "samples": 100,
+        "warmup": 8,
+        "p50Ms": 267.467,
+        "p95Ms": 320.196,
+        "p99Ms": 360.544,
+        "cpuLimit": 2,
+        "memoryLimitMiB": 1536,
+        "toolCount": 2,
+        "transport": "loopback HTTP via identity adapter",
+        "storage": "PostgreSQL",
+        "catalogGrants": 1,
+        "interpretation": "Observed small-fixture latency; no enterprise capacity claim"
+      },
+      "helloWorldParity": {
+        "tools": [
+          "ololabs.hello-world-python/server_greet",
+          "ololabs.hello-world/server_greet"
+        ],
+        "arguments": [
+          {},
+          {
+            "text": "Ada"
+          }
+        ],
+        "outputs": [
+          {
+            "message": "Hello World"
+          },
+          {
+            "message": "Hello Ada"
+          }
+        ],
+        "transport": "Gateway MCP -> Control permit -> Tool Host"
+      }
+    },
+    "sqliteOfflineImageRestore": {
+      "formatVersion": 1,
+      "imageId": "sha256:04ba32d1fe7cdc63cb88638051b71977056ed1d20231f3cb6d19d934831ee987",
+      "tenantId": "73a12949-33cc-4cff-a30a-c9a007dd1906",
+      "backupManifestDigest": "9160da91c2dc2d853922fa64ec796d1de5864da1475b23b67c7c0aa4b7c389de",
+      "gates": [
+        "real-image-offline-backup",
+        "independent-empty-volume",
+        "two-external-reviewers",
+        "single-review-denied-before-write",
+        "tenant-suspended",
+        "live-authority-and-key-floors",
+        "retired-signers",
+        "encrypted-data-and-packages-retained",
+        "no-runtime-rights-or-replayed-work"
+      ]
+    },
+    "postgresqlControlReplicas": {
+      "image": "olo-toolgate-control:tenant-shared-final",
+      "imageId": "sha256:3d03bf7d7d1b5f735754b7ef790c328400b6d3eb8f6a65167c624ada412fe8f5",
+      "replicas": 2,
+      "realPostgres": true,
+      "nonRoot": true,
+      "readOnlyRoot": true,
+      "independentConfigurationReview": true,
+      "sharedIdempotency": true,
+      "protectedDefaults": true,
+      "monotonicRestart": true,
+      "redactedLogs": true,
+      "separateManagement": true,
+      "gracefulShutdown": true,
+      "thirdPartyNotices": true,
+      "databaseTransport": "fixture-only loopback; production requires verify-full"
+    },
+    "postgresqlSharedAndSelectedRecovery": {
+      "postgresqlMajor": 17,
+      "realArchive": true,
+      "sharedRecovery": true,
+      "selectedTenantRecovery": true,
+      "completeIndependentReviews": true,
+      "retirementsPreserved": true,
+      "authorityAndCacheFloorsAdvanced": true,
+      "oldSessionsAndCredentialsFenced": true,
+      "uncertainExecutionsQuarantined": true,
+      "encryptedSecretsPreserved": true,
+      "runtimeConnectRevoked": true,
+      "sourceTenantsUnchanged": true,
+      "nonemptyTargetRejected": true
+    }
+  },
+  "localEvidenceSha256": {
+    "tenant-final-sqlite-tls-evidence.json": "c71a96ac1c538900ce3450cfd61cc3864719a1c423d65acb50e12105403d8642",
+    "tenant-final-postgresql-tls-evidence.json": "c219d6f2d88421d5248c25d5d39b1219236673f940d801884e0a688909156b5f",
+    "tenant-final-browser-evidence.json": "ae45600be42a4d4968215aa0d96ad09d86caf2469efb585734e879b3022af2e1",
+    "tenant-final-browser-results.json": "f13608195c178b28024451962e6ff356e0c064367cb29f0019baea8a95c318db",
+    "tenant-final-pg-runtime-evidence.json": "551ad859c6ff862a000b2f7b4e6b679b3bea050baa9aceed23fa584a6235c496",
+    "tenant-final-sqlite-recovery-evidence.json": "a718a85f3860b280993981d8bc1cd018372c3292e3f574bb165fcd9ffb906d62",
+    "tenant-final-control-evidence.json": "dd8f1aa17dd0ed3c92fec1d05346ef443bb8afa1da408ca0d747d2d8781dd0ed",
+    "tenant-final-recovery-evidence.json": "a45b22267caee3a9980304a1aec7d98165a13996f375488fc3bb000d025eacad",
+    "tenant-final-verifier-sqlite.log": "be72273fd26a041ba871178807d81e4214bfa8719651fc73e36d8b6476ddd443",
+    "tenant-final-verifier-postgresql.log": "c31b1b6b1b20d64881ae0a0779efe5ed6da1e9892cd994b3ba5d620fa04f7aa7",
+    "tenant-final-java.log": "1d796797d07d6c1f7a460679b924bf15b9835e062a79cd279117985a82b9dc39",
+    "tenant-final-ci3.log": "11bf13deecca1fe929a7e3aa5efc4af1b620a903d3fefe881aefa4b68a47fa20",
+    "tenant-final-helm.log": "c53e36abe21c63bdb06df3fef3b84979a1b3b64da761dd9ca2ed7db8a4491c5f",
+    "tenant-final-deployment.log": "abe0428c2714cbd524405f017ff71fb09f2e41dc77dbb92e21195432a5632665",
+    "tenant-final-control-recovery.log": "aa2654406bb0135eea6ff4b58179d6e6fce89f0ff4fe41f8d48f410dc6a2d33c",
+    "tenant-final-npm-audit.log": "4b02d4a3c23d969c46bd2041360f80bfcb1fe760d9db864009acdd710f9de601",
+    "tenant-final-tools-audit.json": "9d783595420f3101ba758cb246a6a37e4fb0caed2cc348e97f14bfb682426aaf",
+    "tenant-final-quickstart-audit.json": "03b6812244ef1d80f175c046b7d76a54ed42f90a934681857a2915678a1b701a"
+  },
+  "qualificationHarnessHashEncoding": "UTF-8 with LF newlines",
+  "qualificationHarnessSha256": {
+    "tools/quickstart/check.py": "d357c288c3bdf285fd0fff14c0407f68da8201cc315c1cf6f72cba059e6bf08e",
+    "tools/control/check.py": "d4457501990616c23b1f47b3f70c511909db91bef7dadb92e5d5baabcc87ae2a",
+    "tools/control/container.py": "fcd502d6039eaa8261f274c8f3ab06be128e451addd308d36ea7b7c4cba97bd0",
+    "tools/enterprise/restore_check.py": "9ed6df4e4f558b97fc72f8e56c144c10972d09236938f803aaffdabe2fa4f009",
+    "tools/tenancy/check.py": "a557de031506679f4fda04f1ce042045a5fa595692e0a20aad5fef9f4ad99bcf",
+    "tools/tenancy/recovery_check.py": "353a17be19a1a71e14fbe0bc84ce374988d0306a6072412dfb2e8a227abe4cba",
+    "tools/tenancy/sqlite_recovery_check.py": "f7e1aeef1639073bf2211ba14e7570b3ea67415f176133414e819b5a63c39f2e",
+    "tools/tenancy/deployment_check.py": "45d440ac65ac5f1b73afb0254df611a0ee2bfb2443cf26128e926e7c3c68cb26",
+    "tools/tenancy/native_evidence.py": "19600227e02dff2d23e64a14f9acf4b041a8393c47f7aab81a3131780525301d",
+    "apps/admin-ui/tests/e2e/enterprise.spec.ts": "f4ac1aaab24f460aee35da15e633de671de6134b92c5f3b735e0c6a6e1eeb96d",
+    "tests/ci/test_control_production_smoke.py": "38b82bfe7d2c1670594bd514cc503c0b810a99e69bde8b16e39d223d91c6f7e8"
+  },
+  "evidenceAvailability": "Native records are retained above and in the workflow artifacts. Local runtime outputs are retained under .dev with the listed SHA-256 digests; the runtime commands are documented in multitenant.md.",
+  "scopeLimits": [
+    "Fresh V1 databases only; no legacy database or device conversion.",
+    "Local operator-managed KEK custody; external KMS/HSM integration is not implemented.",
+    "Native feature qualification does not publish a release or replace RC signing/admission.",
+    "No customer Kubernetes/DNS rollout, automatic traffic cutover or cross-database activation lock was performed."
+  ]
+}

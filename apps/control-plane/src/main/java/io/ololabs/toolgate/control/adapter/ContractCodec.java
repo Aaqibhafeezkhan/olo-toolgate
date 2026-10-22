@@ -31,6 +31,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 /** Offline validation against canonical schemas embedded in the shared Maven artifact. */
 @ApplicationScoped
 public class ContractCodec implements Codec {
+    public com.fasterxml.jackson.databind.JsonNode configuration(String document, boolean yaml) { return parse(document, yaml); }
     private static final int MAX_BODY = 2 * 1024 * 1024;
     private final ObjectMapper mapper;
     private final ObjectNode canonicalDefinitions;
@@ -70,7 +71,7 @@ public class ContractCodec implements Codec {
     /** v2 schema files Control already serves, validated by their v2 binding names. v1 definitions that reference v2
      *  (`../v2/...`, such as the request context) pull in those definitions too. Every adopted name must be new or
      *  identical to its v1 definition apart from descriptions, since both share one flat namespace. */
-    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json", "profile.schema.json");
+    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json", "profile.schema.json", "discovery.schema.json");
     /** Single v2 definitions Control serves from files whose other names collide with v1 (package, protocol). */
     static final java.util.List<java.util.Map.Entry<String, String>> V2_NAMES = java.util.List.of(
         java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
@@ -80,7 +81,7 @@ public class ContractCodec implements Codec {
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",
-                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json")) {
+                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));
@@ -99,7 +100,14 @@ public class ContractCodec implements Codec {
             if (definition.isMissingNode()) throw new IllegalStateException("Unsupported canonical schema reference");
             definition.findValuesAsText("$ref").forEach(ref -> {
                 int split = ref.indexOf("#/$defs/");
-                pending.add(java.util.Map.entry(split <= 0 ? next.getKey() : ref.substring(0, split), ref.substring(split + 8)));
+                if (split < 0) throw new IllegalStateException("Unsupported canonical schema reference");
+                var target = ref.substring(split + 8);
+                if (ref.startsWith("../v1/")) {
+                    // These closed v1 definitions were loaded from the same bundled canonical artifact.
+                    if (!definitions.has(target)) throw new IllegalStateException("Unsupported canonical v1 reference");
+                    return;
+                }
+                pending.add(java.util.Map.entry(split == 0 ? next.getKey() : ref.substring(0, split), target));
             });
             var local = localReferences(definition.deepCopy());
             if (definitions.has(name) && !withoutDescriptions(definitions.get(name)).equals(withoutDescriptions(local))) {

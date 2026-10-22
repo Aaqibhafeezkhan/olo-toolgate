@@ -123,7 +123,7 @@ def main():
         "hostId": "host-e2e", "listen": f"127.0.0.1:{port}",
         "permitKeys": [{"kid": "e2e", "publicKeyPath": public}], "permitIssuer": "control",
         "storeDir": store, "workDir": os.path.join(work, "w"),
-        "control": {"url": f"http://127.0.0.1:{control_port}", "developmentLoopbackHttp": True},
+        "control": {"tenantId":"10000000-0000-4000-8000-000000000001","url": f"http://127.0.0.1:{control_port}", "developmentLoopbackHttp": True},
         "developmentLoopbackHttp": True,
     }
     config_path = os.path.join(work, "host.json")
@@ -148,7 +148,7 @@ def main():
             claims = {
                 "jti": f"jti-{n}", "iss": "control", "aud": "host-e2e", "iat": now, "nbf": now, "exp": now + 20000,
                 "nonce": f"nonce-{n}", "invocationId": f"inv-{n}", "attempt": 1,
-                "identity": {"tenantId": "t1", "mode": "HUMAN", "userId": "u1", "chain": [], "authorizationEpoch": 1, "claims": {}},
+                "identity": {"tenantId": "10000000-0000-4000-8000-000000000001", "mode": "HUMAN", "userId": "u1", "chain": [], "authorizationEpoch": 1, "claims": {}},
                 "target": {
                     "toolId": t["descriptor"]["toolId"], "toolDescriptorDigest": t["toolDescriptorDigest"],
                     "packageDigest": package_digest, "artifactDigest": artifact["artifactDigest"],

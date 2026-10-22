@@ -32,6 +32,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import uuid
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -44,7 +45,7 @@ DATA = Path('/data')
 TRUST = Path('/trust')
 TRUST_FILES = {'device-ca.crt': 'device-ca.crt', 'device-ca.key': 'device-ca.pem', 'server.crt': 'server.crt',
                'server.key': 'server-tls.pem', 'device-trust.p12': 'device-trust.p12'}
-TENANT = 'quickstart'
+TENANT = None  # Set from protected, persisted UUID state before composition starts.
 ISSUER = 'https://quickstart.local'
 GROUPS = ()  # Human portal permissions derive only from the reviewed Team/Role graph.
 # Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
@@ -117,8 +118,17 @@ class Database:
                 dbname=parsed.path.lstrip('/'), user=os.environ['QUARKUS_DATASOURCE_USERNAME'],
                 password=os.environ['QUARKUS_DATASOURCE_PASSWORD'], connect_timeout=3,
                 options='-c statement_timeout=3000', **options)
-        else: self.connection = sqlite3.connect(DATA/'state/control.sqlite', timeout=3)
-    def __enter__(self): return self
+        else:
+            self.connection = sqlite3.connect(DATA/'state/control.sqlite', timeout=3)
+            self.connection.execute('PRAGMA foreign_keys=ON')
+    def __enter__(self):
+        # This helper owns one transaction for local identity reads/audit writes.
+        if self.pg:
+            try: self.connection.execute("SELECT set_config('app.tenant_id', %s, true)", (TENANT,))
+            except Exception:
+                self.connection.close()
+                raise
+        return self
     def __exit__(self, typ, value, trace):
         try:
             if typ: self.connection.rollback()
@@ -126,7 +136,11 @@ class Database:
         finally: self.connection.close()
     def execute(self, sql, values=()):
         if self.pg:
-            sql = 'LOCK TABLE quickstart_vault IN SHARE ROW EXCLUSIVE MODE' if sql == 'BEGIN IMMEDIATE' else sql.replace('?', '%s')
+            if sql == 'BEGIN IMMEDIATE':
+                # Advisory transaction locks need no placeholder table and release on commit/rollback.
+                return self.connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))',
+                                               ('toolgate:quickstart-bootstrap:'+TENANT,))
+            sql = sql.replace('?', '%s')
         return self.connection.execute(sql, values)
     def commit(self): self.connection.commit()
 
@@ -224,6 +238,8 @@ def key(name):
 
 
 def jwt(groups, subject='admin', generation=None, directory_bound=True):
+    global TENANT
+    if TENANT is None: TENANT=tenant_identity()
     now = int(time.time())
     claims = {'iss': ISSUER, 'aud': 'toolgate-control', 'sub': subject, 'user_id': subject, 'tenant_id': TENANT, 'groups': groups, 'iat': now, 'exp': now+900}
     if not directory_bound: claims.pop('user_id')
@@ -263,6 +279,41 @@ def certificates():
         for name in ('device-ca.crt', 'server.crt'): atomic(DATA/'keys'/name, trust(name).read_bytes())
 
 
+def tenant_certificates(tenant):
+    """Independent discovery and device signing custody; the original root is TLS-only."""
+    root=DATA/'tenant-identity'
+    packet=root/'publication.json'
+    if root.is_symlink(): raise ValueError('Unsafe tenant identity custody')
+    root.mkdir(exist_ok=True,mode=0o700);root.chmod(0o700)
+    if not packet.exists():
+        # A partial set is refused, never silently replaced after a failed bring-up.
+        if any(root.iterdir()): raise ValueError('Incomplete tenant identity custody')
+        now=datetime.datetime.now(datetime.timezone.utc);references=[]
+        for purpose in ('DISCOVERY','DEVICE_CA'):
+            private=rsa.generate_private_key(public_exponent=65537,key_size=3072)
+            reference=dict(purpose=purpose,keyId='discovery-1',state='ACTIVE')
+            if purpose=='DEVICE_CA':
+                name=x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME,'ToolGate tenant device CA'),x509.NameAttribute(x509.NameOID.ORGANIZATIONAL_UNIT_NAME,tenant)])
+                certificate=x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(private.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=3650)).add_extension(x509.BasicConstraints(ca=True,path_length=0),critical=True).add_extension(x509.KeyUsage(False,False,False,False,False,True,True,False,False),critical=True).sign(private,hashes.SHA256())
+                reference.update(keyId=hashlib.sha256(certificate.public_bytes(serialization.Encoding.DER)).hexdigest(),certificatePem=certificate.public_bytes(serialization.Encoding.PEM).decode())
+            directory=root/tenant/purpose;directory.mkdir(parents=True,mode=0o700)
+            atomic(directory/(reference['keyId']+'.pk8.pem'),private.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
+            references.append(reference)
+        atomic(packet,json.dumps(dict(formatVersion=1,publications=[dict(tenantId=tenant,generation=1,keys=references)])))
+    value=strict(packet.read_bytes())
+    publication=value['publications']
+    if value['formatVersion']!=1 or len(publication)!=1 or publication[0]['tenantId']!=tenant: raise ValueError('Tenant identity publication mismatch')
+    # Rebuild the public client trust store from retained tenant CAs before opening TLS.
+    # No TLS issuer is trusted to authenticate a device.
+    store=root/'device-trust.p12';partial=root/'device-trust.p12.partial';partial.unlink(missing_ok=True)
+    for reference in publication[0]['keys']:
+        if reference['purpose']!='DEVICE_CA' or reference['state'] not in ('ACTIVE','READ_ONLY'): continue
+        certificate=root/(reference['keyId']+'.crt');atomic(certificate,reference['certificatePem'])
+        subprocess.run(['keytool','-importcert','-noprompt','-alias',reference['keyId'],'-file',str(certificate),'-keystore',str(partial),'-storetype','PKCS12','-storepass','changeit'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    if not partial.exists(): raise ValueError('Tenant client trust required')
+    partial.replace(store)
+
+
 def issue():
     now = datetime.datetime.now(datetime.timezone.utc)
     ca_key = key('device-ca'); server_key = key('server-tls')
@@ -277,6 +328,7 @@ def issue():
 
 
 def initialize():
+    if (DATA/'restore.pending').exists(): raise ValueError('Unfinished restore; recover into a new empty data volume')
     password_disabled(); mode = database_mode()
     os.umask(0o077)
     DATA.mkdir(exist_ok=True)
@@ -308,7 +360,10 @@ def initialize():
             atomic(identity_path(user),json.dumps(password_record(password)))
             atomic(DATA/('bootstrap-password-'+user),password+'\n')
     for name in ('identity', 'policy', 'permit', 'device-ca', 'server-tls', 'fleet', 'package-release'): key(name)
-    if not (DATA/'keys/vault.key').exists(): atomic(DATA/'keys/vault.key', secrets.token_bytes(32))
+    if (DATA/'keys/vault.key').exists(): raise ValueError('Unsupported raw vault key; select a fresh empty data directory')
+    if not (DATA/'keys/vault-wrapping.json').exists():
+        atomic(DATA/'keys/vault-wrapping.json', json.dumps(dict(formatVersion=1,currentKeyId='local-1',keys={'local-1':base64.b64encode(secrets.token_bytes(32)).decode()})))
+        (DATA/'keys/vault-wrapping.json').chmod(0o600)
     certificates()
     fleet_keys()
 
@@ -515,18 +570,41 @@ def login_hints():
             'refreshAt': refresh_at()}
 
 
+def tenant_identity():
+    """A fresh composition allocates its UUID once; aliases never become identity claims."""
+    path=DATA/'state/tenant.json'
+    alias=os.environ.get('TOOLGATE_DEFAULT_TENANT_ALIAS','quickstart')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}',alias): raise ValueError('Invalid default tenant alias')
+    if path.is_symlink(): raise ValueError('Unsafe tenant state')
+    if path.exists():
+        value=strict(path.read_bytes())
+        if set(value)!={'formatVersion','alias','tenantId'} or value['formatVersion']!=1 or value['alias']!=alias: raise ValueError('Invalid or conflicting tenant state')
+        if str(uuid.UUID(value['tenantId']))!=value['tenantId']: raise ValueError('Canonical UUID tenant state required')
+        return value['tenantId']
+    if (DATA/'state/control.sqlite').exists() or (DATA/'installation-review.json').exists():
+        raise ValueError('Unsupported development state; use a new empty data directory')
+    tenant=str(uuid.uuid4())
+    atomic(path,json.dumps(dict(formatVersion=1,alias=alias,tenantId=tenant)))
+    path.chmod(0o600)
+    return tenant
+
+
 def configure():
+    global TENANT
+    TENANT = tenant_identity()
+    tenant_certificates(TENANT)
     runtime_path=DATA/'run/runtime-token'
     if not runtime_path.exists(): atomic(runtime_path,secrets.token_urlsafe(48))
     packet, review_trust = prepare(DATA,TENANT,ISSUER,key,atomic)
     accounts()
     gateway_credentials()
     config = {'listen':'127.0.0.1:8081','managementListen':'127.0.0.1:9091',
-              'trustedTlsProxy':False,'allowedOrigins':[],
+              'trustedTlsProxy':False,'allowedOrigins':[],'tenantHosts':['127.0.0.1:8081'],
+              'publicDiscovery':dict(controlOrigin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443'),gatewayOrigin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL','https://localhost:8443')),
               'limits':{'maxBodyBytes':65536,'maxHeaderBytes':8192,'maxConcurrentRequests':128,
                         'maxConnections':256,'requestsPerSecond':1000,'requestTimeoutMs':20000,
                         'connectionTimeoutMs':35000,'shutdownTimeoutMs':35000,'auditQueueCapacity':256},
-              'control':{'url':'http://127.0.0.1:8082','tokenPath':'/data/run/machine-token',
+              'control':{'tenantId':TENANT,'url':'http://127.0.0.1:8082','caCertificatePath':str(DATA/'keys/device-ca.crt'),'tokenPath':'/data/run/machine-token',
                          'developmentLoopbackHttp':True},
               'toolHosts':[{'hostId':TOOL_HOST,'url':'http://127.0.0.1:8095'}]}
     atomic(DATA/'run/gateway.json',json.dumps(config))
@@ -534,12 +612,12 @@ def configure():
     atomic(DATA/'run/tool-host.json',json.dumps(dict(hostId=TOOL_HOST,listen='127.0.0.1:8095',
            permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
            storeDir=str(DATA/'tool-host/store'),workDir=str(DATA/'tool-host/work'),
-           control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           control=dict(tenantId=TENANT,url=tool_host_control_url(DATA/'state/tool-host'),caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host')),runtimes=dict(javaPath='java'))))
     atomic(DATA/'run/tool-host-remote.json',json.dumps(dict(hostId=REMOTE_TOOL_HOST,listen='127.0.0.1:8096',
            permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
            storeDir=str(DATA/'tool-host-remote/store'),workDir=str(DATA/'tool-host-remote/work'),
-           control=dict(url='https://localhost:8443',caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           control=dict(tenantId=TENANT,url=tool_host_control_url(DATA/'state/tool-host-remote'),caCertificatePath=str(DATA/'keys/device-ca.crt')),
            enrollment=dict(identityDir=str(DATA/'state/tool-host-remote')),runtimes=dict(javaPath='java'))))
     machine()
     env = dict(os.environ)
@@ -548,7 +626,9 @@ def configure():
                 'QUARKUS_HTTP_HOST': '0.0.0.0', 'QUARKUS_HTTP_PORT': '8082', 'QUARKUS_HTTP_SSL_PORT': '8443',
                 'QUARKUS_HTTP_INSECURE_REQUESTS': 'enabled', 'QUARKUS_MANAGEMENT_HOST': '127.0.0.1',
                 'QUARKUS_HTTP_SSL_CERTIFICATE_FILES': str(trust('server.crt')), 'QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES': str(trust('server.key')),
-                'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE': str(trust('device-trust.p12')), 'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_PASSWORD': 'changeit',
+                'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE': str(DATA/'tenant-identity/device-trust.p12'), 'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_PASSWORD': 'changeit',
+                'TOOLGATE_CONTROL_IDENTITY_CUSTODY_ROOT': str(DATA/'tenant-identity'),
+                'TOOLGATE_CONTROL_IDENTITY_PUBLICATION_PATH': str(DATA/'tenant-identity/publication.json'),
                 'MP_JWT_VERIFY_ISSUER': ISSUER, 'MP_JWT_VERIFY_AUDIENCES': 'toolgate-control', 'MP_JWT_VERIFY_PUBLICKEY_LOCATION': '/data/keys/identity-public.pem',
                 'TOOLGATE_CONTROL_BUNDLE_ENABLED': 'true', 'TOOLGATE_CONTROL_BUNDLE_KEY_ID': 'policy-local', 'TOOLGATE_CONTROL_BUNDLE_PRIVATE_KEY_PATH': '/data/keys/policy.pem',
                 'TOOLGATE_QUICKSTART_ARTIFACT_DIRECTORY': '/data/artifacts',
@@ -563,20 +643,20 @@ def configure():
                 'TOOLGATE_CONTROL_EFFECT_ENABLED':'true', 'TOOLGATE_CONTROL_EFFECT_PRIVATE_KEY_PATH':'/data/keys/permit.pem',
                 'TOOLGATE_CONTROL_EFFECT_KEY_ID':'effect-local','TOOLGATE_CONTROL_EFFECT_ISSUER':'control',
                 'TOOLGATE_CONTROL_EFFECT_AUDIENCE':'toolgate-client',
-                'TOOLGATE_CONTROL_VAULT_KEY_PATH':'/data/keys/vault.key',
+                'TOOLGATE_CONTROL_VAULT_WRAPPING_KEY_RING_PATH':'/data/keys/vault-wrapping.json',
                 'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(review_trust)),
-                'TOOLGATE_CONTROL_INITIALIZE_PATH':str(DATA/'state/initialize-snapshot.json'),
                 'TOOLGATE_CONTROL_ENDPOINT_ENABLED': 'true',
                 # Quickstart check-in defaults (platform-requirements.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
                 'TOOLGATE_CONTROL_CLIENT_CHECKIN_MS': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_MS') or '2000',
                 'TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT') or '0',
                 'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS': env.get('TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS') or '120000',
                 'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': str(trust('device-ca.key')), 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': str(trust('device-ca.crt')),
-                'TOOLGATE_CONTROL_ENDPOINT_TENANT_ID': TENANT, 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
+                'TOOLGATE_DEFAULT_TENANT_ALIAS': os.environ.get('TOOLGATE_DEFAULT_TENANT_ALIAS','quickstart'), 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
                 'TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION': 'Quickstart',
                 'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443'),
                 'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL', 'https://localhost:8443'),
                 'TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY': env.get('TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY','/opt/toolgate/client-downloads')}
+    if (DATA/'state/initialize-snapshot.json').exists(): settings['TOOLGATE_CONTROL_INITIALIZE_PATH']=str(DATA/'state/initialize-snapshot.json')
     if database_mode() == 'postgresql':
         for name in ('QUARKUS_DATASOURCE_JDBC_URL','QUARKUS_DATASOURCE_USERNAME','QUARKUS_DATASOURCE_PASSWORD','QUARKUS_FLYWAY_USERNAME','QUARKUS_FLYWAY_PASSWORD'):
             if not env.get(name): raise ValueError('External database settings required')
@@ -587,6 +667,23 @@ def configure():
     env.update(settings)
     return env
 
+
+def tool_host_control_url(identity_dir):
+    """Use the signed published origin, including its port, for local Tool Host discovery."""
+    url = os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443').rstrip('/')
+    path = Path(identity_dir)/'device.json'
+    if path.exists() and not path.is_symlink():
+        state = strict(path.read_bytes())
+        # Earlier compositions wrote the internal port before ever verifying discovery.
+        # Only an unbound journal may adopt the operator-configured published origin;
+        # established trust, pending approvals, keys and identity facts remain untouched.
+        if (url != 'https://localhost:8443' and state.get('formatVersion') == 3
+                and state.get('tenantId') == TENANT and state.get('serverUrl') == 'https://localhost:8443'
+                and state.get('sequence') == 0
+                and all(state.get(name) is None for name in ('manifest', 'discoveryTrust', 'identity', 'challenge'))):
+            state['serverUrl'] = url
+            private(path, state)
+    return url
 
 def fleet_keys():
     """Persistent disjoint package release and desired-state trust domains."""
@@ -788,7 +885,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 # A Marketplace import fetches and verifies the package in Control (60 s per request), so it waits longer.
                 secure = path.startswith(('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/'))
                 client = http.client.HTTPSConnection('127.0.0.1',8443,context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt')),timeout=10) if secure else http.client.HTTPConnection('127.0.0.1',8081 if mcp_http else 8082,timeout=35 if mcp_http else 75 if path=='/api/control/v1/marketplace/imports' else 10)
-                forwarded = {'authorization','content-type','idempotency-key','if-match','x-request-id','traceparent'}
+                forwarded = {'authorization','content-type','idempotency-key','if-match','x-request-id','traceparent','toolgate-tenant-id'}
                 if mcp_http: forwarded.update(('accept','mcp-protocol-version','mcp-method','mcp-name'))
                 headers = {k:v for k,v in self.headers.items() if k.lower() in forwarded}
                 try:
@@ -843,6 +940,7 @@ def deployment_details(page):
 def backup(destination):
     """Offline backup under the exclusive data lock; includes all trust/vault custody."""
     import shutil
+    if (DATA/'restore.pending').exists(): raise ValueError('Unfinished restore cannot be backed up')
     if database_mode() != 'sqlite': raise ValueError('External PostgreSQL requires pg_dump plus matching custody backup')
     destination = Path(destination)
     if destination.exists() or not destination.is_absolute() or destination.is_relative_to(DATA): raise ValueError('Backup must be a new absolute path outside /data')
@@ -853,7 +951,17 @@ def backup(destination):
         # sqlite3's transaction context does not close a connection. Close both
         # before hashing: a WAL checkpoint can remove sidecars at close time.
         with closing(sqlite3.connect(DATA/'state/control.sqlite')) as source, closing(sqlite3.connect(destination/'data/state/control.sqlite')) as target: source.backup(target)
-    atomic(destination/'manifest.json', json.dumps({'layoutVersion':1, 'files': {p.relative_to(destination/'data').as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in (destination/'data').rglob('*') if p.is_file()}}))
+    with closing(sqlite3.connect(destination/'data/state/control.sqlite')) as archived:
+        tenants=archived.execute('SELECT tenant_id FROM control_tenants').fetchall()
+        if len(tenants)!=1:raise ValueError('Quickstart backup requires one registered tenant')
+        tenant=tenants[0][0]
+        def rows(table,columns):
+            return [dict(zip(columns,row)) for row in archived.execute('SELECT '+','.join(columns)+' FROM '+table+' WHERE tenant_id=?',(tenant,))]
+        generation=archived.execute('SELECT directory_cache_generation FROM control_tenant_authority WHERE tenant_id=?',(tenant,)).fetchone()
+        clock=archived.execute('SELECT observed_at FROM control_approval_clocks WHERE tenant_id=?',(tenant,)).fetchone()
+        recovery=dict(tenantId=tenant,identityKeys=rows('control_tenant_identity_keys',['purpose','key_id','state','provider_reference','public_material','key_fingerprint','generation']),
+            vaultKeys=rows('control_tenant_vault_keys',['version','state','provider_reference','wrapped_encryption_key','wrapped_retry_key']),cacheGenerationFloor=generation[0],approvalClockFloor=clock[0] if clock else 0)
+    atomic(destination/'manifest.json', json.dumps({'layoutVersion':1,'tenantRecovery':recovery, 'files': {p.relative_to(destination/'data').as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in (destination/'data').rglob('*') if p.is_file()}}))
 
 
 def restore(source,review=None,trust=None):
@@ -885,7 +993,7 @@ def main():
                 if time.monotonic()>deadline: raise ValueError('Control readiness timeout')
                 stop.wait(.2)
             bridges=tls_bridges()
-            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_'))}
+            child_env = {name:value for name,value in os.environ.items() if not name.startswith(('QUARKUS_DATASOURCE_', 'QUARKUS_FLYWAY_', 'TOOLGATE_REDIS_', 'TOOLGATE_CONTROL_PLATFORM_', 'TOOLGATE_CONTROL_VAULT_', 'TOOLGATE_CONTROL_IDENTITY_'))}
             gateway_env = dict(child_env, TOOLGATE_GATEWAY_CONFIG='/data/run/gateway.json',TOOLGATE_GATEWAY_CREDENTIALS='/data/run/credentials.json')
             children.append(subprocess.Popen(['/usr/local/bin/olo-toolgate-gateway'],env=gateway_env))
             host_env = dict(child_env, TOOLGATE_TOOL_HOST_CONFIG='/data/run/tool-host.json')

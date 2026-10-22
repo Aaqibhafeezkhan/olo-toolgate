@@ -25,12 +25,17 @@ public class PostgresStore implements Store {
     private final ContractCodec codec;
     private final DirectoryCache directoryCache;
     private boolean ownsDataSource;
+    private TenantAdmission admission=new TenantAdmission(0,8);
     @Inject
     public PostgresStore(jakarta.enterprise.inject.Instance<AgroalDataSource> dataSource, ContractCodec codec, org.eclipse.microprofile.config.Config config) {
         this(config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
             && !config.getOptionalValue("toolgate.quickstart.storage", String.class).orElse("sqlite").equals("postgresql")
             ? SqliteState.openPooled(java.nio.file.Path.of(config.getValue("toolgate.quickstart.database", String.class))) : (javax.sql.DataSource) dataSource.get(), codec,
             DirectoryCacheConfig.create(config, codec));
+        int pool=config.getOptionalValue("quarkus.datasource.jdbc.max-size",Integer.class).orElse(16);
+        int cap=config.getOptionalValue("toolgate.capacity.database-concurrency",Integer.class).orElse(Math.max(1,Math.min(8,pool/2)));
+        if(pool<2||cap<1||cap>=pool)throw new IllegalStateException("Tenant database concurrency must reserve connections for other tenants");
+        admission=new TenantAdmission(0,cap);
         ownsDataSource = config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
             && !config.getOptionalValue("toolgate.quickstart.storage", String.class).orElse("sqlite").equals("postgresql");
     }
@@ -40,9 +45,16 @@ public class PostgresStore implements Store {
     }
     @jakarta.annotation.PreDestroy
     void close() { if (ownsDataSource && dataSource instanceof AgroalDataSource pool) pool.close(); }
-    public java.util.List<TenantId> tenants(){try(var connection=dataSource.getConnection();var s=connection.prepareStatement("SELECT tenant_id FROM control_tenants ORDER BY tenant_id LIMIT 10000");var rows=s.executeQuery()){var ids=new java.util.ArrayList<TenantId>();while(rows.next())ids.add(new TenantId(rows.getString(1)));return java.util.List.copyOf(ids);}catch(SQLException failure){throw Failure.unavailable();}}
     public <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work) {
-        try (var connection = dataSource.getConnection()) {
+        return transaction(tenant, write, false, (connection, session) -> work.apply(session));
+    }
+    /** Separate platform credential boundary, inaccessible through the tenant Store port. */
+    <T> T platformTransaction(TenantId tenant, java.util.function.BiFunction<Connection, Session, T> work) {
+        return transaction(tenant, true, true, work);
+    }
+    @SuppressWarnings("try") // The admission lease releases its slot on every transaction exit.
+    private <T> T transaction(TenantId tenant, boolean write, boolean platform, java.util.function.BiFunction<Connection, Session, T> work) {
+        try (var lease=platform?null:admission.enter(tenant);var connection = dataSource.getConnection()) {
             boolean local = SqliteState.local(connection);
             if (local) {
                 // WAL readers use a stable snapshot without reserving the single writer.
@@ -56,14 +68,31 @@ public class PostgresStore implements Store {
                 connection.setReadOnly(!write);
             }
             try {
+                // Transaction-local context is set before any tenant SQL on this connection.
+                // PostgreSQL clears it on commit/rollback, including pooled connection reuse.
+                if (!local) try (var statement = connection.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+                    statement.setString(1, tenant.value()); statement.execute();
+                }
                 if (!local) try (var statement = connection.createStatement()) {
                     statement.execute("SET LOCAL statement_timeout = '5s'"); statement.execute("SET LOCAL lock_timeout = '3s'");
                 }
                 if (write && !local) try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
                     statement.setString(1, tenant.value()); statement.execute();
                 }
+                if (!platform) {
+                    try (var statement = connection.prepareStatement(local
+                            ? "SELECT status='ACTIVE' FROM control_tenants WHERE tenant_id=?"
+                            : "SELECT public.control_tenant_admit(?, ?)")) {
+                        statement.setString(1, tenant.value()); if (!local) statement.setBoolean(2, write);
+                        try (var rows = statement.executeQuery()) { if (!rows.next() || !rows.getBoolean(1)) throw Failure.tenantUnavailable(); }
+                    }
+                    try (var statement = connection.prepareStatement("SELECT 1 FROM control_tenant_authority WHERE tenant_id=?")) {
+                        statement.setString(1, tenant.value());
+                        try (var rows = statement.executeQuery()) { if (!rows.next()) throw Failure.unavailable(); }
+                    }
+                }
                 var session = new JdbcSession(connection, tenant.value());
-                var result = work.apply(session);
+                var result = work.apply(connection, session);
                 // SQLite commit() starts another transaction immediately; closing this
                 // connection needs no second writer reservation after a successful commit.
                 if (local) connection.setAutoCommit(true); else connection.commit();
@@ -95,6 +124,24 @@ public class PostgresStore implements Store {
             directoryDirty = true; directoryEntry = null; directoryCache.invalidate(tenant);
         }
         JdbcSession(Connection connection, String tenant) { this.connection = connection; this.tenant = tenant; }
+        public java.util.List<IdentityKey> identityKeys(){
+            try(var s=statement("SELECT purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation FROM control_tenant_identity_keys WHERE tenant_id=? ORDER BY purpose,key_id LIMIT 4097");var r=s.executeQuery()){
+                var keys=new java.util.ArrayList<IdentityKey>();while(r.next())keys.add(new IdentityKey(r.getString(1),r.getString(2),r.getString(3),r.getString(4),r.getString(5),r.getString(6),r.getLong(7)));return java.util.List.copyOf(keys);
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void initializeIdentityKey(IdentityKey key){
+            try(var s=statement("INSERT INTO control_tenant_identity_keys(tenant_id,purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation) VALUES(?,?,?,?,?,?,?,?)",key.purpose(),key.keyId(),key.state(),key.providerReference(),key.publicMaterial(),key.fingerprint(),key.generation())){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public RuntimeProfile runtimeProfile(){
+            try(var s=statement("SELECT server_id,organization,control_url,gateway_url FROM control_tenant_runtime_profiles WHERE tenant_id=?");var r=s.executeQuery()){
+                return r.next()?new RuntimeProfile(r.getString(1),r.getString(2),r.getString(3),r.getString(4)):null;
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void initializeRuntimeProfile(RuntimeProfile profile){
+            try(var s=statement("INSERT INTO control_tenant_runtime_profiles(tenant_id,server_id,organization,control_url,gateway_url) VALUES(?,?,?,?,?)",profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl())){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.BuilderStore builder() { return new PostgresBuilderStore(connection, tenant); }
@@ -293,8 +340,9 @@ public class PostgresStore implements Store {
             } catch (SQLException e) { throw Failure.unavailable(); }
         }
         private DirectoryCache.Version directoryVersion() throws SQLException {
-            try (var s = statement("SELECT revision,directory_cache_generation FROM control_tenants WHERE tenant_id=?"); var rows = s.executeQuery()) {
-                return rows.next() ? new DirectoryCache.Version(rows.getLong(1), rows.getLong(2)) : new DirectoryCache.Version(0, -1);
+            try (var s = statement("SELECT revision,directory_cache_generation FROM control_tenant_authority WHERE tenant_id=?"); var rows = s.executeQuery()) {
+                if (!rows.next()) throw Failure.unavailable();
+                return new DirectoryCache.Version(rows.getLong(1), rows.getLong(2));
             }
         }
         public String adoptionDigest(TenantId requestedTenant, io.ololabs.toolgate.control.application.Codec requestedCodec) {
@@ -315,10 +363,11 @@ public class PostgresStore implements Store {
                 if(after.equals(before))return;
                 if(after.revision()<before.revision() || !after.entries().equals(before.entries())&&after.revision()<=before.revision())throw Failure.conflict();
                 invalidateDirectory();
-                try (var statement = statement("INSERT INTO control_tenants (tenant_id,revision,authorization_epoch) VALUES (?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET revision=excluded.revision,authorization_epoch=GREATEST(control_tenants.authorization_epoch+1,excluded.authorization_epoch)", after.revision(),after.revision())) {
-                    statement.executeUpdate();
+                try (var statement = connection.prepareStatement(SqliteState.sql(connection,"UPDATE control_tenant_authority SET revision=?,authorization_epoch=GREATEST(authorization_epoch+1,?) WHERE tenant_id=? AND revision=?"))) {
+                    statement.setLong(1,after.revision()); statement.setLong(2,after.revision()); statement.setString(3,tenant); statement.setLong(4,before.revision());
+                    if (statement.executeUpdate()!=1) throw Failure.conflict();
                 }
-                if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenants WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}
+                if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenant_authority WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}
                 for (var id : before.entries().keySet()) if (!after.entries().containsKey(id)) {
                     if(id.kind()==Kind.DEVICE){
                         var row=endpoint(id.value());

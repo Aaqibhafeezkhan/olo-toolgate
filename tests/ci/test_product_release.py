@@ -158,8 +158,10 @@ class VersionPropagationTests(unittest.TestCase):
             self.assertEqual((target/'packages/contracts/VERSION').read_text().strip(), '1.0.0-beta.42')
             self.assertEqual(tomllib.loads((target/'Cargo.toml').read_text())['workspace']['package']['version'], '1.0.0-beta.42')
             lock = tomllib.loads((target/'Cargo.lock').read_text())
-            names = {'olo-toolgate-client','olo-toolgate-gateway','olo-toolgate-tool-host','toolgate-cli','olo-toolgate-contracts'}
-            self.assertEqual({p['version'] for p in lock['package'] if p['name'] in names and 'source' not in p}, {'1.0.0-beta.42'})
+            self.assertEqual({p['version'] for p in lock['package'] if 'source' not in p}, {'1.0.0-beta.42'})
+            original = tomllib.loads((ROOT/'Cargo.lock').read_text())
+            self.assertEqual([p for p in lock['package'] if 'source' in p],
+                             [p for p in original['package'] if 'source' in p])
             npm = json.loads((target/'package-lock.json').read_text())
             self.assertEqual({npm['packages'][p]['version'] for p in ('','apps/admin-ui','packages/contracts/typescript')}, {'1.0.0-beta.42'})
             mapping = json.loads((target/'config/initial/releases.json').read_text())

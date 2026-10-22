@@ -11,7 +11,13 @@ public final class Ids {
         }
         return value;
     }
-    public record TenantId(String value) { public TenantId { valid(value); } }
+    public record TenantId(String value) {
+        public TenantId {
+            if (value == null || !value.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+                throw new IllegalArgumentException("Canonical tenant UUID required");
+        }
+        public static TenantId create() { return new TenantId(java.util.UUID.randomUUID().toString()); }
+    }
     public sealed interface RecordId permits UserId, TeamId, AgentId, ToolId, PolicyId, DeviceId, RoleId, DeviceGroupId, GroupRecordId {
         String value();
         Kind kind();

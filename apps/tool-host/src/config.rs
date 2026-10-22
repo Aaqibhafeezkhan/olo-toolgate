@@ -47,6 +47,11 @@ pub struct PermitKey {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ControlConfig {
+    /// Private persistent authority metadata for the preprovisioned certificate mode.
+    #[serde(default)]
+    pub identity_trust_directory: Option<PathBuf>,
+    /// Immutable owner of this host, its device identity and every accepted permit.
+    pub tenant_id: String,
     /// Control's base URL, such as `https://control:8443`.
     pub url: String,
     /// This host's workload certificate and key (PEM), presented to Control.
@@ -157,6 +162,18 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        let tenant = &self.control.tenant_id;
+        if tenant.len() != 36
+            || !tenant.bytes().enumerate().all(|(i, b)| {
+                if [8, 13, 18, 23].contains(&i) {
+                    b == b'-'
+                } else {
+                    b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
+                }
+            })
+        {
+            return Err("control.tenantId must be a canonical tenant UUID".into());
+        }
         if self.host_id.is_empty() || self.permit_issuer.is_empty() || self.permit_keys.is_empty() {
             return Err("hostId, permitIssuer and permitKeys are required".into());
         }
@@ -181,13 +198,44 @@ impl Config {
             );
         }
         let url = &self.control.url;
-        if !url.starts_with("https://") {
-            let loopback = ["http://127.0.0.1", "http://localhost", "http://[::1]"]
-                .iter()
-                .any(|p| url.starts_with(p));
-            if !(self.control.development_loopback_http && loopback) {
-                return Err(format!("control.url {url} must be https, or a loopback http URL with developmentLoopbackHttp"));
-            }
+        let parsed = reqwest::Url::parse(url).map_err(|_| "Canonical Control origin required")?;
+        let local_http = parsed.scheme() == "http"
+            && matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
+            && self.control.development_loopback_http;
+        if parsed.scheme() == "https" {
+            olo_toolgate_tenant_identity::origin(url)
+                .map_err(|_| "Canonical HTTPS Control origin required")?;
+        } else if !local_http
+            || self.enrollment.is_some()
+            || self.control.client_certificate_path.is_some()
+        {
+            return Err("HTTPS Control origin required for device/workload identity".into());
+        }
+        if !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+            || parsed.path() != "/"
+        {
+            return Err("Canonical Control origin required".into());
+        }
+        if parsed.scheme() == "https"
+            && self.enrollment.is_none()
+            && self.control.client_certificate_path.is_none()
+        {
+            return Err("Tool Host enrollment or a preprovisioned certificate required".into());
+        }
+        if self.control.client_certificate_path.is_some()
+            && self
+                .control
+                .identity_trust_directory
+                .as_ref()
+                .is_none_or(|path| !path.is_absolute())
+        {
+            return Err(
+                "Private identityTrustDirectory required for preprovisioned workload identity"
+                    .into(),
+            );
         }
         if self.enrollment.is_some() && self.control.client_certificate_path.is_some() {
             return Err(

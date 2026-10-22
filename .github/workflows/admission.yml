@@ -4,6 +4,10 @@ name: RC admission
 on:
   workflow_call:
     inputs:
+      branch_checks:
+        description: Allow non-main branch push/manual checks without RC publication admission
+        type: boolean
+        default: false
       main_only:
         description: Require main and exclude version tags for compatibility callers
         type: boolean
@@ -17,7 +21,8 @@ permissions:
 jobs:
   admit:
     if: >-
-      (github.ref == 'refs/heads/main' || (!inputs.main_only && startsWith(github.ref, 'refs/tags/')))
+      ((inputs.branch_checks && !inputs.main_only && startsWith(github.ref, 'refs/heads/'))
+      || github.ref == 'refs/heads/main' || (!inputs.main_only && startsWith(github.ref, 'refs/tags/')))
       && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main')
       && vars.TOOLGATE_CI_ENABLED == 'true'
     runs-on: ubuntu-24.04
@@ -32,5 +37,6 @@ jobs:
         name: Check CI enablement and PR title
         env:
           CI_ENABLED: ${{ vars.TOOLGATE_CI_ENABLED }}
+          BRANCH_CHECKS: ${{ inputs.branch_checks && !inputs.main_only }}
           GH_TOKEN: ${{ github.token }}
         run: python tools/ci/admission.py

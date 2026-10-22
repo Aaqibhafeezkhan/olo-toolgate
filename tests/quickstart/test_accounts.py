@@ -28,7 +28,7 @@ FILE=dict(formatVersion=2,tenantId='quickstart',revision=0,
                   configuration=dict(requiredReviews=0)),
     users=[dict(id='public',name='Public visitor',email='public@demo.invalid',enabled=True,revision=1,showOnLogin=True,claims={'employee_id':'E-101'}),
            dict(id='readiness',name='Readiness',enabled=True,revision=1),dict(id='admin',name='Replaced',enabled=False,revision=1)],
-    teams=[group('VisitorTeam',roleIds=[]),group('team-default',userIds=['public'],roleIds=[]),group('installation-administrators',userIds=[],roleIds=[])],
+    teams=[group('VisitorTeam',userIds=[],roleIds=[]),group('team-default',userIds=['public'],roleIds=[]),group('installation-administrators',userIds=[],roleIds=[])],
     agents=[dict(id='public-agent',name='Public agent',enabled=True,revision=1,ownerUserId='admin')],
     agentGroups=[group('VisitorAgentGroup',agentIds=[],roleIds=[]),group('PublicAgentGroup',agentIds=['public-agent'],roleIds=[])],
     toolGroups=[group('MockToolGroup',toolIds=[])],deviceGroups=[group('ToolHostGroup',deviceIds=[])],
@@ -85,7 +85,8 @@ class AccountTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name)
         quickstart.DATA=self.root/'data';quickstart.TRUST=self.root/'trust'
         for name in ('','keys','state','run'):(quickstart.DATA/name).mkdir(mode=0o700,exist_ok=True)
-        (self.root/'initialize.json').write_text(json.dumps(FILE))
+        quickstart.TENANT=quickstart.tenant_identity()
+        (self.root/'initialize.json').write_text(json.dumps({**FILE,'tenantId':quickstart.TENANT}))
         self.env=patch.dict(os.environ,{'TOOLGATE_INITIALIZE_FILE':str(self.root/'initialize.json'),'TOOLGATE_DEMO_ACCOUNT_POOL':'3',
                                          'TOOLGATE_DEMO_REFRESH_AT':'2026-10-15T03:00:00Z'});self.env.start()
     def tearDown(self):self.env.stop();self.temp.cleanup()
@@ -96,6 +97,8 @@ class AccountTests(unittest.TestCase):
         self.prepare()
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
             db.executescript((ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text(encoding='utf-8'))
+            db.execute("INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES(?,?,?,'ACTIVE',1,1)",(quickstart.TENANT,'quickstart','Test tenant'))
+            db.execute('INSERT INTO control_tenant_authority(tenant_id) VALUES(?)',(quickstart.TENANT,))
             for binding in strict_packet()['identityBindings']:
                 db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING',binding['id'],1,json.dumps(binding)))
         quickstart.atomic(quickstart.DATA/'identity.json',json.dumps(quickstart.password_record('admin-Initial-Password-2026')))
@@ -149,7 +152,7 @@ class AccountTests(unittest.TestCase):
         self.assertFalse(users['admin']['enabled']);self.assertEqual(users['admin']['name'],'Replaced')
         self.assertTrue(next(u for u in installation_packet()['users'] if u['id']=='admin')['enabled'])
         self.assertEqual(teams['installation-administrators']['roleIds'],[])
-        self.assertIn('admin',teams['team-default']['userIds']);self.assertIn('public',teams['team-default']['userIds'])
+        self.assertEqual(teams['team-default']['userIds'],['public'])
         self.assertEqual(users['public']['claims'],{'employee_id':'E-101'});self.assertTrue(users['public']['showOnLogin'])
         self.assertFalse(users['alice']['enabled']);self.assertIn('alice',teams['VisitorTeam']['userIds'])  # Placeholder.
         self.assertIn('installed-public',rows('identityBindings'));self.assertIn('installed-readiness',rows('identityBindings'))
@@ -187,6 +190,27 @@ class AccountTests(unittest.TestCase):
         self.assertLessEqual(records+1+FILE['reservedRecords']+largest,512)  # Plus one owned device per account.
         state=json.loads((quickstart.DATA/'state/installation.json').read_text())
         self.assertEqual(state['maxPool'],largest)
+
+    def test_layers_replace_arrays_and_never_move_omitted_group_members(self):
+        snapshot={name:[] for name in bootstrap.COLLECTIONS}
+        snapshot['users']=[group('admin')]
+        snapshot['teams']=[group('team',userIds=['admin'],roleIds=['old'])]
+        snapshot['agentGroups']=[group('original',agentIds=['agent'],roleIds=[])]
+        document={'teams':[group('team',userIds=[],roleIds=[])],
+                  'agentGroups':[group('new',agentIds=['agent'],roleIds=[])]}
+        with patch.object(bootstrap,'read_initialize',return_value=document):
+            bootstrap.initialize(snapshot,quickstart.TENANT,quickstart.ISSUER,1)
+        self.assertEqual(snapshot['teams'][0]['userIds'],[])
+        self.assertEqual(snapshot['teams'][0]['roleIds'],[])
+        self.assertEqual(snapshot['agentGroups'][0]['agentIds'],['agent'])
+        self.assertEqual(snapshot['agentGroups'][1]['agentIds'],['agent'])  # Control rejects the explicit exclusivity conflict.
+
+    def test_local_database_enforces_registry_ownership_foreign_keys(self):
+        self.install()
+        with quickstart.Database() as db:
+            self.assertEqual(db.execute('PRAGMA foreign_keys').fetchone()[0],1)
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute("INSERT INTO control_secrets(tenant_id,name,tool_group_id,device_group_id,version,key_version,cipher) VALUES(?,?,?,?,1,1,?)",('00000000-0000-4000-8000-000000000099','test','tools','devices','opaque'))
 
     def test_credentials_file_logins_hints_and_no_forced_password_change(self):
         saved=self.install();path=quickstart.DATA/'credentials.json'

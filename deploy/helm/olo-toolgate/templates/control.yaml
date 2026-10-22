@@ -1,6 +1,7 @@
 {{/* Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 */}}
 {{- if .Values.control.enabled }}
 {{- $g := .Values.control }}
+{{- if $g.builder.enabled }}{{ fail "Embedded SDK builds are restricted to local single-tenant Quickstart; deploy isolated external builds and publish verified packages" }}{{- end }}
 {{- $name := include "olo-toolgate.controlName" . }}
 {{- $c := $g.clientCheckIn }}
 {{- if eq $g.cache.mode "redis" }}
@@ -49,6 +50,9 @@ data:
   TOOLGATE_CONTROL_BUILDER_DATA_DIRECTORY: /data/builder
   TOOLGATE_CONTROL_MAX_RECORDS: {{ printf "%d" (int $g.limits.maxRecords) | quote }}
   TOOLGATE_CONTROL_MAX_CONFIG_BYTES: {{ printf "%d" (int $g.limits.maxConfigBytes) | quote }}
+  TOOLGATE_CAPACITY_REQUESTS_PER_SECOND: {{ printf "%d" (int $g.limits.requestsPerSecond) | quote }}
+  TOOLGATE_CAPACITY_HTTP_CONCURRENCY: {{ printf "%d" (int $g.limits.httpConcurrency) | quote }}
+  TOOLGATE_CAPACITY_DATABASE_CONCURRENCY: {{ printf "%d" (int $g.limits.databaseConcurrency) | quote }}
   TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED: {{ $g.tracing.enabled | quote }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {{ printf "https://%s:%v" $g.tracing.host $g.tracing.port | quote }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: {{ $g.tracing.protocol | quote }}
@@ -109,6 +113,21 @@ data:
   {{- end }}
   {{- end }}
   TOOLGATE_CONTROL_ENDPOINT_ENABLED: {{ $g.endpoint.enabled | quote }}
+  TOOLGATE_DEFAULT_TENANT_ALIAS: {{ $g.defaultTenantAlias | quote }}
+  TOOLGATE_TENANCY_MODE: {{ $g.tenancy.mode | quote }}
+  {{- if and (eq $g.tenancy.mode "subdomain") (not $g.tenancy.initializationSecret) }}{{ fail "subdomain tenancy requires control.tenancy.initializationSecret" }}{{ end }}
+  {{- if $g.tenancy.hosts }}
+  TOOLGATE_SINGLE_TENANT_HOSTS: {{ join "," $g.tenancy.hosts | quote }}
+  {{- end }}
+  {{- if $g.tenancy.initializationSecret }}
+  TOOLGATE_INITIALIZE_MANIFEST: /etc/toolgate/initialization/manifest.json
+  {{- if not $g.tenancy.initializationItems }}{{ fail "initializationSecret requires explicit initializationItems including manifest.json" }}{{ end }}
+  {{- if not $g.vaultKeyRingSecret }}{{ fail "tenant initialization requires control.vaultKeyRingSecret" }}{{ end }}
+  {{- end }}
+  TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH: /etc/toolgate/platform-db/password
+  {{- if $g.vaultKeyRingSecret }}
+  TOOLGATE_CONTROL_VAULT_WRAPPING_KEY_RING_PATH: /etc/toolgate/vault-wrapping/key-ring.json
+  {{- end }}
   TOOLGATE_CONTROL_CLIENT_CHECKIN_MS: {{ printf "%d" (int $c.checkInMs) | quote }}
   TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT: {{ printf "%d" (int $c.jitterPct) | quote }}
   {{- if gt (int $c.offlineAfterMs) 0 }}
@@ -117,13 +136,14 @@ data:
   TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY: {{ ternary "/opt/toolgate/client-downloads" "" $g.clientDownloads.enabled | quote }}
   {{- if $g.endpoint.enabled }}
   TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: /opt/toolgate/core-mcp/core-packages.lock.json
-  TOOLGATE_CONTROL_ENDPOINT_TENANT_ID: {{ required "control.endpoint.tenantId required" $g.endpoint.tenantId | quote }}
+  {{- if not $g.tenancy.initializationSecret }}
   TOOLGATE_CONTROL_ENDPOINT_SERVER_ID: {{ required "control.endpoint.serverId required" $g.endpoint.serverId | quote }}
   TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION: {{ required "control.endpoint.organization required" $g.endpoint.organization | quote }}
   TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL: {{ required "control.endpoint.controlUrl required" $g.endpoint.controlUrl | quote }}
   TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL: {{ required "control.endpoint.gatewayUrl required" $g.endpoint.gatewayUrl | quote }}
-  TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH: /etc/toolgate/device-ca/private.pem
-  TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH: /etc/toolgate/device-ca/ca.pem
+  {{- end }}
+  TOOLGATE_CONTROL_IDENTITY_CUSTODY_ROOT: /etc/toolgate/tenant-identity
+  TOOLGATE_CONTROL_IDENTITY_PUBLICATION_PATH: /etc/toolgate/tenant-identity/publication.json
   QUARKUS_HTTP_INSECURE_REQUESTS: disabled
   QUARKUS_HTTP_SSL_PORT: "8082"
   QUARKUS_HTTP_SSL_CLIENT_AUTH: request
@@ -224,7 +244,7 @@ spec:
                 secretKeyRef: {name: {{ required "control.endpoint.trustStoreSecret required" $g.endpoint.trustStoreSecret | quote }}, key: password}
             {{- end }}
             - {name: MP_JWT_VERIFY_PUBLICKEY_LOCATION, value: /etc/toolgate/identity/public.pem}
-            {{- range $env, $key := dict "QUARKUS_DATASOURCE_USERNAME" "username" "QUARKUS_DATASOURCE_PASSWORD" "password" "QUARKUS_FLYWAY_USERNAME" "migrationUsername" "QUARKUS_FLYWAY_PASSWORD" "migrationPassword" }}
+            {{- range $env, $key := dict "QUARKUS_DATASOURCE_USERNAME" "username" "QUARKUS_DATASOURCE_PASSWORD" "password" "QUARKUS_FLYWAY_USERNAME" "migrationUsername" "QUARKUS_FLYWAY_PASSWORD" "migrationPassword" "TOOLGATE_CONTROL_PLATFORM_USERNAME" "platformUsername" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef: {name: {{ $g.database.credentialsSecret | quote }}, key: {{ $key }}}
@@ -242,6 +262,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
           volumeMounts:
+            {{- if $g.tenancy.initializationSecret }}
+            - {name: initialization, mountPath: /etc/toolgate/initialization, readOnly: true}
+            {{- end }}
+            - {name: platform-db, mountPath: /etc/toolgate/platform-db, readOnly: true}
+            {{- if $g.vaultKeyRingSecret }}
+            - {name: vault-wrapping, mountPath: /etc/toolgate/vault-wrapping, readOnly: true}
+            {{- end }}
             {{- if eq $g.cache.mode "redis" }}
             - {name: cache-credentials, mountPath: /etc/toolgate/cache, readOnly: true}
             {{- if $g.cache.caSecret }}
@@ -283,7 +310,7 @@ spec:
             - {name: identity, mountPath: /etc/toolgate/identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
             {{- if $g.endpoint.enabled }}
-            - {name: device-ca, mountPath: /etc/toolgate/device-ca, readOnly: true}
+            - {name: tenant-identity, mountPath: /etc/toolgate/tenant-identity, readOnly: true}
             - {name: server-tls, mountPath: /etc/toolgate/server-tls, readOnly: true}
             - {name: device-trust, mountPath: /etc/toolgate/device-trust, readOnly: true}
             {{- end }}
@@ -294,6 +321,26 @@ spec:
             - {name: database-ca, mountPath: /etc/toolgate/database, readOnly: true}
             {{- end }}
       volumes:
+        {{- if $g.tenancy.initializationSecret }}
+        - name: initialization
+          secret:
+            secretName: {{ $g.tenancy.initializationSecret | quote }}
+            defaultMode: 0440
+            items:
+              {{- toYaml $g.tenancy.initializationItems | nindent 14 }}
+        {{- end }}
+        {{- if $g.vaultKeyRingSecret }}
+        - name: vault-wrapping
+          secret:
+            secretName: {{ $g.vaultKeyRingSecret | quote }}
+            defaultMode: 0440
+            items: [{key: key-ring.json, path: key-ring.json}]
+        {{- end }}
+        - name: platform-db
+          secret:
+            secretName: {{ $g.database.credentialsSecret | quote }}
+            defaultMode: 0440
+            items: [{key: platformPassword, path: password}]
         {{- if eq $g.cache.mode "redis" }}
         - name: cache-credentials
           secret:
@@ -387,11 +434,15 @@ spec:
         {{- end }}
         {{- end }}
         {{- if $g.endpoint.enabled }}
-        - name: device-ca
+        - name: tenant-identity
           secret:
-            secretName: {{ required "control.endpoint.deviceCaSecret required" $g.endpoint.deviceCaSecret | quote }}
+            secretName: {{ required "control.endpoint.identityCustodySecret required" $g.endpoint.identityCustodySecret | quote }}
             defaultMode: 0440
-            items: [{key: private.pem, path: private.pem}, {key: ca.pem, path: ca.pem}]
+            items:
+              - {key: publication.json, path: publication.json}
+              {{- range $item := $g.endpoint.identityKeyFiles }}
+              - {key: {{ $item.key | quote }}, path: {{ $item.path | quote }}}
+              {{- end }}
         - name: server-tls
           secret:
             secretName: {{ required "control.endpoint.tlsSecret required" $g.endpoint.tlsSecret | quote }}

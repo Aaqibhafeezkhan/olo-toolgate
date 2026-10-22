@@ -97,9 +97,13 @@ def split_findings(report, historical):
 
 
 def scan():
+    cache=ROOT/'.dev/trivy-cache';cache.mkdir(parents=True,exist_ok=True)
     with snapshot() as archive:
         command='mkdir /source && tar -xf /source.tar -C /source && exec trivy fs --no-progress --timeout 15m --include-dev-deps --scanners vuln,license --license-full --format json --exit-code 0 --severity HIGH,CRITICAL /source'
-        result=subprocess.run(['docker','run','--rm','-v',f'{archive.as_posix()}:/source.tar:ro','--entrypoint','sh','aquasec/trivy:0.61.1','-c',command],
+        result=subprocess.run(['docker','run','--rm','-v',f'{archive.as_posix()}:/source.tar:ro',
+                              '-v',f'{cache.as_posix()}:/root/.cache/trivy',
+                              '-e','TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2',
+                              '--entrypoint','sh','aquasec/trivy:0.61.1','-c',command],
                               cwd=ROOT,capture_output=True,text=True,encoding='utf-8')
         print(result.stderr,file=sys.stderr,end='',flush=True)
         result.check_returncode()

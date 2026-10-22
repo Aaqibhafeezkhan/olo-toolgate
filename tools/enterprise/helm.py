@@ -11,7 +11,7 @@ from check import run
 
 def checks():
     values={'gateway.enabled':'true','gateway.credentialsSecret':'workload-facts',
-        'gateway.control.tokenSecret':'gateway-service','gateway.networkPolicy.controlTo[0].podSelector.matchLabels.role':'control',
+        'gateway.control.tokenSecret':'gateway-service','gateway.control.url':'https://control.gateway.example.com','gateway.publicOrigin':'https://gateway.example.com','gateway.control.tenantId':'10000000-0000-4000-8000-000000000001','gateway.config.tenantHosts[0]':'gateway.example.com','gateway.networkPolicy.controlTo[0].podSelector.matchLabels.role':'control',
         r'gateway.networkPolicy.dnsTo[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name':'kube-system',
         'control.enabled':'true','control.publicKeySecret':'identity','control.database.credentialsSecret':'db',
         'control.database.caSecret':'db-ca','control.effect.signingSecret':'effect-custody',
@@ -23,7 +23,8 @@ def checks():
     for label,extra in [('install',[]),('upgrade',['--is-upgrade'])]:
         rendered=render(extra).stdout;docs=[d for d in yaml.safe_load_all(rendered) if d]
         gateway=json.loads(next(d for d in docs if d['kind']=='ConfigMap' and 'gateway.json' in d.get('data',{}))['data']['gateway.json'])
-        assert set(gateway)=={'listen','managementListen','trustedTlsProxy','allowedOrigins','limits','control'}
+        assert set(gateway)=={'listen','managementListen','trustedTlsProxy','allowedOrigins','limits','control','tenantHosts','publicDiscovery'}
+        assert gateway['publicDiscovery']=={'controlOrigin':values['gateway.control.url'],'gatewayOrigin':values['gateway.publicOrigin']}
         for d in [d for d in docs if d['kind']=='Deployment']:
             volumes={v['name']:v for v in d['spec']['template']['spec']['volumes']}
             if d['metadata']['name'].endswith('gateway'):assert 'effect-signing' not in volumes and 'bundle-signing' not in volumes

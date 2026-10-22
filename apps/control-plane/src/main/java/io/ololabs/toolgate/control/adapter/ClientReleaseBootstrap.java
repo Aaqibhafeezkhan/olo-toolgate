@@ -18,11 +18,11 @@ import java.util.Base64;
  *  authority. When present it must be one of the configured release trust keys and never the organization key. */
 @ApplicationScoped
 public class ClientReleaseBootstrap {
-    @Inject Config config; @Inject PostgresStore store; @Inject ContractCodec codec; @Inject FleetService fleet; @Inject ArtifactStore artifacts;
+    @Inject Config config; @Inject PostgresStore store; @Inject ContractCodec codec; @Inject FleetBootstrap fleet; @Inject ArtifactStore artifacts;
     private String value(String name) { return config.getOptionalValue("toolgate.control.client-images." + name, String.class).orElse(null); }
 
     @Produces @ApplicationScoped ClientReleases releases() {
-        if (!config.getOptionalValue("toolgate.control.client-images.enabled", Boolean.class).orElse(false)) return new ClientReleases(store, codec, null, null, null, fleet, artifacts, java.time.Clock.systemUTC());
+        if (!config.getOptionalValue("toolgate.control.client-images.enabled", Boolean.class).orElse(false)) return new ClientReleases(store, codec, null, null, null, fleet::forTenant, artifacts, java.time.Clock.systemUTC());
         try {
             javax.net.ssl.SSLContext tls = null;
             if (value("ca-path") != null) {
@@ -53,7 +53,7 @@ public class ClientReleaseBootstrap {
                 if (!trusted) throw new IllegalArgumentException("The package-release key must be a configured release trust key");
                 signer = new RsaPackageReleaseSigner(codec, key, kid);
             }
-            return new ClientReleases(store, codec, registry, settings, signer, fleet, artifacts, java.time.Clock.systemUTC());
+            return new ClientReleases(store, codec, registry, settings, signer, fleet::forTenant, artifacts, java.time.Clock.systemUTC());
         } catch (Exception invalid) { throw new IllegalStateException("Client image releases need a registry origin, repository, approved base by digest and, if configured, a separate release key", invalid); }
     }
     private static byte[] unsigned(java.math.BigInteger value) { byte[] bytes = value.toByteArray(); return bytes[0] == 0 ? java.util.Arrays.copyOfRange(bytes, 1, bytes.length) : bytes; }

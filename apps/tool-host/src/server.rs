@@ -57,15 +57,18 @@ impl Host {
         }
         std::fs::create_dir_all(config.work_dir.join("i"))
             .map_err(|e| format!("{}: {e}", config.work_dir.display()))?;
+        let control = Control::new(&config.control)?;
+        control.validate_host(&config.host_id)?;
         Ok(Arc::new(Host {
             verifier: Verifier::new(
                 keys,
                 &config.permit_issuer,
                 &config.host_id,
+                &config.control.tenant_id,
                 config.limits.max_permit_window_ms,
             ),
             store: Store::new(config.store_dir.clone(), config.work_dir.clone()),
-            control: Arc::new(Control::new(&config.control)?),
+            control: Arc::new(control),
             slots: Arc::new(Semaphore::new(config.limits.max_concurrent)),
             config,
         }))

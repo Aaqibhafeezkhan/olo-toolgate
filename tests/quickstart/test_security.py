@@ -25,11 +25,29 @@ class SecurityTests(unittest.TestCase):
         quickstart.DATA=self.root/'data';quickstart.DATA.mkdir(mode=0o700)
         (quickstart.DATA/'keys').mkdir(mode=0o700)
         (quickstart.DATA/'state').mkdir(mode=0o700)
+        quickstart.TENANT=quickstart.tenant_identity()
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
             db.executescript((ROOT/'apps/control-plane/src/main/resources/db/quickstart/V1.sql').read_text(encoding='utf-8'))
+            db.execute("INSERT INTO control_tenants(tenant_id,alias,display_name,status,created_at,updated_at) VALUES(?,?,?,'ACTIVE',1,1)",(quickstart.TENANT,'quickstart','Test tenant'))
+            db.execute('INSERT INTO control_tenant_authority(tenant_id) VALUES(?)',(quickstart.TENANT,))
             binding={'id':'installed-admin','name':'Reviewed test identity','enabled':True,'revision':1,'userId':'admin','issuer':quickstart.ISSUER,'subject':'admin','sessionEpoch':1,'firstSeenUnixMs':1,'lastAttemptUnixMs':1,'attemptCount':1,'registrationReason':'REVIEWED_INSTALLATION','sessionsValidAfterUnixMs':0}
             db.execute('INSERT INTO control_records VALUES(?,?,?,?,?)',(quickstart.TENANT,'IDENTITY_BINDING','installed-admin',1,json.dumps(binding)))
     def tearDown(self):self.temp.cleanup()
+    def test_tenant_uuid_persists_and_unsupported_state_is_rejected(self):
+        import uuid
+        current=quickstart.tenant_identity()
+        self.assertEqual(current,str(uuid.UUID(current)))
+        self.assertEqual(current,quickstart.tenant_identity())
+        with patch.dict(os.environ,{'TOOLGATE_DEFAULT_TENANT_ALIAS':'different'}):
+            with self.assertRaises(ValueError):quickstart.tenant_identity()
+        (quickstart.DATA/'state/tenant.json').unlink()
+        with self.assertRaises(ValueError):quickstart.tenant_identity()
+    def test_unfinished_restore_cannot_initialize_or_create_an_archive(self):
+        quickstart.atomic(quickstart.DATA/'restore.pending','{}')
+        with self.assertRaisesRegex(ValueError,'Unfinished restore'):quickstart.initialize()
+        archive=self.root/'incomplete'
+        with self.assertRaisesRegex(ValueError,'Unfinished restore'):quickstart.backup(str(archive))
+        self.assertFalse(archive.exists())
     def test_deployment_metadata_preserves_enrollment_and_observed_addresses(self):
         (quickstart.DATA/'run').mkdir()
         record=dict(executionKind='TOOL_HOST_DIRECT',containerId='a'*64,containerName='quickstart-1',
@@ -65,15 +83,19 @@ class SecurityTests(unittest.TestCase):
         gateway='https://127.0.0.1:18450'
         with patch.dict(os.environ,{'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL':control,
                                     'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL':gateway},clear=True):
-            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
+            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')),patch.object(quickstart,'tenant_certificates'):
                 settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],control)
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],gateway)
+            for name in ('tool-host.json','tool-host-remote.json'):
+                self.assertEqual(json.loads((quickstart.DATA/'run'/name).read_text())['control']['url'],control)
         with patch.dict(os.environ,{},clear=True):
-            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')):
+            with patch.object(quickstart,'prepare',return_value=(quickstart.DATA/'packet.json',quickstart.DATA/'trust.json')),patch.object(quickstart,'tenant_certificates'):
                 settings=quickstart.configure()
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL'],'https://localhost:8443')
             self.assertEqual(settings['TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL'],'https://localhost:8443')
+            for name in ('tool-host.json','tool-host-remote.json'):
+                self.assertEqual(json.loads((quickstart.DATA/'run'/name).read_text())['control']['url'],'https://localhost:8443')
     def test_fleet_keys_are_persistent_and_disjoint(self):
         quickstart.fleet_keys()
         organization = json.loads((quickstart.DATA/'keys/organization-keys.json').read_text(encoding='utf-8'))[0]
@@ -85,6 +107,26 @@ class SecurityTests(unittest.TestCase):
         original = (quickstart.DATA/'keys/fleet.pem').read_bytes()
         quickstart.fleet_keys()
         self.assertEqual(original, (quickstart.DATA/'keys/fleet.pem').read_bytes())
+    def test_tenant_signing_keys_are_disjoint_persistent_and_publication_is_bound(self):
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+        def keytool(arguments,**kwargs):
+            Path(arguments[arguments.index('-keystore')+1]).write_bytes(b'public-store-test-double')
+        with patch.object(quickstart.subprocess,'run',side_effect=keytool):
+            quickstart.tenant_certificates(quickstart.TENANT)
+            root=quickstart.DATA/'tenant-identity'
+            before={str(path.relative_to(root)):path.read_bytes() for path in root.rglob('*.pk8.pem')}
+            self.assertEqual(len(before),2)
+            moduli=[serialization.load_pem_private_key(pem,password=None).public_key().public_numbers().n for pem in before.values()]
+            self.assertNotEqual(*moduli)
+            packet=json.loads((root/'publication.json').read_text())
+            self.assertNotIn('PRIVATE KEY',json.dumps(packet))
+            authority=next(row for row in packet['publications'][0]['keys'] if row['purpose']=='DEVICE_CA')
+            certificate=x509.load_pem_x509_certificate(authority['certificatePem'].encode())
+            self.assertEqual(certificate.subject.get_attributes_for_oid(x509.NameOID.ORGANIZATIONAL_UNIT_NAME)[0].value,quickstart.TENANT)
+            quickstart.tenant_certificates(quickstart.TENANT)
+            self.assertEqual(before,{str(path.relative_to(root)):path.read_bytes() for path in root.rglob('*.pk8.pem')})
+            with self.assertRaises(ValueError):quickstart.tenant_certificates('10000000-0000-4000-8000-000000000001')
 
     def test_password_policy_rotation_signature_and_stale_generation(self):
         for password in ('','short','a'*32,'abc def ghi jkl mno','é'*32,123):
@@ -214,13 +256,15 @@ class SecurityTests(unittest.TestCase):
         quickstart.atomic(quickstart.DATA/'layout.json','{"layoutVersion":1}')
         with sqlite3.connect(quickstart.DATA/'state/control.sqlite') as db:
             db.execute('PRAGMA journal_mode=WAL')
-            db.execute('CREATE TABLE records(id INTEGER PRIMARY KEY,value TEXT)');db.execute("INSERT INTO records VALUES(1,'persistent')")
+            tenant=quickstart.TENANT
+            db.execute('INSERT INTO control_server_documents VALUES(?,?,?)',(tenant,'sha256:'+'a'*64,'persistent'))
         backup=self.root/'snapshot';quickstart.backup(str(backup))
         target=self.root/'restored';target.mkdir();quickstart.DATA=target
         manifest=json.loads((backup/'manifest.json').read_text(encoding='utf-8'))
         import hashlib
         self.assertEqual(manifest['files']['state/control.sqlite'],hashlib.sha256((backup/'data/state/control.sqlite').read_bytes()).hexdigest())
-        with sqlite3.connect(backup/'data/state/control.sqlite') as db:self.assertEqual(db.execute('SELECT value FROM records').fetchone()[0],'persistent')
+        with sqlite3.connect(backup/'data/state/control.sqlite') as db:self.assertEqual(db.execute('SELECT document FROM control_server_documents').fetchone()[0],'persistent')
+        self.assertEqual(manifest['tenantRecovery']['tenantId'],tenant)
         # A consistent archive never authorizes restoration of its own credentials.
         with self.assertRaises(ValueError):quickstart.restore(str(backup))
         self.assertEqual(list(target.iterdir()),[])

@@ -75,8 +75,15 @@ def trigger_message(event, event_name):
 def main():
     event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
     enabled = os.environ.get('CI_ENABLED') == 'true'
-    title = trigger_message(event, os.environ['GITHUB_EVENT_NAME']) if enabled else ''
-    allowed, reason = decision(title, enabled)
+    ref = os.environ.get('GITHUB_REF', '')
+    branch_check = (enabled and os.environ.get('BRANCH_CHECKS') == 'true'
+                    and os.environ['GITHUB_EVENT_NAME'] in ('push', 'workflow_dispatch')
+                    and ref.startswith('refs/heads/') and ref != 'refs/heads/main')
+    if branch_check:
+        allowed, reason = True, 'Branch checks admitted; no publication'
+    else:
+        title = trigger_message(event, os.environ['GITHUB_EVENT_NAME']) if enabled else ''
+        allowed, reason = decision(title, enabled)
     with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
         output.write('allow=' + str(allowed).lower() + '\n')
     print(reason)

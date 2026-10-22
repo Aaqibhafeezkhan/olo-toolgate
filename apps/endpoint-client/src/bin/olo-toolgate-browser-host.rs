@@ -17,6 +17,7 @@ struct Request {
     operation: Operation,
     console_url: Option<String>,
     nonce: Option<String>,
+    expected_tenant_id: Option<String>,
 }
 fn read_frame(input: &mut impl Read) -> std::io::Result<Request> {
     let mut size = [0; 4];
@@ -29,8 +30,15 @@ fn read_frame(input: &mut impl Read) -> std::io::Result<Request> {
     input.read_exact(&mut bytes)?;
     let request: Request =
         serde_json::from_slice(&bytes).map_err(|_| std::io::ErrorKind::InvalidData)?;
-    if matches!(request.operation, Operation::Connect | Operation::Proof)
-        != request.console_url.is_some()
+    if let Some(tenant) = &request.expected_tenant_id {
+        olo_toolgate_client::contracts::Contracts::shared()
+            .and_then(|contracts| contracts.encode("TenantUuid", tenant))
+            .map_err(|_| std::io::ErrorKind::InvalidData)?;
+    }
+    if request
+        .console_url
+        .as_deref()
+        .is_none_or(|url| olo_toolgate_client::browser::console_origin(url).is_err())
         || (request.operation == Operation::Proof) != request.nonce.is_some()
     {
         return Err(std::io::ErrorKind::InvalidData.into());
@@ -48,6 +56,26 @@ fn main() {
     if request.operation == Operation::Proof {
         let response = olo_toolgate_client::runtime::executor().and_then(|runtime| {
             runtime.block_on(async {
+                let config = olo_toolgate_client::config::Config::load(
+                    &olo_toolgate_client::install::config_path(),
+                )?;
+                olo_toolgate_client::browser::authorize_console(
+                    &config,
+                    request.console_url.as_deref().unwrap_or(""),
+                )?;
+                let checked = olo_toolgate_client::ipc::console_call_expected(
+                    &config.ipc_endpoint,
+                    olo_toolgate_contracts::v2::ConsoleClientOperation::Health,
+                    request.console_url.as_deref().unwrap_or(""),
+                    request.expected_tenant_id.as_deref(),
+                )
+                .await?;
+                if checked.error == Some(olo_toolgate_contracts::ErrorCode::TenantMismatch) {
+                    return Err(olo_toolgate_client::Failure::TenantMismatch);
+                }
+                if checked.error.is_some() {
+                    return Err(olo_toolgate_client::Failure::Unavailable);
+                }
                 tokio::time::timeout(
                     std::time::Duration::from_secs(20),
                     olo_toolgate_client::ipc::console_proof(
@@ -62,31 +90,48 @@ fn main() {
         });
         write_frame(match response {
             Ok(proof) => serde_json::json!({"proof":proof}),
+            Err(olo_toolgate_client::Failure::TenantMismatch) => {
+                serde_json::json!({"error":"TENANT_MISMATCH"})
+            }
             Err(_) => serde_json::json!({"error":"UNAVAILABLE"}),
         });
         return;
     }
     let connecting = request.operation == Operation::Connect;
     let operation = match request.operation {
-        Operation::Health => olo_toolgate_contracts::ClientIpcOperation::Health,
-        Operation::Enroll => olo_toolgate_contracts::ClientIpcOperation::Enroll,
-        Operation::Connect => olo_toolgate_contracts::ClientIpcOperation::Health,
+        Operation::Health => olo_toolgate_contracts::v2::ConsoleClientOperation::Health,
+        Operation::Enroll => olo_toolgate_contracts::v2::ConsoleClientOperation::Enroll,
+        Operation::Connect => olo_toolgate_contracts::v2::ConsoleClientOperation::Health,
         Operation::Proof => unreachable!(),
     };
     let mut server_url = None;
     let response = olo_toolgate_client::runtime::executor().and_then(|runtime| {
         runtime.block_on(async {
-            if let Some(url) = request.console_url {
-                server_url = Some(olo_toolgate_client::browser::connect(&url).await?);
+            if connecting {
+                server_url = Some(
+                    olo_toolgate_client::browser::connect(
+                        request.console_url.as_deref().unwrap_or(""),
+                        request.expected_tenant_id.as_deref(),
+                    )
+                    .await?,
+                );
             }
             tokio::time::timeout(std::time::Duration::from_secs(20), async {
                 loop {
-                    let response = olo_toolgate_client::ipc::call(
+                    let response = olo_toolgate_client::ipc::console_call_expected(
                         &olo_toolgate_client::install::ipc_endpoint(),
                         operation.clone(),
+                        request.console_url.as_deref().unwrap_or(""),
+                        request.expected_tenant_id.as_deref(),
                     )
                     .await;
-                    if !connecting || response.as_ref().is_ok_and(|value| value.error.is_none()) {
+                    if !connecting
+                        || response.as_ref().is_ok_and(|value| {
+                            value.error.is_none()
+                                || value.error
+                                    == Some(olo_toolgate_contracts::ErrorCode::TenantMismatch)
+                        })
+                    {
                         return response;
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -100,16 +145,19 @@ fn main() {
         Ok(value) => {
             serde_json::to_value(value).unwrap_or(serde_json::json!({"error":"UNAVAILABLE"}))
         }
+        Err(olo_toolgate_client::Failure::TenantMismatch) => {
+            serde_json::json!({"error":"TENANT_MISMATCH"})
+        }
         Err(_) => serde_json::json!({"error":"UNAVAILABLE"}),
     };
-    if server_url.is_none() {
-        server_url =
-            olo_toolgate_client::config::Config::load(&olo_toolgate_client::install::config_path())
-                .ok()
-                .map(|settings| settings.server_url);
-    }
-    if let Some(server) = server_url {
-        value["serverUrl"] = serde_json::json!(server);
+    if value.get("error").is_none_or(serde_json::Value::is_null) {
+        value["consoleOrigin"] = serde_json::json!(olo_toolgate_client::browser::console_origin(
+            request.console_url.as_deref().unwrap_or("")
+        )
+        .ok());
+        if let Some(server) = server_url {
+            value["serverUrl"] = serde_json::json!(server);
+        }
     }
     write_frame(value);
 }
@@ -134,7 +182,7 @@ mod tests {
     use super::*;
     #[test]
     fn bounded_little_endian_protocol() {
-        let body = br#"{"operation":"health"}"#;
+        let body = br#"{"operation":"health","consoleUrl":"https://gate.example/console/"}"#;
         let mut bytes = (body.len() as u32).to_le_bytes().to_vec();
         bytes.extend(body);
         assert_eq!(
@@ -150,7 +198,9 @@ mod tests {
             r#"{"operation":"execute"}"#,
             r#"{"operation":"health","server":"https://evil.example"}"#,
             r#"{"operation":"connect"}"#,
-            r#"{"operation":"health","consoleUrl":"https://gate.example/console/"}"#,
+            r#"{"operation":"health"}"#,
+            r#"{"operation":"enroll"}"#,
+            r#"{"operation":"health","consoleUrl":"https://gate.example/other"}"#,
             r#"{"operation":"connect","consoleUrl":"https://gate.example/console/","credentials":"secret"}"#,
         ] {
             let mut bytes = (invalid.len() as u32).to_le_bytes().to_vec();

@@ -63,13 +63,14 @@ permission step depends on the desktop; universal unattended browser-to-install
 behavior is not supported. Linux requires systemd; this is not a .deb/.rpm package.
 
 Windows setup detects an existing client and offers repair/reinstall or uninstall.
-Repair retains configuration and enrollment for the same gateway. Connect from another
-ToolGate page switches gateways and starts a new enrollment. Linux/macOS installs
-remain initial-install only. Enrollment keys are retained on uninstall by default. Do not use `--purge` unless you intend to remove enrollment state.
-If a fresh debug data volume replaces the local gateway CA, Windows setup or Retry Connect
-verifies the new gateway and clears the old enrollment and gateway-specific settings,
-even if the public config already contains the new CA. It preserves the device key and
-starts a new enrollment. Removing a container while retaining its data volume preserves
+Repair retains configuration and enrollment for the same organization. Connect from another
+ToolGate site returns `TENANT_MISMATCH`. Linux/macOS installs remain initial-install only.
+Uninstall retains tenant state by default; explicit `--purge` removes enrollment, local
+data and the device key before another organization can be installed. Unsupported
+pre-release journals and orphan keys are rejected without conversion.
+If a fresh debug data volume replaces the local gateway CA, use explicit uninstall
+and purge before installing that recreated organization. Setup never silently clears
+the tenant UUID anchor or accepts the replacement CA. Removing a container while retaining its data volume preserves
 the gateway CA and enrollment. The Clients list refreshes automatically after enrollment.
 Use the installed client `uninstall` command as administrator on Linux/macOS;
 Windows Installed Apps invokes this command. Installation does not authorize tools
@@ -134,3 +135,5 @@ rolling diagnostic history supplements the server authorization audit.
 branding and license information. The interactive Windows installer displays the
 bundled Apache-2.0 license and requires acceptance before installation. Native
 installer silent mode retains the existing administrator automation behavior.
+
+Setup verifies discovery v2 over HTTPS before saving the canonical tenant UUID (`tenantId`) and Control origin. A separate signed tenant device CA authenticates enrollment; it is independent of the local TLS bootstrap root. Existing development journal formats are unsupported and are never converted or silently rebound.

@@ -55,6 +55,14 @@ def ready(container, port):
     raise RuntimeError('Quickstart readiness timeout; see build/quickstart/startup-failure.log')
 
 
+def configure_external_gateway(exec_text, port):
+    # Published ports can change when Docker recreates the parent's namespace.
+    exec_text('/opt/quickstart-python/bin/python','-c',
+        "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json;"
+        "c=json.loads((s.DATA/'run/gateway.json').read_text());c['listen']='0.0.0.0:8084';c['trustedTlsProxy']=True;"
+        "c['managementListen']='0.0.0.0:9094';c['tenantHosts']=['127.0.0.1:8084',"+repr('127.0.0.1:'+port)+"];s.atomic(s.DATA/'run/external-gateway.json',json.dumps(c))")
+
+
 def restart_ready(container):
     run(['docker','restart','-t','35',container],capture_output=True)
     # Docker may reassign automatically published host ports when restarting.
@@ -143,14 +151,11 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             delegated_token=secrets.token_urlsafe(48)
             delegated_digest=hashlib.sha256(delegated_token.encode()).hexdigest()
             # Exact production Gateway, online authority on an explicit fixture-only loopback hop.
-            exec_text('/opt/quickstart-python/bin/python','-c',
-                "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json;"
-                "c=json.loads((s.DATA/'run/gateway.json').read_text());c['listen']='0.0.0.0:8084';c['trustedTlsProxy']=True;"
-                "c['managementListen']='0.0.0.0:9094';s.atomic(s.DATA/'run/external-gateway.json',json.dumps(c))")
+            configure_external_gateway(exec_text,info['NetworkSettings']['Ports']['8084/tcp'][0]['HostPort'])
             exec_text('/opt/quickstart-python/bin/python','-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json,time;"
                 "db=s.Database();identities=[json.loads(r[0]) if isinstance(r[0],str) else r[0] for r in db.execute(\"SELECT document FROM control_records WHERE kind='IDENTITY_BINDING'\").fetchall()];db.connection.close();"
-                "i=next(i for i in identities if i['subject']=='admin');values=json.loads((s.DATA/'run/credentials.json').read_text());"
+                "i=next(i for i in identities if i['subject']=='reviewer-1');values=json.loads((s.DATA/'run/credentials.json').read_text());"
                 "c={**values[0]['context'],'mode':'DELEGATED','workloadBindingId':'workload-delegated','userId':i['userId'],'sessionEpoch':i['sessionEpoch'],'credentialSha256':"+repr(delegated_digest)+"};"
                 "values.append(dict(tokenSha256="+repr(delegated_digest)+",context=c,expiresAtUnixMs=int(time.time()*1000)+3600000));"
                 "s.atomic(s.DATA/'run/external-credentials.json',json.dumps(values))")
@@ -203,6 +208,17 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             member={'agentGroups':'agentIds','toolGroups':'toolIds','deviceGroups':'deviceIds'}[key]
             assert all(not row[member] for row in snapshot[key] if row['id']!=default)
         mark('fresh reviewed installation/independent identities/default groups/zero runtime rights')
+        # Hit the Gateway listener directly: no supervisor forwarding or runtime bearer token.
+        public=json.loads(exec_text('/opt/quickstart-python/bin/python','-c',
+            "import json,urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8081/.well-known/olo-toolgate-client',timeout=10).read().decode())"))
+        import base64
+        encoded=public['jws'].split('.')[1]
+        manifest=json.loads(base64.urlsafe_b64decode(encoded+'='*((-len(encoded))%4)))
+        assert manifest['tenantId']==snapshot['tenantId'] and manifest['protocolVersion']==2
+        configuration=json.loads(exec_text('/opt/quickstart-python/bin/python','-c',
+            "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8081/api/public/v1/clients/configuration',timeout=10).read().decode())"))
+        assert configuration=={'serverUrl':manifest['controlUrl']}
+        mark('anonymous Gateway tenant v2 discovery/fixed verified Control configuration')
         # Quickstart has no native client: its execution identities are its two Tool Hosts, approved like any device.
         # The fresh profile then deploys Hello World to tool-host-local and enables server_greet; nobody may run it yet.
         owner=admin
@@ -227,11 +243,18 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             time.sleep(1)
         for tool_name in hello_tools:
             assert ok(api('/api/control/v1/tools/'+tool_name,admin))['enabled'] is True
-        assert device in ok(api('/api/control/v1/device-groups/default-devices',admin))['deviceIds']
+        assert {device,REMOTE_TOOL_HOST}<=set(ok(api('/api/control/v1/device-groups/default-devices',admin))['deviceIds'])
         target=dict(bindingId='binding-default',deviceId=device)
         def catalog(token=None):
             return {t['toolId'] for t in ok(api('/api/control/v1/access/human/catalog',token or human,target,'POST'))['tools']}
         assert catalog()==set()
+        for identity_dir in ('tool-host','tool-host-remote'):
+            journal=json.loads(exec_text('cat','/data/state/'+identity_dir+'/device.json'))
+            assert journal['formatVersion']==3 and journal['sequence']>0
+            assert journal['tenantId']==journal['identity']['tenantId']==snapshot['tenantId']
+            assert journal['manifest']['protocolVersion']==2
+            assert journal['discoveryTrust']['tenantId']==snapshot['tenantId']
+            assert journal['identity']['issuerCertificatePem'].strip()!=exec_text('cat','/data/keys/device-ca.crt')
         mark('Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery')
         # The bootstrap account must retain Super Admin authority. Keep it as the installation owner;
         # the two other local accounts become ordinary administrators for maker/checker and HUMAN tests.
@@ -389,8 +412,30 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         reviewed('/api/control/v1/tools/acme.orders/greet',{**greet,'enabled':True},'PUT',greet['revision'])
         assert 'acme.orders/greet' in ok(api('/api/control/v1/tool-groups/default-tools',admin))['toolIds']
         binding=ok(api('/api/control/v1/bindings/binding-default',admin))
-        reviewed('/api/control/v1/bindings/binding-default',{**binding,'actions':sorted({*binding['actions'],'invoke'}),
-            'allowedPackageDigests':sorted({*binding['allowedPackageDigests'],digest.removeprefix('sha256:')})},'PUT',binding['revision'])
+        # The fresh profile reconciles binding-default to its own two packages. An independently
+        # deployed package needs its own reviewed execution boundary, rather than editing that profile-owned binding.
+        reviewed('/api/control/v1/bindings',{**binding,'id':'binding-orders','name':'Reviewed starter execution',
+            'revision':1,'actions':['invoke'],'allowedPackageDigests':[digest.removeprefix('sha256:')]})
+        def select_execution(binding_id):
+            code="""import sys,json,os,signal
+sys.path.insert(0,'/opt/quickstart')
+import supervisor as s
+from pathlib import Path
+for name in ('credentials.json','external-credentials.json'):
+ p=Path('/data/run')/name
+ if p.exists():
+  values=json.loads(p.read_text())
+  for value in values:
+   if value['context'].get('workloadBindingId')=='workload-local':value['context']['bindingId']=sys.argv[1]
+  s.atomic(p,json.dumps(values))
+for p in Path('/proc').glob('[0-9]*/cmdline'):
+ try:
+  if p.read_bytes().split(b'\\0')[0].endswith(b'/olo-toolgate-gateway'):os.kill(int(p.parent.name),signal.SIGHUP)
+ except (OSError,ProcessLookupError):pass
+"""
+            exec_text('/opt/quickstart-python/bin/python','-c',code,binding_id)
+            if gateway_image:run(['docker','kill','--signal','HUP',external],capture_output=True)
+        select_execution('binding-orders')
         orders=dict(scope,actions=['invoke'],resources=[dict(kind='CUSTOM',locator='tool://acme.orders/greet',match='EXACT')])
         for purpose in ('CAPABILITY','SERVICE'):
             reviewed('/api/control/v1/grants',dict(id='orders-'+purpose.lower(),name='Reviewed starter '+purpose,
@@ -413,12 +458,15 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         # Switch the device: the same version, deployed to the host the Gateway cannot reach. It fetches the call from
         # Control and answers through it.
         assert deploy(REMOTE_TOOL_HOST)['hostIds']==[REMOTE_TOOL_HOST]
+        def host_status():
+            code="import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s,json;from pathlib import Path;s.TENANT=json.loads(Path('/data/state/tenant.json').read_text())['tenantId'];db=s.Database();print(json.dumps(dict(catalogs=db.execute('SELECT device_id,local_tools FROM control_endpoint_configurations WHERE tenant_id=?',(s.TENANT,)).fetchall())))"
+            return dict(group=ok(api('/api/control/v1/device-groups/default-devices',admin))['deviceIds'],catalogs=exec_text('/opt/quickstart-python/bin/python','-c',code))
         deadline=time.monotonic()+120
         while True:  # The tool is unavailable until the remote host has fetched the deployment and checked in.
             status,moved=mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Grace'}})
             if status==200 and 'result' in moved:break
             assert status in (200,403),(status,moved)
-            assert time.monotonic()<deadline,('The remote Tool Host never took the call',moved,exec_text('ls','-R','/data/tool-host-remote'))
+            assert time.monotonic()<deadline,('The remote Tool Host never took the call',moved,host_status())
             time.sleep(1)
         assert moved['result']['structuredContent']=={'text':'Hi, Grace'},moved
         placed(1,1)
@@ -427,6 +475,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             reviewed('/api/control/v1/grants/'+grant_id,{**starter,'enabled':False},'PUT',starter['revision'])
         assert ok(mcp('tools/list'))['result']['tools']==[]
         assert mcp('tools/call',{'name':'acme.orders/greet','arguments':{'name':'Ada'}})[0]==403
+        select_execution('binding-default')
         mark('verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation')
         if gateway_image:
             identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='reviewer-1')
@@ -532,6 +581,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             gateway_management='http://127.0.0.1:'+ports['9094/tcp'][0]['HostPort']
             # This fixture shares the parent's network namespace. Docker replaces
             # that namespace on restart; rejoin it before proving authority outage.
+            configure_external_gateway(exec_text,ports['8084/tcp'][0]['HostPort'])
             run(['docker','restart','-t','35',external],capture_output=True)
             deadline=time.monotonic()+40
             while True:
@@ -546,6 +596,8 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         assert ok(api('/api/control/v1/grants/'+grant['id'],admin))['enabled'] is False
         mark('restart preserves identity/key/revocation/monotonic epoch/no installation reseeding')
         if gateway_image and not browser:
+            available=mcp('tools/list')
+            assert available[0]==200,('Gateway ingress failed before the Core outage',available)
             # Freeze only Core: stopping its namespace-owning container also removes
             # Docker's published Gateway ports, which cannot prove fail-closed HTTP.
             signal_core="import os,pathlib,signal;ids=[int(p.parent.name) for p in pathlib.Path('/proc').glob('[0-9]*/comm') if p.read_text().strip()=='java'];assert len(ids)==1;os.kill(ids[0],signal.SIG%s)"
@@ -555,7 +607,8 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
                 while request(gateway_management+'/v1/health/ready')[0]==200:
                     assert time.monotonic()<deadline,'Stale Gateway remained ready without Core'
                     time.sleep(.25)
-                assert mcp('tools/list')[0] in (502,503)
+                unavailable=mcp('tools/list')
+                assert unavailable[0] in (502,503),('Expected a Core dependency failure',unavailable)
             finally:
                 exec_text('/opt/quickstart-python/bin/python','-c',signal_core%'CONT')
             deadline=time.monotonic()+20
@@ -581,6 +634,12 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
                  'TOOLGATE_ENTERPRISE_REVIEWER_2':passwords['admin']})
             mark('real accessible enterprise administration browser')
         output=ROOT/'build/quickstart';output.mkdir(parents=True,exist_ok=True)
+        if not database_options:
+            for owned in reversed(containers):run(['docker','stop','-t','35',owned],capture_output=True)
+            sys.path.insert(0,str(ROOT/'tools/tenancy'))
+            from sqlite_recovery_check import qualify
+            qualify(image,volume,output/'sqlite-recovery-evidence.json')
+            mark('real image offline SQLite backup/independent signed restore/key and runtime quarantine')
         (output/('smoke-postgresql.json' if database_options else 'smoke.json')).write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
         if browser:(output/'browser-smoke.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
         print('Fresh enterprise runtime gates passed')
@@ -614,18 +673,26 @@ def main():
     if args.build_only:return
     if args.postgresql:
         network='toolgate-enterprise-pg-'+secrets.token_hex(6)
+        custody=network+'-platform'
         with database() as db,tempfile.TemporaryDirectory(prefix='toolgate-db-custody-') as temp:
             run(['docker','network','create',network],capture_output=True)
+            run(['docker','volume','create',custody],capture_output=True)
             try:
+                run(['docker','run','--rm','--network','none','--user','0','-i','-v',custody+':/custody',
+                    '--entrypoint','/opt/quickstart-python/bin/python',args.image,'-c',
+                    "import os,sys;from pathlib import Path;p=Path('/custody/password');p.write_text(sys.stdin.read());p.chmod(0o600);os.chown(p,65532,65532)"],
+                    input=db['CONTROL_TEST_PASSWORD'],capture_output=True,text=True)
                 run(['docker','network','connect','--alias','postgres',network,db['container']],capture_output=True)
                 env=Path(temp)/'database.env'
                 env.write_text('\n'.join(k+'='+v for k,v in dict(TOOLGATE_QUICKSTART_DATABASE_MODE='postgresql',
                     QUARKUS_DATASOURCE_JDBC_URL='jdbc:postgresql://postgres:5432/control?sslmode=disable',
                     QUARKUS_DATASOURCE_USERNAME='control_app',QUARKUS_DATASOURCE_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                     QUARKUS_FLYWAY_USERNAME='control_migrator',QUARKUS_FLYWAY_PASSWORD=db['CONTROL_TEST_PASSWORD'],
+                    TOOLGATE_CONTROL_PLATFORM_USERNAME='control_provisioner',TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH='/run/tenant-database/password',
                     TOOLGATE_CONTROL_DEVELOPMENT_MODE='true').items())+'\n',encoding='utf-8');env.chmod(0o600)
-                smoke(args.image,not args.no_browser,['--network',network,'--env-file',str(env)],args.gateway_image,args.hello_world_only)
+                smoke(args.image,not args.no_browser,['--network',network,'--env-file',str(env),'-v',custody+':/run/tenant-database:ro'],args.gateway_image,args.hello_world_only)
             finally:
+                subprocess.run(['docker','volume','rm','-f',custody],capture_output=True)
                 subprocess.run(['docker','network','disconnect',network,db['container']],capture_output=True)
                 subprocess.run(['docker','network','rm',network],capture_output=True)
     else:smoke(args.image,not args.no_browser,gateway_image=args.gateway_image,hello_world_only=args.hello_world_only)

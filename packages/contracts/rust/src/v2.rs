@@ -324,6 +324,40 @@ pub struct ConnectionRequirement {
     pub provider: String,
     pub scopes: Vec<String>,
 }
+/// Canonical ConsoleClientOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConsoleClientOperation {
+    #[serde(rename = "HEALTH")]
+    Health,
+    #[serde(rename = "ENROLL")]
+    Enroll,
+}
+/// OS-authenticated native request scoped to a console origin and optional expected UUID. The service validates protected local tenant/origin binding before reading health or starting enrollment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleClientRequest {
+    #[serde(deserialize_with = "const_console_client_request_kind")]
+    pub kind: String,
+    pub request_id: String,
+    pub operation: ConsoleClientOperation,
+    pub console_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_tenant_id: Option<String>,
+}
+/// Requester-scoped device state and optional verified tenant UUID. Errors carry no installation or device metadata. The service enforces the error-only response invariant before serialization.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleClientResponse {
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health: Option<crate::ClientHealth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenge: Option<crate::EndpointEnrollmentPrompt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<crate::ErrorCode>,
+}
 /// Identifies the shared contract set.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -455,6 +489,53 @@ pub struct DeviceApproval {
     pub duration_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_user_id: Option<String>,
+}
+/// Canonical DiscoveryAuthorityState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiscoveryAuthorityState {
+    #[serde(rename = "ACTIVE")]
+    Active,
+    #[serde(rename = "READ_ONLY")]
+    ReadOnly,
+}
+/// Tenant device CA. keyId is SHA-256 of certificate DER; its subject binds the same tenant UUID. It cannot reuse a discovery signing key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryDeviceAuthority {
+    pub key_id: String,
+    pub state: DiscoveryAuthorityState,
+    pub certificate_pem: String,
+}
+/// Protected JWS header. Algorithm, message purpose and key selection are authenticated; no unprotected or remote-key headers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryHeader {
+    #[serde(deserialize_with = "const_discovery_header_alg")]
+    pub alg: String,
+    #[serde(deserialize_with = "const_discovery_header_typ")]
+    pub typ: String,
+    pub kid: String,
+}
+/// Bounded tenant discovery JWK Set. Application validation requires unique key IDs and moduli.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryKeySet {
+    pub keys: Vec<DiscoveryPublicKey>,
+}
+/// Public-only RSA JWK, restricted to 3072/4096-bit RS256 keys with exponent 65537. No private parameters or key URLs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryPublicKey {
+    #[serde(deserialize_with = "const_discovery_public_key_kty")]
+    pub kty: String,
+    #[serde(deserialize_with = "const_discovery_public_key_use")]
+    pub r#use: String,
+    #[serde(deserialize_with = "const_discovery_public_key_alg")]
+    pub alg: String,
+    pub kid: String,
+    pub n: String,
+    #[serde(deserialize_with = "const_discovery_public_key_e")]
+    pub e: String,
 }
 /// Gateway to Tool Host.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1796,6 +1877,12 @@ pub type ServiceRoute = RouteDeclaration;
 pub struct SignedInvocationPermit {
     pub jws: String,
 }
+/// RFC 7515 compact RS256 JWS with a protected toolgate-discovery+jws header and TenantDiscovery v2 payload. No v1 or alternate-algorithm fallback.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SignedTenantDiscovery {
+    pub jws: String,
+}
 /// Canonical Streaming wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Streaming {
@@ -1893,6 +1980,28 @@ pub struct TcpDeclaration {
     pub id: String,
     pub host_setting: String,
     pub port: u64,
+}
+/// Signed tenant discovery v2. Exact HTTPS origins, configured/pinned UUID, lifetime, key continuity, CA purposes and active issuer are verified before enrollment or local identity access.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TenantDiscovery {
+    #[serde(deserialize_with = "const_tenant_discovery_protocol_version")]
+    pub protocol_version: u64,
+    pub tenant_id: String,
+    pub issuer: String,
+    pub audiences: Vec<String>,
+    pub server_id: String,
+    pub organization: String,
+    pub control_url: String,
+    pub gateway_url: String,
+    pub verification_uri: String,
+    pub minimum_client_version: String,
+    pub issued_at_unix_ms: u64,
+    pub expires_at_unix_ms: u64,
+    pub key_set_version: u64,
+    pub discovery_keys: DiscoveryKeySet,
+    pub device_issuer_key_id: String,
+    pub device_authorities: Vec<DiscoveryDeviceAuthority>,
 }
 /// Upstream TLS verification.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2134,11 +2243,22 @@ pub enum ValueType {
 }
 const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
 const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");
+const_field!(
+    const_console_client_request_kind,
+    String,
+    "console-tenant-state"
+);
 const_field!(const_contract_set_name, String, "olo-toolgate-contracts");
 const_field!(const_control_server_settings_format_version, u64, 2);
 const_field!(const_control_settings_view_format_version, u64, 2);
 const_field!(const_deployment_binding_binding_format_version, u64, 1);
 const_field!(const_deployment_profile_profile_version, u64, 1);
+const_field!(const_discovery_header_alg, String, "RS256");
+const_field!(const_discovery_header_typ, String, "toolgate-discovery+jws");
+const_field!(const_discovery_public_key_kty, String, "RSA");
+const_field!(const_discovery_public_key_use, String, "sig");
+const_field!(const_discovery_public_key_alg, String, "RS256");
+const_field!(const_discovery_public_key_e, String, "AQAB");
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
 const_field!(const_log_frame_kind, String, "LOG");
 const_field!(const_package_manifest_schema_version, u64, 2);
@@ -2151,6 +2271,7 @@ const_field!(
 const_field!(const_progress_frame_kind, String, "PROGRESS");
 const_field!(const_recovery_event_issuer, String, "control");
 const_field!(const_result_frame_kind, String, "RESULT");
+const_field!(const_tenant_discovery_protocol_version, u64, 2);
 const_field!(const_tool_descriptor_descriptor_generation, u64, 1);
 const_field!(const_tool_input_protocol_version, u64, 2);
 /// Embedded canonical schemas for offline boundary validation.
@@ -2170,6 +2291,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/descriptor.schema.json",
         include_str!("../schemas/v2/descriptor.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
+        include_str!("../schemas/v2/discovery.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",

@@ -20,7 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 class SharedDirectoryCacheTest {
     @TempDir Path temp;
     private static final byte[] KEY = new byte[32];
-    private static final Ids.TenantId TENANT = new Ids.TenantId("tenant-a");
+    private static final Ids.TenantId TENANT = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-a");
     private static final ContractCodec CODEC = new ContractCodec();
 
     private static Directory directory(String name) {
@@ -60,8 +60,8 @@ class SharedDirectoryCacheTest {
         try (var endpoint = new Endpoint(null); var pool = SqliteState.openPooled(temp.resolve("replicas.sqlite"))) {
             var reads = new AtomicInteger();
             var source = recordingSource(pool, reads);
-            var first = new PostgresStore(source, CODEC, new DirectoryCache(shared(endpoint)));
-            var second = new PostgresStore(source, CODEC, new DirectoryCache(shared(endpoint)));
+            var first = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), CODEC, new DirectoryCache(shared(endpoint)));
+            var second = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), CODEC, new DirectoryCache(shared(endpoint)));
             update(first, "First");
             var before = first.transaction(TENANT, false, tx -> tx.load());
             int databaseReads = reads.get(), sets = endpoint.sets.get();
@@ -74,7 +74,7 @@ class SharedDirectoryCacheTest {
             assertNotEquals(before, after);
             assertTrue(after.entries().values().iterator().next().document().contains("Updated"));
             assertTrue(reads.get() > databaseReads);
-            var third = new PostgresStore(source, CODEC, new DirectoryCache(shared(endpoint)));
+            var third = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), CODEC, new DirectoryCache(shared(endpoint)));
             assertEquals(after, third.transaction(TENANT, false, tx -> tx.load()));
             // Identity observations can alter records without advancing configuration revision.
             try (var c = pool.getConnection(); var s = c.prepareStatement("UPDATE control_records SET revision=3,document=? WHERE tenant_id=?")) {
@@ -89,7 +89,7 @@ class SharedDirectoryCacheTest {
 
     @Test void rollbackAndReadYourWritesNeverPublishUncommittedDirectoryData() throws Exception {
         try (var endpoint = new Endpoint(null); var pool = SqliteState.openPooled(temp.resolve("rollback.sqlite"))) {
-            var store = new PostgresStore(pool, CODEC, new DirectoryCache(shared(endpoint)));
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(pool), CODEC, new DirectoryCache(shared(endpoint)));
             update(store, "Committed"); store.transaction(TENANT, false, tx -> tx.load());
             int sets = endpoint.sets.get();
             assertThrows(IllegalStateException.class, () -> store.transaction(TENANT, true, tx -> {
@@ -105,12 +105,12 @@ class SharedDirectoryCacheTest {
 
     @Test void corruptOrUnavailableCacheFallsBackToDatabase() throws Exception {
         try (var endpoint = new Endpoint(null); var pool = SqliteState.openPooled(temp.resolve("fallback.sqlite"))) {
-            var first = new PostgresStore(pool, CODEC, new DirectoryCache(shared(endpoint)));
+            var first = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(pool), CODEC, new DirectoryCache(shared(endpoint)));
             update(first, "Committed"); var expected = first.transaction(TENANT, false, tx -> tx.load());
             endpoint.values.replaceAll((key, value) -> new byte[40]);
-            assertEquals(expected, new PostgresStore(pool, CODEC, new DirectoryCache(shared(endpoint))).transaction(TENANT, false, tx -> tx.load()));
+            assertEquals(expected, new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(pool), CODEC, new DirectoryCache(shared(endpoint))).transaction(TENANT, false, tx -> tx.load()));
             endpoint.reject = true;
-            assertEquals(expected, new PostgresStore(pool, CODEC, new DirectoryCache(shared(endpoint))).transaction(TENANT, false, tx -> tx.load()));
+            assertEquals(expected, new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(pool), CODEC, new DirectoryCache(shared(endpoint))).transaction(TENANT, false, tx -> tx.load()));
         }
     }
 
@@ -162,10 +162,10 @@ class SharedDirectoryCacheTest {
             var scans = new AtomicInteger(); var source = recordingSource(pool, scans);
             String namespace = "test-" + UUID.randomUUID();
             var cache = new SharedDirectoryCache(client, CODEC, namespace, KEY, 60);
-            var first = new PostgresStore(source, CODEC, new DirectoryCache(cache));
+            var first = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), CODEC, new DirectoryCache(cache));
             update(first, "Real shared cache"); var expected = first.transaction(TENANT, false, tx -> tx.load());
             int before = scans.get();
-            var second = new PostgresStore(source, CODEC, new DirectoryCache(new SharedDirectoryCache(client, CODEC, namespace, KEY, 60)));
+            var second = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), CODEC, new DirectoryCache(new SharedDirectoryCache(client, CODEC, namespace, KEY, 60)));
             assertEquals(expected, second.transaction(TENANT, false, tx -> tx.load()));
             assertEquals(before, scans.get());
         }
@@ -175,7 +175,7 @@ class SharedDirectoryCacheTest {
     @Test void databaseFailureCannotUseAnAvailableSharedCacheAsAuthority() throws Exception {
         var pool = SqliteState.openPooled(temp.resolve("database-down.sqlite"));
         try (var endpoint = new Endpoint(null)) {
-            var store = new PostgresStore(pool, CODEC, new DirectoryCache(shared(endpoint)));
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(pool), CODEC, new DirectoryCache(shared(endpoint)));
             update(store, "Committed"); store.transaction(TENANT, false, tx -> tx.load());
             assertFalse(endpoint.values.isEmpty()); pool.close();
             var replica = new PostgresStore(pool, CODEC, new DirectoryCache(shared(endpoint)));

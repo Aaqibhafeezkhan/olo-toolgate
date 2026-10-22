@@ -19,7 +19,7 @@ class DirectoryCacheTest {
         @Override public Directory.Entry entry(Ids.Kind kind, String document) { decoded++; return super.entry(kind, document); }
         @Override public String snapshot(Ids.TenantId tenant, Directory directory, boolean yaml) { snapshots++; return super.snapshot(tenant, directory, yaml); }
     }
-    private static final Ids.TenantId A = new Ids.TenantId("tenant-a"), B = new Ids.TenantId("tenant-b");
+    private static final Ids.TenantId A = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-a"), B = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-b");
     private void update(PostgresStore store, ContractCodec codec, Ids.TenantId tenant, String name) {
         store.transaction(tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
@@ -34,7 +34,7 @@ class DirectoryCacheTest {
     @Test void firstAccessCachesPerTenantAndExpiresSixtyMinutesAfterPopulation() throws Exception {
         var now = new AtomicLong(); var codec = new CountingCodec();
         try (var source = SqliteState.openPooled(temp.resolve("ttl.sqlite"))) {
-            var store = new PostgresStore(source, codec, new DirectoryCache(now::get));
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec, new DirectoryCache(now::get));
             update(store, codec, A, "Alpha"); update(store, codec, B, "Beta");
             var first = read(store, A); int decoded = codec.decoded;
             assertSame(first, read(store, A)); assertEquals(decoded, codec.decoded);
@@ -49,7 +49,7 @@ class DirectoryCacheTest {
     @Test void snapshotDigestIsReusedButNeverAcrossTenants() throws Exception {
         var codec = new CountingCodec();
         try (var source = SqliteState.openPooled(temp.resolve("digest.sqlite"))) {
-            var store = new PostgresStore(source, codec); update(store, codec, A, "Alpha"); update(store, codec, B, "Beta");
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); update(store, codec, A, "Alpha"); update(store, codec, B, "Beta");
             var digest = store.transaction(A, false, tx -> tx.adoptionDigest(A, codec));
             assertEquals(digest, store.transaction(A, false, tx -> tx.adoptionDigest(A, codec)));
             assertEquals(1, codec.snapshots);
@@ -64,7 +64,7 @@ class DirectoryCacheTest {
         var codec = new CountingCodec(); var path = temp.resolve("replica.sqlite");
         try (var source = SqliteState.openPooled(path);
              var otherSource = SqliteState.openPooled(path)) {
-            var first = new PostgresStore(source, codec); var second = new PostgresStore(otherSource, codec);
+            var first = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); var second = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(otherSource), codec);
             update(first, codec, A, "Alpha"); var original = read(first, A);
             update(second, codec, A, "Replica update"); assertTrue(name(read(first, A)).contains("Replica update"));
             var before = read(first, A);
@@ -75,7 +75,7 @@ class DirectoryCacheTest {
             var after = read(first, A); assertEquals(before.revision(), after.revision());
             assertFalse(after.entries().get(Ids.Kind.USER.id("same-id")).enabled());
             assertTrue(name(after).contains("Client update")); assertTrue(original.entries().get(Ids.Kind.USER.id("same-id")).enabled());
-            try (var c = otherSource.getConnection(); var s = c.createStatement()) { s.executeUpdate("DELETE FROM control_records WHERE tenant_id='tenant-a'"); }
+            try (var c = otherSource.getConnection(); var s = c.createStatement()) { s.executeUpdate("DELETE FROM control_records WHERE tenant_id='62f6460d-dcd3-3902-b833-29a47da9f5ae'"); }
             assertTrue(read(first, A).entries().isEmpty());
         }
     }
@@ -83,7 +83,7 @@ class DirectoryCacheTest {
     @Test void rollbackNeverPublishesAndReadYourWritesSurvivesMemoization() throws Exception {
         var codec = new CountingCodec();
         try (var source = SqliteState.openPooled(temp.resolve("rollback.sqlite"))) {
-            var store = new PostgresStore(source, codec); update(store, codec, A, "Committed"); read(store, A);
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); update(store, codec, A, "Committed"); read(store, A);
             assertThrows(IllegalStateException.class, () -> store.transaction(A, true, tx -> {
                 var before = tx.load(); var entries = new HashMap<>(before.entries());
                 entries.put(Ids.Kind.USER.id("same-id"), codec.entry(Ids.Kind.USER, codec.json(new ControlUser("same-id", "Rolled back", false, 2L))));
@@ -99,7 +99,7 @@ class DirectoryCacheTest {
     @Test void settingsMutationInvalidatesAndDatabaseFailureCannotUseCachedAuthority() throws Exception {
         var codec = new CountingCodec(); var source = SqliteState.openPooled(temp.resolve("settings.sqlite"));
         try {
-            var store = new PostgresStore(source, codec); update(store, codec, A, "Alpha"); var before = read(store, A);
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); update(store, codec, A, "Alpha"); var before = read(store, A);
             store.transaction(A, true, tx -> { tx.saveServerSettings(1, "{}"); return null; });
             assertNotSame(before, read(store, A));
             source.close();
@@ -110,7 +110,7 @@ class DirectoryCacheTest {
     @Test void poolResetsReadOnlyStateAndRollsBackFailedWriters() throws Exception {
         var codec = new CountingCodec();
         try (var source = SqliteState.openPooled(temp.resolve("pool.sqlite"))) {
-            var store = new PostgresStore(source, codec); update(store, codec, A, "Initial");
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); update(store, codec, A, "Initial");
             for (int i = 0; i < 8; i++) {
                 read(store, A); update(store, codec, A, "Write " + i);
                 assertThrows(IllegalStateException.class, () -> store.transaction(A, true, tx -> { tx.saveServerSettings(1, "{}"); throw new IllegalStateException(); }));
@@ -127,7 +127,7 @@ class DirectoryCacheTest {
         var codec = new CountingCodec();
         try (var source = SqliteState.openPooled(temp.resolve("concurrent.sqlite"));
              var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
-            var store = new PostgresStore(source, codec); update(store, codec, A, "Old");
+            var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); update(store, codec, A, "Old");
             var loaded = new java.util.concurrent.CountDownLatch(1); var committed = new java.util.concurrent.CountDownLatch(1);
             var reader = executor.submit(() -> store.transaction(A, false, tx -> {
                 var snapshot = tx.load(); loaded.countDown();

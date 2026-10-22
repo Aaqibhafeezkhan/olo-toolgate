@@ -153,6 +153,14 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         downloads = [s['with'] for s in steps if s.get('with',{}).get('name')=='foundation-evidence']
         self.assertEqual(downloads, [dict(name='foundation-evidence', path='.')])
 
+    def test_image_stage_retains_browser_diagnostics_after_failure(self):
+        steps = workflow('images.yml')['jobs']['verify']['steps']
+        diagnostics = next(step for step in steps if step.get('with', {}).get('name') == 'browser-diagnostics')
+        self.assertEqual(diagnostics['if'], '${{ always() && inputs.run_tests }}')
+        self.assertEqual(diagnostics['with']['path'].splitlines(),
+                         ['build/ui/browser-results.json', 'build/ui/browser-output/'])
+        self.assertEqual(diagnostics['with']['if-no-files-found'], 'ignore')
+
     def test_shared_helm_lint_has_one_owner(self):
         # Standalone helper scripts share the basename "check". Other fixtures
         # may have loaded Control's script under that name; isolate this import.
@@ -164,6 +172,17 @@ class SharedCheckOwnershipTests(unittest.TestCase):
                 check.helm_checks()
         gateway.assert_called_once_with()
         control.assert_called_once_with(lint=False)
+
+    def test_active_trivy_scans_reuse_database_cache_without_skipping_updates(self):
+        for name,job in (('foundation.yml','check'),('images.yml','verify')):
+            scripts='\n'.join(step.get('run','') for step in workflow(name)['jobs'][job]['steps'])
+            scans=[line for line in scripts.splitlines() if 'aquasec/trivy:0.61.1' in line]
+            self.assertTrue(scans,name)
+            for scan in scans:
+                with self.subTest(workflow=name,scan=scan):
+                    self.assertIn('$PWD/.dev/trivy-cache:/root/.cache/trivy',scan)
+                    self.assertIn('TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2',scan)
+                    self.assertNotIn('--skip-db-update',scan)
 
 
 if __name__ == '__main__':

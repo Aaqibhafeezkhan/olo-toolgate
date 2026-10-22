@@ -30,7 +30,8 @@ class ContractsV2Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.schemas = load_schemas()
-        cls.registry = Registry().with_resources((s['$id'], Resource.from_contents(s)) for s in cls.schemas.values())
+        cls.v1 = {p.name: json.loads(p.read_text(encoding='utf-8')) for p in (V2.parent/'v1').glob('*.schema.json')}
+        cls.registry = Registry().with_resources((s['$id'], Resource.from_contents(s)) for s in [*cls.v1.values(), *cls.schemas.values()])
         cls.owner = {name: schema['$id'] for schema in cls.schemas.values() for name in schema['$defs']}
         cls.valid = json.loads((FIXTURES/'valid.json').read_text(encoding='utf-8'))
         cls.invalid = json.loads((FIXTURES/'invalid.json').read_text(encoding='utf-8'))
@@ -39,7 +40,7 @@ class ContractsV2Tests(unittest.TestCase):
         return Draft202012Validator({'$ref': self.owner[name]+'#/$defs/'+name}, registry=self.registry)
 
     def test_schema_files_are_valid_versioned_and_licensed(self):
-        self.assertEqual(13, len(self.schemas))
+        self.assertEqual(14, len(self.schemas))
         names = []
         for filename, schema in self.schemas.items():
             Draft202012Validator.check_schema(schema)
@@ -48,12 +49,16 @@ class ContractsV2Tests(unittest.TestCase):
             names += list(schema['$defs'])
         self.assertEqual(len(names), len(set(names)), 'definition names must be unique across v2')
 
-    def test_references_stay_inside_v2_and_resolve(self):
+    def test_references_resolve_only_to_bundled_canonical_versions(self):
         def visit(value, filename):
             if isinstance(value, dict):
                 if '$ref' in value:
                     file, _, fragment = value['$ref'].partition('#')
-                    target = self.schemas[file or filename]
+                    if file.startswith('../v1/'):
+                        self.assertEqual('../v1/'+Path(file).name, file)
+                        target = self.v1[Path(file).name]
+                    else:
+                        target = self.schemas[file or filename]
                     for part in fragment.split('/')[1:]:
                         self.assertIn(part, target, (filename, value['$ref']))
                         target = target[part]

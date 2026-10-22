@@ -7,12 +7,26 @@ from contextlib import contextmanager
 import json
 from pathlib import Path
 import secrets
+import ssl
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from control.check import ROOT,database,ready,request,run
 from access.presets import load as initial_configuration
+
+
+def runtime_ready(origin,context):
+    # Management health may be ready before the public TLS listener after restart.
+    deadline=time.monotonic()+60
+    while True:
+        try:
+            if request(origin+'/api/control/v1/users',context=context)[0]==401:return
+        except (urllib.error.URLError,TimeoutError,ConnectionError):pass
+        if time.monotonic()>=deadline:raise RuntimeError('Pinned Control TLS readiness deadline exceeded')
+        time.sleep(.2)
 
 
 def protected_defaults(baseline):
@@ -47,12 +61,12 @@ def scoped_reviewers(api,baseline):
     """Keep one installation owner while testing ordinary maker/checker authority."""
     management=next(role for role in baseline['roles'] if role['id']=='installation-management')
     assert management['portalRole']=='SUPER_ADMIN'
-    owner={**management,'id':'smoke-super-management','name':'Smoke installation owner','revision':1,'managementRules':[]}
-    assert api('/api/control/v1/roles',body=owner,method='POST')[0]==201
-    assert api('/api/control/v1/teams',body=dict(id='smoke-super-team',name='Smoke installation owners',
-        enabled=True,revision=1,userIds=['reviewer-2'],roleIds=[owner['id']]),method='POST')[0]==201
-    assert api('/api/control/v1/roles/'+management['id'],body={**management,'portalRole':'ADMINISTRATOR'},
-        method='PUT',revision=management['revision'])[0]==200
+    restricted={**management,'id':'smoke-restricted-management','name':'Smoke scoped administrator','revision':1,'portalRole':'ADMINISTRATOR'}
+    assert api('/api/control/v1/roles',body=restricted,method='POST')[0]==201
+    assert api('/api/control/v1/teams',body=dict(id='smoke-makers',name='Smoke makers',
+        enabled=True,revision=1,userIds=['reviewer-1','reviewer-2'],roleIds=[restricted['id']]),method='POST')[0]==201
+    owners=next(team for team in baseline['teams'] if team['id']=='installation-administrators')
+    assert api('/api/control/v1/teams/'+owners['id'],body={**owners,'userIds':['admin']},method='PUT',revision=owners['revision'])[0]==200
 
 
 @contextmanager
@@ -61,22 +75,37 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
     name='toolgate-control-proof-'+secrets.token_hex(6);volume=name+'-custody';containers=[]
     with database() as db,tempfile.TemporaryDirectory(prefix='toolgate-control-custody-') as temp:
         folder=Path(temp);run(['docker','volume','create',volume],capture_output=True)
+        origin='https://127.0.0.1:'+db['tlsPort']
         def helper(code,envfile=None):
             return run(['docker','run','--rm','--network','container:'+db['container'],
                 *(['--env-file',str(envfile)] if envfile else []),'-v',volume+':/data',
+                # Seed the tenant profile with the published browser authority.
+                '--env','TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL='+origin,
+                '--env','TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL='+origin,
                 '--entrypoint','/opt/quickstart-python/bin/python',helper_image,'-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;"+code],
                 capture_output=True,text=True).stdout.strip()
         try:
-            env=json.loads(helper("s.initialize();import json;print(json.dumps({k:v for k,v in s.configure()[0].items() if k.startswith(('QUARKUS_','MP_JWT_','TOOLGATE_'))}))"))
+            env=json.loads(helper("s.initialize();import json;print(json.dumps({k:v for k,v in s.configure().items() if k.startswith(('QUARKUS_','MP_JWT_','TOOLGATE_'))}))"))
+            # The helper's Quickstart-only profile file is absent from standalone Control.
+            env.pop('TOOLGATE_CONTROL_PROFILE_PATH',None)
+            certificates=json.loads(helper("import json;print(json.dumps({name:s.trust(name).read_text() for name in ('device-ca.crt','server.crt')}))"))
+            ca_file=folder/'device-ca.crt';ca_file.write_text(certificates['device-ca.crt'],encoding='utf-8')
+            server_file=folder/'server.crt';server_file.write_text(certificates['server.crt'],encoding='utf-8')
+            tls=ssl.create_default_context(cafile=str(ca_file))
+            platform_file=folder/'platform-password';platform_file.write_text(db['CONTROL_TEST_PASSWORD'],encoding='utf-8');platform_file.chmod(0o600)
+            run(['docker','run','--rm','--user','0','-v',volume+':/data','-v',str(platform_file)+':/credential:ro','--entrypoint','/bin/sh',helper_image,
+                '-c','cp /credential /data/platform-password && chown 65532:65532 /data/platform-password && chmod 0400 /data/platform-password'],capture_output=True)
             env.update(TOOLGATE_QUICKSTART_ENABLED='false',QUARKUS_PROFILE='prod',
                 QUARKUS_FLYWAY_ACTIVE='true',QUARKUS_FLYWAY_MIGRATE_AT_START='true',
                 QUARKUS_DATASOURCE_ACTIVE='true',QUARKUS_DATASOURCE_HEALTH_ENABLED='true',
                 QUARKUS_DATASOURCE_JDBC_URL='jdbc:postgresql://127.0.0.1:5432/control?sslmode=disable',
                 QUARKUS_DATASOURCE_USERNAME='control_app',QUARKUS_DATASOURCE_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                 QUARKUS_FLYWAY_USERNAME='control_migrator',QUARKUS_FLYWAY_PASSWORD=db['CONTROL_TEST_PASSWORD'],
-                QUARKUS_MANAGEMENT_HOST='0.0.0.0',TOOLGATE_CONTROL_DEVELOPMENT_MODE='true',
-                TOOLGATE_CONTROL_FLEET_ENABLED='false',TOOLGATE_CONTROL_ENDPOINT_ENABLED='false',
+                TOOLGATE_CONTROL_PLATFORM_USERNAME='control_provisioner',TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH='/data/platform-password',
+                QUARKUS_MANAGEMENT_HOST='0.0.0.0',TOOLGATE_CONTROL_DEVELOPMENT_MODE='true',QUARKUS_HTTP_INSECURE_REQUESTS='disabled',
+                # Identity publication validates the tenant's provisioned endpoint profile.
+                TOOLGATE_CONTROL_FLEET_ENABLED='false',
                 TOOLGATE_QUICKSTART_DATABASE_MODE='postgresql')
             envfile=folder/'runtime.env'
             def save_env(values):
@@ -91,9 +120,10 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
                 ready('http://127.0.0.1:'+db['managementPort' if index==0 else 'replicaManagementPort'])
             save_env(env)
             tokens={user:helper("print(s.jwt(s.GROUPS,'"+user+"'))",envfile) for user in ('admin','reviewer-1','reviewer-2')}
-            origins=['http://127.0.0.1:'+db['runtimePort']]
-            if replicas==2:origins.append('http://127.0.0.1:'+db['replicaRuntimePort'])
-            yield dict(containers=containers,origins=origins,tokens=tokens,db=db,folder=folder)
+            origins=[origin]
+            if replicas==2:origins.append('https://127.0.0.1:'+db['replicaTlsPort'])
+            yield dict(containers=containers,origins=origins,tokens=tokens,db=db,folder=folder,sslContext=tls,
+                       caCertificatePath=ca_file,serverCertificatePath=server_file)
         except Exception:
             output=ROOT/'build/control';output.mkdir(parents=True,exist_ok=True)
             for index,container in enumerate(containers):
@@ -109,11 +139,11 @@ def fixture(image,helper_image='olo-toolgate-quickstart:enterprise-validation',r
 def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',replicas=2):
     with fixture(image,helper_image,replicas) as f:
         origins=f['origins'];tokens=f['tokens'];secret_values=list(tokens.values())+[f['db']['CONTROL_TEST_PASSWORD']]
-        def api(path,user='admin',body=None,method='GET',key=None,origin=0,revision=None):
+        def api(path,user='reviewer-1',body=None,method='GET',key=None,origin=0,revision=None):
             headers={'Idempotency-Key':key or secrets.token_hex(16)} if body is not None else {}
             if revision is not None:headers['If-Match']='"'+str(revision)+'"'
             status,raw,_=request(origins[origin]+path,tokens.get(user),body,method,
-                headers or None)
+                headers or None,context=f['sslContext'])
             return status,json.loads(raw) if raw else None
         def ok(value,status=200):assert value[0]==status,(value[0],value[1]);return value[1]
         assert api('/api/control/v1/users','anonymous')[0]==401
@@ -124,14 +154,14 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
         with ThreadPoolExecutor(max_workers=4) as pool:
             responses=list(pool.map(lambda n:api('/api/control/v1/users',body=entity,method='POST',key=key,origin=n%len(origins)),range(4)))
         changes=[ok(value,202) for value in responses];assert len({c['id'] for c in changes})==1;change=changes[0]
-        def transition(action,user='admin',origin=0):
+        def transition(action,user='reviewer-1',origin=0):
             nonlocal change
             change=ok(api('/api/control/v1/configuration-changes/'+change['id']+'/transition',user,
                 dict(action=action,expectedRevision=change['revision']),'POST',origin=origin))
         transition('SUBMIT')
         assert api('/api/control/v1/configuration-changes/'+change['id']+'/transition',body=dict(action='APPROVE',expectedRevision=change['revision']),method='POST')[0]==403
         # The review threshold in force at creation decides how many independent reviewers approve.
-        for index,reviewer in enumerate(('reviewer-1','reviewer-2')[:change['requiredReviews']]):
+        for index,reviewer in enumerate(('reviewer-2','admin')[:change['requiredReviews']]):
             transition('APPROVE',reviewer,(len(origins)-1-index)%len(origins))
         transition('APPLY')
         for origin in range(len(origins)):
@@ -141,10 +171,11 @@ def smoke(image,helper_image='olo-toolgate-quickstart:enterprise-validation',rep
         for index,container in enumerate(f['containers']):
             inspect=json.loads(run(['docker','inspect',container],capture_output=True,text=True).stdout)[0]
             assert inspect['Config']['User']=='65532:65532' and inspect['HostConfig']['ReadonlyRootfs']
-            assert request(origins[index]+'/q/health/ready')[0]==404
+            assert request(origins[index]+'/q/health/ready',context=f['sslContext'])[0]==404
             management='http://127.0.0.1:'+f['db']['managementPort' if index==0 else 'replicaManagementPort']
             assert request(management+'/q/metrics')[0]==200
             run(['docker','restart','-t','30',container],capture_output=True);ready(management)
+            runtime_ready(origins[index],f['sslContext'])
             assert ok(api('/api/control/v1/access/status',origin=index))['authorizationEpoch']>=epoch
             assert ok(api('/api/control/v1/users/'+entity['id'],origin=index))['enabled'] is False
             run(['docker','stop','-t','30',container],capture_output=True)

@@ -12,9 +12,16 @@ import subprocess
 import tempfile
 import time
 from package import ROOT
+from qualification import record
+from discovery_fixture import installation
 
 
-def run(arguments):return subprocess.run(arguments,check=True,capture_output=True,text=True)
+def run(arguments):
+    result=subprocess.run(arguments,capture_output=True,text=True)
+    if result.returncode:
+        print(result.stdout+result.stderr,flush=True)
+        raise subprocess.CalledProcessError(result.returncode,arguments,result.stdout,result.stderr)
+    return result
 
 
 def windows_install(installer, server=None):
@@ -30,6 +37,10 @@ def windows_install(installer, server=None):
 
 def check(target):
     if os.environ.get('GITHUB_ACTIONS')!='true':raise RuntimeError('Disposable native CI only')
+    with installation(standard_ports=True) as site:binary,installer=check_server(target,site)
+    record('installer',binary,target,installer)
+
+def check_server(target,site):
     system=platform.system();suffix={'Windows':'setup.exe','Darwin':'dmg','Linux':'run'}[system]
     version=(ROOT/'VERSION').read_text().strip()
     installer=ROOT/f'build/client/release/olo-toolgate-client-{version}-{target}.{suffix}'
@@ -40,13 +51,11 @@ def check(target):
         if system=='Windows':
             run(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
                  '-STA','-File',str(ROOT/'tools/client/tray_status_test.ps1')])
-            # Disposable runners have no local gateway/CA for the localhost default.
-            # Use the same remote HTTPS fixture as the other native service proofs.
-            windows_install(installer,'https://control.example.invalid')
+            windows_install(installer,site.origin)
             installed=True
         elif system=='Linux':
             run(['/bin/sh',str(installer),'--verify'])
-            run(['sudo','-n','/bin/sh',str(installer),'--elevated','https://control.example.invalid',str(os.getuid())])
+            run(['sudo','-n','/bin/sh',str(installer),'--elevated',site.origin,str(os.getuid())])
             installed=True
         else:
             # The native GUI app is compiled into the disk image. Execute its exact payload
@@ -56,7 +65,7 @@ def check(target):
                 try:
                     source=Path(temporary)/'Install ToolGate.app/Contents/Resources/payload/olo-toolgate-client'
                     if hashlib.sha256(source.read_bytes()).digest()!=hashlib.sha256(binary.read_bytes()).digest():raise ValueError('Disk image native payload drift')
-                    run(['sudo','-n',str(source),'install','--server','https://control.example.invalid']);installed=True
+                    run(['sudo','-n',str(source),'install','--server',site.origin]);installed=True
                 finally:run(['/usr/bin/hdiutil','detach',temporary])
         deadline=time.monotonic()+45
         while True:
@@ -73,20 +82,24 @@ def check(target):
         if system=='Windows':
             import winreg
             config=Path(r'C:\ProgramData\OLO\ToolGate\client.json')
-            if json.loads(config.read_text())['serverUrl']!='https://control.example.invalid':raise ValueError('Installer HTTPS gateway was not stored')
+            if json.loads(config.read_text())['serverUrl']!=site.origin:raise ValueError('Installer HTTPS gateway was not stored')
             state=config.parent/'state'
             device_key_digest=hashlib.sha256((state/'device-key').read_bytes()).hexdigest()
             # Configured anonymous web downloads still work without a URL argument.
-            hint='https://control.example.invalid'.encode().hex()
+            hint=site.origin.encode().hex()
             with tempfile.TemporaryDirectory(prefix='toolgate-configured-') as temporary:
                 configured=Path(temporary)/f'olo-toolgate-client-{target}--{hint}.setup.exe'
                 shutil.copyfile(installer,configured)
                 windows_install(configured)
             windows_install(installer)
             if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Repair changed the device key')
-            run([str(binary),'configure','--server','https://second.example.invalid'])
-            if json.loads(config.read_text())['serverUrl']!='https://second.example.invalid':raise ValueError('Gateway switch was not stored')
-            if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Gateway switch changed the device key')
+            before=config.read_bytes()
+            with installation() as foreign:
+                refused=subprocess.run([str(binary),'configure','--server',foreign.console],capture_output=True,text=True)
+                if refused.returncode==0:raise ValueError('Configuration accepted a different tenant')
+            if config.read_bytes()!=before:raise ValueError('Tenant mismatch changed protected configuration')
+            if json.loads(before)['tenantId']!=site.tenant:raise ValueError('Verified tenant UUID was not stored')
+            if hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Rejected tenant switch changed the device key')
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,r'Software\Microsoft\Windows\CurrentVersion\Run',0,winreg.KEY_READ|winreg.KEY_WOW64_64KEY) as tray_key:
                 if 'toolgate-tray.ps1' not in winreg.QueryValueEx(tray_key,'OloToolGateTray')[0]:raise ValueError('Tray startup is missing')
             powershell=str(Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe')
@@ -99,12 +112,16 @@ def check(target):
             allowed='chrome-extension://emmemldedebhbloibichmmdlbpjakfkf/'
             if host_manifest['allowed_origins']!=[allowed] or host_manifest['name']!='io.ololabs.toolgate.connect':raise ValueError('Native host registration drift')
             host=Path(host_manifest['path'])
-            request=b'{"operation":"health"}'
+            request=json.dumps(dict(operation='health',consoleUrl=site.console+'/console/',expectedTenantId=site.tenant)).encode()
             frame=len(request).to_bytes(4,'little')+request
             result=subprocess.run([str(host),allowed],input=frame,capture_output=True,timeout=25,check=True)
             if len(result.stdout)<4 or int.from_bytes(result.stdout[:4],'little')!=len(result.stdout)-4:raise ValueError('Native frame corruption')
             browser_health=json.loads(result.stdout[4:])
-            if browser_health.get('error') or browser_health['health']['state']!='UNENROLLED':raise ValueError('Native host cannot reach protected service')
+            if browser_health.get('error') or browser_health['health']['state']!='UNENROLLED' or browser_health.get('consoleOrigin')!=site.console:raise ValueError('Native host cannot reach its scoped protected service')
+            foreign=json.dumps(dict(operation='health',consoleUrl=site.console+'/console/',expectedTenantId='00000000-0000-4000-8000-000000000001')).encode()
+            denied_tenant=subprocess.run([str(host),allowed],input=len(foreign).to_bytes(4,'little')+foreign,capture_output=True,timeout=25,check=True)
+            refusal=json.loads(denied_tenant.stdout[4:])
+            if refusal.get('error')!='TENANT_MISMATCH' or refusal.get('health') is not None:raise ValueError('Foreign tenant exposed local health')
             denied=subprocess.run([str(host),'chrome-extension://'+'a'*32+'/'],input=frame,capture_output=True,timeout=25)
             if denied.returncode==0 or denied.stdout:raise ValueError('Wrong Chrome extension accepted')
         print('Packaged installer started the system service; protected mode remains unenrolled')
@@ -120,7 +137,7 @@ def check(target):
                 query=subprocess.run(['sc.exe','query','OloToolGateClient'],capture_output=True,text=True)
                 if query.returncode!=1060:raise ValueError('Uninstall left a service registration')
                 if config.exists() or (Path(os.environ['ProgramFiles'])/'OLO/ToolGate/olo-toolgate-client.exe').exists():raise ValueError('Uninstall left the client configuration or service executable')
-                if {path.name for path in state.iterdir()}!={'device-key'} or hashlib.sha256((state/'device-key').read_bytes()).hexdigest()!=device_key_digest:raise ValueError('Uninstall did not remove every enrollment while retaining the device key')
+                if state.exists() and any(state.iterdir()):raise ValueError('Explicit GUI uninstall purge left a key, journal or local data')
                 if int(run([powershell,'-NoProfile','-NonInteractive','-Command',tray_query]).stdout.strip())!=0:raise ValueError('Uninstall left the tray running')
                 for registry_path, value in [(r'Software\Microsoft\Windows\CurrentVersion\Run','OloToolGateTray'),(r'Software\Google\Chrome\NativeMessagingHosts\io.ololabs.toolgate.connect',None)]:
                     try:
@@ -129,6 +146,7 @@ def check(target):
                     except FileNotFoundError:continue
                     raise ValueError('Uninstall left tray startup or Chrome bridge registration')
             else:run(['sudo','-n',str(binary),'uninstall','--purge'])
+    return binary,installer
 
 
 if __name__=='__main__':

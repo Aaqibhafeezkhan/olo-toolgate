@@ -50,8 +50,8 @@ final class MarketplaceTest {
 
     @BeforeEach void setUp() throws Exception {
         var generator = KeyPairGenerator.getInstance("Ed25519"); key = generator.generateKeyPair(); other = generator.generateKeyPair();
-        codec = new ContractCodec(); store = new PostgresStore(SqliteState.open(directory.resolve("marketplace.sqlite")), codec);
-        tenant = new Ids.TenantId("tenant"); actor = TestSupport.seed(store, codec, tenant, "root");
+        codec = new ContractCodec(); store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("marketplace.sqlite"))), codec);
+        tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); actor = TestSupport.seed(store, codec, tenant, "root");
         packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
         files = ServerPackagesTest.files(); bytes = ServerPackagesTest.zip(files);
         source = new Fake();

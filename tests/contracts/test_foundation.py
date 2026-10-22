@@ -135,7 +135,25 @@ class FoundationTests(unittest.TestCase):
                     # retain the strict reader compatibility check.
                     current = copy.deepcopy(current)
                     del current['$defs']['ClientReport']['properties']['power']
+                if name == 'error.schema.json':
+                    # This unreleased tenant baseline requires matching current readers.
+                    # Check the exact intentional enum extension separately, retaining
+                    # compatibility checks for every other error-envelope field.
+                    current = copy.deepcopy(current)
+                    current['$defs']['ErrorCode']['enum'] = schema['$defs']['ErrorCode']['enum']
                 compatible(schema,current,name)
+
+    def test_tenant_error_codes_require_the_current_reader(self):
+        baseline = schemas_at(ROOT/'tests/fixtures/contracts/v1/schemas')
+        previous = baseline['error.schema.json']['$defs']['ErrorCode']['enum']
+        added = {'TENANT_MISMATCH','TENANT_UNAVAILABLE','MISDIRECTED_REQUEST','INVALID_TENANT_ID'}
+        self.assertEqual(set(previous) | added,set(self.schemas['error.schema.json']['$defs']['ErrorCode']['enum']))
+        archived = validators(baseline)['ErrorEnvelope']
+        for code in added:
+            envelope = {'code':code,'requestId':'tenant-error','retryable':False}
+            self.validators['ErrorEnvelope'].validate(envelope)
+            with self.subTest(code=code),self.assertRaises(ValidationError):archived.validate(envelope)
+        with self.assertRaises(ValueError):compatible(baseline['error.schema.json'],self.schemas['error.schema.json'])
 
     def test_device_power_report_requires_current_control_reader(self):
         baseline = schemas_at(ROOT/'tests/fixtures/contracts/v1/schemas')

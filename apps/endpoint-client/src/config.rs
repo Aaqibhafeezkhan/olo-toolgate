@@ -8,6 +8,9 @@ use std::path::PathBuf;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
+    /// Administrator-pinned expected UUID; never supplied by an untrusted console as authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
     #[serde(default)]
     pub deployment: Option<crate::deployment::Settings>,
     #[serde(default)]
@@ -26,6 +29,9 @@ pub struct Config {
 }
 impl Config {
     pub fn validate(&self) -> Result<()> {
+        if let Some(tenant) = &self.tenant_id {
+            crate::contracts::Contracts::shared()?.encode("TenantUuid", tenant)?;
+        }
         if let Some(deployment) = &self.deployment {
             deployment.validate()?;
             if self.execution.is_none() {

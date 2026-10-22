@@ -19,8 +19,9 @@ import java.util.*;
 /** Disabled by default. Deployment requires explicit external signer, release keyring and artifact mirror. */
 @ApplicationScoped
 public class FleetBootstrap {
-    @Inject Config config; @Inject ContractCodec codec; @Inject PostgresStore store; @Inject EndpointService endpoints;
-    private FleetService service; private ArtifactStore artifacts;
+    @Inject TenantRequest request;
+    @Inject Config config; @Inject ContractCodec codec; @Inject PostgresStore store; @Inject EndpointBootstrap endpoints;
+    private FleetCrypto crypto; private ArtifactStore artifacts; private boolean enabled; private boolean loaded;
     private String setting(String name){return config.getValue("toolgate.control.fleet."+name,String.class);}
     private byte[] read(Path path,int max)throws java.io.IOException{return ProtectedCustody.read(path,max);}
     private String pem(Path path)throws java.io.IOException{return new String(read(path,16384),java.nio.charset.StandardCharsets.US_ASCII);}
@@ -31,9 +32,10 @@ public class FleetBootstrap {
         if(!value.isArray()||value.isEmpty()||value.size()>4)throw new IllegalArgumentException();
         var keys=new ArrayList<FleetTrustKey>();for(var entry:value)keys.add(codec.model(codec.json(entry),FleetTrustKey.class));return keys;
     }
-    private void load(){
-        boolean enabled=config.getValue("toolgate.control.fleet.enabled",Boolean.class);
-        FleetCrypto crypto=null;String tenant="disabled",server="disabled";artifacts=(digest,size)->{throw Failure.unavailable();};
+    private synchronized void load(){
+        if(loaded)return;
+        enabled=config.getValue("toolgate.control.fleet.enabled",Boolean.class);
+        artifacts=(digest,size)->{throw Failure.unavailable();};
         if(enabled)try{
             if(!config.getValue("toolgate.control.endpoint.enabled",Boolean.class))throw new IllegalArgumentException();
             var factory=KeyFactory.getInstance("RSA");
@@ -60,11 +62,12 @@ public class FleetBootstrap {
                 && config.getOptionalValue("toolgate.control.fleet.artifact-origin",String.class).orElse("").equals("https://localhost:8443/artifacts")
                 ? new LocalArtifactStore(Path.of(config.getValue("toolgate.quickstart.artifact-directory",String.class)))
                 : new HttpsArtifactStore(setting("artifact-origin"),token,tls);
-            tenant=config.getValue("toolgate.control.endpoint.tenant-id",String.class);server=config.getValue("toolgate.control.endpoint.server-id",String.class);
+
         }catch(Exception failure){throw new IllegalStateException("Fleet deployment requires dedicated external trust keys, endpoint identity and fixed HTTPS artifact store");}
-        service=new FleetService(store,codec,crypto,endpoints,java.time.Clock.systemUTC(),enabled,tenant,server);
+        loaded=true;
     }
-    void start(@Observes StartupEvent event){if(service==null)load();}
-    @Produces @ApplicationScoped FleetService fleet(){if(service==null)load();return service;}
-    @Produces @ApplicationScoped ArtifactStore artifacts(){if(service==null)load();return artifacts;}
+    void start(@Observes StartupEvent event){load();}
+    public FleetService forTenant(io.ololabs.toolgate.control.domain.Ids.TenantId tenant){load();var profile=endpoints.profile(tenant);return new FleetService(store,codec,crypto,endpoints.forTenant(tenant),java.time.Clock.systemUTC(),enabled&&profile!=null,tenant.value(),profile==null?"disabled":profile.serverId());}
+    @Produces @jakarta.enterprise.context.RequestScoped FleetService fleet(){return forTenant(request.tenant());}
+    @Produces @ApplicationScoped ArtifactStore artifacts(){load();return artifacts;}
 }

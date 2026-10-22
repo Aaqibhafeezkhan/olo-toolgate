@@ -41,6 +41,7 @@ async fn write<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) -> Result<()
 fn code(failure: Failure) -> ErrorCode {
     match failure {
         Failure::Unauthorized | Failure::Revoked => ErrorCode::Forbidden,
+        Failure::TenantMismatch => ErrorCode::TenantMismatch,
         Failure::EnrollmentRequired => ErrorCode::NotFound,
         Failure::Validation => ErrorCode::Validation,
         Failure::Conflict => ErrorCode::Conflict,
@@ -242,6 +243,59 @@ async fn handle<S: AsyncWrite + Unpin>(
     }
     if bytes.len() > 4096 {
         return Err(Failure::Validation);
+    }
+    if envelope.get("kind").and_then(serde_json::Value::as_str) == Some("console-tenant-state") {
+        use olo_toolgate_contracts::v2::{
+            ConsoleClientOperation, ConsoleClientRequest, ConsoleClientResponse,
+        };
+        let request: ConsoleClientRequest = contracts.decode("ConsoleClientRequest", bytes)?;
+        let mut response = ConsoleClientResponse {
+            request_id: request.request_id,
+            health: None,
+            challenge: None,
+            tenant_id: None,
+            error: None,
+        };
+        let mut state = match service.try_lock() {
+            Ok(state) => state,
+            Err(_) => {
+                response.error = Some(ErrorCode::Conflict);
+                return write(
+                    stream,
+                    &contracts.encode("ConsoleClientResponse", &response)?,
+                )
+                .await;
+            }
+        };
+        let result = match state
+            .authorize_console(&request.console_url, request.expected_tenant_id.as_deref())
+        {
+            Err(failure) => Err(failure),
+            Ok(()) => match request.operation {
+                ConsoleClientOperation::Health => {
+                    response.health = Some(state.health());
+                    Ok(())
+                }
+                ConsoleClientOperation::Enroll if !off => state
+                    .request_approval()
+                    .await
+                    .map(|prompt| response.challenge = Some(prompt)),
+                _ => Err(Failure::Unavailable),
+            },
+        };
+        if let Err(failure) = result {
+            response.error = Some(code(failure));
+            response.health = None;
+            response.challenge = None;
+        } else {
+            response.tenant_id = state.tenant_id().map(str::to_owned);
+        }
+        drop(state);
+        return write(
+            stream,
+            &contracts.encode("ConsoleClientResponse", &response)?,
+        )
+        .await;
     }
     if serde_json::from_slice::<serde_json::Value>(bytes)
         .ok()
@@ -466,6 +520,37 @@ pub async fn call(endpoint: &str, operation: ClientIpcOperation) -> Result<Clien
     };
     let bytes = exchange(endpoint, &bytes, limit).await?;
     let response: ClientIpcResponse = contracts.decode("ClientIpcResponse", &bytes)?;
+    if response.request_id != request.request_id {
+        return Err(Failure::Unauthorized);
+    }
+    Ok(response)
+}
+/// The service checks context under its lock before exposing health or starting enrollment.
+pub async fn console_call(
+    endpoint: &str,
+    operation: olo_toolgate_contracts::v2::ConsoleClientOperation,
+    console_url: &str,
+) -> Result<olo_toolgate_contracts::v2::ConsoleClientResponse> {
+    console_call_expected(endpoint, operation, console_url, None).await
+}
+pub async fn console_call_expected(
+    endpoint: &str,
+    operation: olo_toolgate_contracts::v2::ConsoleClientOperation,
+    console_url: &str,
+    expected_tenant_id: Option<&str>,
+) -> Result<olo_toolgate_contracts::v2::ConsoleClientResponse> {
+    let contracts = Contracts::shared()?;
+    let request = olo_toolgate_contracts::v2::ConsoleClientRequest {
+        kind: "console-tenant-state".into(),
+        request_id: crate::identity::nonce()?,
+        operation,
+        console_url: console_url.into(),
+        expected_tenant_id: expected_tenant_id.map(str::to_owned),
+    };
+    let bytes = contracts.encode("ConsoleClientRequest", &request)?;
+    let bytes = exchange(endpoint, &bytes, 16384).await?;
+    let response: olo_toolgate_contracts::v2::ConsoleClientResponse =
+        contracts.decode("ConsoleClientResponse", &bytes)?;
     if response.request_id != request.request_id {
         return Err(Failure::Unauthorized);
     }

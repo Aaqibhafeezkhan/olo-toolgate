@@ -17,7 +17,9 @@ permissions:
 jobs:
   publish:
     name: Publish images, Helm and GitHub release
-    if: github.ref == 'refs/heads/main' || (!inputs.manual && startsWith(github.ref, 'refs/tags/v'))
+    if: >-
+      (inputs.manual && github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/'))
+      || (!inputs.manual && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: development-release

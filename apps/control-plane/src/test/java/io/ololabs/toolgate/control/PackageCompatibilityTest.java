@@ -73,8 +73,8 @@ final class PackageCompatibilityTest {
     }
 
     @Test void uploadRefusesWhatNoToolHostCanRunAndDeployRefusesATooOldHost() throws Exception {
-        var codec = new ContractCodec(); var store = new PostgresStore(SqliteState.open(directory.resolve("compatibility.sqlite")), codec);
-        var tenant = new Ids.TenantId("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("compatibility.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
         var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
 
         // A runtime or descriptor generation mismatch already fails the package rules (400); these pass them and fail here.

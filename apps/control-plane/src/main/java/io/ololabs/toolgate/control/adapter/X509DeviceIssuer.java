@@ -87,14 +87,25 @@ public final class X509DeviceIssuer implements DeviceIssuer {
             var encoder=Base64.getUrlEncoder().withoutPadding();return new SignedClientDiscovery(encoder.encodeToString(bytes),encoder.encodeToString(signature.sign()));
         } catch(GeneralSecurityException e){throw Failure.unavailable();}
     }
-    public String peerFingerprint(X509Certificate peer,long now) {
+    public DeviceIssuer.Peer verifyPeer(X509Certificate peer,long now) {
+        return verifyPeer(ca,peer,now);
+    }
+    static DeviceIssuer.Peer verifyPeer(X509Certificate ca,X509Certificate peer,long now) {
         try {
             ca.checkValidity(new Date(now));peer.checkValidity(new Date(now));peer.verify(ca.getPublicKey());
             if (!peer.getIssuerX500Principal().equals(ca.getSubjectX500Principal()) || peer.getBasicConstraints()!=-1
                 || !java.util.List.of("1.3.6.1.5.5.7.3.2").equals(peer.getExtendedKeyUsage())
                 || peer.getNotAfter().getTime()-peer.getNotBefore().getTime()>86400000
                 || peer.getKeyUsage()==null || !peer.getKeyUsage()[0]) throw new IllegalArgumentException();
-            return DirectoryService.digest(peer.getPublicKey().getEncoded());
+            var subject=X500Name.getInstance(peer.getSubjectX500Principal().getEncoded());
+            if(subject.getRDNs().length!=3||java.util.Arrays.stream(subject.getRDNs()).anyMatch(rdn->rdn.size()!=1)
+                ||subject.getRDNs(BCStyle.CN).length!=1||subject.getRDNs(BCStyle.OU).length!=1||subject.getRDNs(BCStyle.O).length!=1)throw new IllegalArgumentException();
+            var device=io.ololabs.toolgate.control.domain.Ids.valid(org.bouncycastle.asn1.x500.style.IETFUtils.valueToString(subject.getRDNs(BCStyle.CN)[0].getFirst().getValue()));
+            var tenant=new io.ololabs.toolgate.control.domain.Ids.TenantId(org.bouncycastle.asn1.x500.style.IETFUtils.valueToString(subject.getRDNs(BCStyle.OU)[0].getFirst().getValue()));
+            var server=io.ololabs.toolgate.control.domain.Ids.valid(org.bouncycastle.asn1.x500.style.IETFUtils.valueToString(subject.getRDNs(BCStyle.O)[0].getFirst().getValue()));
+            var names=peer.getSubjectAlternativeNames();if(names==null||names.size()!=1)throw new IllegalArgumentException();
+            var name=names.iterator().next();if(name.size()!=2||!Integer.valueOf(6).equals(name.get(0))||!(name.get(1) instanceof String uri)||!uri.matches("urn:toolgate:device:[a-f0-9]{64}"))throw new IllegalArgumentException();
+            return new DeviceIssuer.Peer(DirectoryService.digest(peer.getPublicKey().getEncoded()),device,tenant,server,uri);
         }catch(Exception failure){throw new Failure(ErrorCode.UNAUTHORIZED,401,"Device certificate required");}
     }
 }

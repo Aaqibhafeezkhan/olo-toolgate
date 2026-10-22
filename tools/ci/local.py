@@ -41,6 +41,7 @@ POLICY = {
     'policy.enterprise-access': 'legacy',
     'client.native': 'native',
     'client.public-bundle': 'artifacts',
+    'tenant-qualification.evidence': 'artifacts',
     'control.container-and-replicas': 'artifacts',
     'quickstart.image': 'artifacts',
     'release-images.publish': 'publication',

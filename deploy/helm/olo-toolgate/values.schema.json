@@ -65,7 +65,8 @@
         "networkPolicy",
         "ingress",
         "serviceMonitor",
-        "control"
+        "control",
+        "publicOrigin"
       ],
       "properties": {
         "enabled": {
@@ -130,7 +131,8 @@
             "managementListen",
             "trustedTlsProxy",
             "allowedOrigins",
-            "limits"
+            "limits",
+            "tenantHosts"
           ],
           "properties": {
             "listen": {
@@ -212,6 +214,17 @@
                   "minimum": 1,
                   "maximum": 4096
                 }
+              }
+            },
+            "tenantHosts": {
+              "type": "array",
+              "maxItems": 16,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 260,
+                "pattern": "^[A-Za-z0-9.:\\[\\]-]+$"
               }
             }
           }
@@ -521,12 +534,14 @@
             "url",
             "tokenSecret",
             "tokenKey",
-            "controlPort"
+            "controlPort",
+            "tenantId",
+            "caSecret"
           ],
           "properties": {
             "url": {
               "type": "string",
-              "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"
+              "pattern": "^$|^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"
             },
             "tokenSecret": {
               "type": "string",
@@ -543,8 +558,22 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 65535
+            },
+            "tenantId": {
+              "type": "string",
+              "pattern": "^$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            },
+            "caSecret": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
             }
           }
+        },
+        "publicOrigin": {
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^$|^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"
         }
       },
       "allOf": [
@@ -568,8 +597,24 @@
                 "properties": {
                   "tokenSecret": {
                     "minLength": 1
+                  },
+                  "tenantId": {
+                    "minLength": 36
+                  },
+                  "url": {
+                    "minLength": 1
                   }
                 }
+              },
+              "config": {
+                "properties": {
+                  "tenantHosts": {
+                    "minItems": 1
+                  }
+                }
+              },
+              "publicOrigin": {
+                "minLength": 1
               }
             }
           }
@@ -605,6 +650,16 @@
                   },
                   "dnsTo": {
                     "minItems": 1
+                  }
+                }
+              },
+              "publicOrigin": {
+                "minLength": 1
+              },
+              "control": {
+                "properties": {
+                  "url": {
+                    "minLength": 1
                   }
                 }
               }
@@ -646,7 +701,8 @@
         "recovery",
         "clientCheckIn",
         "builder",
-        "cache"
+        "cache",
+        "defaultTenantAlias"
       ],
       "properties": {
         "builder": {
@@ -1168,11 +1224,29 @@
               "type": "integer",
               "minimum": 1024,
               "maximum": 1048576
+            },
+            "requestsPerSecond": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "httpConcurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
+            },
+            "databaseConcurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
             }
           },
           "required": [
             "maxRecords",
-            "maxConfigBytes"
+            "maxConfigBytes",
+            "requestsPerSecond",
+            "httpConcurrency",
+            "databaseConcurrency"
           ]
         },
         "tracing": {
@@ -1351,32 +1425,24 @@
           "additionalProperties": false,
           "required": [
             "enabled",
-            "tenantId",
             "serverId",
             "organization",
-            "deviceCaSecret",
             "tlsSecret",
             "trustStoreSecret",
             "controlUrl",
-            "gatewayUrl"
+            "gatewayUrl",
+            "identityCustodySecret",
+            "identityKeyFiles"
           ],
           "properties": {
             "enabled": {
               "type": "boolean"
-            },
-            "tenantId": {
-              "type": "string",
-              "maxLength": 128
             },
             "serverId": {
               "type": "string",
               "maxLength": 128
             },
             "organization": {
-              "type": "string",
-              "maxLength": 128
-            },
-            "deviceCaSecret": {
               "type": "string",
               "maxLength": 128
             },
@@ -1395,6 +1461,32 @@
             "gatewayUrl": {
               "type": "string",
               "maxLength": 2048
+            },
+            "identityCustodySecret": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "identityKeyFiles": {
+              "type": "array",
+              "maxItems": 1536,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "path"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9._-]{1,253}$"
+                  },
+                  "path": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/(DISCOVERY|DEVICE_CA)/[a-zA-Z0-9_-]{1,128}\\.pk8\\.pem$"
+                  }
+                }
+              }
             }
           },
           "allOf": [
@@ -1408,16 +1500,10 @@
               },
               "then": {
                 "properties": {
-                  "tenantId": {
-                    "minLength": 1
-                  },
                   "serverId": {
                     "minLength": 1
                   },
                   "organization": {
-                    "minLength": 1
-                  },
-                  "deviceCaSecret": {
                     "minLength": 1
                   },
                   "tlsSecret": {
@@ -1431,6 +1517,12 @@
                   },
                   "gatewayUrl": {
                     "pattern": "^https://[^/@?#]+/?$"
+                  },
+                  "identityCustodySecret": {
+                    "minLength": 1
+                  },
+                  "identityKeyFiles": {
+                    "minItems": 2
                   }
                 }
               }
@@ -1856,6 +1948,70 @@
               }
             }
           ]
+        },
+        "tenancy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "hosts",
+            "initializationSecret",
+            "initializationItems"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "single",
+                "subdomain"
+              ]
+            },
+            "hosts": {
+              "type": "array",
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 253
+              }
+            },
+            "initializationSecret": {
+              "type": "string",
+              "maxLength": 253
+            },
+            "initializationItems": {
+              "type": "array",
+              "maxItems": 1024,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "path"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,252}$"
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "pattern": "^(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "vaultKeyRingSecret": {
+          "type": "string",
+          "maxLength": 253
+        },
+        "defaultTenantAlias": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
         }
       },
       "allOf": [

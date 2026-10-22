@@ -9,6 +9,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+olo-toolgate-tenant-identity.workspace = true
 axum.workspace = true
 subtle.workspace = true
 olo-toolgate-contracts.workspace = true

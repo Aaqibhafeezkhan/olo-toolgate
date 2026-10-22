@@ -25,7 +25,7 @@ public class Bootstrap {
     @Produces @ApplicationScoped
     io.ololabs.toolgate.control.application.ConfigurationChanges configurationChanges(PostgresStore store,ContractCodec codec){var l=limits();return new io.ololabs.toolgate.control.application.ConfigurationChanges(store,codec,java.time.Clock.systemUTC(),l.records(),l.bytes());}
     @Produces @ApplicationScoped
-    io.ololabs.toolgate.control.application.ServerSettingsService serverSettings(PostgresStore store,ContractCodec codec,io.ololabs.toolgate.control.application.EndpointService endpoint,io.ololabs.toolgate.control.application.ConfigurationChanges changes){return new io.ololabs.toolgate.control.application.ServerSettingsService(store,codec,endpoint.checkInPolicy()).reviews(changes);}
+    io.ololabs.toolgate.control.application.ServerSettingsService serverSettings(PostgresStore store,ContractCodec codec,EndpointBootstrap endpoint,io.ololabs.toolgate.control.application.ConfigurationChanges changes){return new io.ololabs.toolgate.control.application.ServerSettingsService(store,codec,endpoint.checkInPolicy()).reviews(changes);}
     private record Limits(int records, int bytes) {}
     private Limits limits() {
         var records = config.getValue("toolgate.control.max-records", Integer.class);
@@ -62,7 +62,7 @@ public class Bootstrap {
         config.getValue("quarkus.flyway.password", String.class);
         if (runtimeUser.equals(migrationUser)) throw new IllegalStateException("Separate runtime and migration credentials required");
         try (var connection = source.get().getConnection(); var statement = connection.createStatement();
-             var rows = statement.executeQuery("SELECT has_table_privilege(current_user,'control_audit','UPDATE') OR has_table_privilege(current_user,'control_policy_bundles','UPDATE'), has_table_privilege(current_user,'control_audit','DELETE') OR has_table_privilege(current_user,'control_policy_bundles','DELETE'), has_schema_privilege(current_user,'public','CREATE'), rolsuper FROM pg_roles WHERE rolname=current_user")) {
+             var rows = statement.executeQuery("SELECT has_table_privilege(current_user,'control_audit','UPDATE') OR has_table_privilege(current_user,'control_policy_bundles','UPDATE') OR has_table_privilege(current_user,'control_tenant_authority','INSERT'), has_table_privilege(current_user,'control_audit','DELETE') OR has_table_privilege(current_user,'control_policy_bundles','DELETE') OR has_table_privilege(current_user,'control_tenants','SELECT,INSERT,UPDATE,DELETE'), has_schema_privilege(current_user,'public','CREATE'), rolsuper OR rolbypassrls OR pg_has_role(session_user,'toolgate_control_platform','MEMBER') FROM pg_roles WHERE rolname=current_user")) {
             if (!rows.next() || rows.getBoolean(1) || rows.getBoolean(2) || rows.getBoolean(3) || rows.getBoolean(4)) throw new IllegalStateException("Runtime database role is overprivileged");
         } catch (java.sql.SQLException e) { throw new IllegalStateException("Runtime database role validation failed"); }
     }

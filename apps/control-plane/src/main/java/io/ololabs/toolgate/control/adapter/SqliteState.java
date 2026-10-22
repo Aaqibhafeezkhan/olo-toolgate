@@ -31,6 +31,11 @@ public final class SqliteState {
             settings.setTransactionMode(org.sqlite.SQLiteConfig.TransactionMode.IMMEDIATE);
             var source = new org.sqlite.SQLiteDataSource(settings); source.setUrl("jdbc:sqlite:" + path);
             try (var c = source.getConnection(); var s = c.createStatement()) {
+                boolean history=false,applicationTables=false;
+                try(var rows=s.executeQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")){
+                    while(rows.next()){if(rows.getString(1).equals("quickstart_migrations"))history=true;else applicationTables=true;}
+                }
+                if(!history&&applicationTables)throw new IllegalStateException("Unsupported non-empty local database; use a new empty database");
                 s.execute("CREATE TABLE IF NOT EXISTS quickstart_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL)");
                 try(var r=s.executeQuery("SELECT COALESCE(max(version),0) FROM quickstart_migrations")){if(!r.next() || r.getInt(1)>1)throw new IllegalStateException("Newer local state requires a newer image");}
                 for(int version=1;version<=1;version++) {

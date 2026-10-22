@@ -2,10 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fixed-path bounded HTTPS transport; identity/private material never enters error strings.
 use crate::{config::Config, contracts::Contracts, identity::DeviceKey, Failure, Result};
+use olo_toolgate_contracts::v2::SignedTenantDiscovery;
 use olo_toolgate_contracts::*;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 pub type Call<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
+/// Discovery can run before a device transport exists (including fresh installers).
+pub(crate) fn tls_client_builder() -> reqwest::ClientBuilder {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::builder()
+}
 pub trait ControlPort: Send + Sync {
+    /// Assertion only: it cannot change the configured destination or authenticate a request.
+    fn bind_tenant(&self, _tenant: &str) -> Result<()> {
+        Ok(())
+    }
     fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective>;
     fn effect_outcome(
         &self,
@@ -18,6 +28,7 @@ pub trait ControlPort: Send + Sync {
         &self,
         _identity: DeviceIdentity,
         _request: EnterpriseSecretDeliveryRequest,
+        _fencing_token: String,
     ) -> Call<'_, EnterpriseSecretDelivery> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
@@ -74,7 +85,7 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, Vec<u8>> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery>;
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery>;
     fn start(&self, request: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge>;
     fn request_approval(
         &self,
@@ -90,6 +101,7 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, EndpointCheckInAck>;
 }
 pub struct HttpsControl {
+    tenant: std::sync::Mutex<Option<String>>,
     origin: String,
     client: reqwest::Client,
     config: Config,
@@ -99,12 +111,41 @@ pub struct HttpsControl {
     socket: crate::socket::Channel,
 }
 impl HttpsControl {
+    async fn refusal(&self, mut response: reqwest::Response) -> Failure {
+        let status = response.status().as_u16();
+        if response
+            .content_length()
+            .is_some_and(|size| size > crate::rejection::MAX_ERROR as u64)
+            || response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .is_none_or(|value| value.split(';').next() != Some("application/json"))
+        {
+            return Failure::Unavailable;
+        }
+        let mut bytes = Vec::new();
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => {
+                    if bytes.len() + chunk.len() > crate::rejection::MAX_ERROR {
+                        return Failure::Unavailable;
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                Ok(None) => break,
+                Err(_) => return Failure::Unavailable,
+            }
+        }
+        crate::rejection::http(status, &bytes, &self.contracts)
+    }
     pub fn new(config: Config, key: Arc<DeviceKey>, contracts: Arc<Contracts>) -> Result<Self> {
         config.validate()?;
         let client = Self::builder(&config)?
             .build()
             .map_err(|_| Failure::Unavailable)?;
         Ok(Self {
+            tenant: std::sync::Mutex::new(None),
             socket: crate::socket::Channel::default(),
             packets: crate::diagnostics::PacketLog::open(config.state_directory.clone())?,
             origin: crate::config::origin(&config.server_url)?,
@@ -115,8 +156,7 @@ impl HttpsControl {
         })
     }
     fn builder(config: &Config) -> Result<reqwest::ClientBuilder> {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        let mut builder = reqwest::Client::builder()
+        let mut builder = tls_client_builder()
             .https_only(true)
             .http1_only()
             .redirect(reqwest::redirect::Policy::none())
@@ -134,6 +174,13 @@ impl HttpsControl {
             builder = builder.tls_certs_only([root]);
         }
         Ok(builder)
+    }
+    fn tenant_request(&self, request: reqwest::RequestBuilder) -> Result<reqwest::RequestBuilder> {
+        let tenant = self.tenant.lock().map_err(|_| Failure::Unavailable)?;
+        Ok(match tenant.as_deref() {
+            Some(tenant) => request.header("Toolgate-Tenant-ID", tenant),
+            None => request,
+        })
     }
     async fn request<T: serde::de::DeserializeOwned>(
         &self,
@@ -162,7 +209,8 @@ impl HttpsControl {
         } else {
             client.get(url)
         };
-        request = request
+        request = self
+            .tenant_request(request)?
             .header("Accept", "application/json")
             .header("X-Request-ID", &correlation);
         if path == "/api/control/v1/endpoint/check-in" {
@@ -207,12 +255,8 @@ impl HttpsControl {
                 serde_json::json!({"code":"HTTP_REJECTED"}),
             );
         }
-        match response.status().as_u16() {
-            200 => {}
-            401 | 403 => return Err(Failure::Revoked),
-            409 => return Err(Failure::Conflict),
-            410 => return Err(Failure::EnrollmentRequired),
-            _ => return Err(Failure::Unavailable),
+        if status != 200 {
+            return Err(self.refusal(response).await);
         }
         if response.content_length().is_some_and(|n| n > 131072)
             || response
@@ -250,6 +294,17 @@ impl HttpsControl {
     }
 }
 impl ControlPort for HttpsControl {
+    fn bind_tenant(&self, tenant: &str) -> Result<()> {
+        self.contracts.encode("TenantUuid", &tenant)?;
+        let mut owner = self.tenant.lock().map_err(|_| Failure::Unavailable)?;
+        if owner.as_ref().is_some_and(|current| current != tenant) {
+            return Err(Failure::TenantMismatch);
+        }
+        if owner.is_none() {
+            *owner = Some(tenant.into());
+        }
+        Ok(())
+    }
     fn request_approval(
         &self,
         request: EndpointEnrollmentStart,
@@ -298,9 +353,19 @@ impl ControlPort for HttpsControl {
         &self,
         identity: DeviceIdentity,
         request: EnterpriseSecretDeliveryRequest,
+        fencing_token: String,
     ) -> Call<'_, EnterpriseSecretDelivery> {
         Box::pin(async move {
+            if fencing_token.is_empty() || fencing_token.len() > 128 {
+                return Err(Failure::Validation);
+            }
+            let mut fence = reqwest::header::HeaderValue::from_str(&fencing_token)
+                .map_err(|_| Failure::Validation)?;
+            fence.set_sensitive(true);
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("toolgate-fencing-token", fence);
             let client = Self::builder(&self.config)?
+                .default_headers(headers)
                 .identity(self.key.tls_identity(&identity)?)
                 .build()
                 .map_err(|_| Failure::Unavailable)?;
@@ -514,11 +579,11 @@ impl ControlPort for HttpsControl {
                 .identity(self.key.tls_identity(&identity)?)
                 .build()
                 .map_err(|_| Failure::Unavailable)?;
-            let mut response = client
-                .post(format!(
+            let mut response = self
+                .tenant_request(client.post(format!(
                     "{}/api/control/v1/fleet/artifacts/download",
                     self.origin
-                ))
+                )))?
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .header("X-Request-ID", crate::identity::nonce()?)
@@ -526,11 +591,8 @@ impl ControlPort for HttpsControl {
                 .send()
                 .await
                 .map_err(|_| Failure::Unavailable)?;
-            match response.status().as_u16() {
-                200 => {}
-                401 | 403 => return Err(Failure::Revoked),
-                409 => return Err(Failure::Conflict),
-                _ => return Err(Failure::Unavailable),
+            if response.status().as_u16() != 200 {
+                return Err(self.refusal(response).await);
             }
             if response.content_length().is_some_and(|n| n > 32768)
                 || response
@@ -551,12 +613,12 @@ impl ControlPort for HttpsControl {
             Ok(bytes)
         })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery> {
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery> {
         Box::pin(self.request(
             &self.client,
             "/.well-known/olo-toolgate-client",
             None,
-            "SignedClientDiscovery",
+            "SignedTenantDiscovery",
         ))
     }
     fn start(&self, request: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge> {
@@ -635,5 +697,65 @@ impl ControlPort for HttpsControl {
             }
             Ok(response)
         })
+    }
+}
+
+#[cfg(test)]
+mod tenant_tests {
+    use super::*;
+    #[test]
+    fn transport_assertion_is_optional_then_immutable_and_canonical() {
+        let directory = crate::storage::test_directory("tenant-http");
+        let store = crate::storage::ProtectedStore::open(directory.clone()).unwrap();
+        let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
+        let config = Config {
+            tenant_id: None,
+            deployment: None,
+            execution: None,
+            gateway: None,
+            server_url: "https://control.example.test".into(),
+            state_directory: directory.clone(),
+            ipc_endpoint: crate::install::ipc_endpoint(),
+            authorized_peers: vec![{
+                #[cfg(unix)]
+                {
+                    unsafe { libc::geteuid() }.to_string()
+                }
+                #[cfg(windows)]
+                {
+                    crate::platform::windows::current_sid().unwrap()
+                }
+            }],
+            ca_certificate_path: None,
+            request_timeout_seconds: 5,
+            local_console_url: None,
+        };
+        let transport =
+            HttpsControl::new(config, key, Arc::new(Contracts::new().unwrap())).unwrap();
+        let headers = || {
+            transport
+                .tenant_request(transport.client.get("https://control.example.test/ping"))
+                .unwrap()
+                .build()
+                .unwrap()
+                .headers()
+                .clone()
+        };
+        assert!(!headers().contains_key("Toolgate-Tenant-ID"));
+        assert_eq!(
+            transport.bind_tenant("quickstart"),
+            Err(Failure::Validation)
+        );
+        let owner = "10000000-0000-4000-8000-000000000001";
+        transport.bind_tenant(owner).unwrap();
+        transport.bind_tenant(owner).unwrap();
+        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
+        assert_eq!(
+            transport.bind_tenant("10000000-0000-4000-8000-000000000002"),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
+        drop(transport);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

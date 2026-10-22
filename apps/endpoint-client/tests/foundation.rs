@@ -11,6 +11,7 @@ use olo_toolgate_client::{
     transport::{Call, ControlPort},
     Failure,
 };
+use olo_toolgate_contracts::v2::SignedTenantDiscovery;
 use olo_toolgate_contracts::*;
 use std::{path::PathBuf, sync::Arc};
 struct Directory(PathBuf);
@@ -178,7 +179,7 @@ impl ControlPort for Offline {
     fn ping(&self, _: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
         Box::pin(async { Err(Failure::Unavailable) })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery> {
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery> {
         Box::pin(async { Err(Failure::Unavailable) })
     }
     fn start(&self, _: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge> {
@@ -193,6 +194,7 @@ impl ControlPort for Offline {
 }
 fn config(directory: &Directory) -> Config {
     Config {
+        tenant_id: None,
         deployment: None,
         execution: None,
         gateway: None,
@@ -229,8 +231,107 @@ fn config(directory: &Directory) -> Config {
 }
 fn service(directory: &Directory) -> ClientService {
     let store = directory.store();
-    let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
-    ClientService::open(config(directory), store, key, Arc::new(Offline)).unwrap()
+    ClientService::open(config(directory), store, |_| Ok(Arc::new(Offline))).unwrap()
+}
+#[test]
+fn journal_binds_origin_before_key_creation_and_rejects_repointing_without_mutation() {
+    let directory = Directory::new();
+    let initial = service(&directory);
+    let store = directory.store();
+    let before = store.read("journal.json").unwrap().unwrap();
+    let journal: serde_json::Value = serde_json::from_slice(&before).unwrap();
+    assert_eq!(journal["formatVersion"], 3);
+    assert_eq!(journal["serverUrl"], config(&directory).server_url);
+    let key_hash = olo_toolgate_client::digest(&store.read("device-key").unwrap().unwrap());
+    drop(initial);
+    let mut foreign = config(&directory);
+    foreign.server_url = "https://foreign.example".into();
+    assert_eq!(
+        ClientService::open(foreign, directory.store(), |_| panic!(
+            "foreign state must not construct transport"
+        ))
+        .err(),
+        Some(Failure::TenantMismatch)
+    );
+    assert_eq!(store.read("journal.json").unwrap().unwrap(), before);
+    assert_eq!(
+        olo_toolgate_client::digest(&store.read("device-key").unwrap().unwrap()),
+        key_hash
+    );
+    assert!(
+        ClientService::open(config(&directory), directory.store(), |_| Ok(Arc::new(
+            Offline
+        )))
+        .is_ok()
+    );
+}
+#[test]
+fn administrator_uuid_is_persisted_before_transport_and_cannot_be_replaced() {
+    let directory = Directory::new();
+    let mut settings = config(&directory);
+    settings.tenant_id = Some("10000000-0000-4000-8000-000000000001".into());
+    let initial = ClientService::open(settings.clone(), directory.store(), |_| {
+        let bytes = directory.store().read("journal.json")?.unwrap();
+        let journal: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(journal["tenantId"], settings.tenant_id.as_deref().unwrap());
+        Ok(Arc::new(Offline))
+    })
+    .unwrap();
+    drop(initial);
+    let before = directory.store().read("journal.json").unwrap().unwrap();
+    settings.tenant_id = Some("10000000-0000-4000-8000-000000000002".into());
+    assert_eq!(
+        ClientService::open(settings, directory.store(), |_| panic!(
+            "foreign UUID cannot construct transport"
+        ))
+        .err(),
+        Some(Failure::TenantMismatch)
+    );
+    assert_eq!(
+        directory.store().read("journal.json").unwrap().unwrap(),
+        before
+    );
+}
+#[test]
+fn unsupported_journal_is_left_unchanged_without_creating_a_key() {
+    for bytes in [
+        br#"{}"#.as_slice(),
+        br#"{"formatVersion":1,"serverUrl":"https://control.example.test","tenantId":null}"#
+            .as_slice(),
+    ] {
+        let directory = Directory::new();
+        let store = directory.store();
+        store.write("journal.json", bytes).unwrap();
+        assert_eq!(
+            ClientService::open(config(&directory), directory.store(), |_| panic!(
+                "unsupported state must not construct transport"
+            ))
+            .err(),
+            Some(Failure::Validation)
+        );
+        assert_eq!(store.read("journal.json").unwrap().unwrap(), bytes);
+        assert!(store.read("device-key").unwrap().is_none());
+    }
+}
+#[test]
+fn orphan_key_cannot_be_adopted_into_a_new_tenant_journal() {
+    let directory = Directory::new();
+    let store = directory.store();
+    let key = DeviceKey::load_or_create(&store).unwrap();
+    let fingerprint = key.fingerprint();
+    drop(key);
+    assert_eq!(
+        ClientService::open(config(&directory), directory.store(), |_| panic!(
+            "orphan state must not construct transport"
+        ))
+        .err(),
+        Some(Failure::Validation)
+    );
+    assert!(store.read("journal.json").unwrap().is_none());
+    assert_eq!(
+        DeviceKey::load_or_create(&store).unwrap().fingerprint(),
+        fingerprint
+    );
 }
 /// Signed releases do not need the local Gateway credential: relayed calls are authorized by Control (ADR 027).
 #[test]
@@ -340,49 +441,16 @@ fn ipc_contract_cannot_export_keys_or_accept_arbitrary_operations() {
     }
 }
 #[test]
-fn signed_discovery_rejects_wrong_origin_expiry_ca_and_corruption() {
-    use olo_toolgate_client::identity::verify_discovery;
-    let mut envelope: SignedClientDiscovery = serde_json::from_str(include_str!(
-        "../../../tests/fixtures/client/discovery-public.json"
-    ))
-    .unwrap();
-    let now = 1700000000000;
-    let manifest = verify_discovery(&envelope, "https://control.example.test", now, None).unwrap();
-    assert_eq!(manifest.server_id, "server-1");
-    assert_eq!(
-        verify_discovery(&envelope, "https://wrong.example.test", now, None).unwrap_err(),
-        Failure::Unauthorized
-    );
-    assert_eq!(
-        verify_discovery(
-            &envelope,
-            "https://control.example.test",
-            now + 300000,
-            None
-        )
-        .unwrap_err(),
-        Failure::Unauthorized
-    );
-    assert_eq!(
-        verify_discovery(
-            &envelope,
-            "https://control.example.test",
-            now,
-            Some(&"0".repeat(64))
-        )
-        .unwrap_err(),
-        Failure::Unauthorized
-    );
-    let replacement = if envelope.signature.starts_with('A') {
-        "B"
-    } else {
-        "A"
-    };
-    envelope.signature.replace_range(..1, replacement);
-    assert_eq!(
-        verify_discovery(&envelope, "https://control.example.test", now, None).unwrap_err(),
-        Failure::Unauthorized
-    );
+fn live_discovery_boundary_rejects_the_archived_v1_envelope() {
+    let bytes = include_bytes!("../../../tests/fixtures/client/discovery-public.json");
+    assert!(olo_toolgate_tenant_identity::verify_bytes(
+        bytes,
+        "https://control.example.test",
+        None,
+        None,
+        1700000000000
+    )
+    .is_err());
 }
 #[tokio::test]
 async fn offline_enrollment_never_becomes_ready_and_key_is_retained() {
@@ -413,6 +481,148 @@ async fn unauthorized_ipc_rejected_before_reading_payload() {
         .await,
         Err(Failure::Unauthorized)
     );
+}
+#[tokio::test]
+async fn console_ipc_denies_foreign_context_before_health_or_enrollment() {
+    use olo_toolgate_contracts::v2::{
+        ConsoleClientOperation, ConsoleClientRequest, ConsoleClientResponse,
+    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let directory = Directory::new();
+    let service = Arc::new(tokio::sync::Mutex::new(service(&directory)));
+    let contracts = Contracts::new().unwrap();
+    let activity = service.lock().await.activity.clone();
+    for (operation, console, expected, allowed) in [
+        (
+            ConsoleClientOperation::Health,
+            "https://other.example/console/",
+            None,
+            false,
+        ),
+        (
+            ConsoleClientOperation::Enroll,
+            "https://other.example/console/",
+            None,
+            false,
+        ),
+        (
+            ConsoleClientOperation::Health,
+            "https://control.example.test/console/",
+            None,
+            true,
+        ),
+        (
+            ConsoleClientOperation::Health,
+            "https://control.example.test/console/",
+            Some("10000000-0000-4000-8000-000000000001"),
+            false,
+        ),
+    ] {
+        let before = directory.store().read("journal.json").unwrap();
+        let request = ConsoleClientRequest {
+            kind: "console-tenant-state".into(),
+            request_id: "context-check".into(),
+            operation,
+            console_url: console.into(),
+            expected_tenant_id: expected.map(str::to_owned),
+        };
+        let bytes = contracts.encode("ConsoleClientRequest", &request).unwrap();
+        let (mut stream, mut peer) = tokio::io::duplex(16384);
+        peer.write_u32(bytes.len() as u32).await.unwrap();
+        peer.write_all(&bytes).await.unwrap();
+        ipc::connection(
+            &mut stream,
+            "authorized",
+            &["authorized".into()],
+            &service,
+            &contracts,
+            &activity,
+        )
+        .await
+        .unwrap();
+        let size = peer.read_u32().await.unwrap() as usize;
+        let mut bytes = vec![0; size];
+        peer.read_exact(&mut bytes).await.unwrap();
+        let reply: ConsoleClientResponse =
+            contracts.decode("ConsoleClientResponse", &bytes).unwrap();
+        assert_eq!(
+            reply.error,
+            if allowed {
+                None
+            } else {
+                Some(ErrorCode::TenantMismatch)
+            }
+        );
+        assert_eq!(reply.health.is_some(), allowed);
+        assert!(reply.challenge.is_none());
+        let wire: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        for field in ["activity", "connections", "power"] {
+            assert!(wire.get(field).is_none());
+        }
+        if !allowed {
+            assert!(wire.get("tenantId").is_none());
+            assert_eq!(wire.as_object().unwrap().len(), 2);
+        }
+        assert_eq!(directory.store().read("journal.json").unwrap(), before);
+    }
+}
+
+#[tokio::test]
+async fn busy_console_requests_receive_a_correlated_conflict_frame() {
+    use olo_toolgate_contracts::v2::{
+        ConsoleClientOperation, ConsoleClientRequest, ConsoleClientResponse,
+    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let directory = Directory::new();
+    let service = Arc::new(tokio::sync::Mutex::new(service(&directory)));
+    let contracts = Contracts::new().unwrap();
+    let activity = service.lock().await.activity.clone();
+    let guard = service.lock().await;
+    for operation in [
+        ConsoleClientOperation::Health,
+        ConsoleClientOperation::Enroll,
+    ] {
+        let request = ConsoleClientRequest {
+            kind: "console-tenant-state".into(),
+            request_id: "busy-console".into(),
+            operation,
+            console_url: "https://control.example.test/console/".into(),
+            expected_tenant_id: None,
+        };
+        let bytes = contracts.encode("ConsoleClientRequest", &request).unwrap();
+        let (mut stream, mut peer) = tokio::io::duplex(16384);
+        peer.write_u32(bytes.len() as u32).await.unwrap();
+        peer.write_all(&bytes).await.unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            ipc::connection(
+                &mut stream,
+                "authorized",
+                &["authorized".into()],
+                &service,
+                &contracts,
+                &activity,
+            ),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let size = peer.read_u32().await.unwrap();
+        let mut bytes = vec![0; size as usize];
+        peer.read_exact(&mut bytes).await.unwrap();
+        let response: ConsoleClientResponse =
+            contracts.decode("ConsoleClientResponse", &bytes).unwrap();
+        assert_eq!(response.request_id, request.request_id);
+        assert_eq!(response.error, Some(ErrorCode::Conflict));
+        assert!(
+            response.health.is_none()
+                && response.challenge.is_none()
+                && response.tenant_id.is_none()
+        );
+        let wire: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(wire.as_object().unwrap().len(), 2);
+    }
+    drop(guard);
 }
 
 #[tokio::test]

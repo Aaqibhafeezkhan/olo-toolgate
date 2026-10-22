@@ -15,6 +15,7 @@ import io.vertx.ext.web.RoutingContext;
 /** Human management, authenticated Gateway and certificate-bound client routes are explicit trust boundaries. */
 @Path("/api/control/v1/access") @Produces("application/json") @Blocking
 public class EnterpriseOperationResource {
+    @Inject TenantRequest request;
     @Inject EnterpriseOperations operations;@Inject VerifiedActors actors;@Inject ContractCodec codec;
     @Inject EndpointService endpoints;@Inject PostgresStore store;@Inject RoutingContext routing;
     @Inject io.quarkus.security.identity.SecurityIdentity security;
@@ -40,7 +41,7 @@ public class EnterpriseOperationResource {
     private Response reply(Store.Reply value){return Response.status(value.status()).header("Cache-Control","no-store").header("ETag","\""+value.revision()+"\"").entity(value.body()).build();}
     private String body(String value){if(value==null||value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>65536)throw Failure.validation();return value;}
     private java.security.cert.X509Certificate peer(){if(!routing.request().isSSL())throw unauthorized();try{return (java.security.cert.X509Certificate)routing.request().sslSession().getPeerCertificates()[0];}catch(Exception invalid){throw unauthorized();}}
-    private Ids.TenantId tenant(){return new Ids.TenantId(org.eclipse.microprofile.config.ConfigProvider.getConfig().getValue("toolgate.control.endpoint.tenant-id",String.class));}
+    private Ids.TenantId tenant(){return request.tenant();}
     private static Failure unauthorized(){return new Failure(ErrorCode.UNAUTHORIZED,401,"Direct device certificate required");}
     @GET @Path("health") @RolesAllowed("toolgate-relay-gateway")
     public Response health(){var actor=gateway();store.transaction(actor.tenant(),false,tx->{tx.load();tx.enterprise().authorizationEpoch();return null;});return Response.ok("{\"ready\":true}").header("Cache-Control","no-store").build();}
@@ -80,5 +81,5 @@ public class EnterpriseOperationResource {
     @GET @Path("invocations/{id}/events") @io.quarkus.security.Authenticated
     public Response eventPage(@PathParam("id")String id,@QueryParam("after")@DefaultValue("0")long after,@QueryParam("limit")@DefaultValue("200")int limit){return reply(new RunEvents(store,codec,operations).page(actors.human(),id,after,limit));}
     @POST @Path("secrets/deliver") @Consumes("application/json") @PermitAll
-    public Response secret(String document){var certificate=peer();return reply(vault.service().deliver(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document),operations));}
+    public Response secret(@HeaderParam("Toolgate-Fencing-Token")String fencingToken,String document){var certificate=peer();return reply(vault.service().deliver(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document),fencingToken,operations));}
 }

@@ -76,6 +76,7 @@ jobs:
           python tools/control/container.py --client-assets deploy/client-assets/release
           docker tag olo-toolgate-control:module05 olo-toolgate-control:enterprise-production
           python tools/enterprise/restore_check.py
+          python tools/tenancy/recovery_check.py --output build/control/tenant-recovery.json
           python tools/client/downloads.py --image olo-toolgate-control:module05
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-control:module05
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/control:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/control-sbom.cdx.json olo-toolgate-control:module05
@@ -86,7 +87,7 @@ jobs:
           docker save olo-toolgate-control:module05 -o build/control/image.tar
           cp -r build/ui build/control/ui-evidence
           cp CHANGELOG.md docs/control-plane/upgrades.md build/control/
-          (cd build/control && sha256sum image.tar control-sbom.cdx.json > SHA256SUMS)
+          (cd build/control && sha256sum image.tar control-sbom.cdx.json tenant-recovery.json > SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: control-evidence

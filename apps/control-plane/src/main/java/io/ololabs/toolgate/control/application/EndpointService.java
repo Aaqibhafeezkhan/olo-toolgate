@@ -28,6 +28,12 @@ public final class EndpointService {
     private final boolean enabled;
     private ClientCheckInPolicy checkInPolicy=ClientCheckInPolicy.QUICKSTART;
     private EnterpriseOperations operations;
+    private long identityGeneration;
+    public EndpointService identityGeneration(long generation){if(generation<1||generation>9007199254740991L)throw Failure.validation();identityGeneration=generation;return this;}
+    private void currentIdentity(Store.Session tx){if(identityGeneration>0){var keys=tx.identityKeys();if(keys.isEmpty()||keys.stream().anyMatch(key->key.generation()!=identityGeneration))throw Failure.unavailable();}}
+    private java.util.function.BiFunction<String,Long,io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery> discoverySigner;
+    /** Discovery has its own tenant key domain, independent of the device CA. */
+    public EndpointService discoverySigner(java.util.function.BiFunction<String,Long,io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery> signer){discoverySigner=Objects.requireNonNull(signer);return this;}
     /** Env-owned check-in policy; the 2 s Quickstart default applies until configured. */
     public EndpointService checkInPolicy(ClientCheckInPolicy value){checkInPolicy=java.util.Objects.requireNonNull(value);if(operations!=null)operations.checkInPolicy(value);return this;}
     public ClientCheckInPolicy checkInPolicy(){return checkInPolicy;}
@@ -38,6 +44,16 @@ public final class EndpointService {
         this.store=store;this.codec=codec;this.issuer=issuer;this.clock=clock;this.enabled=enabled;
         this.tenant=new Ids.TenantId(tenant);this.server=Ids.valid(server);this.organization=organization;
         this.control=origin(control);this.gateway=origin(gateway);
+    }
+    /** A request gets an immutable tenant binding; failed-code budgets survive request/service recreation. */
+    public EndpointService forTenant(Ids.TenantId id,Store.RuntimeProfile profile) {
+        return forTenant(id,profile,issuer);
+    }
+    public EndpointService forTenant(Ids.TenantId id,Store.RuntimeProfile profile,DeviceIssuer tenantIssuer) {
+        var scoped=new EndpointService(store,codec,tenantIssuer,clock,enabled&&profile!=null,id.value(),
+            profile==null?"disabled":profile.serverId(),profile==null?"disabled":profile.organization(),
+            profile==null?"https://disabled.invalid":profile.controlUrl(),profile==null?"https://disabled.invalid":profile.gatewayUrl());
+        scoped.failures=failures;scoped.checkInPolicy(checkInPolicy);if(operations!=null)scoped.operations(operations);return scoped;
     }
     /** Fixed HTTPS origins exclude redirects, userinfo, paths and fragments. */
     public static String origin(String value) {
@@ -51,7 +67,7 @@ public final class EndpointService {
     private static final class Observation {long time=-1;}
     private <T> T transaction(java.util.function.BiFunction<Store.Session,Long,T> action) {
         available();var observation=new Observation();
-        try {return store.transaction(tenant,true,tx->{long now=clock.millis();if(now<0||now>9007199254740991L)throw Failure.unavailable();
+        try {return store.transaction(tenant,true,tx->{currentIdentity(tx);long now=clock.millis();if(now<0||now>9007199254740991L)throw Failure.unavailable();
             observation.time=Math.max(now,tx.approvalClock(now));if(observation.time>now)throw Failure.unavailable();return action.apply(tx,now);});}
         catch(RuntimeException failure){if(observation.time>=0)store.transaction(tenant,true,tx->{tx.approvalClock(observation.time);return null;});throw failure;}
     }
@@ -94,7 +110,7 @@ public final class EndpointService {
     private static EndpointDeviceRecord redacted(EndpointDeviceRecord d){return new EndpointDeviceRecord(d.deviceId(),d.tenantId(),d.userId(),null,d.state(),d.revision(),d.lastSeenUnixMs(),d.reportSequence(),d.report(),d.connectionExpiresAtUnixMs(),d.connectionApproved(),d.approvalRevision(),d.systemName(),d.ipAddress());}
     /** An OWNED approval leaves the device in exactly the rule's group. */
     private void ownMembership(Store.Session tx,String deviceId,String group){var before=tx.load();var entries=new HashMap<>(before.entries());GroupGraph.setMemberships(entries,codec,Ids.Kind.DEVICE,deviceId,List.of(group));var after=new Directory(before.revision()+1,entries);after.validate(512,1048576);tx.save(before,after);}
-    private final java.util.concurrent.ConcurrentHashMap<String,ArrayDeque<Long>> failures=new java.util.concurrent.ConcurrentHashMap<>();
+    private java.util.concurrent.ConcurrentHashMap<String,ArrayDeque<Long>> failures=new java.util.concurrent.ConcurrentHashMap<>();
     /** Five failed code lookups or approvals per user in ten minutes, then 429 until the oldest failure ages out. */
     private <T> T limited(DirectoryService.Actor actor,java.util.function.Supplier<T> work){
         var times=failures.computeIfAbsent(actor.tenant().value()+"/"+actor.userId(),k->new ArrayDeque<>());long now=clock.millis();
@@ -105,8 +121,9 @@ public final class EndpointService {
     private static String random(int bytes){byte[] value=new byte[bytes];new java.security.SecureRandom().nextBytes(value);return HexFormat.of().formatHex(value);}
     private String verification(){return control+"/console/#enroll";}
     public Store.Reply discovery(){available();long now=clock.millis();
-        var manifest=new ClientDiscovery(1L,server,organization,tenant.value(),control,gateway,verification(),MINIMUM_CLIENT_VERSION,now,now+300000,issuer.issuerCertificate());
-        return reply(issuer.discovery(codec.json(manifest)),0);
+        if(discoverySigner==null)throw Failure.unavailable();
+        if(identityGeneration>0)return store.transaction(tenant,false,tx->{currentIdentity(tx);return reply(discoverySigner.apply(MINIMUM_CLIENT_VERSION,now),0);});
+        return reply(discoverySigner.apply(MINIMUM_CLIENT_VERSION,now),0);
     }
     /** A signed CSR proves the announced key even before enrollment or after certificate expiry. */
     public Store.Reply ping(String body){
@@ -326,10 +343,10 @@ public final class EndpointService {
         available();
         if(systemName!=null&&(systemName.length()>255||!systemName.matches("[a-zA-Z0-9._-]+")))throw Failure.validation();
         if(ipAddress!=null&&(ipAddress.length()>45||!ipAddress.matches("[0-9a-fA-F:.]{2,45}")))throw Failure.validation();
-        var check=codec.model(body,EndpointCheckIn.class);Ids.valid(requestId);var fingerprint=issuer.peerFingerprint(peer,clock.millis());
+        var check=codec.model(body,EndpointCheckIn.class);Ids.valid(requestId);var claims=peer(peer,clock.millis());var fingerprint=claims.fingerprint();
         var digest=DirectoryService.digest(codec.json(check));
         return transaction((tx,now)->{var row=tx.endpointKey(fingerprint);if(row==null)throw forbidden();
-            var device=codec.model(row.document(),EndpointDeviceRecord.class);active(tx,device);
+            var device=codec.model(row.document(),EndpointDeviceRecord.class);binding(claims,device);active(tx,device);
             if(!device.deviceId().equals(check.report().deviceId()))throw forbidden();
             if(check.report().appliedRevision()!=0||!check.report().packages().isEmpty())FleetService.validateReport(tx,codec,check.report());
             if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),serverName(tx));}
@@ -351,8 +368,17 @@ public final class EndpointService {
         });
     }
     public EndpointDeviceRecord authenticate(Store.Session tx,java.security.cert.X509Certificate peer,long now){
-        available();var fingerprint=issuer.peerFingerprint(peer,now);var row=tx.endpointKey(fingerprint);
-        if(row==null)throw forbidden();var device=codec.model(row.document(),EndpointDeviceRecord.class);active(tx,device);return device;
+        available();var claims=peer(peer,now);var row=tx.endpointKey(claims.fingerprint());
+        if(row==null)throw forbidden();var device=codec.model(row.document(),EndpointDeviceRecord.class);binding(claims,device);active(tx,device);return device;
+    }
+    private DeviceIssuer.Peer peer(java.security.cert.X509Certificate certificate,long now){
+        var peer=issuer.verifyPeer(certificate,now);
+        if(!peer.tenant().equals(tenant))throw new Failure(ErrorCode.TENANT_MISMATCH,403,"Tenant identity mismatch");
+        if(!peer.serverId().equals(server))throw forbidden();return peer;
+    }
+    private void binding(DeviceIssuer.Peer peer,EndpointDeviceRecord device){
+        if(!device.tenantId().equals(tenant.value())||!peer.deviceId().equals(device.deviceId())
+            ||!peer.identityUri().equals("urn:toolgate:device:"+DirectoryService.digest(server+"\n"+tenant.value()+"\n"+device.userId()+"\n"+device.deviceId())))throw forbidden();
     }
     public void active(Store.Session tx,EndpointDeviceRecord device){
         if(deleted(tx,device))throw enrollmentRequired();

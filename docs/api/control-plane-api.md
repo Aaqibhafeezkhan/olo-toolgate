@@ -3,7 +3,9 @@
 The console consumes this canonical API on the same origin. Generated operation
 metadata imports the shared TypeScript contracts. Device-management operations
 are defined in the canonical OpenAPI and schemas, with no browser-owned security
-decisions. See [console behavior](../control-plane/admin-ui.md).
+decisions. See [console behavior](../control-plane/admin-ui.md). For the
+complete route list with example requests and responses, see the
+[HTTP and MCP API reference](api-reference.md#5-control-public-and-discovery-routes).
 
 ## Device registry operations
 

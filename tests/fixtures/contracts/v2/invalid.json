@@ -2154,5 +2154,518 @@
         "request": {}
       }
     }
+  ],
+  "TenantUuid": [
+    {
+      "case": "discovery boundary 1",
+      "value": "quickstart"
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": "4A130F27-89BB-4EB9-BB12-3C28473D59E1"
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": null
+    }
+  ],
+  "DiscoveryKeyId": [
+    {
+      "case": "discovery boundary 1",
+      "value": "../key"
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": "https://key"
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": ""
+    }
+  ],
+  "DiscoveryHeader": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "alg": "none",
+        "typ": "toolgate-discovery+jws",
+        "kid": "discovery-a"
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "alg": "RS256",
+        "typ": "JWT",
+        "kid": "discovery-a"
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "alg": "RS256",
+        "typ": "toolgate-discovery+jws",
+        "kid": "discovery-a",
+        "jku": "https://untrusted.invalid"
+      }
+    }
+  ],
+  "DiscoveryPublicKey": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAB",
+        "d": "private"
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "kty": "oct",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAB"
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "kty": "RSA",
+        "use": "enc",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAB"
+      }
+    },
+    {
+      "case": "discovery boundary 4",
+      "value": {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAD"
+      }
+    },
+    {
+      "case": "discovery boundary 5",
+      "value": {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "weak",
+        "e": "AQAB"
+      }
+    }
+  ],
+  "DiscoveryKeySet": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "keys": []
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "keys": [
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          }
+        ]
+      }
+    }
+  ],
+  "DiscoveryAuthorityState": [
+    {
+      "case": "discovery boundary 1",
+      "value": "RETIRED"
+    }
+  ],
+  "DiscoveryDeviceAuthority": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "keyId": "short",
+        "state": "ACTIVE",
+        "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+      }
+    }
+  ],
+  "TenantDiscovery": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "protocolVersion": 1,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "default",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 0,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 4",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 9007199254740992,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 5",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 6",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "https://untrusted.invalid",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    }
+  ],
+  "SignedTenantDiscovery": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "payload": "old",
+        "signature": "old"
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "jws": "a.b.c="
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "jws": "a.b.c",
+        "header": {}
+      }
+    }
+  ],
+  "ConsoleClientOperation": [
+    {
+      "case": "no execution operations",
+      "value": "INVOKE"
+    }
+  ],
+  "ConsoleClientRequest": [
+    {
+      "case": "closed tenant assertion",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "consoleUrl": "https://tenant.example.test/console/",
+        "expectedTenantId": "quickstart"
+      }
+    },
+    {
+      "case": "origin required",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "expectedTenantId": "10000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "case": "no credentials from local caller",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "consoleUrl": "https://tenant.example.test/console/",
+        "expectedTenantId": "10000000-0000-4000-8000-000000000001",
+        "credential": "unexpected"
+      }
+    }
+  ],
+  "ConsoleClientResponse": [
+    {
+      "case": "activity cannot be exported",
+      "value": {
+        "requestId": "console-response",
+        "activity": {}
+      }
+    },
+    {
+      "case": "UUID must be canonical",
+      "value": {
+        "requestId": "console-response",
+        "tenantId": "quickstart"
+      }
+    },
+    {
+      "case": "request correlation required",
+      "value": {
+        "error": "TENANT_MISMATCH"
+      }
+    },
+    {
+      "case": "unknown error rejected",
+      "value": {
+        "requestId": "console-response",
+        "error": "UNKNOWN"
+      }
+    }
   ]
 }

@@ -88,6 +88,8 @@ class SourceScanTests(unittest.TestCase):
                 self.assertEqual(len(json.loads((output/'historical.json').read_text())['Results']),1)
                 self.assertEqual(bool(json.loads((output/'blocking.json').read_text())['Results']),active)
                 self.assertNotIn('--skip',run.call_args.args[0][-1])
+                self.assertIn(f'{root.as_posix()}/.dev/trivy-cache:/root/.cache/trivy',run.call_args.args[0])
+                self.assertTrue((root/'.dev/trivy-cache').is_dir())
 
     def test_scanner_failure_cannot_become_a_clean_report(self):
         with tempfile.TemporaryDirectory() as temporary:

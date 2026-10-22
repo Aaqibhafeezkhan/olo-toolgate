@@ -12,7 +12,7 @@ def installation():
     snapshot=copy.deepcopy(container.initial_configuration()['records'])
     snapshot['roles'].append(dict(id='installation-management',portalRole='SUPER_ADMIN',revision=1,managementRules=[]))
     snapshot['bindings'].append(dict(id='binding-default'))
-    snapshot['teams'].append(dict(id='installation-administrators',userIds=['admin','reviewer-1','reviewer-2']))
+    snapshot['teams'].append(dict(id='installation-administrators',revision=1,userIds=['admin','reviewer-1','reviewer-2'],roleIds=['installation-management']))
     next(team for team in snapshot['teams'] if team['id']=='team-default')['userIds']=['admin','reviewer-1','reviewer-2']
     snapshot['tools']=[dict(id='builtin',enabled=False)]
     snapshot['agents']=[dict(id='agent-local',enabled=False)]
@@ -51,18 +51,20 @@ class ProductionSmokeDefaultsTests(unittest.TestCase):
             else:snapshot[field].append(dict(id='unreviewed'))
             with self.subTest(field=field),self.assertRaises(AssertionError):container.protected_defaults(snapshot)
 
-    def test_review_fixture_keeps_an_owner_before_demoting_maker_and_checker(self):
+    def test_review_fixture_preserves_bootstrap_owner_when_restricting_reviewers(self):
         api=Mock(side_effect=[(201,{}),(201,{}),(200,{})])
         container.scoped_reviewers(api,installation())
         calls=api.call_args_list
         role=calls[0].kwargs['body'];team=calls[1].kwargs['body']
-        self.assertEqual(role['portalRole'],'SUPER_ADMIN')
-        self.assertEqual(team['userIds'],['reviewer-2'])
+        self.assertEqual(role['portalRole'],'ADMINISTRATOR')
+        self.assertEqual(team['userIds'],['reviewer-1','reviewer-2'])
         self.assertEqual(team['roleIds'],[role['id']])
-        self.assertEqual(calls[2].kwargs['body']['portalRole'],'ADMINISTRATOR')
+        self.assertEqual(calls[2].args[0],'/api/control/v1/teams/installation-administrators')
+        self.assertEqual(calls[2].kwargs['body']['userIds'],['admin'])
+        self.assertEqual(calls[2].kwargs['body']['roleIds'],['installation-management'])
         self.assertEqual(calls[2].kwargs['revision'],1)
 
-    def test_failed_owner_creation_stops_before_demoting_administrators(self):
+    def test_failed_scoped_role_creation_leaves_owners_unchanged(self):
         api=Mock(return_value=(403,{}))
         with self.assertRaises(AssertionError):container.scoped_reviewers(api,installation())
         self.assertEqual(api.call_count,1)

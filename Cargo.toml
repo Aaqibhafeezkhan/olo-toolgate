@@ -4,6 +4,7 @@
 resolver = "2"
 members = [
   "packages/contracts/rust",
+  "packages/tenant-identity/rust",
   "apps/gateway",
   "apps/endpoint-client",
   "apps/tool-host",
@@ -17,6 +18,7 @@ repository = "https://github.com/olo-labs/olo-toolgate"
 version = "0.10.0-dev"
 
 [workspace.dependencies]
+olo-toolgate-tenant-identity = { path = "packages/tenant-identity/rust" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 olo-toolgate-contracts = { path = "packages/contracts/rust", version = "0.10.0-dev" }

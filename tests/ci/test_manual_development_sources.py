@@ -92,7 +92,7 @@ class ManualSourceTests(unittest.TestCase):
                 images.publish(run, 'owner/repo', SHA, 'owner', {'gateway':('local','gateway')}, 'unique',
                                source_branch='feature/test', branch_alias='dev-feature-test')
             pushes = [args[2] for args in calls if args[:2] == ('docker','push')]
-            self.assertEqual(pushes, ['owner/gateway:unique']+(['owner/gateway:dev-feature-test'] if current else []))
+            self.assertEqual(pushes, ['owner/gateway:unique']+(['owner/gateway:dev-feature-test'] if current else [])+['owner/gateway:dev-branch'])
             self.assertTrue(any('heads/feature%2Ftest' in args[-1] for args in calls if args[0] == 'gh'))
 
     def test_npm_publishes_exact_prepared_version_and_restricts_dev_alias(self):
@@ -144,8 +144,11 @@ class ManualSourceTests(unittest.TestCase):
             for name in ('VERSION','packages/contracts/VERSION'):
                 self.assertEqual((destination/name).read_text().strip(), info['version'])
             lock = tomllib.loads((destination/'Cargo.lock').read_text())
-            local = [p['version'] for p in lock['package'] if p['name'] in ('olo-toolgate-client','toolgate-cli','olo-toolgate-tool-host','olo-toolgate-gateway','olo-toolgate-contracts') and 'source' not in p]
+            local = [p['version'] for p in lock['package'] if 'source' not in p]
             self.assertEqual(set(local), {info['version']})
+            original = tomllib.loads((ROOT/'Cargo.lock').read_text())
+            self.assertEqual([p for p in lock['package'] if 'source' in p],
+                             [p for p in original['package'] if 'source' in p])
             npm = json.loads((destination/'package-lock.json').read_text())
             self.assertEqual({npm['packages'][p]['version'] for p in ('','apps/admin-ui','packages/contracts/typescript')}, {info['version']})
             extension = json.loads((destination/'apps/browser-extension/manifest.json').read_text())
@@ -154,14 +157,24 @@ class ManualSourceTests(unittest.TestCase):
             self.assertEqual(json.loads((destination/'development-source.json').read_text()), info)
             self.assertTrue((destination/'tools/release/manual_development.py').is_file())
 
-    def test_workflows_keep_controller_on_main_and_stamp_every_builder(self):
+    def test_manual_workflow_accepts_only_branch_and_stamps_every_builder(self):
         def workflow(name):
             return yaml.safe_load((ROOT/'.github/workflows'/f'{name}.yml').read_text())
         ci = workflow('ci')
         self.assertNotIn('release', ci['jobs'])
         self.assertTrue(all(level == 'read' for level in ci['permissions'].values()))
         manual_flow = workflow('manual-development-release')
-        self.assertEqual(set(manual_flow['on']['workflow_dispatch']['inputs']), {'source_branch','source_commit'})
+        self.assertEqual(set(manual_flow['on']['workflow_dispatch']['inputs']), {'source_branch'})
+        for job in manual_flow['jobs'].values():
+            self.assertEqual(job['if'], "github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')")
+        source_step=next(s for s in manual_flow['jobs']['select']['steps'] if s.get('id')=='source')
+        self.assertEqual(source_step['env']['SOURCE_COMMIT'],'latest')
+        self.assertEqual(source_step['env']['SOURCE_BRANCH'],'${{ inputs.source_branch }}')
+        image_condition=workflow('release-images')['jobs']['publish']['if']
+        self.assertIn("inputs.manual && github.event_name == 'workflow_dispatch'",image_condition)
+        self.assertIn("!inputs.manual && (github.ref == 'refs/heads/main'",image_condition)
+        self.assertEqual(workflow('release-typescript')['jobs']['publish']['if'],
+                         "github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')")
         self.assertNotIn('secrets', manual_flow['jobs']['native'])
         for name in ('client','images'):
             for job in workflow(name)['jobs'].values():

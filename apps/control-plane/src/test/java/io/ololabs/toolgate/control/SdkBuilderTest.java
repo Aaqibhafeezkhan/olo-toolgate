@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SdkBuilderTest {
     @TempDir Path directory;
     private final ContractCodec codec = new ContractCodec();
-    private final Ids.TenantId tenant = new Ids.TenantId("sdk-builder");
+    private final Ids.TenantId tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("sdk-builder");
     private final ObjectMapper json = new ObjectMapper();
 
     private String project() throws Exception {
@@ -59,7 +59,7 @@ class SdkBuilderTest {
     }
 
     @Test void revisionsReplayImmutableBuildsAndSourceSnapshotsSurviveDraftEdits() throws Exception {
-        var store = new PostgresStore(SqliteState.open(directory.resolve("builder.sqlite")), codec);
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("builder.sqlite"))), codec);
         var root = TestSupport.seed(store, codec, tenant, "root"); var calls = new AtomicInteger(); var service = service(store, worker(calls));
         var draft = save(service, root, project(), 0, "save"); assertEquals(draft, save(service, root, project(), 0, "save"));
         assertEquals(409, assertThrows(Failure.class, () -> save(service, root, project(), 0, "stale")).status());
@@ -90,7 +90,7 @@ class SdkBuilderTest {
     }
 
     @Test void anExportedSourceEditedAndImportedBuildsTheNextVersion() throws Exception {
-        var store = new PostgresStore(SqliteState.open(directory.resolve("round-trip.sqlite")), codec);
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("round-trip.sqlite"))), codec);
         var root = TestSupport.seed(store, codec, tenant, "root"); var service = service(store, worker(new AtomicInteger()));
         var first = save(service, root, project(), 0, "save"); queue(service, root, first, "first"); service.workOne();
         byte[] exported = service.download(root, "first", true);
@@ -133,7 +133,7 @@ class SdkBuilderTest {
         });
     }
     @Test void currentAuthorityIsCheckedBeforeWorkerClaimAndDownloads() throws Exception {
-        var store = new PostgresStore(SqliteState.open(directory.resolve("authority.sqlite")), codec);
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("authority.sqlite"))), codec);
         TestSupport.seed(store, codec, tenant, "root"); var actor = editor(store); var calls = new AtomicInteger(); var service = service(store, worker(calls));
         byte[] archive = JsonSdk.sourceArchive(project().getBytes(StandardCharsets.UTF_8));
         assertEquals(200, service.source(actor, archive).status());
@@ -146,7 +146,7 @@ class SdkBuilderTest {
         assertEquals(403, assertThrows(Failure.class, () -> service.source(actor, archive)).status());
     }
     @Test void revocationDuringCompilationPreventsArtifactPublication() throws Exception {
-        var store = new PostgresStore(SqliteState.open(directory.resolve("during.sqlite")), codec);
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("during.sqlite"))), codec);
         var root = TestSupport.seed(store, codec, tenant, "root"); var actor = editor(store);
         var service = service(store, source -> { revoke(store); try { return output(source); } catch (Exception failure) { throw new java.io.IOException(failure); } });
         var draft = save(service, actor, project(), 0, "save"); queue(service, actor, draft, "build"); service.workOne();
@@ -163,7 +163,7 @@ class SdkBuilderTest {
         String url = base.replace("/control?", "/" + database + "?");
         var migrations = org.flywaydb.core.Flyway.configure().dataSource(url, "control_migrator", password).load(); migrations.migrate(); migrations.validate();
         var data = new org.postgresql.ds.PGSimpleDataSource(); data.setURL(url); data.setUser("control_app"); data.setPassword(password);
-        var store = new PostgresStore(data, codec); var root = TestSupport.seed(store, codec, tenant, "root");
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(data), codec); var root = TestSupport.seed(store, codec, tenant, "root");
         var calls = new AtomicInteger(); var service = service(store, worker(calls)); String source = project();
         var first = save(service, root, source, 0, "save");
         try (var threads = java.util.concurrent.Executors.newFixedThreadPool(2)) {
@@ -182,6 +182,7 @@ class SdkBuilderTest {
         assertEquals(1, calls.get());
         assertEquals(SdkBuilderState.READY, codec.model(service.builds(root, null).body(), SdkBuilderBuildPage.class).items().getFirst().state());
         try (var connection = data.getConnection(); var statement = connection.prepareStatement("UPDATE control_builder SET revision=revision+1 WHERE tenant_id=? AND kind='VERSION'")) {
+            TestSupport.scope(connection, tenant);
             statement.setString(1, tenant.value()); assertThrows(java.sql.SQLException.class, statement::executeUpdate);
         }
     }

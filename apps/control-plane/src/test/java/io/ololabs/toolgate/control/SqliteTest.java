@@ -18,15 +18,15 @@ final class SqliteTest {
             try(var r=s.executeQuery("SELECT version FROM quickstart_migrations")){
                 assertTrue(r.next());assertEquals(1,r.getInt(1));assertFalse(r.next());
             }
-            try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name IN ('control_access_migration_archive','control_approvals','control_permit_leases')")){
+            try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name IN ('control_access_migration_archive','control_approvals','control_permit_leases','quickstart_vault')")){
                 assertFalse(r.next());
             }
             try(var r=s.executeQuery("PRAGMA foreign_key_check")){assertFalse(r.next());}
         }
     }
     @Test void concurrentDirectoryReadsDoNotReserveTheWriterAndKeepSnapshotIsolation() {
-        var codec=new ContractCodec();var store=new PostgresStore(SqliteState.open(directory.resolve("readers.sqlite")),codec);
-        var actor=TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");
+        var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("readers.sqlite"))),codec);
+        var actor=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"),"root");
         var service=new DirectoryService(store,codec,512,1048576);
         store.transaction(actor.tenant(),false,first->{
             long revision=first.load().revision();
@@ -43,16 +43,16 @@ final class SqliteTest {
         assertEquals(200,service.get(actor,Ids.Kind.USER,"concurrent-user").status());
     }
     @Test void readTransactionsCannotWriteAuditRecords() {
-        var codec=new ContractCodec();var store=new PostgresStore(SqliteState.open(directory.resolve("readonly.sqlite")),codec);
-        var actor=TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");
+        var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("readonly.sqlite"))),codec);
+        var actor=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"),"root");
         assertThrows(Failure.class,()->store.transaction(actor.tenant(),false,tx->{
             tx.audit(actor.id(),"CREATE","forbidden",1,"readonly","b".repeat(64));return null;
         }));
         assertFalse(store.transaction(actor.tenant(),false,tx->tx.auditPage(0,20)).contains("forbidden"));
     }
     @Test void defaultMembershipIsAtomicAndNeverGrantsRuntimeAccess() {
-        var codec=new ContractCodec();var store=new PostgresStore(SqliteState.open(directory.resolve("membership.sqlite")),codec);
-        var actor=TestSupport.seed(store,codec,new Ids.TenantId("tenant"),"root");var service=new DirectoryService(store,codec,512,1048576);
+        var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("membership.sqlite"))),codec);
+        var actor=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"),"root");var service=new DirectoryService(store,codec,512,1048576);
         var body=DomainTest.user("new-user",1).replace("true","false");
         var created=service.mutate(actor,Ids.Kind.USER,"new-user","CREATE",body,0,"new-user-key","request");
         assertEquals(created,service.mutate(actor,Ids.Kind.USER,"new-user","CREATE",body,0,"new-user-key","retry"));
@@ -63,18 +63,18 @@ final class SqliteTest {
     }
     @Test void realTransactionsAuditReplayRestartAndImmutableTriggers() throws Exception {
         Path path=directory.resolve("control.sqlite"); var source=SqliteState.open(path); var codec=new ContractCodec();
-        var store=new PostgresStore(source,codec);var service=new DirectoryService(store,codec,512,1048576);
-        var actor=TestSupport.seed(store,codec,new Ids.TenantId("quickstart"),"root");
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);var service=new DirectoryService(store,codec,512,1048576);
+        var actor=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("quickstart"),"root");
         var body="{\"id\":\"admin\",\"name\":\"Administrator\",\"enabled\":true,\"revision\":1}";
         var created=service.mutate(actor,Ids.Kind.USER,"admin","CREATE",body,0,"seed-user","req-create");assertEquals(201,created.status());
         assertEquals(created,service.mutate(actor,Ids.Kind.USER,"admin","CREATE",body,0,"seed-user","req-repeat"));
-        var restarted=new PostgresStore(SqliteState.open(path),codec);
+        var restarted=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(path)),codec);
         assertEquals("Administrator",codec.model(new DirectoryService(restarted,codec,512,1048576).get(actor,Ids.Kind.USER,"admin").body(),io.ololabs.toolgate.contracts.ControlUser.class).name());
         assertTrue(restarted.transaction(actor.tenant(),false,tx->tx.auditPage(0,20)).contains("CREATE"));
         assertThrows(Failure.class,()->store.transaction(actor.tenant(),true,tx->{tx.audit(actor.id(),"CREATE","failed",1,"rollback","b".repeat(64));throw Failure.validation();}));
         try(var c=source.getConnection();var s=c.createStatement()){
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_audit SET target='tampered'"));
-            s.execute("INSERT INTO control_fleet VALUES('quickstart','RELEASE','test',1,'{}')");
+            s.execute("INSERT INTO control_fleet VALUES('302ac53b-7b2b-3b49-b761-726e98572a88','RELEASE','test',1,'{}')");
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_fleet SET revision=2 WHERE record_id='test'"));
             try(var r=s.executeQuery("SELECT count(*) FROM control_audit")){assertTrue(r.next());assertEquals(3,r.getInt(1));}
         }
@@ -87,7 +87,8 @@ final class SqliteTest {
             var script=new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
             for(var sql:script.split("(?m)^-- statement\\s*$"))if(!sql.isBlank())statement.execute(sql);
             statement.execute("INSERT INTO quickstart_migrations VALUES(1,'"+DirectoryService.digest(bytes)+"')");
-            statement.execute("INSERT INTO control_records VALUES('tenant','USER','kept',1,'{\"id\":\"kept\",\"name\":\"Kept\",\"enabled\":true,\"revision\":1}')");
+            io.ololabs.toolgate.control.fixtures.Tenants.provision(c);
+            statement.execute("INSERT INTO control_records VALUES('3ddfb462-d173-3b24-823b-17d134680296','USER','kept',1,'{\"id\":\"kept\",\"name\":\"Kept\",\"enabled\":true,\"revision\":1}')");
         }
         var upgraded=SqliteState.open(path);
         try(var c=upgraded.getConnection();var s=c.createStatement()){

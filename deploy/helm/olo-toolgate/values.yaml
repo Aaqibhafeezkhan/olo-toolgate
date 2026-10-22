@@ -5,6 +5,7 @@ global:
   imagePullSecrets: []
 gateway:
   enabled: false
+  publicOrigin: ''
   replicaCount: 2
   image:
     repository: olo-toolgate-gateway
@@ -18,6 +19,7 @@ gateway:
     managementListen: 0.0.0.0:9091
     trustedTlsProxy: true
     allowedOrigins: []
+    tenantHosts: []
     limits:
       maxBodyBytes: 65536
       maxHeaderBytes: 8192
@@ -78,12 +80,25 @@ gateway:
     labels: {}
     interval: 30s
   control:
-    url: https://control.example.invalid
+    tenantId: ''
+    url: ''
+    caSecret: ''
     tokenSecret: ''
     tokenKey: access-token
     controlPort: 443
 control:
   enabled: false
+  defaultTenantAlias: default
+  tenancy:
+    mode: single
+    # Exact hosts for a default-only initialization; empty derives local and configured endpoint hosts.
+    hosts: []
+    # Existing Secret: manifest.json and protected per-tenant packet/trust/import files.
+    initializationSecret: ''
+    # Map Secret keys to the relative paths referenced by manifest.json.
+    initializationItems: []
+  # Existing Secret containing the protected operator-managed KEK ring as key-ring.json.
+  vaultKeyRingSecret: ''
   # Optional external Redis/Valkey directory cache. Local remains the default.
   # Secrets contain `password` and `encryption-key` (base64 text for 32 random bytes).
   cache:
@@ -186,12 +201,13 @@ control:
     offlineAfterMs: 0
   endpoint:
     enabled: false
-    tenantId: ''
     serverId: ''
     organization: ''
     controlUrl: ''
     gatewayUrl: ''
-    deviceCaSecret: ''
+    identityCustodySecret: ''
+    # Secret items: publication.json plus explicit UUID/purpose/key-ID private-key projections.
+    identityKeyFiles: []
     tlsSecret: ''
     trustStoreSecret: ''
   publicKeySecret: ''
@@ -214,6 +230,9 @@ control:
     caKey: ca.crt
   limits:
     maxRecords: 512
+    requestsPerSecond: 1000
+    httpConcurrency: 64
+    databaseConcurrency: 8
     maxConfigBytes: 1048576
   # OLO Orgs Marketplace (marketplace docs/api.md §4). Environment-owned: a configuration import can't change these.
   # keys lists keyId:base64RawEd25519PublicKey pairs; Control logs and shows their fingerprints. caSecret optionally

@@ -1,6 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
+import type * as V1 from "../index.js";
 /** Verified delegation chain entry; never caller-asserted. */
 export interface ActorHop {
   readonly agentId: string;
@@ -153,6 +154,23 @@ export interface ConnectionRequirement {
   readonly provider: string;
   readonly scopes: ReadonlyArray<string>;
 }
+export type ConsoleClientOperation = "HEALTH" | "ENROLL";
+/** OS-authenticated native request scoped to a console origin and optional expected UUID. The service validates protected local tenant/origin binding before reading health or starting enrollment. */
+export interface ConsoleClientRequest {
+  readonly kind: "console-tenant-state";
+  readonly requestId: string;
+  readonly operation: ConsoleClientOperation;
+  readonly consoleUrl: string;
+  readonly expectedTenantId?: string;
+}
+/** Requester-scoped device state and optional verified tenant UUID. Errors carry no installation or device metadata. The service enforces the error-only response invariant before serialization. */
+export interface ConsoleClientResponse {
+  readonly requestId: string;
+  readonly tenantId?: string;
+  readonly health?: V1.ClientHealth;
+  readonly challenge?: V1.EndpointEnrollmentPrompt;
+  readonly error?: V1.ErrorCode;
+}
 /** Identifies the shared contract set. */
 export interface ContractSet {
   readonly name: "olo-toolgate-contracts";
@@ -235,6 +253,33 @@ export interface DeviceApproval {
   readonly ownerUserId?: string;
 }
 export type Digest = string;
+export type DiscoveryAuthorityState = "ACTIVE" | "READ_ONLY";
+/** Tenant device CA. keyId is SHA-256 of certificate DER; its subject binds the same tenant UUID. It cannot reuse a discovery signing key. */
+export interface DiscoveryDeviceAuthority {
+  readonly keyId: string;
+  readonly state: DiscoveryAuthorityState;
+  readonly certificatePem: string;
+}
+/** Protected JWS header. Algorithm, message purpose and key selection are authenticated; no unprotected or remote-key headers. */
+export interface DiscoveryHeader {
+  readonly alg: "RS256";
+  readonly typ: "toolgate-discovery+jws";
+  readonly kid: string;
+}
+export type DiscoveryKeyId = string;
+/** Bounded tenant discovery JWK Set. Application validation requires unique key IDs and moduli. */
+export interface DiscoveryKeySet {
+  readonly keys: ReadonlyArray<DiscoveryPublicKey>;
+}
+/** Public-only RSA JWK, restricted to 3072/4096-bit RS256 keys with exponent 65537. No private parameters or key URLs. */
+export interface DiscoveryPublicKey {
+  readonly kty: "RSA";
+  readonly use: "sig";
+  readonly alg: "RS256";
+  readonly kid: string;
+  readonly n: string;
+  readonly e: "AQAB";
+}
 /** Gateway to Tool Host. */
 export interface Dispatch {
   readonly permit: SignedInvocationPermit;
@@ -927,6 +972,10 @@ export type Sha256 = string;
 export interface SignedInvocationPermit {
   readonly jws: string;
 }
+/** RFC 7515 compact RS256 JWS with a protected toolgate-discovery+jws header and TenantDiscovery v2 payload. No v1 or alternate-algorithm fallback. */
+export interface SignedTenantDiscovery {
+  readonly jws: string;
+}
 export type Slug = string;
 export type Streaming = "NONE" | "RESPONSE" | "BIDIRECTIONAL";
 export type TargetKind = "TOOL_HOST_POOL" | "DEVICE_GROUP";
@@ -966,6 +1015,26 @@ export interface TcpDeclaration {
   readonly hostSetting: string;
   readonly port: number;
 }
+/** Signed tenant discovery v2. Exact HTTPS origins, configured/pinned UUID, lifetime, key continuity, CA purposes and active issuer are verified before enrollment or local identity access. */
+export interface TenantDiscovery {
+  readonly protocolVersion: 2;
+  readonly tenantId: string;
+  readonly issuer: string;
+  readonly audiences: ReadonlyArray<string>;
+  readonly serverId: string;
+  readonly organization: string;
+  readonly controlUrl: string;
+  readonly gatewayUrl: string;
+  readonly verificationUri: string;
+  readonly minimumClientVersion: string;
+  readonly issuedAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly keySetVersion: number;
+  readonly discoveryKeys: DiscoveryKeySet;
+  readonly deviceIssuerKeyId: string;
+  readonly deviceAuthorities: ReadonlyArray<DiscoveryDeviceAuthority>;
+}
+export type TenantUuid = string;
 /** Upstream TLS verification. */
 export interface TlsSettings {
   readonly caBundle?: string;

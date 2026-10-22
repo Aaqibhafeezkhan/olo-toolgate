@@ -51,7 +51,9 @@ def checks(lint=True):
             assert container['securityContext']['readOnlyRootFilesystem'] and not container['securityContext']['allowPrivilegeEscalation']
             assert {port['containerPort'] for port in container['ports']} == {8082,9092}
             assert all(container[probe]['httpGet']['port']=='management' for probe in ('startupProbe','readinessProbe','livenessProbe'))
-            assert len([v for v in container['env'] if 'valueFrom' in v]) == 4
+            credentials={v['name']:v['valueFrom']['secretKeyRef']['key'] for v in container['env'] if 'valueFrom' in v}
+            assert {key:credentials[key] for key in ('QUARKUS_DATASOURCE_USERNAME','QUARKUS_DATASOURCE_PASSWORD','QUARKUS_FLYWAY_USERNAME','QUARKUS_FLYWAY_PASSWORD','TOOLGATE_CONTROL_PLATFORM_USERNAME')}==dict(QUARKUS_DATASOURCE_USERNAME='username',QUARKUS_DATASOURCE_PASSWORD='password',QUARKUS_FLYWAY_USERNAME='migrationUsername',QUARKUS_FLYWAY_PASSWORD='migrationPassword',TOOLGATE_CONTROL_PLATFORM_USERNAME='platformUsername')
+            assert any(v['name']=='platform-db' and v['secret']['items']==[{'key':'platformPassword','path':'password'}] for v in pod['volumes'])
             assert any(v.get('emptyDir',{}).get('sizeLimit')=='64Mi' for v in pod['volumes'])
             config = next(doc for doc in docs if doc['kind']=='ConfigMap')['data']
             assert 'sslmode=verify-full' in config['QUARKUS_DATASOURCE_JDBC_URL']

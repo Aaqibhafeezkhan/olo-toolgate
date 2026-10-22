@@ -94,7 +94,8 @@ class EndpointContractsTests(unittest.TestCase):
         values['control']['endpoint']['enabled'] = True
         with self.assertRaises(ValidationError): Draft7Validator(schema).validate(values)
         settings = values['control']['endpoint']
-        settings.update(tenantId='tenant',serverId='server',organization='Organization',deviceCaSecret='device-ca',
+        settings.update(serverId='server',organization='Organization',identityCustodySecret='tenant-identity',
+                        identityKeyFiles=[dict(key='discovery-key',path='10000000-0000-4000-8000-000000000001/DISCOVERY/key1.pk8.pem'),dict(key='device-ca',path='10000000-0000-4000-8000-000000000001/DEVICE_CA/key2.pk8.pem')],
                         tlsSecret='server-tls',trustStoreSecret='device-trust',controlUrl='https://control.example.test',gatewayUrl='https://gateway.example.test')
         Draft7Validator(schema).validate(values)
         settings['controlUrl'] = 'http://control.example.test'

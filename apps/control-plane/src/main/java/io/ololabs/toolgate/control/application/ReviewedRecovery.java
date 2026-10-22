@@ -14,6 +14,22 @@ import java.util.*;
 public final class ReviewedRecovery {
     private final Store store;private final Codec codec;private final Clock clock;
     public ReviewedRecovery(Store store,Codec codec,Clock clock){this.store=store;this.codec=codec;this.clock=clock;}
+    /** Prevalidate operator material before allocating or initializing any tenant in a manifest. */
+    public EnterpriseReviewedRecovery validate(String document,List<FleetTrustKey> trust){
+        var packet=codec.model(document,EnterpriseReviewedRecovery.class);var a=packet.authorization();
+        new Ids.TenantId(a.tenantId());if(!a.tenantId().equals(a.snapshot().tenantId()))throw Failure.validation();
+        long now=clock.millis();if(a.issuedAtUnixMs()>now||a.expiresAtUnixMs()<=now||a.expiresAtUnixMs()-a.issuedAtUnixMs()>3600000)throw ManagementAccess.denied();
+        byte[] signed=("OLO ToolGate recovery v1\n"+codec.json(a)).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var seen=new HashSet<String>();var moduli=new HashSet<BigInteger>();
+        try{for(var proof:packet.proofs()){
+            var key=trust.stream().filter(k->k.kid().equals(proof.keyId())).findFirst().orElseThrow(ManagementAccess::denied);
+            var modulus=new BigInteger(1,Base64.getUrlDecoder().decode(key.n()));var exponent=new BigInteger(1,Base64.getUrlDecoder().decode(key.e()));
+            if(modulus.bitLength()<2048||modulus.bitLength()>8192||!exponent.equals(BigInteger.valueOf(65537))||!seen.add(key.kid())||!moduli.add(modulus))throw ManagementAccess.denied();
+            var verifier=Signature.getInstance("SHA256withRSA");verifier.initVerify(KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(modulus,exponent)));verifier.update(signed);
+            if(!verifier.verify(Base64.getUrlDecoder().decode(proof.signature())))throw ManagementAccess.denied();
+        }}catch(GeneralSecurityException|IllegalArgumentException invalid){throw ManagementAccess.denied();}
+        if(seen.isEmpty())throw ManagementAccess.denied();return packet;
+    }
     public void apply(String document,List<FleetTrustKey> trust){
         // A committed receipt is an exact no-op, not permission-rule compatibility.
         // Old signed installation packets must not be decoded or re-applied after a schema upgrade.

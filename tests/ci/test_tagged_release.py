@@ -238,6 +238,7 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
         workflows={p.stem:yaml.safe_load(p.read_text()) for p in (ROOT/'.github/workflows').glob('*.yml')}
         automatic=[name for name,doc in workflows.items() if 'push' in doc.get('on',{})]
         self.assertEqual(automatic,['ci'])
+        self.assertEqual(set(workflows['tenant-qualification']['on']),{'workflow_dispatch'})
         self.assertNotIn('release-foundation',workflows)
         for name in ('control','gateway','quickstart'):
             self.assertNotIn('publish',workflows[name]['jobs'])

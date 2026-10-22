@@ -136,6 +136,7 @@ impl HttpsGateway {
         crate::storage::ProtectedStore,
     )> {
         let store = crate::storage::ProtectedStore::open(self.config.state_directory.clone())?;
+        crate::service::validate_saved_binding(&self.config, &store)?;
         if store.read("device-key")?.is_none() {
             return Err(Failure::Unauthorized);
         }
@@ -148,26 +149,26 @@ impl HttpsGateway {
         }
         let identity: DeviceIdentity = serde_json::from_value(journal["identity"].clone())
             .map_err(|_| Failure::Unauthorized)?;
-        let manifest: ClientDiscovery = serde_json::from_value(journal["manifest"].clone())
-            .map_err(|_| Failure::Unauthorized)?;
+        let manifest: olo_toolgate_contracts::v2::TenantDiscovery =
+            serde_json::from_value(journal["manifest"].clone())
+                .map_err(|_| Failure::Unauthorized)?;
         if crate::config::origin(&manifest.control_url)?
             != crate::config::origin(&self.config.server_url)?
             || identity.device_id != self.settings.device_id
         {
             return Err(Failure::Unauthorized);
         }
-        crate::identity::verify_identity(
+        crate::identity::verify_tenant_identity(
             &identity,
             &manifest,
             &key,
             &identity.device_id,
             crate::now(),
         )?;
-        Ok((
-            identity,
-            crate::transport::HttpsControl::new(self.config.clone(), key, self.contracts.clone())?,
-            store,
-        ))
+        let control =
+            crate::transport::HttpsControl::new(self.config.clone(), key, self.contracts.clone())?;
+        crate::transport::ControlPort::bind_tenant(&control, &identity.tenant_id)?;
+        Ok((identity, control, store))
     }
     /// The signed managed registration for this request; nothing else is executable on a device.
     fn installed(&self, request: &AuthorizationRequest) -> Result<LocalToolInfo> {
