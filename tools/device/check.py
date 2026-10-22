@@ -145,6 +145,13 @@ def check(image, quickstart):
         output.mkdir(parents=True, exist_ok=True)
         (output/'smoke.json').write_text(json.dumps(dict(image=image, quickstartImage=quickstart,
             clientSha256=checksums[0].split()[0], gates=gates), indent=2)+'\n', encoding='utf-8')
+    except BaseException:
+        # A timed-out gate otherwise hides why a device never reached its next state.
+        for container in (alias, client, gateway):
+            logs = subprocess.run(['docker', 'logs', '--tail', '80', container], cwd=ROOT,
+                                  capture_output=True, text=True)
+            print(f'--- {container} logs ---\n{logs.stdout}{logs.stderr}', flush=True)
+        raise
     finally:
         for container in (alias, client, gateway):
             subprocess.run(['docker', 'rm', '-f', container], cwd=ROOT, capture_output=True)
