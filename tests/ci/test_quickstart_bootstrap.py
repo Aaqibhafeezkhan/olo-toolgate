@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import tempfile
 import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 from unittest.mock import Mock
@@ -113,6 +114,28 @@ class QuickstartBootstrapTests(unittest.TestCase):
 
 
 class QuickstartRestartTests(unittest.TestCase):
+    def test_external_gateway_refreshes_its_allowed_authority_after_port_reassignment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data=Path(temporary);(data/'run').mkdir()
+            original=dict(tenantHosts=['127.0.0.1:8081'],control={'tenantId':'fixture-tenant'},
+                          toolHosts=[{'hostId':'tool-host-local','url':'http://127.0.0.1:8095'}])
+            (data/'run/gateway.json').write_text(json.dumps(original),encoding='utf-8')
+            supervisor=Mock(DATA=data,atomic=lambda path,content:path.write_text(content,encoding='utf-8'))
+            def execute(*args):
+                with patch.dict(sys.modules,{'supervisor':supervisor}),patch.object(sys,'path',sys.path.copy()):
+                    exec(args[-1],{})
+            for port in ('54500','54600'):
+                quickstart_check.configure_external_gateway(execute,port)
+                configured=json.loads((data/'run/external-gateway.json').read_text())
+                self.assertEqual(configured['tenantHosts'],['127.0.0.1:8084','127.0.0.1:'+port])
+                self.assertEqual(configured['control'],original['control'])
+                self.assertEqual(configured['toolHosts'],original['toolHosts'])
+                self.assertEqual(configured['listen'],'0.0.0.0:8084')
+                self.assertEqual(configured['managementListen'],'0.0.0.0:9094')
+                self.assertTrue(configured['trustedTlsProxy'])
+            self.assertNotIn('127.0.0.1:54500',configured['tenantHosts'])
+            self.assertEqual(json.loads((data/'run/gateway.json').read_text()),original)
+
     def test_restart_waits_on_the_newly_assigned_host_port(self):
         ports = {'8080/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '54600'}],
                  '8443/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '54601'}]}

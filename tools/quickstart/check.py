@@ -55,6 +55,14 @@ def ready(container, port):
     raise RuntimeError('Quickstart readiness timeout; see build/quickstart/startup-failure.log')
 
 
+def configure_external_gateway(exec_text, port):
+    # Published ports can change when Docker recreates the parent's namespace.
+    exec_text('/opt/quickstart-python/bin/python','-c',
+        "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json;"
+        "c=json.loads((s.DATA/'run/gateway.json').read_text());c['listen']='0.0.0.0:8084';c['trustedTlsProxy']=True;"
+        "c['managementListen']='0.0.0.0:9094';c['tenantHosts']=['127.0.0.1:8084',"+repr('127.0.0.1:'+port)+"];s.atomic(s.DATA/'run/external-gateway.json',json.dumps(c))")
+
+
 def restart_ready(container):
     run(['docker','restart','-t','35',container],capture_output=True)
     # Docker may reassign automatically published host ports when restarting.
@@ -143,10 +151,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             delegated_token=secrets.token_urlsafe(48)
             delegated_digest=hashlib.sha256(delegated_token.encode()).hexdigest()
             # Exact production Gateway, online authority on an explicit fixture-only loopback hop.
-            exec_text('/opt/quickstart-python/bin/python','-c',
-                "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json;"
-                "c=json.loads((s.DATA/'run/gateway.json').read_text());c['listen']='0.0.0.0:8084';c['trustedTlsProxy']=True;"
-                "c['managementListen']='0.0.0.0:9094';c['tenantHosts']=['127.0.0.1:8084',"+repr('127.0.0.1:'+info['NetworkSettings']['Ports']['8084/tcp'][0]['HostPort'])+"];s.atomic(s.DATA/'run/external-gateway.json',json.dumps(c))")
+            configure_external_gateway(exec_text,info['NetworkSettings']['Ports']['8084/tcp'][0]['HostPort'])
             exec_text('/opt/quickstart-python/bin/python','-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json,time;"
                 "db=s.Database();identities=[json.loads(r[0]) if isinstance(r[0],str) else r[0] for r in db.execute(\"SELECT document FROM control_records WHERE kind='IDENTITY_BINDING'\").fetchall()];db.connection.close();"
@@ -576,6 +581,7 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
             gateway_management='http://127.0.0.1:'+ports['9094/tcp'][0]['HostPort']
             # This fixture shares the parent's network namespace. Docker replaces
             # that namespace on restart; rejoin it before proving authority outage.
+            configure_external_gateway(exec_text,ports['8084/tcp'][0]['HostPort'])
             run(['docker','restart','-t','35',external],capture_output=True)
             deadline=time.monotonic()+40
             while True:
@@ -590,6 +596,8 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
         assert ok(api('/api/control/v1/grants/'+grant['id'],admin))['enabled'] is False
         mark('restart preserves identity/key/revocation/monotonic epoch/no installation reseeding')
         if gateway_image and not browser:
+            available=mcp('tools/list')
+            assert available[0]==200,('Gateway ingress failed before the Core outage',available)
             # Freeze only Core: stopping its namespace-owning container also removes
             # Docker's published Gateway ports, which cannot prove fail-closed HTTP.
             signal_core="import os,pathlib,signal;ids=[int(p.parent.name) for p in pathlib.Path('/proc').glob('[0-9]*/comm') if p.read_text().strip()=='java'];assert len(ids)==1;os.kill(ids[0],signal.SIG%s)"
@@ -599,7 +607,8 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
                 while request(gateway_management+'/v1/health/ready')[0]==200:
                     assert time.monotonic()<deadline,'Stale Gateway remained ready without Core'
                     time.sleep(.25)
-                assert mcp('tools/list')[0] in (502,503)
+                unavailable=mcp('tools/list')
+                assert unavailable[0] in (502,503),('Expected a Core dependency failure',unavailable)
             finally:
                 exec_text('/opt/quickstart-python/bin/python','-c',signal_core%'CONT')
             deadline=time.monotonic()+20
