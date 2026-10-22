@@ -220,11 +220,13 @@ def configure(device, local_fixture_reviewers=False, group='ReadAndWriteAgentGro
         credentialSha256=digest,credentialEpoch=epoch,expiresAtUnixMs=expires))
     private_file(path,token)
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires,
-        context=dict(requestId='debug-mimic',tenantId='quickstart',mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='debug-mimic-agent',
+        context=dict(requestId='debug-mimic',tenantId=None,mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='debug-mimic-agent',
             workloadBindingId='debug-mimic-workload',chain=[],credentialEpoch=epoch,expiresAtUnixMs=expires,credentialSha256=digest,
             bindingId='standard-ReadAndWrite-ReadAndWrite'))
+    # Quickstart allocates a UUID tenant at first start; the container fills it in below.
     docker_script("import sys,json,time,os;os.umask(0o077);sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
         "p=s.DATA/'client-runtime-credentials.json';v=s.strict(p.read_bytes()) if p.exists() else [];c=json.load(sys.stdin);"
+        "c['context']['tenantId']=s.strict((s.DATA/'state/tenant.json').read_bytes())['tenantId'];"
         "v=[x for x in v if x['expiresAtUnixMs']>int(time.time()*1000) and x['context'].get('workloadBindingId')!='debug-mimic-workload'];"
         "assert len(v)<32;s.atomic(p,json.dumps(v+[c]))", json.dumps(credential))
     subprocess.run(['docker','restart',CONTAINER],check=True,capture_output=True)

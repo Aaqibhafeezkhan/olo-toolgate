@@ -397,13 +397,15 @@ def provision(args):
         revision=1, agentId=agent, mode='SERVICE', issuer='gateway', subject=name, audience='gateway',
         credentialSha256=digest, credentialEpoch=epoch, expiresAtUnixMs=expires))
     # The context names no device; this binding's group contains only the selected member.
+    # Quickstart allocates a UUID tenant at first start; the container fills it in below.
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires, context=dict(requestId=name,
-        tenantId='quickstart', mode='SERVICE', credentialKind='STATIC_TOKEN', agentId=agent, workloadBindingId=workload,
+        tenantId=None, mode='SERVICE', credentialKind='STATIC_TOKEN', agentId=agent, workloadBindingId=workload,
         chain=[], credentialEpoch=epoch, expiresAtUnixMs=expires, credentialSha256=digest, bindingId=binding_id))
     # Install opaque bearer facts only. No private signing key or server-side verifier is read.
     docker('quickstart', ['/opt/quickstart-python/bin/python', '-c',
         "import sys,json,time,os;os.umask(0o077);sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
         "p=s.DATA/'client-runtime-credentials.json';v=s.strict(p.read_bytes()) if p.exists() else [];c=json.load(sys.stdin);"
+        "c['context']['tenantId']=s.strict((s.DATA/'state/tenant.json').read_bytes())['tenantId'];"
         "v=[x for x in v if x['expiresAtUnixMs']>int(time.time()*1000) and x['context'].get('workloadBindingId')!=c['context']['workloadBindingId']];"
         "assert len(v)<32;s.atomic(p,json.dumps(v+[c]))"], json.dumps(credential))
     directory = STATE / 'agents'
