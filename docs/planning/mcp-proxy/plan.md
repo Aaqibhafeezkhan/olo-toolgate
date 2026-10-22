@@ -453,18 +453,65 @@ T2 digest ────┼─> T3 Control register/scan ─> T4 approve/package/q
 
 ## 10. How I will finish it
 
-1. T1 and T2 first: small PRs; review the contract shapes with you before behaviour.
-2. In parallel, each in its own session and worktree with your OK: TP, TR, T5s, T3, T7, T8a. Their areas are disjoint
-   (Control placement, the Gateway result path, Tool Host egress, Control MCP tables and APIs, the console, a test
-   fixture).
-3. Then T4 and T5, then T6, then T8b.
-4. Every PR:
-   - unit and integration tests and contract checks;
-   - clippy for Linux and Windows on Rust changes;
-   - PostgreSQL tests, including the RLS isolation suite, on Control changes;
-   - console tests and typecheck;
-   - no local image builds.
-5. Close #129 when T8b's composed and two-tenant checks pass in CI. File T9 as follow-up issues.
+### Branch and commits
+
+- **One branch:** all work for this feature goes on `feature/mcp-proxy`, cut from `main`. No other branch carries
+  feature changes.
+- **A commit after every milestone:** each milestone below ends with its tests passing locally and one commit (or a
+  small series) pushed to `feature/mcp-proxy`. The commit message names the milestone (for example `M2: pool
+  targeting, result provenance, streaming egress`). The milestone table in this section is updated in the same
+  commit: its Status column moves to **Done** with the commit id.
+- **Staying current:** before each milestone starts, `main` is merged into `feature/mcp-proxy`, so conflicts surface
+  early and the multitenancy and other main changes are always under test.
+- **One pull request** from `feature/mcp-proxy` to `main` opens once M1 lands (as a draft, so CI runs on every
+  milestone push) and is marked ready after M8.
+- **Sequential by default.** Tasks inside a milestone are independent. They may run in parallel sessions only with
+  your OK, each in its own worktree branched from `feature/mcp-proxy` and merged back into it before the milestone
+  commit.
+
+### Milestones and effort
+
+Effort is the estimated share of the whole feature (code, tests and docs), from the size of each task in §8. Columns:
+**Effort** is the milestone's own share; **Cumulative** is the running total.
+
+| Milestone | Tasks | What it delivers | Effort | Cumulative | Status |
+|---|---|---|---|---|---|
+| M0 | Plan | This plan, reviewed through revision 5 | — | 0% | Done (7c35a000) |
+| M1 Foundations | T1, T2, T8a | Contracts and bindings for every later step; the definition-digest spec with Java and Rust implementations; the fixture MCP server every later test uses | 14% | 14% | Planned |
+| M2 Platform extensions | TP, TR, T5s | Device-Group-targeted Tool Host deployments; result provenance through Control, replay and the Gateway; the streaming egress client | 25% | 39% | Planned |
+| M3 Register and scan | T3 | MCP server registrations, scoped secret authority, scan jobs and permits with deadlines, snapshots, tenant-owned tables with RLS | 14% | 53% | Planned |
+| M4 Approve and package | T4 | Approval sequence, generated `MCP_PROXY` packages through the real pipeline, retiring omitted tools, evidence-bound quarantine, recovery | 12% | 65% | Planned |
+| M5 Proxy executor | T5 | Tool Host `mcp-proxy` runtime, governed calls with validation and provenance, the scan worker | 14% | 79% | Planned |
+| M6 Freshness | T6 | Scheduled refreshes, verification status in permits, strict mode, pin enforcement | 8% | 87% | Planned |
+| M7 Console | T7 | The MCP servers page | 7% | 94% | Planned |
+| M8 Proof and docs | T8b | Composed and two-tenant end-to-end checks, operator guide, ADR, example | 6% | 100% | Planned |
+
+| Task | Effort | Milestone |
+|---|---|---|
+| T1 Contracts | 8% | M1 |
+| T2 Definition digest | 3% | M1 |
+| T8a Fixture MCP server | 3% | M1 |
+| TP Device-Group targeting | 8% | M2 |
+| TR Result provenance | 5% | M2 |
+| T5s Streaming egress | 12% | M2 |
+| T3 Register and scan | 14% | M3 |
+| T4 Approve, package, quarantine | 12% | M4 |
+| T5 Proxy executor and scan worker | 14% | M5 |
+| T6 Freshness and strict mode | 8% | M6 |
+| T7 Console | 7% | M7 |
+| T8b End to end, docs, example | 6% | M8 |
+| **Total** | **100%** | |
+
+### Checks before each milestone commit
+
+- unit and integration tests for the milestone's tasks, and contract checks;
+- clippy for Linux and Windows on Rust changes;
+- PostgreSQL tests, including the RLS isolation suite, on Control changes;
+- console tests and typecheck;
+- no local image builds.
+
+Close #129 when M8's composed and two-tenant checks pass in CI and the pull request merges. File T9 as follow-up
+issues.
 
 ## 11. Review resolution (revision 3)
 
