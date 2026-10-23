@@ -10,6 +10,20 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class EarlyGateTests(unittest.TestCase):
+    def test_manual_ci_reuses_all_unified_stages_after_bypassing_admission(self):
+        manual = yaml.load((ROOT/'.github/workflows/ci-manual.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(manual['name'], 'ToolGate CI - Manual')
+        self.assertEqual(set(manual['on']), {'workflow_dispatch'})
+        automatic = yaml.load((ROOT/'.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
+        expected = copy.deepcopy(automatic['jobs'])
+        del expected['admission']
+        del expected['preflight']['needs']
+        del expected['preflight']['if']
+        self.assertEqual(manual['jobs'], expected)
+        self.assertEqual(manual['permissions'], automatic['permissions'])
+        self.assertNotEqual(manual['concurrency']['group'], automatic['concurrency']['group'])
+        self.assert_preflight_dependencies(manual['jobs'], {'foundation','clients','images'})
+
     def assert_preflight_dependencies(self, jobs, names):
         self.assertEqual(jobs['preflight']['uses'], './.github/workflows/preflight.yml')
         def gated(name, seen=None):

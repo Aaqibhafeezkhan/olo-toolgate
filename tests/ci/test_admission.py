@@ -58,6 +58,16 @@ class AdmissionTests(unittest.TestCase):
                     self.assertNotIn('secrets',job);self.assertNotIn('permissions',job);self.assertNotIn('environment',job)
                 continue
             jobs=document['jobs']
+            if path.name=='ci-manual.yml':
+                # Explicit operator validation bypasses admission, including CI pause.
+                self.assertEqual(set(events),{'workflow_dispatch'})
+                self.assertNotIn('admission',jobs)
+                self.assertEqual(document['permissions'],{'contents':'read','pull-requests':'read'})
+                self.assertEqual(set(jobs),{'preflight','foundation','clients','images'})
+                for job in jobs.values():
+                    self.assertNotIn('if',job)
+                    self.assertNotIn('secrets',job)
+                continue
             if path.name in ('create-release-branch.yml','build-release.yml'):
                 # Operator-selected product releases have their own immutable-source
                 # and full-test gates, independent of development RC admission.

@@ -93,6 +93,7 @@ class SharedCheckOwnershipTests(unittest.TestCase):
 
     def test_reusable_workflow_permissions_fit_the_calling_job(self):
         self.check_caller_permissions(workflow('ci.yml'))
+        self.check_caller_permissions(workflow('ci-manual.yml'))
 
     def test_missing_client_pr_read_permission_reproduces_startup_rejection(self):
         pipeline = workflow('ci.yml')
