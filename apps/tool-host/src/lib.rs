@@ -12,6 +12,8 @@ pub mod digest;
 pub mod egress;
 pub mod events;
 pub mod mcp;
+pub mod mcp_call;
+pub mod mcp_scan;
 pub mod permit;
 pub mod runner;
 pub mod server;

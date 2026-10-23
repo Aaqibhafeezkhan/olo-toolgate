@@ -32,7 +32,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
 pub struct Host {
-    config: Config,
+    pub(crate) config: Config,
     verifier: Verifier,
     store: Store,
     control: Arc<Control>,
@@ -43,6 +43,15 @@ impl Host {
     /// The Control client dispatch uses; enrollment swaps its certificate in place.
     pub fn control(&self) -> Arc<Control> {
         self.control.clone()
+    }
+
+    pub fn verifier(&self) -> &Verifier {
+        &self.verifier
+    }
+
+    /// Plain http to a loopback upstream, for local development and tests only.
+    pub fn allow_loopback(&self) -> bool {
+        self.config.development_loopback_http
     }
 
     pub fn new(config: Config) -> Result<Arc<Host>, String> {
@@ -311,6 +320,21 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
     let deadline = claims
         .deadline_unix_ms
         .min(now_ms() + limits.sync_deadline_ms.min(CEILING.sync_deadline_ms));
+    if let Some(document) = prepared.proxy.clone() {
+        // The native MCP proxy runtime: no process, no sandbox.
+        let (outcome, result, not_started) = crate::mcp_call::run(
+            &host,
+            &claims,
+            &prepared,
+            &dispatch,
+            &fencing_token,
+            deadline,
+            &document,
+        )
+        .await;
+        drop(slot);
+        return finish(&host, id, fencing_token, outcome, result, not_started).await;
+    }
     let sandbox = host.config.work_dir.join("i").join(random_hex(8));
     let descriptor = &prepared.tool.descriptor;
     let in_sandbox = descriptor
@@ -464,6 +488,18 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
     };
     let _ = std::fs::remove_dir_all(&sandbox);
     drop(slot);
+    finish(&host, id, fencing_token, outcome, result, not_started).await
+}
+
+/// Reports an invocation's outcome to Control and answers the dispatch with it.
+async fn finish(
+    host: &Arc<Host>,
+    id: String,
+    fencing_token: String,
+    outcome: InvocationOutcome,
+    result: ResultFrame,
+    not_started: Option<RefusalReason>,
+) -> ResultMessage {
     tracing::info!(target: "toolgate::audit", invocation_id = %id, outcome = ?outcome, "invocation finished");
     let report = InvocationResultReport {
         invocation_id: id.clone(),

@@ -483,8 +483,8 @@ Effort is the estimated share of the whole feature (code, tests and docs), from 
 | M1 Foundations | T1, T2, T8a | Contracts and bindings for every later step; the definition-digest spec with Java and Rust implementations; the fixture MCP server every later test uses | 14% | 14% | Done (16b97ca6) |
 | M2 Platform extensions | TP, TR, T5s | Device-Group-targeted Tool Host deployments; result provenance through Control, replay and the Gateway; the streaming egress client | 25% | 39% | Done (230e55d0) |
 | M3 Register and scan | T3 | MCP server registrations, scoped secret authority, scan jobs and permits with deadlines, snapshots, tenant-owned tables with RLS | 14% | 53% | Done (feb8b08c) |
-| M4 Approve and package | T4 | Approval sequence, generated `MCP_PROXY` packages through the real pipeline, retiring omitted tools, evidence-bound quarantine, recovery | 12% | 65% | Done |
-| M5 Proxy executor | T5 | Tool Host `mcp-proxy` runtime, governed calls with validation and provenance, the scan worker | 14% | 79% | Planned |
+| M4 Approve and package | T4 | Approval sequence, generated `MCP_PROXY` packages through the real pipeline, retiring omitted tools, evidence-bound quarantine, recovery | 12% | 65% | Done (e66a1daf) |
+| M5 Proxy executor | T5 | Tool Host `mcp-proxy` runtime, governed calls with validation and provenance, the scan worker | 14% | 79% | Done |
 | M6 Freshness | T6 | Scheduled refreshes, verification status in permits, strict mode, pin enforcement | 8% | 87% | Planned |
 | M7 Console | T7 | The MCP servers page | 7% | 94% | Planned |
 | M8 Proof and docs | T8b | Composed and two-tenant end-to-end checks, operator guide, ADR, example | 6% | 100% | Planned |

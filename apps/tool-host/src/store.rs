@@ -11,7 +11,8 @@
 
 use crate::digest;
 use olo_toolgate_contracts::v2::{
-    PermitTarget, RouteDeclaration, RuntimeDeclaration, ServiceProfile, ToolDefinition,
+    McpProxyDocument, PermitTarget, RouteDeclaration, RuntimeDeclaration, ServiceProfile,
+    ToolDefinition,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -41,6 +42,8 @@ pub struct Prepared {
     pub globals: BTreeMap<String, Value>,
     /// The permit's routes, from the service profile.
     pub routes: Vec<RouteDeclaration>,
+    /// For the mcp-proxy runtime: the approved upstream and tools, from the package's mcp-proxy.json.
+    pub proxy: Option<McpProxyDocument>,
 }
 
 pub struct Store {
@@ -49,7 +52,10 @@ pub struct Store {
 }
 
 /// Runtimes this host can launch, by `runtimeId`.
-pub const RUNTIMES: [&str; 2] = ["jvm", "python"];
+pub const RUNTIMES: [&str; 3] = ["jvm", "python", MCP_PROXY];
+/// The native MCP proxy runtime: no process, the proxy document is its artifact.
+pub const MCP_PROXY: &str = "mcp-proxy";
+pub const MCP_PROXY_MEDIA_TYPE: &str = "application/vnd.ololabs.toolgate.mcp-proxy+json";
 
 fn not_present(why: impl Into<String>) -> StoreError {
     StoreError::NotPresent(why.into())
@@ -165,6 +171,13 @@ impl Store {
                 "a Python tool must run the SDK runtime from one pyz",
             ));
         }
+        if (runtime.runtime_id == MCP_PROXY)
+            != (artifact.get("mediaType").and_then(Value::as_str) == Some(MCP_PROXY_MEDIA_TYPE))
+        {
+            return Err(not_present(
+                "an mcp-proxy tool runs from exactly its mcp-proxy.json",
+            ));
+        }
         let executable = package_dir.join(artifact_name(
             artifact
                 .get("path")
@@ -204,6 +217,11 @@ impl Store {
             Value::Object(map) => map.into_iter().collect(),
             _ => return Err(not_present("the globals document is not an object")),
         };
+        let proxy = if runtime.runtime_id == MCP_PROXY {
+            Some(proxy_document(&executable, &manifest, &target.tool_id)?)
+        } else {
+            None
+        };
         Ok(Prepared {
             tool,
             runtime,
@@ -211,6 +229,7 @@ impl Store {
             profile,
             globals,
             routes,
+            proxy,
         })
     }
 
@@ -266,6 +285,29 @@ impl Store {
         result?;
         Ok((dir, verified.manifest))
     }
+}
+
+/// The proxy document of a generated MCP_PROXY package, which must approve `tool_id` for the package's own upstream.
+fn proxy_document(
+    path: &Path,
+    manifest: &Value,
+    tool_id: &str,
+) -> Result<McpProxyDocument, StoreError> {
+    let bytes = read(path, "the proxy document")?;
+    let document: McpProxyDocument = serde_json::from_slice(&bytes)
+        .map_err(|e| not_present(format!("the proxy document is invalid: {e}")))?;
+    let package = manifest
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if manifest.get("kind").and_then(Value::as_str) != Some("MCP_PROXY")
+        || document.format_version != 1
+        || package != format!("mcp.{}", document.server.slug)
+        || !document.tools.iter().any(|t| t.tool_id == tool_id)
+    {
+        return Err(not_present("the proxy document does not approve this tool"));
+    }
+    Ok(document)
 }
 
 /// The file name an artifact is unpacked under.

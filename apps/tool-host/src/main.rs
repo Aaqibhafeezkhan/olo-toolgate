@@ -41,6 +41,7 @@ async fn main() -> ExitCode {
                 // An enrolled host also takes calls relayed through Control, so it runs tools
                 // wherever it is, whether or not the Gateway can reach its listener.
                 tokio::spawn(tool_host::server::pull(host.clone()));
+                tokio::spawn(tool_host::mcp_scan::pull(host.clone()));
             }
             Err(e) => {
                 eprintln!("enrollment refused: {e}");

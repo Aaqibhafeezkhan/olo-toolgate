@@ -35,6 +35,7 @@ rustls.workspace = true
 x509-parser.workspace = true
 rcgen.workspace = true
 futures-util.workspace = true
+jsonschema.workspace = true
 regex = "1.13.1"
 ryu-js = "1.0.3"
 

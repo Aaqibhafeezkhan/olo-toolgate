@@ -6,11 +6,14 @@
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use olo_toolgate_contracts::v2::{InvocationPermitClaims, PermitHeader};
+use olo_toolgate_contracts::v2::{InvocationPermitClaims, McpScanClaims};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 pub const TYP: &str = "toolgate-invocation-permit+jws";
+pub const SCAN_TYP: &str = "toolgate-mcp-scan-permit+jws";
+/// The longest admission window of a scan permit.
+const SCAN_WINDOW_MS: u64 = 10_000;
 const MAX_JWS: usize = 32 * 1024;
 /// Clock skew allowed on `nbf` and `exp`.
 const SKEW_MS: u64 = 2_000;
@@ -53,34 +56,7 @@ impl Verifier {
     /// Verifies the signature and claims, then records `jti` so the same permit is never admitted twice.
     pub fn verify(&self, jws: &str, now_ms: u64) -> Result<InvocationPermitClaims, PermitError> {
         let invalid = |why: &str| PermitError::Invalid(why.into());
-        if jws.len() > MAX_JWS {
-            return Err(invalid("the permit is too large"));
-        }
-        let parts: Vec<&str> = jws.split('.').collect();
-        let [header, payload, signature] = parts.as_slice() else {
-            return Err(invalid("the permit is not a compact JWS"));
-        };
-        let header_bytes =
-            decode(header).ok_or_else(|| invalid("the permit header is not base64url"))?;
-        let header: PermitHeader = serde_json::from_slice(&header_bytes)
-            .map_err(|_| invalid("the permit header is not an RS256 invocation permit header"))?;
-        if header.alg != "RS256" || header.typ != TYP {
-            return Err(invalid(
-                "the permit header is not an RS256 invocation permit header",
-            ));
-        }
-        let key = self
-            .keys
-            .get(&header.kid)
-            .ok_or_else(|| invalid("the permit is signed with an unknown key"))?;
-        let signature =
-            decode(signature).ok_or_else(|| invalid("the permit signature is not base64url"))?;
-        let signed = format!("{}.{}", parts[0], parts[1]);
-        ring::signature::UnparsedPublicKey::new(&ring::signature::RSA_PKCS1_2048_8192_SHA256, key)
-            .verify(signed.as_bytes(), &signature)
-            .map_err(|_| invalid("the permit signature does not verify"))?;
-        let payload =
-            decode(payload).ok_or_else(|| invalid("the permit payload is not base64url"))?;
+        let payload = self.payload(jws, TYP)?;
         let claims: InvocationPermitClaims = serde_json::from_slice(&payload)
             .map_err(|e| PermitError::Invalid(format!("the permit claims are invalid: {e}")))?;
         if claims.iss != self.issuer {
@@ -117,6 +93,81 @@ impl Verifier {
         seen.insert(claims.jti.clone(), claims.exp);
         Ok(claims)
     }
+}
+
+impl Verifier {
+    /// Verifies an MCP scan permit (typ toolgate-mcp-scan-permit+jws, docs/planning/mcp-proxy/plan.md §6): Control's
+    /// signature, this host as audience, an admission window of at most 10 s, a signed deadline still ahead, and a jti
+    /// never presented before.
+    pub fn verify_scan(&self, jws: &str, now_ms: u64) -> Result<McpScanClaims, PermitError> {
+        let invalid = |why: &str| PermitError::Invalid(why.into());
+        let payload = self.payload(jws, SCAN_TYP)?;
+        let claims: McpScanClaims = serde_json::from_slice(&payload).map_err(|e| {
+            PermitError::Invalid(format!("the scan permit claims are invalid: {e}"))
+        })?;
+        if claims.aud != self.audience {
+            return Err(invalid("the scan permit is addressed to another Tool Host"));
+        }
+        if claims.exp < claims.iat || claims.exp - claims.iat > SCAN_WINDOW_MS {
+            return Err(invalid(
+                "the scan permit's admission window is invalid or too long",
+            ));
+        }
+        if now_ms + SKEW_MS < claims.iat
+            || now_ms > claims.exp + SKEW_MS
+            || claims.deadline_unix_ms <= now_ms
+        {
+            return Err(PermitError::Expired);
+        }
+        let mut seen = self.seen.lock().unwrap();
+        seen.retain(|_, exp| *exp + SKEW_MS >= now_ms);
+        if seen.contains_key(&claims.jti) {
+            return Err(invalid("the scan permit was already presented"));
+        }
+        seen.insert(claims.jti.clone(), claims.exp);
+        Ok(claims)
+    }
+
+    /// The payload of a compact JWS of this `typ`, signed RS256 with a known key.
+    fn payload(&self, jws: &str, typ: &str) -> Result<Vec<u8>, PermitError> {
+        let invalid = |why: &str| PermitError::Invalid(why.into());
+        if jws.len() > MAX_JWS {
+            return Err(invalid("the permit is too large"));
+        }
+        let parts: Vec<&str> = jws.split('.').collect();
+        let [header, payload, signature] = parts.as_slice() else {
+            return Err(invalid("the permit is not a compact JWS"));
+        };
+        let header_bytes =
+            decode(header).ok_or_else(|| invalid("the permit header is not base64url"))?;
+        let header: Header = serde_json::from_slice(&header_bytes)
+            .map_err(|_| invalid("the permit header is not an RS256 permit header"))?;
+        if header.alg != "RS256" || header.typ != typ {
+            return Err(invalid(
+                "the permit header is not an RS256 permit of this type",
+            ));
+        }
+        let key = self
+            .keys
+            .get(&header.kid)
+            .ok_or_else(|| invalid("the permit is signed with an unknown key"))?;
+        let signature =
+            decode(signature).ok_or_else(|| invalid("the permit signature is not base64url"))?;
+        let signed = format!("{}.{}", parts[0], parts[1]);
+        ring::signature::UnparsedPublicKey::new(&ring::signature::RSA_PKCS1_2048_8192_SHA256, key)
+            .verify(signed.as_bytes(), &signature)
+            .map_err(|_| invalid("the permit signature does not verify"))?;
+        decode(payload).ok_or_else(|| invalid("the permit payload is not base64url"))
+    }
+}
+
+/// A JWS protected header: exactly alg, typ and kid.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Header {
+    alg: String,
+    typ: String,
+    kid: String,
 }
 
 fn decode(part: &str) -> Option<Vec<u8>> {
