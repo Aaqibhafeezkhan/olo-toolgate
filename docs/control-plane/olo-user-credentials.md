@@ -30,6 +30,26 @@ authorizes the call as that user. Everything here is off by default.
 Refusals use RFC 6749 errors (`invalid_grant`, `invalid_request`, `invalid_target`, `unsupported_grant_type`). A
 disabled user is `403`.
 
+## Delegated calls (path B)
+
+An agent acting for the run's user sends the user's credential as the bearer and its own workload token in
+`X-ToolGate-Actor-Credential`. The agent's workload binding is an **on-behalf-of** binding: `DELEGATED`, with neither
+`delegatedUserId` nor `delegatedSessionEpoch`. The Gateway builds a `DELEGATED` context with the user and session from the
+verified user credential, and the agent, workload and credential epoch from the workload token. Control checks the workload token's
+digest against the binding and accepts on-behalf-of contexts only from the configured user-credential issuer. The evaluator
+requires the user's team grant, a delegation, the agent's capability and the user's current session epoch, so a tool the
+agent may use but the user may not is denied.
+
+An on-behalf-of token never works alone, and a duplicated or malformed actor header is refused rather than treated as a
+`HUMAN` call.
+
+## Audit evidence
+
+Invocation audit rows (`INVOCATION_SUBMIT`, `PERMIT_RESERVE`, `PERMIT_CONSUME`, `EFFECT_*`, watchdog and cancel rows) carry
+`evidence` (`ControlAuditEvidence`): mode, subject user, actor agent, delegation chain, workload binding, tool, operation,
+resources (or only their count and digest beyond 16), decision, state, authorization epoch and policy revision. Arguments,
+payloads and credentials are never recorded.
+
 ## Control settings
 
 | Property | Default | Meaning |
@@ -65,7 +85,7 @@ accepted and `HUMAN` stays impossible; static workload credentials are unchanged
 
 The Tool Host passes the principal Control signed into the permit as the reserved `toolgate` claim; pass-through
 claims cannot use that name. The Java SDK lifts it into `Invocation`: `tenantId()`, `userId()`, `agentId()`,
-`delegationChain()`, `operation()` and `resources()`. A tool that acts on a user's data calls
+`delegationChain()`, `operation()` and `resources()`; the Python SDK has the same accessors (`tenant_id`, `require_user()`, ...). A tool that acts on a user's data calls
 `invocation.requireUser()`, which refuses with `CLAIMS_UNAVAILABLE` when there is no verified user, including every
 standalone run.
 
