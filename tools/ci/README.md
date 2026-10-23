@@ -46,7 +46,7 @@ testci.bat
 testci.bat plan
 testci.bat audit
 testci.bat run --replayable
-testci.bat run --job foundation.check --act "C:\Tools\act.exe"
+testci.bat run --job foundation.rust --act "C:\Tools\act.exe"
 ```
 
 Complete the setup above first. The batch file prefers `TOOLGATE_CI_PYTHON`,
@@ -73,7 +73,7 @@ python tools/ci/local.py audit
 python tools/ci/local.py run --job preflight.metadata
 
 # Select several jobs by repeating --job WORKFLOW.JOB.
-python tools/ci/local.py run --job foundation.check --job gateway.container-and-replicas
+python tools/ci/local.py run --job foundation.rust --job gateway.container-and-replicas
 
 # Replay all supported jobs and report every remaining coverage gap.
 python tools/ci/local.py run
@@ -89,9 +89,11 @@ Omitting the command runs `plan`. `plan` requires Python and PyYAML; it does not
 run tests. `audit` checks configuration and admission rules without replaying
 job bodies. `run` always starts with the audit.
 
-Supported job bodies are `preflight.metadata`, `foundation.check`,
-`gateway.container-and-replicas` and `policy.enterprise-access`. Use `plan` to
-see the current inventory before selecting jobs.
+Supported job bodies are `preflight.metadata`, the foundation gate groups
+`foundation.python`, `foundation.ui`, `foundation.rust`, `foundation.examples` and
+`foundation.scans`, plus `gateway.container-and-replicas` and
+`policy.enterprise-access`. Foundation jobs that consume same-run artifacts are
+`staged`. Use `plan` to see the current inventory before selecting jobs.
 
 On GitHub, the five CI workflows run automatically only for pushes to `main`.
 Pull requests and feature-branch pushes do not trigger CI. Manual runs must

@@ -18,6 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCKER = os.environ.get('TOOLGATE_DOCKER_TOOLS') == '1'
+# Independent groups of the shared CI gates. The foundation workflow runs each as its own job;
+# --ci-common without --ci-part runs all of them in this process, in the original order.
+CI_PARTS = ('python', 'ui', 'browser', 'java', 'rust', 'examples')
 
 
 def command(args):
@@ -129,7 +132,10 @@ def main():
     parser.add_argument('--publication-only', action='store_true')
     parser.add_argument('--gateway-only', action='store_true')
     parser.add_argument('--ci-common', action='store_true', help='Shared CI gates; preflight owns metadata/CI regressions and the image stage owns runtime smoke')
+    parser.add_argument('--ci-part', action='append', choices=CI_PARTS, help='With --ci-common, run only this group of shared gates; repeatable')
     args = parser.parse_args()
+    if args.ci_part and not args.ci_common: parser.error('--ci-part requires --ci-common')
+    def part(name): return not args.ci_part or name in args.ci_part
     if args.scans: scans(staged_scan=not args.ci_common); return
     if args.publication_only:
         from control.check import database
@@ -147,11 +153,12 @@ def main():
     if not args.ci_common:
         python('tools/ci/preflight.py')
         python('-m','unittest','discover','-s','tests/ci','-v')
-    python('tools/ui/generate.py','--check')
-    python('tools/quality.py')
-    python('-m','unittest','discover','-s','tests/contracts','-v')
-    python('-m','unittest','discover','-s','tool-sdk/python-sdk/tests','-v')
-    if args.ci_common:
+    if part('python'):
+        python('tools/ui/generate.py','--check')
+        python('tools/quality.py')
+        python('-m','unittest','discover','-s','tests/contracts','-v')
+        python('-m','unittest','discover','-s','tool-sdk/python-sdk/tests','-v')
+    if args.ci_common and part('ui'):
         run(['npm','ci','--ignore-scripts'])
         run(['npm','run','contracts:check'])
         run(['npm','run','contracts:build'])
@@ -160,30 +167,36 @@ def main():
         run(['npm','--workspace','@olo-labs/toolgate-admin-ui','test'])
         run(['npm','--workspace','@olo-labs/toolgate-admin-ui','exec','--','vite','build'])
         run(['node','tools/ui/build.mjs','--metadata-only'])
+    if args.ci_common and part('browser'):
+        # A browser job on its own receives the built UI as an artifact but still needs node_modules.
+        if not part('ui'): run(['npm','ci','--ignore-scripts'])
         run(['npm','--workspace','@olo-labs/toolgate-admin-ui','exec','--','playwright','install','--with-deps','chromium'])
         run(['node','tools/ci/browser-downloads.mjs','--skip-build'])
-    from control.check import database
-    with database() as db:
-        old = {name:os.environ.get(name) for name in ('CONTROL_TEST_URL','CONTROL_TEST_PASSWORD')}
-        os.environ.update({name:db[name] for name in old})
-        try:
-            run(['gradle',*(['-PprebuiltAdminUi=true'] if args.ci_common else []),'projects','javaCheck','build'])
-            publication_proof(prebuilt_ui=args.ci_common)
-            if not args.ci_common: run(['gradle',':control-plane:enterpriseTest'])
-            python('tools/enterprise/custody.py')
-        finally:
-            for name,value in old.items():
-                if value is None: os.environ.pop(name,None)
-                else: os.environ[name]=value
-    run(['cargo','fmt','--all','--check'])
-    run(['cargo','test','--workspace','--locked'])
-    run(['cargo','clippy','--workspace','--all-targets','--locked','--','-D','warnings'])
-    # The Java SDK's Gradle and Maven plugins on a sample project, end to end through toolgate pack.
-    if os.name != 'nt' and not DOCKER and shutil.which('mvn') and shutil.which('cargo'): run(['bash','tool-sdk/java-sdk/e2e/run.sh'])
-    else: print('Skipping the Java SDK plugin end-to-end run: it needs bash, mvn and a local cargo')
-    # The Java example tool packages under examples/java-tools and examples/mocked-tools: tests, @Examples, packs, and each fat jar answering tools/list.
-    if os.name != 'nt' and not DOCKER and shutil.which('cargo'): run(['bash','examples/run-java-examples.sh'])
-    else: print('Skipping the Java example tools: they need bash and a local cargo')
+    if part('java'):
+        from control.check import database
+        with database() as db:
+            old = {name:os.environ.get(name) for name in ('CONTROL_TEST_URL','CONTROL_TEST_PASSWORD')}
+            os.environ.update({name:db[name] for name in old})
+            try:
+                run(['gradle',*(['-PprebuiltAdminUi=true'] if args.ci_common else []),'projects','javaCheck','build'])
+                publication_proof(prebuilt_ui=args.ci_common)
+                if not args.ci_common: run(['gradle',':control-plane:enterpriseTest'])
+                python('tools/enterprise/custody.py')
+            finally:
+                for name,value in old.items():
+                    if value is None: os.environ.pop(name,None)
+                    else: os.environ[name]=value
+    if part('rust'):
+        run(['cargo','fmt','--all','--check'])
+        run(['cargo','test','--workspace','--locked'])
+        run(['cargo','clippy','--workspace','--all-targets','--locked','--','-D','warnings'])
+    if part('examples'):
+        # The Java SDK's Gradle and Maven plugins on a sample project, end to end through toolgate pack.
+        if os.name != 'nt' and not DOCKER and shutil.which('mvn') and shutil.which('cargo'): run(['bash','tool-sdk/java-sdk/e2e/run.sh'])
+        else: print('Skipping the Java SDK plugin end-to-end run: it needs bash, mvn and a local cargo')
+        # The Java example tool packages under examples/java-tools and examples/mocked-tools: tests, @Examples, packs, and each fat jar answering tools/list.
+        if os.name != 'nt' and not DOCKER and shutil.which('cargo'): run(['bash','examples/run-java-examples.sh'])
+        else: print('Skipping the Java example tools: they need bash and a local cargo')
     if not args.ci_common:
         run(['npm','ci','--ignore-scripts'])
         run(['npm','run','contracts:check'])
@@ -192,15 +205,17 @@ def main():
         run(['npm','run','ui:check'])
         run(['npm','--workspace','@olo-labs/toolgate-admin-ui','test'])
     if not args.contracts_only and not args.ci_common: python('tools/quickstart/check.py','--build')
-    if args.ci_common:
+    if args.ci_common and part('java'):
         python('tools/enterprise/check.py','--evidence-only')
-    python('tools/ui/package.py')
-    run(['php','packages/contracts/php/tests/roundtrip.php'])
-    run(['php','packages/contracts/php/tests/roundtrip_v2.php'])
-    for source in sorted((ROOT/'packages/contracts/php/src').rglob('*.php')):
-        run(['php','-l',source.relative_to(ROOT).as_posix()], capture=True)
-    if not args.contracts_only: helm_checks()
-    print('All required foundation, gateway, control and admin UI gates passed')
+    if part('ui'): python('tools/ui/package.py')
+    if part('python'):
+        run(['php','packages/contracts/php/tests/roundtrip.php'])
+        run(['php','packages/contracts/php/tests/roundtrip_v2.php'])
+        for source in sorted((ROOT/'packages/contracts/php/src').rglob('*.php')):
+            run(['php','-l',source.relative_to(ROOT).as_posix()], capture=True)
+        if not args.contracts_only: helm_checks()
+    if args.ci_part: print('Foundation gate groups passed: '+', '.join(args.ci_part))
+    else: print('All required foundation, gateway, control and admin UI gates passed')
 
 
 if __name__ == '__main__': main()

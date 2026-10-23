@@ -35,7 +35,7 @@ python tools/ci/local.py audit
 python tools/ci/local.py run --job preflight.metadata
 
 # Replay selected full job bodies.
-python tools/ci/local.py run --job foundation.check
+python tools/ci/local.py run --job foundation.rust --job foundation.ui
 
 # Attempt all supported bodies and report every remaining gap.
 python tools/ci/local.py run
@@ -123,7 +123,12 @@ the actual native matrix and release environments, to close these gaps. See
 The unified main workflow delegates production UI/browser checks to foundation.
 A standalone preflight replay includes its browser check using the reviewed
 `shared_checks=false` default. Main reuses foundation UI/test evidence for its
-image stage. `images.verify` requires same-run hosted artifacts and is reported
-as unverified locally. Legacy component bodies are compatibility-only and are
+image stage. Foundation runs one job per gate group: `foundation.python`,
+`foundation.ui`, `foundation.rust`, `foundation.examples` and `foundation.scans`
+replay locally. `foundation.browser`, `foundation.java`, `foundation.core-mcp` and
+the `foundation.check` release gate consume the UI build or other stage artifacts
+from the same run, so they are reported as `staged` and unverified locally. The
+`images.*` stages require same-run hosted artifacts and are reported as unverified
+locally. Legacy component bodies are compatibility-only and are
 not selected for replay; [the ownership map](ci-check-ownership.md) lists their
 current main-stage owners.

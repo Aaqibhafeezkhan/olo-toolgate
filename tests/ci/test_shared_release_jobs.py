@@ -42,7 +42,7 @@ class SharedReleaseJobTests(unittest.TestCase):
         self.assertNotIn('admission',manual)
         for job in ('publish','publish-typescript'):
             self.assertEqual(manual[job]['needs'],['select','build'])
-        images = workflow('images')['jobs']['verify']['steps']
+        images = [step for job in workflow('images')['jobs'].values() for step in job.get('steps',[])]
         foundation = next(s for s in images if s.get('with',{}).get('name') == 'foundation-evidence')
         self.assertEqual(foundation['if'],'${{ inputs.run_tests }}')
         manual_build = next(s for s in images if s.get('name') == 'Build containers and library packages')

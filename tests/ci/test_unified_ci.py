@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import copy
 import importlib
 import os
+import re
 from pathlib import Path
 import sys
 import unittest
@@ -23,6 +24,11 @@ TARGETS = ('x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu',
 
 def workflow(name):
     return yaml.safe_load((ROOT/'.github/workflows'/name).read_text())
+
+
+def steps(name):
+    """Every step of a workflow; its stages run as separate jobs."""
+    return [step for job in workflow(name)['jobs'].values() for step in job.get('steps', [])]
 
 
 class SameRunReleaseTests(unittest.TestCase):
@@ -138,8 +144,8 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         publication.assert_called_once_with(prebuilt_ui=True)
 
     def test_image_stage_uses_same_run_ui_and_preserves_all_runtime_contexts(self):
-        steps = workflow('images.yml')['jobs']['verify']['steps']
-        scripts = '\n'.join(step.get('run','') for step in steps)
+        images = steps('images.yml')
+        scripts = '\n'.join(step.get('run','') for step in images)
         for gate in ('tools/control/container.py','tools/enterprise/restore_check.py',
                      'tools/client/downloads.py','tools/gateway/container.py',
                      'tools/gateway/benchmark.py','tools/device/check.py','tools/device/secured_check.py'):
@@ -151,16 +157,66 @@ class SharedCheckOwnershipTests(unittest.TestCase):
             self.assertIn(f'--severity HIGH,CRITICAL olo-toolgate-{image}:', scripts)
         self.assertNotIn('tools/check.py', scripts)
         self.assertNotIn('cargo test', scripts)
-        downloads = [s['with'] for s in steps if s.get('with',{}).get('name')=='foundation-evidence']
-        self.assertEqual(downloads, [dict(name='foundation-evidence', path='.')])
+        downloads = [s['with'] for s in images if s.get('with',{}).get('name')=='foundation-evidence']
+        self.assertTrue(downloads)
+        for download in downloads:
+            self.assertEqual(download, dict(name='foundation-evidence', path='.'))
 
     def test_image_stage_retains_browser_diagnostics_after_failure(self):
-        steps = workflow('images.yml')['jobs']['verify']['steps']
-        diagnostics = next(step for step in steps if step.get('with', {}).get('name') == 'browser-diagnostics')
+        diagnostics = next(step for step in steps('images.yml') if step.get('with', {}).get('name') == 'browser-diagnostics')
         self.assertEqual(diagnostics['if'], '${{ always() && inputs.run_tests }}')
         self.assertEqual(diagnostics['with']['path'].splitlines(),
                          ['build/ui/browser-results.json', 'build/ui/browser-output/'])
         self.assertEqual(diagnostics['with']['if-no-files-found'], 'ignore')
+
+    def test_foundation_runs_every_gate_group_in_its_own_job(self):
+        jobs = workflow('foundation.yml')['jobs']
+        parts = {}
+        for name, job in jobs.items():
+            for step in job.get('steps', []):
+                for part in re.findall(r'tools/check\.py --ci-common --ci-part (\w+)', step.get('run', '')):
+                    parts[part] = name
+        self.assertEqual(set(parts), set(check.CI_PARTS))
+        self.assertEqual(len(set(parts.values())), len(parts))
+        for name in ('browser', 'java', 'core-mcp'):
+            self.assertEqual(jobs[name]['needs'], 'ui')
+
+    def test_ci_parts_together_run_the_whole_common_gate_set(self):
+        def commands(argv):
+            recorded = []
+            @contextmanager
+            def database():
+                yield dict(CONTROL_TEST_URL='fixture', CONTROL_TEST_PASSWORD='fixture')
+            with patch.object(sys, 'argv', argv), \
+                    patch.object(check, 'run', side_effect=lambda args, **kw: recorded.append(args)), \
+                    patch.object(check, 'python', side_effect=lambda *args: recorded.append(['python',*args])), \
+                    patch.object(check, 'publication_proof'), \
+                    patch.object(check, 'helm_checks', side_effect=lambda: recorded.append(['helm'])), \
+                    patch('control.check.database', database):
+                check.main()
+            return recorded
+        whole = commands(['check.py','--ci-common'])
+        split = [args for part in check.CI_PARTS
+                 for args in commands(['check.py','--ci-common','--ci-part',part])]
+        # Only the browser job repeats npm ci, because it receives node_modules from no other job.
+        self.assertEqual(split.count(['npm','ci','--ignore-scripts']), 2)
+        split.remove(['npm','ci','--ignore-scripts'])
+        key = lambda args: [str(arg) for arg in args]
+        self.assertEqual(sorted(map(key, split)), sorted(map(key, whole)))
+
+    def test_release_gates_require_every_stage(self):
+        foundation = workflow('foundation.yml')['jobs']
+        self.assertEqual(set(foundation['check']['needs']), set(foundation)-{'check','python-sdk'})
+        images = workflow('images.yml')['jobs']
+        verify = images['verify']
+        self.assertEqual(set(verify['needs']), set(images)-{'verify'})
+        self.assertEqual(verify['if'], '${{ !cancelled() }}')
+        script = verify['steps'][0]['run']
+        for name in set(images)-{'verify'}:
+            self.assertIn(f'"{name}"', script)
+        self.assertEqual(images['build']['if'], '${{ !inputs.run_tests }}')
+        for name in set(images)-{'verify','build'}:
+            self.assertEqual(images[name].get('if', '${{ inputs.run_tests }}'), '${{ inputs.run_tests }}')
 
     def test_shared_helm_lint_has_one_owner(self):
         # Standalone helper scripts share the basename "check". Other fixtures
@@ -175,8 +231,8 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         control.assert_called_once_with(lint=False)
 
     def test_active_trivy_scans_reuse_database_cache_without_skipping_updates(self):
-        for name,job in (('foundation.yml','check'),('images.yml','verify')):
-            scripts='\n'.join(step.get('run','') for step in workflow(name)['jobs'][job]['steps'])
+        for name in ('foundation.yml','images.yml'):
+            scripts='\n'.join(step.get('run','') for step in steps(name))
             scans=[line for line in scripts.splitlines() if 'aquasec/trivy:0.61.1' in line]
             self.assertTrue(scans,name)
             for scan in scans:
