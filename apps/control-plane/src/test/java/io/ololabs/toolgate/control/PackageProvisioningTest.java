@@ -43,6 +43,7 @@ final class PackageProvisioningTest {
     private static JsonNode deployment(Rig rig) throws Exception { String raw = rig.store.<String>transaction(rig.tenant, false, tx -> tx.packages().deployment("acme.orders")); return JSON.readTree(raw); }
     private void register(Rig rig) {
         var host = new EndpointDeviceRecord("host-1", "tenant", "root", "f".repeat(64), EndpointState.ACTIVE, 1L, 0L, 0L, null, null, true, 1L, null, null);
+        TestSupport.pool(rig.store, rig.codec, rig.tenant, "pool", "host-1"); // host-1 is an administered member of its pool
         rig.packages.register(rig.tenant, tx -> host, "{\"hostId\":\"host-1\",\"poolId\":\"pool\",\"version\":\"0.10.0\",\"protocol\":{\"min\":2,\"max\":2},\"launcherVersion\":\"0.10.0\",\"tiers\":[\"HOST_NATIVE\"]}", "register");
     }
 
@@ -117,6 +118,7 @@ final class PackageProvisioningTest {
     @Test void aToolHostThatCannotSpeakProtocolTwoIsRefusedAtRegistration() throws Exception {
         var rig = rig();
         var host = new EndpointDeviceRecord("host-1", "tenant", "root", "f".repeat(64), EndpointState.ACTIVE, 1L, 0L, 0L, null, null, true, 1L, null, null);
+        TestSupport.pool(rig.store, rig.codec, rig.tenant, "pool", "host-1"); // host-1 is an administered member of its pool
         var old = "{\"hostId\":\"host-1\",\"poolId\":\"pool\",\"version\":\"0.9.0\",\"protocol\":{\"min\":1,\"max\":1},\"launcherVersion\":\"0.9.0\",\"tiers\":[\"HOST_NATIVE\"]}";
         assertEquals(409, assertThrows(Failure.class, () -> rig.packages.register(rig.tenant, tx -> host, old, "register-old")).status());
         assertNull(rig.store.transaction(rig.tenant, false, tx -> tx.packages().toolHost("host-1")));

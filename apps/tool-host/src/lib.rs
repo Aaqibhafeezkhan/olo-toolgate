@@ -16,6 +16,7 @@ pub mod permit;
 pub mod runner;
 pub mod server;
 pub mod store;
+pub mod stream;
 mod workload_identity;
 
 /// Milliseconds since the Unix epoch.

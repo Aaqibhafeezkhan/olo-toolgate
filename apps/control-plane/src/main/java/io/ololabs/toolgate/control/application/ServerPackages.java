@@ -107,11 +107,22 @@ public final class ServerPackages {
             }
             for (var name : request.globals().keySet()) if (!declared.containsKey(name) && !hosts.contains(name)) throw Failure.validation();
             var targets = new TreeSet<String>(request.hostIds() == null ? List.of() : request.hostIds());
+            var groups = new TreeSet<String>(request.deviceGroupIds() == null ? List.of() : request.deviceGroupIds());
+            // A deployment names Tool Hosts or Device Groups (pools), never both.
+            if (!targets.isEmpty() && !groups.isEmpty()) throw Failure.validation();
             var problems = new ArrayList<>(PackageCompatibility.runtimeProblems(manifest));
             for (var target : targets) {
                 var registration = tx.packages().toolHost(target);
                 if (registration == null) throw Failure.validation();
                 problems.addAll(PackageCompatibility.hostProblems(manifest, target, node(registration)));
+            }
+            var directory = tx.load();
+            for (var group : groups) {
+                if (directory.entries().get(Ids.Kind.DEVICE_GROUP.id(group)) == null) throw Failure.validation();
+                for (var member : DeviceGroups.members(directory, codec, group)) {
+                    var registration = tx.packages().toolHost(member);
+                    if (registration != null) problems.addAll(PackageCompatibility.hostProblems(manifest, member, node(registration)));
+                }
             }
             PackageCompatibility.require(problems);
             var globals = JSON.objectNode();
@@ -173,21 +184,32 @@ public final class ServerPackages {
             var ids = deployment.putArray("toolIds"); toolIds.forEach(ids::add);
             deployment.put("deployedAtUnixMs", clock.millis());
             if (!targets.isEmpty()) { var hostIds = deployment.putArray("hostIds"); targets.forEach(hostIds::add); }
+            if (!groups.isEmpty()) { var groupIds = deployment.putArray("deviceGroupIds"); groups.forEach(groupIds::add); }
             tx.packages().saveDeployment(packageId, codec.json(deployment));
             tx.audit(actor.id(), "PACKAGE_DEPLOY", "package:" + packageId, revision, requestId, hex(version.digest()));
             return reply(200, deployment);
         });
     }
 
-    /** A deployment runs on the Tool Hosts it names, or on every Tool Host when it names none. Moving a tool to another
-     *  device is a redeploy that names another host. */
-    public static boolean targets(JsonNode deployment, String hostId) {
+    /** A deployment runs on the Tool Hosts it names, on the current members of the Device Groups (pools) it names, or on
+     *  every Tool Host when it names neither. Group membership is read live, so a host added to a pool gets its
+     *  deployments and one removed from it stops getting them, and their permits. Moving a tool to another device is a
+     *  redeploy that names another host or pool. */
+    public static boolean targets(Directory directory, Codec codec, JsonNode deployment, String hostId) {
+        var groupIds = deployment.path("deviceGroupIds");
+        if (groupIds.isArray() && !groupIds.isEmpty()) {
+            for (var group : groupIds) if (DeviceGroups.members(directory, codec, group.asText()).contains(hostId)) return true;
+            return false;
+        }
         var hostIds = deployment.path("hostIds");
         if (!hostIds.isArray() || hostIds.isEmpty()) return true;
         for (var id : hostIds) if (id.asText().equals(hostId)) return true;
         return false;
     }
-    private List<JsonNode> deploymentsFor(Store.Session tx, String hostId) { return tx.packages().deployments().stream().map(this::node).filter(d -> targets(d, hostId)).toList(); }
+    private List<JsonNode> deploymentsFor(Store.Session tx, String hostId) {
+        var directory = tx.load();
+        return tx.packages().deployments().stream().map(this::node).filter(d -> targets(directory, codec, d, hostId)).toList();
+    }
 
     /** One declaration per name across a package's tools; two tools may share it only verbatim. */
     private static void same(Map<String, JsonNode> seen, String key, JsonNode value) { var previous = seen.putIfAbsent(key, value); if (previous != null && !previous.equals(value)) throw Failure.validation(); }
@@ -235,6 +257,9 @@ public final class ServerPackages {
         return store.transaction(tenant, true, tx -> {
             var d = device.apply(tx);
             if (!registration.hostId().equals(d.deviceId())) throw ManagementAccess.denied();
+            // The pool a host claims is never trusted: it must be a Device Group the host is an administered member of,
+            // on its first registration as on every later one.
+            if (!DeviceGroups.members(tx.load(), codec, registration.poolId()).contains(d.deviceId())) throw ManagementAccess.denied();
             String document = codec.json(registration);
             if (!document.equals(tx.packages().toolHost(d.deviceId()))) {
                 tx.packages().saveToolHost(d.deviceId(), document);
@@ -307,7 +332,7 @@ public final class ServerPackages {
             int slash = e.toolId().indexOf('/'); var raw = slash < 0 ? null : tx.packages().deployment(e.toolId().substring(0, slash));
             if (raw == null) throw Failure.conflict();
             var deployment = node(raw);
-            if (!deployment.get("packageDigest").asText().equals("sha256:" + e.packageDigest()) || !targets(deployment, device)) throw Failure.conflict();
+            if (!deployment.get("packageDigest").asText().equals("sha256:" + e.packageDigest()) || !targets(tx.load(), codec, deployment, device)) throw Failure.conflict();
             var version = tx.packages().version(deployment.get("packageDigest").asText()); var manifest = node(version.document()).get("manifest");
             JsonNode tool = null;
             for (var t : manifest.path("tools")) if (t.path("descriptor").path("toolId").asText().equals(e.toolId())) tool = t;

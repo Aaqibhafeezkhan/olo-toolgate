@@ -91,6 +91,7 @@ public final class RunEvents {
         var events = tx.runEvents(); var stream = events.stream(i.id());
         if (size(text) > MAX_RESULT_BYTES || stream != null && (stream.events() >= MAX_EVENTS || stream.bytes() + size(text) > MAX_BYTES + MAX_RESULT_BYTES)) {
             var marker = JSON.objectNode().put("kind", "RESULT").put("resultType", "complete").put("isError", result.isError());
+            if (result.provenance() != null) marker.put("provenance", result.provenance().name());
             marker.putArray("content").addObject().put("type", "text").put("text", "The result exceeds the retained run-event size; it is not shown here.");
             document.set("result", marker); text = document.toString(); refused = 1;
         }
