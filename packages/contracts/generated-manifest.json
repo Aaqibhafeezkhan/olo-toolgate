@@ -4,7 +4,7 @@
     "packages/contracts/schemas/v1/bundle.schema.json": "4056c803153e58fbc7b220c70423d288fbc547f4f02f93e8432e2c846ee720a4",
     "packages/contracts/schemas/v1/client.schema.json": "7f90eba0d390d4df0a485c4c84df5fa20606bde6646d6baebe16fca3844478fb",
     "packages/contracts/schemas/v1/common.schema.json": "dbc3c58d35e4fa7919db172f340a4cf460b601d65e83debdbf11cb21672df313",
-    "packages/contracts/schemas/v1/control.schema.json": "2cc8c44d0f66e1ba2464ab074c0dc9a3393e8ab89aecd304990676b71a00d28e",
+    "packages/contracts/schemas/v1/control.schema.json": "32d7541cf426d39927498ae5fc19bcbc98b0627dc3864b7b04ca27ee3de6ceae",
     "packages/contracts/schemas/v1/deployment.schema.json": "cd3bbc59d25050b3fd820cb2a635a73a9959f8260eda06a408646a5d52e4c7f1",
     "packages/contracts/schemas/v1/endpoint.schema.json": "690d922c14defa8a449c76c66e64508aadf69eaaea2df9cf76ce7d176aab51c7",
     "packages/contracts/schemas/v1/enterprise.schema.json": "f80dc4844c08714b3c90d3ef6cc05b41934f1b924e65112216362e319eeca98b",
@@ -34,7 +34,7 @@
     "packages/contracts/schemas/v2/service-profile.schema.json": "9d9526778d6b8d2625bf71232b642b68fd5a62a0b0ad5837f83596cce936d12a",
     "packages/contracts/schemas/v2/settings.schema.json": "2a55ae4fd562d8904f33104177a66f6789912509035e4fe8da91b92b2776da5a"
   },
-  "generatorSha256": "64e0dc1a8d69055050c900b236fc3285eefaa51aa8130fd66e96937782c36f7f",
+  "generatorSha256": "1e9b47e6603f9678564b6b4bfbd5d389e1359867dab364938c41b81478ec58f7",
   "outputs": [
     "packages/contracts/java/LICENSE",
     "packages/contracts/java/NOTICE.md",

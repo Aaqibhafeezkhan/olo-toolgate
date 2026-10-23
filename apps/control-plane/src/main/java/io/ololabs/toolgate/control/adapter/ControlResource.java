@@ -69,7 +69,7 @@ public class ControlResource {
     @GET @Path("admin-session") @io.quarkus.security.Authenticated
     public String adminSession() {
         var identity=actor();
-        return codec.json(store.transaction(identity.tenant(),false,tx->{var access=new io.ololabs.toolgate.control.application.ManagementAccess(codec);var directory=tx.load();return new io.ololabs.toolgate.contracts.AdminSession(access.capabilities(directory,identity.userId(),System.currentTimeMillis(),io.ololabs.toolgate.control.application.ConsoleDeviceSessions.current(tx,codec,identity.sessionId(),identity.userId(),System.currentTimeMillis())).stream().sorted().toList(),access.access(directory,identity.userId()).portalRole(),tx.bootstrapAdminUserId(),identity.tenant().value());}));
+        return codec.json(store.transaction(identity.tenant(),false,tx->{var access=new io.ololabs.toolgate.control.application.ManagementAccess(codec);var directory=tx.load();var profile=tx.runtimeProfile();return new io.ololabs.toolgate.contracts.AdminSession(access.capabilities(directory,identity.userId(),System.currentTimeMillis(),io.ololabs.toolgate.control.application.ConsoleDeviceSessions.current(tx,codec,identity.sessionId(),identity.userId(),System.currentTimeMillis())).stream().sorted().toList(),access.access(directory,identity.userId()).portalRole(),tx.bootstrapAdminUserId(),identity.tenant().value(),profile==null?null:profile.organization());}));
     }
     @GET @Path("bundles/current") @io.quarkus.security.Authenticated
     public Response currentBundle() {

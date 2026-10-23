@@ -209,6 +209,9 @@ def render_version(ver, version, outputs):
                     arguments = ', '.join(java_ident(key) if key in required else 'null' for key in props)
                     java += ['    /** Construct a record without optional installation metadata.\n     *\n' + '\n'.join(f'     * @param {java_ident(key)} canonical {key} value' for key in previous) + '\n     */',
                              f'    public {name}({signature}) {{ this({arguments}); }}']
+                if not v2 and name == 'AdminSession':
+                    java += ['    /** Construct a session without an optional tenant display name. */',
+                             '    public AdminSession(java.util.List<String> permissions, UserRole role, String bootstrapAdminUserId, String tenantId) { this(permissions, role, bootstrapAdminUserId, tenantId, null); }']
                 java += ['}']
             rust += [f'/// {description}'.rstrip(), '#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]', '#[serde(rename_all = "camelCase", deny_unknown_fields)]', f'pub struct {name} {{']
             ts += [f'/** {description} */', f'export interface {name} {{']

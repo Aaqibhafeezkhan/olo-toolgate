@@ -27,6 +27,13 @@ Packages and releases come back exactly. A backup holds every uploaded package w
 
 ## Initialize file, trust volume and generated credentials
 
+Tenant identity is an immutable installation UUID; the alias is only a lookup label.
+Reusable initialize files should omit `tenantId` and set `tenantName` for display
+(non-blank, at most 256 UTF-16 code units). `TOOLGATE_TENANT_NAME` overrides the file
+on first installation, with `Quickstart` as the default. The name is persisted and
+used for Control's organization metadata and console display alongside the UUID.
+Changing these inputs later does not rename an initialized tenant or replace its ID.
+
 Set `TOOLGATE_INITIALIZE_FILE` to a configuration snapshot (the `snapshot` of an export, or the whole import envelope) to apply it once on a fresh `/data` volume. Its records are merged into the installation snapshot; the `admin`, `reviewer-1` and `reviewer-2` users, the installation team and the Super Admin role always stay as installed. Team members from the file are added to existing members, and each `requiredIdentities` id that does not exist becomes a disabled placeholder user added to its teams. The file's `settings` reach Control as `TOOLGATE_GATEWAY_NAME`, `TOOLGATE_SETTINGS_AUTO_APPROVE_DEVICES`, `TOOLGATE_SETTINGS_AUTO_APPROVE_DURATION_DAYS`, `TOOLGATE_SETTINGS_AUTO_APPROVE_OWNER` and `TOOLGATE_CONFIG_REQUIRED_REVIEWS`; a non-empty container variable of the same name wins.
 
 Every enabled user in the file can sign in locally with a random password. Every workload binding in the file gets a random static token; its hash goes into the binding and into the Gateway credentials, and the binding's calls use the first execution binding its agent groups' CAPABILITY grants cover. Everything generated is written once to `/data/credentials.json` (mode 0600, never logged): `users` (with admin and reviewers), `agents` (`agentId`, `workloadBindingId`, `token`, `userId`) and `claimToken`. Users marked `showOnLogin` are listed, with their passwords, by the unauthenticated `GET /api/quickstart/v1/login-hints`, together with `refreshAt` from `TOOLGATE_DEMO_REFRESH_AT`.

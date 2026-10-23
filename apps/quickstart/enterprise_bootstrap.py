@@ -16,7 +16,7 @@ COLLECTIONS = ('users', 'teams', 'agents', 'tools', 'policies', 'devices', 'role
                'toolGroups', 'grants', 'delegations', 'agentDelegations', 'bindings', 'extractors', 'workloadBindings',
                'identityBindings', 'deviceEvidence')
 # File-level fields read only here; they never become directory records.
-FILE_FIELDS = {'formatVersion', 'tenantId', 'revision', 'settings', 'requiredIdentities', 'visitorPool', 'reservedRecords'}
+FILE_FIELDS = {'formatVersion', 'tenantId', 'tenantName', 'revision', 'settings', 'requiredIdentities', 'visitorPool', 'reservedRecords'}
 TOOL_HOST = 'tool-host-local'  # Enrolls on first start; its device record counts against the directory.
 PER_ACCOUNT = 5  # Pool account: user, agent, workload binding, identity binding and one owned device.
 YEAR_MS = 365 * 86400000
@@ -133,6 +133,9 @@ def initialize(snapshot, tenant, issuer, now):
     document = read_initialize()
     if 'tenantId' in document and document['tenantId'] != tenant:
         raise Refused('Initialize file tenantId must match the installation UUID; common templates omit it')
+    tenant_name = os.environ.get('TOOLGATE_TENANT_NAME', document.get('tenantName', 'Quickstart'))
+    if not isinstance(tenant_name, str) or not tenant_name.strip() or len(tenant_name.encode('utf-16-le')) > 512:
+        raise Refused('tenantName / TOOLGATE_TENANT_NAME must be a non-blank display name of at most 256 characters')
     values = environment(document.get('settings'))
     installed_users={user['id'] for user in snapshot['users']}
     for name in COLLECTIONS:
@@ -209,7 +212,7 @@ def initialize(snapshot, tenant, issuer, now):
     for entry in agents+accounts:
         binding = by_id[entry['workloadBindingId']]
         entry['context'] = workload_context(tenant, binding, execution_binding(snapshot, binding['agentId']))
-    return dict(users=logins, agents=agents, pool=accounts, environment=values, maxPool=largest, fixedCredentials=1+len(agents))
+    return dict(tenantName=tenant_name, users=logins, agents=agents, pool=accounts, environment=values, maxPool=largest, fixedCredentials=1+len(agents))
 
 
 def prepare(data, tenant, issuer, key, atomic):
