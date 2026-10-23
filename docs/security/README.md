@@ -10,7 +10,8 @@ invalid authority fails closed.
 - [Security invariants](security-invariants.md)
 - [Enterprise access control](enterprise-access-control.md) and [user roles](user-roles.md)
 - [Trust boundaries](../architecture/trust-boundaries.md)
-- [Threat model](threat-model.md) and [Tool Host threat model](threat-models/tool-host.md)
+- [Threat model](threat-model.md), [Tool Host threat model](threat-models/tool-host.md) and
+  [OLO integration threat model](threat-models/olo-integration.md) (proposed)
 - [Device enforcement](endpoint-enforcement.md) and [key management](key-management.md)
 - [Enterprise evidence and limitations](../enterprise-access-control/README.md)
 
