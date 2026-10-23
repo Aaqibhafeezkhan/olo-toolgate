@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package.
+/** Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package.
  *
  * @param profileVersion canonical profileVersion value
  * @param profileId canonical profileId value

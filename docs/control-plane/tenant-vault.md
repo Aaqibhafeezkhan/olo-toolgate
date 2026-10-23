@@ -65,7 +65,7 @@ they do not contain full compromise of that process or its provider credentials.
 Use separate application credentials/deployments and tenant-dedicated wrapping
 custody when that stronger boundary is required. `VaultWrappingProvider` defines
 the integration boundary for external KMS backends; none are claimed implemented.
-Shared-host and release qualification are still tracked in `plan.md`.
+Validate shared-host custody and recovery using the [deployment qualification guide](../deployment/multitenant.md).
 
 Discovery continues using the development CA-signed protocol until the separate
 server/client discovery-v2 milestone.

@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The MCP proxy executor (docs/planning/mcp-proxy/plan.md §7, Call). An admitted call of an `MCP_PROXY` tool:
+//! The MCP proxy executor (ADR 030, Call). An admitted call of an `MCP_PROXY` tool:
 //! 1. validates the arguments against the approved input schema;
 //! 2. connects with the approved SPKI pins, so a changed TLS key fails before the credential is sent;
 //! 3. checks the upstream inline (identity and the tool's definition digest) when the package is strict or the

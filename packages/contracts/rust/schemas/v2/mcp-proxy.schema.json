@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/mcp-proxy.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "MCP proxy",
-  "description": "Upstream MCP server registrations, scans, snapshots, approvals and the MCP_PROXY package document (docs/planning/mcp-proxy/plan.md).",
+  "description": "Upstream MCP server registrations, scans, snapshots, approvals and the MCP_PROXY package document (ADR 030).",
   "$ref": "#/$defs/McpServerRegistration",
   "$defs": {
     "McpServerSlug": {

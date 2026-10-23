@@ -36,4 +36,4 @@ needs runtime grants and cannot override effect authorization or retired identit
 
 Marketplace signing is planned provenance for immutable community releases.
 It will remain separate from organization deployment signing and runtime
-authorization. See [the backlog](../planning/README.md).
+authorization. See [Marketplace scope](../marketplace/README.md).

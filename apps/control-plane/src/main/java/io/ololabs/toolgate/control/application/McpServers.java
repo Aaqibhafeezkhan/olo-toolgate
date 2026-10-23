@@ -16,7 +16,7 @@ import java.time.Clock;
 import java.util.*;
 import java.util.function.Function;
 
-/** MCP proxy registrations and their scans (docs/planning/mcp-proxy/plan.md §4–§7). Shared Control never contacts an
+/** MCP proxy registrations and their scans (ADR 030). Shared Control never contacts an
  *  upstream server: a scan runs on a Tool Host of the registration's pool, which is its execution binding's Device
  *  Group, under a scan permit with a signed deadline. Control keeps the registration, the immutable snapshots it
  *  accepted (recomputing every digest and limit) and the scan jobs, all in the routed tenant. */

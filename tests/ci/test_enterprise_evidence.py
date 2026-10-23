@@ -15,6 +15,18 @@ spec.loader.exec_module(acceptance)
 
 
 class EnterpriseEvidenceTests(unittest.TestCase):
+    def test_report_needs_no_tracked_status_document_and_missing_evidence_fails(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with patch.object(acceptance, 'ROOT', root), \
+                 patch('sys.argv', ['acceptance.py', '--require-complete']), \
+                 self.assertRaisesRegex(SystemExit, 'Acceptance evidence remains incomplete'):
+                acceptance.main()
+            report = json.loads((root/'build/enterprise/acceptance.json').read_text())
+            self.assertEqual(report['mapped'], 96)
+            self.assertEqual(report['verified'], 0)
+            self.assertFalse((root/'docs').exists())
+
     def test_skips_failures_and_errors_are_not_passing_evidence(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

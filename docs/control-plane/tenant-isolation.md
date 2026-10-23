@@ -1,6 +1,6 @@
 # Tenant data isolation foundation
 
-This document describes the implemented tenant fences. Use the [deployment and qualification guide](../deployment/multitenant.md) for supported topologies, evidence and operational boundaries; the [implementation plan](../../plan.md) tracks accepted release gates.
+This document describes the implemented tenant fences. Use the [deployment and qualification guide](../deployment/multitenant.md) for supported topologies, evidence and operational boundaries.
 
 The current inventory covers 50 application tables: 48 tenant-scoped tables with forced PostgreSQL row-level security and two platform-only registry/hostname tables. Every tenant-owned row references the registry's canonical UUID string. `PostgresStore.transaction(...)` sets `app.tenant_id` with transaction-local `set_config` before tenant SQL, for both read and write transactions. Commit and rollback clear the context before the pooled connection is reused. SQLite retains application scoping, explicit non-null tenant IDs, UUID registry checks and ownership foreign keys; it does not implement PostgreSQL RLS.
 

@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The MCP proxy runtime (docs/planning/mcp-proxy/plan.md). `definition_digest` is the definition digest of
+//! The MCP proxy runtime (ADR 030). `definition_digest` is the definition digest of
 //! tool-sdk/spec/mcp-proxy: `sha256:` over the RFC 8785 form, without NFC, of an upstream tool's six definition members
 //! exactly as returned; Control's `McpDefinitions.digest` computes the same value. [`Session`] is one Streamable HTTP
 //! session with an upstream MCP server over the streaming egress client ([`crate::stream`]): pinned TLS, the

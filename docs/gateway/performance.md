@@ -19,6 +19,5 @@ concurrency, tool/catalog size, warmup, sample count, p50/p95/p99, error rate an
 memory. Include outage, queue pressure and denied requests. Keep performance
 observations separate from deterministic correctness gates.
 
-[Recorded enterprise evidence](../enterprise-access-control/implementation-status.md)
-contains small-fixture results with explicit limits; enterprise-scale qualification
-remains in [the backlog](../planning/README.md).
+Small-fixture results do not establish enterprise-scale capacity. Retain fresh
+benchmark reports with the release or deployment being evaluated.

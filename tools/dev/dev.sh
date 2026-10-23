@@ -9,6 +9,5 @@ The make dev full-stack bootstrap is not implemented.
 For working source-build and startup commands, read:
   docs/development/README.md
 
-For pending contributor improvements, read:
-  docs/planning/README.md
+Use GitHub issues to discuss contributor improvements.
 EOF

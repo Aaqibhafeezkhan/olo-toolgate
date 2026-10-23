@@ -1,8 +1,9 @@
 # Governing existing MCP servers
 
 ToolGate can put an MCP server you already run behind its policy, approval and audit, without changing the server.
-The design is [ADR 030](../adr/030-mcp-proxy-packages.md); the full plan is
-[docs/planning/mcp-proxy/plan.md](../planning/mcp-proxy/plan.md).
+The trust and package boundaries are defined in [ADR 030](../adr/030-mcp-proxy-packages.md).
+The shared [definition digest specification](../../tool-sdk/spec/mcp-proxy/README.md)
+and [v2 schemas](../../packages/contracts/schemas/v2/mcp-proxy.schema.json) define the wire contract.
 
 ## How it works
 

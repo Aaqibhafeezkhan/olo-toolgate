@@ -7,4 +7,4 @@
 - [Shared contracts](shared-contracts.md), [compatibility](compatibility.md) and [scalability](scalability.md).
 - [Repository layout](monorepo-layout.md) and [decision records](../adr/README.md).
 
-See [planning](../planning/README.md) for capabilities that are not yet complete.
+Component guides describe current support and limitations.

@@ -6,8 +6,8 @@
 This directory holds the acceptance cases for the SDK and governed platform.
 [suites.json](suites.json) defines each suite, runner and required evidence.
 [Platform requirement IDs](../../docs/contracts/platform-requirements.md) connect
-the cases to maintained design sources. Pending implementation is tracked in
-the [backlog](../../docs/planning/README.md).
+the cases to maintained design sources. Use the language and component guides
+for current implementation support.
 
 The cases say **what** must hold, in the words of the design they come from. Each language and component writes its own runner, which reads these files.
 

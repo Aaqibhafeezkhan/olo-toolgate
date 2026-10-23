@@ -8,7 +8,7 @@ public interface EffectSigner {
     EnterprisePermitClaims verify(EnterpriseSignedPermit permit);
     /** v2 invocation permits for Tool Hosts (platform-requirements.md §11.2): the same key, typ toolgate-invocation-permit+jws. */
     default io.ololabs.toolgate.contracts.v2.SignedInvocationPermit signInvocation(io.ololabs.toolgate.contracts.v2.InvocationPermitClaims claims){throw Failure.unavailable();}
-    /** MCP proxy scan permits (docs/planning/mcp-proxy/plan.md §6): the same key, typ toolgate-mcp-scan-permit+jws. */
+    /** MCP proxy scan permits (ADR 030): the same key, typ toolgate-mcp-scan-permit+jws. */
     default String signScan(io.ololabs.toolgate.contracts.v2.McpScanClaims claims){throw Failure.unavailable();}
     default io.ololabs.toolgate.contracts.v2.McpScanClaims verifyScan(String jws){throw Failure.unavailable();}
     default io.ololabs.toolgate.contracts.v2.InvocationPermitClaims verifyInvocation(io.ololabs.toolgate.contracts.v2.SignedInvocationPermit permit){throw Failure.unavailable();}

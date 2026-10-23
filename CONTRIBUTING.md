@@ -14,7 +14,7 @@ cd olo-toolgate
 Follow the [implemented setup and verification commands](docs/development/README.md).
 `make dev` is still a scaffold; it does not start the application.
 Use [good first contributions](docs/contributors/good-first-contributions.md)
-or the [pending-feature backlog](docs/planning/README.md) to choose a focused task.
+or open GitHub issues to choose a focused task.
 Discuss large changes in an issue before implementation.
 
 ## Design and implementation

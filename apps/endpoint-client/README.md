@@ -124,8 +124,7 @@ on all three operating systems. Native CI tests the real service manager and
 builds x64 and ARM64 packages. A protected tagged-release job publishes verified
 packages and provenance; signing hooks require externally provisioned OS/KMS
 identities. Local development packages are unsigned and macOS notarization is
-not configured. See [installer limitations](../../docs/client/installers.md) and
-[remaining qualification work](../../docs/planning/README.md).
+not configured. See [installer limitations](../../docs/client/installers.md).
 
 Module 09 uses immutable signed descriptors and monotonic device generations.
 See the [fleet usage, upgrade and debug guide](../../docs/client/package-deployment.md) for external trust/store

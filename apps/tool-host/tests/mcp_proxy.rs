@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //! The MCP scan worker and proxy executor against a scripted upstream MCP server over real TLS: pins, paging, limits,
-//! deadlines, the inline check, and result validation (docs/planning/mcp-proxy/plan.md T5).
+//! deadlines, the inline check, and result validation (ADR 030 T5).
 
 use olo_toolgate_contracts::v2::{
     McpCheckFailure, McpPermitVerification, McpProxyDocument, McpQuarantineReason, McpScanClaims,

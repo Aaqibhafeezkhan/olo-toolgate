@@ -15,7 +15,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** MCP proxy registration and scans in Control (docs/planning/mcp-proxy/plan.md T3), on SQLite and PostgreSQL. */
+/** MCP proxy registration and scans in Control (ADR 030 T3), on SQLite and PostgreSQL. */
 final class McpServersTest {
     @TempDir Path temp;
     private static final ObjectMapper JSON = new ObjectMapper();

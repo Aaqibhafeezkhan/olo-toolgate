@@ -1,4 +1,4 @@
-# Tool SDK specification (design gate D0)
+# Tool SDK specification
 
 ## Purpose
 
@@ -7,12 +7,12 @@ This is the normative authoring contract for the ToolGate Tool SDK. Every SDK, i
 ## Rules
 
 - Key words **must**, **must not**, **should** and **may** are normative.
-- A file here changes only through an amendment to [ADR 019](../../docs/adr/019-tool-sdk-authoring-contract.md), which reopens gate D0.
+- A file here changes only through an amendment to [ADR 019](../../docs/adr/019-tool-sdk-authoring-contract.md).
 - Examples are illustrative; tables and grammar blocks are normative.
 
 ## Contents
 
-| File | Defines | Plan section |
+| File | Defines | Requirement reference |
 |---|---|---|
 | [authoring/README.md](authoring/README.md) | Language-neutral contract: declarations, `ToolContext`, value types | §5, §6 |
 | [authoring/java.md](authoring/java.md), [python.md](authoring/python.md), [typescript.md](authoring/typescript.md), [dotnet.md](authoring/dotnet.md) | Exact API surface per language | §5.3 |
@@ -24,12 +24,4 @@ This is the normative authoring contract for the ToolGate Tool SDK. Every SDK, i
 | [composition.md](composition.md) | Library fragments and merge rules, with fixtures | §7.7 |
 | [protocol-layer.md](protocol-layer.md) | Protocol layer and adapter contracts A1 to A5 | §5.10 |
 | [sdk-compat/](sdk-compat/README.md) | Official MCP SDK compatibility record (pinned versions, test results, gaps) | §5.10 |
-| [mcp-proxy/](mcp-proxy/README.md) | MCP proxy definition digest of upstream tools, with shared vectors | [MCP proxy plan](../../docs/planning/mcp-proxy/plan.md) §5 |
-
-## D0 exit checklist
-
-Verify the descriptor vectors with `python3 tool-sdk/spec/descriptor/vectors/verify.py`.
-
-- [ ] Architecture review of every file above.
-- [ ] Adapter contracts A1 to A5 reviewed against the compatibility record.
-- [ ] ADR 019 accepted (merging this directory with ADR 019 marked accepted is the sign-off).
+| [mcp-proxy/](mcp-proxy/README.md) | MCP proxy definition digest of upstream tools, with shared vectors | [Definition digest](mcp-proxy/README.md) |

@@ -22,7 +22,7 @@ const MAX_REPLY: usize = 1024 * 1024;
 const DISPATCHES: &str = "/api/control/v1/tool-hosts/dispatches";
 /// A relayed dispatch carries the call's arguments, at most the host's input ceiling.
 const MAX_DISPATCH: usize = 2 * 1024 * 1024;
-/// MCP proxy scans this host runs (docs/planning/mcp-proxy/plan.md §6).
+/// MCP proxy scans this host runs (ADR 030).
 const SCANS: &str = "/api/control/v1/tool-hosts/mcp-scans";
 
 #[derive(Debug, Clone, PartialEq, Eq)]

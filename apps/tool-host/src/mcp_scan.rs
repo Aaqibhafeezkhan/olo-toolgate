@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The MCP scan worker (docs/planning/mcp-proxy/plan.md §6, §7 Scan). It takes the scans Control queued for this host,
+//! The MCP scan worker (ADR 030 Scan). It takes the scans Control queued for this host,
 //! verifies and consumes each scan permit, redeems the upstream credential, and then, within the permit's signed
 //! deadline: connects (with the approved pins for a refresh, so a changed key fails before the credential is sent),
 //! runs `initialize`, pages through `tools/list` within the scan limits, and reports the raw definitions with the

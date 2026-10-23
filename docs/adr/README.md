@@ -5,7 +5,7 @@ The current runtime model is described in [the overview](../architecture/overvie
 Older Gateway static evaluation, bundle authority and Gateway permit-signing
 descriptions in ADRs 002, 005 and 006 are superseded by Control's online authority
 and [ADR 013](013-tool-host-egress-broker-secrets.md). Read amendments before applying
-a historical decision. Remaining implementation is tracked in [planning](../planning/README.md).
+a historical decision. Use the owning component guide for current implementation support.
 
 Create an ADR when changing:
 

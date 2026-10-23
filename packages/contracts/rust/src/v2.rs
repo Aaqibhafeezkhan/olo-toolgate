@@ -442,7 +442,7 @@ pub struct DeploymentGrant {
     pub agent_group_id: String,
     pub tool_ids: Vec<String>,
 }
-/// Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package.
+/// Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeploymentProfile {

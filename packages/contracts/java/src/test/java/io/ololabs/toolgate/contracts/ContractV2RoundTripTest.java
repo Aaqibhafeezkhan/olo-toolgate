@@ -117,6 +117,7 @@ final class ContractV2RoundTripTest {
         "McpQuarantine",
         "McpQuarantineReason",
         "McpQuarantineReport",
+        "McpRefreshRequest",
         "McpScanClaims",
         "McpScanDispatch",
         "McpScanFailureReport",

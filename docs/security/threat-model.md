@@ -52,4 +52,4 @@ providers. A compromised privileged endpoint or malicious downstream provider
 cannot be repaired by group ACL evaluation alone. Production transport, external
 trust provisioning, retention and capacity testing require installation-specific
 configuration. See [enterprise operations](../enterprise-access-control/operations.md)
-and [executable acceptance evidence](../enterprise-access-control/implementation-status.md).
+and [verification procedures](../testing/README.md).

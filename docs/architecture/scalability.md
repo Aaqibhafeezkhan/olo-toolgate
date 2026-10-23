@@ -10,7 +10,7 @@ networking and Helm. Bound queues, request sizes, deadlines and concurrency; fai
 closed when current authority is unavailable. Client presence and delivery use
 server-directed polling as described in [ADR 023](../adr/023-server-directed-device-presence.md).
 
-The [recorded enterprise checks](../enterprise-access-control/implementation-status.md)
-include small-fixture observations, not general throughput guarantees. Report
+The [verification tools](../testing/README.md) produce results for their tested
+revision and environment, not general throughput guarantees. Report
 workload, hardware, topology, concurrency and p50/p95/p99 together. Multi-host
-capacity, soak and multi-region qualification remain [planned work](../planning/README.md).
+capacity, soak and multi-region qualification require deployment-specific measurement.

@@ -6,10 +6,10 @@ IDs remain stable so test intent stays traceable. The referenced specification,
 its current ADR amendments and the case's explicit assertions define the behavior.
 An ID or an authored case does not establish implementation or a passing test.
 
-Use [the backlog](../planning/README.md) for unfinished work and
-[component guides](../README.md) for operational instructions. In particular,
-planned host isolation, result spooling, kill delivery, proxying and language SDKs
-must not be inferred available from the requirement descriptions below.
+Use the [component guides](../README.md) for supported behavior, limitations and
+operational instructions. In particular,
+host isolation, result spooling, kill delivery and language support must not be
+inferred available from the requirement descriptions below.
 
 Source citations use this file name and the numeric IDs below. Multiple-ID
 citations resolve each ID independently; broader IDs such as §12 refer to the
@@ -70,9 +70,9 @@ preserve migration checksums; those numeric IDs resolve through this index too.
 | §13.3 | [Tool protocol v2 frames](../../packages/contracts/schemas/v2/protocol.schema.json) |
 | §13.4 | [Environment and process confinement requirements](../security/threat-models/tool-host.md) |
 | §13.5 | [Input/output, time and resource ceilings](../../tool-sdk/conformance/security/sandbox.json) |
-| §14.1 | [Planned MCP proxy acceptance cases](../../tool-sdk/conformance/protocol/mcp-proxy.json) |
+| §14.1 | [MCP proxy acceptance cases](../../tool-sdk/conformance/protocol/mcp-proxy.json) |
 | §14.2 | [Planned OpenAPI transformation acceptance cases](../../tool-sdk/conformance/integration/openapi-import.json) |
-| §14.3 | [Deferred connection-provider delivery](../planning/README.md) |
+| §14.3 | [Credential connection requirements](../../tool-sdk/spec/authoring/http.md) |
 | §15 | [Emergency kill specification](../control-plane/kill-switch.md) |
 | §15.1 | [Immutable kill/recovery events and merge](../control-plane/kill-switch.md) |
 | §15.2 | [Delivery and authorization epoch](../control-plane/kill-switch.md) |
@@ -84,13 +84,13 @@ preserve migration checksums; those numeric IDs resolve through this index too.
 | §17 | [Client check-in settings](../control-plane/configuration.md) |
 | §17.1 | [Environment-owned client timing fields](../control-plane/configuration.md) |
 | §17.2 | [Server-directed polling and bounds](../control-plane/configuration.md) |
-| §17.3 | [Pending delivery/concurrency improvements](../planning/README.md) |
-| §17.4 | [Pending adoption deltas](../planning/README.md) |
+| §17.3 | [Fleet reconciliation and delivery](../adr/010-signed-fleet-reconciliation.md) |
+| §17.4 | [Desired and reported state](../architecture/desired-vs-reported-state.md) |
 | §18 | [Implemented Administration menu and settings ownership](../control-plane/configuration-menu.md) |
 | §20 | [Contract-set generation and component integration](../contracts/v2-generation.md) |
 | §21 | [Suite definitions and evidence rules](../../tool-sdk/conformance/README.md) |
-| §22.1 | [Implementation completion criteria; designs alone are not acceptance](../planning/README.md) |
-| §22.2 | [Consolidated pending work](../planning/README.md) |
+| §22.1 | [Verification and acceptance evidence](../testing/README.md) |
+| §22.2 | [Release qualification](../development/how-to-release.md) |
 
 ## 12.7 Persistence and failure requirements
 
@@ -98,7 +98,8 @@ These row IDs are used by failure-injection conformance cases. Control's actual
 states and transaction boundaries are specified in
 [invocation state v2](../control-plane/invocation-state-v2.md). Control owns all
 durable authority; Gateway and Tool Host never write its database directly.
-The host/spool requirements include unfinished work listed in the backlog.
+Host isolation and durable result spooling are requirements, not support claims;
+see the [Tool Host guide](../../apps/tool-host/README.md) for implemented boundaries.
 
 | Row | Boundary | Required durability and failure behavior |
 |---|---|---|

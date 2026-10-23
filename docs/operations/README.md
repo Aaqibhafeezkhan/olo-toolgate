@@ -26,5 +26,6 @@ availability before interpreting a Gateway failure as an executor problem.
 
 Use the reviewed recovery procedure for compromised custody or damaged state.
 Never copy an old database over live authority or reset identity to reconnect a
-client. Emergency push/break-glass tooling has [unfinished scope](../planning/README.md).
+client. Check the [kill-switch specification](../control-plane/kill-switch.md)
+and executor guides before relying on emergency push or break-glass delivery.
 For a vulnerability, follow [private disclosure](../../SECURITY.md).

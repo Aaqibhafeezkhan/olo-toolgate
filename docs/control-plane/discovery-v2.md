@@ -1,6 +1,6 @@
 # Tenant discovery v2
 
-The live Control endpoint and native service use v2. Installer setup verifies the signed document over independently authenticated HTTPS before persisting the tenant UUID and canonical Control origin. Fresh journal format 3 stores the manifest and monotonic discovery trust together; old development journals are refused without conversion. Shared production hosting still requires the remaining deployment, Tool Host, rotation and release gates in `plan.md`.
+The live Control endpoint and native service use v2. Installer setup verifies the signed document over independently authenticated HTTPS before persisting the tenant UUID and canonical Control origin. Fresh journal format 3 stores the manifest and monotonic discovery trust together; old development journals are refused without conversion. Qualify shared production hosting using the [multitenant deployment guide](../deployment/multitenant.md) and its runtime and recovery checks.
 
 V2 follows the existing Fleet compact [JWS pattern, RFC 7515](https://www.rfc-editor.org/rfc/rfc7515.html#section-3.1). Its JSON envelope contains only `jws`. The protected header requires `alg=RS256`, `typ=toolgate-discovery+jws` and a bounded key ID. Unknown header fields, alternate algorithms, remote key URLs, duplicate JSON members and noncanonical base64url are rejected. The message type and separate signing keys apply the purpose-separation principles in [RFC 8725](https://www.rfc-editor.org/rfc/rfc8725.html#section-3.11).
 

@@ -9,7 +9,7 @@ CONTRIBUTING.md
 ARCHITECTURE.md
 SECURITY.md
 docs/README.md
-docs/planning/README.md
+docs/testing/README.md
 docs/enterprise-access-control/README.md
 docs/architecture/overview.md
 docs/control-plane/device-registry.md
