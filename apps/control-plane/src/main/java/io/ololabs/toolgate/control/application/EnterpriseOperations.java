@@ -19,6 +19,9 @@ public final class EnterpriseOperations {
     private volatile ClientCheckInPolicy checkIn=ClientCheckInPolicy.configure(null,null,null);
     /** The running check-in policy decides which devices are online for placement. */
     public EnterpriseOperations checkInPolicy(ClientCheckInPolicy value){checkIn=java.util.Objects.requireNonNull(value);return this;}
+    private volatile String userCredentialIssuer;
+    /** Accept Gateway {@code HUMAN} contexts verified from user credentials of this issuer (M3.4); null refuses all. */
+    public EnterpriseOperations userCredentialIssuer(String issuer){userCredentialIssuer=issuer==null||issuer.isBlank()?null:Ids.valid(issuer);return this;}
     public EnterpriseOperations(Store store,Codec codec,EffectSigner signer,Clock clock,String issuer,String audience,long lifetime,int capacity){
         if(lifetime<1000||lifetime>300000||capacity<1||capacity>10000)throw new IllegalArgumentException("Invalid operation limits");
         this.store=store;this.codec=codec;this.signer=signer;this.clock=clock;this.issuer=Ids.valid(issuer);this.audience=Ids.valid(audience);this.lifetime=lifetime;this.capacity=capacity;
@@ -62,7 +65,12 @@ public final class EnterpriseOperations {
             for(var review:approval.reviews())if(review.decision()==EnterpriseReviewDecision.APPROVE)reviewer(tx,review.reviewerUserId(),i,review.obligationId(),now);
         }
     }
-    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==RequestMode.HUMAN)throw ManagementAccess.denied();return submitVerified(actor,request,null);}
+    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==RequestMode.HUMAN&&!gatewayUser(request.context()))throw ManagementAccess.denied();return submitVerified(actor,request,null);}
+    /** A Gateway HUMAN context exists only for a verified user credential: JWT kind, the configured issuer, a credential digest,
+     *  and no agent or workload. The evaluator then requires the user enabled and the identity binding at this session epoch. */
+    private boolean gatewayUser(io.ololabs.toolgate.contracts.v2.RequestContext c){String trusted=userCredentialIssuer;
+        return trusted!=null&&c.credentialKind()==io.ololabs.toolgate.contracts.v2.CredentialKind.JWT&&trusted.equals(c.issuer())&&c.credentialSha256()!=null
+            &&c.userId()!=null&&c.sessionEpoch()!=null&&c.agentId()==null&&c.workloadBindingId()==null&&c.chain().isEmpty();}
     /** A person names the device; it must belong to the execution binding's device group. */
     public Store.Reply submitHuman(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String device){if(actor.userId()==null||device==null||request.context().mode()!=RequestMode.HUMAN||!actor.userId().equals(request.context().userId()))throw ManagementAccess.denied();return submitVerified(actor,request,device);}
     private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){String document=codec.json(request)+(chosen==null?"":"\n"+chosen);
