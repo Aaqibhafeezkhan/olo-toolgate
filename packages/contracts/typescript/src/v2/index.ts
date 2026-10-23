@@ -593,6 +593,11 @@ export interface McpQuarantineReport {
   readonly observedDigest?: string;
   readonly observedServerInfo?: McpServerInfo;
 }
+/** A Tool Host saw notifications/tools/list_changed during a call it holds and asks Control for an immediate refresh of that call's MCP server. Bound to the invocation and its fencing token, like a quarantine report. */
+export interface McpRefreshRequest {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+}
 /** Claims of a scan permit (typ toolgate-mcp-scan-permit+jws), signed in the effect-signing domain. exp - iat is at most 10 s (admission); deadlineUnixMs bounds the whole scan. spkiPins is required for REFRESH. */
 export interface McpScanClaims {
   readonly jti: string;

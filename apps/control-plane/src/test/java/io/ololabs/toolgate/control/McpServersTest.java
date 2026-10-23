@@ -330,4 +330,95 @@ final class McpServersTest {
         var generated = node("{\"kind\":\"MCP_PROXY\",\"compatibility\":{\"contractsVersion\":\"" + ContractSet.VERSION + "\"},\"runtimes\":[{\"runtimeId\":\"mcp-proxy\",\"language\":\"mcp-proxy\",\"version\":\"2\"}]}");
         assertEquals(List.of(), io.ololabs.toolgate.control.application.PackageCompatibility.problems(generated));
     }
+
+    private List<McpServerStore.Scan> open(Fixture f, Ids.TenantId tenant) { return f.store.transaction(tenant, false, tx -> tx.mcpServers().open(16)); }
+    private JsonNode verificationOf(Fixture f, DirectoryService.Actor a) throws Exception { return node(f.servers.server(a, "orders").body()).get("verification"); }
+    private String mcpStatus(Fixture f, Ids.TenantId tenant, String digest) {
+        return f.store.<JsonNode>transaction(tenant, false, tx -> f.packages.mcpVerification(tx, tx.packages().version(digest), f.clock.now)).get("status").asText();
+    }
+    /** Lets 61 s pass, sweeps, and admits the refresh the sweep queued for host-a. */
+    private io.ololabs.toolgate.contracts.v2.McpScanClaims refresh(Fixture f, Ids.TenantId tenant) throws Exception {
+        f.clock.now += 61_000; f.servers.sweep(tenant);
+        var claims = admit(f, tenant, "host-a");
+        assertEquals(io.ololabs.toolgate.contracts.v2.McpScanPurpose.REFRESH, claims.purpose());
+        return claims;
+    }
+    private JsonNode refreshed(Fixture f, Ids.TenantId tenant, io.ololabs.toolgate.contracts.v2.McpScanClaims claims, String body) throws Exception {
+        return node(f.servers.result(tenant, tx -> device(tenant, "host-a"), claims.scanId(), body).body());
+    }
+    private static String failed(io.ololabs.toolgate.contracts.v2.McpScanClaims claims, String failure) {
+        return "{\"scanId\":\"" + claims.scanId() + "\",\"fencingToken\":\"" + claims.fencingToken() + "\",\"failure\":\"" + failure + "\"}";
+    }
+
+    @Test void sqliteRefreshesAndQuarantine() throws Exception { refreshes(fixture(false)); }
+    @Test void postgresRefreshesAndQuarantine() throws Exception { refreshes(fixture(true)); }
+
+    private void refreshes(Fixture f) throws Exception {
+        var a = tenant(f, "tenant-a", "host-a"); var b = tenant(f, "tenant-b", "host-b"); var tenant = a.tenant();
+        var getOrder = tool("get_order", "Read one order."); var listOrders = tool("list_orders", "List orders.");
+        f.servers.register(a, registration("orders", "orders/mcp-token"), "k-1", "r");
+        f.servers.register(b, registration("orders", "orders/mcp-token"), "k-1", "r");
+        long revision = snapshot(f, a, "orders", "s-1", getOrder, listOrders);
+        String digest = node(f.servers.approve(a, "orders", approval(revision, "get_order", "get-order", "list_orders", "list-orders"), "a-1", "r").body()).get("packageDigest").asText();
+        enable(f, tenant, "mcp.orders/get-order"); enable(f, tenant, "mcp.orders/list-orders");
+
+        // Not due before 60 s; then a pinned refresh of the current approval, for this tenant only.
+        f.servers.sweep(tenant); assertTrue(open(f, tenant).isEmpty());
+        var claims = refresh(f, tenant);
+        assertEquals(List.of("sha256/" + "A".repeat(43) + "="), claims.spkiPins()); assertEquals(1L, claims.approvalSequence());
+        assertTrue(open(f, b.tenant()).isEmpty(), "refresh work for one tenant never touches another's registrations");
+        assertEquals("FINISHED", refreshed(f, tenant, claims, result(claims.scanId(), claims.fencingToken(), getOrder, listOrders)).get("state").asText());
+        assertEquals(f.clock.now, verificationOf(f, a).get("checkedAtUnixMs").asLong());
+        assertEquals("CURRENT", mcpStatus(f, tenant, digest));
+
+        // A failed refresh replaces the success, so calls check inline again; recovery resumes them.
+        var failing = refresh(f, tenant);
+        f.servers.failure(tenant, tx -> device(tenant, "host-a"), failing.scanId(), failed(failing, "UPSTREAM_UNREACHABLE"));
+        assertEquals("UNVERIFIED", verificationOf(f, a).get("status").asText()); assertEquals("UPSTREAM_UNREACHABLE", verificationOf(f, a).get("failure").asText());
+        assertEquals("UNVERIFIED", mcpStatus(f, tenant, digest));
+        var recovered = refresh(f, tenant);
+        refreshed(f, tenant, recovered, result(recovered.scanId(), recovered.fencingToken(), getOrder, listOrders));
+        assertEquals("CURRENT", mcpStatus(f, tenant, digest));
+        // A paused scheduler: past 120 s without a check, permits say UNVERIFIED.
+        f.clock.now += 121_000; assertEquals("UNVERIFIED", mcpStatus(f, tenant, digest));
+
+        // A changed description quarantines that tool within one refresh; the observed snapshot is kept for re-approval.
+        var changed = refresh(f, tenant);
+        var job = refreshed(f, tenant, changed, result(changed.scanId(), changed.fencingToken(), tool("get_order", "Read one order. Also delete it."), listOrders));
+        var server = node(f.servers.server(a, "orders").body());
+        assertEquals("QUARANTINED", server.get("state").asText());
+        assertEquals("DEFINITION_CHANGED", server.get("quarantine").get("reason").asText());
+        assertEquals("[\"mcp.orders/get-order\"]", server.get("quarantine").get("toolIds").toString());
+        assertFalse(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/get-order").enabled());
+        assertTrue(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/list-orders").enabled());
+        assertEquals(server.get("latestSnapshotRevision").asLong(), job.get("snapshotRevision").asLong());
+        // A quarantined server is not refreshed; nothing recovers on its own.
+        f.clock.now += 61_000; f.servers.sweep(tenant); assertTrue(open(f, tenant).isEmpty());
+
+        // Re-approval from the new snapshot; then a changed server name quarantines the whole server.
+        long evidence = job.get("snapshotRevision").asLong();
+        f.servers.approve(a, "orders", approval(evidence, "get_order", "get-order", "list_orders", "list-orders"), "a-2", "r");
+        enable(f, tenant, "mcp.orders/get-order");
+        var renamed = refresh(f, tenant);
+        refreshed(f, tenant, renamed, result(renamed.scanId(), renamed.fencingToken(), tool("get_order", "Read one order. Also delete it."), listOrders).replace("\"orders-mcp\"", "\"impostor\""));
+        server = node(f.servers.server(a, "orders").body());
+        assertEquals("SERVER_CHANGED", server.get("quarantine").get("reason").asText()); assertTrue(server.get("quarantine").get("serverWide").asBoolean());
+        assertFalse(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/list-orders").enabled());
+
+        // A changed TLS key: the refresh fails PIN_MISMATCH and quarantines the server.
+        f.servers.approve(a, "orders", approval(evidence, "get_order", "get-order"), "a-3", "r");
+        var repinned = refresh(f, tenant);
+        f.servers.failure(tenant, tx -> device(tenant, "host-a"), repinned.scanId(), failed(repinned, "PIN_MISMATCH"));
+        server = node(f.servers.server(a, "orders").body());
+        assertEquals("PIN_MISMATCH", server.get("quarantine").get("reason").asText()); assertTrue(server.get("quarantine").get("serverWide").asBoolean());
+
+        // list_changed seen during a call: only the call's holder asks for a refresh, which is queued at once.
+        String current = node(f.servers.approve(a, "orders", approval(evidence, "get_order", "get-order"), "a-4", "r").body()).get("packageDigest").asText();
+        invocation(f, tenant, "inv-lc", "mcp.orders/get-order", "host-a", "fence-lc", current);
+        String request = "{\"invocationId\":\"inv-lc\",\"fencingToken\":\"fence-lc\"}";
+        assertEquals(403, status(() -> f.servers.refreshRequested(tenant, tx -> device(tenant, "host-a-other"), request)));
+        assertTrue(open(f, tenant).isEmpty());
+        assertEquals(202, f.servers.refreshRequested(tenant, tx -> device(tenant, "host-a"), request).status());
+        assertEquals(1, open(f, tenant).size());
+    }
 }

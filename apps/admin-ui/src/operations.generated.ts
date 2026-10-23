@@ -233,6 +233,7 @@ export const operations = {
   deliverMcpScanSecret: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/secret' },
   postMcpScanResult: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/result' },
   postMcpScanFailure: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/failure' },
+  requestMcpRefresh: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-refreshes' },
   reportMcpQuarantine: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-quarantines' },
 } as const;
 export interface DirectoryRecords {

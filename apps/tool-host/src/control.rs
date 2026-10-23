@@ -7,9 +7,9 @@
 
 use crate::config::ControlConfig;
 use olo_toolgate_contracts::v2::{
-    AdmissionResponse, Dispatch, InvocationResultReport, McpQuarantineReport, McpScanClaims,
-    McpScanDispatch, McpScanFailureReport, McpScanResult, PermitConsumed, PermitConsumption,
-    ResultMessage, RunEventAck, RunEventBatch,
+    AdmissionResponse, Dispatch, InvocationResultReport, McpQuarantineReport, McpRefreshRequest,
+    McpScanClaims, McpScanDispatch, McpScanFailureReport, McpScanResult, PermitConsumed,
+    PermitConsumption, ResultMessage, RunEventAck, RunEventBatch,
 };
 use olo_toolgate_contracts::{EnterpriseSecretDelivery, EnterpriseSecretDeliveryRequest};
 use std::time::Duration;
@@ -269,6 +269,14 @@ impl Control {
     pub async fn scan_failure(&self, report: &McpScanFailureReport) -> Result<(), ControlError> {
         let path = format!("{SCANS}/{}/failure", report.scan_id);
         let _: serde_json::Value = self.post_json(&path, report, &[]).await?;
+        Ok(())
+    }
+
+    /// Asks for an immediate refresh of the server of a call this host holds, which sent `list_changed`.
+    pub async fn refresh(&self, request: &McpRefreshRequest) -> Result<(), ControlError> {
+        let _: serde_json::Value = self
+            .post_json("/api/control/v1/tool-hosts/mcp-refreshes", request, &[])
+            .await?;
         Ok(())
     }
 

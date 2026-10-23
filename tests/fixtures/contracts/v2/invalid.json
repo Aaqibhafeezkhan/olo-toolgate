@@ -3160,5 +3160,13 @@
         ]
       }
     }
+  ],
+  "McpRefreshRequest": [
+    {
+      "case": "no evidence",
+      "value": {
+        "fencingToken": "fence-42"
+      }
+    }
   ]
 }

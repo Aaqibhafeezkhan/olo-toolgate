@@ -856,6 +856,25 @@
         "reason"
       ]
     },
+    "McpRefreshRequest": {
+      "type": "object",
+      "description": "A Tool Host saw notifications/tools/list_changed during a call it holds and asks Control for an immediate refresh of that call's MCP server. Bound to the invocation and its fencing token, like a quarantine report.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken"
+      ]
+    },
     "McpPermitVerification": {
       "type": "object",
       "description": "Freshness evidence an invocation permit carries for an MCP_PROXY tool.",

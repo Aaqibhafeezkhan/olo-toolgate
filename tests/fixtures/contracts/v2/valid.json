@@ -2610,5 +2610,9 @@
     "checkedAtUnixMs": 1792000000000
   },
   "ResultProvenance": "UNTRUSTED_UPSTREAM",
-  "McpSecretName": "orders/mcp-token"
+  "McpSecretName": "orders/mcp-token",
+  "McpRefreshRequest": {
+    "invocationId": "inv-42",
+    "fencingToken": "fence-42"
+  }
 }

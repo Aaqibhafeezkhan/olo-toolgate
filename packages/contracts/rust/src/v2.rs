@@ -1140,6 +1140,13 @@ pub struct McpQuarantineReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observed_server_info: Option<McpServerInfo>,
 }
+/// A Tool Host saw notifications/tools/list_changed during a call it holds and asks Control for an immediate refresh of that call's MCP server. Bound to the invocation and its fencing token, like a quarantine report.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpRefreshRequest {
+    pub invocation_id: String,
+    pub fencing_token: String,
+}
 /// Claims of a scan permit (typ toolgate-mcp-scan-permit+jws), signed in the effect-signing domain. exp - iat is at most 10 s (admission); deadlineUnixMs bounds the whole scan. spkiPins is required for REFRESH.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

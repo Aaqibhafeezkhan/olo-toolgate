@@ -679,3 +679,28 @@ fn a_generated_mcp_proxy_package_passes_the_tool_host_package_rules() {
         "MCP_PROXY descriptors are generation 1"
     );
 }
+
+#[tokio::test]
+async fn a_list_changed_notification_during_a_call_is_noticed() {
+    let upstream = serve(Script {
+        sse: true,
+        ..Script::default()
+    });
+    let doc = document(&upstream, false, vec![upstream.pin.clone()]);
+    let input = json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]});
+    let (outcome, list_changed) = tool_host::mcp_call::execute_observed(Call {
+        document: &doc,
+        tool_id: "mcp.orders/get-order",
+        input_schema: &input,
+        output_schema: None,
+        arguments: json!({"id":"7"}),
+        verification: Some(&verification(now())),
+        now_ms: now(),
+        secret: "s3cret".into(),
+        allow_loopback: true,
+        deadline: Instant::now() + Duration::from_secs(20),
+    })
+    .await;
+    assert!(matches!(outcome, Outcome::Answered(_)));
+    assert!(list_changed);
+}

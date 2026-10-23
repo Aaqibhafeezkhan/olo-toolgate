@@ -8987,6 +8987,30 @@ paths:
           description: Expired, already reported or stale
         '503':
           description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-refreshes:
+    post:
+      operationId: requestMcpRefresh
+      security:
+      - deviceCertificate: []
+      description: The holder of one MCP_PROXY invocation saw notifications/tools/list_changed and asks for an immediate refresh
+        of that call's server. Control queues one unless a scan of it is already open.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpRefreshRequest
+      responses:
+        '202':
+          description: Accepted; a refresh is queued or already open
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the invocation's lease holder, or not an MCP_PROXY call
+        '503':
+          description: Dependency unavailable
   /api/control/v1/tool-hosts/mcp-quarantines:
     post:
       operationId: reportMcpQuarantine

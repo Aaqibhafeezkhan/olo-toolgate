@@ -51,6 +51,8 @@ public class McpServerResource {
     }
     @POST @Path("tool-hosts/mcp-scans/{id}/result") @Consumes("application/json")
     public Response result(@PathParam("id")String id,String document){return reply(servers.result(request.tenant(),device(),id,PackageResource.large(document)));}
+    @POST @Path("tool-hosts/mcp-refreshes") @Consumes("application/json")
+    public Response refresh(String document){return reply(servers.refreshRequested(request.tenant(),device(),body(document)));}
     @POST @Path("tool-hosts/mcp-quarantines") @Consumes("application/json")
     public Response quarantine(String document){return reply(servers.quarantine(request.tenant(),device(),body(document)));}
     @POST @Path("tool-hosts/mcp-scans/{id}/failure") @Consumes("application/json")

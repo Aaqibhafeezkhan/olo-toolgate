@@ -126,6 +126,17 @@ pub fn fresh(
 }
 
 pub async fn execute(call: Call<'_>) -> Outcome {
+    execute_observed(call).await.0
+}
+
+/// [`execute`], and whether the upstream sent `notifications/tools/list_changed` during the call.
+pub async fn execute_observed(call: Call<'_>) -> (Outcome, bool) {
+    let mut list_changed = false;
+    let outcome = attempt(call, &mut list_changed).await;
+    (outcome, list_changed)
+}
+
+async fn attempt(call: Call<'_>, list_changed: &mut bool) -> Outcome {
     let document = call.document;
     let Some(approved) = document.tools.iter().find(|t| t.tool_id == call.tool_id) else {
         return refused(
@@ -218,7 +229,9 @@ pub async fn execute(call: Call<'_>) -> Outcome {
             );
         }
     }
-    let result = match session.call(&approved.upstream_name, call.arguments).await {
+    let called = session.call(&approved.upstream_name, call.arguments).await;
+    *list_changed = session.list_changed;
+    let result = match called {
         Ok(result) => result,
         Err(Failure::Upstream(message)) => {
             return Outcome::Failed {
@@ -307,7 +320,7 @@ pub(crate) async fn run(
         .clone()
         .map(|m| Value::Object(m.into_iter().collect()));
     let now = crate::now_ms();
-    let outcome = execute(Call {
+    let (outcome, list_changed) = execute_observed(Call {
         document,
         tool_id: &claims.target.tool_id,
         input_schema: &input_schema,
@@ -321,6 +334,15 @@ pub(crate) async fn run(
             + std::time::Duration::from_millis(deadline_ms.saturating_sub(now)),
     })
     .await;
+    if list_changed {
+        let request = olo_toolgate_contracts::v2::McpRefreshRequest {
+            invocation_id: id.clone(),
+            fencing_token: fencing_token.into(),
+        };
+        if let Err(e) = control.refresh(&request).await {
+            tracing::warn!(invocation_id = %id, error = %e, "Control did not take the refresh request");
+        }
+    }
     let quarantine = match &outcome {
         Outcome::Refused { quarantine, .. } | Outcome::Failed { quarantine, .. } => {
             quarantine.clone()

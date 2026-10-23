@@ -24,6 +24,8 @@ public final class McpServers {
     public static final int MAX_SERVERS = 32, MAX_SNAPSHOTS = 16, MAX_OPEN_SCANS = 2;
     /** The signed scan deadline, the admission window of a scan permit, and how long a scan may wait for its host. */
     public static final long SCAN_MS = 30_000, PERMIT_MS = 10_000, QUEUED_MS = 60_000;
+    /** How often an approved server is refreshed at most (plan §7, Refresh). */
+    public static final long REFRESH_MS = 60_000;
     // Plan §5 limits, enforced again on receipt.
     static final int MAX_TOOLS = 256, MAX_NAME = 128, MAX_DESCRIPTION = 8192, MAX_SCHEMA_BYTES = 65536, MAX_DEPTH = 32, MAX_MEMBERS = 256, MAX_ENUM = 256;
     static final int MAX_SCAN_BYTES = 4 << 20;
@@ -380,22 +382,115 @@ public final class McpServers {
             ArrayNode tools;
             try { tools = definitions(result); }
             catch (Limit exceeded) { return reply(200, finish(tx, scan, "FAILED", exceeded.failure, now, actor)); }
-            var servers = tx.mcpServers(); var server = servers.server(scan.row().slug());
+            var server = tx.mcpServers().server(scan.row().slug());
             var registration = (ObjectNode) node(server.document());
-            long revision = registration.path("latestSnapshotRevision").asLong(0) + 1;
-            var snapshot = JSON.objectNode().put("revision", revision).put("scanId", scanId);
-            snapshot.set("serverInfo", node(codec.json(result.serverInfo())));
-            snapshot.put("protocolVersion", result.protocolVersion()).put("spkiPin", result.spkiPin()).put("scannedAtUnixMs", now);
-            snapshot.set("tools", tools);
-            String document = codec.json(codec.model(snapshot.toString(), McpSnapshot.class));
-            servers.saveSnapshot(new McpServerStore.Snapshot(server.slug(), revision, document));
-            prune(tx, server.slug(), revision);
+            if (scan.job().get("purpose").asText().equals("REFRESH")) return reply(200, refreshed(tx, scan, registration, result, tools, now, actor));
+            long revision = snapshot(tx, registration, scanId, result, tools, now);
             scan.job().put("snapshotRevision", revision);
-            registration.put("latestSnapshotRevision", revision);
             if (Set.of("REGISTERED", "SCANNING").contains(registration.get("state").asText())) registration.put("state", "SCANNED");
             save(tx, registration);
-            tx.audit(actor, "MCP_SCAN_FINISHED", "mcp-server:" + server.slug(), revision, scanId, DirectoryService.digest(document));
+            tx.audit(actor, "MCP_SCAN_FINISHED", "mcp-server:" + server.slug(), revision, scanId, DirectoryService.digest(scanId));
             return reply(200, finish(tx, scan, "FINISHED", null, now, null));
+        });
+    }
+
+    /** Stores an immutable snapshot of a scan result as the registration's latest; returns its revision. */
+    private long snapshot(Store.Session tx, ObjectNode registration, String scanId, McpScanResult result, ArrayNode tools, long now) {
+        var servers = tx.mcpServers(); String slug = registration.get("slug").asText();
+        long revision = registration.path("latestSnapshotRevision").asLong(0) + 1;
+        var snapshot = JSON.objectNode().put("revision", revision).put("scanId", scanId);
+        snapshot.set("serverInfo", node(codec.json(result.serverInfo())));
+        snapshot.put("protocolVersion", result.protocolVersion()).put("spkiPin", result.spkiPin()).put("scannedAtUnixMs", now);
+        snapshot.set("tools", tools);
+        servers.saveSnapshot(new McpServerStore.Snapshot(slug, revision, codec.json(codec.model(snapshot.toString(), McpSnapshot.class))));
+        prune(tx, slug, revision);
+        registration.put("latestSnapshotRevision", revision);
+        return revision;
+    }
+
+    /** A refresh outcome replaces the verification record (plan §7): a match makes the approval CURRENT now; a changed
+     *  server name quarantines the server, a missing or changed tool quarantines that tool, with the observed snapshot
+     *  kept as evidence for re-approval; a changed server version only asks for review. A refresh of an approval that
+     *  is no longer current proves nothing and changes nothing. */
+    private ObjectNode refreshed(Store.Session tx, Lease scan, ObjectNode registration, McpScanResult result, ArrayNode tools, long now, String actor) {
+        var servers = tx.mcpServers(); String slug = registration.get("slug").asText();
+        long sequence = scan.job().path("approvalSequence").asLong(-1);
+        if (registration.path("approvalSequence").asLong(0) != sequence || !registration.get("state").asText().equals("APPROVED")) {
+            tx.audit(actor, "MCP_REFRESH_STALE", "mcp-server:" + slug, sequence, scan.row().scanId(), DirectoryService.digest(scan.row().scanId()));
+            return finish(tx, scan, "FINISHED", null, now, null);
+        }
+        var approval = node(servers.approval(slug, sequence).document());
+        var approvedSnapshot = node(servers.snapshot(slug, approval.get("snapshotRevision").asLong()).document());
+        var observed = new HashMap<String, String>();
+        for (var tool : tools) observed.put(tool.get("tool").get("name").asText(), tool.get("definitionDigest").asText());
+        String reason = null; boolean serverWide = false; var affected = new ArrayList<String>(); var all = new ArrayList<String>();
+        for (var tool : approval.get("tools")) {
+            all.add(tool.get("toolId").asText());
+            String digest = observed.get(tool.get("upstreamName").asText());
+            if (digest != null && digest.equals(tool.get("definitionDigest").asText())) continue;
+            affected.add(tool.get("toolId").asText());
+            if (reason == null || digest == null) reason = digest == null ? "TOOL_MISSING" : "DEFINITION_CHANGED";
+        }
+        if (!result.serverInfo().name().equals(approvedSnapshot.get("serverInfo").get("name").asText())) { reason = "SERVER_CHANGED"; serverWide = true; affected = all; }
+        if (reason != null) {
+            scan.job().put("snapshotRevision", snapshot(tx, registration, scan.row().scanId(), result, tools, now));
+            save(tx, registration);
+            quarantineIn(tx, slug, reason, scan.row().scanId(), affected, serverWide, now, actor);
+            return finish(tx, scan, "FINISHED", null, now, null);
+        }
+        if (!result.serverInfo().version().equals(approvedSnapshot.get("serverInfo").get("version").asText()))
+            tx.audit(actor, "MCP_SERVER_REVIEW_REQUESTED", "mcp-server:" + slug, sequence, scan.row().scanId(), DirectoryService.digest(result.serverInfo().version()));
+        registration.putObject("verification").put("status", "CURRENT").put("approvalSequence", sequence).put("checkedAtUnixMs", now);
+        save(tx, registration);
+        return finish(tx, scan, "FINISHED", null, now, null);
+    }
+
+    /** Disables the affected tools in one audited directory change and marks the registration QUARANTINED; a refresh
+     *  of it can no longer make the approval CURRENT. Recovery is a re-scan and re-approval. */
+    private void quarantineIn(Store.Session tx, String slug, String reason, String evidence, List<String> toolIds, boolean serverWide, long now, String actor) {
+        var before = tx.load(); var entries = new HashMap<>(before.entries());
+        for (var toolId : toolIds) {
+            var entry = entries.get(Kind.TOOL.id(toolId));
+            if (entry == null || !entry.enabled()) continue;
+            var tool = (ObjectNode) node(entry.document());
+            entries.put(entry.id(), codec.entry(Kind.TOOL, codec.json(tool.put("enabled", false).put("revision", tool.get("revision").asLong() + 1))));
+        }
+        if (!entries.equals(before.entries())) tx.save(before, new io.ololabs.toolgate.control.domain.Directory(before.revision() + 1, entries));
+        var registration = (ObjectNode) node(tx.mcpServers().server(slug).document());
+        long sequence = registration.path("approvalSequence").asLong();
+        var quarantine = registration.putObject("quarantine").put("reason", reason).put("evidenceId", evidence);
+        var ids = quarantine.putArray("toolIds"); toolIds.forEach(ids::add);
+        quarantine.put("serverWide", serverWide).put("atUnixMs", now).put("approvalSequence", sequence);
+        registration.put("state", "QUARANTINED");
+        save(tx, registration);
+        tx.audit(actor, "MCP_SERVER_QUARANTINED", "mcp-server:" + slug, sequence, evidence, DirectoryService.digest(reason + "\n" + String.join(",", toolIds)));
+    }
+
+    /** Queues a pinned REFRESH of the current approval of an approved server. */
+    private void refresh(Store.Session tx, McpServerStore.Server server, String actor, String requestId) {
+        var registration = node(server.document()); long sequence = registration.path("approvalSequence").asLong();
+        var pins = new ArrayList<String>();
+        node(tx.mcpServers().approval(server.slug(), sequence).document()).get("spkiPins").forEach(pin -> pins.add(pin.asText()));
+        queue(tx, server, binding(tx, registration.get("bindingId").asText()), McpScanPurpose.REFRESH, pins, sequence, actor, requestId);
+    }
+
+    /** The holder of an MCP_PROXY call saw notifications/tools/list_changed: refresh that server now, unless a scan of
+     *  it is open. */
+    public Store.Reply refreshRequested(Ids.TenantId tenant, Function<Store.Session, EndpointDeviceRecord> device, String body) {
+        var request = codec.model(body, McpRefreshRequest.class);
+        return store.transaction(tenant, true, tx -> {
+            var d = host(tx, device);
+            var invocation = operations.invocationIn(tx, request.invocationId()); var evaluation = invocation.evaluation();
+            if (!d.deviceId().equals(evaluation.context().deviceId()) || invocation.reservedNonce() == null
+                || !java.security.MessageDigest.isEqual(invocation.reservedNonce().getBytes(java.nio.charset.StandardCharsets.UTF_8), request.fencingToken().getBytes(java.nio.charset.StandardCharsets.UTF_8))) throw ManagementAccess.denied();
+            String toolId = evaluation.toolId();
+            if (!toolId.startsWith("mcp.") || toolId.indexOf('/') < 0) throw ManagementAccess.denied();
+            var server = tx.mcpServers().server(toolId.substring(4, toolId.indexOf('/')));
+            if (server != null && node(server.document()).get("state").asText().equals("APPROVED") && tx.mcpServers().scans(server.slug(), OPEN).isEmpty()) {
+                try { refresh(tx, server, DirectoryService.digest(d.deviceId()), request.invocationId()); }
+                catch (Failure busy) { if (busy.status() != 409) throw busy; }
+            }
+            return new Store.Reply(202, "{}", 0);
         });
     }
 
@@ -409,7 +504,19 @@ public final class McpServers {
             if (!Set.of("CLAIMED", "ADMITTED").contains(scan.row().state())) throw Failure.conflict();
             if (!report.fencingToken().equals(scan.lease().get("fencingToken").asText())) throw ManagementAccess.denied();
             if (now > scan.row().deadline()) throw Failure.conflict();
-            return reply(200, finish(tx, scan, "FAILED", report.failure().name(), now, DirectoryService.digest(d.deviceId())));
+            String actor = DirectoryService.digest(d.deviceId());
+            var job = finish(tx, scan, "FAILED", report.failure().name(), now, actor);
+            if (report.failure() == McpCheckFailure.PIN_MISMATCH && job.get("purpose").asText().equals("REFRESH")) {
+                // The approved TLS key changed: the server is quarantined, before any credential was sent.
+                var server = tx.mcpServers().server(scan.row().slug()); var registration = server == null ? null : node(server.document());
+                long sequence = job.path("approvalSequence").asLong(-1);
+                if (registration != null && registration.get("state").asText().equals("APPROVED") && registration.path("approvalSequence").asLong() == sequence) {
+                    var toolIds = new ArrayList<String>();
+                    node(tx.mcpServers().approval(scan.row().slug(), sequence).document()).get("tools").forEach(t -> toolIds.add(t.get("toolId").asText()));
+                    quarantineIn(tx, scan.row().slug(), "PIN_MISMATCH", scanId, toolIds, true, now, actor);
+                }
+            }
+            return reply(200, job);
         });
     }
 
@@ -451,20 +558,7 @@ public final class McpServers {
                 tx.audit(actor, "MCP_QUARANTINE_STALE", "mcp-server:" + slug, server.revision(), evidence, DirectoryService.digest(body));
                 return new Store.Reply(200, server.document(), 0);
             }
-            var before = tx.load(); var entries = new HashMap<>(before.entries());
-            for (var toolId : toolIds) {
-                var entry = entries.get(Kind.TOOL.id(toolId));
-                if (entry == null || !entry.enabled()) continue;
-                var tool = (ObjectNode) node(entry.document());
-                entries.put(entry.id(), codec.entry(Kind.TOOL, codec.json(tool.put("enabled", false).put("revision", tool.get("revision").asLong() + 1))));
-            }
-            tx.save(before, new io.ololabs.toolgate.control.domain.Directory(before.revision() + 1, entries));
-            var quarantine = registration.putObject("quarantine").put("reason", report.reason().name()).put("evidenceId", evidence);
-            var ids = quarantine.putArray("toolIds"); toolIds.forEach(ids::add);
-            quarantine.put("serverWide", serverWide).put("atUnixMs", now).put("approvalSequence", registration.path("approvalSequence").asLong());
-            registration.put("state", "QUARANTINED");
-            save(tx, registration);
-            tx.audit(actor, "MCP_SERVER_QUARANTINED", "mcp-server:" + slug, registration.get("revision").asLong(), evidence, DirectoryService.digest(body));
+            quarantineIn(tx, slug, report.reason().name(), evidence, toolIds, serverWide, now, actor);
             return new Store.Reply(200, tx.mcpServers().server(slug).document(), 0);
         });
     }
@@ -522,6 +616,15 @@ public final class McpServers {
                 expired++;
             }
             tx.mcpServers().prune(now - 86_400_000L);
+            // Refreshes: each approved server at most every 60 s, its last check (success or failure) the clock.
+            for (var server : tx.mcpServers().servers(MAX_SERVERS)) {
+                var registration = node(server.document());
+                if (!registration.get("state").asText().equals("APPROVED")) continue;
+                if (now - registration.path("verification").path("checkedAtUnixMs").asLong(0) < REFRESH_MS) continue;
+                if (!tx.mcpServers().scans(server.slug(), OPEN).isEmpty()) continue;
+                try { refresh(tx, server, "mcp-refresh-scheduler", "refresh-" + now); }
+                catch (Failure busy) { if (busy.status() != 409) throw busy; }
+            }
             return expired;
         });
     }
