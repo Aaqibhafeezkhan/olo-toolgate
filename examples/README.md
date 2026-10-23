@@ -2,6 +2,8 @@
 
 Safe example packages, policies and integrations. Never include real credentials.
 
+- [Govern an existing MCP server](mcp-proxy/README.md): register a scriptable MCP server, scan it
+  from a Tool Host, approve two tools into a tenant package, call them, and see a change quarantined.
 - [Python Hello World](../core-mcp/hello-world-python/README.md): the same
   server/device greetings as Java Hello World, packaged and invoked through the
   ordinary ToolGate flow by changing only the tool name.

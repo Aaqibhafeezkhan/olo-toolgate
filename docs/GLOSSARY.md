@@ -10,6 +10,12 @@
 | Marketplace | Community package registry and publishing platform |
 | Resource | Real target of an action: file, repo, table, service, namespace, account, etc. |
 | Resource Extractor | Converts tool arguments into normalized resource context |
+| MCP proxy | Governance of an existing MCP server through a generated, tenant-owned `MCP_PROXY` package ([ADR 030](adr/030-mcp-proxy-packages.md)) |
+| MCP server registration | A tenant's record of one upstream MCP server: URL, execution binding (its pool), vault secret and strict mode |
+| Snapshot | An immutable scan result of an MCP server, with a definition digest per tool |
+| Approval sequence | The per-registration counter of MCP tool approvals; package version `1.0.<sequence>` |
+| Scan permit | A Control-signed, single-use admission for one MCP scan with a signed execution deadline |
+| Quarantine | Disabling the tools of an MCP server that changed after approval, until it is re-approved |
 | Permit | Short-lived signed authorization for one protected execution |
 | Desired State | What the Control Plane wants installed/configured on a client |
 | Reported State | What the client reports is actually installed and healthy |

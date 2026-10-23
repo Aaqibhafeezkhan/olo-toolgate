@@ -1,8 +1,8 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # MCP proxy: govern existing MCP servers through ToolGate
 
-Plan for [olo-labs/olo-toolgate#129](https://github.com/olo-labs/olo-toolgate/issues/129). Status: in progress
-(M1 done; see §10). Revision 5 (22 October 2026):
+Plan for [olo-labs/olo-toolgate#129](https://github.com/olo-labs/olo-toolgate/issues/129). Status: implemented
+through M7, M8 partial (see §10). Revision 5 (22 October 2026):
 
 - **Revision 2** adopted the multitenancy model merged in #176 ([ADR 029](../../adr/029-tenant-ownership-and-trust-boundaries.md)).
 - **Revision 3** resolves the first review: admission for native execution and scans, quarantine binding, pool
@@ -464,6 +464,11 @@ T2 digest ────┼─> T3 Control register/scan ─> T4 approve/package/q
   targeting, result provenance, streaming egress`). The milestone table in this section is updated in the same
   commit: its Status column moves to **Done**, and the next milestone's commit adds that commit's id (a commit cannot
   name itself).
+- **Open after M8 (composed checks):** the composed Quickstart check and the two-tenant `tools/tenancy/check.py`
+  scenario need images built from this branch, and an upstream certificate the Tool Host's system roots trust for the
+  unpinned DISCOVER scan (for example, issued by the Quickstart local trust root). Until they run in CI, the same
+  behaviour is covered by Control tests on SQLite and PostgreSQL (registration, scans, approvals, packages, refresh,
+  quarantine and cross-tenant RLS), Tool Host tests against a real TLS upstream, and Gateway and console tests.
 - **Staying current:** before each milestone starts, `main` is merged into `feature/mcp-proxy`, so conflicts surface
   early and the multitenancy and other main changes are always under test.
 - **One pull request** from `feature/mcp-proxy` to `main` opens once M1 lands (as a draft, so CI runs on every
@@ -486,8 +491,8 @@ Effort is the estimated share of the whole feature (code, tests and docs), from 
 | M4 Approve and package | T4 | Approval sequence, generated `MCP_PROXY` packages through the real pipeline, retiring omitted tools, evidence-bound quarantine, recovery | 12% | 65% | Done (e66a1daf) |
 | M5 Proxy executor | T5 | Tool Host `mcp-proxy` runtime, governed calls with validation and provenance, the scan worker | 14% | 79% | Done (72521034) |
 | M6 Freshness | T6 | Scheduled refreshes, verification status in permits, strict mode, pin enforcement | 8% | 87% | Done (84a3ea9b) |
-| M7 Console | T7 | The MCP servers page | 7% | 94% | Done |
-| M8 Proof and docs | T8b | Composed and two-tenant end-to-end checks, operator guide, ADR, example | 6% | 100% | Planned |
+| M7 Console | T7 | The MCP servers page | 7% | 94% | Done (615c6f30) |
+| M8 Proof and docs | T8b | Composed and two-tenant end-to-end checks, operator guide, ADR, example | 6% | 100% | Partial: docs, ADR 030, example and isolation inventory done; composed Quickstart and two-tenant end-to-end checks open (see below) |
 
 | Task | Effort | Milestone |
 |---|---|---|
