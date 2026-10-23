@@ -25,9 +25,12 @@ hyper-util.workspace = true
 ring.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
+x509-parser.workspace = true
 
 [dev-dependencies]
 tower.workspace = true
+rsa = { version = "0.9.10", features = ["sha2"] }
+rand = "0.8.5"
 
 [[bench]]
 name = "authorization"
