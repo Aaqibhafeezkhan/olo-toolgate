@@ -79,6 +79,37 @@ class QuickstartBootstrapTests(unittest.TestCase):
             self.assertEqual(self.prepare(), first)
         self.assertEqual([path.read_bytes() for path in first[1:]], originals)
 
+    def test_tenant_display_name_is_separate_from_uuid_and_persisted(self):
+        tenant = '10000000-0000-4000-8000-000000000001'
+        initialize = self.data/'initialize.json'
+        initialize.write_text(json.dumps(dict(formatVersion=2, tenantName='Demo organization')), encoding='utf-8')
+        with patch.dict(os.environ, {'TOOLGATE_INITIALIZE_FILE': str(initialize)}, clear=True):
+            packet, _ = bootstrap.prepare(self.data, tenant, 'https://quickstart.local', lambda _: self.key, self.atomic)
+            self.assertEqual(tenant, json.loads(packet.read_text())['authorization']['tenantId'])
+            self.assertEqual('Demo organization', json.loads((self.data/'state/installation.json').read_text())['tenantName'])
+            initialize.write_text(json.dumps(dict(formatVersion=2, tenantName='Different name')), encoding='utf-8')
+            bootstrap.prepare(self.data, tenant, 'https://quickstart.local', lambda _: self.key, self.atomic)
+            self.assertEqual('Demo organization', json.loads((self.data/'state/installation.json').read_text())['tenantName'])
+
+    def test_invalid_tenant_names_and_mismatched_ids_are_refused(self):
+        initialize = self.data/'initialize.json'
+        for name in ('', '   ', 12, None, 'x'*257, '\U0001f600'*129):
+            with self.subTest(name=name), patch.dict(os.environ, {'TOOLGATE_INITIALIZE_FILE': str(initialize)}, clear=True):
+                initialize.write_text(json.dumps(dict(formatVersion=2, tenantName=name)), encoding='utf-8')
+                with self.assertRaisesRegex(bootstrap.Refused, 'display name'):
+                    self.prepare()
+        initialize.write_text(json.dumps(dict(formatVersion=2, tenantId='wrong')), encoding='utf-8')
+        with patch.dict(os.environ, {'TOOLGATE_INITIALIZE_FILE': str(initialize)}, clear=True):
+            with self.assertRaisesRegex(bootstrap.Refused, 'installation UUID'):
+                self.prepare()
+
+    def test_tenant_name_environment_override_and_default(self):
+        for environment, expected in (({}, 'Quickstart'), ({'TOOLGATE_TENANT_NAME': 'My organization'}, 'My organization')):
+            with self.subTest(environment=environment), patch.dict(os.environ, environment, clear=True):
+                snapshot = {name: [] for name in bootstrap.COLLECTIONS}
+                installed = bootstrap.initialize(snapshot, 'uuid', 'issuer', 0)
+                self.assertEqual(expected, installed['tenantName'])
+
     def test_first_admin_has_default_email_and_super_admin_role(self):
         with patch.dict(os.environ, {}, clear=True):
             path, _ = self.prepare()

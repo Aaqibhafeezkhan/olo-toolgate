@@ -14,6 +14,17 @@ async function connect() {
   fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}}); fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'})); await screen.findByRole('navigation'); }
 
 describe('Management shell states', () => {
+  it('shows the tenant display name and UUID separately', async () => {
+    const tenantId='10000000-0000-4000-8000-000000000001';
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(input:RequestInfo|URL)=>String(input).endsWith('/admin-session')
+      ? new Response(JSON.stringify({role:'ADMINISTRATOR',permissions:allPermissions,tenantId,tenantName:'Demo organization'}))
+      : response()));
+    render(<App/>);
+    fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}});
+    fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
+    expect(await screen.findByText('Tenant: Demo organization')).toBeTruthy();
+    expect(screen.getByText(`Tenant ID: ${tenantId}`)).toBeTruthy();
+  });
   it('shows the version and build number on the About page', async () => {
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();

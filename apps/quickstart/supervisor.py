@@ -652,7 +652,7 @@ def configure():
                 'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS': env.get('TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS') or '120000',
                 'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': str(trust('device-ca.key')), 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': str(trust('device-ca.crt')),
                 'TOOLGATE_DEFAULT_TENANT_ALIAS': os.environ.get('TOOLGATE_DEFAULT_TENANT_ALIAS','quickstart'), 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
-                'TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION': 'Quickstart',
+                'TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION': installation().get('tenantName', 'Quickstart'),
                 'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443'),
                 'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL', 'https://localhost:8443'),
                 'TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY': env.get('TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY','/opt/toolgate/client-downloads')}
@@ -825,7 +825,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if len(raw)!=length: raise ValueError()
             path = urllib.parse.urlsplit(self.path).path
             if path=='/api/quickstart/v1/status' and self.command=='GET':
-                return self.reply(200, {'mode': 'Quickstart', 'tenant': TENANT, 'nonHa': True, 'ready': self.server.ready.is_set(), 'version': Path('/opt/quickstart/VERSION').read_text().strip(), 'passwordRequired': not password_disabled(), 'database': database_mode(), 'authority': 'online'})
+                return self.reply(200, {'mode': 'Quickstart', 'tenant': TENANT, 'tenantId': TENANT, 'tenantName': installation().get('tenantName', 'Quickstart'), 'nonHa': True, 'ready': self.server.ready.is_set(), 'version': Path('/opt/quickstart/VERSION').read_text().strip(), 'passwordRequired': not password_disabled(), 'database': database_mode(), 'authority': 'online'})
             if path=='/api/quickstart/v1/login-hints' and self.command=='GET': return self.reply(200, login_hints())
             if claiming:
                 saved = strict((DATA/'credentials.json').read_bytes()) if (DATA/'credentials.json').exists() else {}

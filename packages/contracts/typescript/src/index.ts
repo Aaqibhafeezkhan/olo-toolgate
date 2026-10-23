@@ -8,6 +8,7 @@ export interface AdminSession {
   readonly role: UserRole;
   readonly bootstrapAdminUserId?: string;
   readonly tenantId?: string;
+  readonly tenantName?: string;
 }
 /** Immutable artifact identity; digest must be verified by consumers. */
 export interface ArtifactDescriptor {
