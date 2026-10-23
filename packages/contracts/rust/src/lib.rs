@@ -418,6 +418,36 @@ pub struct ControlAudit {
     pub request_id: String,
     pub occurred_at: String,
     pub request_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<ControlAuditEvidence>,
+}
+/// Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlAuditEvidence {
+    pub invocation_id: String,
+    pub mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation_chain: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workload_binding_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_kind: Option<String>,
+    pub tool_id: String,
+    pub operation: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resources: Option<Vec<String>>,
+    pub resource_count: u64,
+    pub resources_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision: Option<Decision>,
+    pub state: String,
+    pub authorization_epoch: u64,
+    pub policy_revision: u64,
 }
 /// Cursor page of audit mutation metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

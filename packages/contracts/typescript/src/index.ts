@@ -270,6 +270,26 @@ export interface ControlAudit {
   readonly requestId: string;
   readonly occurredAt: string;
   readonly requestDigest: string;
+  readonly evidence?: ControlAuditEvidence;
+}
+/** Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials. */
+export interface ControlAuditEvidence {
+  readonly invocationId: string;
+  readonly mode: string;
+  readonly subjectUserId?: string;
+  readonly actorAgentId?: string;
+  readonly delegationChain?: ReadonlyArray<string>;
+  readonly workloadBindingId?: string;
+  readonly credentialKind?: string;
+  readonly toolId: string;
+  readonly operation: string;
+  readonly resources?: ReadonlyArray<string>;
+  readonly resourceCount: number;
+  readonly resourcesDigest: string;
+  readonly decision?: Decision;
+  readonly state: string;
+  readonly authorizationEpoch: number;
+  readonly policyRevision: number;
 }
 /** Cursor page of audit mutation metadata. */
 export interface ControlAuditPage {

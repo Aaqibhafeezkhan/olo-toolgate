@@ -93,6 +93,31 @@ def files(*, context: ToolContext) -> Out:
 '''
 
 
+PRINCIPAL_SOURCE = '''
+from dataclasses import dataclass
+from typing import List
+from toolgate import *
+tool_package(id="acme.principal", name="Principal", publisher="Acme")
+
+@dataclass
+class Who:
+    user: str
+    tenant: str
+    agent: str
+    operation: str
+    chain: List[str]
+    resources: List[str]
+    claims: List[str]
+
+@server_tool(name="whoami", title="Who", description="Reports the verified principal of a user-scoped call")
+def whoami(*, context: ToolContext) -> Who:
+    inv = context.invocation
+    user = inv.require_user()
+    return Who(user, inv.tenant_id, inv.agent_id or "", inv.operation or "", inv.delegation_chain,
+               [r.kind + ":" + r.locator for r in inv.resources], sorted(context.jwt.identity or {}))
+'''
+
+
 def compiled(source=SOURCE):
     result = compile_package({"__init__": source})
     if not result.success:
@@ -297,6 +322,30 @@ def charge(key: Annotated[str, Param(description="Key")], amount: Annotated[int,
                 self.assertEqual({"value": "async"}, result["result"]["structuredContent"])
             finally:
                 connection.close()
+
+    def test_governed_principal_comes_from_the_host_and_never_from_claims(self):
+        build = compiled(PRINCIPAL_SOURCE)
+        principal = {"tenantId": "10000000-0000-4000-8000-000000000001", "mode": "DELEGATED", "userId": "user-42",
+                     "agentId": "agent-planner", "chain": ["agent-router"], "operation": "read",
+                     "resources": [{"kind": "CUSTOM", "locator": "olo://memory/user-42"}]}
+        inp = {"protocolVersion": 2, "invocationId": "who-1", "deadlineUnixMs": int(time.time()*1000)+5000,
+               "toolId": "acme.principal/whoami", "arguments": {}, "claims": {"sub": "u-1", "toolgate": principal}}
+        output = io.BytesIO()
+        self.assertEqual(0, run(io.BytesIO(json.dumps(inp).encode()+b"\n"), output, {}, build))
+        result = json.loads(output.getvalue().splitlines()[-1])["structuredContent"]
+        self.assertEqual({"user": "user-42", "tenant": principal["tenantId"], "agent": "agent-planner", "operation": "read",
+                          "chain": ["agent-router"], "resources": ["CUSTOM:olo://memory/user-42"], "claims": ["sub"]}, result)
+
+    def test_user_scoped_tools_refuse_without_a_verified_user(self):
+        build = compiled(PRINCIPAL_SOURCE)
+        for claims in ({}, {"toolgate": {"tenantId": "10000000-0000-4000-8000-000000000001", "mode": "SERVICE"}}):
+            inp = {"protocolVersion": 2, "invocationId": "who-2", "deadlineUnixMs": int(time.time()*1000)+5000,
+                   "toolId": "acme.principal/whoami", "arguments": {}, "claims": claims}
+            output = io.BytesIO()
+            run(io.BytesIO(json.dumps(inp).encode()+b"\n"), output, {}, build)
+            self.assertEqual("CLAIMS_UNAVAILABLE", json.loads(output.getvalue().splitlines()[-1])["error"]["code"])
+        with ToolHarness(build) as h:
+            self.assertEqual("CLAIMS_UNAVAILABLE", h.call("whoami").error_code)
 
     def test_governed_routes_use_stdio_broker(self):
         inp = {"protocolVersion": 2, "invocationId": "invoke-2", "deadlineUnixMs": int(time.time()*1000)+5000,

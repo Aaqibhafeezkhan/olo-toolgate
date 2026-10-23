@@ -6,7 +6,7 @@ from ._version import SDK_VERSION
 from .context import DeviceFiles
 from .declarations import device_file_access
 from .accessors import declared
-from .context import (CancellationToken, HttpClient, InputRequest, Invocation, Jwt, RawResponse, RouteCall,
+from .context import (CancellationToken, HttpClient, InputRequest, Invocation, Jwt, RawResponse, Resource, RouteCall,
                       TcpConnector, ToolContext, ToolResult, Values)
 from .declarations import (ErrorDecl, Global, JwtClaim, Param, Secret, Variable, client_tool, destination, example,
                            http_auth, http_route, idempotency, reconcile, server_tool, tcp_destination, tool_package,
@@ -20,7 +20,7 @@ __version__ = SDK_VERSION
 
 __all__ = [
     "SDK_VERSION", "declared", "device_file_access", "DeviceFiles",
-    "CancellationToken", "HttpClient", "InputRequest", "Invocation", "Jwt", "RawResponse", "RouteCall",
+    "CancellationToken", "HttpClient", "InputRequest", "Invocation", "Jwt", "RawResponse", "Resource", "RouteCall",
     "TcpConnector", "ToolContext", "ToolResult", "Values",
     "ErrorDecl", "Global", "JwtClaim", "Param", "Secret", "Variable", "client_tool", "destination", "example",
     "http_auth", "http_route", "idempotency", "reconcile", "server_tool", "tcp_destination", "tool_package",

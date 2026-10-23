@@ -82,6 +82,28 @@ class EnterpriseOperationTest {
     }
     @Test void claimedSuperFlagCannotOverrideOperationReviewIndependence(){graph.policy("ask",Decision.ASK);saveGraph();var a=approval(submit("claimed-super"));var owner=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"d".repeat(64),true,true,"alice");assertEquals(403,assertThrows(Failure.class,()->operations.decide(owner,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),"ask",EnterpriseReviewDecision.APPROVE)),"claimed")).status());}
 
+    EnterpriseInvocationRequest delegated(String id,CredentialKind kind,String issuer){var r=request(id,"data/report.txt");
+        var c=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,kind,issuer,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);
+        return new EnterpriseInvocationRequest(c,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey());}
+    /** M3.10: an on-behalf-of binding takes its user only from a verified user credential of the configured issuer. */
+    @Test void onBehalfOfBindingNeedsAVerifiedUserCredential(){
+        graph.remove(Kind.WORKLOAD_BINDING,"workload");graph.workload("workload","agent",RequestMode.DELEGATED,null,null);saveGraph();
+        assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(delegated("static",CredentialKind.STATIC_TOKEN,null))),"a static token cannot claim the user");
+        assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(delegated("untrusted",CredentialKind.JWT,"toolgate-control"))),"no trusted issuer configured");
+        operations.userCredentialIssuer("toolgate-control");
+        assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(delegated("other-issuer",CredentialKind.JWT,"someone-else"))));
+        var i=graph.codec.model(operations.submit(gateway,graph.codec.json(delegated("verified",CredentialKind.JWT,"toolgate-control"))).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseInvocationState.QUEUED,i.state());assertEquals("alice",i.evaluation().context().userId());
+    }
+    /** M4.4: the submit row carries the authorization facts as separate fields. */
+    @Test void submitAuditCarriesAuthorizationEvidence(){var i=submit("audited");
+        var page=(com.fasterxml.jackson.databind.JsonNode)graph.codec.value(store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.auditPage(0,100)));
+        com.fasterxml.jackson.databind.JsonNode row=null;for(var item:page.get("items"))if(item.get("operation").asText().equals("INVOCATION_SUBMIT")&&item.get("target").asText().equals("invocation:"+i.id()))row=item;
+        assertNotNull(row);var e=row.get("evidence");
+        assertEquals("alice",e.get("subjectUserId").asText());assertEquals("agent",e.get("actorAgentId").asText());assertEquals("workload",e.get("workloadBindingId").asText());
+        assertEquals("read",e.get("operation").asText());assertEquals("FILE:data/report.txt",e.get("resources").get(0).asText());assertEquals("ALLOW",e.get("decision").asText());
+        assertEquals("DELEGATED",e.get("mode").asText());
+    }
     @Test void exactInvocationIsDurableAndIdempotentWithoutStoringArguments(){var i=submit("request");assertEquals(EnterpriseInvocationState.QUEUED,i.state());assertEquals(i,submit("request"));assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(request("request","data/other.txt"))));assertFalse(graph.codec.json(i).contains("credentialSha256"));}
     @Test void signedPermitBindsTargetVersionsArgumentsAndFullResourceSet(){var r=reserve(submit("request"));var claims=signer.verify(r.permit());assertEquals("binding-a",claims.bindingId());assertEquals("device",claims.deviceId());var e=r.invocation().evaluation();var other=new EnterprisePermitConsumption("request",r.permit(),e.argumentsDigest(),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/other.txt")),e.toolDigest(),e.packageDigest());assertThrows(Failure.class,()->operations.consume(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(other)));assertEquals(EnterpriseInvocationState.EXECUTING,consume(r).state());}
     @Test void wrongCertificateDeviceAndTenantCannotConsume(){var r=reserve(submit("request"));assertThrows(Failure.class,()->operations.consume(EnterpriseConformanceTest.TENANT,"different",consumption(r)));assertThrows(Failure.class,()->operations.consume(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"device",consumption(r)));}

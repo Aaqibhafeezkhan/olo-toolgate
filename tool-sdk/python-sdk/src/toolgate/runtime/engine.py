@@ -285,6 +285,8 @@ class StandaloneRuntime(ToolCatalog):
         ctx.attach_progress(meta.progress_token, meta.notifications)
         from ..enums import InvocationMode
         ctx._mode = InvocationMode.GOVERNED if self.config.mode is Mode.GOVERNED else InvocationMode.STANDALONE
+        if self.config.mode is Mode.GOVERNED:
+            ctx.attach_principal(getattr(self.config, "principal", None))
         ctx._frames = getattr(self.config, "frames", None)
         permissions = d["permissions"]
         ctx._files = (self.files if "DEVICE_FILES_WRITE" in permissions else ReadOnlyFiles(self.files)) \

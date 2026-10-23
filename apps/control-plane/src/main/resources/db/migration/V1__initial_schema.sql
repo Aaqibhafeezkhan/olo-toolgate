@@ -22,6 +22,7 @@ CREATE TABLE control_audit (
     revision bigint NOT NULL,
     request_id varchar(128) NOT NULL,
     request_digest char(64) NOT NULL,
+    evidence text CHECK (evidence IS NULL OR octet_length(evidence) <= 4096),
     occurred_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 

@@ -13,6 +13,9 @@ from ..protocol.core import TASKS, Connection
 from ..protocol.tasks import TaskStatus
 from .config import Config, StartupRefused
 from .engine import StandaloneRuntime, failure
+
+#: Reserved claim carrying the principal the Tool Host verified in the Control permit (OLO M4.2).
+PRINCIPAL_CLAIM = "toolgate"
 from .files import FileInfo, refused
 
 
@@ -124,10 +127,14 @@ def run(input, output, env, build=None):
         return fail("DEADLINE_EXCEEDED", "The invocation deadline passed before the tool started", 0)
     broker = StdioBroker(input, emit)
     handles = {h["name"]: h["handle"] for h in value.get("secretHandles", [])}
-    config = Config.governed({"globals": value.get("globals", {}), "claims": value.get("claims", {})},
+    claims = dict(value.get("claims", {})) if isinstance(value.get("claims"), dict) else {}
+    # The Tool Host adds the verified principal under a reserved claim; it is lifted out so no tool reads it as a claim.
+    principal = claims.pop(PRINCIPAL_CLAIM, None)
+    config = Config.governed({"globals": value.get("globals", {}), "claims": claims},
                              lambda name: broker.redeem(handles[name]) if name in handles else None)
     config.env = {"TOOLGATE_EXECUTION_TARGET": env.get("TOOLGATE_EXECUTION_TARGET", "SERVER")}
     config.invocation_id = ident
+    config.principal = principal if isinstance(principal, dict) else None
     config.deadline = dt.datetime.fromtimestamp(deadline/1000, dt.timezone.utc)
     config.frames = emit
     try:

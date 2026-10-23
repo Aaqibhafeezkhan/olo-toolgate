@@ -783,6 +783,9 @@
         },
         "requestDigest": {
           "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "evidence": {
+          "$ref": "control.schema.json#/$defs/ControlAuditEvidence"
         }
       },
       "required": [
@@ -795,6 +798,88 @@
         "requestId",
         "occurredAt",
         "requestDigest"
+      ]
+    },
+    "ControlAuditEvidence": {
+      "type": "object",
+      "description": "Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "mode": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "subjectUserId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "actorAgentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "delegationChain": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16
+        },
+        "workloadBindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "credentialKind": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "operation": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "maxItems": 16
+        },
+        "resourceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "resourcesDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "decision": {
+          "$ref": "policy.schema.json#/$defs/Decision"
+        },
+        "state": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "policyRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "invocationId",
+        "mode",
+        "toolId",
+        "operation",
+        "resourceCount",
+        "resourcesDigest",
+        "state",
+        "authorizationEpoch",
+        "policyRevision"
       ]
     },
     "ControlAuditPage": {

@@ -33,6 +33,8 @@ public final class EnterpriseEvaluator {
         var extractor=directory.entries().get(Kind.EXTRACTOR.id(tool.extractorId()));
         return DirectoryService.digest(codec.json(tool.definition())+"\n"+tool.version()+"\n"+tool.packageDigest()+"\n"+(extractor==null?"":extractor.document()));
     }
+    /** M3.10: a DELEGATED binding naming no user acts for whichever verified user the Gateway authenticated. */
+    public static boolean onBehalfOf(ControlWorkloadBinding w) { return w.mode()==RequestMode.DELEGATED&&w.delegatedUserId()==null&&w.delegatedSessionEpoch()==null; }
     public static boolean selected(GroupSelection selection,String id) { return selection.all()||selection.ids().contains(id); }
     public static boolean intersects(GroupSelection selection,List<String> ids) { return selection.all()||ids.stream().anyMatch(selection.ids()::contains); }
     public static boolean resource(EnterpriseResourceRule rule,ResourceDescriptor actual) {
@@ -129,8 +131,10 @@ public final class EnterpriseEvaluator {
             for(var hop:hops) {
                 require(seen.add(hop.agentId()),INVALID_CONTEXT);active(Kind.AGENT,hop.agentId(),ControlAgent.class,IDENTITY_DISABLED);
                 var workload=active(Kind.WORKLOAD_BINDING,hop.workloadBindingId(),ControlWorkloadBinding.class,IDENTITY_DISABLED);
-                require(workload.agentId().equals(hop.agentId())&&workload.mode()==context.mode()&&Objects.equals(workload.delegatedUserId(),context.userId())&&Objects.equals(workload.parentBindingId(),previous),INVALID_CONTEXT);
-                require(Objects.equals(workload.delegatedSessionEpoch(),context.sessionEpoch()),IDENTITY_DISABLED);
+                require(workload.agentId().equals(hop.agentId())&&workload.mode()==context.mode()&&(onBehalfOf(workload)&&context.mode()==RequestMode.DELEGATED||Objects.equals(workload.delegatedUserId(),context.userId()))&&Objects.equals(workload.parentBindingId(),previous),INVALID_CONTEXT);
+                // An on-behalf-of binding (M3.10) takes the user and session from the verified user credential; identity() already
+                // required that user enabled at this session epoch.
+                require(onBehalfOf(workload)||Objects.equals(workload.delegatedSessionEpoch(),context.sessionEpoch()),IDENTITY_DISABLED);
                 require(workload.expiresAtUnixMs()>request.nowUnixMs(),EXPIRED);
                 if(hop==hops.getLast())require(workload.credentialEpoch().equals(context.credentialEpoch()),IDENTITY_DISABLED);
                 validUntil=Math.min(validUntil,workload.expiresAtUnixMs());previous=workload.id();
