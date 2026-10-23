@@ -102,14 +102,11 @@ test('real group administration, inherited provenance and review impact are acce
         await reviewer.getByRole('button',{name:'Approve exact configuration'}).click();
         await expect(reviewer.getByLabel(confirmation)).not.toBeChecked();
       }
-      const changeId=new URLSearchParams(href.split('?')[1]).get('id');
-      expect(changeId).toBeTruthy();
-      const [refreshed]=await Promise.all([
-        page.waitForResponse(response=>new URL(response.url()).pathname==='/api/control/v1/configuration-changes/'+changeId
-          &&response.request().method()==='GET',{timeout:30000}),
-        page.getByRole('button',{name:'Refresh changes'}).click()
-      ]);
-      expect(refreshed.status()).toBe(200);
+      // Reopen the exact draft after independent review. The acceptance gate
+      // checks current workflow state, not an incidental queue-refresh request.
+      // Refresh/retry behavior is covered deterministically in component tests.
+      await page.goto(origin+'/console/'+href);
+      await expect(page.getByRole('region',{name:'Configuration impact'}).getByText('APPROVED',{exact:true})).toBeVisible();
       await expect(page.getByRole('button',{name:'Apply reviewed change'})).toBeVisible();
       await page.getByLabel(confirmation).check();
       await page.getByRole('button',{name:'Apply reviewed change'}).click();

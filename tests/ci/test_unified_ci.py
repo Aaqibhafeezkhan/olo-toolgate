@@ -166,7 +166,8 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         diagnostics = next(step for step in steps('images.yml') if step.get('with', {}).get('name') == 'browser-diagnostics')
         self.assertEqual(diagnostics['if'], '${{ always() && inputs.run_tests }}')
         self.assertEqual(diagnostics['with']['path'].splitlines(),
-                         ['build/ui/browser-results.json', 'build/ui/browser-output/'])
+                         ['build/ui/browser-results.json', 'build/ui/browser-output/',
+                          'build/quickstart/runtime-failure.log', 'build/quickstart/startup-failure.log'])
         self.assertEqual(diagnostics['with']['if-no-files-found'], 'ignore')
 
     def test_foundation_runs_every_gate_group_in_its_own_job(self):
