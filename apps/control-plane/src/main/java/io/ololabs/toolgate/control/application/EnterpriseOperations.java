@@ -76,12 +76,20 @@ public final class EnterpriseOperations {
             for(var review:approval.reviews())if(review.decision()==EnterpriseReviewDecision.APPROVE)reviewer(tx,review.reviewerUserId(),i,review.obligationId(),now);
         }
     }
-    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==RequestMode.HUMAN&&!gatewayUser(request.context())||request.context().mode()==RequestMode.DELEGATED&&laundered(request.context()))throw ManagementAccess.denied();return submitVerified(actor,request,null);}
+    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==RequestMode.HUMAN&&!gatewayUser(request.context())||request.context().mode()==RequestMode.DELEGATED&&onBehalfOf(actor.tenant(),request.context())&&!gatewayDelegated(request.context())||request.context().mode()==RequestMode.DELEGATED&&laundered(request.context()))throw ManagementAccess.denied();return submitVerified(actor,request,null);}
     /** A Gateway HUMAN context exists only for a verified user credential: JWT kind, the configured issuer, a credential digest,
      *  and no agent or workload. The evaluator then requires the user enabled and the identity binding at this session epoch. */
     private boolean gatewayUser(io.ololabs.toolgate.contracts.v2.RequestContext c){String trusted=userCredentialIssuer;
         return trusted!=null&&c.credentialKind()==io.ololabs.toolgate.contracts.v2.CredentialKind.JWT&&trusted.equals(c.issuer())&&c.credentialSha256()!=null
             &&c.userId()!=null&&c.sessionEpoch()!=null&&c.agentId()==null&&c.workloadBindingId()==null&&c.chain().isEmpty();}
+    /** M3.10: whether any hop of a DELEGATED context uses an on-behalf-of workload binding. */
+    private boolean onBehalfOf(Ids.TenantId tenant,io.ololabs.toolgate.contracts.v2.RequestContext c){var hops=new java.util.ArrayList<String>();c.chain().forEach(h->hops.add(h.workloadBindingId()));if(c.workloadBindingId()!=null)hops.add(c.workloadBindingId());
+        var directory=store.transaction(tenant,false,tx->tx.load());
+        return hops.stream().map(id->directory.entries().get(Kind.WORKLOAD_BINDING.id(id))).anyMatch(e->e!=null&&EnterpriseEvaluator.onBehalfOf(codec.model(e.document(),ControlWorkloadBinding.class)));}
+    /** An on-behalf-of context carries a verified user credential from the configured issuer, plus the agent's workload credential. */
+    private boolean gatewayDelegated(io.ololabs.toolgate.contracts.v2.RequestContext c){String trusted=userCredentialIssuer;
+        return trusted!=null&&c.credentialKind()==io.ololabs.toolgate.contracts.v2.CredentialKind.JWT&&trusted.equals(c.issuer())&&c.userId()!=null&&c.sessionEpoch()!=null
+            &&c.agentId()!=null&&c.workloadBindingId()!=null&&c.credentialSha256()!=null;}
     /** M3.5: the reserved service principal never carries delegated authority, as the agent or as a chain hop. */
     private boolean laundered(io.ololabs.toolgate.contracts.v2.RequestContext c){var olo=codec.protections();
         return olo.reserved(c.agentId())||c.chain().stream().anyMatch(h->olo.reserved(h.agentId()));}

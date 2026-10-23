@@ -69,6 +69,31 @@ class EnterpriseConformanceTest {
 
     @Test void completeDelegatedPathAllowsWithoutOwnerEquality() {var decision=decide(context(RequestMode.DELEGATED,"binding-a"));assertEquals(Decision.ALLOW,decision.decision());assertEquals("team-a",decision.witnesses().getFirst().teamId());assertEquals("group-a",decision.witnesses().getFirst().agentGroupId());}
     @Test void humanExecutionRequiresOnlyHumanGrantAndBinding() {remove(Kind.DELEGATION,"delegation");remove(Kind.GRANT,"capability");assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());}
+    /** M3.6: a person's own call is decided by their teams and HUMAN grants alone; no agent record is consulted. */
+    @Test void humanPermissionsResolveWithoutAnyAgentRecord() {
+        remove(Kind.DELEGATION,"delegation");remove(Kind.GRANT,"capability");remove(Kind.WORKLOAD_BINDING,"workload");
+        remove(Kind.AGENT_GROUP,"group-a");remove(Kind.AGENT_GROUP,"group-b");remove(Kind.AGENT,"agent");
+        assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());
+        add(Kind.POLICY,new ControlPolicy("agents-only","agents-only",true,1L,Decision.BLOCK,scope("tools-a","devices-a"),new GroupSelection(List.of(),true),new GroupSelection(List.of("group-a"),false),new GroupSelection(List.of(),true)));
+        assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());
+    }
+    /** M3.10: an on-behalf-of binding acts for the verified user, and still needs the user's grant and the agent's capability. */
+    @Test void onBehalfOfBindingNeedsTheUsersGrantTheAgentsCapabilityAndTheCurrentSession() {
+        remove(Kind.WORKLOAD_BINDING,"workload");workload("workload","agent",RequestMode.DELEGATED,null,null);
+        directory().validate(512,1048576);codec.validatePolicies(directory());
+        assertEquals(Decision.ALLOW,decide(context(RequestMode.DELEGATED,"binding-a")).decision());
+        var c=context(RequestMode.DELEGATED,"binding-a");
+        var stale=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),2L,c.credentialEpoch(),c.bindingId(),c.deviceId());
+        assertEquals(EnterpriseDecisionReason.IDENTITY_DISABLED,decide(stale).reason());
+        remove(Kind.GRANT,"capability");assertEquals(Decision.BLOCK,decide(c).decision());
+        grant("capability","group-a",EnterpriseSourceType.AGENT_GROUP,EnterpriseGrantPurpose.CAPABILITY,scope("tools-a","devices-a"));
+        remove(Kind.GRANT,"human");assertEquals(Decision.BLOCK,decide(c).decision(),"the agent may, the user may not: denied");
+    }
+    @Test void delegatedBindingNamesBothUserAndEpochOrNeither() {
+        remove(Kind.WORKLOAD_BINDING,"workload");
+        add(Kind.WORKLOAD_BINDING,new ControlWorkloadBinding("workload","workload",true,1L,"agent",RequestMode.DELEGATED,"gateway","workload-subject","gateway",PROOF,1L,NOW+100000,"alice",null,null,null,null));
+        assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));
+    }
     @Test void defaultMembershipCreatesNoGrant() {remove(Kind.GRANT,"human");assertEquals(Decision.BLOCK,decide(context(RequestMode.DELEGATED,"binding-a")).decision());}
     @Test void unrelatedTeamsCannotShareGrantAndDelegation() {add(Kind.DELEGATION,new ControlDelegation("delegation","Delegation",true,2L,"team-b","group-a",scope("tools-a","devices-a")));assertEquals(EnterpriseDecisionReason.NO_GRANT,decide(context(RequestMode.DELEGATED,"binding-a")).reason());}
     @Test void unrelatedAgentGroupsCannotShareCapabilityAndDelegation() {add(Kind.DELEGATION,new ControlDelegation("delegation","Delegation",true,2L,"team-a","group-b",scope("tools-a","devices-a")));assertEquals(EnterpriseDecisionReason.NO_GRANT,decide(context(RequestMode.DELEGATED,"binding-a")).reason());}

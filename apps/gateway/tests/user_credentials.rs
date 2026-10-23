@@ -183,3 +183,88 @@ fn settings_require_distinct_pinned_rsa_keys() {
     )
     .is_err());
 }
+
+const AGENT: &str = "agent-on-behalf-of-credential-000000000000000000000000000000";
+
+fn on_behalf_of() -> Credential {
+    Credential {
+        token_sha256: digest(AGENT.as_bytes()),
+        context: serde_json::from_value(json!({"requestId":"operation","tenantId":TENANT,"mode":"DELEGATED",
+            "agentId":"agent-planner","workloadBindingId":"workload-planner","chain":[],"credentialEpoch":2,
+            "credentialKind":"STATIC_TOKEN","bindingId":"binding-agents","credentialSha256":digest(AGENT.as_bytes())}))
+        .unwrap(),
+        expires_at_unix_ms: 4102444800000,
+    }
+}
+
+#[test]
+fn delegated_calls_combine_the_verified_user_with_the_agent_workload() {
+    let contracts = Contracts::new().unwrap();
+    let auth = Authenticator::new(vec![on_behalf_of()], &contracts, NOW)
+        .unwrap()
+        .with_user_credentials(verifier());
+    let token = sign(&header(), &claims());
+    let (context, expires) = auth
+        .authenticate_delegated(&token, AGENT, "req-9".into(), NOW)
+        .unwrap();
+    assert_eq!(context.mode, RequestMode::Delegated);
+    assert_eq!(context.credential_kind, CredentialKind::Jwt);
+    assert_eq!(context.issuer.as_deref(), Some("toolgate-control"));
+    assert_eq!(context.user_id.as_deref(), Some("user-42"));
+    assert_eq!(context.session_epoch, Some(3));
+    assert_eq!(context.agent_id.as_deref(), Some("agent-planner"));
+    assert_eq!(
+        context.workload_binding_id.as_deref(),
+        Some("workload-planner")
+    );
+    assert_eq!(context.credential_epoch, Some(2));
+    assert_eq!(context.binding_id.as_deref(), Some("binding-agents"));
+    assert_eq!(
+        context.credential_sha256.as_deref(),
+        Some(digest(AGENT.as_bytes()).as_str()),
+        "Control checks the agent's workload credential digest"
+    );
+    assert_eq!(expires, (NOW_S + 300) * 1000);
+}
+
+#[test]
+fn an_on_behalf_of_token_never_acts_alone_or_with_a_forged_user() {
+    let contracts = Contracts::new().unwrap();
+    let auth = Authenticator::new(vec![on_behalf_of()], &contracts, NOW)
+        .unwrap()
+        .with_user_credentials(verifier());
+    assert!(auth.authenticate(AGENT, "r".into(), NOW).is_none());
+    assert!(auth
+        .authenticate_delegated(AGENT, AGENT, "r".into(), NOW)
+        .is_none());
+    let forged = sign_with(other_key(), &header(), &claims());
+    assert!(auth
+        .authenticate_delegated(&forged, AGENT, "r".into(), NOW)
+        .is_none());
+    let mut foreign = claims();
+    foreign["tid"] = json!("10000000-0000-4000-8000-000000000002");
+    assert!(auth
+        .authenticate_delegated(&sign(&header(), &foreign), AGENT, "r".into(), NOW)
+        .is_none());
+    let plain = Authenticator::new(vec![on_behalf_of()], &contracts, NOW).unwrap();
+    assert!(plain
+        .authenticate_delegated(&sign(&header(), &claims()), AGENT, "r".into(), NOW)
+        .is_none());
+}
+
+#[test]
+fn a_fixed_user_delegated_credential_cannot_be_combined_with_another_user() {
+    let contracts = Contracts::new().unwrap();
+    let mut fixed = on_behalf_of();
+    fixed.context.user_id = Some("user-7".into());
+    fixed.context.session_epoch = Some(1);
+    let auth = Authenticator::new(vec![fixed], &contracts, NOW)
+        .unwrap()
+        .with_user_credentials(verifier());
+    assert!(auth
+        .authenticate_delegated(&sign(&header(), &claims()), AGENT, "r".into(), NOW)
+        .is_none());
+    let mut half = on_behalf_of();
+    half.context.user_id = Some("user-7".into());
+    assert!(Authenticator::new(vec![half], &contracts, NOW).is_err());
+}

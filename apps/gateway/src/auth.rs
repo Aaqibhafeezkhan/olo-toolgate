@@ -122,29 +122,65 @@ impl Authenticator {
         {
             return users.verify(bearer, request_id, now);
         }
-        if !(32..=256).contains(&bearer.len())
-            || !bearer
+        let credential = self.workload(bearer, now)?;
+        // An on-behalf-of credential (M3.10) names no user: it only ever acts beside a verified user credential.
+        if on_behalf_of(&credential.context) {
+            return None;
+        }
+        let mut context = credential.context;
+        context.request_id = request_id;
+        context.expires_at_unix_ms = Some(credential.expires_at_unix_ms);
+        Some((context, credential.expires_at_unix_ms))
+    }
+    /// Path B (M3.10): the user's Control-issued credential as the bearer and the agent's on-behalf-of workload token
+    /// beside it. The context is DELEGATED: user and session from the verified user credential, agent, workload and
+    /// credential epoch from the workload credential, whose digest Control checks against the workload binding.
+    pub fn authenticate_delegated(
+        &self,
+        user_bearer: &str,
+        actor: &str,
+        request_id: String,
+        now: u64,
+    ) -> Option<(RequestContext, u64)> {
+        let users = self.users.as_ref()?;
+        if !crate::user_credential::Verifier::applies(user_bearer) {
+            return None;
+        }
+        let (user, user_expiry) = users.verify(user_bearer, request_id.clone(), now)?;
+        let agent = self.workload(actor, now)?;
+        if !on_behalf_of(&agent.context) || agent.context.tenant_id != user.tenant_id {
+            return None;
+        }
+        let expires = user_expiry.min(agent.expires_at_unix_ms);
+        let mut context = agent.context;
+        context.request_id = request_id;
+        context.credential_kind = CredentialKind::Jwt;
+        context.issuer = user.issuer;
+        context.user_id = user.user_id;
+        context.session_epoch = user.session_epoch;
+        context.expires_at_unix_ms = Some(expires);
+        Some((context, expires))
+    }
+    /// The unexpired workload credential for a static token, compared in constant time.
+    fn workload(&self, token: &str, now: u64) -> Option<Credential> {
+        if !(32..=256).contains(&token.len())
+            || !token
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b"-_.~".contains(&b))
         {
             return None;
         }
-        let hash = digest(bearer.as_bytes());
+        let hash = digest(token.as_bytes());
         let current = self.current();
         let mut found = None;
         for c in &current.credentials {
             if bool::from(hash.as_bytes().ct_eq(c.token_sha256.as_bytes()))
                 && c.expires_at_unix_ms > now
             {
-                found = Some(c);
+                found = Some(c.clone());
             }
         }
-        found.map(|c| {
-            let mut context = c.context.clone();
-            context.request_id = request_id;
-            context.expires_at_unix_ms = Some(c.expires_at_unix_ms);
-            (context, c.expires_at_unix_ms)
-        })
+        found
     }
     pub fn ready(&self, now: u64) -> bool {
         self.current()
@@ -152,6 +188,13 @@ impl Authenticator {
             .iter()
             .any(|c| c.expires_at_unix_ms > now)
     }
+}
+
+/// A DELEGATED workload credential naming no user: usable only with a verified user credential (M3.10).
+fn on_behalf_of(context: &RequestContext) -> bool {
+    context.mode == RequestMode::Delegated
+        && context.user_id.is_none()
+        && context.session_epoch.is_none()
 }
 
 fn parse(bytes: &[u8], contracts: &Contracts, now: u64) -> Result<Loaded, &'static str> {
@@ -194,7 +237,7 @@ fn validate(
             || context.credential_epoch.is_none()
             || context.credential_sha256.as_deref() != Some(c.token_sha256.as_str())
             || context.mode == RequestMode::Delegated
-                && (context.user_id.is_none() || context.session_epoch.is_none())
+                && (context.user_id.is_none() != context.session_epoch.is_none())
             || context.mode == RequestMode::Service
                 && (context.user_id.is_some()
                     || context.session_epoch.is_some()

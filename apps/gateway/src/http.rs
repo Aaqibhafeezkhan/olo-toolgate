@@ -54,6 +54,8 @@ pub(crate) struct Correlation {
     pub(crate) trace_id: String,
     traceparent: String,
 }
+/// Header carrying an agent's on-behalf-of workload token beside a user credential (OLO M3.10).
+pub const ACTOR_CREDENTIAL_HEADER: &str = "x-toolgate-actor-credential";
 #[derive(Clone, Copy)]
 pub(crate) struct CredentialDeadline(pub(crate) u64);
 
@@ -334,8 +336,19 @@ async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next)
         }
         let bearer = single_header(request.headers(), "authorization")
             .and_then(|v| v.strip_prefix("Bearer "));
+        // M3.10: with an actor credential the call is DELEGATED (user bearer plus agent workload token), never a fallback.
+        let actor = single_header(request.headers(), ACTOR_CREDENTIAL_HEADER);
+        if actor.is_none() && request.headers().contains_key(ACTOR_CREDENTIAL_HEADER) {
+            return error(ErrorCode::Unauthorized, &correlation.request_id);
+        }
         let context = bearer.and_then(|b| {
-            unix_ms().and_then(|now| s.auth.authenticate(b, correlation.request_id.clone(), now))
+            unix_ms().and_then(|now| match actor {
+                Some(agent) => {
+                    s.auth
+                        .authenticate_delegated(b, agent, correlation.request_id.clone(), now)
+                }
+                None => s.auth.authenticate(b, correlation.request_id.clone(), now),
+            })
         });
         let Some((context, credential_expiry)) = context else {
             return error(ErrorCode::Unauthorized, &correlation.request_id);

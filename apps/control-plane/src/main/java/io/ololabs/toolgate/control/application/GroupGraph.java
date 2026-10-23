@@ -114,7 +114,7 @@ public final class GroupGraph {
             if(kind==Kind.BINDING)StandardAccessPresets.validateBinding(codec.model(e.document(),ControlExecutionBinding.class));
             if(kind==Kind.WORKLOAD_BINDING) {
                 var b=codec.model(e.document(),ControlWorkloadBinding.class);olo.workload(b);
-                if(b.mode()==RequestMode.HUMAN || b.mode()==RequestMode.DELEGATED&&(b.delegatedUserId()==null||b.delegatedSessionEpoch()==null) || b.mode()==RequestMode.SERVICE&&(b.delegatedUserId()!=null||b.delegatedSessionEpoch()!=null))throw new IllegalArgumentException("Invalid workload identity mode");
+                if(b.mode()==RequestMode.HUMAN || b.mode()==RequestMode.DELEGATED&&(b.delegatedUserId()==null)!=(b.delegatedSessionEpoch()==null) || b.mode()==RequestMode.SERVICE&&(b.delegatedUserId()!=null||b.delegatedSessionEpoch()!=null))throw new IllegalArgumentException("Invalid workload identity mode");
             }
         }
         var credentials=new HashSet<String>();for(var e:directory.entries().values())if(e.id().kind()==Kind.WORKLOAD_BINDING&&!credentials.add(codec.model(e.document(),ControlWorkloadBinding.class).credentialSha256()))throw new IllegalArgumentException("Workload credentials must be individually distinct");
