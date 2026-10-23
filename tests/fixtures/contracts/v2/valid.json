@@ -2262,7 +2262,7 @@
   "McpSpkiPin": "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   "McpAuthScheme": "HEADER",
   "McpUpstreamAuth": {
-    "secretName": "ORDERS_MCP_KEY",
+    "secretName": "orders/mcp-key",
     "scheme": "HEADER",
     "header": "X-Api-Key"
   },
@@ -2290,7 +2290,7 @@
     "slug": "orders",
     "url": "https://mcp.example.com/mcp",
     "auth": {
-      "secretName": "ORDERS_MCP_TOKEN",
+      "secretName": "orders/mcp-token",
       "scheme": "BEARER"
     },
     "bindingId": "orders-binding",
@@ -2300,7 +2300,7 @@
     "slug": "orders",
     "url": "https://mcp.example.com/mcp",
     "auth": {
-      "secretName": "ORDERS_MCP_TOKEN",
+      "secretName": "orders/mcp-token",
       "scheme": "BEARER"
     },
     "bindingId": "orders-binding",
@@ -2332,7 +2332,7 @@
         "slug": "orders",
         "url": "https://mcp.example.com/mcp",
         "auth": {
-          "secretName": "ORDERS_MCP_TOKEN",
+          "secretName": "orders/mcp-token",
           "scheme": "BEARER"
         },
         "bindingId": "orders-binding",
@@ -2452,7 +2452,7 @@
     "purpose": "REFRESH",
     "url": "https://mcp.example.com/mcp",
     "auth": {
-      "secretName": "ORDERS_MCP_TOKEN",
+      "secretName": "orders/mcp-token",
       "scheme": "BEARER"
     },
     "spkiPins": [
@@ -2559,6 +2559,11 @@
   },
   "McpProxyServer": {
     "slug": "orders",
+    "url": "https://mcp.example.com/mcp",
+    "auth": {
+      "secretName": "orders/mcp-token",
+      "scheme": "BEARER"
+    },
     "serverInfo": {
       "name": "orders-mcp",
       "version": "1.4.0"
@@ -2571,6 +2576,11 @@
     "formatVersion": 1,
     "server": {
       "slug": "orders",
+      "url": "https://mcp.example.com/mcp",
+      "auth": {
+        "secretName": "orders/mcp-token",
+        "scheme": "BEARER"
+      },
       "serverInfo": {
         "name": "orders-mcp",
         "version": "1.4.0"
@@ -2599,5 +2609,6 @@
     "approvalSequence": 2,
     "checkedAtUnixMs": 1792000000000
   },
-  "ResultProvenance": "UNTRUSTED_UPSTREAM"
+  "ResultProvenance": "UNTRUSTED_UPSTREAM",
+  "McpSecretName": "orders/mcp-token"
 }

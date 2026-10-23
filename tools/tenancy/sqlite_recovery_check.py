@@ -78,10 +78,11 @@ revision,epoch,cache=c.execute('SELECT revision,authorization_epoch,directory_ca
 assert revision>a['directoryRevisionFloor'] and epoch>a['authorizationEpochFloor'] and cache>m['cacheGenerationFloor']
 assert not c.execute("SELECT 1 FROM control_tenant_identity_keys WHERE state<>'RETIRED'").fetchone()
 if m['identityKeys']:assert c.execute('SELECT min(generation) FROM control_tenant_identity_keys').fetchone()[0]>max(r['generation'] for r in m['identityKeys'])
-for table in ('control_secrets','control_server_packages','control_server_deployments','control_server_documents','control_package_provisioning','control_fleet'):
+for table in ('control_secrets','control_server_packages','control_server_deployments','control_server_documents','control_package_provisioning','control_fleet','control_mcp_servers','control_mcp_snapshots','control_mcp_approvals'):
  assert sorted(c.execute('SELECT * FROM '+table).fetchall())==sorted(old.execute('SELECT * FROM '+table).fetchall()),table
 assert not c.execute("SELECT 1 FROM control_enterprise_invocations WHERE state IN ('PREPARED','EXECUTING','DISPATCHED')").fetchone()
 assert not c.execute("SELECT 1 FROM control_tool_host_dispatches WHERE state IN ('QUEUED','CLAIMED','ADMITTED')").fetchone()
+assert not c.execute("SELECT 1 FROM control_mcp_scans WHERE state IN ('QUEUED','CLAIMED','ADMITTED')").fetchone()
 assert not c.execute("SELECT 1 FROM control_mcp_requests WHERE state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED')").fetchone()
 assert not any(json.loads(d).get('enabled') for d, in c.execute("SELECT document FROM control_records WHERE kind IN ('GRANT','BINDING','WORKLOAD_BINDING','POLICY')"))
 assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'

@@ -8880,6 +8880,41 @@ paths:
           description: Expired, already reported or stale
         '503':
           description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/secret:
+    post:
+      operationId: deliverMcpScanSecret
+      security:
+      - deviceCertificate: []
+      description: The registration's upstream secret, for the admitted lease holder of a current scan with its fencing token,
+        before the signed deadline, and only a secret of exactly the binding's Tool Group and Device Group.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: Toolgate-Fencing-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: The secret; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseSecretDelivery
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the admitted lease holder, past the deadline, or the secret is not the binding's
+        '404':
+          description: No such scan in this tenant
+        '503':
+          description: Dependency unavailable
   /api/control/v1/tool-hosts/mcp-scans/{id}/result:
     post:
       operationId: postMcpScanResult

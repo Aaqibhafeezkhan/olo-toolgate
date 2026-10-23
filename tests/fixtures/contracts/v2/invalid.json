@@ -2713,7 +2713,7 @@
         "slug": "orders",
         "url": "https://mcp.example.com/mcp",
         "auth": {
-          "secretName": "ORDERS_MCP_TOKEN",
+          "secretName": "orders/mcp-token",
           "scheme": "BEARER"
         },
         "strict": false
@@ -2725,7 +2725,7 @@
         "slug": "orders",
         "url": "https://mcp.example.com/mcp",
         "auth": {
-          "secretName": "ORDERS_MCP_TOKEN",
+          "secretName": "orders/mcp-token",
           "scheme": "BEARER"
         },
         "bindingId": "orders-binding",
@@ -3027,7 +3027,7 @@
         "purpose": "REFRESH",
         "url": "https://mcp.example.com/mcp",
         "auth": {
-          "secretName": "ORDERS_MCP_TOKEN",
+          "secretName": "orders/mcp-token",
           "scheme": "BEARER"
         },
         "approvalSequence": 2,
@@ -3050,7 +3050,7 @@
         "purpose": "REFRESH",
         "url": "https://mcp.example.com/mcp",
         "auth": {
-          "secretName": "ORDERS_MCP_TOKEN",
+          "secretName": "orders/mcp-token",
           "scheme": "BEARER"
         },
         "spkiPins": [
@@ -3068,6 +3068,11 @@
         "formatVersion": 2,
         "server": {
           "slug": "orders",
+          "url": "https://mcp.example.com/mcp",
+          "auth": {
+            "secretName": "orders/mcp-token",
+            "scheme": "BEARER"
+          },
           "serverInfo": {
             "name": "orders-mcp",
             "version": "1.4.0"
@@ -3093,6 +3098,11 @@
         "formatVersion": 1,
         "server": {
           "slug": "orders",
+          "url": "https://mcp.example.com/mcp",
+          "auth": {
+            "secretName": "orders/mcp-token",
+            "scheme": "BEARER"
+          },
           "serverInfo": {
             "name": "orders-mcp",
             "version": "1.4.0"
@@ -3124,6 +3134,31 @@
     {
       "case": "unknown provenance",
       "value": "UPSTREAM"
+    }
+  ],
+  "McpSecretName": [
+    {
+      "case": "a descriptor variable name, not a vault secret name",
+      "value": "ORDERS_MCP_TOKEN"
+    }
+  ],
+  "McpProxyServer": [
+    {
+      "case": "no URL",
+      "value": {
+        "slug": "orders",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "serverInfo": {
+          "name": "orders-mcp",
+          "version": "1.4.0"
+        },
+        "spkiPins": [
+          "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        ]
+      }
     }
   ]
 }

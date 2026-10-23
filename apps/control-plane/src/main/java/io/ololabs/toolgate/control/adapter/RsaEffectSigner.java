@@ -13,17 +13,21 @@ import java.util.Base64;
 
 /** Fixed algorithm, fixed type, pinned verification key; no attacker-selected key URLs or algorithms. */
 public final class RsaEffectSigner implements EffectSigner {
-    private final RSAPrivateCrtKey key;private final PublicKey publicKey;private final ContractCodec codec;private final String header,invocationHeader;
+    private final RSAPrivateCrtKey key;private final PublicKey publicKey;private final ContractCodec codec;private final String header,invocationHeader,scanHeader;
     public RsaEffectSigner(RSAPrivateCrtKey key,String keyId,ContractCodec codec){
         if(!java.util.Set.of(2048,3072,4096).contains(key.getModulus().bitLength())||!key.getPublicExponent().equals(java.math.BigInteger.valueOf(65537)))throw new IllegalArgumentException("Invalid permit key");
         this.key=key;this.codec=codec;header=encode(codec.json(new EnterprisePermitHeader("RS256","toolgate-effect-permit+jws",Ids.valid(keyId))));
         invocationHeader=encode(codec.json(new io.ololabs.toolgate.contracts.v2.PermitHeader("RS256","toolgate-invocation-permit+jws",keyId)));
+        var scan=new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("alg","RS256").put("typ","toolgate-mcp-scan-permit+jws").put("kid",keyId);
+        scanHeader=encode(scan.toString());
         try{publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(key.getModulus(),key.getPublicExponent()));}catch(GeneralSecurityException invalid){throw new IllegalArgumentException("Invalid permit key",invalid);}
     }
     public EnterpriseSignedPermit sign(EnterprisePermitClaims claims){String payload=codec.json(claims);codec.model(payload,EnterprisePermitClaims.class);return new EnterpriseSignedPermit(signed(header,payload));}
     public EnterprisePermitClaims verify(EnterpriseSignedPermit permit){return codec.model(verified(header,permit.jws()),EnterprisePermitClaims.class);}
     public io.ololabs.toolgate.contracts.v2.SignedInvocationPermit signInvocation(io.ololabs.toolgate.contracts.v2.InvocationPermitClaims claims){String payload=codec.json(claims);codec.model(payload,io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class);return new io.ololabs.toolgate.contracts.v2.SignedInvocationPermit(signed(invocationHeader,payload));}
     public io.ololabs.toolgate.contracts.v2.InvocationPermitClaims verifyInvocation(io.ololabs.toolgate.contracts.v2.SignedInvocationPermit permit){return codec.model(verified(invocationHeader,permit.jws()),io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class);}
+    public String signScan(io.ololabs.toolgate.contracts.v2.McpScanClaims claims){String payload=codec.json(claims);codec.model(payload,io.ololabs.toolgate.contracts.v2.McpScanClaims.class);return signed(scanHeader,payload);}
+    public io.ololabs.toolgate.contracts.v2.McpScanClaims verifyScan(String jws){return codec.model(verified(scanHeader,jws),io.ololabs.toolgate.contracts.v2.McpScanClaims.class);}
     private String signed(String header,String payload){String message=header+"."+encode(payload);
         try{var signature=Signature.getInstance("SHA256withRSA");signature.initSign(key);signature.update(message.getBytes(StandardCharsets.US_ASCII));return message+"."+Base64.getUrlEncoder().withoutPadding().encodeToString(signature.sign());}catch(GeneralSecurityException failure){throw Failure.unavailable();}
     }

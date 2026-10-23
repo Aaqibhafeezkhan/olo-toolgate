@@ -1088,11 +1088,13 @@ pub struct McpProxyDocument {
     pub strict: bool,
     pub tools: Vec<McpApprovedTool>,
 }
-/// The upstream an MCP_PROXY package proxies.
+/// The upstream an MCP_PROXY package proxies: its URL and credential reference, bound by the package digest, and the identity and TLS pins it was approved with.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct McpProxyServer {
     pub slug: String,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
     pub server_info: McpServerInfo,
     pub spki_pins: Vec<String>,
 }

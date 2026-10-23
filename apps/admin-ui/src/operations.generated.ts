@@ -230,6 +230,7 @@ export const operations = {
   approveMcpServer: { method: 'POST', path: '/api/control/v1/mcp-servers/{slug}/approvals' },
   nextMcpScan: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/next' },
   consumeMcpScan: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/consume' },
+  deliverMcpScanSecret: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/secret' },
   postMcpScanResult: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/result' },
   postMcpScanFailure: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/failure' },
   reportMcpQuarantine: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-quarantines' },

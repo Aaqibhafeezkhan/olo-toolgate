@@ -481,8 +481,8 @@ Effort is the estimated share of the whole feature (code, tests and docs), from 
 |---|---|---|---|---|---|
 | M0 | Plan | This plan, reviewed through revision 5 | — | 0% | Done (7c35a000) |
 | M1 Foundations | T1, T2, T8a | Contracts and bindings for every later step; the definition-digest spec with Java and Rust implementations; the fixture MCP server every later test uses | 14% | 14% | Done (16b97ca6) |
-| M2 Platform extensions | TP, TR, T5s | Device-Group-targeted Tool Host deployments; result provenance through Control, replay and the Gateway; the streaming egress client | 25% | 39% | Done |
-| M3 Register and scan | T3 | MCP server registrations, scoped secret authority, scan jobs and permits with deadlines, snapshots, tenant-owned tables with RLS | 14% | 53% | Planned |
+| M2 Platform extensions | TP, TR, T5s | Device-Group-targeted Tool Host deployments; result provenance through Control, replay and the Gateway; the streaming egress client | 25% | 39% | Done (230e55d0) |
+| M3 Register and scan | T3 | MCP server registrations, scoped secret authority, scan jobs and permits with deadlines, snapshots, tenant-owned tables with RLS | 14% | 53% | Done |
 | M4 Approve and package | T4 | Approval sequence, generated `MCP_PROXY` packages through the real pipeline, retiring omitted tools, evidence-bound quarantine, recovery | 12% | 65% | Planned |
 | M5 Proxy executor | T5 | Tool Host `mcp-proxy` runtime, governed calls with validation and provenance, the scan worker | 14% | 79% | Planned |
 | M6 Freshness | T6 | Scheduled refreshes, verification status in permits, strict mode, pin enforcement | 8% | 87% | Planned |

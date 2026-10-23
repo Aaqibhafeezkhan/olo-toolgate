@@ -566,9 +566,11 @@ export interface McpProxyDocument {
   readonly strict: boolean;
   readonly tools: ReadonlyArray<McpApprovedTool>;
 }
-/** The upstream an MCP_PROXY package proxies. */
+/** The upstream an MCP_PROXY package proxies: its URL and credential reference, bound by the package digest, and the identity and TLS pins it was approved with. */
 export interface McpProxyServer {
   readonly slug: string;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
   readonly serverInfo: McpServerInfo;
   readonly spkiPins: ReadonlyArray<string>;
 }
@@ -646,6 +648,7 @@ export interface McpScanResult {
   readonly tools: ReadonlyArray<McpUpstreamTool>;
 }
 export type McpScanState = "QUEUED" | "CLAIMED" | "ADMITTED" | "FINISHED" | "FAILED" | "EXPIRED";
+export type McpSecretName = string;
 /** The upstream serverInfo from initialize. */
 export interface McpServerInfo {
   readonly name: string;

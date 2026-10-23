@@ -22,6 +22,12 @@
       "pattern": "^sha256/[A-Za-z0-9+/]{43}=$",
       "description": "SHA-256 of the leaf certificate SubjectPublicKeyInfo, base64 (as in HTTP public key pinning)."
     },
+    "McpSecretName": {
+      "type": "string",
+      "description": "The name of a tenant vault secret (EnterpriseVaultWrite.name) holding the upstream credential.",
+      "pattern": "^[a-z0-9][a-z0-9/-]{0,127}$",
+      "maxLength": 128
+    },
     "McpAuthScheme": {
       "type": "string",
       "description": "How the upstream secret is sent: BEARER as Authorization: Bearer, HEADER in the named header.",
@@ -36,7 +42,7 @@
       "additionalProperties": false,
       "properties": {
         "secretName": {
-          "$ref": "identifiers.schema.json#/$defs/VariableName"
+          "$ref": "mcp-proxy.schema.json#/$defs/McpSecretName"
         },
         "scheme": {
           "$ref": "mcp-proxy.schema.json#/$defs/McpAuthScheme"
@@ -751,11 +757,17 @@
     },
     "McpProxyServer": {
       "type": "object",
-      "description": "The upstream an MCP_PROXY package proxies.",
+      "description": "The upstream an MCP_PROXY package proxies: its URL and credential reference, bound by the package digest, and the identity and TLS pins it was approved with.",
       "additionalProperties": false,
       "properties": {
         "slug": {
           "$ref": "mcp-proxy.schema.json#/$defs/McpServerSlug"
+        },
+        "url": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpServerUrl"
+        },
+        "auth": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpUpstreamAuth"
         },
         "serverInfo": {
           "$ref": "mcp-proxy.schema.json#/$defs/McpServerInfo"
@@ -772,6 +784,8 @@
       },
       "required": [
         "slug",
+        "url",
+        "auth",
         "serverInfo",
         "spkiPins"
       ]

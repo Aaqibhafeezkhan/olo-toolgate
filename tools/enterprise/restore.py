@@ -199,6 +199,11 @@ def quarantine_connection(db,a,now,multiple=False):
     for rid,raw in db.execute("SELECT invocation_id,document FROM control_tool_host_dispatches WHERE tenant_id=? AND state IN ('QUEUED','CLAIMED','ADMITTED')",(tenant,)).fetchall():
         doc=json.loads(raw);doc['status']['state']='EXPIRED'
         db.execute("UPDATE control_tool_host_dispatches SET state='EXPIRED',document=? WHERE tenant_id=? AND invocation_id=?",(canonical(doc).decode(),tenant,rid))
+    # MCP proxy registrations, snapshots, approvals and their generated packages are restored exactly, QUARANTINED
+    # states included; an open scan is expired and nothing re-scans or re-approves on its own.
+    for rid,raw in db.execute("SELECT scan_id,document FROM control_mcp_scans WHERE tenant_id=? AND state IN ('QUEUED','CLAIMED','ADMITTED')",(tenant,)).fetchall():
+        doc=json.loads(raw);doc['job']['state']='EXPIRED'
+        db.execute("UPDATE control_mcp_scans SET state='EXPIRED',document=? WHERE tenant_id=? AND scan_id=?",(canonical(doc).decode(),tenant,rid))
     for rid,old,raw in db.execute("SELECT record_id,revision,document FROM control_builder WHERE tenant_id=? AND kind='TEST'",(tenant,)).fetchall():
         doc=json.loads(raw)
         if doc.get('state') in ('QUEUED','RUNNING'):

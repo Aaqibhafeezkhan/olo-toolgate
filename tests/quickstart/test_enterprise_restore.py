@@ -34,6 +34,12 @@ class RestoreTests(unittest.TestCase):
    for invocation,state in (('queued','QUEUED'),('claimed','CLAIMED'),('admitted','ADMITTED'),('finished','FINISHED')):
     c.execute("INSERT INTO control_tool_host_dispatches(tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES('00000000-0000-4000-8000-000000000001',?,'host',?,9,1,?)",
               (invocation,state,json.dumps(dict(status=dict(invocationId=invocation,hostId='host',state=state,**({'result':{'outcome':'COMPLETED'}} if state=='FINISHED' else {}))))))
+   # MCP proxy state: registrations and snapshots restored exactly, open scans expired.
+   c.execute("INSERT INTO control_mcp_servers(tenant_id,slug,revision,document) VALUES('00000000-0000-4000-8000-000000000001','orders',3,?)",(json.dumps(dict(slug='orders',state='QUARANTINED')),))
+   c.execute("INSERT INTO control_mcp_snapshots(tenant_id,slug,revision,document) VALUES('00000000-0000-4000-8000-000000000001','orders',1,?)",(json.dumps(dict(revision=1)),))
+   for scan,state in (('scan-queued','QUEUED'),('scan-admitted','ADMITTED'),('scan-finished','FINISHED')):
+    c.execute("INSERT INTO control_mcp_scans(tenant_id,scan_id,slug,host_id,state,deadline,created_at,document) VALUES('00000000-0000-4000-8000-000000000001',?,'orders','host',?,9,1,?)",
+              (scan,state,json.dumps(dict(job=dict(scanId=scan,state=state),lease=dict()))))
   self.manifest=dict(layoutVersion=1,tenantRecovery=dict(tenantId='00000000-0000-4000-8000-000000000001',identityKeys=[],vaultKeys=[],cacheGenerationFloor=90,approvalClockFloor=self.now),files={p.relative_to(self.data).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.data.rglob('*') if p.is_file()});restore.write(self.source/'manifest.json',self.manifest)
   self.keys=[rsa.generate_private_key(public_exponent=65537,key_size=2048) for _ in range(2)]
   encode=lambda b:base64.urlsafe_b64encode(b).rstrip(b'=').decode()
@@ -107,8 +113,12 @@ class RestoreTests(unittest.TestCase):
   self.assertEqual(before,rows(self.target/'state/control.sqlite'))
   with closing(sqlite3.connect(self.target/'state/control.sqlite')) as c:
    dispatches={rid:(state,json.loads(doc)['status']) for rid,state,doc in c.execute('SELECT invocation_id,state,document FROM control_tool_host_dispatches')}
+   scans={rid:(state,json.loads(doc)['job']['state']) for rid,state,doc in c.execute('SELECT scan_id,state,document FROM control_mcp_scans')}
+   servers=c.execute('SELECT slug,revision,document FROM control_mcp_servers').fetchall()
   for invocation in ('queued','claimed','admitted'):
    self.assertEqual(dispatches[invocation][0],'EXPIRED');self.assertEqual(dispatches[invocation][1]['state'],'EXPIRED')
+  self.assertEqual(scans,{'scan-queued':('EXPIRED','EXPIRED'),'scan-admitted':('EXPIRED','EXPIRED'),'scan-finished':('FINISHED','FINISHED')})
+  self.assertEqual(json.loads(servers[0][2])['state'],'QUARANTINED')
   # A finished call keeps the result a repeated call returns.
   self.assertEqual(dispatches['finished'],('FINISHED',dict(invocationId='finished',hostId='host',state='FINISHED',result={'outcome':'COMPLETED'})))
  def test_one_reviewer_and_self_selected_archived_trust_are_rejected(self):
