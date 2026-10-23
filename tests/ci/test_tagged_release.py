@@ -312,7 +312,9 @@ class UnifiedPublicationWorkflowTests(unittest.TestCase):
                 ('manual-development-release','build','manual-development','build/manual-development')):
             jobs=yaml.safe_load((ROOT/'.github/workflows'/f'{workflow}.yml').read_text())['jobs']
             prepared=jobs[preparation]
-            if 'uses' in prepared:prepared=yaml.safe_load((ROOT/prepared['uses'][2:]).read_text())['jobs']['verify']
+            if 'uses' in prepared:
+                called=yaml.safe_load((ROOT/prepared['uses'][2:]).read_text())['jobs'].values()
+                prepared={'steps':[step for job in called for step in job.get('steps',[])]}
             uploads={s['with']['name']:s['with'] for s in prepared['steps']
                      if s.get('uses','').startswith('actions/upload-artifact@')}
             for publisher in ('release-images','release-maven'):

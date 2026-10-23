@@ -34,8 +34,23 @@ POLICY = {
     'build-release.publish': 'publication',
     'admission.admit': 'admission',
     'preflight.metadata': 'replay',
-    'foundation.check': 'replay',
+    'foundation.python': 'replay',
+    'foundation.ui': 'replay',
+    'foundation.rust': 'replay',
+    'foundation.examples': 'replay',
+    'foundation.scans': 'replay',
+    'foundation.browser': 'staged',
+    'foundation.java': 'staged',
+    'foundation.core-mcp': 'staged',
+    'foundation.check': 'staged',
     'foundation.python-sdk': 'python-matrix',
+    'images.quickstart': 'artifacts',
+    'images.control': 'artifacts',
+    'images.gateway': 'artifacts',
+    'images.device': 'artifacts',
+    'images.secured-device': 'artifacts',
+    'images.langchain': 'artifacts',
+    'images.build': 'artifacts',
     'images.verify': 'artifacts',
     'gateway.container-and-replicas': 'legacy',
     'policy.enterprise-access': 'legacy',
@@ -64,6 +79,7 @@ REASONS = {
     'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',
     'native': 'Requires all six native VMs and system service/installer support.',
     'artifacts': 'Requires genuine artifacts from the complete six-platform native matrix.',
+    'staged': 'Consumes artifacts uploaded by an earlier job of the same run; replay the producing jobs locally and rely on hosted CI for the hand-off.',
     'publication': 'Requires protected environments, credentials or GitHub release/registry writes.',
 }
 ALLOWED_ACTIONS = {'actions/checkout', 'actions/setup-python', 'actions/setup-java',
@@ -189,7 +205,7 @@ def inventory(workflows):
 
 def replay_body(key, document, job):
     body = copy.deepcopy(job)
-    if key == 'foundation.check':
+    if key.startswith('foundation.'):
         if body.get('env', {}).get('TOOLGATE_BUILD') == "${{ inputs.build_number || 'local' }}":
             body['env']['TOOLGATE_BUILD'] = 'local'
         # A local foundation replay always validates the current checkout.

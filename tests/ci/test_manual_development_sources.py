@@ -177,9 +177,13 @@ class ManualSourceTests(unittest.TestCase):
                          "github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')")
         self.assertNotIn('secrets', manual_flow['jobs']['native'])
         for name in ('client','images'):
-            for job in workflow(name)['jobs'].values():
+            for job_name, job in workflow(name)['jobs'].items():
                 steps = job['steps']
-                checkout = next(s for s in steps if s.get('uses','').startswith('actions/checkout@'))
+                checkout = next((s for s in steps if s.get('uses','').startswith('actions/checkout@')), None)
+                if checkout is None:
+                    # The images release gate only reads stage results; it never builds source.
+                    self.assertEqual((name, job_name), ('images', 'verify'))
+                    continue
                 self.assertIn('inputs.source_sha', checkout['with']['ref'])
                 overlay = next(s for s in steps if s.get('with',{}).get('name') == 'manual-development-source')
                 self.assertEqual(overlay['if'], '${{ inputs.development_source }}')

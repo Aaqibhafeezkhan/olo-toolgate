@@ -57,11 +57,11 @@ class LocalCiTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 2)
 
     def test_yaml_changes_flow_into_replay_without_mutating_source(self):
-        source = self.workflows['foundation']['jobs']['check']
+        source = self.workflows['foundation']['jobs']['scans']
         source['needs'] = 'preflight-fixture'
         source['steps'][1]['with']['java-version'] = '25'
         source['steps'].append({'name': 'New gate', 'run': 'python tools/new_gate.py'})
-        body = local.replay_document('foundation.check', self.workflows)['jobs']['replay']
+        body = local.replay_document('foundation.scans', self.workflows)['jobs']['replay']
         expected=copy.deepcopy(source['steps'])
         del expected[0]['with']['ref']
         expected.insert(1, copy.deepcopy(local.WORKSPACE_SETUP))
@@ -71,6 +71,17 @@ class LocalCiTests(unittest.TestCase):
         self.assertIn('needs', source)
         body['steps'].clear()
         self.assertTrue(source['steps'])
+
+    def test_jobs_consuming_same_run_artifacts_are_staged_not_replayed(self):
+        rows = {row['id']: row for row in local.inventory(self.workflows)}
+        for key in ('foundation.browser', 'foundation.java', 'foundation.core-mcp', 'foundation.check'):
+            with self.subTest(job=key):
+                self.assertEqual(rows[key]['kind'], 'staged')
+                self.assertIn('same run', rows[key]['reason'])
+                self.assertNotIn(key, local.replayable_jobs(list(rows.values())))
+        for key in ('foundation.python', 'foundation.ui', 'foundation.rust', 'foundation.examples', 'foundation.scans'):
+            with self.subTest(job=key):
+                self.assertEqual(rows[key]['kind'], 'replay')
 
     def test_unknown_job_requires_coverage_policy(self):
         self.workflows['foundation']['jobs']['new-job'] = {'runs-on': 'ubuntu-24.04', 'steps': []}
@@ -112,13 +123,13 @@ class LocalCiTests(unittest.TestCase):
             local.inventory(self.workflows)
 
     def test_scan_report_capture_preserves_always_without_allowing_conditional_gates(self):
-        body=local.replay_document('foundation.check',self.workflows)['jobs']['replay']
+        body=local.replay_document('foundation.scans',self.workflows)['jobs']['replay']
         capture=next(s for s in body['steps'] if s.get('with',{}).get('name')=='source-scan-findings')
         self.assertEqual(capture['if'],'always()')
         for step in ({'run':'python tools/check.py --scans','if':'always()'},
                      {**capture,'if':'failure()'}):
             workflows=copy.deepcopy(self.workflows)
-            workflows['foundation']['jobs']['check']['steps'].append(step)
+            workflows['foundation']['jobs']['scans']['steps'].append(step)
             with self.subTest(step=step),self.assertRaisesRegex(ValueError,'conditional steps'):
                 local.inventory(workflows)
 
@@ -197,10 +208,10 @@ class LocalCiTests(unittest.TestCase):
         for field, value in [('if', 'false'), ('services', {}), ('environment', 'release'),
                              ('runs-on', 'windows-2025'), ('env', {'VALUE': '${{ needs.preflight.outputs.value }}'})]:
             workflows = copy.deepcopy(self.workflows)
-            workflows['foundation']['jobs']['check'][field] = value
+            workflows['foundation']['jobs']['scans'][field] = value
             with self.subTest(field=field), self.assertRaises(ValueError):
                 local.inventory(workflows)
-        self.workflows['foundation']['jobs']['check']['steps'][0]['if'] = 'false'
+        self.workflows['foundation']['jobs']['scans']['steps'][0]['if'] = 'false'
         with self.assertRaisesRegex(ValueError, 'conditional steps'):
             local.inventory(self.workflows)
 
@@ -209,7 +220,7 @@ class LocalCiTests(unittest.TestCase):
                      {'run': 'npm publish'}, {'run': 'git push origin main'},
                      {'run': 'echo test', 'env': {'TOKEN': '${{ secrets.GH_TOKEN }}'}}]:
             workflows = copy.deepcopy(self.workflows)
-            workflows['foundation']['jobs']['check']['steps'].append(step)
+            workflows['foundation']['jobs']['scans']['steps'].append(step)
             with self.subTest(step=step), self.assertRaises(ValueError):
                 local.inventory(workflows)
 

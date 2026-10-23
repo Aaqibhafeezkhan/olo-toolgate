@@ -78,7 +78,7 @@ class EarlyGateTests(unittest.TestCase):
         self.assertEqual('preflight', ci['jobs']['foundation']['needs'])
         foundation = yaml.load((ROOT/'.github/workflows/foundation.yml').read_text(encoding='utf-8'), Loader=yaml.BaseLoader)
         self.assertEqual({'workflow_call'}, set(foundation['on']))
-        commands = '\n'.join(s.get('run','') for s in foundation['jobs']['check']['steps'])
+        commands = '\n'.join(s.get('run','') for job in foundation['jobs'].values() for s in job.get('steps',[]))
         self.assertIn('python tools/check.py --ci-common', commands)
         self.assertIn('python tools/check.py --scans --ci-common', commands)
         for path in (ROOT/'.github/workflows').glob('*.yml'):
