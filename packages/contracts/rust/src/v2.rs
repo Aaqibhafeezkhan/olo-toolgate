@@ -2395,6 +2395,13 @@ pub struct TlsSettings {
     pub ca_bundle: Option<String>,
     pub spki_pins: Vec<String>,
 }
+/// The tool's single permission and the resources it acts on (OLO M3.7). Absent: action invoke on tool://{toolId}.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolAuthorization {
+    pub action: String,
+    pub resources: Vec<String>,
+}
 /// Tool definition v2: the semantic descriptor plus packaging members outside the digest.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2440,6 +2447,8 @@ pub struct ToolDescriptor {
     pub variables: ToolVariables,
     pub permissions: Vec<Permission>,
     pub toolsets: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<ToolAuthorization>,
 }
 /// Effect settings with defaults resolved.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

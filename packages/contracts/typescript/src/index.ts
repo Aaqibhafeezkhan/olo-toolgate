@@ -466,6 +466,7 @@ export interface ControlResourceExtractor {
   readonly maxResources: number;
   readonly amountPointer?: string;
   readonly operationPointer?: string;
+  readonly locatorTemplates?: ReadonlyArray<string>;
 }
 /** Bounded canonical directory cursor page. */
 export interface ControlResourceExtractorPage {

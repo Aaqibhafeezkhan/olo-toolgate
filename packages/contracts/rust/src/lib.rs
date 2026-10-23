@@ -763,6 +763,8 @@ pub struct ControlResourceExtractor {
     pub amount_pointer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation_pointer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locator_templates: Option<Vec<String>>,
 }
 /// Bounded canonical directory cursor page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -714,6 +714,18 @@
           "type": "string",
           "minLength": 0,
           "maxLength": 256
+        },
+        "locatorTemplates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 512,
+            "pattern": "^[a-z][a-z0-9+.-]{0,31}://[{]tenant[}](/([A-Za-z0-9._-]{1,64}|[{][A-Za-z][A-Za-z0-9_]{0,63}[}]))+$",
+            "description": "Locator template: {tenant} is the verified tenant, {name} a required string argument holding an opaque id."
+          },
+          "maxItems": 8,
+          "uniqueItems": true
         }
       },
       "required": [

@@ -570,6 +570,36 @@
         "claims"
       ]
     },
+    "ToolAuthorization": {
+      "type": "object",
+      "description": "The tool's single permission and the resources it acts on (OLO M3.7). Absent: action invoke on tool://{toolId}.",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_-]{0,31}([.][a-z][a-z0-9_-]{0,31}){0,3}$"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 512,
+            "pattern": "^[a-z][a-z0-9+.-]{0,31}://[{]tenant[}](/([A-Za-z0-9._-]{1,64}|[{][A-Za-z][A-Za-z0-9_]{0,63}[}]))+$",
+            "description": "Locator template: {tenant} is the verified tenant, {name} a required string argument holding an opaque id."
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "action",
+        "resources"
+      ]
+    },
     "ToolDescriptor": {
       "type": "object",
       "description": "Semantic tool descriptor, generation 1. Identical in standalone and governed mode.",
@@ -686,6 +716,9 @@
           },
           "maxItems": 16,
           "uniqueItems": true
+        },
+        "authorization": {
+          "$ref": "descriptor.schema.json#/$defs/ToolAuthorization"
         }
       },
       "required": [
