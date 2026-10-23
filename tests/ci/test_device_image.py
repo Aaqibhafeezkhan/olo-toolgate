@@ -45,6 +45,31 @@ class DeviceImageTests(unittest.TestCase):
             publish.assert_called_once_with({'state':'ACTIVE'},None)
             service.terminate.assert_called_once()
 
+    def test_startup_package_recovery_uses_responsive_ipc_instead_of_restarting_live_service(self):
+        service=Mock();service.poll.return_value=None
+        health=json.dumps({'state':'ACTIVE'})
+        with tempfile.TemporaryDirectory() as folder,patch.object(device,'STATUS',Path(folder)/'status.json'), \
+                patch.object(device.subprocess,'Popen',return_value=service), \
+                patch.object(device.time,'monotonic',side_effect=[100,170]), \
+                patch.object(device,'cli',side_effect=[RuntimeError('busy'),json.dumps([{'state':'ACTIVE'}]),health,health]) as cli, \
+                patch.object(device,'publish') as publish:
+            def wait(seconds):
+                service.terminate.assert_not_called()
+                if seconds==5:device.STOP.set()
+            with patch.object(device.STOP,'wait',side_effect=wait):device.supervise()
+        self.assertEqual([call.args[0] for call in cli.call_args_list],['health','connections','health','health'])
+        publish.assert_called_once_with({'state':'ACTIVE'},None)
+
+    def test_missing_startup_ipc_still_fails_within_the_startup_bound(self):
+        service=Mock();service.poll.return_value=None
+        with tempfile.TemporaryDirectory() as folder,patch.object(device,'STATUS',Path(folder)/'status.json'), \
+                patch.object(device.subprocess,'Popen',return_value=service), \
+                patch.object(device.time,'monotonic',side_effect=[100,170]), \
+                patch.object(device,'cli',side_effect=RuntimeError('no IPC')), \
+                self.assertRaisesRegex(RuntimeError,'IPC did not become ready'):
+            device.supervise()
+        service.terminate.assert_called_once()
+
     def test_gateway_origins_normalize_and_deduplicate(self):
         self.assertEqual(module.gateway_urls(' https://ONE.example:443/, https://two.example:8443,https://one.example '),
                          ['https://one.example', 'https://two.example:8443'])

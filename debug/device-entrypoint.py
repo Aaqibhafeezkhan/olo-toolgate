@@ -128,6 +128,7 @@ def reset_gateway(config, settings):
 def supervise():
     """Keep the installed service and its ordinary gateway retry loop in the foreground."""
     STATUS.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    STATUS.unlink(missing_ok=True)
     service = subprocess.Popen([CLIENT, 'service'])
     try:
         deadline = time.monotonic() + 60
@@ -139,7 +140,15 @@ def supervise():
                 break
             except (RuntimeError, subprocess.TimeoutExpired, ValueError):
                 if time.monotonic() >= deadline:
-                    raise RuntimeError('The protected client IPC did not become ready.')
+                    # Package recovery can hold health's service lock at startup.
+                    # The lock-free connections command proves IPC is responsive;
+                    # a missing listener still fails after the normal startup bound.
+                    try:
+                        connections = json.loads(cli('connections'))
+                        if not isinstance(connections, list) or not connections:
+                            raise ValueError('No service connections')
+                    except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+                        raise RuntimeError('The protected client IPC did not become ready.') from None
                 STOP.wait(1)
         if STOP.is_set():
             return

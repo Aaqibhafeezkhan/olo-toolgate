@@ -248,19 +248,16 @@ def load_mimic():
     return module
 
 
-def wait_package_executor(release, timeout=240):
+def wait_package_executor(config, release, device, seen_after, timeout=240):
     """A fresh heartbeat can precede package recovery after a service restart."""
-    expected = {runtime['id'] for runtime in release['document']['runtimes']}
     deadline = time.monotonic()+timeout
     while True:
-        try:
-            status = json.loads(docker('linux-device', ['/usr/local/lib/olo-toolgate/olo-toolgate-client', 'runtimes', 'status']))
-            health = status.get('health') or {}
-            ready = {runtime['runtimeId'] for runtime in health.get('runtimes', []) if runtime['state'] == 'READY'}
-            if health.get('ready') is True and expected and expected <= ready:
-                return
-        except ValueError:
-            pass  # Native IPC returns busy while package pull/self-tests hold its service lock.
+        status = config.api('/api/control/v1/endpoint/devices/'+device)
+        reported = (status.get('report') or {}).get('packages', [])
+        if status.get('lastSeenUnixMs', 0) >= seen_after and any(
+                package['packageId'] == release['packageId'] and package['version'] == release['version']
+                and package['state'] == 'READY' for package in reported):
+            return
         if time.monotonic() >= deadline:
             raise ValueError('The signed package executor did not recover after restart; inspect device activation logs')
         time.sleep(2)
@@ -383,8 +380,7 @@ def provision(args):
             raise ValueError('Could not reconnect this example\'s Linux device')
     print('Waiting for a fresh device check-in after the Gateway restart (up to 6 minutes for client retry backoff).', flush=True)
     wait_device(config, device, seen_after=reconnect_after, timeout=360)
-    if selection['platform'] == 'linux':
-        wait_package_executor(release)
+    wait_package_executor(config, release, device, reconnect_after)
     verify_discovery(selection, directory, args.target)
     sync_deployment_metadata()
     print(f'Configured {selection["platform"]}: {device} in {DEVICE_GROUP}. Configuration applied through the Control API. Credentials expire in 24 hours.')

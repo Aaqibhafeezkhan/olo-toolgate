@@ -226,12 +226,15 @@ class DeploymentMetadataTests(unittest.TestCase):
 
 class PackageRecoveryTests(unittest.TestCase):
     def test_fresh_heartbeat_is_not_enough_until_expected_runtime_is_ready(self):
-        release={'document':{'runtimes':[{'id':'jvm'}]}}
-        states=[ValueError('IPC busy'),json.dumps({'health':{'ready':True,'runtimes':[]}}),
-                json.dumps({'health':{'ready':True,'runtimes':[{'runtimeId':'jvm','state':'READY'}]}})]
-        with patch.object(manage,'docker',side_effect=states) as docker,patch.object(manage.time,'sleep'):
-            manage.wait_package_executor(release)
-        self.assertEqual(docker.call_count,3)
+        release={'packageId':'examples.hotfolder','version':'0.1.0'}
+        package={**release,'state':'READY'}
+        states=[dict(lastSeenUnixMs=99,report={'packages':[package]}),
+                dict(lastSeenUnixMs=100,report={'packages':[]}),
+                dict(lastSeenUnixMs=101,report={'packages':[package]})]
+        config=SimpleNamespace(api=unittest.mock.Mock(side_effect=states))
+        with patch.object(manage.time,'sleep'):
+            manage.wait_package_executor(config,release,LINUX,100)
+        self.assertEqual(config.api.call_count,3)
 
 
 class DeploymentTrustTests(unittest.TestCase):
