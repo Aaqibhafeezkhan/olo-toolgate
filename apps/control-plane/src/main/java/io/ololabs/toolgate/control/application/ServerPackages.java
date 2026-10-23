@@ -184,14 +184,16 @@ public final class ServerPackages {
                 if (!io.ololabs.toolgate.sdk.ExecutionLocation.SERVER.allows(tool.path("descriptor").path("kind").asText())) continue;
                 var descriptor = tool.get("descriptor"); String toolId = descriptor.get("toolId").asText(); toolIds.add(toolId);
                 String extractorId = "extract-" + DirectoryService.digest(toolId).substring(0, 32);
-                var fixed = JSON.arrayNode(); fixed.addObject().put("kind", "CUSTOM").put("locator", "tool://" + toolId);
+                var authorization = PackageAuthorization.of(descriptor);
+                var fixed = JSON.arrayNode(); authorization.fixedResources(fixed, toolId);
                 for (var secret : secrets.get(toolId)) fixed.addObject().put("kind", "CUSTOM").put("locator", "secret://" + secret);
                 var extractor = JSON.objectNode().put("id", extractorId).put("name", ("Resources for " + toolId).substring(0, Math.min(128, 14 + toolId.length())))
                     .put("enabled", true).put("revision", 1).put("extractorKind", "FIELDS").put("version", version.version());
                 extractor.putArray("fields"); extractor.set("fixedResources", fixed); extractor.put("maxResources", 32);
+                authorization.locatorTemplates(extractor);
                 put(entries, Kind.EXTRACTOR, extractorId, extractor, true);
                 var definition = JSON.objectNode().put("id", toolId).put("name", toolId).put("description", descriptor.path("description").asText(toolId));
-                definition.putArray("actions").addObject().put("name", ACTION).putArray("resourceKinds").add("CUSTOM");
+                definition.putArray("actions").addObject().put("name", authorization.action()).putArray("resourceKinds").add("CUSTOM");
                 definition.set("inputSchema", descriptor.get("inputSchema"));
                 definition.set("outputSchema", descriptor.path("outputSchema").isObject() ? descriptor.get("outputSchema") : JSON.objectNode().put("type", "object"));
                 var controlTool = JSON.objectNode().put("id", toolId).put("name", toolId).put("enabled", false).put("revision", 1);
@@ -349,7 +351,7 @@ public final class ServerPackages {
                     if (entry == null) continue;
                     var tool = codec.model(entry.document(), ControlTool.class);
                     if (!("sha256:" + tool.packageDigest()).equals(digest)) continue;
-                    var assignment = tools.addObject().put("toolId", tool.id()).put("action", ACTION).put("description", tool.definition().description()).put("enabled", entry.enabled());
+                    var assignment = tools.addObject().put("toolId", tool.id()).put("action", tool.definition().actions().getFirst().name()).put("description", tool.definition().description()).put("enabled", entry.enabled());
                     assignment.set("inputSchema", node(codec.json(tool.definition().inputSchema())));
                     assignment.put("toolDigest", evaluator.toolDigest(directory, tool)).put("packageDigest", digest);
                 }

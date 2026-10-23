@@ -28,7 +28,9 @@ final class ServerPackagesTest {
     static Map<String, byte[]> files() throws Exception { return files(false); }
     /** split: the tool also needs a zip of libraries, which a Java tool may not. */
     static Map<String, byte[]> files(boolean split) throws Exception { return files(split, "SERVER"); }
-    static Map<String, byte[]> files(boolean split, String kind) throws Exception {
+    static Map<String, byte[]> files(boolean split, String kind) throws Exception { return files(split, kind, null); }
+    /** authorization: the descriptor's OLO M3.7 declaration, or null. */
+    static Map<String, byte[]> files(boolean split, String kind, String authorization) throws Exception {
         var descriptor = (ObjectNode) JSON.readTree("""
             {"descriptorGeneration":1,"toolId":"acme.orders/items.get","mcpName":"orders.items.get","kind":"SERVER","title":"Get item",
              "description":"Gets one item.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},
@@ -39,6 +41,7 @@ final class ServerPackagesTest {
              "variables":{"globals":[{"name":"Greeting","type":"STRING","required":true,"sensitive":false,"default":"Hello"}],"secrets":[{"name":"ApiKey","type":"STRING","scope":"TENANT"}],"claims":[]},
              "permissions":["HTTP_ROUTE"],"toolsets":[]}""");
         descriptor.put("kind", kind);
+        if (authorization != null) descriptor.set("authorization", JSON.readTree(authorization));
         if (kind.equals("CLIENT")) {
             for (var field : List.of("routes", "destinations", "httpAuth", "tcp", "permissions")) descriptor.putArray(field);
             var variables = descriptor.putObject("variables");
@@ -155,6 +158,23 @@ final class ServerPackagesTest {
         assertEquals(422, assertThrows(Failure.class, () -> packages.deploy(actor,
             "{\"packageDigest\":\"" + digest + "\",\"globals\":{}}", "deploy-client")).status());
         assertNull(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))));
+    }
+
+    /** OLO M3.7: a declared permission and locator template replace invoke on tool://. */
+    @Test void declaredAuthorizationBecomesTheToolsActionAndResources() throws Exception {
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("authorized.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        String digest = node(packages.upload(actor, zip(files(false, "SERVER", "{\"action\":\"items.read\",\"resources\":[\"olo://{tenant}/item/{id}\"]}")), "request-1").body()).get("packageDigest").asText();
+        packages.deploy(actor, "{\"packageDigest\":\"" + digest + "\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"}}", "request-2");
+        var tool = codec.model(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))).document(), ControlTool.class);
+        assertEquals(List.of("items.read"), tool.definition().actions().stream().map(a -> a.name()).toList());
+        var extractor = codec.model(store.transaction(tenant, false, tx -> tx.load().entries().get(Ids.Kind.EXTRACTOR.id(tool.extractorId()))).document(), ControlResourceExtractor.class);
+        assertEquals(List.of("secret://ApiKey"), extractor.fixedResources().stream().map(ResourceDescriptor::locator).toList());
+        assertEquals(List.of("olo://{tenant}/item/{id}"), extractor.locatorTemplates());
+        String bad = "{\"action\":\"items.read\",\"resources\":[\"olo://{tenant}/item/{missing}\"]}";
+        assertEquals(422, assertThrows(Failure.class, () -> packages.deploy(actor, "{\"packageDigest\":\"" + node(packages.upload(actor, zip(files(false, "SERVER", bad)), "request-3").body()).get("packageDigest").asText()
+            + "\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"}}", "request-4")).status());
     }
 
     @Test void deploymentWritesDisabledToolsAndTheHostFetchesThem() throws Exception {

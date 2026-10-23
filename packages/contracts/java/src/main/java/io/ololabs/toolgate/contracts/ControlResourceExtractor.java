@@ -16,6 +16,7 @@ package io.ololabs.toolgate.contracts;
  * @param maxResources canonical maxResources value
  * @param amountPointer canonical amountPointer value
  * @param operationPointer canonical operationPointer value
+ * @param locatorTemplates canonical locatorTemplates value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ControlResourceExtractor(
@@ -29,7 +30,8 @@ public record ControlResourceExtractor(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "fixedResources", required = true) java.util.List<ResourceDescriptor> fixedResources,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "maxResources", required = true) Long maxResources,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "amountPointer", required = false) String amountPointer,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "operationPointer", required = false) String operationPointer
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "operationPointer", required = false) String operationPointer,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "locatorTemplates", required = false) java.util.List<String> locatorTemplates
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -44,6 +46,7 @@ public record ControlResourceExtractor(
      * @param maxResources canonical maxResources value
      * @param amountPointer canonical amountPointer value
      * @param operationPointer canonical operationPointer value
+     * @param locatorTemplates canonical locatorTemplates value
      */
     public ControlResourceExtractor {
         java.util.Objects.requireNonNull(id, "id");
@@ -57,5 +60,6 @@ public record ControlResourceExtractor(
         java.util.Objects.requireNonNull(fixedResources, "fixedResources");
         fixedResources = fixedResources == null ? null : java.util.List.copyOf(fixedResources);
         java.util.Objects.requireNonNull(maxResources, "maxResources");
+        locatorTemplates = locatorTemplates == null ? null : java.util.List.copyOf(locatorTemplates);
     }
 }

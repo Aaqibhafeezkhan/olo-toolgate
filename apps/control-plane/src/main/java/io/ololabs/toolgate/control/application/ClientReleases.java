@@ -114,8 +114,8 @@ public final class ClientReleases {
         document.putArray("runtimes").add(runtime);
         var tools = document.putArray("tools"); var tests = document.putArray("selfTests"); var records = new ArrayList<ObjectNode[]>();
         for (var tool : supported) {
-            var d = tool.path("descriptor"); String toolId = d.path("toolId").asText();
-            var registration = JSON.objectNode().put("toolId", toolId).put("action", ServerPackages.ACTION).put("runtimeId", runtimeId)
+            var d = tool.path("descriptor"); String toolId = d.path("toolId").asText(); var authorization = PackageAuthorization.of(d);
+            var registration = JSON.objectNode().put("toolId", toolId).put("action", authorization.action()).put("runtimeId", runtimeId)
                 .put("entryPoint", "/opt/tool/" + packageId + "/" + filename);
             registration.set("inputSchema", d.get("inputSchema")); registration.set("outputSchema", d.get("outputSchema"));
             // The device brokers its files area only as the signed registration grants (ADR 027).
@@ -129,12 +129,13 @@ public final class ClientReleases {
                 .put("memoryMiB", 512).put("maxInputBytes", 65536).put("maxOutputBytes", 65536);
             String managed = InstalledProfiles.packageDigest(registration, runtime);
             String extractorId = "extract-" + DirectoryService.digest(toolId).substring(0, 32);
-            var fixed = JSON.arrayNode(); fixed.addObject().put("kind", "CUSTOM").put("locator", "tool://" + toolId);
+            var fixed = JSON.arrayNode(); authorization.fixedResources(fixed, toolId);
             var extractor = JSON.objectNode().put("id", extractorId).put("name", ("Resources for " + toolId).substring(0, Math.min(128, 14 + toolId.length())))
                 .put("enabled", true).put("revision", 1).put("extractorKind", "FIELDS").put("version", version);
             extractor.putArray("fields"); extractor.set("fixedResources", fixed); extractor.put("maxResources", 32);
+            authorization.locatorTemplates(extractor);
             var definition = JSON.objectNode().put("id", toolId).put("name", toolId).put("description", d.path("description").asText(toolId));
-            definition.putArray("actions").addObject().put("name", ServerPackages.ACTION).putArray("resourceKinds").add("CUSTOM");
+            definition.putArray("actions").addObject().put("name", authorization.action()).putArray("resourceKinds").add("CUSTOM");
             definition.set("inputSchema", d.get("inputSchema")); definition.set("outputSchema", d.get("outputSchema"));
             var controlTool = JSON.objectNode().put("id", toolId).put("name", toolId).put("enabled", true).put("revision", 1);
             controlTool.set("definition", definition); controlTool.put("extractorId", extractorId).put("version", version).put("packageDigest", managed);

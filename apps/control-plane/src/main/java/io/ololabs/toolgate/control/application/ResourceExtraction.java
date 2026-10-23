@@ -13,10 +13,13 @@ public final class ResourceExtraction {
     private final Codec codec;
     public ResourceExtraction(Codec codec) {this.codec=codec;}
     public record Extracted(List<ResourceDescriptor> resources,Long amount,String operation,String argumentsDigest) {}
-    public Extracted extract(ControlResourceExtractor extractor,AuthorizationRequest request) {
+    public Extracted extract(ControlResourceExtractor extractor,AuthorizationRequest request) {return extract(extractor,request,null);}
+    /** {@code tenant}: the verified tenant that fills {@code {tenant}} in locator templates (M3.7); templates refuse without it. */
+    public Extracted extract(ControlResourceExtractor extractor,AuthorizationRequest request,String tenant) {
         var arguments=(JsonNode)codec.value(codec.json(request.arguments()));
         var resources=new TreeMap<String,ResourceDescriptor>();
         for(var resource:extractor.fixedResources())add(resources,resource.kind(),resource.locator());
+        if(extractor.locatorTemplates()!=null)for(var template:extractor.locatorTemplates())add(resources,ResourceKind.CUSTOM,locator(template,arguments,tenant));
         for(var field:extractor.fields()) {
             var value=pointer(arguments,field.pointer());
             if(field.multiple()) {
@@ -34,6 +37,26 @@ public final class ResourceExtraction {
         }
         if(extractor.extractorKind()==EnterpriseExtractorKind.SHELL && (!resources.values().stream().allMatch(r->r.kind()==ResourceKind.CUSTOM)||operation==null))throw Failure.validation();
         return new Extracted(List.copyOf(resources.values()),amount,operation,DirectoryService.digest(codec.json(request.arguments())));
+    }
+    /** An opaque id: one path segment, never "." or "..", so an argument cannot leave its segment or name the tenant. */
+    static final java.util.regex.Pattern OPAQUE_ID=java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
+    /** Fills a template such as {@code olo://{tenant}/kb/{kbId}/doc/{docId}}: the tenant from the verified context, each
+     *  other placeholder from the top-level string argument of that name. */
+    public static String locator(String template,JsonNode arguments,String tenant) {
+        if(tenant==null||!OPAQUE_ID.matcher(tenant).matches())throw Failure.validation();
+        int start=template.indexOf("://");if(start<1||!template.startsWith("{tenant}",start+3))throw Failure.validation();
+        var out=new StringBuilder(template.substring(0,start+3)).append(tenant);
+        for(var segment:template.substring(start+3+"{tenant}".length()).split("/",-1)) {
+            if(segment.isEmpty()&&out.length()==start+3+tenant.length())continue;
+            String value=segment;
+            if(segment.startsWith("{")&&segment.endsWith("}")) {
+                var argument=arguments.get(segment.substring(1,segment.length()-1));
+                if(argument==null||!argument.isTextual())throw Failure.validation();value=argument.asText();
+            }
+            if(!OPAQUE_ID.matcher(value).matches()||value.equals(".")||value.equals(".."))throw Failure.validation();
+            out.append('/').append(value);
+        }
+        return out.toString();
     }
     private static JsonNode pointer(JsonNode arguments,String pointer) {
         if(!pointer.startsWith("/")||pointer.contains("//")||pointer.matches(".*~(?![01]).*"))throw Failure.validation();

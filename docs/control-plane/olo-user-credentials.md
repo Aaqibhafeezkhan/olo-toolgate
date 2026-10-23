@@ -50,6 +50,16 @@ Invocation audit rows (`INVOCATION_SUBMIT`, `PERMIT_RESERVE`, `PERMIT_CONSUME`, 
 resources (or only their count and digest beyond 16), decision, state, authorization epoch and policy revision. Arguments,
 payloads and credentials are never recorded.
 
+## Resources and permissions (contract 2.3)
+
+A package tool can declare its single permission and the resources each call acts on (`@Authorization` in Java,
+`@authorization` in Python). Its Control tool then has exactly that action (for example `memory.read`), and its extractor
+builds `CUSTOM` resources from the declared templates, such as `olo://{tenant}/conversation/{conversationId}`: `{tenant}` is the
+verified tenant, never an argument, and each id must be one opaque path segment. Deployment refuses templates that name an
+argument that isn't a required string. Grants then use exact actions and a `PREFIX` locator such as
+`olo://<tenant>/conversation`; ownership, membership and sharing of each object stay with the memory or RAG service. Tools
+that declare nothing keep `invoke` on `tool://<toolId>`.
+
 ## Control settings
 
 | Property | Default | Meaning |

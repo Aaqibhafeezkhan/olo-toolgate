@@ -21,7 +21,7 @@ from .enums import (AuthType, BusinessKey, EffectSafety, HttpMethod, Idempotency
 __all__ = [
     "tool_package", "server_tool", "client_tool", "Param", "tool_variables", "Variable", "Global", "Secret",
     "JwtClaim", "destination", "http_auth", "http_route", "tcp_destination", "idempotency", "reconcile", "example",
-    "ErrorDecl", "REGISTRY_ATTRIBUTE", "ATTACHED_ATTRIBUTE", "device_file_access",
+    "ErrorDecl", "REGISTRY_ATTRIBUTE", "ATTACHED_ATTRIBUTE", "device_file_access", "authorization",
 ]
 
 #: The module-level list every declaration registers in.
@@ -113,6 +113,26 @@ class device_file_access(Declaration):
         fields = ", ".join("%s=%r" % (k, v) for k, v in vars(self).items()
                            if k not in ("file", "line", "module", "target", "embedded"))
         return "%s(%s)" % (type(self).__name__, fields)
+
+
+class authorization(Declaration):
+    """The tool's single permission and per-call resources, equivalent to Java Authorization (OLO M3.7).
+
+    Without it a tool is one ``invoke`` action on ``tool://<toolId>``. With it, administrators grant exactly ``action`` (for
+    example ``memory.read``) on resources built per call from templates such as
+    ``olo://{tenant}/conversation/{conversationId}``: ToolGate fills ``{tenant}`` with the verified tenant and each other
+    placeholder with the required string argument of that name, an opaque id."""
+
+    kind = "authorization"
+    on_class = False
+
+    def __init__(self, *, action: str, resources: Union[str, Iterable[str]]) -> None:
+        super().__init__()
+        self.action = action
+        self.resources = (resources,) if isinstance(resources, str) else tuple(resources)
+
+    def __repr__(self) -> str:
+        return "authorization(action=%r, resources=%r)" % (self.action, self.resources)
 
 
 class ErrorDecl:

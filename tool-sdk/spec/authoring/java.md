@@ -36,7 +36,14 @@ Exact Java surface of the [authoring contract](README.md). Package `io.ololabs.t
 @Target(METHOD) @interface Reconcile { String tool(); }
 @Repeatable(Examples.class) @Target(METHOD) @interface Example { String arguments(); String expectedOutput() default ""; String expectedError() default ""; String exchanges() default ""; }
 @interface ErrorDecl { String code(); String description(); boolean retryable() default false; String dataSchema() default ""; }
+@Target(METHOD) @interface Authorization { String action(); String[] resources(); }
 ```
+
+`@Authorization` gives the tool its single permission and per-call resources (descriptor `authorization`). Without it a tool
+is one `invoke` action on `tool://<toolId>`. Each resource template starts `<scheme>://{tenant}/`; ToolGate fills `{tenant}` with
+the verified tenant and every other `{name}` with the required string argument of that name, which must be an opaque id
+(one path segment), for example `@Authorization(action = "memory.read", resources = "olo://{tenant}/conversation/{conversationId}")`.
+Actions are lower-case dotted names without wildcards.
 
 `title` and `text` are mutually exclusive; exactly one must be set. `BusinessKey.DEFAULT` resolves per [README.md](README.md) §3.
 

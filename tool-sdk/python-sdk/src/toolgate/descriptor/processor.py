@@ -22,7 +22,7 @@ from ..context import ToolContext, ToolResult
 from ..declarations import (ATTACHED_ATTRIBUTE, REGISTRY_ATTRIBUTE, Declaration, ErrorDecl, Global, JwtClaim, Param,
                             Secret, ToolDeclaration, ToolPackageDeclaration, client_tool, destination, example,
                             http_auth, http_route, idempotency, reconcile, server_tool, tcp_destination,
-                            tool_variables, device_file_access)
+                            tool_variables, device_file_access, authorization)
 from ..enums import AuthType, BusinessKey, EffectSafety, OpenWorld, SecretScope, ValueType
 from ..jcs import canonical, sha256, sorted_utf16, utf16_key, utf16_length
 from . import schemas as S
@@ -645,6 +645,29 @@ class _Builder:
         for toolset in t.toolsets:
             length(toolset, 1, 64, "toolset", site)
         d["toolsets"] = sorted_utf16(unique(list(t.toolsets), "toolset", site))
+
+        # OLO M3.7: the tool's permission and per-call resources; ToolGate rechecks every template against the input schema.
+        declared = [x for x in attached if isinstance(x, authorization)]
+        if len(declared) > 1:
+            raise Problem(site, "authorization is declared at most once per tool")
+        if declared:
+            a = declared[0]
+            if not isinstance(a.action, str) or re.fullmatch(
+                    r"[a-z][a-z0-9_-]{0,31}([.][a-z][a-z0-9_-]{0,31}){0,3}", a.action) is None:
+                raise Problem(site, "authorization action %s must be a lower-case dotted permission without wildcards"
+                              % a.action)
+            if not 1 <= len(a.resources) <= 8:
+                raise Problem(site, "authorization needs one to eight resources")
+            for template in a.resources:
+                if not isinstance(template, str) or re.fullmatch(
+                        r"[a-z][a-z0-9+.-]{0,31}://[{]tenant[}](/([A-Za-z0-9._-]{1,64}|[{][A-Za-z][A-Za-z0-9_]{0,63}[}]))+",
+                        template) is None:
+                    raise Problem(site, "authorization resource %s must look like olo://{tenant}/kind/{argument}" % template)
+                for argument in re.findall(r"[{]([A-Za-z][A-Za-z0-9_]{0,63})[}]", template[template.index("{tenant}") + 8:]):
+                    if argument not in required:
+                        raise Problem(site, "authorization resource %s names %s, which is not a required argument"
+                                      % (template, argument))
+            d["authorization"] = {"action": a.action, "resources": unique(list(a.resources), "resource", site)}
 
         examples = [x for x in attached if isinstance(x, example)]
         if len(examples) > 8:

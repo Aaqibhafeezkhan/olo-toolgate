@@ -1255,6 +1255,11 @@ export interface TlsSettings {
   readonly caBundle?: string;
   readonly spkiPins: ReadonlyArray<string>;
 }
+/** The tool's single permission and the resources it acts on (OLO M3.7). Absent: action invoke on tool://{toolId}. */
+export interface ToolAuthorization {
+  readonly action: string;
+  readonly resources: ReadonlyArray<string>;
+}
 /** Tool definition v2: the semantic descriptor plus packaging members outside the digest. */
 export interface ToolDefinition {
   readonly descriptor: ToolDescriptor;
@@ -1288,6 +1293,7 @@ export interface ToolDescriptor {
   readonly variables: ToolVariables;
   readonly permissions: ReadonlyArray<Permission>;
   readonly toolsets: ReadonlyArray<string>;
+  readonly authorization?: ToolAuthorization;
 }
 /** Effect settings with defaults resolved. */
 export interface ToolEffect {

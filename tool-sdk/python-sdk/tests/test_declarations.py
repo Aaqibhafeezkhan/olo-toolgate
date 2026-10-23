@@ -358,3 +358,33 @@ class DeclarationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuthorizationDeclarationTest(unittest.TestCase):
+    """OLO M3.7: authorization becomes the descriptor's permission and locator templates, as in Java."""
+
+    def test_authorization_declares_the_permission_and_resource_templates(self):
+        r = tools("", '''
+            @server_tool(name="items.read", title="T", description="D")
+            @authorization(action="items.read", resources="olo://{tenant}/item/{id}")
+            def run(self, id: Annotated[str, Param(description="Id")]) -> Out:
+                return None
+            ''')
+        self.assertTrue(r.success, r.errors)
+        self.assertIn('"authorization":{"action":"items.read","resources":["olo://{tenant}/item/{id}"]}',
+                      r.descriptor("items.read"))
+        plain = tools("", TOOL % "items.list")
+        self.assertNotIn("authorization", plain.descriptor("items.list"))
+
+    def test_bad_declarations_fail_the_build(self):
+        for action, resource, fragment in (("items.*", "olo://{tenant}/item/{id}", "without wildcards"),
+                                           ("items.read", "olo://{tenant}/item/{other}", "not a required argument"),
+                                           ("items.read", "olo://acme/item/{id}", "olo://{tenant}/kind/{argument}")):
+            r = tools("", '''
+                @server_tool(name="items.read", title="T", description="D")
+                @authorization(action="%s", resources="%s")
+                def run(self, id: Annotated[str, Param(description="Id")]) -> Out:
+                    return None
+                ''' % (action, resource))
+            self.assertFalse(r.success, resource)
+            self.assertIn(fragment, r.errors)

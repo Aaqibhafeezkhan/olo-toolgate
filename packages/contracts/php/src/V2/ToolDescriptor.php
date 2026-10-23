@@ -29,12 +29,13 @@ final readonly class ToolDescriptor implements \JsonSerializable {
         public ?string $useWhen = null,
         public ?\stdClass $outputSchema = null,
         public ?string $reconcileTool = null,
-        public ?array $tiers = null
+        public ?array $tiers = null,
+        public ?ToolAuthorization $authorization = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['descriptorGeneration', 'toolId', 'mcpName', 'kind', 'title', 'description', 'useWhen', 'inputSchema', 'outputSchema', 'errors', 'effect', 'businessKey', 'execution', 'reconcileTool', 'tiers', 'routes', 'destinations', 'httpAuth', 'tcp', 'variables', 'permissions', 'toolsets']) || array_diff(['descriptorGeneration', 'toolId', 'mcpName', 'kind', 'title', 'description', 'inputSchema', 'errors', 'effect', 'businessKey', 'execution', 'routes', 'destinations', 'httpAuth', 'tcp', 'variables', 'permissions', 'toolsets'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['descriptorGeneration', 'toolId', 'mcpName', 'kind', 'title', 'description', 'useWhen', 'inputSchema', 'outputSchema', 'errors', 'effect', 'businessKey', 'execution', 'reconcileTool', 'tiers', 'routes', 'destinations', 'httpAuth', 'tcp', 'variables', 'permissions', 'toolsets', 'authorization']) || array_diff(['descriptorGeneration', 'toolId', 'mcpName', 'kind', 'title', 'description', 'inputSchema', 'errors', 'effect', 'businessKey', 'execution', 'routes', 'destinations', 'httpAuth', 'tcp', 'variables', 'permissions', 'toolsets'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         if ($data['descriptorGeneration'] !== 1) {
@@ -62,7 +63,8 @@ final readonly class ToolDescriptor implements \JsonSerializable {
             array_key_exists('useWhen', $data) ? $data['useWhen'] : null,
             array_key_exists('outputSchema', $data) ? (object) $data['outputSchema'] : null,
             array_key_exists('reconcileTool', $data) ? $data['reconcileTool'] : null,
-            array_key_exists('tiers', $data) ? array_map(static fn ($item) => RuntimeTier::from($item), $data['tiers']) : null
+            array_key_exists('tiers', $data) ? array_map(static fn ($item) => RuntimeTier::from($item), $data['tiers']) : null,
+            array_key_exists('authorization', $data) ? ToolAuthorization::fromArray($data['authorization']) : null
         );
     }
 

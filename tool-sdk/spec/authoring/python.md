@@ -28,6 +28,9 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Order num
            *, context: ToolContext) -> OrderResult: ...
 ```
 
+`@authorization(action="memory.read", resources="olo://{tenant}/conversation/{conversationId}")` below `@server_tool` or
+`@client_tool` is the Python form of Java `@Authorization`, with the same rules.
+
 Attribute names are the snake_case forms of the neutral names (`use_when`, `max_duration_ms`, `business_key_namespace`, …). `Param.name` defaults to the Python parameter name; give `name=` to keep a camelCase input name. Return types: dataclass, `TypedDict`, Pydantic model, `dict`, or `ToolResult`. `async def` handlers are supported.
 
 ## ToolContext
