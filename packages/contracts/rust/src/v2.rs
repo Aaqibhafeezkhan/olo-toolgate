@@ -767,6 +767,8 @@ pub struct InvocationPermitClaims {
     pub business_key_namespace: Option<KeyNamespace>,
     pub approval_ids: Vec<String>,
     pub deadline_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_verification: Option<McpPermitVerification>,
 }
 /// Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1000,6 +1002,316 @@ pub struct MarketplaceStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keys: Option<Vec<MarketplaceKey>>,
 }
+/// An accepted approval: one per approval sequence, with its generated package.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApproval {
+    pub sequence: u64,
+    pub snapshot_revision: u64,
+    pub tools: Vec<McpApprovedTool>,
+    pub spki_pins: Vec<String>,
+    pub package_id: String,
+    pub package_version: String,
+    pub package_digest: String,
+    pub approved_at_unix_ms: u64,
+}
+/// Approvals of one registration, newest first.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApprovalPage {
+    pub items: Vec<McpApproval>,
+}
+/// Approves tools of one snapshot; at most 64, the package and deployment limit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApprovalRequest {
+    pub snapshot_revision: u64,
+    pub tools: Vec<McpToolApproval>,
+}
+/// A tool of an approval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApprovedTool {
+    pub tool_id: String,
+    pub upstream_name: String,
+    pub definition_digest: String,
+}
+/// Canonical McpAuthScheme wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpAuthScheme {
+    #[serde(rename = "BEARER")]
+    Bearer,
+    #[serde(rename = "HEADER")]
+    Header,
+}
+/// Canonical McpCheckFailure wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpCheckFailure {
+    #[serde(rename = "PIN_MISMATCH")]
+    PinMismatch,
+    #[serde(rename = "TLS_ERROR")]
+    TlsError,
+    #[serde(rename = "UPSTREAM_UNREACHABLE")]
+    UpstreamUnreachable,
+    #[serde(rename = "UPSTREAM_ERROR")]
+    UpstreamError,
+    #[serde(rename = "PROTOCOL_ERROR")]
+    ProtocolError,
+    #[serde(rename = "SCAN_LIMIT_EXCEEDED")]
+    ScanLimitExceeded,
+    #[serde(rename = "DEADLINE_EXCEEDED")]
+    DeadlineExceeded,
+    #[serde(rename = "DEFINITION_CHANGED")]
+    DefinitionChanged,
+    #[serde(rename = "TOOL_MISSING")]
+    ToolMissing,
+    #[serde(rename = "SERVER_CHANGED")]
+    ServerChanged,
+}
+/// Freshness evidence an invocation permit carries for an MCP_PROXY tool.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpPermitVerification {
+    pub status: McpVerificationStatus,
+    pub approval_sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at_unix_ms: Option<u64>,
+}
+/// mcp-proxy.json, the one artifact of an MCP_PROXY package (media type application/vnd.ololabs.toolgate.mcp-proxy+json).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpProxyDocument {
+    #[serde(deserialize_with = "const_mcp_proxy_document_format_version")]
+    pub format_version: u64,
+    pub server: McpProxyServer,
+    pub approval_sequence: u64,
+    pub strict: bool,
+    pub tools: Vec<McpApprovedTool>,
+}
+/// The upstream an MCP_PROXY package proxies: its URL and credential reference, bound by the package digest, and the identity and TLS pins it was approved with.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpProxyServer {
+    pub slug: String,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub server_info: McpServerInfo,
+    pub spki_pins: Vec<String>,
+}
+/// A recorded quarantine and the evidence that caused it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpQuarantine {
+    pub reason: McpQuarantineReason,
+    pub evidence_id: String,
+    pub tool_ids: Vec<String>,
+    pub server_wide: bool,
+    pub at_unix_ms: u64,
+    pub approval_sequence: u64,
+}
+/// Canonical McpQuarantineReason wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpQuarantineReason {
+    #[serde(rename = "OUTPUT_INVALID")]
+    OutputInvalid,
+    #[serde(rename = "DEFINITION_CHANGED")]
+    DefinitionChanged,
+    #[serde(rename = "TOOL_MISSING")]
+    ToolMissing,
+    #[serde(rename = "SERVER_CHANGED")]
+    ServerChanged,
+    #[serde(rename = "SERVER_VERSION_CHANGED")]
+    ServerVersionChanged,
+    #[serde(rename = "PIN_MISMATCH")]
+    PinMismatch,
+}
+/// Sent by the lease holder of exactly one invocation (a call) or one scan (a refresh); Control derives the targets from that evidence and applies it only to the current approval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpQuarantineReport {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invocation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_id: Option<String>,
+    pub fencing_token: String,
+    pub reason: McpQuarantineReason,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_server_info: Option<McpServerInfo>,
+}
+/// A Tool Host saw notifications/tools/list_changed during a call it holds and asks Control for an immediate refresh of that call's MCP server. Bound to the invocation and its fencing token, like a quarantine report.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpRefreshRequest {
+    pub invocation_id: String,
+    pub fencing_token: String,
+}
+/// Claims of a scan permit (typ toolgate-mcp-scan-permit+jws), signed in the effect-signing domain. exp - iat is at most 10 s (admission); deadlineUnixMs bounds the whole scan. spkiPins is required for REFRESH.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanClaims {
+    pub jti: String,
+    #[serde(deserialize_with = "const_mcp_scan_claims_iss")]
+    pub iss: String,
+    pub aud: String,
+    pub iat: u64,
+    pub exp: u64,
+    pub scan_id: String,
+    pub slug: String,
+    pub registration_revision: u64,
+    pub binding_id: String,
+    pub purpose: McpScanPurpose,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub spki_pins: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    pub fencing_token: String,
+    pub deadline_unix_ms: u64,
+}
+/// A scan a Tool Host fetched: the signed scan permit for its admission.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanDispatch {
+    pub scan_id: String,
+    pub permit: String,
+}
+/// A failed scan, reported by the lease holder before the deadline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanFailureReport {
+    pub scan_id: String,
+    pub fencing_token: String,
+    pub failure: McpCheckFailure,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_spki_pin: Option<String>,
+}
+/// A scan of one registration on one Tool Host of its binding Device Group.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanJob {
+    pub scan_id: String,
+    pub slug: String,
+    pub purpose: McpScanPurpose,
+    pub state: McpScanState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_id: Option<String>,
+    pub created_at_unix_ms: u64,
+    pub deadline_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_revision: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<McpCheckFailure>,
+}
+/// Canonical McpScanPurpose wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpScanPurpose {
+    #[serde(rename = "DISCOVER")]
+    Discover,
+    #[serde(rename = "REFRESH")]
+    Refresh,
+}
+/// What the scanning host observed, reported once by the lease holder before the deadline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanResult {
+    pub scan_id: String,
+    pub fencing_token: String,
+    pub server_info: McpServerInfo,
+    pub protocol_version: String,
+    pub spki_pin: String,
+    pub tools: Vec<McpUpstreamTool>,
+}
+/// Canonical McpScanState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpScanState {
+    #[serde(rename = "QUEUED")]
+    Queued,
+    #[serde(rename = "CLAIMED")]
+    Claimed,
+    #[serde(rename = "ADMITTED")]
+    Admitted,
+    #[serde(rename = "FINISHED")]
+    Finished,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+}
+/// The upstream serverInfo from initialize.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerInfo {
+    pub name: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+/// A registered upstream MCP server of the routed tenant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerRegistration {
+    pub slug: String,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub binding_id: String,
+    pub strict: bool,
+    pub state: McpServerState,
+    pub revision: u64,
+    pub created_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_snapshot_revision: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    pub verification: McpVerification,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quarantine: Option<McpQuarantine>,
+}
+/// Registrations of the routed tenant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerRegistrationPage {
+    pub items: Vec<McpServerRegistration>,
+}
+/// Registers an upstream MCP server in the routed tenant. The pool is the binding Device Group.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerRegistrationRequest {
+    pub slug: String,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub binding_id: String,
+    pub strict: bool,
+}
+/// Canonical McpServerState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpServerState {
+    #[serde(rename = "REGISTERED")]
+    Registered,
+    #[serde(rename = "SCANNING")]
+    Scanning,
+    #[serde(rename = "SCANNED")]
+    Scanned,
+    #[serde(rename = "APPROVED")]
+    Approved,
+    #[serde(rename = "QUARANTINED")]
+    Quarantined,
+}
+/// An immutable scan result; Control recomputes every digest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpSnapshot {
+    pub revision: u64,
+    pub scan_id: String,
+    pub server_info: McpServerInfo,
+    pub protocol_version: String,
+    pub spki_pin: String,
+    pub scanned_at_unix_ms: u64,
+    pub tools: Vec<McpToolDefinition>,
+}
 /// Canonical McpTaskStatus wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum McpTaskStatus {
@@ -1013,6 +1325,64 @@ pub enum McpTaskStatus {
     Failed,
     #[serde(rename = "cancelled")]
     Cancelled,
+}
+/// One approved upstream tool and the ToolGate local name it gets (mcp.{slug}/{name}).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpToolApproval {
+    pub upstream_name: String,
+    pub name: String,
+}
+/// A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpToolDefinition {
+    pub tool: McpUpstreamTool,
+    pub definition_digest: String,
+}
+/// Upstream credential for scans and calls. The secret is a tenant vault entry whose Tool Group and Device Group equal the registration binding.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpUpstreamAuth {
+    pub secret_name: String,
+    pub scheme: McpAuthScheme,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header: Option<String>,
+}
+/// One tool exactly as the upstream tools/list returned it, within the scan limits.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpUpstreamTool {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// The latest check of a registration against its approval; a failure replaces an earlier success.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpVerification {
+    pub status: McpVerificationStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<McpCheckFailure>,
+}
+/// Canonical McpVerificationStatus wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpVerificationStatus {
+    #[serde(rename = "CURRENT")]
+    Current,
+    #[serde(rename = "UNVERIFIED")]
+    Unverified,
 }
 /// Canonical MissingKeyPolicy wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1049,6 +1419,8 @@ pub struct PackageDeployment {
     pub deployed_at_unix_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_group_ids: Option<Vec<String>>,
 }
 /// Current deployments, one per package id.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1064,6 +1436,8 @@ pub struct PackageDeploymentRequest {
     pub globals: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_group_ids: Option<Vec<String>>,
 }
 /// Enable exactly the reviewed digest with this binding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1561,6 +1935,8 @@ pub struct ResultFrame {
     pub is_error: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<ToolErrorBody>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<ResultProvenance>,
 }
 /// Tool Host to Gateway.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1572,6 +1948,14 @@ pub struct ResultMessage {
     pub outcome: InvocationOutcome,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<ResultFrame>,
+}
+/// Canonical ResultProvenance wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResultProvenance {
+    #[serde(rename = "TOOL")]
+    Tool,
+    #[serde(rename = "UNTRUSTED_UPSTREAM")]
+    UntrustedUpstream,
 }
 /// Canonical ResultType wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2261,6 +2645,8 @@ const_field!(const_discovery_public_key_alg, String, "RS256");
 const_field!(const_discovery_public_key_e, String, "AQAB");
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
 const_field!(const_log_frame_kind, String, "LOG");
+const_field!(const_mcp_proxy_document_format_version, u64, 1);
+const_field!(const_mcp_scan_claims_iss, String, "control");
 const_field!(const_package_manifest_schema_version, u64, 2);
 const_field!(const_permit_header_alg, String, "RS256");
 const_field!(
@@ -2307,6 +2693,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/kill.schema.json",
         include_str!("../schemas/v2/kill.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/mcp-proxy.schema.json",
+        include_str!("../schemas/v2/mcp-proxy.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/package.schema.json",

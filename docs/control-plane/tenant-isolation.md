@@ -2,7 +2,7 @@
 
 This document describes the implemented tenant fences. Use the [deployment and qualification guide](../deployment/multitenant.md) for supported topologies, evidence and operational boundaries; the [implementation plan](../../plan.md) tracks accepted release gates.
 
-The current inventory covers 46 application tables: 44 tenant-scoped tables with forced PostgreSQL row-level security and two platform-only registry/hostname tables. Every tenant-owned row references the registry's canonical UUID string. `PostgresStore.transaction(...)` sets `app.tenant_id` with transaction-local `set_config` before tenant SQL, for both read and write transactions. Commit and rollback clear the context before the pooled connection is reused. SQLite retains application scoping, explicit non-null tenant IDs, UUID registry checks and ownership foreign keys; it does not implement PostgreSQL RLS.
+The current inventory covers 50 application tables: 48 tenant-scoped tables with forced PostgreSQL row-level security and two platform-only registry/hostname tables. Every tenant-owned row references the registry's canonical UUID string. `PostgresStore.transaction(...)` sets `app.tenant_id` with transaction-local `set_config` before tenant SQL, for both read and write transactions. Commit and rollback clear the context before the pooled connection is reused. SQLite retains application scoping, explicit non-null tenant IDs, UUID registry checks and ownership foreign keys; it does not implement PostgreSQL RLS.
 
 Each protected PostgreSQL table has a permissive access policy and a restrictive tenant fence with both `USING` and `WITH CHECK`. Existing table privileges still determine which operations are available. The restrictive policy prevents an additional permissive policy from widening the tenant boundary. Missing or empty context reveals no customer rows and cannot insert customer data. A selected tenant cannot insert data for another tenant or change a row's tenant ownership.
 
@@ -28,3 +28,14 @@ Verification uses real PostgreSQL runtime credentials and a pool limited to one 
 Tenant vault key versions are tenant-owned, with tenant-aware foreign keys from secret rows. Runtime cannot insert or mutate key metadata. Provisioning, rotation, rewrapping and retirement use the separate platform transaction. See [tenant vault custody](tenant-vault.md) for the wrapping-provider trust boundary and operational rules.
 
 Canonical Control/Gateway endpoint profiles are provisioned into control_tenant_runtime_profiles in the same transaction as hosts and tenant activation. Runtime has SELECT only. Profile origins must belong to registered hosts of that tenant. HTTP routing, per-tenant service selection, certificate/credential ownership and discovery v2 use that registered context. Real SQLite and PostgreSQL TLS fixtures verify two tenants, key rotation, lifecycle changes and wrong-tenant rejection.
+
+## MCP proxy state
+
+`control_mcp_servers`, `control_mcp_snapshots`, `control_mcp_approvals` and `control_mcp_scans` hold MCP server
+registrations, their immutable scan snapshots, approvals and scan jobs ([ADR 030](../adr/030-mcp-proxy-packages.md)).
+Each is tenant data with forced RLS, a tenant foreign key and capacity accounting; open scans count as queued work.
+Slugs, package ids `mcp.<slug>` and tool ids are unique within their tenant, and two tenants may register the same
+slug and URL. A registration names only its own tenant's execution binding and vault secret. Scans and calls run only
+on Tool Hosts that are administered members of the binding's Device Group in the same tenant; Control never contacts
+an upstream. Tenant recovery restores registrations, snapshots and approvals exactly and expires open scans.
+

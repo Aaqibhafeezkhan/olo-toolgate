@@ -40,4 +40,5 @@ public class EffectBootstrap {
     }
     @Produces @ApplicationScoped EnterpriseOperations operations(PostgresStore store){if(validated==null)validated=signer();return new EnterpriseOperations(store,codec,validated,java.time.Clock.systemUTC(),config.getOptionalValue("toolgate.control.effect.issuer",String.class).orElse("control"),config.getOptionalValue("toolgate.control.effect.audience",String.class).orElse("toolgate-client"),config.getValue("toolgate.control.approval.pending-ttl-ms",Long.class),config.getValue("toolgate.control.approval.max-active",Integer.class));}
     @Produces @ApplicationScoped ServerPackages packages(PostgresStore store,EnterpriseOperations operations){return new ServerPackages(store,codec,operations,java.time.Clock.systemUTC());}
+    @Produces @ApplicationScoped McpServers mcpServers(PostgresStore store,ServerPackages packages,EnterpriseOperations operations){if(validated==null)validated=signer();return new McpServers(store,codec,validated,java.time.Clock.systemUTC(),packages,operations);}
 }

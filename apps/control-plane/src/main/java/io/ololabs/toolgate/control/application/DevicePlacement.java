@@ -27,7 +27,7 @@ public final class DevicePlacement {
         var deployment=deployment(tx,packageDigest);
         return place(tx,context,now,id->{var saved=tx.endpointConfiguration(id);if(saved==null||saved.localTools()==null)return false;
             // A Tool Host still reporting a tool its deployment moved elsewhere no longer gets its calls.
-            if(deployment!=null&&tx.packages().toolHost(id)!=null&&!ServerPackages.targets(deployment,id))return false;
+            if(deployment!=null&&tx.packages().toolHost(id)!=null&&!ServerPackages.targets(tx.load(),codec,deployment,id))return false;
             return codec.model(saved.localTools(),LocalToolCatalog.class).tools().stream().anyMatch(t->t.enabled()&&t.toolId().equals(request.toolId())&&t.action().equals(request.action())&&t.toolDigest().equals(toolDigest)&&t.packageDigest().equals(packageDigest));});
     }
     /** The server package deployment running this package, when the tool is a server tool. */

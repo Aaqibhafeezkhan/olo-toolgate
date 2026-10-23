@@ -399,6 +399,7 @@ export interface InvocationPermitClaims {
   readonly businessKeyNamespace?: KeyNamespace;
   readonly approvalIds: ReadonlyArray<string>;
   readonly deadlineUnixMs: number;
+  readonly mcpVerification?: McpPermitVerification;
 }
 /** Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10). */
 export interface InvocationResultReport {
@@ -522,8 +523,218 @@ export interface MarketplaceStatus {
   readonly baseUrl?: string;
   readonly keys?: ReadonlyArray<MarketplaceKey>;
 }
+/** An accepted approval: one per approval sequence, with its generated package. */
+export interface McpApproval {
+  readonly sequence: number;
+  readonly snapshotRevision: number;
+  readonly tools: ReadonlyArray<McpApprovedTool>;
+  readonly spkiPins: ReadonlyArray<string>;
+  readonly packageId: string;
+  readonly packageVersion: string;
+  readonly packageDigest: string;
+  readonly approvedAtUnixMs: number;
+}
+/** Approvals of one registration, newest first. */
+export interface McpApprovalPage {
+  readonly items: ReadonlyArray<McpApproval>;
+}
+/** Approves tools of one snapshot; at most 64, the package and deployment limit. */
+export interface McpApprovalRequest {
+  readonly snapshotRevision: number;
+  readonly tools: ReadonlyArray<McpToolApproval>;
+}
+/** A tool of an approval. */
+export interface McpApprovedTool {
+  readonly toolId: string;
+  readonly upstreamName: string;
+  readonly definitionDigest: string;
+}
+export type McpAuthScheme = "BEARER" | "HEADER";
+export type McpCheckFailure = "PIN_MISMATCH" | "TLS_ERROR" | "UPSTREAM_UNREACHABLE" | "UPSTREAM_ERROR" | "PROTOCOL_ERROR" | "SCAN_LIMIT_EXCEEDED" | "DEADLINE_EXCEEDED" | "DEFINITION_CHANGED" | "TOOL_MISSING" | "SERVER_CHANGED";
 export type McpName = string;
+/** Freshness evidence an invocation permit carries for an MCP_PROXY tool. */
+export interface McpPermitVerification {
+  readonly status: McpVerificationStatus;
+  readonly approvalSequence: number;
+  readonly checkedAtUnixMs?: number;
+}
+/** mcp-proxy.json, the one artifact of an MCP_PROXY package (media type application/vnd.ololabs.toolgate.mcp-proxy+json). */
+export interface McpProxyDocument {
+  readonly formatVersion: 1;
+  readonly server: McpProxyServer;
+  readonly approvalSequence: number;
+  readonly strict: boolean;
+  readonly tools: ReadonlyArray<McpApprovedTool>;
+}
+/** The upstream an MCP_PROXY package proxies: its URL and credential reference, bound by the package digest, and the identity and TLS pins it was approved with. */
+export interface McpProxyServer {
+  readonly slug: string;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly serverInfo: McpServerInfo;
+  readonly spkiPins: ReadonlyArray<string>;
+}
+/** A recorded quarantine and the evidence that caused it. */
+export interface McpQuarantine {
+  readonly reason: McpQuarantineReason;
+  readonly evidenceId: string;
+  readonly toolIds: ReadonlyArray<string>;
+  readonly serverWide: boolean;
+  readonly atUnixMs: number;
+  readonly approvalSequence: number;
+}
+export type McpQuarantineReason = "OUTPUT_INVALID" | "DEFINITION_CHANGED" | "TOOL_MISSING" | "SERVER_CHANGED" | "SERVER_VERSION_CHANGED" | "PIN_MISMATCH";
+/** Sent by the lease holder of exactly one invocation (a call) or one scan (a refresh); Control derives the targets from that evidence and applies it only to the current approval. */
+export interface McpQuarantineReport {
+  readonly invocationId?: string;
+  readonly scanId?: string;
+  readonly fencingToken: string;
+  readonly reason: McpQuarantineReason;
+  readonly observedDigest?: string;
+  readonly observedServerInfo?: McpServerInfo;
+}
+/** A Tool Host saw notifications/tools/list_changed during a call it holds and asks Control for an immediate refresh of that call's MCP server. Bound to the invocation and its fencing token, like a quarantine report. */
+export interface McpRefreshRequest {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+}
+/** Claims of a scan permit (typ toolgate-mcp-scan-permit+jws), signed in the effect-signing domain. exp - iat is at most 10 s (admission); deadlineUnixMs bounds the whole scan. spkiPins is required for REFRESH. */
+export interface McpScanClaims {
+  readonly jti: string;
+  readonly iss: "control";
+  readonly aud: string;
+  readonly iat: number;
+  readonly exp: number;
+  readonly scanId: string;
+  readonly slug: string;
+  readonly registrationRevision: number;
+  readonly bindingId: string;
+  readonly purpose: McpScanPurpose;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly spkiPins: ReadonlyArray<string>;
+  readonly approvalSequence?: number;
+  readonly fencingToken: string;
+  readonly deadlineUnixMs: number;
+}
+/** A scan a Tool Host fetched: the signed scan permit for its admission. */
+export interface McpScanDispatch {
+  readonly scanId: string;
+  readonly permit: string;
+}
+/** A failed scan, reported by the lease holder before the deadline. */
+export interface McpScanFailureReport {
+  readonly scanId: string;
+  readonly fencingToken: string;
+  readonly failure: McpCheckFailure;
+  readonly observedSpkiPin?: string;
+}
+/** A scan of one registration on one Tool Host of its binding Device Group. */
+export interface McpScanJob {
+  readonly scanId: string;
+  readonly slug: string;
+  readonly purpose: McpScanPurpose;
+  readonly state: McpScanState;
+  readonly hostId?: string;
+  readonly createdAtUnixMs: number;
+  readonly deadlineUnixMs: number;
+  readonly approvalSequence?: number;
+  readonly snapshotRevision?: number;
+  readonly failure?: McpCheckFailure;
+}
+export type McpScanPurpose = "DISCOVER" | "REFRESH";
+/** What the scanning host observed, reported once by the lease holder before the deadline. */
+export interface McpScanResult {
+  readonly scanId: string;
+  readonly fencingToken: string;
+  readonly serverInfo: McpServerInfo;
+  readonly protocolVersion: string;
+  readonly spkiPin: string;
+  readonly tools: ReadonlyArray<McpUpstreamTool>;
+}
+export type McpScanState = "QUEUED" | "CLAIMED" | "ADMITTED" | "FINISHED" | "FAILED" | "EXPIRED";
+export type McpSecretName = string;
+/** The upstream serverInfo from initialize. */
+export interface McpServerInfo {
+  readonly name: string;
+  readonly version: string;
+  readonly title?: string;
+}
+/** A registered upstream MCP server of the routed tenant. */
+export interface McpServerRegistration {
+  readonly slug: string;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly bindingId: string;
+  readonly strict: boolean;
+  readonly state: McpServerState;
+  readonly revision: number;
+  readonly createdAtUnixMs: number;
+  readonly latestSnapshotRevision?: number;
+  readonly approvalSequence?: number;
+  readonly verification: McpVerification;
+  readonly quarantine?: McpQuarantine;
+}
+/** Registrations of the routed tenant. */
+export interface McpServerRegistrationPage {
+  readonly items: ReadonlyArray<McpServerRegistration>;
+}
+/** Registers an upstream MCP server in the routed tenant. The pool is the binding Device Group. */
+export interface McpServerRegistrationRequest {
+  readonly slug: string;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly bindingId: string;
+  readonly strict: boolean;
+}
+export type McpServerSlug = string;
+export type McpServerState = "REGISTERED" | "SCANNING" | "SCANNED" | "APPROVED" | "QUARANTINED";
+export type McpServerUrl = string;
+/** An immutable scan result; Control recomputes every digest. */
+export interface McpSnapshot {
+  readonly revision: number;
+  readonly scanId: string;
+  readonly serverInfo: McpServerInfo;
+  readonly protocolVersion: string;
+  readonly spkiPin: string;
+  readonly scannedAtUnixMs: number;
+  readonly tools: ReadonlyArray<McpToolDefinition>;
+}
+export type McpSpkiPin = string;
 export type McpTaskStatus = "working" | "input_required" | "completed" | "failed" | "cancelled";
+/** One approved upstream tool and the ToolGate local name it gets (mcp.{slug}/{name}). */
+export interface McpToolApproval {
+  readonly upstreamName: string;
+  readonly name: string;
+}
+/** A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy). */
+export interface McpToolDefinition {
+  readonly tool: McpUpstreamTool;
+  readonly definitionDigest: string;
+}
+/** Upstream credential for scans and calls. The secret is a tenant vault entry whose Tool Group and Device Group equal the registration binding. */
+export interface McpUpstreamAuth {
+  readonly secretName: string;
+  readonly scheme: McpAuthScheme;
+  readonly header?: string;
+}
+/** One tool exactly as the upstream tools/list returned it, within the scan limits. */
+export interface McpUpstreamTool {
+  readonly name: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly inputSchema: Record<string, unknown>;
+  readonly outputSchema?: Record<string, unknown>;
+  readonly annotations?: Record<string, unknown>;
+}
+/** The latest check of a registration against its approval; a failure replaces an earlier success. */
+export interface McpVerification {
+  readonly status: McpVerificationStatus;
+  readonly approvalSequence?: number;
+  readonly checkedAtUnixMs?: number;
+  readonly failure?: McpCheckFailure;
+}
+export type McpVerificationStatus = "CURRENT" | "UNVERIFIED";
 export type MissingKeyPolicy = "REJECT" | "ASK" | "ALLOW_WITH_DEDUPE";
 export type NamespacePrefix = string;
 /** Version requirements checked at enable. */
@@ -544,6 +755,7 @@ export interface PackageDeployment {
   readonly toolIds: ReadonlyArray<string>;
   readonly deployedAtUnixMs: number;
   readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
 }
 /** Current deployments, one per package id. */
 export interface PackageDeploymentPage {
@@ -554,6 +766,7 @@ export interface PackageDeploymentRequest {
   readonly packageDigest: string;
   readonly globals: Record<string, unknown>;
   readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
 }
 /** Enable exactly the reviewed digest with this binding. */
 export interface PackageEnableRequest {
@@ -805,6 +1018,7 @@ export interface ResultFrame {
   readonly structuredContent?: Record<string, unknown>;
   readonly isError: boolean;
   readonly error?: ToolErrorBody;
+  readonly provenance?: ResultProvenance;
 }
 /** Tool Host to Gateway. */
 export interface ResultMessage {
@@ -813,6 +1027,7 @@ export interface ResultMessage {
   readonly outcome: InvocationOutcome;
   readonly result?: ResultFrame;
 }
+export type ResultProvenance = "TOOL" | "UNTRUSTED_UPSTREAM";
 export type ResultType = "complete" | "input_required" | "task";
 export type Revision = number;
 /** Rollout plan attached at enable. */

@@ -115,6 +115,7 @@ public class PostgresStore implements Store {
             }
         } catch (SQLException e) { throw Failure.unavailable(); }
     }
+    @FunctionalInterface private interface RowMapper<T> { T map(java.sql.ResultSet row) throws SQLException; }
     private final class JdbcSession implements Session {
         private final Connection connection;
         private final String tenant;
@@ -240,6 +241,7 @@ public class PostgresStore implements Store {
                 public String deployment(String packageId){return text("SELECT document FROM control_server_deployments WHERE tenant_id=? AND package_id=?",packageId);}
                 public java.util.List<String> deployments(){return texts("SELECT document FROM control_server_deployments WHERE tenant_id=? ORDER BY package_id LIMIT 256");}
                 public void saveDeployment(String packageId,String document){write("INSERT INTO control_server_deployments (tenant_id,package_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,package_id) DO UPDATE SET document=excluded.document",packageId,document);}
+                public void deleteDeployment(String packageId){write("DELETE FROM control_server_deployments WHERE tenant_id=? AND package_id=?",packageId);}
                 public String toolHost(String deviceId){return text("SELECT document FROM control_tool_hosts WHERE tenant_id=? AND device_id=?",deviceId);}
                 public void saveToolHost(String deviceId,String document){write("INSERT INTO control_tool_hosts (tenant_id,device_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,device_id) DO UPDATE SET document=excluded.document",deviceId,document);}
                 private Relayed relayedRow(String suffix,Object... parameters){
@@ -274,6 +276,43 @@ public class PostgresStore implements Store {
                     write("INSERT INTO control_tool_host_dispatches (tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES (?,?,?,?,?,?,?) ON CONFLICT (tenant_id,invocation_id) DO UPDATE SET state=excluded.state,document=excluded.document",
                         r.invocationId(),r.hostId(),r.state(),r.expiresAt(),System.currentTimeMillis(),r.document());
                 }
+            };
+        }
+        public io.ololabs.toolgate.control.application.McpServerStore mcpServers() {
+            return new io.ololabs.toolgate.control.application.McpServerStore() {
+                private <T> java.util.List<T> rows(String sql,RowMapper<T> mapper,Object... parameters){
+                    try(var s=statement(sql,parameters);var rows=s.executeQuery()){var values=new java.util.ArrayList<T>();while(rows.next())values.add(mapper.map(rows));return java.util.List.copyOf(values);}catch(SQLException failure){throw Failure.unavailable();}
+                }
+                private void write(String sql,Object... parameters){try(var s=statement(sql,parameters)){if(s.executeUpdate()!=1)throw Failure.conflict();}catch(SQLException failure){throw Failure.unavailable();}}
+                private <T> T first(java.util.List<T> rows){return rows.isEmpty()?null:rows.getFirst();}
+                private Server server(java.sql.ResultSet r)throws SQLException{return new Server(r.getString(1),r.getLong(2),r.getString(3));}
+                private Scan scan(java.sql.ResultSet r)throws SQLException{return new Scan(r.getString(1),r.getString(2),r.getString(3),r.getString(4),r.getLong(5),r.getLong(6),r.getString(7));}
+                private static final String SCANS="SELECT scan_id,slug,host_id,state,deadline,created_at,document FROM control_mcp_scans WHERE tenant_id=? ";
+                public Server server(String slug){return first(rows("SELECT slug,revision,document FROM control_mcp_servers WHERE tenant_id=? AND slug=?",this::server,slug));}
+                public java.util.List<Server> servers(int limit){return rows("SELECT slug,revision,document FROM control_mcp_servers WHERE tenant_id=? ORDER BY slug LIMIT ?",this::server,limit);}
+                public long count(){return rows("SELECT count(*) FROM control_mcp_servers WHERE tenant_id=?",r->r.getLong(1)).getFirst();}
+                public void saveServer(Server s){
+                    if(s.revision()==1)write("INSERT INTO control_mcp_servers (tenant_id,slug,revision,document) VALUES (?,?,?,?)",s.slug(),s.revision(),s.document());
+                    else try(var u=connection.prepareStatement("UPDATE control_mcp_servers SET revision=?,document=? WHERE tenant_id=? AND slug=? AND revision=?")){
+                        u.setLong(1,s.revision());u.setString(2,s.document());u.setString(3,tenant);u.setString(4,s.slug());u.setLong(5,s.revision()-1);
+                        if(u.executeUpdate()!=1)throw Failure.conflict();
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public void deleteServer(String slug){write("DELETE FROM control_mcp_servers WHERE tenant_id=? AND slug=?",slug);}
+                public Snapshot snapshot(String slug,long revision){return first(rows("SELECT slug,revision,document FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? AND revision=?",r->new Snapshot(r.getString(1),r.getLong(2),r.getString(3)),slug,revision));}
+                public java.util.List<Long> snapshotRevisions(String slug){return rows("SELECT revision FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? ORDER BY revision DESC LIMIT 64",r->r.getLong(1),slug);}
+                public void saveSnapshot(Snapshot s){write("INSERT INTO control_mcp_snapshots (tenant_id,slug,revision,document) VALUES (?,?,?,?)",s.slug(),s.revision(),s.document());}
+                public void deleteSnapshot(String slug,long revision){write("DELETE FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? AND revision=?",slug,revision);}
+                public Approval approval(String slug,long sequence){return first(rows("SELECT slug,sequence,document FROM control_mcp_approvals WHERE tenant_id=? AND slug=? AND sequence=?",r->new Approval(r.getString(1),r.getLong(2),r.getString(3)),slug,sequence));}
+                public java.util.List<Approval> approvals(String slug,int limit){return rows("SELECT slug,sequence,document FROM control_mcp_approvals WHERE tenant_id=? AND slug=? ORDER BY sequence DESC LIMIT ?",r->new Approval(r.getString(1),r.getLong(2),r.getString(3)),slug,limit);}
+                public void saveApproval(Approval a){write("INSERT INTO control_mcp_approvals (tenant_id,slug,sequence,document) VALUES (?,?,?,?)",a.slug(),a.sequence(),a.document());}
+                public Scan scan(String scanId){return first(rows(SCANS+"AND scan_id=?",this::scan,scanId));}
+                public Scan nextScan(String hostId,long now){return first(rows(SCANS+"AND host_id=? AND state='QUEUED' AND deadline>? ORDER BY created_at,scan_id LIMIT 1",this::scan,hostId,now));}
+                public java.util.List<Scan> scans(String slug,java.util.Set<String> states){return rows(SCANS+"AND slug=? ORDER BY created_at DESC,scan_id LIMIT 64",this::scan,slug).stream().filter(s->states.contains(s.state())).toList();}
+                public java.util.List<Scan> open(int limit){return rows(SCANS+"AND state IN ('QUEUED','CLAIMED','ADMITTED') ORDER BY created_at,scan_id LIMIT ?",this::scan,limit);}
+                public void saveScan(Scan s){write("INSERT INTO control_mcp_scans (tenant_id,scan_id,slug,host_id,state,deadline,created_at,document) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (tenant_id,scan_id) DO UPDATE SET state=excluded.state,deadline=excluded.deadline,document=excluded.document",
+                    s.scanId(),s.slug(),s.hostId(),s.state(),s.deadline(),s.createdAt(),s.document());}
+                public void prune(long before){try(var s=statement("DELETE FROM control_mcp_scans WHERE tenant_id=? AND state IN ('FINISHED','FAILED','EXPIRED') AND deadline<?",before)){s.executeUpdate();}catch(SQLException failure){throw Failure.unavailable();}}
             };
         }
         public McpStore mcp() {

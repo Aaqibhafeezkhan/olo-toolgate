@@ -537,7 +537,9 @@ CREATE TABLE control_tool_hosts(tenant_id varchar(128) NOT NULL,device_id varcha
 
 GRANT SELECT,INSERT ON control_server_packages,control_server_documents TO toolgate_control_runtime;
 
-GRANT SELECT,INSERT,UPDATE ON control_server_deployments,control_tool_hosts TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON control_tool_hosts TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_server_deployments TO toolgate_control_runtime;
 
 CREATE TABLE control_tool_host_dispatches(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,host_id varchar(128) NOT NULL,
     state varchar(16) NOT NULL CHECK(state IN ('QUEUED','CLAIMED','ADMITTED','REFUSED','FINISHED','EXPIRED')),
@@ -547,6 +549,30 @@ CREATE TABLE control_tool_host_dispatches(tenant_id varchar(128) NOT NULL,invoca
 CREATE INDEX control_tool_host_dispatches_queue ON control_tool_host_dispatches(tenant_id,host_id,state,created_at);
 
 GRANT SELECT,INSERT,UPDATE,DELETE ON control_tool_host_dispatches TO toolgate_control_runtime;
+
+CREATE TABLE control_mcp_servers(tenant_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),
+    document text NOT NULL CHECK(octet_length(document)<=65536),PRIMARY KEY(tenant_id,slug));
+
+CREATE TABLE control_mcp_snapshots(tenant_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),
+    document text NOT NULL CHECK(octet_length(document)<=8388608),PRIMARY KEY(tenant_id,slug,revision));
+
+CREATE TABLE control_mcp_approvals(tenant_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),sequence bigint NOT NULL CHECK(sequence BETWEEN 1 AND 9007199254740991),
+    document text NOT NULL CHECK(octet_length(document)<=1048576),PRIMARY KEY(tenant_id,slug,sequence));
+
+CREATE TABLE control_mcp_scans(tenant_id varchar(128) NOT NULL,scan_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),host_id varchar(128) NOT NULL,
+    state varchar(16) NOT NULL CHECK(state IN ('QUEUED','CLAIMED','ADMITTED','FINISHED','FAILED','EXPIRED')),
+    deadline bigint NOT NULL CHECK(deadline BETWEEN 0 AND 9007199254740991),created_at bigint NOT NULL CHECK(created_at BETWEEN 0 AND 9007199254740991),
+    document text NOT NULL CHECK(octet_length(document)<=65536),PRIMARY KEY(tenant_id,scan_id));
+
+CREATE INDEX control_mcp_scans_queue ON control_mcp_scans(tenant_id,host_id,state,created_at);
+
+CREATE INDEX control_mcp_scans_server ON control_mcp_scans(tenant_id,slug,state);
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_mcp_servers,control_mcp_scans TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,DELETE ON control_mcp_snapshots TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT ON control_mcp_approvals TO toolgate_control_runtime;
 
 CREATE FUNCTION control_invalidate_directory_cache() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -744,6 +770,54 @@ END;$$;
 REVOKE ALL ON FUNCTION control_tool_host_dispatches_capacity() FROM PUBLIC;
 CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_tool_host_dispatches FOR EACH ROW EXECUTE FUNCTION control_tool_host_dispatches_capacity();
 
+CREATE FUNCTION control_mcp_scans_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_mcp_scans_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_mcp_scans FOR EACH ROW EXECUTE FUNCTION control_mcp_scans_capacity();
+
+CREATE FUNCTION control_mcp_servers_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_mcp_servers_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_mcp_servers FOR EACH ROW EXECUTE FUNCTION control_mcp_servers_capacity();
+
+CREATE FUNCTION control_mcp_snapshots_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_mcp_snapshots_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_mcp_snapshots FOR EACH ROW EXECUTE FUNCTION control_mcp_snapshots_capacity();
+
+CREATE FUNCTION control_mcp_approvals_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_mcp_approvals_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_mcp_approvals FOR EACH ROW EXECUTE FUNCTION control_mcp_approvals_capacity();
+
 CREATE FUNCTION control_server_packages_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
 BEGIN
@@ -845,7 +919,11 @@ BEGIN
         'control_invocation_event_streams',
         'control_invocation_events',
         'control_invocation_results',
+        'control_mcp_approvals',
         'control_mcp_requests',
+        'control_mcp_scans',
+        'control_mcp_servers',
+        'control_mcp_snapshots',
         'control_outcome_reconciliations',
         'control_package_provisioning',
         'control_policy_bundles',

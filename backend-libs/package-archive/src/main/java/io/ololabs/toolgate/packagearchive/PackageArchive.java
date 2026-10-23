@@ -91,13 +91,15 @@ public final class PackageArchive {
         if (!tools.isArray()) throw reject("tools is not an array");
         if (tools.size() > maxTools) throw reject(tools.size() + " tools exceed maxTools " + maxTools);
         var generation = manifest.path("sdk").path("descriptorGeneration");
+        // A generated MCP_PROXY package has no SDK block; its descriptors are generation 1.
+        boolean proxy = "MCP_PROXY".equals(manifest.path("kind").asText());
         var digests = new TreeMap<String, String>(); var toolFiles = new HashSet<String>();
         for (var tool : tools) {
             var descriptor = tool.path("descriptor");
             String toolId = descriptor.path("toolId").asText();
             int slash = toolId.indexOf('/');
             if (slash < 0 || !toolId.substring(0, slash).equals(packageId)) throw reject("toolId is not in package " + packageId + ": " + toolId);
-            if (!descriptor.path("descriptorGeneration").equals(generation)) throw reject(toolId + ": descriptorGeneration differs from sdk.descriptorGeneration");
+            if (proxy ? descriptor.path("descriptorGeneration").asLong(-1) != 1 || !descriptor.path("descriptorGeneration").isIntegralNumber() : !descriptor.path("descriptorGeneration").equals(generation)) throw reject(toolId + ": descriptorGeneration differs from sdk.descriptorGeneration");
             byte[] canonical;
             try { canonical = Canonical.bytes(descriptor); }
             catch (IllegalArgumentException e) { throw reject(toolId + ": the descriptor has no canonical form: " + e.getMessage()); }

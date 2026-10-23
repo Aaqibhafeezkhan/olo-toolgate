@@ -24,6 +24,7 @@ This is the normative authoring contract for the ToolGate Tool SDK. Every SDK, i
 | [composition.md](composition.md) | Library fragments and merge rules, with fixtures | §7.7 |
 | [protocol-layer.md](protocol-layer.md) | Protocol layer and adapter contracts A1 to A5 | §5.10 |
 | [sdk-compat/](sdk-compat/README.md) | Official MCP SDK compatibility record (pinned versions, test results, gaps) | §5.10 |
+| [mcp-proxy/](mcp-proxy/README.md) | MCP proxy definition digest of upstream tools, with shared vectors | [MCP proxy plan](../../docs/planning/mcp-proxy/plan.md) §5 |
 
 ## D0 exit checklist
 

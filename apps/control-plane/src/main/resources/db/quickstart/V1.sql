@@ -126,6 +126,15 @@ CREATE TABLE control_tool_hosts(tenant_id TEXT REFERENCES control_tenants(tenant
 CREATE TABLE control_tool_host_dispatches(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,host_id TEXT NOT NULL,state TEXT NOT NULL,
     expires_at INTEGER NOT NULL,created_at INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
 -- statement
+CREATE TABLE control_mcp_servers(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,slug TEXT NOT NULL,revision INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(tenant_id,slug));
+-- statement
+CREATE TABLE control_mcp_snapshots(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,slug TEXT NOT NULL,revision INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(tenant_id,slug,revision));
+-- statement
+CREATE TABLE control_mcp_approvals(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,slug TEXT NOT NULL,sequence INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(tenant_id,slug,sequence));
+-- statement
+CREATE TABLE control_mcp_scans(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,scan_id TEXT NOT NULL,slug TEXT NOT NULL,host_id TEXT NOT NULL,state TEXT NOT NULL,
+    deadline INTEGER NOT NULL,created_at INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(tenant_id,scan_id));
+-- statement
 CREATE TABLE control_console_devices (
  tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL, session_id TEXT NOT NULL, user_id TEXT NOT NULL,
  device_id TEXT NOT NULL, nonce_digest TEXT NOT NULL, code_digest TEXT NOT NULL,
@@ -187,6 +196,10 @@ CREATE INDEX control_business_key_retention ON control_business_keys(tenant_id,r
 CREATE INDEX control_invocation_result_retention ON control_invocation_results(tenant_id,retain_until) WHERE purged_at IS NULL;
 -- statement
 CREATE INDEX control_tool_host_dispatches_queue ON control_tool_host_dispatches(tenant_id,host_id,state,created_at);
+-- statement
+CREATE INDEX control_mcp_scans_queue ON control_mcp_scans(tenant_id,host_id,state,created_at);
+-- statement
+CREATE INDEX control_mcp_scans_server ON control_mcp_scans(tenant_id,slug,state);
 -- statement
 CREATE INDEX control_console_devices_expiry ON control_console_devices(tenant_id,expires_at);
 -- statement
@@ -414,6 +427,18 @@ CREATE TRIGGER control_tool_hosts_tenant_immutable BEFORE UPDATE OF tenant_id ON
 CREATE TRIGGER control_tool_host_dispatches_tenant_immutable BEFORE UPDATE OF tenant_id ON control_tool_host_dispatches WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 
 -- statement
+CREATE TRIGGER control_mcp_approvals_tenant_immutable BEFORE UPDATE OF tenant_id ON control_mcp_approvals WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+
+-- statement
+CREATE TRIGGER control_mcp_scans_tenant_immutable BEFORE UPDATE OF tenant_id ON control_mcp_scans WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+
+-- statement
+CREATE TRIGGER control_mcp_servers_tenant_immutable BEFORE UPDATE OF tenant_id ON control_mcp_servers WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+
+-- statement
+CREATE TRIGGER control_mcp_snapshots_tenant_immutable BEFORE UPDATE OF tenant_id ON control_mcp_snapshots WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+
+-- statement
 CREATE TRIGGER control_console_devices_tenant_immutable BEFORE UPDATE OF tenant_id ON control_console_devices WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 
 -- statement
@@ -501,6 +526,66 @@ END;
 -- statement
 CREATE TRIGGER control_tool_host_dispatches_capacity_update AFTER UPDATE ON control_tool_host_dispatches BEGIN
  UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((CASE WHEN NEW.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END)-(CASE WHEN OLD.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_scans_capacity_insert AFTER INSERT ON control_mcp_scans BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(CASE WHEN NEW.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_scans_capacity_delete AFTER DELETE ON control_mcp_scans BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(CASE WHEN OLD.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_scans_capacity_update AFTER UPDATE ON control_mcp_scans BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((CASE WHEN NEW.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END)-(CASE WHEN OLD.state IN ('QUEUED','CLAIMED','ADMITTED') THEN 1 ELSE 0 END)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_servers_capacity_insert AFTER INSERT ON control_mcp_servers BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_servers_capacity_delete AFTER DELETE ON control_mcp_servers BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_servers_capacity_update AFTER UPDATE ON control_mcp_servers BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_snapshots_capacity_insert AFTER INSERT ON control_mcp_snapshots BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_snapshots_capacity_delete AFTER DELETE ON control_mcp_snapshots BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_snapshots_capacity_update AFTER UPDATE ON control_mcp_snapshots BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_approvals_capacity_insert AFTER INSERT ON control_mcp_approvals BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_approvals_capacity_delete AFTER DELETE ON control_mcp_approvals BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_mcp_approvals_capacity_update AFTER UPDATE ON control_mcp_approvals BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement

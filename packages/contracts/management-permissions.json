@@ -103,6 +103,9 @@
     ],
     "mapping": [
       "access_grant.read"
+    ],
+    "mcp-servers": [
+      "mcp_server.read"
     ]
   },
   "resources": [
@@ -445,6 +448,14 @@
       ]
     },
     {
+      "id": "mcp_server",
+      "label": "MCP server",
+      "actions": [
+        "read",
+        "register"
+      ]
+    },
+    {
       "id": "secret",
       "label": "Secret",
       "actions": [
@@ -499,7 +510,8 @@
     "read_value": "Read secret value",
     "write": "Write",
     "request": "Request execution",
-    "recover": "Reviewed installation administration"
+    "recover": "Reviewed installation administration",
+    "register": "Register"
   },
   "directoryRoutes": [
     "users",

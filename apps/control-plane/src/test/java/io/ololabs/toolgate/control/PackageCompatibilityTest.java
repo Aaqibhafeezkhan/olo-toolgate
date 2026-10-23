@@ -87,6 +87,7 @@ final class PackageCompatibilityTest {
         var needsNewHost = ServerPackagesTest.zip(files(m -> ((ObjectNode) m.get("compatibility")).put("minimumToolHostVersion", "0.11.0")));
         String digest = JSON.readTree(packages.upload(actor, needsNewHost, "request-3").body()).get("packageDigest").asText();
         var device = new EndpointDeviceRecord("host-1", "tenant", "root", "f".repeat(64), EndpointState.ACTIVE, 1L, 0L, 0L, null, null, true, 1L, null, null);
+        TestSupport.pool(store, codec, tenant, "pool", "host-1"); // host-1 is an administered member of its pool
         packages.register(tenant, tx -> device, "{\"hostId\":\"host-1\",\"poolId\":\"pool\",\"version\":\"0.10.0\",\"protocol\":{\"min\":2,\"max\":2},\"launcherVersion\":\"0.10.0\",\"tiers\":[\"HOST_NATIVE\"]}", "request-4");
         String body = "{\"packageDigest\":\"" + digest + "\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"},\"hostIds\":[\"host-1\"]}";
         assertEquals(422, assertThrows(Failure.class, () -> packages.deploy(actor, body, "request-5")).status());

@@ -72,13 +72,14 @@ pub struct ControlConfig {
 pub struct Enrollment {
     /// Holds this host's device key, its certificate and its check-in sequence.
     pub identity_dir: PathBuf,
-    /// The pool this host registers in.
+    /// The pool this host registers in: a Device Group it is an administered member of. Every enrolled device is a
+    /// member of `default-devices`.
     #[serde(default = "default_pool")]
     pub pool_id: String,
 }
 
 fn default_pool() -> String {
-    "default".into()
+    "default-devices".into()
 }
 
 #[derive(Debug, Clone, Deserialize)]

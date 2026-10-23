@@ -15,6 +15,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param toolIds canonical toolIds value
  * @param deployedAtUnixMs canonical deployedAtUnixMs value
  * @param hostIds canonical hostIds value
+ * @param deviceGroupIds canonical deviceGroupIds value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record PackageDeployment(
@@ -27,7 +28,8 @@ public record PackageDeployment(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "globalsDigest", required = true) String globalsDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolIds", required = true) java.util.List<String> toolIds,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deployedAtUnixMs", required = true) Long deployedAtUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "hostIds", required = false) java.util.List<String> hostIds
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "hostIds", required = false) java.util.List<String> hostIds,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceGroupIds", required = false) java.util.List<String> deviceGroupIds
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -41,6 +43,7 @@ public record PackageDeployment(
      * @param toolIds canonical toolIds value
      * @param deployedAtUnixMs canonical deployedAtUnixMs value
      * @param hostIds canonical hostIds value
+     * @param deviceGroupIds canonical deviceGroupIds value
      */
     public PackageDeployment {
         java.util.Objects.requireNonNull(packageId, "packageId");
@@ -54,5 +57,6 @@ public record PackageDeployment(
         toolIds = toolIds == null ? null : java.util.List.copyOf(toolIds);
         java.util.Objects.requireNonNull(deployedAtUnixMs, "deployedAtUnixMs");
         hostIds = hostIds == null ? null : java.util.List.copyOf(hostIds);
+        deviceGroupIds = deviceGroupIds == null ? null : java.util.List.copyOf(deviceGroupIds);
     }
 }

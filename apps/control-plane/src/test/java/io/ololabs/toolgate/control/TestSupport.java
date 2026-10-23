@@ -27,5 +27,14 @@ final class TestSupport {
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         return new DirectoryService(store,codec,512,1048576).portalActor(tenant,"a".repeat(64),user);
     }
+    /** Sets the members of one Device Group (a Tool Host pool) to exactly these enrolled devices, as enrollment and a
+     *  reviewed group change leave them. */
+    static void pool(Store store,Codec codec,Ids.TenantId tenant,String groupId,String... deviceIds) {
+        store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
+            for(var id:deviceIds)if(!entries.containsKey(Ids.Kind.DEVICE.id(id))){put(entries,codec,Ids.Kind.DEVICE,new ControlDevice(id,"Tool Host "+id,true,1L,"root"));DeviceGroups.addDefault(entries,codec,id);}
+            var previous=entries.get(Ids.Kind.DEVICE_GROUP.id(groupId));long revision=previous==null?1L:codec.model(previous.document(),ControlDeviceGroup.class).revision()+1;
+            put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup(groupId,"Pool "+groupId,true,revision,List.of(deviceIds).stream().sorted().toList()));
+            tx.save(before,new Directory(before.revision()+1,entries));return null;});
+    }
     static void put(Map<Ids.RecordId,Directory.Entry> entries,Codec codec,Ids.Kind kind,Object model){var entry=codec.entry(kind,codec.json(model));entries.put(entry.id(),entry);}
 }

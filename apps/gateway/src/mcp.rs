@@ -15,7 +15,7 @@ use axum::{
 };
 use base64::Engine;
 use olo_toolgate_contracts::v2::{
-    Dispatch, InvocationOutcome, PermitReservationRequest, RequestContext,
+    Dispatch, InvocationOutcome, PermitReservationRequest, RequestContext, ResultProvenance,
 };
 use olo_toolgate_contracts::{
     AuthorizationRequest, EnterpriseInvocationState, ErrorCode, RemoteToolState,
@@ -526,6 +526,10 @@ fn host_result(
                 if let Some(error) = frame.error {
                     result["_meta"] = json!({"io.ololabs.toolgate/error":error});
                 }
+                if frame.provenance == Some(ResultProvenance::UntrustedUpstream) {
+                    // Output relayed from an upstream MCP server (MCP_PROXY), also on replays.
+                    result["_meta"][UNTRUSTED_UPSTREAM] = json!(true);
+                }
                 Ok(result)
             }
             (outcome, frame) => Err(failed(
@@ -537,8 +541,81 @@ fn host_result(
     }
 }
 
-fn success(id: Value, mut result: Value) -> Response {
+/// The `_meta` member marking a result as relayed from an untrusted upstream MCP server.
+pub const UNTRUSTED_UPSTREAM: &str = "io.toolgate/untrusted-upstream";
+
+fn success(id: Value, result: Value) -> Response {
+    Json(json!({"jsonrpc":"2.0","id":id,"result":completed(result)})).into_response()
+}
+
+/// Marks a result complete and adds the Gateway's `serverInfo` to its `_meta`, keeping the members already there.
+fn completed(mut result: Value) -> Value {
     result["resultType"] = json!("complete");
-    result["_meta"] = json!({"io.modelcontextprotocol/serverInfo":{"name":"olo-toolgate-gateway","version":env!("CARGO_PKG_VERSION")}});
-    Json(json!({"jsonrpc":"2.0","id":id,"result":result})).into_response()
+    if !result["_meta"].is_object() {
+        result["_meta"] = json!({});
+    }
+    result["_meta"]["io.modelcontextprotocol/serverInfo"] =
+        json!({"name":"olo-toolgate-gateway","version":env!("CARGO_PKG_VERSION")});
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use olo_toolgate_contracts::v2::{ResultFrame, ResultMessage, ResultType};
+
+    fn finished(provenance: Option<ResultProvenance>) -> Value {
+        let frame = ResultFrame {
+            kind: "RESULT".into(),
+            result_type: ResultType::Complete,
+            content: vec![],
+            structured_content: None,
+            is_error: false,
+            error: None,
+            provenance,
+        };
+        let message = ResultMessage {
+            invocation_id: "inv-1".into(),
+            fencing_token: None,
+            outcome: InvocationOutcome::Completed,
+            result: Some(frame),
+        };
+        let result = host_result(
+            Ok(crate::toolhost::Dispatched::Finished(Box::new(message))),
+            "inv-1",
+            &json!(1),
+        )
+        .unwrap();
+        completed(result)
+    }
+
+    #[test]
+    fn untrusted_upstream_results_carry_the_marker_and_the_server_info() {
+        let result = finished(Some(ResultProvenance::UntrustedUpstream));
+        assert_eq!(result["_meta"][UNTRUSTED_UPSTREAM], json!(true));
+        assert_eq!(
+            result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
+            json!("olo-toolgate-gateway")
+        );
+    }
+
+    #[test]
+    fn tool_results_have_no_marker() {
+        for provenance in [None, Some(ResultProvenance::Tool)] {
+            let result = finished(provenance);
+            assert!(result["_meta"].get(UNTRUSTED_UPSTREAM).is_none());
+            assert!(result["_meta"]["io.modelcontextprotocol/serverInfo"].is_object());
+        }
+    }
+
+    #[test]
+    fn completed_keeps_existing_meta_members() {
+        let result =
+            completed(json!({"content":[],"_meta":{"io.ololabs.toolgate/error":{"code":"X"}}}));
+        assert_eq!(
+            result["_meta"]["io.ololabs.toolgate/error"]["code"],
+            json!("X")
+        );
+        assert!(result["_meta"]["io.modelcontextprotocol/serverInfo"].is_object());
+    }
 }

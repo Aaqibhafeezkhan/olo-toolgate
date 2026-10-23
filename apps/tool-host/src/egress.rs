@@ -183,6 +183,7 @@ pub fn client(
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .tls_sslkeylogfile(false)
+        .tls_info(true)
         .connect_timeout(Duration::from_secs(10))
         .pool_max_idle_per_host(2)
         .dns_resolver(Arc::new(CheckedResolver(policy)));

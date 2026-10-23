@@ -2667,5 +2667,506 @@
         "error": "UNKNOWN"
       }
     }
+  ],
+  "McpServerSlug": [
+    {
+      "case": "one character",
+      "value": "a"
+    },
+    {
+      "case": "starts with a digit",
+      "value": "1server"
+    },
+    {
+      "case": "starts with a hyphen",
+      "value": "-server"
+    },
+    {
+      "case": "longer than one package id component",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "case": "uppercase",
+      "value": "Orders"
+    }
+  ],
+  "McpServerUrl": [
+    {
+      "case": "plain HTTP",
+      "value": "http://mcp.example.com/mcp"
+    },
+    {
+      "case": "user info",
+      "value": "https://user@mcp.example.com/mcp"
+    }
+  ],
+  "McpSpkiPin": [
+    {
+      "case": "hex instead of base64",
+      "value": "sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "McpServerRegistrationRequest": [
+    {
+      "case": "no binding",
+      "value": {
+        "slug": "orders",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "strict": false
+      }
+    },
+    {
+      "case": "tenant smuggled in the body",
+      "value": {
+        "slug": "orders",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "bindingId": "orders-binding",
+        "strict": true,
+        "tenantId": "other"
+      }
+    }
+  ],
+  "McpApprovalRequest": [
+    {
+      "case": "no tools",
+      "value": {
+        "snapshotRevision": 2,
+        "tools": []
+      }
+    },
+    {
+      "case": "more than 64 tools",
+      "value": {
+        "snapshotRevision": 2,
+        "tools": [
+          {
+            "upstreamName": "t0",
+            "name": "t0"
+          },
+          {
+            "upstreamName": "t1",
+            "name": "t1"
+          },
+          {
+            "upstreamName": "t2",
+            "name": "t2"
+          },
+          {
+            "upstreamName": "t3",
+            "name": "t3"
+          },
+          {
+            "upstreamName": "t4",
+            "name": "t4"
+          },
+          {
+            "upstreamName": "t5",
+            "name": "t5"
+          },
+          {
+            "upstreamName": "t6",
+            "name": "t6"
+          },
+          {
+            "upstreamName": "t7",
+            "name": "t7"
+          },
+          {
+            "upstreamName": "t8",
+            "name": "t8"
+          },
+          {
+            "upstreamName": "t9",
+            "name": "t9"
+          },
+          {
+            "upstreamName": "t10",
+            "name": "t10"
+          },
+          {
+            "upstreamName": "t11",
+            "name": "t11"
+          },
+          {
+            "upstreamName": "t12",
+            "name": "t12"
+          },
+          {
+            "upstreamName": "t13",
+            "name": "t13"
+          },
+          {
+            "upstreamName": "t14",
+            "name": "t14"
+          },
+          {
+            "upstreamName": "t15",
+            "name": "t15"
+          },
+          {
+            "upstreamName": "t16",
+            "name": "t16"
+          },
+          {
+            "upstreamName": "t17",
+            "name": "t17"
+          },
+          {
+            "upstreamName": "t18",
+            "name": "t18"
+          },
+          {
+            "upstreamName": "t19",
+            "name": "t19"
+          },
+          {
+            "upstreamName": "t20",
+            "name": "t20"
+          },
+          {
+            "upstreamName": "t21",
+            "name": "t21"
+          },
+          {
+            "upstreamName": "t22",
+            "name": "t22"
+          },
+          {
+            "upstreamName": "t23",
+            "name": "t23"
+          },
+          {
+            "upstreamName": "t24",
+            "name": "t24"
+          },
+          {
+            "upstreamName": "t25",
+            "name": "t25"
+          },
+          {
+            "upstreamName": "t26",
+            "name": "t26"
+          },
+          {
+            "upstreamName": "t27",
+            "name": "t27"
+          },
+          {
+            "upstreamName": "t28",
+            "name": "t28"
+          },
+          {
+            "upstreamName": "t29",
+            "name": "t29"
+          },
+          {
+            "upstreamName": "t30",
+            "name": "t30"
+          },
+          {
+            "upstreamName": "t31",
+            "name": "t31"
+          },
+          {
+            "upstreamName": "t32",
+            "name": "t32"
+          },
+          {
+            "upstreamName": "t33",
+            "name": "t33"
+          },
+          {
+            "upstreamName": "t34",
+            "name": "t34"
+          },
+          {
+            "upstreamName": "t35",
+            "name": "t35"
+          },
+          {
+            "upstreamName": "t36",
+            "name": "t36"
+          },
+          {
+            "upstreamName": "t37",
+            "name": "t37"
+          },
+          {
+            "upstreamName": "t38",
+            "name": "t38"
+          },
+          {
+            "upstreamName": "t39",
+            "name": "t39"
+          },
+          {
+            "upstreamName": "t40",
+            "name": "t40"
+          },
+          {
+            "upstreamName": "t41",
+            "name": "t41"
+          },
+          {
+            "upstreamName": "t42",
+            "name": "t42"
+          },
+          {
+            "upstreamName": "t43",
+            "name": "t43"
+          },
+          {
+            "upstreamName": "t44",
+            "name": "t44"
+          },
+          {
+            "upstreamName": "t45",
+            "name": "t45"
+          },
+          {
+            "upstreamName": "t46",
+            "name": "t46"
+          },
+          {
+            "upstreamName": "t47",
+            "name": "t47"
+          },
+          {
+            "upstreamName": "t48",
+            "name": "t48"
+          },
+          {
+            "upstreamName": "t49",
+            "name": "t49"
+          },
+          {
+            "upstreamName": "t50",
+            "name": "t50"
+          },
+          {
+            "upstreamName": "t51",
+            "name": "t51"
+          },
+          {
+            "upstreamName": "t52",
+            "name": "t52"
+          },
+          {
+            "upstreamName": "t53",
+            "name": "t53"
+          },
+          {
+            "upstreamName": "t54",
+            "name": "t54"
+          },
+          {
+            "upstreamName": "t55",
+            "name": "t55"
+          },
+          {
+            "upstreamName": "t56",
+            "name": "t56"
+          },
+          {
+            "upstreamName": "t57",
+            "name": "t57"
+          },
+          {
+            "upstreamName": "t58",
+            "name": "t58"
+          },
+          {
+            "upstreamName": "t59",
+            "name": "t59"
+          },
+          {
+            "upstreamName": "t60",
+            "name": "t60"
+          },
+          {
+            "upstreamName": "t61",
+            "name": "t61"
+          },
+          {
+            "upstreamName": "t62",
+            "name": "t62"
+          },
+          {
+            "upstreamName": "t63",
+            "name": "t63"
+          },
+          {
+            "upstreamName": "t64",
+            "name": "t64"
+          }
+        ]
+      }
+    }
+  ],
+  "McpScanClaims": [
+    {
+      "case": "no pins member",
+      "value": {
+        "jti": "scan-permit-1",
+        "iss": "control",
+        "aud": "tool-host-local",
+        "iat": 1792000000000,
+        "exp": 1792000010000,
+        "scanId": "scan-7",
+        "slug": "orders",
+        "registrationRevision": 3,
+        "bindingId": "orders-binding",
+        "purpose": "REFRESH",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "approvalSequence": 2,
+        "fencingToken": "fence-7",
+        "deadlineUnixMs": 1792000030000
+      }
+    },
+    {
+      "case": "no deadline",
+      "value": {
+        "jti": "scan-permit-1",
+        "iss": "control",
+        "aud": "tool-host-local",
+        "iat": 1792000000000,
+        "exp": 1792000010000,
+        "scanId": "scan-7",
+        "slug": "orders",
+        "registrationRevision": 3,
+        "bindingId": "orders-binding",
+        "purpose": "REFRESH",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "spkiPins": [
+          "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        ],
+        "approvalSequence": 2,
+        "fencingToken": "fence-7"
+      }
+    }
+  ],
+  "McpProxyDocument": [
+    {
+      "case": "unknown format version",
+      "value": {
+        "formatVersion": 2,
+        "server": {
+          "slug": "orders",
+          "url": "https://mcp.example.com/mcp",
+          "auth": {
+            "secretName": "orders/mcp-token",
+            "scheme": "BEARER"
+          },
+          "serverInfo": {
+            "name": "orders-mcp",
+            "version": "1.4.0"
+          },
+          "spkiPins": [
+            "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          ]
+        },
+        "approvalSequence": 2,
+        "strict": false,
+        "tools": [
+          {
+            "toolId": "mcp.orders/get-order",
+            "upstreamName": "get_order",
+            "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    },
+    {
+      "case": "no pins",
+      "value": {
+        "formatVersion": 1,
+        "server": {
+          "slug": "orders",
+          "url": "https://mcp.example.com/mcp",
+          "auth": {
+            "secretName": "orders/mcp-token",
+            "scheme": "BEARER"
+          },
+          "serverInfo": {
+            "name": "orders-mcp",
+            "version": "1.4.0"
+          },
+          "spkiPins": []
+        },
+        "approvalSequence": 2,
+        "strict": false,
+        "tools": [
+          {
+            "toolId": "mcp.orders/get-order",
+            "upstreamName": "get_order",
+            "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    }
+  ],
+  "McpToolApproval": [
+    {
+      "case": "name is not a ToolGate local name",
+      "value": {
+        "upstreamName": "get_order",
+        "name": "Get Order"
+      }
+    }
+  ],
+  "ResultProvenance": [
+    {
+      "case": "unknown provenance",
+      "value": "UPSTREAM"
+    }
+  ],
+  "McpSecretName": [
+    {
+      "case": "a descriptor variable name, not a vault secret name",
+      "value": "ORDERS_MCP_TOKEN"
+    }
+  ],
+  "McpProxyServer": [
+    {
+      "case": "no URL",
+      "value": {
+        "slug": "orders",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "serverInfo": {
+          "name": "orders-mcp",
+          "version": "1.4.0"
+        },
+        "spkiPins": [
+          "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        ]
+      }
+    }
+  ],
+  "McpRefreshRequest": [
+    {
+      "case": "no evidence",
+      "value": {
+        "fencingToken": "fence-42"
+      }
+    }
   ]
 }

@@ -53,3 +53,4 @@ Use `000-template.md`.
 - [027: One tool protocol, brokered over stdio, with a generic device files area](027-one-tool-protocol-device-files.md)
 - [028: Python SDK follows the Java invocation runtime](028-python-sdk-java-parity.md)
 - [029: UUID tenant ownership with shared management and isolated execution](029-tenant-ownership-and-trust-boundaries.md)
+- [030: Existing MCP servers become tenant-owned MCP_PROXY packages](030-mcp-proxy-packages.md)

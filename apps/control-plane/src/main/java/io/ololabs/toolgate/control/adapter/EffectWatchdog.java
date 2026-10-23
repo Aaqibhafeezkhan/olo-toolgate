@@ -13,7 +13,7 @@ import java.util.concurrent.*;
 /** Bounded restart-safe sweeps. A failed sweep cannot authorize or redispatch an effect. */
 @ApplicationScoped
 public class EffectWatchdog {
-    @Inject PostgresStore store;@Inject TenantRegistry registry;@Inject EnterpriseOperations operations;@Inject ContractCodec codec;
+    @Inject PostgresStore store;@Inject TenantRegistry registry;@Inject EnterpriseOperations operations;@Inject ContractCodec codec;@Inject io.ololabs.toolgate.control.application.McpServers mcpServers;
     @Inject io.micrometer.core.instrument.MeterRegistry metrics;
     private ScheduledExecutorService executor;
     private volatile long unknown,outbox;
@@ -25,6 +25,7 @@ public class EffectWatchdog {
     private void sweep(){
         if(tenants==null)tenants=new TenantSweep(32,registry::activeAfter,tenant->{
             int count=operations.sweep(tenant);
+            count+=mcpServers.sweep(tenant);
             new io.ololabs.toolgate.control.application.RunEvents(store,codec,operations).purge(tenant,System.currentTimeMillis());
             if(count>0)metrics.counter("toolgate_control_expired_effects_total").increment(count);
             var status=store.transaction(tenant,false,tx->tx.enterprise().operationalStatus(System.currentTimeMillis()));

@@ -29,12 +29,13 @@ final readonly class InvocationPermitClaims implements \JsonSerializable {
         public int $deadlineUnixMs,
         public ?string $taskId = null,
         public ?string $businessKeyHash = null,
-        public ?KeyNamespace $businessKeyNamespace = null
+        public ?KeyNamespace $businessKeyNamespace = null,
+        public ?McpPermitVerification $mcpVerification = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['jti', 'iss', 'aud', 'iat', 'nbf', 'exp', 'nonce', 'invocationId', 'attempt', 'taskId', 'identity', 'target', 'catalogRevision', 'argumentsDigest', 'action', 'resources', 'effectSafety', 'requiresExecutionLedger', 'businessKeyHash', 'businessKeyNamespace', 'approvalIds', 'deadlineUnixMs']) || array_diff(['jti', 'iss', 'aud', 'iat', 'nbf', 'exp', 'nonce', 'invocationId', 'attempt', 'identity', 'target', 'catalogRevision', 'argumentsDigest', 'action', 'resources', 'effectSafety', 'requiresExecutionLedger', 'approvalIds', 'deadlineUnixMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['jti', 'iss', 'aud', 'iat', 'nbf', 'exp', 'nonce', 'invocationId', 'attempt', 'taskId', 'identity', 'target', 'catalogRevision', 'argumentsDigest', 'action', 'resources', 'effectSafety', 'requiresExecutionLedger', 'businessKeyHash', 'businessKeyNamespace', 'approvalIds', 'deadlineUnixMs', 'mcpVerification']) || array_diff(['jti', 'iss', 'aud', 'iat', 'nbf', 'exp', 'nonce', 'invocationId', 'attempt', 'identity', 'target', 'catalogRevision', 'argumentsDigest', 'action', 'resources', 'effectSafety', 'requiresExecutionLedger', 'approvalIds', 'deadlineUnixMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -59,7 +60,8 @@ final readonly class InvocationPermitClaims implements \JsonSerializable {
             $data['deadlineUnixMs'],
             array_key_exists('taskId', $data) ? $data['taskId'] : null,
             array_key_exists('businessKeyHash', $data) ? $data['businessKeyHash'] : null,
-            array_key_exists('businessKeyNamespace', $data) ? KeyNamespace::from($data['businessKeyNamespace']) : null
+            array_key_exists('businessKeyNamespace', $data) ? KeyNamespace::from($data['businessKeyNamespace']) : null,
+            array_key_exists('mcpVerification', $data) ? McpPermitVerification::fromArray($data['mcpVerification']) : null
         );
     }
 

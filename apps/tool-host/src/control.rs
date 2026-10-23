@@ -7,8 +7,9 @@
 
 use crate::config::ControlConfig;
 use olo_toolgate_contracts::v2::{
-    AdmissionResponse, Dispatch, InvocationResultReport, PermitConsumed, PermitConsumption,
-    ResultMessage, RunEventAck, RunEventBatch,
+    AdmissionResponse, Dispatch, InvocationResultReport, McpQuarantineReport, McpRefreshRequest,
+    McpScanClaims, McpScanDispatch, McpScanFailureReport, McpScanResult, PermitConsumed,
+    PermitConsumption, ResultMessage, RunEventAck, RunEventBatch,
 };
 use olo_toolgate_contracts::{EnterpriseSecretDelivery, EnterpriseSecretDeliveryRequest};
 use std::time::Duration;
@@ -21,6 +22,8 @@ const MAX_REPLY: usize = 1024 * 1024;
 const DISPATCHES: &str = "/api/control/v1/tool-hosts/dispatches";
 /// A relayed dispatch carries the call's arguments, at most the host's input ceiling.
 const MAX_DISPATCH: usize = 2 * 1024 * 1024;
+/// MCP proxy scans this host runs (docs/planning/mcp-proxy/plan.md §6).
+const SCANS: &str = "/api/control/v1/tool-hosts/mcp-scans";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ControlError {
@@ -214,6 +217,74 @@ impl Control {
     pub async fn relayed_result(&self, result: &ResultMessage) -> Result<(), ControlError> {
         let path = format!("{DISPATCHES}/{}/result", result.invocation_id);
         let _: serde_json::Value = self.post_json(&path, result, &[]).await?;
+        Ok(())
+    }
+
+    /// MCP scans: the oldest scan Control queued for this host, with its scan permit.
+    pub async fn next_scan(&self) -> Result<Option<McpScanDispatch>, ControlError> {
+        let bytes = self
+            .send(
+                &format!("{SCANS}/next"),
+                Some(b"{}".to_vec()),
+                &[],
+                MAX_REPLY,
+            )
+            .await?;
+        if bytes.is_empty() {
+            return Ok(None);
+        }
+        json(&bytes).map(Some)
+    }
+
+    /// Consumes a verified scan permit; only then may the scan's secret be redeemed.
+    pub async fn consume_scan(&self, claims: &McpScanClaims) -> Result<(), ControlError> {
+        let path = format!("{SCANS}/{}/consume", claims.scan_id);
+        let _: serde_json::Value = self.post_json(&path, claims, &[]).await?;
+        Ok(())
+    }
+
+    /// The registration's upstream credential, for the admitted holder of the scan.
+    pub async fn scan_secret(
+        &self,
+        scan_id: &str,
+        fencing_token: &str,
+    ) -> Result<String, ControlError> {
+        let path = format!("{SCANS}/{scan_id}/secret");
+        let delivery: EnterpriseSecretDelivery = self
+            .post_json(
+                &path,
+                &serde_json::json!({}),
+                &[(FENCING_HEADER, fencing_token)],
+            )
+            .await?;
+        Ok(delivery.value)
+    }
+
+    pub async fn scan_result(&self, result: &McpScanResult) -> Result<(), ControlError> {
+        let path = format!("{SCANS}/{}/result", result.scan_id);
+        let _: serde_json::Value = self.post_json(&path, result, &[]).await?;
+        Ok(())
+    }
+
+    pub async fn scan_failure(&self, report: &McpScanFailureReport) -> Result<(), ControlError> {
+        let path = format!("{SCANS}/{}/failure", report.scan_id);
+        let _: serde_json::Value = self.post_json(&path, report, &[]).await?;
+        Ok(())
+    }
+
+    /// Asks for an immediate refresh of the server of a call this host holds, which sent `list_changed`.
+    pub async fn refresh(&self, request: &McpRefreshRequest) -> Result<(), ControlError> {
+        let _: serde_json::Value = self
+            .post_json("/api/control/v1/tool-hosts/mcp-refreshes", request, &[])
+            .await?;
+        Ok(())
+    }
+
+    /// A quarantine report bound to one invocation or refresh scan this host holds.
+    pub async fn quarantine(&self, report: &McpQuarantineReport) -> Result<(), ControlError> {
+        let _: serde_json::Value = self
+            .post_json("/api/control/v1/tool-hosts/mcp-quarantines", report, &[])
+            .await?;
         Ok(())
     }
 
