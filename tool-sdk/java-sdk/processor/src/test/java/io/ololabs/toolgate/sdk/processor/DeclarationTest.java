@@ -28,6 +28,34 @@ class DeclarationTest {
         for (String f : fragments) assertTrue(r.errors().contains(f), () -> "missing \"" + f + "\" in:\n" + r.errors());
     }
 
+    /** OLO M3.7: @Authorization becomes the descriptor's permission and locator templates. */
+    @Test
+    void authorizationDeclaresThePermissionAndResourceTemplates() {
+        var r = ok(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.read", resources = "olo://{tenant}/item/{id}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION));
+        String descriptor = r.descriptor("items.read");
+        assertTrue(descriptor.contains("\"authorization\":{\"action\":\"items.read\",\"resources\":[\"olo://{tenant}/item/{id}\"]}"), descriptor);
+        assertFalse(ok(tools("", TOOL.formatted("items.list"), GENERATION)).descriptor("items.list").contains("authorization"));
+        fails(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.*", resources = "olo://{tenant}/item/{id}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION), "without wildcards");
+        fails(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.read", resources = "olo://{tenant}/item/{other}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION), "not a required argument");
+        fails(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.read", resources = "olo://acme/item/{id}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION), "olo://{tenant}/kind/{argument}");
+    }
+
     @Test
     void generationIsRequiredAndHasNoDefault() {
         fails(tools("", TOOL.formatted("items.list")), "toolgate.descriptorGeneration");

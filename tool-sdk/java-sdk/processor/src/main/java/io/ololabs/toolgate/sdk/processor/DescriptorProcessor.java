@@ -84,7 +84,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
     static final String TOOL_RESULT = "io.ololabs.toolgate.sdk.context.ToolResult";
 
     private static final List<Class<? extends Annotation>> ANNOTATIONS = List.of(ToolPackage.class, ServerTool.class,
-            ClientTool.class, io.ololabs.toolgate.sdk.annotations.DeviceFileAccess.class, Destination.class, HttpAuth.class, HttpRoute.class,
+            ClientTool.class, io.ololabs.toolgate.sdk.annotations.DeviceFileAccess.class, io.ololabs.toolgate.sdk.annotations.Authorization.class, Destination.class, HttpAuth.class, HttpRoute.class,
             TcpDestination.class);
 
     private boolean done;
@@ -569,6 +569,31 @@ public final class DescriptorProcessor extends AbstractProcessor {
 
             for (String set : t.toolsets) length(set, 1, 64, "toolset", method);
             d.put("toolsets", Jcs.sorted(unique(Arrays.asList(t.toolsets), "toolset", method)));
+
+            // OLO M3.7: the tool's permission and per-call resources; ToolGate rechecks every template against the input schema.
+            io.ololabs.toolgate.sdk.annotations.Authorization authorization = method.getAnnotation(io.ololabs.toolgate.sdk.annotations.Authorization.class);
+            if (authorization != null) {
+                if (!authorization.action().matches("[a-z][a-z0-9_-]{0,31}([.][a-z][a-z0-9_-]{0,31}){0,3}")) {
+                    throw new Problem(method, "@Authorization action " + authorization.action() + " must be a lower-case dotted permission without wildcards");
+                }
+                String[] templates = authorization.resources();
+                if (templates.length < 1 || templates.length > 8) throw new Problem(method, "@Authorization needs one to eight resources");
+                for (String template : templates) {
+                    if (!template.matches("[a-z][a-z0-9+.-]{0,31}://[{]tenant[}](/([A-Za-z0-9._-]{1,64}|[{][A-Za-z][A-Za-z0-9_]{0,63}[}]))+")) {
+                        throw new Problem(method, "@Authorization resource " + template + " must look like olo://{tenant}/kind/{argument}");
+                    }
+                    var placeholder = java.util.regex.Pattern.compile("[{]([A-Za-z][A-Za-z0-9_]{0,63})[}]").matcher(template.substring(template.indexOf("{tenant}") + 8));
+                    while (placeholder.find()) {
+                        if (!required.contains(placeholder.group(1))) {
+                            throw new Problem(method, "@Authorization resource " + template + " names " + placeholder.group(1) + ", which is not a required argument");
+                        }
+                    }
+                }
+                Map<String, Object> declared = new LinkedHashMap<>();
+                declared.put("action", authorization.action());
+                declared.put("resources", unique(Arrays.asList(templates), "resource", method));
+                d.put("authorization", declared);
+            }
 
             Example[] examples = method.getAnnotationsByType(Example.class);
             if (examples.length > 8) throw new Problem(method, "tool " + name + " declares " + examples.length + " examples; at most 8 are allowed");
