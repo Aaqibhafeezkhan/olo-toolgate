@@ -117,7 +117,7 @@ describe('Administration',()=>{
     vi.stubGlobal('fetch',vi.fn(async(url:string)=>url.endsWith('/admin-session')?json({role:'SUPER_ADMIN',permissions:allPermissions}):url.startsWith('/api/control/v1/settings')?json(settings):json({items:[]})));
     render(<App/>);await connect();
     const administration=[...document.querySelectorAll('nav details')].find(group=>group.querySelector('summary')?.textContent==='Administration')!;
-    expect([...administration.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['#config-server','#config-device','#config-backup']);
+    expect([...administration.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['#config-server','#config-device','#config-backup','#mcp-servers']);
     expect(screen.getByRole('link',{name:'About'}).previousElementSibling).toBe(administration);
     navigate('#config-server');expect(((await screen.findByLabelText('Configuration reviews')) as HTMLSelectElement).value).toBe('1');
     navigate('#config-backup');await screen.findByRole('heading',{name:'Backup/Restore'});

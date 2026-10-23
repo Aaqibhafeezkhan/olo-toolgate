@@ -4,7 +4,7 @@ import type { FleetReleasePage, FleetRolloutPage, FleetRolloutRequest, FleetRoll
 import { listOperations, getOperations, createOperations, updateOperations, deleteOperations, operations, type DirectoryKind, type DirectoryPages, type DirectoryRecords } from './operations.generated';
 import type {SdkBuilderDraft,SdkBuilderDraftPage,SdkBuilderSave,SdkBuilderBuild,SdkBuilderBuildPage,SdkBuilderBuildRequest,SdkBuilderStatus,SdkBuilderSource} from '@olo-labs/toolgate-contracts';
 import type { AdminSession, ControlAuditPage,ConsoleDeviceLookup,ConsoleDeviceChallenge,ConsoleDeviceProof,ConsoleDeviceVerified } from '@olo-labs/toolgate-contracts';
-import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest,ProvisioningStatusPage} from '@olo-labs/toolgate-contracts/v2';
+import type {MarketplaceStatus,MarketplaceImportRequest,PackageVersion,PackageVersionPage,PackageDeployment,PackageDeploymentPage,PackageDeploymentRequest,ProvisioningStatusPage,McpApproval,McpApprovalPage,McpApprovalRequest,McpScanJob,McpServerRegistration,McpServerRegistrationPage,McpServerRegistrationRequest,McpSnapshot} from '@olo-labs/toolgate-contracts/v2';
 import type {RemoteToolPage,RemoteToolInspection,GroupMembership,ControlSnapshot,SignedPolicyBundle,BundlePublishRequest,EnterpriseEvaluation,EnterpriseDecision} from '@olo-labs/toolgate-contracts';
 import {pendingOperations,type ConfigurationFile,type EnrollmentLookup,type ImportIdentityOptions,type PendingServerSettings,type PendingServerSettingsPatch,type ReauthorizedWorkload,type ReviewPolicy} from './pendingContracts';
 
@@ -98,11 +98,11 @@ export class ControlClient {
   }
   dispose(): void { this.token = ''; this.lifetime.abort(); }
 
-  private async send<T>(operation: Operation, options: { id?: string; query?: URLSearchParams; body?: unknown; raw?: Blob; revision?: number; key?: string; signal?: AbortSignal; contentType?: string; timeoutMs?: number } = {}): Promise<T> {
+  private async send<T>(operation: Operation, options: { id?: string; params?: Record<string, string>; query?: URLSearchParams; body?: unknown; raw?: Blob; revision?: number; key?: string; signal?: AbortSignal; contentType?: string; timeoutMs?: number } = {}): Promise<T> {
     if (this.lifetime.signal.aborted) throw new DOMException('Session ended', 'AbortError');
     const timeout = AbortSignal.timeout(options.timeoutMs ?? 15000);
     const signal = AbortSignal.any([this.lifetime.signal, timeout, ...(options.signal ? [options.signal] : [])]);
-    const path = operation.path.replace('{id}', encodeURIComponent(options.id ?? ''));
+    const path = operation.path.replace(/\{(\w+)\}/g, (_, name: string) => encodeURIComponent(name === 'id' ? options.id ?? '' : options.params?.[name] ?? ''));
     const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${this.token}` });
     if (options.body !== undefined || options.raw) headers.set('Content-Type', options.contentType ?? 'application/json');
     if (options.key) headers.set('Idempotency-Key', options.key);
@@ -137,6 +137,14 @@ export class ControlClient {
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */
   uploadServerPackage(file:Blob):Promise<PackageVersion>{return this.send(operations.uploadServerPackage,{raw:file,contentType:'application/vnd.ololabs.toolgate.package+zip',timeoutMs:120000});}
   deployServerPackage(body:PackageDeploymentRequest):Promise<PackageDeployment>{return this.send(operations.deployServerPackage,{body});}
+  mcpServers(signal?:AbortSignal):Promise<McpServerRegistrationPage>{return this.send(operations.listMcpServers,{signal});}
+  mcpServer(slug:string,signal?:AbortSignal):Promise<McpServerRegistration>{return this.send(operations.getMcpServer,{params:{slug},signal});}
+  registerMcpServer(body:McpServerRegistrationRequest,key:string):Promise<McpServerRegistration>{return this.send(operations.registerMcpServer,{body,key});}
+  scanMcpServer(slug:string,key:string):Promise<McpScanJob>{return this.send(operations.scanMcpServer,{params:{slug},key});}
+  mcpSnapshot(slug:string,revision:number,signal?:AbortSignal):Promise<McpSnapshot>{return this.send(operations.getMcpSnapshot,{params:{slug,revision:String(revision)},signal});}
+  mcpApprovals(slug:string,signal?:AbortSignal):Promise<McpApprovalPage>{return this.send(operations.listMcpApprovals,{params:{slug},signal});}
+  approveMcpServer(slug:string,body:McpApprovalRequest,key:string):Promise<McpApproval>{return this.send(operations.approveMcpServer,{params:{slug},body,key,timeoutMs:45000});}
+  unregisterMcpServer(slug:string,key:string):Promise<void>{return this.send(operations.deleteMcpServer,{params:{slug},key});}
   /** The latest status of every applied deployment profile, with its package changes. */
   provisioningStatuses(signal?:AbortSignal):Promise<ProvisioningStatusPage>{return this.send(operations.listProvisioningStatuses,{signal});}
   marketplaceStatus(signal?:AbortSignal):Promise<MarketplaceStatus>{return this.send(operations.getMarketplaceStatus,{signal});}
