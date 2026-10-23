@@ -53,10 +53,20 @@ public final class ServerPackages {
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId, Origin origin) {
         var verified = PackageArchive.validate(data, this::node); var manifest = verified.manifest();
         PackageCompatibility.require(PackageCompatibility.problems(manifest));
-        String digest = verified.packageDigest(), id = manifest.get("id").asText(), version = manifest.get("version").asText();
+        // Only Control generates MCP_PROXY packages, from an approved MCP server snapshot.
+        if (PackageCompatibility.proxy(manifest)) throw PackageCompatibility.incompatible();
         return store.transaction(actor.tenant(), true, tx -> {
             writer(tx, actor, "import");
-            if (origin != null) tx.audit(actor.id(), "PACKAGE_MARKETPLACE_IMPORT", origin.target(), 1, requestId, hex(digest));
+            if (origin != null) tx.audit(actor.id(), "PACKAGE_MARKETPLACE_IMPORT", origin.target(), 1, requestId, hex(verified.packageDigest()));
+            return imported(tx, actor.id(), verified, data, requestId);
+        });
+    }
+
+    /** Stores a verified, compatible package. The caller has authorized the import. */
+    Store.Reply imported(Store.Session tx, String actor, PackageArchive.Verified verified, byte[] data, String requestId) {
+        var manifest = verified.manifest();
+        String digest = verified.packageDigest(), id = manifest.get("id").asText(), version = manifest.get("version").asText();
+        {
             var existing = tx.packages().version(digest);
             if (existing != null) return new Store.Reply(200, existing.document(), 0);
             long now = clock.millis();
@@ -64,9 +74,9 @@ public final class ServerPackages {
                 .put("state", "VERIFIED").put("revision", 1).put("uploadedAtUnixMs", now);
             document.set("manifest", manifest);
             tx.packages().saveVersion(new PackageStore.Version(digest, id, version, now, codec.json(document)), data);
-            tx.audit(actor.id(), "PACKAGE_UPLOAD", "package:" + id, 1, requestId, hex(digest));
+            tx.audit(actor, "PACKAGE_UPLOAD", "package:" + id, 1, requestId, hex(digest));
             return reply(201, document);
-        });
+        }
     }
 
     public Store.Reply versions(DirectoryService.Actor actor) {
@@ -89,6 +99,18 @@ public final class ServerPackages {
         var request = codec.model(body, PackageDeploymentRequest.class);
         return store.transaction(actor.tenant(), true, tx -> {
             writer(tx, actor, "deploy");
+            var stored = tx.packages().version(request.packageDigest());
+            // A generated MCP_PROXY package is deployed by its approval only, onto its registration's pool.
+            if (stored != null && PackageCompatibility.proxy(node(stored.document()).get("manifest"))) throw Failure.conflict();
+            return reply(200, deployIn(tx, actor.id(), request, requestId));
+        });
+    }
+
+    /** Deploys a stored package. The caller has authorized the deployment. Tools of the previous deployment that this
+     *  manifest omits are retired in the same directory change: disabled with their extractors, so catalogs stop listing
+     *  them and permits for them are refused. */
+    ObjectNode deployIn(Store.Session tx, String actor, PackageDeploymentRequest request, String requestId) {
+        {
             var version = tx.packages().version(request.packageDigest());
             if (version == null) throw notFound();
             var manifest = node(version.document()).get("manifest");
@@ -106,6 +128,12 @@ public final class ServerPackages {
                 for (var route : descriptor.path("routes")) same(routes, route.get("id").asText(), route);
             }
             for (var name : request.globals().keySet()) if (!declared.containsKey(name) && !hosts.contains(name)) throw Failure.validation();
+            if (PackageCompatibility.proxy(manifest)) {
+                // The upstream credential is named by the proxy document, not by descriptor variables.
+                String secret = proxyDocument(tx, version).get("server").get("auth").get("secretName").asText();
+                secrets.replaceAll((toolId, names) -> new TreeSet<>(Set.of(secret)));
+                if (request.deviceGroupIds() == null || request.deviceGroupIds().size() != 1) throw Failure.validation();
+            }
             var targets = new TreeSet<String>(request.hostIds() == null ? List.of() : request.hostIds());
             var groups = new TreeSet<String>(request.deviceGroupIds() == null ? List.of() : request.deviceGroupIds());
             // A deployment names Tool Hosts or Device Groups (pools), never both.
@@ -175,6 +203,7 @@ public final class ServerPackages {
                 if (added) GroupGraph.addDefault(entries, codec, Kind.TOOL, toolId);
             }
             if (toolIds.isEmpty()) throw PackageCompatibility.incompatible();
+            if (previous != null) for (var old : node(previous).path("toolIds")) if (!toolIds.contains(old.asText())) retire(entries, old.asText());
             var after = new Directory(before.revision() + 1, entries);
             try { after.validate(512, 1048576); codec.validatePolicies(after); } catch (IllegalArgumentException failure) { throw Failure.conflict(); }
             tx.save(before, after);
@@ -186,9 +215,47 @@ public final class ServerPackages {
             if (!targets.isEmpty()) { var hostIds = deployment.putArray("hostIds"); targets.forEach(hostIds::add); }
             if (!groups.isEmpty()) { var groupIds = deployment.putArray("deviceGroupIds"); groups.forEach(groupIds::add); }
             tx.packages().saveDeployment(packageId, codec.json(deployment));
-            tx.audit(actor.id(), "PACKAGE_DEPLOY", "package:" + packageId, revision, requestId, hex(version.digest()));
-            return reply(200, deployment);
-        });
+            tx.audit(actor, "PACKAGE_DEPLOY", "package:" + packageId, revision, requestId, hex(version.digest()));
+            return deployment;
+        }
+    }
+
+    /** Retires every tool of a deployment and removes it (an unregistered MCP server's package). */
+    void undeployIn(Store.Session tx, String actor, String packageId, String requestId) {
+        var raw = tx.packages().deployment(packageId);
+        if (raw == null) return;
+        var before = tx.load(); var entries = new HashMap<>(before.entries());
+        for (var toolId : node(raw).path("toolIds")) retire(entries, toolId.asText());
+        tx.save(before, new Directory(before.revision() + 1, entries));
+        tx.packages().deleteDeployment(packageId);
+        tx.audit(actor, "PACKAGE_UNDEPLOY", "package:" + packageId, node(raw).get("revision").asLong(), requestId, DirectoryService.digest(raw));
+    }
+
+    /** Disables a deployed tool and its extractor at their next revisions. */
+    private void retire(Map<Ids.RecordId, Directory.Entry> entries, String toolId) {
+        var tool = entries.get(Kind.TOOL.id(toolId));
+        if (tool == null) return;
+        var document = (ObjectNode) node(tool.document());
+        var extractor = entries.get(Kind.EXTRACTOR.id(document.path("extractorId").asText()));
+        entries.put(tool.id(), codec.entry(Kind.TOOL, codec.json(document.put("enabled", false).put("revision", document.get("revision").asLong() + 1))));
+        if (extractor != null) {
+            var e = (ObjectNode) node(extractor.document());
+            entries.put(extractor.id(), codec.entry(Kind.EXTRACTOR, codec.json(e.put("enabled", false).put("revision", e.get("revision").asLong() + 1))));
+        }
+    }
+
+    public static final String MCP_PROXY_MEDIA_TYPE = "application/vnd.ololabs.toolgate.mcp-proxy+json";
+    /** The mcp-proxy.json of a stored MCP_PROXY package. */
+    JsonNode proxyDocument(Store.Session tx, PackageStore.Version version) {
+        var manifest = node(version.document()).get("manifest"); String path = null;
+        for (var artifact : manifest.path("artifacts")) if (MCP_PROXY_MEDIA_TYPE.equals(artifact.path("mediaType").asText())) path = artifact.get("path").asText();
+        var bytes = tx.packages().content(version.digest());
+        if (path == null || bytes == null) throw Failure.conflict();
+        var file = PackageArchive.validate(bytes, this::node).files().get(path);
+        if (file == null) throw Failure.conflict();
+        String json = new String(file, java.nio.charset.StandardCharsets.UTF_8);
+        codec.model(json, io.ololabs.toolgate.contracts.v2.McpProxyDocument.class);
+        return node(json);
     }
 
     /** A deployment runs on the Tool Hosts it names, on the current members of the Device Groups (pools) it names, or on
@@ -368,8 +435,27 @@ public final class ServerPackages {
             claims.put("effectSafety", safety).put("requiresExecutionLedger", !safety.equals("READ_ONLY") && !safety.equals("IDEMPOTENT"));
             var approvals = claims.putArray("approvalIds"); lease.approvalIds().forEach(approvals::add);
             claims.put("deadlineUnixMs", i.expiresAtUnixMs());
+            if (PackageCompatibility.proxy(manifest)) claims.set("mcpVerification", mcpVerification(tx, version, clock.millis()));
             return operations.signer().signInvocation(codec.model(codec.json(claims), io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class));
         }
+    }
+
+    public static final long MCP_FRESHNESS_MS = 120_000;
+    /** Freshness evidence for an MCP_PROXY call (docs/planning/mcp-proxy/plan.md §7): CURRENT only when the most recent
+     *  check of the deployed approval sequence succeeded at most 120 s ago and the server is approved, not quarantined. */
+    public ObjectNode mcpVerification(Store.Session tx, PackageStore.Version version, long now) {
+        long deployed = Long.parseLong(version.version().substring(version.version().lastIndexOf('.') + 1));
+        var result = JSON.objectNode(); boolean current = false;
+        var server = tx.mcpServers().server(version.packageId().substring("mcp.".length()));
+        if (server != null) {
+            var registration = node(server.document()); var verification = registration.path("verification");
+            long checked = verification.path("checkedAtUnixMs").asLong(-1);
+            current = registration.path("state").asText().equals("APPROVED") && verification.path("status").asText().equals("CURRENT")
+                && verification.path("approvalSequence").asLong(-1) == deployed && checked >= 0 && checked <= now && now - checked <= MCP_FRESHNESS_MS;
+        }
+        result.put("status", current ? "CURRENT" : "UNVERIFIED").put("approvalSequence", deployed);
+        if (current) result.put("checkedAtUnixMs", node(server.document()).path("verification").path("checkedAtUnixMs").asLong());
+        return result;
     }
 
     /** Delegated user claims the workload binding passes to this tool (glob on tool id or MCP name, * suffix only). Nothing else reaches the permit. */

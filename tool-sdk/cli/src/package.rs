@@ -204,9 +204,14 @@ pub fn validate(data: &[u8]) -> Result<Report, Error> {
     let manifest = &verified.manifest;
     validate_manifest_schema(manifest)?;
     let package_id = str_at(manifest, "id")?;
-    let generation = manifest
-        .pointer("/sdk/descriptorGeneration")
-        .and_then(Value::as_u64);
+    // A generated MCP_PROXY package has no SDK block; its descriptors are generation 1.
+    let generation = if manifest.get("kind").and_then(Value::as_str) == Some("MCP_PROXY") {
+        Some(1)
+    } else {
+        manifest
+            .pointer("/sdk/descriptorGeneration")
+            .and_then(Value::as_u64)
+    };
     let limits = manifest.get("limits").cloned().unwrap_or(Value::Null);
     let max_tools = limits
         .get("maxTools")

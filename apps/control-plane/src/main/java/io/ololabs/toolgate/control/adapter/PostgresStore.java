@@ -241,6 +241,7 @@ public class PostgresStore implements Store {
                 public String deployment(String packageId){return text("SELECT document FROM control_server_deployments WHERE tenant_id=? AND package_id=?",packageId);}
                 public java.util.List<String> deployments(){return texts("SELECT document FROM control_server_deployments WHERE tenant_id=? ORDER BY package_id LIMIT 256");}
                 public void saveDeployment(String packageId,String document){write("INSERT INTO control_server_deployments (tenant_id,package_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,package_id) DO UPDATE SET document=excluded.document",packageId,document);}
+                public void deleteDeployment(String packageId){write("DELETE FROM control_server_deployments WHERE tenant_id=? AND package_id=?",packageId);}
                 public String toolHost(String deviceId){return text("SELECT document FROM control_tool_hosts WHERE tenant_id=? AND device_id=?",deviceId);}
                 public void saveToolHost(String deviceId,String document){write("INSERT INTO control_tool_hosts (tenant_id,device_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,device_id) DO UPDATE SET document=excluded.document",deviceId,document);}
                 private Relayed relayedRow(String suffix,Object... parameters){
@@ -297,6 +298,7 @@ public class PostgresStore implements Store {
                         if(u.executeUpdate()!=1)throw Failure.conflict();
                     }catch(SQLException failure){throw Failure.unavailable();}
                 }
+                public void deleteServer(String slug){write("DELETE FROM control_mcp_servers WHERE tenant_id=? AND slug=?",slug);}
                 public Snapshot snapshot(String slug,long revision){return first(rows("SELECT slug,revision,document FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? AND revision=?",r->new Snapshot(r.getString(1),r.getLong(2),r.getString(3)),slug,revision));}
                 public java.util.List<Long> snapshotRevisions(String slug){return rows("SELECT revision FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? ORDER BY revision DESC LIMIT 64",r->r.getLong(1),slug);}
                 public void saveSnapshot(Snapshot s){write("INSERT INTO control_mcp_snapshots (tenant_id,slug,revision,document) VALUES (?,?,?,?)",s.slug(),s.revision(),s.document());}

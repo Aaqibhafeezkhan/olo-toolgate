@@ -44,8 +44,10 @@ final class McpServersTest {
         var store = new PostgresStore(runtime, codec); var clock = new Ticking();
         var generator = java.security.KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
         var signer = new RsaEffectSigner((java.security.interfaces.RSAPrivateCrtKey) generator.generateKeyPair().getPrivate(), "effect-1", codec);
+        var operations = new EnterpriseOperations(store, codec, null, clock, "control", "toolgate-client", 60000, 256);
+        var packages = new ServerPackages(store, codec, operations, clock);
         return new Fixture(postgres, runtime, store, new TenantRegistry(platform, codec, keys), new VaultService(store, codec, keys),
-            new ServerPackages(store, codec, null, clock), new McpServers(store, codec, signer, clock), clock, signer);
+            packages, new McpServers(store, codec, signer, clock, packages, operations), clock, signer);
     }
 
     /** A tenant with an administrator, a pool of one Tool Host and an execution binding onto it, and the upstream secret in the binding's groups. */
@@ -201,5 +203,131 @@ final class McpServersTest {
         assertEquals(403, status(() -> f.servers.register(limited, registration("payments", "orders/mcp-token"), "k-2", "r")));
         assertEquals(404, status(() -> f.servers.scan(limited, "orders", "k-3", "r")));
         assertEquals(0, node(f.servers.servers(limited).body()).get("items").size());
+    }
+
+    /** Scans `tools` into a new snapshot of `slug` on host-a and returns its revision. */
+    private long snapshot(Fixture f, DirectoryService.Actor a, String slug, String key, String... tools) throws Exception {
+        f.servers.scan(a, slug, key, "r"); var claims = admit(f, a.tenant(), "host-a");
+        return node(f.servers.result(a.tenant(), tx -> device(a.tenant(), "host-a"), claims.scanId(), result(claims.scanId(), claims.fencingToken(), tools)).body()).get("snapshotRevision").asLong();
+    }
+    private static String approval(long revision, String... mappings) {
+        var tools = new StringBuilder();
+        for (int i = 0; i < mappings.length; i += 2) tools.append(i == 0 ? "" : ",").append("{\"upstreamName\":\"").append(mappings[i]).append("\",\"name\":\"").append(mappings[i + 1]).append("\"}");
+        return "{\"snapshotRevision\":" + revision + ",\"tools\":[" + tools + "]}";
+    }
+    private Directory.Entry entry(Fixture f, Ids.TenantId tenant, Ids.Kind kind, String id) { return f.store.transaction(tenant, false, tx -> tx.load().entries().get(kind.id(id))); }
+    private void enable(Fixture f, Ids.TenantId tenant, String toolId) {
+        f.store.transaction(tenant, true, tx -> {
+            var before = tx.load(); var entries = new HashMap<>(before.entries()); var tool = entries.get(Ids.Kind.TOOL.id(toolId));
+            var document = (com.fasterxml.jackson.databind.node.ObjectNode) codec.value(tool.document());
+            entries.put(tool.id(), codec.entry(Ids.Kind.TOOL, codec.json(document.put("enabled", true).put("revision", document.get("revision").asLong() + 1))));
+            tx.save(before, new Directory(before.revision() + 1, entries)); return null;
+        });
+    }
+    /** An executing invocation of an MCP_PROXY tool on `host` under `fence`, bound to the deployed package `digest`. */
+    private void invocation(Fixture f, Ids.TenantId tenant, String id, String toolId, String host, String fence, String digest) {
+        String invocation = """
+            {"id":"%s","requestDigest":"%s","evaluation":{"context":{"requestId":"%s","tenantId":"%s","mode":"SERVICE","agentId":"agent-1","chain":[],"bindingId":"mcp-binding","deviceId":"%s"},
+             "toolId":"%s","action":"invoke","argumentsDigest":"%s","resources":[],"toolDigest":"%s","packageDigest":"%s","nowUnixMs":0,"authorityRevision":0,"online":true},
+             "state":"EXECUTING","revision":1,"authorizationEpoch":0,"reservedNonce":"%s","expiresAtUnixMs":%d,"completedResources":[],"diagnosticId":"diag"}"""
+            .formatted(id, "a".repeat(64), id, tenant.value(), host, toolId, DirectoryService.digest("{}"), "c".repeat(64), digest.substring(7), fence, f.clock.now + 60000);
+        f.store.transaction(tenant, true, tx -> { tx.enterprise().saveInvocation(codec.model(invocation, EnterpriseInvocation.class), f.clock.now, 0); return null; });
+    }
+    private static String report(String invocation, String fence) { return "{\"invocationId\":\"" + invocation + "\",\"fencingToken\":\"" + fence + "\",\"reason\":\"DEFINITION_CHANGED\"}"; }
+
+    @Test void sqliteApprovalsPackagesAndQuarantine() throws Exception { approvals(fixture(false)); }
+    @Test void postgresApprovalsPackagesAndQuarantine() throws Exception { approvals(fixture(true)); }
+
+    private void approvals(Fixture f) throws Exception {
+        var a = tenant(f, "tenant-a", "host-a"); var tenant = a.tenant();
+        f.servers.register(a, registration("orders", "orders/mcp-token"), "k-1", "r");
+        long revision = snapshot(f, a, "orders", "s-1", tool("get_order", "Read one order."), tool("list_orders", "List orders."));
+
+        // Names are refused, never silently changed: an unknown upstream tool, a duplicate name, a bad local name.
+        assertEquals(400, status(() -> f.servers.approve(a, "orders", approval(revision, "nope", "nope"), "a-0", "r")));
+        assertEquals(400, status(() -> f.servers.approve(a, "orders", approval(revision, "get_order", "same", "list_orders", "same"), "a-0b", "r")));
+        assertEquals(400, status(() -> f.servers.approve(a, "orders", approval(revision, "get_order", "Get Order"), "a-0c", "r")));
+
+        // Approval 1: the generated package goes through the real pipeline and is deployed to the registration's pool.
+        var first = node(f.servers.approve(a, "orders", approval(revision, "get_order", "get-order", "list_orders", "list-orders"), "a-1", "r").body());
+        assertEquals(1, first.get("sequence").asLong()); assertEquals("1.0.1", first.get("packageVersion").asText()); assertEquals("mcp.orders", first.get("packageId").asText());
+        String digest1 = first.get("packageDigest").asText();
+        var version = f.store.transaction(tenant, false, tx -> tx.packages().version(digest1));
+        assertEquals("MCP_PROXY", node(version.document()).get("manifest").get("kind").asText());
+        byte[] content = f.store.transaction(tenant, false, tx -> tx.packages().content(digest1));
+        var verified = PackageArchive.validate(content, document -> (JsonNode) codec.value(document));
+        assertEquals(digest1, verified.packageDigest());
+        var proxy = node(new String(verified.files().get("artifacts/mcp-proxy.json"), java.nio.charset.StandardCharsets.UTF_8));
+        assertEquals("https://mcp.example.com/mcp", proxy.get("server").get("url").asText()); assertEquals(1, proxy.get("approvalSequence").asLong());
+        var deployment = node(f.store.transaction(tenant, false, tx -> tx.packages().deployment("mcp.orders")));
+        assertEquals("[\"pool\"]", deployment.get("deviceGroupIds").toString());
+        assertEquals("[\"mcp.orders/get-order\",\"mcp.orders/list-orders\"]", deployment.get("toolIds").toString());
+        // New tools start disabled; the extractor names the registration's secret for secret delivery.
+        assertFalse(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/get-order").enabled());
+        var extractorId = node(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/get-order").document()).get("extractorId").asText();
+        assertTrue(entry(f, tenant, Ids.Kind.EXTRACTOR, extractorId).document().contains("secret://orders/mcp-token"));
+        // Only Control generates and deploys MCP_PROXY packages.
+        assertEquals(422, status(() -> f.packages.upload(a, content, "r")));
+        assertEquals(409, status(() -> f.packages.deploy(a, "{\"packageDigest\":\"" + digest1 + "\",\"globals\":{},\"deviceGroupIds\":[\"pool\"]}", "r")));
+
+        // Idempotency: the same key returns the approval; the same approval under another key is the current one.
+        assertEquals(first, node(f.servers.approve(a, "orders", approval(revision, "get_order", "get-order", "list_orders", "list-orders"), "a-1", "r").body()));
+        assertEquals(1, node(f.servers.approve(a, "orders", approval(revision, "list_orders", "list-orders", "get_order", "get-order"), "a-2", "r").body()).get("sequence").asLong());
+
+        // Freshness evidence in permits: CURRENT from the approved snapshot for 120 s, then UNVERIFIED.
+        assertEquals("CURRENT", f.store.<JsonNode>transaction(tenant, false, tx -> f.packages.mcpVerification(tx, version, f.clock.now)).get("status").asText());
+        assertEquals("UNVERIFIED", f.store.<JsonNode>transaction(tenant, false, tx -> f.packages.mcpVerification(tx, version, f.clock.now + 120_001)).get("status").asText());
+
+        // Subset shrink: approve {get_order} after enabling both. list-orders is retired; get-order keeps its state.
+        enable(f, tenant, "mcp.orders/get-order"); enable(f, tenant, "mcp.orders/list-orders");
+        var second = node(f.servers.approve(a, "orders", approval(revision, "get_order", "get-order"), "a-3", "r").body());
+        assertEquals(2, second.get("sequence").asLong()); assertEquals("1.0.2", second.get("packageVersion").asText());
+        assertNotEquals(digest1, second.get("packageDigest").asText());
+        assertTrue(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/get-order").enabled());
+        assertFalse(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/list-orders").enabled());
+        assertFalse(entry(f, tenant, Ids.Kind.EXTRACTOR, node(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/list-orders").document()).get("extractorId").asText()).enabled());
+        assertEquals("[\"mcp.orders/get-order\"]", node(f.store.transaction(tenant, false, tx -> tx.packages().deployment("mcp.orders"))).get("toolIds").toString());
+        String digest2 = second.get("packageDigest").asText();
+        // A permit for the retired tool is refused at issuance.
+        invocation(f, tenant, "inv-retired", "mcp.orders/list-orders", "host-a", "fence-0", digest2);
+        var gateway = new DirectoryService.Actor(tenant, "e".repeat(64), false);
+        assertEquals(409, status(() -> f.packages.permit(gateway, "{\"invocationId\":\"inv-retired\",\"audience\":\"host-a\",\"attempt\":1,\"arguments\":{}}", "permit")));
+
+        // Quarantine from a call: only the invocation's lease holder, with its fencing token, for its own tool.
+        invocation(f, tenant, "inv-1", "mcp.orders/get-order", "host-a", "fence-1", digest2);
+        assertEquals(403, status(() -> f.servers.quarantine(tenant, tx -> device(tenant, "host-a-other"), report("inv-1", "fence-1"))));
+        assertEquals(403, status(() -> f.servers.quarantine(tenant, tx -> device(tenant, "host-a"), report("inv-1", "wrong"))));
+        var quarantined = node(f.servers.quarantine(tenant, tx -> device(tenant, "host-a"), report("inv-1", "fence-1")).body());
+        assertEquals("QUARANTINED", quarantined.get("state").asText());
+        assertEquals("[\"mcp.orders/get-order\"]", quarantined.get("quarantine").get("toolIds").toString());
+        assertFalse(quarantined.get("quarantine").get("serverWide").asBoolean());
+        assertFalse(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/get-order").enabled());
+        // A replayed report changes nothing.
+        assertEquals(quarantined, node(f.servers.quarantine(tenant, tx -> device(tenant, "host-a"), report("inv-1", "fence-1")).body()));
+        assertEquals("UNVERIFIED", f.store.<JsonNode>transaction(tenant, false, tx -> f.packages.mcpVerification(tx, f.store.transaction(tenant, false, t -> t.packages().version(digest2)), f.clock.now)).get("status").asText());
+
+        // Recovery is a re-approval; a report bound to an older package is then stale: audited, nothing changes.
+        var third = node(f.servers.approve(a, "orders", approval(revision, "get_order", "get-order"), "a-4", "r").body());
+        assertEquals(3, third.get("sequence").asLong());
+        assertEquals("APPROVED", node(f.servers.server(a, "orders").body()).get("state").asText());
+        invocation(f, tenant, "inv-old", "mcp.orders/get-order", "host-a", "fence-2", digest2);
+        assertEquals("APPROVED", node(f.servers.quarantine(tenant, tx -> device(tenant, "host-a"), report("inv-old", "fence-2")).body()).get("state").asText());
+
+        // Unregister: the package is undeployed and its tools disabled; a new registration continues the sequence.
+        assertEquals(204, f.servers.unregister(a, "orders", "u-1", "r").status());
+        assertNull(f.store.transaction(tenant, false, tx -> tx.packages().deployment("mcp.orders")));
+        assertFalse(entry(f, tenant, Ids.Kind.TOOL, "mcp.orders/get-order").enabled());
+        assertEquals(404, status(() -> f.servers.server(a, "orders")));
+        assertEquals(3, node(f.servers.register(a, registration("orders", "orders/mcp-token"), "k-again", "r").body()).get("approvalSequence").asLong());
+        assertEquals(3, node(f.servers.approvals(a, "orders").body()).get("items").size());
+    }
+
+    @Test void theMcpProxyRuntimeBelongsToMcpProxyPackagesOnly() throws Exception {
+        var sdk = node("{\"kind\":\"SDK\",\"compatibility\":{\"contractsVersion\":\"" + ContractSet.VERSION + "\"},\"sdk\":{\"descriptorGeneration\":1,\"protocol\":{\"min\":2,\"max\":2}},\"runtimes\":[{\"runtimeId\":\"mcp-proxy\",\"language\":\"mcp-proxy\",\"version\":\"2\"}]}");
+        assertFalse(io.ololabs.toolgate.control.application.PackageCompatibility.problems(sdk).isEmpty());
+        var proxy = node("{\"kind\":\"MCP_PROXY\",\"compatibility\":{\"contractsVersion\":\"" + ContractSet.VERSION + "\"},\"runtimes\":[{\"runtimeId\":\"jvm\",\"language\":\"java\",\"version\":\"2\"}]}");
+        assertFalse(io.ololabs.toolgate.control.application.PackageCompatibility.problems(proxy).isEmpty());
+        var generated = node("{\"kind\":\"MCP_PROXY\",\"compatibility\":{\"contractsVersion\":\"" + ContractSet.VERSION + "\"},\"runtimes\":[{\"runtimeId\":\"mcp-proxy\",\"language\":\"mcp-proxy\",\"version\":\"2\"}]}");
+        assertEquals(List.of(), io.ololabs.toolgate.control.application.PackageCompatibility.problems(generated));
     }
 }

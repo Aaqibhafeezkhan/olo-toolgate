@@ -32,6 +32,11 @@ public class McpServerResource {
     @GET @Path("mcp-servers/{slug}") @io.quarkus.security.Authenticated public Response server(@PathParam("slug")String slug){return reply(servers.server(actors.management(),slug));}
     @POST @Path("mcp-servers/{slug}/scans") @io.quarkus.security.Authenticated
     public Response scan(@PathParam("slug")String slug,@HeaderParam("Idempotency-Key")String key){return reply(servers.scan(actors.management(),slug,key,correlation.id()));}
+    @DELETE @Path("mcp-servers/{slug}") @io.quarkus.security.Authenticated
+    public Response unregister(@PathParam("slug")String slug,@HeaderParam("Idempotency-Key")String key){return reply(servers.unregister(actors.management(),slug,key,correlation.id()));}
+    @POST @Path("mcp-servers/{slug}/approvals") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response approve(@PathParam("slug")String slug,@HeaderParam("Idempotency-Key")String key,String document){return reply(servers.approve(actors.management(),slug,body(document),key,correlation.id()));}
+    @GET @Path("mcp-servers/{slug}/approvals") @io.quarkus.security.Authenticated public Response approvals(@PathParam("slug")String slug){return reply(servers.approvals(actors.management(),slug));}
     @GET @Path("mcp-servers/{slug}/snapshots/{revision}") @io.quarkus.security.Authenticated
     public Response snapshot(@PathParam("slug")String slug,@PathParam("revision")long revision){return reply(servers.snapshot(actors.management(),slug,revision));}
 
@@ -46,6 +51,8 @@ public class McpServerResource {
     }
     @POST @Path("tool-hosts/mcp-scans/{id}/result") @Consumes("application/json")
     public Response result(@PathParam("id")String id,String document){return reply(servers.result(request.tenant(),device(),id,PackageResource.large(document)));}
+    @POST @Path("tool-hosts/mcp-quarantines") @Consumes("application/json")
+    public Response quarantine(String document){return reply(servers.quarantine(request.tenant(),device(),body(document)));}
     @POST @Path("tool-hosts/mcp-scans/{id}/failure") @Consumes("application/json")
     public Response failure(@PathParam("id")String id,String document){return reply(servers.failure(request.tenant(),device(),id,body(document)));}
 }

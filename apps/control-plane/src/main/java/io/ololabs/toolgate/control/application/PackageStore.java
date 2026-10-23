@@ -18,6 +18,7 @@ public interface PackageStore {
     String deployment(String packageId);
     java.util.List<String> deployments();
     void saveDeployment(String packageId,String document);
+    void deleteDeployment(String packageId);
     /** document is the ToolHostRegistration of the device. */
     String toolHost(String deviceId);
     void saveToolHost(String deviceId,String document);

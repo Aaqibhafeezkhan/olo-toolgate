@@ -316,4 +316,50 @@ final class ServerPackagesTest {
         // A host whose pool membership was removed cannot register again under that pool.
         assertEquals(403, assertThrows(Failure.class, () -> packages.register(tenant, tx -> hosts.get("host-1"), registration.formatted("host-1", "pool"), "register-1b")).status());
     }
+
+    /** The package of files() with a second SERVER tool, items.list, beside items.get. */
+    static Map<String, byte[]> twoServers() throws Exception {
+        var files = new TreeMap<>(files()); files.remove("CHECKSUMS.sha256");
+        var manifest = (ObjectNode) JSON.readTree(files.get("toolgate-package.json"));
+        var second = (ObjectNode) manifest.get("tools").get(0).get("descriptor").deepCopy();
+        second.put("toolId", "acme.orders/items.list").put("mcpName", "orders.items.list");
+        byte[] canonical = Canonical.bytes(second);
+        var tool = ((com.fasterxml.jackson.databind.node.ArrayNode) manifest.get("tools")).addObject();
+        tool.set("descriptor", second); tool.put("toolDescriptorDigest", Canonical.sha256(canonical)).put("runtimeId", "jvm"); tool.putArray("artifactIds").add("app");
+        var set = JSON.createArrayNode();
+        for (var id : List.of("acme.orders/items.get", "acme.orders/items.list")) for (var t : manifest.get("tools")) if (t.get("descriptor").get("toolId").asText().equals(id))
+            set.addObject().put("toolId", id).put("toolDescriptorDigest", t.get("toolDescriptorDigest").asText());
+        manifest.put("descriptorSetDigest", Canonical.digest(set)).put("version", "0.2.0");
+        files.put("tools/items.list.json", canonical); files.put("toolgate-package.json", JSON.writeValueAsBytes(manifest));
+        var checksums = new StringBuilder();
+        for (var e : files.entrySet()) checksums.append(Canonical.sha256(e.getValue()).substring(7)).append("  ").append(e.getKey()).append('\n');
+        files.put("CHECKSUMS.sha256", checksums.toString().getBytes(StandardCharsets.UTF_8));
+        return files;
+    }
+
+    @Test void aRedeployWithoutAToolRetiresIt() throws Exception {
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("retire.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
+        var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        String both = node(packages.upload(actor, zip(twoServers()), "upload-1").body()).get("packageDigest").asText();
+        String one = node(packages.upload(actor, zip(files()), "upload-2").body()).get("packageDigest").asText();
+        String body = "{\"packageDigest\":\"%s\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"}}";
+        packages.deploy(actor, body.formatted(both), "deploy-1");
+        // Both enabled by a reviewed change.
+        store.transaction(tenant, true, tx -> {
+            var before = tx.load(); var entries = new HashMap<>(before.entries());
+            for (var id : List.of("acme.orders/items.get", "acme.orders/items.list")) {
+                var tool = entries.get(Ids.Kind.TOOL.id(id)); var document = (ObjectNode) codec.value(tool.document());
+                entries.put(tool.id(), codec.entry(Ids.Kind.TOOL, codec.json(document.put("enabled", true).put("revision", document.get("revision").asLong() + 1))));
+            }
+            tx.save(before, new io.ololabs.toolgate.control.domain.Directory(before.revision() + 1, entries)); return null;
+        });
+        long epoch = store.transaction(tenant, false, tx -> tx.enterprise().authorizationEpoch());
+        var deployed = node(packages.deploy(actor, body.formatted(one), "deploy-2").body());
+        assertEquals("[\"acme.orders/items.get\"]", deployed.get("toolIds").toString());
+        var entries = store.transaction(tenant, false, tx -> tx.load().entries());
+        assertTrue(entries.get(Ids.Kind.TOOL.id("acme.orders/items.get")).enabled());
+        assertFalse(entries.get(Ids.Kind.TOOL.id("acme.orders/items.list")).enabled());
+        assertTrue(store.transaction(tenant, false, tx -> tx.enterprise().authorizationEpoch()) > epoch);
+    }
 }

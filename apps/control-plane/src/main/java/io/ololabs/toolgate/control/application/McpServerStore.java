@@ -12,6 +12,7 @@ public interface McpServerStore {
     long count();
     /** Inserts revision 1, or replaces exactly the previous revision. */
     void saveServer(Server server);
+    void deleteServer(String slug);
 
     /** document is the McpSnapshot. */
     record Snapshot(String slug,long revision,String document) {}

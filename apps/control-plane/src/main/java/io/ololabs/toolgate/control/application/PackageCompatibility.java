@@ -21,6 +21,21 @@ public final class PackageCompatibility {
     public static final Set<Long> DESCRIPTOR_GENERATIONS = Set.of(1L);
     /** Runtime languages a Tool Host of this release provides. */
     public static final Set<String> RUNTIME_LANGUAGES = Set.of("java", "python");
+    /** The Tool Host's native MCP proxy runtime, which only generated MCP_PROXY packages may declare and which they
+     *  must declare; its version is the tool protocol it speaks. */
+    public static final String MCP_PROXY_RUNTIME = "mcp-proxy";
+
+    static boolean proxy(JsonNode manifest) { return "MCP_PROXY".equals(manifest.path("kind").asText()); }
+    /** The descriptor generation a package's tools use: its SDK's, or 1 for a generated MCP_PROXY package. */
+    static JsonNode generation(JsonNode manifest) { return proxy(manifest) ? com.fasterxml.jackson.databind.node.IntNode.valueOf(1) : manifest.path("sdk").path("descriptorGeneration"); }
+    /** The tool protocol range a package speaks: its SDK's, or its mcp-proxy runtime version. */
+    static JsonNode protocol(JsonNode manifest) {
+        if (!proxy(manifest)) return manifest.path("sdk").path("protocol");
+        var range = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        String version = manifest.path("runtimes").path(0).path("version").asText("");
+        if (version.matches("[1-9][0-9]{0,3}")) range.put("min", Long.parseLong(version)).put("max", Long.parseLong(version));
+        return range;
+    }
     private static final Pattern SEMVER = Pattern.compile("^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$");
 
     private PackageCompatibility() {}
@@ -33,9 +48,9 @@ public final class PackageCompatibility {
         else if (major(contracts) != major(ContractSet.VERSION)) problems.add("built against contracts " + contracts + ", this Control supports " + major(ContractSet.VERSION) + ".x");
         var minimumHost = manifest.path("compatibility").path("minimumToolHostVersion");
         if (!minimumHost.isMissingNode() && !SEMVER.matcher(minimumHost.asText("")).matches()) problems.add("compatibility.minimumToolHostVersion is not a version");
-        var generation = manifest.path("sdk").path("descriptorGeneration");
+        var generation = generation(manifest);
         if (!generation.isIntegralNumber() || !DESCRIPTOR_GENERATIONS.contains(generation.asLong())) problems.add("descriptor generation " + generation.asText("?") + " is not one Control accepts " + DESCRIPTOR_GENERATIONS);
-        var protocol = manifest.path("sdk").path("protocol");
+        var protocol = protocol(manifest);
         if (!protocol.path("min").isIntegralNumber() || !protocol.path("max").isIntegralNumber() || protocol.path("min").asLong() > protocol.path("max").asLong())
             problems.add("sdk.protocol is missing or not a range");
         else if (!overlaps(protocol, PROTOCOL_MIN, PROTOCOL_MAX))
@@ -48,8 +63,12 @@ public final class PackageCompatibility {
     public static List<String> runtimeProblems(JsonNode manifest) {
         var problems = new ArrayList<String>();
         if (!manifest.path("runtimes").isArray() || manifest.path("runtimes").isEmpty()) problems.add("the package declares no runtime");
-        for (var runtime : manifest.path("runtimes"))
-            if (!RUNTIME_LANGUAGES.contains(runtime.path("language").asText())) problems.add("no Tool Host provides the " + runtime.path("language").asText("?") + " runtime");
+        boolean proxy = proxy(manifest);
+        for (var runtime : manifest.path("runtimes")) {
+            String language = runtime.path("language").asText("?");
+            if (proxy != language.equals(MCP_PROXY_RUNTIME)) problems.add(proxy ? "an MCP_PROXY package runs only on the " + MCP_PROXY_RUNTIME + " runtime" : "only an MCP_PROXY package may declare the " + MCP_PROXY_RUNTIME + " runtime");
+            else if (!proxy && !RUNTIME_LANGUAGES.contains(language)) problems.add("no Tool Host provides the " + language + " runtime");
+        }
         return problems;
     }
 
@@ -59,7 +78,7 @@ public final class PackageCompatibility {
         String minimum = manifest.path("compatibility").path("minimumToolHostVersion").asText(""), version = registration.path("version").asText("");
         if (!minimum.isEmpty() && (!SEMVER.matcher(version).matches() || compare(version, minimum) < 0))
             problems.add("Tool Host " + hostId + " is version " + version + ", the package needs " + minimum + " or later");
-        JsonNode protocol = manifest.path("sdk").path("protocol"), hostProtocol = registration.path("protocol");
+        JsonNode protocol = protocol(manifest), hostProtocol = registration.path("protocol");
         if (!overlaps(protocol, hostProtocol.path("min").asLong(0), hostProtocol.path("max").asLong(-1)))
             problems.add("Tool Host " + hostId + " speaks protocol " + range(hostProtocol) + ", the package needs " + range(protocol));
         return problems;

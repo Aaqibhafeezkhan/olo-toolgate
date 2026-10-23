@@ -537,7 +537,9 @@ CREATE TABLE control_tool_hosts(tenant_id varchar(128) NOT NULL,device_id varcha
 
 GRANT SELECT,INSERT ON control_server_packages,control_server_documents TO toolgate_control_runtime;
 
-GRANT SELECT,INSERT,UPDATE ON control_server_deployments,control_tool_hosts TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON control_tool_hosts TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,UPDATE,DELETE ON control_server_deployments TO toolgate_control_runtime;
 
 CREATE TABLE control_tool_host_dispatches(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,host_id varchar(128) NOT NULL,
     state varchar(16) NOT NULL CHECK(state IN ('QUEUED','CLAIMED','ADMITTED','REFUSED','FINISHED','EXPIRED')),
