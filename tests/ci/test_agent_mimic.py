@@ -18,11 +18,11 @@ class ScriptTests(unittest.TestCase):
         class Agent:
             def rpc(self,method,params=None):
                 calls.append((method,params))
-                if params['name']=='hotfolder.write_text':return {'structuredContent':{'written':True}}
+                if params['name']=='examples.hotfolder/write_text':return {'structuredContent':{'written':True}}
                 return {'structuredContent':{'exists':True,'text':mimic.TEXT}}
         with contextlib.redirect_stdout(io.StringIO()),patch.object(mimic.time,'monotonic',side_effect=[0,1,2,8]),patch.object(mimic.time,'sleep') as sleep:
             mimic.mimic(Agent(),'rahul-nigam.txt',8)
-        self.assertEqual([params['name'] for _,params in calls],['hotfolder.write_text','hotfolder.write_text','hotfolder.read_text'])
+        self.assertEqual([params['name'] for _,params in calls],['examples.hotfolder/write_text','examples.hotfolder/write_text','examples.hotfolder/read_text'])
         self.assertEqual(calls[0],calls[1])
         sleep.assert_called_once_with(0.25)
     def test_repeated_write_failure_stops_without_reading(self):
@@ -33,7 +33,7 @@ class ScriptTests(unittest.TestCase):
                 return {'structuredContent':{'written':len(calls)==1}}
         with contextlib.redirect_stdout(io.StringIO()),patch.object(mimic.time,'monotonic',side_effect=[0,1,2]),patch.object(mimic.time,'sleep'),self.assertRaises(ValueError):
             mimic.mimic(Agent(),'rahul-nigam.txt',8)
-        self.assertEqual(calls,['hotfolder.write_text','hotfolder.write_text'])
+        self.assertEqual(calls,['examples.hotfolder/write_text','examples.hotfolder/write_text'])
     def test_invalid_duration_sends_nothing(self):
         class Agent:
             def rpc(self,*args):raise AssertionError('Invalid duration must not call the gateway')
@@ -48,20 +48,20 @@ class ScriptTests(unittest.TestCase):
                 return {'structuredContent':{'written':True}} if len(calls)==1 else {'structuredContent':{'exists':True,'text':mimic.TEXT}}
         with contextlib.redirect_stdout(io.StringIO()),patch.object(mimic.time,'monotonic',side_effect=[0,20]),patch.object(mimic.time,'sleep') as sleep:
             mimic.mimic(Agent(),'rahul-nigam.txt',8)
-        self.assertEqual(calls,['hotfolder.write_text','hotfolder.read_text'])
+        self.assertEqual(calls,['examples.hotfolder/write_text','examples.hotfolder/read_text'])
         sleep.assert_not_called()
     def test_only_calls_two_tools_and_prints_their_responses(self):
         calls=[]
         class Agent:
             def rpc(self,method,params=None):
                 calls.append((method,params))
-                if params['name']=='hotfolder.write_text':return {'structuredContent':{'written':True}}
+                if params['name']=='examples.hotfolder/write_text':return {'structuredContent':{'written':True}}
                 return {'structuredContent':{'exists':True,'text':mimic.TEXT}}
         output=io.StringIO()
         with contextlib.redirect_stdout(output):content=mimic.mimic(Agent(),'rahul-nigam.txt')
         self.assertEqual([call[0] for call in calls],['tools/call','tools/call'])
-        self.assertEqual(calls[0][1],{'name':'hotfolder.write_text','arguments':{'path':'rahul-nigam.txt','text':'My Name is Rahul Nigam'}})
-        self.assertEqual(calls[1][1],{'name':'hotfolder.read_text','arguments':{'path':'rahul-nigam.txt'}})
+        self.assertEqual(calls[0][1],{'name':'examples.hotfolder/write_text','arguments':{'path':'rahul-nigam.txt','text':'My Name is Rahul Nigam'}})
+        self.assertEqual(calls[1][1],{'name':'examples.hotfolder/read_text','arguments':{'path':'rahul-nigam.txt'}})
         self.assertEqual(content['text'],mimic.TEXT)
         self.assertIn('Client file-write response:',output.getvalue())
         self.assertIn('"written": true',output.getvalue())

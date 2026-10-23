@@ -17,9 +17,9 @@ class Agent:
     def rpc(self,method,params):
         self.calls.append((method,params))
         print('SEND '+method)
-        if method=='tools/list':return {'tools':[{'name':'hotfolder.write_text','inputSchema':{'type':'object'}}]}
+        if method=='tools/list':return {'tools':[{'name':'examples.hotfolder/write_text','inputSchema':{'type':'object'}}]}
         if params['arguments'].get('path')!='rahul-nigam.txt':raise ValueError('Private upstream details')
-        return {'content':[{'type':'text','text':'ok'}],'structuredContent':{'success':True},'resultType':'complete'}
+        return {'content':[{'type':'text','text':'ok'}],'structuredContent':{'written':True},'resultType':'complete'}
 
 
 class BridgeTests(unittest.TestCase):
@@ -38,22 +38,22 @@ class BridgeTests(unittest.TestCase):
         agent=Agent();bridge=self.initialized(agent)
         with contextlib.redirect_stderr(io.StringIO()):
             result=bridge.handle({'jsonrpc':'2.0','id':2,'method':'tools/list'})
-            called=bridge.handle({'jsonrpc':'2.0','id':'call-1','method':'tools/call','params':{'name':'hotfolder.write_text','arguments':{'path':'rahul-nigam.txt','text':'My Name is Rahul Nigam'},'_meta':{'progressToken':'test'}}})
-        self.assertEqual([t['name'] for t in result['result']['tools']],['hotfolder.write_text'])
+            called=bridge.handle({'jsonrpc':'2.0','id':'call-1','method':'tools/call','params':{'name':'examples.hotfolder/write_text','arguments':{'path':'rahul-nigam.txt','text':'My Name is Rahul Nigam'},'_meta':{'progressToken':'test'}}})
+        self.assertEqual([t['name'] for t in result['result']['tools']],['examples.hotfolder/write_text'])
         self.assertEqual(called['id'],'call-1')
-        self.assertTrue(called['result']['structuredContent']['success'])
+        self.assertTrue(called['result']['structuredContent']['written'])
         self.assertNotIn('resultType',called['result'])
         self.assertNotIn('_meta',agent.calls[1][1])
     def test_denial_is_returned_without_retry_or_private_detail(self):
         agent=Agent();bridge=self.initialized(agent)
         with contextlib.redirect_stderr(io.StringIO()):
-            denied=bridge.handle({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'hotfolder.write_text','arguments':{'path':'other.txt'}}})
+            denied=bridge.handle({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'examples.hotfolder/write_text','arguments':{'path':'other.txt'}}})
         self.assertEqual(denied['error']['code'],-32000)
         self.assertNotIn('Private',json.dumps(denied))
         self.assertEqual(len(agent.calls),1)
     def test_cannot_override_target_or_principal(self):
         agent=Agent();bridge=self.initialized(agent)
-        denied=bridge.handle({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'hotfolder.write_text','arguments':{},'deviceId':'other-device'}})
+        denied=bridge.handle({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'examples.hotfolder/write_text','arguments':{},'deviceId':'other-device'}})
         self.assertEqual(denied['error']['code'],-32602)
         self.assertEqual(agent.calls,[])
     def test_stdio_stdout_contains_only_correlated_json_responses(self):

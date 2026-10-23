@@ -183,6 +183,35 @@ class Configuration:
 MIMIC_TOOLS = ('examples.hotfolder/write_text', 'examples.hotfolder/read_text')
 
 
+def configure_package_access(config, device, installed, group):
+    """Authorize installed SDK exports explicitly; standard FILE actions do not authorize invoke."""
+    base = dict(enabled=True, revision=1)
+    tools, devices, agents = 'debug-mimic-tools', 'debug-mimic-devices', 'debug-mimic-agents'
+    if not any(row['id'] == tools for row in config.all('tool-groups')):
+        config.upsert('tool-groups', dict(**base, id=tools, name='Debug HotFolder tools', toolIds=[]))
+    config.upsert('device-groups', dict(**base, id=devices, name='Debug selected device', deviceIds=[device]))
+    if not any(row['id'] == agents for row in config.all('agent-groups')):
+        config.upsert('agent-groups', dict(**base, id=agents, name='Debug package agent', agentIds=[], roleIds=[]))
+    # Moving an agent to ReadOnly (including --allocate-agent) removes this opt-in capability.
+    config.memberships('agents', 'debug-mimic-agent', [group]+([agents] if group != 'ReadOnlyAgentGroup' else []))
+    config.memberships('devices', device, ['ReadAndWriteDeviceGroup', devices])
+    for tool in MIMIC_TOOLS:
+        config.memberships('tools', tool, [tools])
+    scope = dict(toolGroups=dict(ids=[tools], all=False), deviceGroups=dict(ids=[devices], all=False),
+        actions=['invoke'], allActions=False,
+        resources=[dict(kind='CUSTOM', locator='tool://'+tool, match='EXACT') for tool in sorted(MIMIC_TOOLS)],
+        conditions=dict(notBeforeUnixMs=0, expiresAtUnixMs=0, networkCidrs=[], devicePosture=[],
+                        regions=[], hoursUtc=[], requireOnline=True, highRisk=False))
+    for purpose in ('CAPABILITY', 'SERVICE'):
+        config.upsert('grants', dict(**base, id='debug-mimic-'+purpose.lower(), name='Debug package '+purpose.lower(),
+            sourceType='AGENT_GROUP', sourceId=agents, purpose=purpose, scope=scope))
+    config.upsert('policies', dict(**base, id='debug-mimic-access', name='Debug package access', decision='ALLOW',
+        scope=scope, teams=dict(ids=[], all=False), agentGroups=dict(ids=[agents], all=False), approverTeams=dict(ids=[], all=False)))
+    config.upsert('bindings', dict(**base, id='debug-mimic-binding', name='Debug selected-device execution',
+        toolGroupId=tools, deviceGroupId=devices, actions=['invoke'],
+        allowedPackageDigests=sorted({tool['packageDigest'] for tool in installed.values()}), requireOnline=True, ownerDependency=False))
+
+
 def configure(device, local_fixture_reviewers=False, group='ReadAndWriteAgentGroup'):
     # Verify private token custody before publishing any rotated workload credential.
     path = ROOT/'.dev/debug/client-agent-token'
@@ -198,17 +227,7 @@ def configure(device, local_fixture_reviewers=False, group='ReadAndWriteAgentGro
     if set(installed) != set(MIMIC_TOOLS):
         raise ValueError('Install the examples.hotfolder package and release it to this device first; its tools are not installed')
     config.upsert('agents', dict(id='debug-mimic-agent', name='Debug mimic agent', enabled=True, revision=1, ownerUserId='admin'))
-    config.memberships('agents','debug-mimic-agent',[group])
-    config.memberships('devices',device,['ReadAndWriteDeviceGroup'])
-    for tool_id in MIMIC_TOOLS:config.memberships('tools',tool_id,['ReadAndWriteToolGroup'])
-    config.upsert('bindings', dict(id='standard-ReadAndWrite-ReadAndWrite', name='ReadAndWrite tools on ReadAndWrite devices', enabled=True, revision=1,
-        toolGroupId='ReadAndWriteToolGroup', deviceGroupId='ReadAndWriteDeviceGroup', actions=['invoke'],
-        allowedPackageDigests=sorted({tool['packageDigest'] for tool in installed.values()}), requireOnline=True, ownerDependency=False))
-    for purpose in ('capability','service'):config.delete('grants','debug-mimic-'+purpose)
-    config.delete('bindings','debug-mimic-binding')
-    for collection, id in (('agent-groups','debug-mimic-agents'),('device-groups','debug-mimic-devices')):
-        old=next((x for x in config.all(collection) if x['id']==id),None)
-        if old and not old.get('agentIds',old.get('deviceIds',[])):config.delete(collection,id)
+    configure_package_access(config, device, installed, group)
     if local_fixture_reviewers:config.test_users()
     token = secrets.token_urlsafe(48)
     digest = hashlib.sha256(token.encode()).hexdigest()
@@ -222,7 +241,7 @@ def configure(device, local_fixture_reviewers=False, group='ReadAndWriteAgentGro
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires,
         context=dict(requestId='debug-mimic',tenantId=None,mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='debug-mimic-agent',
             workloadBindingId='debug-mimic-workload',chain=[],credentialEpoch=epoch,expiresAtUnixMs=expires,credentialSha256=digest,
-            bindingId='standard-ReadAndWrite-ReadAndWrite'))
+            bindingId='debug-mimic-binding'))
     # Quickstart allocates a UUID tenant at first start; the container fills it in below.
     docker_script("import sys,json,time,os;os.umask(0o077);sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
         "p=s.DATA/'client-runtime-credentials.json';v=s.strict(p.read_bytes()) if p.exists() else [];c=json.load(sys.stdin);"

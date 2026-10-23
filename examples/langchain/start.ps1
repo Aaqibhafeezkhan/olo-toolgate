@@ -6,7 +6,6 @@ param(
     [ValidateSet('any','linux','windows')][string]$Target = 'any',
     [switch]$Win,
     [string]$DeviceId = '',
-    [string]$Profiles = '',
     [string]$Python = '',
     [switch]$Smoke,
     [switch]$SkipBuild
@@ -24,7 +23,7 @@ try {
     Write-Host $_.Exception.Message -ForegroundColor Red
     exit 1
 }
-$deploy = @{ Target = $Target; DeviceId = $DeviceId; Profiles = $Profiles; Python = $Python; SkipBuild = $SkipBuild }
+$deploy = @{ Target = $Target; DeviceId = $DeviceId; Python = $Python; SkipBuild = $SkipBuild }
 & (Join-Path $PSScriptRoot 'deploy.ps1') @deploy
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $execute = @{ Target = $Target; UseCase = $UseCase; Smoke = $Smoke }

@@ -128,6 +128,7 @@ def reset_gateway(config, settings):
 def supervise():
     """Keep the installed service and its ordinary gateway retry loop in the foreground."""
     STATUS.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    STATUS.unlink(missing_ok=True)
     service = subprocess.Popen([CLIENT, 'service'])
     try:
         deadline = time.monotonic() + 60
@@ -139,7 +140,15 @@ def supervise():
                 break
             except (RuntimeError, subprocess.TimeoutExpired, ValueError):
                 if time.monotonic() >= deadline:
-                    raise RuntimeError('The protected client IPC did not become ready.')
+                    # Package recovery can hold health's service lock at startup.
+                    # The lock-free connections command proves IPC is responsive;
+                    # a missing listener still fails after the normal startup bound.
+                    try:
+                        connections = json.loads(cli('connections'))
+                        if not isinstance(connections, list) or not connections:
+                            raise ValueError('No service connections')
+                    except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+                        raise RuntimeError('The protected client IPC did not become ready.') from None
                 STOP.wait(1)
         if STOP.is_set():
             return
@@ -149,7 +158,16 @@ def supervise():
         while not STOP.is_set():
             if service.poll() is not None:
                 raise RuntimeError('The protected client service exited.')
-            health = json.loads(cli('health'))
+            try:
+                health = json.loads(cli('health'))
+            except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+                # Native health can be busy while signed package activation holds
+                # the service lock. Mark unhealthy and retry; killing a live service
+                # here would repeatedly interrupt its bounded pull/self-tests.
+                STATUS.unlink(missing_ok=True)
+                print('Client health unavailable; service is running, retrying.', flush=True)
+                STOP.wait(5)
+                continue
             # An expired request can be renewed; a deliberate denial stops automatic enrollment.
             if previous == 'PENDING' and health['state'] == 'UNENROLLED' and prompt:
                 enroll_due = time.time() * 1000 >= prompt['expiresAtUnixMs']

@@ -368,15 +368,35 @@ jobs:
         TOOLGATE_TLS_PORT: '18451'
       working-directory: examples/langchain
       run: |
-        trap 'docker compose down -v' EXIT
+        mkdir -p ../../build/langchain
+        cleanup() {
+          result=$?
+          docker compose logs --no-color --tail 200 quickstart linux-device registry > ../../build/langchain/compose.log 2>&1 || true
+          docker compose ps --all > ../../build/langchain/containers.txt 2>&1 || true
+          docker compose down -v || true
+          exit "$result"
+        }
+        trap cleanup EXIT
         LOCAL_UID="$(id -u)"
         LOCAL_GID="$(id -g)"
         export LOCAL_UID LOCAL_GID
+        python -m unittest discover -s . -p test_manage.py
+        python -m unittest discover -s . -p test_packages.py
+        python manage.py prepare
         docker compose build agent
         docker compose up -d --wait --wait-timeout 180 quickstart linux-device
         python manage.py setup --bootstrap-local --approve-linux-device --target linux
+        docker compose run --rm -T --no-deps --entrypoint python -v "$PWD/test_agent.py:/app/test_agent.py:ro" agent /app/test_agent.py
         docker compose run --rm -T agent --target linux --smoke
       if: ${{ inputs.run_tests }}
+    - name: Preserve LangChain diagnostics
+      if: ${{ always() && inputs.run_tests }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: langchain-diagnostics
+        path: build/langchain/
+        if-no-files-found: ignore
+
   build:
     if: ${{ !inputs.run_tests }}
     runs-on: ubuntu-24.04

@@ -5,7 +5,6 @@ param(
     [ValidateSet('any','linux','windows')][string]$Target = 'any',
     [switch]$Win,
     [string]$DeviceId = '',
-    [string]$Profiles = '',
     [string]$Python = '',
     [switch]$SkipBuild
 )
@@ -17,12 +16,7 @@ try {
     Import-ExampleEnvironment
     if (-not $env:TOOLGATE_QUICKSTART_IMAGE) { $env:TOOLGATE_QUICKSTART_IMAGE = 'ololab/olo-toolgate-quickstart:dev' }
     if (-not $env:TOOLGATE_DEVICE_IMAGE) { $env:TOOLGATE_DEVICE_IMAGE = 'ololab/olo-toolgate-device:dev' }
-    if ($Target -eq 'windows') {
-        if (-not $Profiles) { $Profiles = $env:TOOLGATE_WINDOWS_PROFILES }
-    }
-    if ($Profiles -and -not (Test-Path -LiteralPath $Profiles -PathType Leaf)) {
-        throw "Device profiles not found: $Profiles. Run prepare-windows.ps1 on the Windows device to register its public profiles."
-    }
+    if ($Target -eq 'windows' -and -not $DeviceId) { throw 'Windows targeting requires the enrolled -DeviceId and package executor setup from the README.' }
     if (-not $Python) {
         . (Join-Path $PSScriptRoot '../../debug/python.ps1')
         $Python = Find-DebugPython
@@ -51,11 +45,11 @@ try {
             if (-not $imageExists) { Invoke-ImageCommand @('compose','pull',$service[0]) }
         }
     }
+    Invoke-ExampleCommand $Python @('manage.py','prepare')
     # Replace the wrapper even when the image is cached; named volumes retain its identity and files.
     Invoke-ExampleCommand 'docker' @('compose','up','-d','--force-recreate','--wait','--wait-timeout','180','quickstart','linux-device')
     $setupArguments = @('manage.py','setup','--bootstrap-local','--approve-linux-device','--target',$Target)
     if ($DeviceId) { $setupArguments += @('--device-id',$DeviceId) }
-    if ($Profiles) { $setupArguments += @('--profiles',$Profiles) }
     Invoke-ExampleCommand $Python $setupArguments
     Write-Host "Console: http://127.0.0.1:$($env:TOOLGATE_HTTP_PORT)/console/"
     $next = if ($Target -eq 'windows') { 'execute.bat -Win' } elseif ($Target -eq 'any') { 'execute.bat' } else { "execute.bat -Target $Target" }
