@@ -476,21 +476,24 @@ public class PostgresStore implements Store {
                     actor, key, digest, reply.status(), reply.body(), reply.revision())) { statement.executeUpdate(); }
             } catch (SQLException e) { throw Failure.unavailable(); }
         }
-        public void audit(String actor, String operation, String target, long revision, String requestId, String digest) {
-            try (var statement = statement("INSERT INTO control_audit (tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES (?,?,?,?,?,?,?)",
-                actor, operation, target, revision, requestId, digest)) { statement.executeUpdate(); }
+        public void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence) {
+            try (var statement = statement("INSERT INTO control_audit (tenant_id,actor_id,operation,target,revision,request_id,request_digest,evidence) VALUES (?,?,?,?,?,?,?,?)",
+                actor, operation, target, revision, requestId, digest, evidence)) { statement.executeUpdate(); }
             catch (SQLException e) { throw Failure.unavailable(); }
         }
         public String auditPage(long after, int limit) {
-            try (var statement = statement("SELECT sequence,actor_id,operation,target,revision,request_id,request_digest,occurred_at FROM control_audit WHERE tenant_id=? AND sequence>? ORDER BY sequence LIMIT ?", after, limit + 1);
+            try (var statement = statement("SELECT sequence,actor_id,operation,target,revision,request_id,request_digest,occurred_at,evidence FROM control_audit WHERE tenant_id=? AND sequence>? ORDER BY sequence LIMIT ?", after, limit + 1);
                  var rows = statement.executeQuery()) {
                 var items = new java.util.ArrayList<Object>(); long sequence = after; boolean more = false;
                 while (rows.next()) {
                     if (items.size() == limit) { more = true; break; }
                     sequence = rows.getLong(1);
-                    items.add(Map.of("sequence", sequence, "tenantId", tenant, "actorId", rows.getString(2), "operation", rows.getString(3),
+                    var item = new java.util.LinkedHashMap<String, Object>(Map.of("sequence", sequence, "tenantId", tenant, "actorId", rows.getString(2), "operation", rows.getString(3),
                         "target", rows.getString(4), "revision", rows.getLong(5), "requestId", rows.getString(6), "requestDigest", rows.getString(7),
                         "occurredAt", SqliteState.local(connection) ? rows.getString(8) : rows.getObject(8, java.time.OffsetDateTime.class).toInstant().toString()));
+                    String evidence = rows.getString(9);
+                    if (evidence != null) item.put("evidence", codec.value(evidence));
+                    items.add(item);
                 }
                 return codec.json(more ? Map.of("items", items, "nextCursor", Long.toString(sequence)) : Map.of("items", items));
             } catch (SQLException e) { throw Failure.unavailable(); }

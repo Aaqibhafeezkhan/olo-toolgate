@@ -36,7 +36,11 @@ public interface Store {
         default void observeIdentity(io.ololabs.toolgate.contracts.ControlIdentityBinding identity){throw Failure.unavailable();}
         Reply replay(String actor, String key, String digest);
         void remember(String actor, String key, String digest, Reply reply);
-        void audit(String actor, String operation, String target, long revision, String requestId, String digest);
+        default void audit(String actor, String operation, String target, long revision, String requestId, String digest) {
+            audit(actor, operation, target, revision, requestId, digest, null);
+        }
+        /** {@code evidence}: canonical {@code ControlAuditEvidence} JSON of an invocation event, or null (M4.4). */
+        void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence);
         String auditPage(long after, int limit);
         long bundleSequence();
         BundleRecord bundle(long sequence);

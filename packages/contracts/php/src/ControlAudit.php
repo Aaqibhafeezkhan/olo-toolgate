@@ -16,12 +16,13 @@ final readonly class ControlAudit implements \JsonSerializable {
         public int $revision,
         public string $requestId,
         public string $occurredAt,
-        public string $requestDigest
+        public string $requestDigest,
+        public ?ControlAuditEvidence $evidence = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest']) || array_diff(['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest', 'evidence']) || array_diff(['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -33,7 +34,8 @@ final readonly class ControlAudit implements \JsonSerializable {
             $data['revision'],
             $data['requestId'],
             $data['occurredAt'],
-            $data['requestDigest']
+            $data['requestDigest'],
+            array_key_exists('evidence', $data) ? ControlAuditEvidence::fromArray($data['evidence']) : null
         );
     }
 

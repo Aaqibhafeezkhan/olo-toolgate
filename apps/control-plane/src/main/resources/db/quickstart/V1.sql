@@ -30,7 +30,7 @@ CREATE TRIGGER control_tenant_initializations_immutable_delete BEFORE DELETE ON 
 -- statement
 CREATE TABLE control_record_ids(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,kind TEXT NOT NULL,record_id TEXT NOT NULL,PRIMARY KEY(tenant_id,kind,record_id));
 -- statement
-CREATE TABLE control_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,actor_id TEXT NOT NULL,operation TEXT NOT NULL,target TEXT NOT NULL,revision INTEGER NOT NULL,request_id TEXT NOT NULL,request_digest TEXT NOT NULL,occurred_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ','now')));
+CREATE TABLE control_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,actor_id TEXT NOT NULL,operation TEXT NOT NULL,target TEXT NOT NULL,revision INTEGER NOT NULL,request_id TEXT NOT NULL,request_digest TEXT NOT NULL,evidence TEXT CHECK(evidence IS NULL OR length(CAST(evidence AS BLOB))<=4096),occurred_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ','now')));
 -- statement
 CREATE TABLE control_idempotency(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,actor_id TEXT NOT NULL,key TEXT NOT NULL,request_digest TEXT NOT NULL,status INTEGER NOT NULL,body TEXT NOT NULL,revision INTEGER NOT NULL,expires_at INTEGER NOT NULL DEFAULT(unixepoch()+86400),PRIMARY KEY(tenant_id,actor_id,key));
 -- statement
