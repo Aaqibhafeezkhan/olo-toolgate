@@ -236,3 +236,6 @@ deploy/client-assets/release/
 
 # Externally provisioned Compose custody must never enter Git.
 deploy/compose/GatewayControl/custody/
+
+*.tgpkg
+.seed
