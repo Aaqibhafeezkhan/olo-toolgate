@@ -26,7 +26,7 @@ execution, availability and recovery requirements before adopting it.
    enrolled executor. Verify that disabling any required authority stops effects.
 3. Review the [security model](../security/enterprise-access-control.md),
    [trust boundaries](../architecture/trust-boundaries.md) and
-   [implementation evidence](implementation-status.md).
+   [verification procedures](../testing/README.md).
 4. Prepare [production deployment](../deployment/production.md), external identity
    and key custody, and separate migration/runtime database roles.
 5. Rehearse [migration and signed recovery](operations.md), outages and upgrades.
@@ -37,15 +37,14 @@ execution, availability and recovery requirements before adopting it.
 Quickstart is single-node evaluation software. Tool Host process launch and broker
 checks exist, but container/network isolation and durable result retry remain
 unfinished. Managed endpoint OCI confinement is a different execution path.
-Marketplace applications are scaffolds; Python, TypeScript and .NET Tool SDKs
-are specifications rather than shipped authoring implementations.
+Marketplace applications are scaffolds. Java and Python authoring implementations
+are available; TypeScript and .NET authoring APIs remain specifications.
 
 Nested/dynamic groups and offline protected effects are unsupported. Recorded
 acceptance and small-fixture performance results apply to the tested revision and
 environment. They do not establish your organization's deployment readiness,
 capacity or compliance certification.
 
-The [consolidated backlog](../planning/README.md) identifies outstanding work.
 [Standards alignment](standards-alignment.md) explains design relationships.
 Use [SUPPORT.md](../../SUPPORT.md) for project support and
 [SECURITY.md](../../SECURITY.md) for private vulnerability reporting.

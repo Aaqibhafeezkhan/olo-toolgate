@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.toolgate.control.application;
 
-/** Tenant-transactional MCP proxy state (docs/planning/mcp-proxy/plan.md §4.2): registrations, their immutable scan
+/** Tenant-transactional MCP proxy state (ADR 030): registrations, their immutable scan
  *  snapshots and approvals, and scan jobs. Every row belongs to the session's tenant. */
 public interface McpServerStore {
     /** document is the McpServerRegistration. */

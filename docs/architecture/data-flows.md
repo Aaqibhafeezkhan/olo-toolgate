@@ -35,5 +35,5 @@ check and atomic apply -> audit/outbox. Super Admin's documented exception permi
 immediate audited management changes. Neither path manufactures runtime grants.
 See [configuration transfer](../control-plane/import-export.md).
 
-Marketplace import/publication and OpenAPI/MCP-proxy adoption remain in
-[planning](../planning/README.md).
+See [Marketplace integration](../control-plane/marketplace-integration.md) and
+[existing MCP servers](../gateway/mcp-proxy.md) for their supported flows and limits.

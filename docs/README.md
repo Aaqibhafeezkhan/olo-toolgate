@@ -1,14 +1,14 @@
 # ToolGate documentation
 
 Choose the guide for the task you are doing. Current operating instructions live
-with their component; unfinished features live in the [planning backlog](planning/README.md).
+with their component, including its supported behavior and current limitations.
 
 | Audience | Start here | Continue with |
 |---|---|---|
 | Users evaluating ToolGate | [Quickstart](getting-started/one-minute-quickstart.md) | [First login](getting-started/first-login.md), [first tool](getting-started/first-tool.md) |
 | Tool authors | [Tool SDK guide](../TOOL-SDK-GUIDE.md) | [Java SDK](../tool-sdk/java-sdk/README.md), [CLI](../tool-sdk/cli/README.md), [examples](../examples/README.md) |
 | Contributors | [Contributing](../CONTRIBUTING.md) | [Development](development/README.md), [testing](testing/README.md) |
-| Enterprise evaluators | [Scope and readiness](enterprise-access-control/README.md) | [Security](security/README.md), [implementation evidence](enterprise-access-control/implementation-status.md) |
+| Enterprise evaluators | [Scope and readiness](enterprise-access-control/README.md) | [Security](security/README.md), [verification](testing/README.md) |
 | Operators | [Deployment](deployment/README.md) | [Operations](operations/README.md), [recovery](enterprise-access-control/operations.md) |
 
 ## Component guides
@@ -29,4 +29,3 @@ with their component; unfinished features live in the [planning backlog](plannin
 - [Release process](development/release-process.md)
 - [Documentation contributions](contributors/documentation-guide.md)
 - [Glossary](GLOSSARY.md)
-- [Pending and planned features](planning/README.md)

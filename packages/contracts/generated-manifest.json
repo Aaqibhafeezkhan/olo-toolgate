@@ -27,10 +27,10 @@
     "packages/contracts/schemas/v2/identifiers.schema.json": "5337f9e0da9c6a210937bf978e793159aa92a57c29a9652f2996219668786563",
     "packages/contracts/schemas/v2/invocation.schema.json": "01f3c426ea3a2ab2cc6e94401350c0173e07d6de33eab8f62e23d37e16173c13",
     "packages/contracts/schemas/v2/kill.schema.json": "08f899bea20c69c94a2d31aefd4433391111f3132f3f6bc2b64574d62bf53e79",
-    "packages/contracts/schemas/v2/mcp-proxy.schema.json": "572b57551d13aa4193e9b98223d96ce579d4bd1b7c51f757fb70c440c66b602e",
+    "packages/contracts/schemas/v2/mcp-proxy.schema.json": "3e75e0d57f63e1e46293c22e4691055fa0147eb311f83a43fe70ea3872f35faf",
     "packages/contracts/schemas/v2/package.schema.json": "2653680bfeef92dff28aa958c9aa1448324ea954aba655b9df49e8059d9443f1",
     "packages/contracts/schemas/v2/permit.schema.json": "98abdc836fac634d7e0bfbc0b439989f041aa1687cad666013b7bd46e2dcbc3e",
-    "packages/contracts/schemas/v2/profile.schema.json": "b25258ba2f037e322748628769f7e0c819cfcd87244a702404bba7ffeef9a0be",
+    "packages/contracts/schemas/v2/profile.schema.json": "3e5f1724034938b400883eaebac709f1123e9b78f4dfb11f2d646549741a5768",
     "packages/contracts/schemas/v2/protocol.schema.json": "16b44fb632ce06cb17370ce9c11d4068f1adc6a8652ff04a459826d365e35f12",
     "packages/contracts/schemas/v2/service-profile.schema.json": "9d9526778d6b8d2625bf71232b642b68fd5a62a0b0ad5837f83596cce936d12a",
     "packages/contracts/schemas/v2/settings.schema.json": "2a55ae4fd562d8904f33104177a66f6789912509035e4fe8da91b92b2776da5a"

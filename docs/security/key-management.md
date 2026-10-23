@@ -26,5 +26,5 @@ for compromise or restore, and verify revocation before reopening traffic.
 
 Server-tool request-state and emergency operator keys are specified in
 [ADR 013](../adr/013-tool-host-egress-broker-secrets.md) and
-[ADR 017](../adr/017-kill-switch.md). Their complete runtime integration is tracked
-in [planning](../planning/README.md); the specifications are not deployment promises.
+[ADR 017](../adr/017-kill-switch.md). Check the executor guides for current
+runtime support; specifications alone do not establish deployment support.

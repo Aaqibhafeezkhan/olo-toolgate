@@ -17,8 +17,8 @@ The console records the requests; the endpoint records its actual activity.
 > **Not runnable at the moment.** This example registered the client's former built-in HotFolder tools from the
 > device. Those built-ins are gone (ADR 027): HotFolder is now the `examples.hotfolder` Marketplace package, released to
 > devices with their own container engine and files area, as `deploy/docker` does for the demo lab devices. This
-> example has no Marketplace, so it needs a package-upload and client-release flow before it runs again; that rework is
-> tracked in `plan.md`. Its scripts no longer register tool definitions.
+> example has no Marketplace and does not run as-is. Upload and release the required package using the
+> [current runtime guide](../../docs/client/server-mcp.md). Its scripts no longer register tool definitions.
 
 ## What it does
 

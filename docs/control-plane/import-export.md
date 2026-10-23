@@ -209,4 +209,4 @@ exception text. A successful retry clears the diagnostic. An initialized tenant
 is never reseeded, even when sources or environment values change.
 
 The manifest implements provisioning. Shared-host request routing and client
-binding remain under development as tracked in `plan.md`.
+binding require the qualification described in the [multitenant deployment guide](../deployment/multitenant.md).

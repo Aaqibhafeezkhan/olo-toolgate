@@ -113,6 +113,7 @@ $models = [
     'McpQuarantine',
     'McpQuarantineReason',
     'McpQuarantineReport',
+    'McpRefreshRequest',
     'McpScanClaims',
     'McpScanDispatch',
     'McpScanFailureReport',

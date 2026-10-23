@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Forwards the SDK response frames of one admitted attempt to Control (plan.md §12). The runner offers each complete
+//! Forwards the SDK response frames of one admitted attempt to Control (docs/contracts/platform-requirements.md). The runner offers each complete
 //! stdout line; LOG, PROGRESS and INPUT_REQUEST frames that match the protocol get the next per-attempt sequence and are
 //! posted in batches bound to the invocation and its fencing token. Resending a batch is idempotent at Control, so a
 //! transient failure is retried with the same sequences. Frames beyond the bounds, malformed frames and frames that

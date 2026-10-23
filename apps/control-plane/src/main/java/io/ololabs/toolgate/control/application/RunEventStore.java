@@ -4,7 +4,7 @@ package io.ololabs.toolgate.control.application;
 
 import java.util.List;
 
-/** Tenant-transactional run-response events (plan.md §12). The stream row allocates cursors under a row lock and keeps
+/** Tenant-transactional run-response events (docs/contracts/platform-requirements.md). The stream row allocates cursors under a row lock and keeps
  *  the counters that tell a reader what was refused, dropped or purged; events are immutable once appended. */
 public interface RunEventStore {
     record Stream(String invocationId,long lastCursor,int events,long bytes,long droppedFrames,long refusedFrames,long retainUntil,Long purgedAt) {}

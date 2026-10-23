@@ -118,6 +118,7 @@ fn v2_fixture_round_trips() {
         McpQuarantine,
         McpQuarantineReason,
         McpQuarantineReport,
+        McpRefreshRequest,
         McpScanClaims,
         McpScanDispatch,
         McpScanFailureReport,

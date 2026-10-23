@@ -80,7 +80,7 @@ public final class DirectoryService {
             var reply=input==null?new Store.Reply(204,"",after.revision()):new Store.Reply(old==null?201:200,after.entries().get(typedId).document(),after.entries().get(typedId).revision());tx.remember(actor.id(),key,hash,reply);return reply;
         });
     }
-    /** Tools and their extractors come only from installed packages (ADR 027, plan.md §15): this API may enable, disable or
+    /** Tools and their extractors come only from installed packages (ADR 027, docs/contracts/platform-requirements.md): this API may enable, disable or
      *  delete one, never create one or change what it runs, so no script can add a tool outside the package path. */
     private void packaged(Kind kind,Directory.Entry old,Directory.Entry input,String operation){
         if(kind!=Kind.TOOL&&kind!=Kind.EXTRACTOR)return;

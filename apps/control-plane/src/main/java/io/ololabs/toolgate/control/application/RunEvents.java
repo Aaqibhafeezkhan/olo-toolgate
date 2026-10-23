@@ -17,7 +17,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-/** Durable governed run-response events (plan.md §12).
+/** Durable governed run-response events (docs/contracts/platform-requirements.md).
  *
  *  An executor forwards the redacted SDK frames of the attempt it admitted, bound to the fencing token its permit
  *  consumption returned; Control records them under the invocation, assigns the replay cursor, and records every ledger

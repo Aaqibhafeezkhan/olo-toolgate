@@ -1,6 +1,6 @@
 # Shared Control, dedicated tenant execution
 
-Use the default Quickstart for a single tenant. This composition provides the shared PostgreSQL topology: one Control, one Gateway per tenant, and separate Tool Host containers/volumes/networks. Set the required image variables to qualified immutable digests. Create the restricted `PLATFORM_NETWORK` for the external PostgreSQL service; it must not contain customer executors. The complete release matrix remains a separate gate in `plan.md`.
+Use the default Quickstart for a single tenant. This composition provides the shared PostgreSQL topology: one Control, one Gateway per tenant, and separate Tool Host containers/volumes/networks. Set the required image variables to qualified immutable digests. Create the restricted `PLATFORM_NETWORK` for the external PostgreSQL service; it must not contain customer executors. Qualify this topology using the [multitenant deployment guide](../../../docs/deployment/multitenant.md) before production use.
 
 Create the two tenants with the protected initialization manifest described in [tenant routing](../../../docs/control-plane/tenant-routing.md). Use these canonical origins:
 

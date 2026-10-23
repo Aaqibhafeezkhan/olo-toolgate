@@ -12,7 +12,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 
 /** MCP proxy registrations for administrators of the routed tenant, and their scans for the Tool Hosts that run them,
- *  which present their device certificate (docs/planning/mcp-proxy/plan.md §6). */
+ *  which present their device certificate (ADR 030). */
 @Path("/api/control/v1") @Produces("application/json") @Blocking @PermitAll
 public class McpServerResource {
     @Inject TenantRequest request;@Inject McpServers servers;@Inject VerifiedActors actors;@Inject EndpointService endpoints;

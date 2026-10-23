@@ -43,8 +43,8 @@ Device approval alone never grants permission to run a tool.
 
 This repository is a development release. Tool Host sandbox isolation and several
 SDK, integration and distribution features remain unfinished. The Marketplace
-applications are scaffolds. See the [consolidated backlog](docs/planning/README.md)
-for pending work and completion criteria.
+applications are scaffolds. Each [component guide](docs/README.md) describes its
+current behavior and limitations.
 
 ## Console and devices
 
@@ -74,8 +74,7 @@ describes design relationships; it is not a certification claim.
 Read [CONTRIBUTING.md](CONTRIBUTING.md), choose a component from the
 [architecture map](docs/architecture/component-map.md), and use the
 [development commands](docs/development/README.md). Small fixes, tests,
-documentation and examples are welcome. Planned work is tracked in
-[one backlog](docs/planning/README.md).
+documentation and examples are welcome. Discuss proposed work in GitHub issues.
 
 [Support](SUPPORT.md) · [Report a vulnerability](SECURITY.md) ·
 [Governance](GOVERNANCE.md) · [Code of conduct](CODE_OF_CONDUCT.md) ·

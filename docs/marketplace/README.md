@@ -5,7 +5,6 @@ They do not provide a complete hosted publication/moderation service.
 Control does implement import from a configured external OLO Orgs registry;
 follow [Marketplace integration](../control-plane/marketplace-integration.md) for
 the current settings, trust checks and supported import path.
-All remaining work is tracked in the [consolidated backlog](../planning/README.md).
 
 The intended boundary keeps catalog, publisher and immutable version authority
 in the API; isolated scan/build/sign/publish orchestration in the worker; and

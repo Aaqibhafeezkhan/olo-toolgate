@@ -28,5 +28,4 @@ ASK approvals remain bound to the exact operation and current authority.
 [Invocation state](invocation-state-v2.md), [kill switch](kill-switch.md) and
 [migration specifications](migrations-v2/README.md) define contracts used by
 conformance tests. A design does not establish that every executor implements it.
-See the [backlog](../planning/README.md) for remaining task, kill-delivery and
-Marketplace work.
+Check each component guide for its supported behavior and current limits.

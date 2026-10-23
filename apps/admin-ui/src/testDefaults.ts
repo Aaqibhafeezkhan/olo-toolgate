@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 
-/** Test input built from the typed defaults in a verified tool definition (plan.md §12).
+/** Test input built from the typed defaults in a verified tool definition (docs/contracts/platform-requirements.md).
  *
  * JSON Schema `default` is an annotation; this resolver constructs the test payload explicitly and never changes
  * invocation semantics elsewhere. A default is used only when it validates against its own property schema. Required

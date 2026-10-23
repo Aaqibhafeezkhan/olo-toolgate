@@ -96,7 +96,7 @@ impl Verifier {
 }
 
 impl Verifier {
-    /// Verifies an MCP scan permit (typ toolgate-mcp-scan-permit+jws, docs/planning/mcp-proxy/plan.md §6): Control's
+    /// Verifies an MCP scan permit (typ toolgate-mcp-scan-permit+jws, ADR 030): Control's
     /// signature, this host as audience, an admission window of at most 10 s, a signed deadline still ahead, and a jti
     /// never presented before.
     pub fn verify_scan(&self, jws: &str, now_ms: u64) -> Result<McpScanClaims, PermitError> {

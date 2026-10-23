@@ -8,5 +8,5 @@
 - [Production preparation](production.md): separate services, external state and custody.
 - [Device installation](device.md) and [secured devices](secured-device.md).
 
-Marketplace hosting and additional infrastructure automation are
-[planned features](../planning/README.md).
+Marketplace hosting is not provided by these deployment helpers; see the
+[Marketplace guide](../marketplace/README.md) for current scope.

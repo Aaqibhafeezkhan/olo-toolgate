@@ -13,7 +13,7 @@ import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-/** The package of one MCP server approval (docs/planning/mcp-proxy/plan.md §6): kind MCP_PROXY, id mcp.<slug>, version
+/** The package of one MCP server approval (ADR 030): kind MCP_PROXY, id mcp.<slug>, version
  *  1.0.<approval sequence>, the Tool Host's native mcp-proxy runtime, and one artifact, mcp-proxy.json, that every tool
  *  runs from. Each approved upstream tool becomes a SERVER descriptor; the upstream credential is named by the proxy
  *  document, so the package digest pins the URL, the credential reference, the TLS pins and every definition digest. */

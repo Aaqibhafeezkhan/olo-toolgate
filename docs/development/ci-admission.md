@@ -1,6 +1,6 @@
 # CI pause and RC admission
 
-**ToolGate CI** (`ci.yml`) is the only branch push/dispatch validation entry point.
+**ToolGate CI** (`ci.yml`) is the automatic branch-push validation entry point.
 It does not publish development packages. Admission runs once, then preflight,
 foundation, six native platform builds and production image checks retain their
 existing validation gates. See [check ownership](ci-check-ownership.md).
@@ -17,7 +17,11 @@ Set the variable under GitHub Settings > Secrets and variables > Actions > Varia
   commit message is not checked. A direct push without a merged PR is not admitted.
 - Manual CI dispatch: the same merged-PR title check applies to the selected main
   commit. Other branch pushes and manual dispatches run checks without a merged PR.
-  There is no comment input or override.
+  There is no comment input or override in this workflow.
+- **ToolGate CI - Manual** (`ci-manual.yml`) is an explicit dispatch-only entry point.
+  It bypasses both RC title and CI enablement admission while running the same
+  preflight, foundation, native and image checks. Select the source branch in
+  **Run workflow**; this entry point does not publish artifacts to registries.
 - Pull requests, comments and version tags do not trigger CI. A merge's push
   triggers one run, avoiding a duplicate pull-request run.
   Product releases use the separate [two manual jobs](how-to-release.md), with

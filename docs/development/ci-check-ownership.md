@@ -1,6 +1,7 @@
 # CI check ownership
 
-`ci.yml` has one main push/dispatch validation entry point. Admission and preflight run once;
+`ci.yml` owns automatic validation. `ci-manual.yml` calls the same reusable stages
+for explicit operator validation, bypassing admission. In automatic CI, admission and preflight run once;
 foundation and the six native platform jobs then run in parallel. Images wait
 for both. Main CI does not publish development releases. Manual development
 publication selects any source branch; product publication retains its separate

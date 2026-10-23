@@ -57,6 +57,5 @@ Do not change application import names during the split.
 
 See:
 
-- [shared-contracts](../architecture/shared-contracts.md)
-- `docs/architecture/shared-contracts.md`
-- `docs/development/contracts-release.md`
+- [Shared contracts](../architecture/shared-contracts.md)
+- [Release operator guide](how-to-release.md)

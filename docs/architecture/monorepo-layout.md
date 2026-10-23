@@ -14,7 +14,6 @@
 | `tools/` | Build, validation, release and developer automation |
 | `tests/` | Contract, CI and other cross-component checks/fixtures |
 | `docs/` | User, contributor and operator guides, security model and ADRs |
-| `docs/planning/` | Consolidated pending and planned features |
 
 Generated build output and local credentials belong in ignored directories.
 Canonical cross-language schemas live in `packages/contracts/schemas/`; do not

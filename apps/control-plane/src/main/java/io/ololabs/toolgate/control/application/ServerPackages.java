@@ -36,7 +36,7 @@ public final class ServerPackages {
     private JsonNode node(String document) { return (JsonNode) codec.value(document); }
     private Store.Reply reply(int status, Object value) { return new Store.Reply(status, codec.json(value), 0); }
     private static Failure notFound() { return new Failure(ErrorCode.NOT_FOUND, 404, "Package not found"); }
-    /** A declaration whose execution location does not allow this target (plan.md §4). */
+    /** A declaration whose execution location does not allow this target (docs/contracts/platform-requirements.md). */
     static Failure locationRefused() { return new Failure(ErrorCode.FORBIDDEN, 403, "Tool execution location does not allow this target"); }
     private void writer(Store.Session tx, DirectoryService.Actor actor, String action) { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package." + action, clock.millis()); }
     private void reader(Store.Session tx, DirectoryService.Actor actor) { actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package.read", clock.millis()); }
@@ -441,7 +441,7 @@ public final class ServerPackages {
     }
 
     public static final long MCP_FRESHNESS_MS = 120_000;
-    /** Freshness evidence for an MCP_PROXY call (docs/planning/mcp-proxy/plan.md §7): CURRENT only when the most recent
+    /** Freshness evidence for an MCP_PROXY call (ADR 030): CURRENT only when the most recent
      *  check of the deployed approval sequence succeeded at most 120 s ago and the server is approved, not quarantined. */
     public ObjectNode mcpVerification(Store.Session tx, PackageStore.Version version, long now) {
         long deployed = Long.parseLong(version.version().substring(version.version().lastIndexOf('.') + 1));

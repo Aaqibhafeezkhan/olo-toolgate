@@ -38,8 +38,7 @@ keys and runtime configuration. The console is served by Control.
 
 Managed endpoint packages use signed fleet assignments and OCI confinement.
 The server Tool Host supports Java execution, content verification and brokered
-routes; its container/network isolation and durable result outbox remain
-[unfinished](../planning/README.md). These execution paths have different current limits.
+routes; container/network isolation and a durable result outbox are not implemented. These execution paths have different current limits.
 
 The public Marketplace is planned infrastructure with scaffold applications.
 A future community signature will establish release provenance, never organization

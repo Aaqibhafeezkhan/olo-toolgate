@@ -25,5 +25,4 @@ Read the [architecture overview](docs/architecture/overview.md),
 [component map](docs/architecture/component-map.md),
 [trust boundaries](docs/architecture/trust-boundaries.md),
 [shared contracts](docs/architecture/shared-contracts.md) and
-[architecture decisions](docs/adr/README.md). Proposed capabilities belong in
-the [planning backlog](docs/planning/README.md).
+[architecture decisions](docs/adr/README.md). Discuss proposed capabilities in GitHub issues.

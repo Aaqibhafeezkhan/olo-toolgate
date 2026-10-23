@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/profile.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Deployment profiles",
-  "description": "Configuration-driven package provisioning applied at deployment (plan.md §7, §8, §11).",
+  "description": "Configuration-driven package provisioning applied at deployment (docs/contracts/platform-requirements.md).",
   "$ref": "#/$defs/DeploymentProfile",
   "$defs": {
     "ProfilePackageSource": {
@@ -120,7 +120,7 @@
     "DeploymentProfile": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package.",
+      "description": "Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package.",
       "properties": {
         "profileVersion": {
           "type": "integer",

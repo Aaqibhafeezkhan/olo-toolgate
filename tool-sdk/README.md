@@ -15,7 +15,6 @@ see [Python SDK](python-sdk/README.md). TypeScript and .NET implementations rema
 | Run server tools | [Tool Host](../apps/tool-host/README.md) |
 | Understand the authoring contract | [Specification](spec/README.md) |
 | Check required behavior | [Conformance](conformance/README.md) |
-| See remaining work | [Pending features](../docs/planning/README.md) |
 
 Conformance requirements refer to [platform requirement IDs](../docs/contracts/platform-requirements.md)
 and the component specifications. Requirements are distinct from passing runtime evidence.

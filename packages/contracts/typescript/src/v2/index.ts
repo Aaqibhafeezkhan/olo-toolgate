@@ -224,7 +224,7 @@ export interface DeploymentGrant {
   readonly agentGroupId: string;
   readonly toolIds: ReadonlyArray<string>;
 }
-/** Deployment-time package provisioning for one profile (plan.md §7). Applied by Control at deployment; removing an entry never uninstalls a package. */
+/** Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package. */
 export interface DeploymentProfile {
   readonly profileVersion: 1;
   readonly profileId: string;

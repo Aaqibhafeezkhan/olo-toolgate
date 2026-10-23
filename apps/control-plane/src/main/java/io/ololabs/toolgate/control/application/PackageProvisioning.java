@@ -15,7 +15,7 @@ import java.time.Clock;
 import java.util.*;
 import java.util.function.Supplier;
 
-/** The one application service that provisions packages from a deployment profile (plan.md §7, §8, §11).
+/** The one application service that provisions packages from a deployment profile (docs/contracts/platform-requirements.md).
  *
  *  The whole profile is validated before anything changes. Each pinned package is then imported through the ordinary
  *  verifier — the sealed core artifact from the image lock, or the exact signed Marketplace release — deployed to the
