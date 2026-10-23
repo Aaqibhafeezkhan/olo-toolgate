@@ -187,9 +187,11 @@ def configure_package_access(config, device, installed, group):
     """Authorize installed SDK exports explicitly; standard FILE actions do not authorize invoke."""
     base = dict(enabled=True, revision=1)
     tools, devices, agents = 'debug-mimic-tools', 'debug-mimic-devices', 'debug-mimic-agents'
-    config.upsert('tool-groups', dict(**base, id=tools, name='Debug HotFolder tools', toolIds=[]))
+    if not any(row['id'] == tools for row in config.all('tool-groups')):
+        config.upsert('tool-groups', dict(**base, id=tools, name='Debug HotFolder tools', toolIds=[]))
     config.upsert('device-groups', dict(**base, id=devices, name='Debug selected device', deviceIds=[device]))
-    config.upsert('agent-groups', dict(**base, id=agents, name='Debug package agent', agentIds=[], roleIds=[]))
+    if not any(row['id'] == agents for row in config.all('agent-groups')):
+        config.upsert('agent-groups', dict(**base, id=agents, name='Debug package agent', agentIds=[], roleIds=[]))
     # Moving an agent to ReadOnly (including --allocate-agent) removes this opt-in capability.
     config.memberships('agents', 'debug-mimic-agent', [group]+([agents] if group != 'ReadOnlyAgentGroup' else []))
     config.memberships('devices', device, ['ReadAndWriteDeviceGroup', devices])
@@ -198,7 +200,8 @@ def configure_package_access(config, device, installed, group):
     scope = dict(toolGroups=dict(ids=[tools], all=False), deviceGroups=dict(ids=[devices], all=False),
         actions=['invoke'], allActions=False,
         resources=[dict(kind='CUSTOM', locator='tool://'+tool, match='EXACT') for tool in sorted(MIMIC_TOOLS)],
-        conditions=dict(requireOnline=True))
+        conditions=dict(notBeforeUnixMs=0, expiresAtUnixMs=0, networkCidrs=[], devicePosture=[],
+                        regions=[], hoursUtc=[], requireOnline=True, highRisk=False))
     for purpose in ('CAPABILITY', 'SERVICE'):
         config.upsert('grants', dict(**base, id='debug-mimic-'+purpose.lower(), name='Debug package '+purpose.lower(),
             sourceType='AGENT_GROUP', sourceId=agents, purpose=purpose, scope=scope))

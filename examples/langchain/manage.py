@@ -325,8 +325,9 @@ def provision(args):
     selected = [{'tool': tool} for tool in config.all('tools') if tool['id'] in TOOLS]
     if {profile['tool']['id'] for profile in selected} != TOOLS:
         raise ValueError('The client release did not register the required HotFolder tools')
-    config.upsert('tool-groups', dict(id=TOOL_GROUP, name='LangChain HotFolder package tools', enabled=True,
-                                    revision=1, toolIds=[]))
+    if not any(group['id'] == TOOL_GROUP for group in config.all('tool-groups')):
+        config.upsert('tool-groups', dict(id=TOOL_GROUP, name='LangChain HotFolder package tools', enabled=True,
+                                        revision=1, toolIds=[]))
     for profile in selected:
         tool = profile['tool']
         if not tool['enabled']:
