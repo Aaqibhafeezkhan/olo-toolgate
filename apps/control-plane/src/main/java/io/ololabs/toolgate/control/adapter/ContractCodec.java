@@ -273,6 +273,18 @@ public class ContractCodec implements Codec {
         try { return mapper.treeToValue(node, type); }
         catch (java.io.IOException | IllegalArgumentException e) { throw Failure.validation(); }
     }
+    private volatile io.ololabs.toolgate.control.application.OloProtections protections = io.ololabs.toolgate.control.application.OloProtections.NONE;
+    /** Loads {@code toolgate.control.olo.reserved-agents} and {@code toolgate.control.olo.protected-tool-groups} (M3.5, M3.8). */
+    void configure(@jakarta.enterprise.event.Observes io.quarkus.runtime.StartupEvent event, org.eclipse.microprofile.config.Config config) {
+        protections(new io.ololabs.toolgate.control.application.OloProtections(names(config, "toolgate.control.olo.reserved-agents"), names(config, "toolgate.control.olo.protected-tool-groups")));
+    }
+    private static java.util.Set<String> names(org.eclipse.microprofile.config.Config config, String key) {
+        var out = new java.util.HashSet<String>();
+        for (var name : config.getOptionalValue(key, String.class).orElse("").split(",")) if (!name.isBlank()) out.add(name.strip());
+        return out;
+    }
+    public ContractCodec protections(io.ololabs.toolgate.control.application.OloProtections protections) { this.protections = java.util.Objects.requireNonNull(protections); return this; }
+    @Override public io.ololabs.toolgate.control.application.OloProtections protections() { return protections; }
     public void validatePolicies(Directory directory) {
         io.ololabs.toolgate.control.application.GroupGraph.validate(directory,this);
     }

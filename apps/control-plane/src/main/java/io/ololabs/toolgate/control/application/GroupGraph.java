@@ -75,6 +75,7 @@ public final class GroupGraph {
         }
     }
     public static void validate(Directory directory,Codec codec) {
+        var olo=codec.protections();
         for(var kind:DEFAULTS.keySet()) {
             var group=directory.entries().get(kind.id(DEFAULTS.get(kind))); if(group==null||!group.enabled())throw new IllegalArgumentException("Protected default group is required");
         }
@@ -97,22 +98,22 @@ public final class GroupGraph {
                 for(var rule:role.managementRules()) { selection(rule.groups());if(!ManagementPermissionCatalog.ALL.containsAll(rule.actions()))throw new IllegalArgumentException("Unknown feature permission");if(ManagementAccess.own(rule)&&(rule.groupType()!=EnterpriseGroupType.DEVICE_GROUP||rule.groups().all()||rule.groups().ids().size()!=1||rule.actions().stream().anyMatch(a->!a.startsWith("device."))))throw new IllegalArgumentException("Device scope requires one placement group and device permissions only"); conditions(rule.conditions()); rule.grantableScopes().forEach(GroupGraph::scope); }
             }
             if(kind==Kind.GRANT) {
-                var grant=codec.model(e.document(),ControlAccessGrant.class); scope(grant.scope());
+                var grant=codec.model(e.document(),ControlAccessGrant.class); scope(grant.scope());olo.scope(grant.scope());
                 if(grant.sourceType()==EnterpriseSourceType.TEAM&&grant.purpose()!=EnterpriseGrantPurpose.HUMAN&&grant.purpose()!=EnterpriseGrantPurpose.SECRET || grant.sourceType()==EnterpriseSourceType.AGENT_GROUP&&grant.purpose()==EnterpriseGrantPurpose.HUMAN)throw new IllegalArgumentException("Grant source is incompatible with purpose");
                 if(grant.sourceType()==EnterpriseSourceType.ROLE) {
                     var role=codec.model(directory.entries().get(Kind.ROLE.id(grant.sourceId())).document(),ControlRole.class);
                     if(role.roleType()==EnterpriseRoleType.MANAGEMENT || grant.purpose()==EnterpriseGrantPurpose.HUMAN&&role.roleType()!=EnterpriseRoleType.HUMAN || (grant.purpose()==EnterpriseGrantPurpose.CAPABILITY||grant.purpose()==EnterpriseGrantPurpose.SERVICE)&&role.roleType()!=EnterpriseRoleType.ACTOR_SERVICE)throw new IllegalArgumentException("Grant cannot use this role type");
                 }
             }
-            if(kind==Kind.DELEGATION)scope(codec.model(e.document(),ControlDelegation.class).scope());
-            if(kind==Kind.AGENT_DELEGATION)scope(codec.model(e.document(),ControlAgentDelegation.class).scope());
+            if(kind==Kind.DELEGATION){var s=codec.model(e.document(),ControlDelegation.class).scope();scope(s);olo.scope(s);}
+            if(kind==Kind.AGENT_DELEGATION){var s=codec.model(e.document(),ControlAgentDelegation.class).scope();scope(s);olo.scope(s);}
             if(kind==Kind.POLICY) {
                 var p=codec.model(e.document(),ControlPolicy.class);scope(p.scope()); selection(p.teams());selection(p.agentGroups());selection(p.approverTeams());
                 if(p.decision()==Decision.ASK&&!p.approverTeams().all()&&p.approverTeams().ids().isEmpty())throw new IllegalArgumentException("ASK requires an explicit reviewer group");
             }
             if(kind==Kind.BINDING)StandardAccessPresets.validateBinding(codec.model(e.document(),ControlExecutionBinding.class));
             if(kind==Kind.WORKLOAD_BINDING) {
-                var b=codec.model(e.document(),ControlWorkloadBinding.class);
+                var b=codec.model(e.document(),ControlWorkloadBinding.class);olo.workload(b);
                 if(b.mode()==RequestMode.HUMAN || b.mode()==RequestMode.DELEGATED&&(b.delegatedUserId()==null||b.delegatedSessionEpoch()==null) || b.mode()==RequestMode.SERVICE&&(b.delegatedUserId()!=null||b.delegatedSessionEpoch()!=null))throw new IllegalArgumentException("Invalid workload identity mode");
             }
         }
