@@ -121,9 +121,9 @@ No script deletes volumes; back up `/data` before testing migrations.
 
 Run `setup-agent-mimic.bat` or `agent-mimic.bat` to call an already configured,
 approved and connected client through `https://localhost:18450/mcp`. The commands
-only call existing tools and record their responses: `hotfolder.write_text`
+only call existing tools and record their responses: `examples.hotfolder/write_text`
 creates `rahul-nigam.txt` containing exactly `My Name is Rahul Nigam` in the
-device's files area, then `hotfolder.read_text` reads it back. By default the
+device's files area, then `examples.hotfolder/read_text` reads it back. By default the
 write repeats for eight seconds (`-DurationSeconds 0..60`; 0 sends one write).
 A denied or failed write stops the script before the read. They do not install
 tools, update the client, configure the device or grant permissions.
@@ -137,8 +137,9 @@ client: install it, release it to the device and give the device an engine and a
 files area as the demos do (`deploy/docker`, [ADR 027](../docs/adr/027-one-tool-protocol-device-files.md)).
 Then, for this isolated debug Quickstart, run
 `configure-debug-agent.bat --device-id <approved-device-id>`. It refuses unless the
-package's `write_text` and `read_text` tools are installed, places them and the
-device in the ReadAndWrite groups, allows exactly their recorded package digests,
+package's `write_text` and `read_text` tools are installed, configures dedicated
+package groups with exact `invoke`/`CUSTOM` grants for the selected device and exports,
+allows exactly their recorded package digests,
 and issues the debug agent a 24-hour credential in `.dev/debug/client-agent-token`
 (readable only by the current account and SYSTEM; its hash is stored in
 `/data/client-runtime-credentials.json`, enabled by
@@ -160,7 +161,7 @@ gateway timeout and online authorization checks.
 The console URL is the management UI. The AI gateway is `https://localhost:18450/mcp`.
 Its configured credential binds the device and agent; requests cannot select
 another device or grant themselves access. With the supplied debug mappings,
-an AI can discover `hotfolder.write_text` and `hotfolder.read_text`, write
+an AI can discover `examples.hotfolder/write_text` and `examples.hotfolder/read_text`, write
 `rahul-nigam.txt` and read it back. Each call may name only paths it was given,
 inside the device's configured files area; the client's files boundary still applies. Additional AI actors need their own configured credentials and reviewed
 Agent Group memberships/grants. The example contains no credential; the bridge
@@ -233,8 +234,8 @@ and uses independent fixture accounts for reviews. It also enables and assigns
 `test-readonly`, `test-readwrite`, and `test-admin` to their standard Teams.
 No password or bearer credential is logged. Ordinary MCP calls never provision access.
 
-The setup pins only the installed diagnostic tools to the ReadAndWrite execution
-binding and assigns the selected device/tools to the corresponding standard groups.
-It removes the previous bespoke debug groups/grants after moving their memberships.
+The setup pins the installed diagnostic tools and selected device to a dedicated
+package binding. Standard FILE read/write presets remain unchanged. ReadAndWrite
+and Admin agents receive the explicit package capability; ReadOnly agents do not.
 Use `--allocate-agent` for later group changes without rotating the workload token.
 The ReadOnly group intentionally fails writes; ReadAndWrite allows this diagnostic.

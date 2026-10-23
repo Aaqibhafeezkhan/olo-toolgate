@@ -73,6 +73,23 @@ class InitialConfigurationTests(unittest.TestCase):
 
 
 class PackageToolTests(unittest.TestCase):
+    def test_package_grants_pin_exports_digests_and_selected_device_without_changing_standard_bindings(self):
+        from unittest.mock import Mock
+        for group in ('ReadAndWriteAgentGroup', 'ReadOnlyAgentGroup'):
+            config=Mock()
+            installed={tool:{'packageDigest':'a'*64} for tool in module.MIMIC_TOOLS}
+            module.configure_package_access(config,'device-selected',installed,group)
+            records={(call.args[0],call.args[1]['id']):call.args[1] for call in config.upsert.call_args_list}
+            binding=records['bindings','debug-mimic-binding']
+            self.assertEqual(binding['actions'],['invoke'])
+            self.assertEqual(binding['allowedPackageDigests'],['a'*64])
+            self.assertEqual(records['device-groups','debug-mimic-devices']['deviceIds'],['device-selected'])
+            self.assertFalse(any(key[1].startswith('standard-') for key in records))
+            scope=records['grants','debug-mimic-service']['scope']
+            self.assertEqual(scope['resources'],[dict(kind='CUSTOM',locator='tool://'+tool,match='EXACT') for tool in sorted(module.MIMIC_TOOLS)])
+            membership=next(call.args[2] for call in config.memberships.call_args_list if call.args[0]=='agents')
+            self.assertEqual('debug-mimic-agents' in membership,group!='ReadOnlyAgentGroup')
+
     def test_the_debug_agent_is_never_configured_with_tools_a_package_did_not_install(self):
         config=object.__new__(module.Configuration)
         with patch.object(module,'private_file'),patch.object(module,'Configuration',return_value=config),             patch.object(config,'api',side_effect=[{'role':'SUPER_ADMIN'},{'state':'ACTIVE','lastSeenUnixMs':10**15}]),             patch.object(config,'presets'),patch.object(config,'all',return_value=[{'id':'examples.hotfolder/write_text','packageDigest':'a'*64}]),             patch.object(config,'upsert') as upsert,patch.object(module.time,'time',return_value=10**12):

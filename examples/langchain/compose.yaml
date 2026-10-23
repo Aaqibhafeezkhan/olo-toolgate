@@ -1,7 +1,18 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-name: toolgate-langchain
+name: ${TOOLGATE_LANGCHAIN_PROJECT:-toolgate-langchain}
 services:
+  registry:
+    # Explicit loopback-only development registry, supported by Control's OCI adapter.
+    image: registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:${TOOLGATE_REGISTRY_PORT:-18552}
+    ports:
+      - "127.0.0.1:${TOOLGATE_REGISTRY_PORT:-18552}:${TOOLGATE_REGISTRY_PORT:-18552}"
+      - "127.0.0.1:${TOOLGATE_HTTP_PORT:-18091}:8080"
+      - "127.0.0.1:${TOOLGATE_TLS_PORT:-18451}:8443"
+    volumes:
+      - registry-data:/var/lib/registry
   quickstart:
     image: ${TOOLGATE_QUICKSTART_IMAGE:-ololab/olo-toolgate-quickstart:dev}
     platform: linux/amd64
@@ -12,6 +23,14 @@ services:
     mem_limit: 1536m
     cpus: 2
     stop_grace_period: 35s
+    # Control and the system Docker engine use the same loopback registry coordinates.
+    network_mode: service:registry
+    depends_on:
+      registry:
+        condition: service_started
+    env_file:
+      - path: ${TOOLGATE_LANGCHAIN_STATE:-.state}/client-images.env
+        required: false
     environment:
       TOOLGATE_DISABLE_ADMIN_PASSWORD: 'false'
       TOOLGATE_QUICKSTART_DATABASE_MODE: sqlite
@@ -21,9 +40,6 @@ services:
       TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL: https://localhost:${TOOLGATE_TLS_PORT:-18451}
       # Setup downloads name this console so Windows clients can trust the local CA.
       TOOLGATE_CONTROL_ENDPOINT_CONSOLE_URL: http://127.0.0.1:${TOOLGATE_HTTP_PORT:-18091}
-    ports:
-      - "127.0.0.1:${TOOLGATE_HTTP_PORT:-18091}:8080"
-      - "127.0.0.1:${TOOLGATE_TLS_PORT:-18451}:8443"
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532
     volumes:
@@ -43,7 +59,7 @@ services:
       quickstart:
         condition: service_healthy
     environment:
-      TOOLGATE_DEVICE_UPSTREAM: quickstart
+      TOOLGATE_DEVICE_UPSTREAM: registry
       TOOLGATE_DEVICE_HTTP_PORT: ${TOOLGATE_HTTP_PORT:-18091}
       TOOLGATE_DEVICE_TLS_PORT: ${TOOLGATE_TLS_PORT:-18451}
     tmpfs:
@@ -51,6 +67,8 @@ services:
     volumes:
       - device-config:/etc/olo-toolgate
       - device-state:/var/lib/olo-toolgate
+      # Explicit local evaluation executor; tool containers receive no socket or mounts.
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: [CMD, python, -c, "import json; d=json.load(open('/run/olo-toolgate/device-status.json')); assert d.get('deviceId')"]
       interval: 5s
@@ -78,10 +96,11 @@ services:
       TOOLGATE_CREDENTIAL_DIRECTORY: /run/toolgate-agents
       PYTHONDONTWRITEBYTECODE: '1'
     volumes:
-      - ./.state/agents:/run/toolgate-agents:ro
+      - ${TOOLGATE_LANGCHAIN_STATE:-.state}/agents:/run/toolgate-agents:ro
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
 volumes:
+  registry-data:
   quickstart-data:
   device-config:
   device-state:

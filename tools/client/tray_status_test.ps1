@@ -12,9 +12,9 @@ $form = New-ToolGateStatusWindow -LogoPath $logo
 $about = New-ToolGateAboutWindow -LogoPath $logo -Version '0.10.0-dev' -Build '42 (8f0822a)'
 try {
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    $running = [pscustomobject]@{ active = @([pscustomobject]@{ name = 'hotfolder.write_text'; startedAtUnixMs = $now - 4000 }); events = @(); logAvailable = $true }
+    $running = [pscustomobject]@{ active = @([pscustomobject]@{ name = 'examples.hotfolder/write_text'; startedAtUnixMs = $now - 4000 }); events = @(); logAvailable = $true }
     Update-ToolGateStatusWindow $form 'Service running - Connected' $running $true
-    if ($form.Tag.Progress.Style -ne 'Marquee' -or $form.Tag.Command.Text -ne 'Executing: hotfolder.write_text') { throw 'Running state is missing' }
+    if ($form.Tag.Progress.Style -ne 'Marquee' -or $form.Tag.Command.Text -ne 'Executing: examples.hotfolder/write_text') { throw 'Running state is missing' }
     $running.active[0] | Add-Member NoteProperty progressPercent 45
     Update-ToolGateStatusWindow $form 'Service running - Connected' $running $true
     if ($form.Tag.Progress.Style -ne 'Continuous' -or $form.Tag.Progress.Value -ne 45) { throw 'Measured progress is missing' }

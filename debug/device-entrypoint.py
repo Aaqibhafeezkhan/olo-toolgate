@@ -149,7 +149,16 @@ def supervise():
         while not STOP.is_set():
             if service.poll() is not None:
                 raise RuntimeError('The protected client service exited.')
-            health = json.loads(cli('health'))
+            try:
+                health = json.loads(cli('health'))
+            except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+                # Native health can be busy while signed package activation holds
+                # the service lock. Mark unhealthy and retry; killing a live service
+                # here would repeatedly interrupt its bounded pull/self-tests.
+                STATUS.unlink(missing_ok=True)
+                print('Client health unavailable; service is running, retrying.', flush=True)
+                STOP.wait(5)
+                continue
             # An expired request can be renewed; a deliberate denial stops automatic enrollment.
             if previous == 'PENDING' and health['state'] == 'UNENROLLED' and prompt:
                 enroll_due = time.time() * 1000 >= prompt['expiresAtUnixMs']

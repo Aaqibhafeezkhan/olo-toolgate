@@ -114,10 +114,10 @@ def mimic(agent, file_path, duration_seconds=0):
     if not isinstance(duration_seconds, int) or isinstance(duration_seconds, bool) or not 0 <= duration_seconds <= 60:
         raise ValueError('Duration seconds must be between 0 and 60')
     if duration_seconds:
-        print(f'Open the client tray > Show Status. Repeating hotfolder.write_text for {duration_seconds} seconds; each request uses the existing tool.', flush=True)
+        print(f'Open the client tray > Show Status. Repeating examples.hotfolder/write_text for {duration_seconds} seconds; each request uses the existing tool.', flush=True)
     deadline = time.monotonic() + duration_seconds
     while True:
-        write = agent.rpc('tools/call', {'name': 'hotfolder.write_text', 'arguments': {'path': file_path, 'text': TEXT}})
+        write = agent.rpc('tools/call', {'name': 'examples.hotfolder/write_text', 'arguments': {'path': file_path, 'text': TEXT}})
         print('Client file-write response:', flush=True)
         print(json.dumps(write, ensure_ascii=True, indent=2), flush=True)
         if write.get('structuredContent', {}).get('written') is not True: raise ValueError('Client did not confirm file creation')
@@ -125,7 +125,7 @@ def mimic(agent, file_path, duration_seconds=0):
         if remaining <= 0: break
         time.sleep(min(0.25, remaining))
         if time.monotonic() >= deadline: break
-    read = agent.rpc('tools/call', {'name': 'hotfolder.read_text', 'arguments': {'path': file_path}})
+    read = agent.rpc('tools/call', {'name': 'examples.hotfolder/read_text', 'arguments': {'path': file_path}})
     print('Client file-read response:', flush=True)
     print(json.dumps(read, ensure_ascii=True, indent=2), flush=True)
     content = read.get('structuredContent', {})

@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -22,6 +23,27 @@ class DeviceImageTests(unittest.TestCase):
     def setUp(self):
         device.STOP.clear()
         self.addCleanup(device.STOP.clear)
+
+    def test_busy_health_during_package_activation_marks_unhealthy_without_killing_service(self):
+        service=Mock();service.poll.return_value=None
+        health=json.dumps({'state':'ACTIVE'})
+        with tempfile.TemporaryDirectory() as folder:
+            status=Path(folder)/'device-status.json';status.write_text('stale health')
+            waits=[]
+            def wait(seconds):
+                waits.append(seconds)
+                if len(waits)==1:
+                    self.assertFalse(status.exists())
+                    service.terminate.assert_not_called()
+                else:
+                    device.STOP.set()
+            with patch.object(device,'STATUS',status),patch.object(device.subprocess,'Popen',return_value=service), \
+                    patch.object(device,'cli',side_effect=[health,RuntimeError('busy'),health]) as cli, \
+                    patch.object(device,'publish') as publish,patch.object(device.STOP,'wait',side_effect=wait):
+                device.supervise()
+            self.assertEqual(cli.call_count,3)
+            publish.assert_called_once_with({'state':'ACTIVE'},None)
+            service.terminate.assert_called_once()
 
     def test_gateway_origins_normalize_and_deduplicate(self):
         self.assertEqual(module.gateway_urls(' https://ONE.example:443/, https://two.example:8443,https://one.example '),
