@@ -138,4 +138,13 @@ public class DemoTools {
     public Map<String, Object> whoami(ToolContext context) {
         return Map.of("user", context.jwt().getStringValue("UserName"), "subject", context.jwt().getSubject());
     }
+
+    @ServerTool(name = "demo.principal", title = "Principal", description = "Reports the verified principal of a user-scoped call.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> principal(ToolContext context) {
+        var invocation = context.invocation();
+        String user = invocation.requireUser();
+        return Map.of("user", user, "tenant", invocation.tenantId().orElseThrow(), "agent", invocation.agentId().orElse(""),
+                "operation", invocation.operation().orElse(""), "chain", invocation.delegationChain(),
+                "resources", invocation.resources().stream().map(r -> r.kind() + ":" + r.locator()).toList());
+    }
 }

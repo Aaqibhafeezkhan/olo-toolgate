@@ -171,6 +171,9 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     /** The governed supervisor receives the same canonical frames for sync calls and tasks. */
     void attachResponses(java.util.function.Consumer<ObjectNode> sink) { responseFrames = sink; }
     void attachMode(InvocationMode mode) { invocationMode = mode; }
+    /** The principal the Tool Host verified in the permit; absent in standalone runs. */
+    void attachPrincipal(JsonNode verified) { principal = verified != null && verified.isObject() ? verified : null; }
+    private JsonNode principal;
 
     /**
      * Bounded and monotonic (case {@code context/progress}): a fraction outside 0..1, or lower than the last one, is
@@ -299,13 +302,30 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     // Invocation
     @Override public String invocationId() { return invocationId; }
     @Override public String toolId() { return toolId; }
-    @Override public Optional<String> agentId() { return Optional.empty(); }
-    @Override public Optional<String> userId() { return Optional.empty(); }
+    @Override public Optional<String> agentId() { return text("agentId"); }
+    @Override public Optional<String> userId() { return text("userId"); }
     @Override public Optional<Long> catalogRevision() { return Optional.empty(); }
     @Override public Instant deadline() { return deadline; }
     @Override public Optional<String> businessKey() { return Optional.ofNullable(businessKey); }
     @Override public int attempt() { return 1; }
     @Override public InvocationMode mode() { return invocationMode; }
+    @Override public Optional<String> tenantId() { return text("tenantId"); }
+    @Override public Optional<String> operation() { return text("operation"); }
+    @Override public List<Invocation.Resource> resources() {
+        if (principal == null) return List.of();
+        var out = new java.util.ArrayList<Invocation.Resource>();
+        principal.path("resources").forEach(r -> { if (r.path("kind").isTextual() && r.path("locator").isTextual()) out.add(new Invocation.Resource(r.get("kind").asText(), r.get("locator").asText())); });
+        return List.copyOf(out);
+    }
+    @Override public List<String> delegationChain() {
+        if (principal == null) return List.of();
+        var out = new java.util.ArrayList<String>();
+        principal.path("chain").forEach(agent -> { if (agent.isTextual()) out.add(agent.asText()); });
+        return List.copyOf(out);
+    }
+    private Optional<String> text(String field) {
+        return principal != null && principal.path(field).isTextual() ? Optional.of(principal.get(field).asText()) : Optional.empty();
+    }
 
     // ToolLogger: redacted, 4 KiB per entry, 256 KiB per invocation, kept as local diagnostics
     @Override public void debug(String message) { write("debug", message); }

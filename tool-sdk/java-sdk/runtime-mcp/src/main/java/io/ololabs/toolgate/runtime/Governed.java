@@ -24,6 +24,8 @@ import java.util.Map;
  * same in both modes (runtime-modes.md §3).
  */
 final class Governed {
+    /** Reserved claim carrying the principal the Tool Host verified in the Control permit (M4.2). */
+    static final String PRINCIPAL_CLAIM = "toolgate";
     /** Maximum size of the input line (platform-requirements.md §13.5: 1 MiB of arguments, plus the envelope). */
     static final int MAX_INPUT = 2 * 1024 * 1024;
 
@@ -64,13 +66,17 @@ final class Governed {
         input.path("secretHandles").forEach(h -> handles.put(h.path("name").asText(), h.path("handle").asText()));
         ObjectNode values = JSON.createObjectNode();
         values.set("globals", input.path("globals").isObject() ? input.get("globals") : JSON.createObjectNode());
-        values.set("claims", input.path("claims").isObject() ? input.get("claims") : JSON.createObjectNode());
+        ObjectNode claims = input.path("claims").isObject() ? ((ObjectNode) input.get("claims")).deepCopy() : JSON.createObjectNode();
+        // The Tool Host adds the verified principal under a reserved claim; it is lifted out so no tool reads it as a claim.
+        JsonNode principal = claims.remove(PRINCIPAL_CLAIM);
+        values.set("claims", claims);
         Config config = Config.governed(values, name -> {
             String handle = handles.get(name);
             return handle == null ? null : broker.redeem(handle);
         });
         config.governedInvocationId = input.path("invocationId").asText();
         config.governedDeadline = java.time.Instant.ofEpochMilli(input.path("deadlineUnixMs").asLong());
+        config.governedPrincipal = principal != null && principal.isObject() ? principal : null;
         config.responses = frames;
         try {
             config.location = io.ololabs.toolgate.sdk.ExecutionLocation.valueOf(env.getOrDefault("TOOLGATE_EXECUTION_TARGET", "SERVER"));

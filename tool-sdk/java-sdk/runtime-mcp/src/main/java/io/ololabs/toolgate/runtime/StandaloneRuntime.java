@@ -846,6 +846,7 @@ public final class StandaloneRuntime implements ToolCatalog {
                 claims, invocationId, tool.toolId, deadline, redact, diagnostics);
         context.attachResponses(config.responses);
         if (config.mode == Config.Mode.GOVERNED) context.attachMode(io.ololabs.toolgate.sdk.context.InvocationMode.GOVERNED);
+        if (config.mode == Config.Mode.GOVERNED) context.attachPrincipal(config.governedPrincipal);
 
         RouteClient routes = new RouteClient(egress, tool.routes, tool.auths, tool.secrets, context, deadline, redact);
         String idempotencyHeader = tool.businessKey.path("idempotencyHeader").asText("");
