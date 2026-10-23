@@ -77,7 +77,7 @@ jobs:
         cp CHANGELOG.md docs/deployment/quickstart.md build/quickstart/
         (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json > SHA256SUMS)
       if: ${{ inputs.run_tests }}
-    - name: Preserve browser diagnostics
+    - name: Preserve browser and runtime diagnostics
       if: ${{ always() && inputs.run_tests }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
@@ -85,6 +85,8 @@ jobs:
         path: |
           build/ui/browser-results.json
           build/ui/browser-output/
+          build/quickstart/runtime-failure.log
+          build/quickstart/startup-failure.log
         if-no-files-found: ignore
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:

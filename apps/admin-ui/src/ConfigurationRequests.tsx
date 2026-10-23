@@ -13,9 +13,12 @@ export function ConfigurationRequests({client,superAdmin=false}:{client:ControlC
   const [items,setItems]=useState<readonly EnterpriseConfigurationChange[]>();const [selected,setSelected]=useState<EnterpriseConfigurationChange>();const [error,setError]=useState<unknown>();const [busy,setBusy]=useState(false);const [confirmed,setConfirmed]=useState(false);const [attempt,setAttempt]=useState(0);const [after,setAfter]=useState<string>();const [history,setHistory]=useState<(string|undefined)[]>([]);
   const locked=useRef(false);const pending=useRef<{body:string;key:string}|undefined>(undefined);const alive=useRef(true);
   useEffect(()=>{const abort=new AbortController();alive.current=true;setError(undefined);const id=requestedId;
-    async function load(){try{const page=await client.configurationChanges(after,abort.signal);if(!abort.signal.aborted)setItems(page.items);if(id){const c=await client.configurationChange(id,abort.signal);if(!abort.signal.aborted)setSelected(c);}}catch(f){if(!abort.signal.aborted)setError(f);}}void load();return()=>{alive.current=false;abort.abort();};
+    setSelected(undefined);setConfirmed(false);
+    async function loadQueue(){try{const page=await client.configurationChanges(after,abort.signal);if(!abort.signal.aborted)setItems(page.items);}catch(f){if(!abort.signal.aborted)setError(f);}}
+    async function loadDetail(){if(!id)return;try{const c=await client.configurationChange(id,abort.signal);if(!abort.signal.aborted)setSelected(c);}catch(f){if(!abort.signal.aborted)setError(f);}}
+    void loadQueue();void loadDetail();return()=>{alive.current=false;abort.abort();};
   },[client,attempt,after,requestedId]);
-  async function open(c:EnterpriseConfigurationChange){setConfirmed(false);setError(undefined);try{setSelected(await client.configurationChange(c.id));}catch(f){setError(f);}}
+  function open(c:EnterpriseConfigurationChange){const hash='#config-reviews?id='+encodeURIComponent(c.id);if(window.location.hash===hash)setAttempt(v=>v+1);else window.location.hash=hash;}
   async function transition(action:EnterpriseConfigurationAction){if(!selected||!confirmed||locked.current)return;const body={expectedRevision:selected.revision,action};const encoded=JSON.stringify(body);if(pending.current?.body!==encoded)pending.current={body:encoded,key:crypto.randomUUID()};locked.current=true;setBusy(true);setError(undefined);
     try{const result=await client.transitionConfiguration(selected.id,body,pending.current.key);if(alive.current){setSelected(result);setConfirmed(false);pending.current=undefined;setAttempt(v=>v+1);window.dispatchEvent(new Event('toolgate:approval-change'));}}
     catch(f){if(alive.current){setError(f);if(f instanceof ApiError&&f.status===409){pending.current=undefined;setConfirmed(false);}}}finally{locked.current=false;if(alive.current)setBusy(false);}}
