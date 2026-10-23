@@ -109,6 +109,33 @@ class GovernedTest {
     }
 
     @Test
+    void verifiedPrincipalComesFromTheHostAndNeverFromClaimsOrArguments() throws IOException {
+        ObjectNode input = input("acme.demo/demo.principal", "{}");
+        ObjectNode principal = input.withObjectProperty("claims").putObject("toolgate");
+        principal.put("tenantId", "10000000-0000-4000-8000-000000000001").put("mode", "DELEGATED").put("userId", "user-42")
+                .put("agentId", "agent-planner").put("operation", "read");
+        principal.putArray("chain").add("agent-router");
+        principal.putArray("resources").addObject().put("kind", "CUSTOM").put("locator", "olo://memory/user-42");
+        JsonNode frame = run(demo, Map.of(), input);
+        JsonNode result = frame.path("structuredContent");
+        assertEquals("user-42", result.path("user").asText(), frame.toString());
+        assertEquals("10000000-0000-4000-8000-000000000001", result.path("tenant").asText());
+        assertEquals("agent-planner", result.path("agent").asText());
+        assertEquals("read", result.path("operation").asText());
+        assertEquals("agent-router", result.path("chain").path(0).asText());
+        assertEquals("CUSTOM:olo://memory/user-42", result.path("resources").path(0).asText());
+    }
+
+    @Test
+    void userScopedToolsRefuseWithoutAVerifiedUser() throws IOException {
+        JsonNode frame = run(demo, Map.of(), input("acme.demo/demo.principal", "{}"));
+        assertEquals("CLAIMS_UNAVAILABLE", frame.path("error").path("code").asText(), frame.toString());
+        ObjectNode service = input("acme.demo/demo.principal", "{}");
+        service.withObjectProperty("claims").putObject("toolgate").put("tenantId", "10000000-0000-4000-8000-000000000001").put("mode", "SERVICE");
+        assertEquals("CLAIMS_UNAVAILABLE", run(demo, Map.of(), service).path("error").path("code").asText());
+    }
+
+    @Test
     void errorsAndTasksBecomeTerminalFrames() throws IOException {
         JsonNode failed = run(demo, Map.of(), input("acme.demo/demo.fail", "{\"kind\":\"retryable\"}"));
         assertTrue(failed.path("isError").asBoolean());

@@ -54,12 +54,18 @@ pub struct Config {
     /// Tool Hosts this Gateway dispatches to; any other device's calls go through the relay.
     #[serde(default)]
     pub tool_hosts: Vec<crate::toolhost::ToolHostRoute>,
+    /// OLO user credentials issued by Control (M3.4); without it, HUMAN bearers are refused.
+    #[serde(default)]
+    pub user_credentials: Option<crate::user_credential::Settings>,
 }
 
 impl Config {
     /// Invalid or unbounded configuration prevents startup.
     pub fn validate(&self, _contracts: &Contracts, _now: u64) -> Result<(), &'static str> {
         self.control.validate()?;
+        if let Some(users) = &self.user_credentials {
+            users.validate()?;
+        }
         if self.tenant_hosts.is_empty() || self.tenant_hosts.len() > 16 {
             return Err("explicit tenant authorities required");
         }

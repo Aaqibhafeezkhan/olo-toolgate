@@ -33,6 +33,7 @@ struct Loaded {
 pub struct Authenticator {
     loaded: RwLock<Arc<Loaded>>,
     tenant: Option<String>,
+    users: Option<crate::user_credential::Verifier>,
 }
 impl Authenticator {
     pub fn new(
@@ -43,6 +44,7 @@ impl Authenticator {
         let sha256 = digest(&serde_json::to_vec(&credentials).map_err(|_| "invalid workload")?);
         let credentials = validate(credentials, contracts, now)?;
         Ok(Self {
+            users: None,
             tenant: None,
             loaded: RwLock::new(Arc::new(Loaded {
                 credentials,
@@ -53,6 +55,7 @@ impl Authenticator {
     /// Parse a mounted credential file; its digest identifies exactly which file is loaded.
     pub fn from_bytes(bytes: &[u8], contracts: &Contracts, now: u64) -> Result<Self, &'static str> {
         Ok(Self {
+            users: None,
             tenant: None,
             loaded: RwLock::new(Arc::new(parse(bytes, contracts, now)?)),
         })
@@ -70,6 +73,11 @@ impl Authenticator {
         }
         self.tenant = Some(tenant);
         Ok(self)
+    }
+    /// Also accept Control-issued user credentials (M3.4). Workload credentials can still never be HUMAN.
+    pub fn with_user_credentials(mut self, users: crate::user_credential::Verifier) -> Self {
+        self.users = Some(users);
+        self
     }
     /// Replace the set only after the whole new file validates; any error keeps the current set.
     pub fn reload(
@@ -107,6 +115,13 @@ impl Authenticator {
         request_id: String,
         now: u64,
     ) -> Option<(RequestContext, u64)> {
+        if let Some(users) = self
+            .users
+            .as_ref()
+            .filter(|_| crate::user_credential::Verifier::applies(bearer))
+        {
+            return users.verify(bearer, request_id, now);
+        }
         if !(32..=256).contains(&bearer.len())
             || !bearer
                 .bytes()

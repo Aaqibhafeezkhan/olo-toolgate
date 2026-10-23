@@ -1,8 +1,9 @@
 # Threat model: OLO platform integration
 
-**Status: proposed, for review.** This model describes ToolGate's side of the OLO integration contracts
-(olo-labs/olo-mono `docs/toolgate-integration/m2`). Most of the capabilities it relies on are **not implemented yet**.
-Section 5 lists each gap against current code. Nothing here claims that the runtime path works today.
+**Status: proposed, for review; partly implemented.** This model describes ToolGate's side of the OLO integration
+contracts (olo-labs/olo-mono `docs/toolgate-integration/m2`). User credentials, the reserved service principal,
+wildcard refusal and the executor principal are implemented (see
+[OLO user credentials](../../control-plane/olo-user-credentials.md)). Section 5 lists what is still missing.
 
 ## Purpose
 
@@ -113,14 +114,20 @@ Each item is evidence from the source, and none is a design claim. Details are i
 
 | Needed by | Gap | Current code |
 |---|---|---|
-| T-OI-1, T-OI-3 | No user-bound Gateway credential | `apps/gateway/src/auth.rs` refuses `RequestMode::Human` for credentials and requires `agent_id` and a workload binding. `CredentialKind::Jwt` and `Introspection` exist only in `packages/contracts`. |
-| T-OI-2 | No token-issuance endpoint for OLO | Not present |
-| T-OI-4 | No reserved, non-delegable service principal | A `SERVICE` credential still requires an agent record (`auth.rs`) |
+| T-OI-1, T-OI-3 | ~~No user-bound Gateway credential~~ **Closed** | The Gateway verifies Control-issued `toolgate-user-credential+jws` (pinned kid, RS256, at most 300 s) as a `HUMAN` `JWT` context (`apps/gateway/src/user_credential.rs`). Control accepts `HUMAN` submissions only with that issuer and a credential digest, then checks the identity binding's session epoch. |
+| T-OI-2 | ~~No token-issuance endpoint for OLO~~ **Closed** | `POST /api/control/v1/oauth/token-exchange` (RFC 8693) and `/oauth/sessions/revoke`, role `toolgate-olo-token-exchange` (`UserCredentialResource`). The worker has no such role. |
+| T-OI-4 | ~~No reserved, non-delegable service principal~~ **Closed** | `toolgate.control.olo.reserved-agents`: such agents have only `SERVICE` workload bindings, and `DELEGATED` submissions naming them as agent or chain hop are refused (`OloProtections`). |
 | T-OR-1 | Resource extraction for package tools | `ResourceExtraction.java` exists. Package tools use the fixed `tool://<tool-id>` resource (`docs/api/gateway-api.md`). |
-| T-OS-1 – T-OS-5 | No service permits or service-side consumption | Effect permits target executors (`EnterprisePermitClaims.audience`, `deviceId`). Only Tool Host calls `/permits/consume` (`apps/tool-host/src/control.rs`). There is no revocation feed. |
+| T-OR-3 | ~~Wildcard grants~~ **Closed** | `toolgate.control.olo.protected-tool-groups` refuses `allActions` and `match: ANY` in grants and delegations reaching those groups, including through the tool-group wildcard. |
+| T-OS-1 – T-OS-5 | No service permits or service-side consumption (M4.6, follow-up) | Effect permits target executors (`EnterprisePermitClaims.audience`, `deviceId`). Only Tool Host calls `/permits/consume` (`apps/tool-host/src/control.rs`). There is no revocation feed. |
 | T-OE-1, T-OE-2 | Conflict on a fingerprint mismatch, and atomic create | `/mcp` maps the same JSON-RPC id and caller to the same invocation. A mismatch conflict and atomicity are unverified. |
-| T-OA-1 | Audit lacks separate subject, resource, decision and policy-version fields | `EnterpriseOperations` audits actor, operation, invocation, revision, request id and request digest |
-| Executor context | The SDK `Invocation` has no tenant, session or resource | `tool-sdk/java-sdk/api/.../context/Invocation.java`. `StandaloneContext.userId()` returns empty. |
+| T-OA-1 | Partly closed | The Tool Host admission record carries tenant, mode, user, agent, chain length, operation, resource count and authorization epoch. Control's `EnterpriseOperations` audit still lacks separate subject, resource, decision and policy-version fields. |
+| Executor context | ~~The SDK `Invocation` has no tenant or resource~~ **Closed** | The Tool Host passes the permit's principal as the reserved `toolgate` claim. The Java SDK exposes `tenantId`, `operation`, `resources`, `delegationChain`, and `requireUser()` refuses without a verified user, including standalone runs. The executor does not receive the session epoch: Control checks it when it issues and consumes the permit. The Python SDK does not expose the principal yet. |
+| Delegated users | Delegated bindings name one fixed user (M3.10, follow-up) | `ControlWorkloadBinding.delegatedUserId` |
+
+Residual risk added by user credentials: a compromised Gateway can present any `HUMAN` context for its tenant.
+Control still requires the configured issuer, an enabled user, a current identity binding and team grants. A
+registry of issued credential digests would remove the residual and is a follow-up.
 
 ## 6. Conformance
 

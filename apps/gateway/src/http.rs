@@ -64,7 +64,10 @@ impl AppState {
         auth: Authenticator,
         config: Config,
     ) -> Result<Self, &'static str> {
-        let auth = auth.for_tenant(config.control.tenant_id.clone())?;
+        let mut auth = auth.for_tenant(config.control.tenant_id.clone())?;
+        if let Some(users) = &config.user_credentials {
+            auth = auth.with_user_credentials(crate::user_credential::Verifier::load(users)?);
+        }
         let instance = digest(
             format!(
                 "{}-{}-{:?}",

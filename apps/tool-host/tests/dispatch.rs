@@ -49,7 +49,7 @@ assert response["kind"] == "BROKER_RESPONSE" and response["requestId"] == "b-1",
 reply = response["result"] if "result" in response else {"refused": response["error"]["message"]}
 env = sorted(k for k in os.environ)
 frame = {"kind": "RESULT", "resultType": "complete", "content": [{"type": "text", "text": "ok"}],
-         "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"]}, "isError": False}
+         "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"], "claims": inp["claims"]}, "isError": False}
 print(json.dumps(frame))
 "#;
 
@@ -512,6 +512,13 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
     assert_eq!(out["globals"], json!({"TimeoutSeconds": 10}));
     // Without CREDENTIALS_IN_SANDBOX the secret stays with the broker.
     assert_eq!(out["secretHandles"], json!([]));
+    // M4.2: the principal comes only from the signed permit, beside the pass-through claims.
+    assert_eq!(out["claims"]["UserName"], "ada");
+    assert_eq!(
+        out["claims"]["toolgate"],
+        json!({"tenantId": "10000000-0000-4000-8000-000000000001", "mode": "HUMAN", "userId": "u1", "chain": [],
+            "operation": "orders.lookup", "resources": [], "invocationId": id, "attempt": 1})
+    );
 
     let seen = rig.seen.lock().unwrap();
     assert_eq!(seen.upstream[0]["apiKey"], API_KEY);
@@ -584,6 +591,15 @@ async fn bad_permits_are_refused_before_anything_runs() {
     let rig = rig!();
     let arguments = json!({"orderId": "123456"});
     let refused = |lines: &[Value]| lines[0]["reason"].as_str().unwrap().to_string();
+
+    let (shadowed, _) = permit(&rig, &arguments, |claims| {
+        claims["identity"]["claims"]["toolgate"] = json!({"userId": "admin"})
+    });
+    assert_eq!(
+        refused(&dispatch(&rig, &shadowed, &arguments).await),
+        "PERMIT_INVALID",
+        "Pass-through claims cannot supply the reserved principal"
+    );
 
     let (foreign, _) = permit(&rig, &arguments, |claims| {
         claims["identity"]["tenantId"] = json!("10000000-0000-4000-8000-000000000002")

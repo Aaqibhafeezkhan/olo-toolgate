@@ -13,6 +13,7 @@ pub mod relay;
 pub mod server;
 pub mod tenancy;
 pub mod toolhost;
+pub mod user_credential;
 pub mod validation;
 
 use sha2::{Digest, Sha256};

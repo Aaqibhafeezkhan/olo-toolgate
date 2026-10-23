@@ -204,6 +204,49 @@ impl Admitted {
     }
 }
 
+/// Reserved `ToolInput` claim: the principal Control signed into the permit (M4.2). SDKs lift it out of the claims.
+pub const PRINCIPAL_CLAIM: &str = "toolgate";
+
+/// The pass-through claims plus the verified principal. Only permit fields, never arguments, feed it.
+fn principal_claims(claims: &InvocationPermitClaims) -> std::collections::BTreeMap<String, Value> {
+    let identity = &claims.identity;
+    let mut principal = serde_json::Map::new();
+    principal.insert("tenantId".into(), Value::from(identity.tenant_id.clone()));
+    principal.insert(
+        "mode".into(),
+        serde_json::to_value(&identity.mode).unwrap_or(Value::Null),
+    );
+    if let Some(user) = &identity.user_id {
+        principal.insert("userId".into(), Value::from(user.clone()));
+    }
+    if let Some(agent) = &identity.agent_id {
+        principal.insert("agentId".into(), Value::from(agent.clone()));
+    }
+    principal.insert(
+        "chain".into(),
+        Value::from(
+            identity
+                .chain
+                .iter()
+                .map(|hop| Value::from(hop.agent_id.clone()))
+                .collect::<Vec<_>>(),
+        ),
+    );
+    principal.insert("operation".into(), Value::from(claims.action.clone()));
+    principal.insert(
+        "resources".into(),
+        serde_json::to_value(&claims.resources).unwrap_or_default(),
+    );
+    principal.insert(
+        "invocationId".into(),
+        Value::from(claims.invocation_id.clone()),
+    );
+    principal.insert("attempt".into(), Value::from(claims.attempt));
+    let mut out = identity.claims.clone().unwrap_or_default();
+    out.insert(PRINCIPAL_CLAIM.into(), Value::Object(principal));
+    out
+}
+
 /// Checks a dispatch, finds what its permit pins and claims the permit with Control. A refusal
 /// is definitive: nothing ran.
 pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, AdmissionResponse> {
@@ -222,6 +265,15 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
     let arguments = Value::Object(dispatch.arguments.clone().into_iter().collect());
     if digest::jcs(&arguments).ok().as_deref() != Some(claims.arguments_digest.as_str()) {
         tracing::info!(target: "toolgate::audit", invocation_id = %id, "arguments differ from the permit's argumentsDigest");
+        return Err(refusal(&id, RefusalReason::PermitInvalid));
+    }
+    if claims
+        .identity
+        .claims
+        .as_ref()
+        .is_some_and(|c| c.contains_key(PRINCIPAL_CLAIM))
+    {
+        tracing::info!(target: "toolgate::audit", invocation_id = %id, "pass-through claims use the reserved principal claim");
         return Err(refusal(&id, RefusalReason::PermitInvalid));
     }
     let prepared = match host.store.prepare(&claims.target) {
@@ -276,7 +328,21 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
             return Err(refusal(&id, RefusalReason::StoreUnavailable));
         }
     };
-    tracing::info!(target: "toolgate::audit", invocation_id = %id, tool_id = %claims.target.tool_id, attempt = claims.attempt, "dispatch admitted");
+    tracing::info!(
+        target: "toolgate::audit",
+        invocation_id = %id,
+        tool_id = %claims.target.tool_id,
+        attempt = claims.attempt,
+        tenant_id = %claims.identity.tenant_id,
+        mode = ?claims.identity.mode,
+        user_id = claims.identity.user_id.as_deref().unwrap_or(""),
+        agent_id = claims.identity.agent_id.as_deref().unwrap_or(""),
+        chain = claims.identity.chain.len(),
+        operation = %claims.action,
+        resources = claims.resources.len(),
+        authorization_epoch = claims.identity.authorization_epoch,
+        "dispatch admitted"
+    );
     Ok(Admitted {
         claims,
         prepared,
@@ -389,7 +455,7 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 entry_point: prepared.tool.entry_point.clone().unwrap_or_default(),
                 arguments: dispatch.arguments.clone(),
                 globals: prepared.globals.clone(),
-                claims: claims.identity.claims.clone().unwrap_or_default(),
+                claims: principal_claims(&claims),
                 secret_handles,
                 deadline_unix_ms: deadline,
                 idempotency_key: None,

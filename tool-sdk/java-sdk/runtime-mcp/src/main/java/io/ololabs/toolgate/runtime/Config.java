@@ -42,6 +42,8 @@ final class Config {
     java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> responses;
     String governedInvocationId;
     java.time.Instant governedDeadline;
+    /** The Tool Host's verified principal (claims.toolgate), never part of the tool's declared claims. */
+    JsonNode governedPrincipal;
     /** The device files area: the executor broker on a device; outside one, an in-memory area that starts empty. */
     io.ololabs.toolgate.sdk.context.DeviceFiles deviceFiles;
     final List<String> warnings = new ArrayList<>();
