@@ -10,12 +10,12 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 import socket
-from typing import Any, Callable, Dict, Generic, List, Mapping, Optional, Protocol, Type, TypeVar
+from typing import Any, Callable, Dict, Generic, List, Mapping, NamedTuple, Optional, Protocol, Type, TypeVar
 
 from .enums import InvocationMode
 
 __all__ = [
-    "ToolContext", "Values", "Jwt", "HttpClient", "RouteCall", "RawResponse", "TcpConnector", "Invocation",
+    "ToolContext", "Values", "Jwt", "HttpClient", "RouteCall", "RawResponse", "TcpConnector", "Invocation", "Resource",
     "CancellationToken", "InputRequest", "ToolResult",
 ]
 
@@ -103,7 +103,16 @@ class CancellationToken(Protocol):
     def on_cancel(self, callback: Callable[[], None]) -> None: ...
 
 
+class Resource(NamedTuple):
+    """One resource Control authorized for this call."""
+    kind: str
+    locator: str
+
+
 class Invocation(Protocol):
+    """The current invocation. In governed execution the principal is the one Control signed into the permit and the
+    Tool Host verified; no argument can change it. Standalone runs have no verified principal."""
+
     @property
     def invocation_id(self) -> str: ...
     @property
@@ -122,6 +131,17 @@ class Invocation(Protocol):
     def attempt(self) -> int: ...
     @property
     def mode(self) -> InvocationMode: ...
+    @property
+    def tenant_id(self) -> Optional[str]: ...
+    @property
+    def operation(self) -> Optional[str]: ...
+    @property
+    def resources(self) -> List[Resource]: ...
+    @property
+    def delegation_chain(self) -> List[str]: ...
+    def require_user(self) -> str:
+        """The verified user, for tools acting on a user's data; raises CLAIMS_UNAVAILABLE without one."""
+        ...
 
 
 class InputRequest(Generic[T]):

@@ -10,7 +10,7 @@ import math
 import threading
 from typing import Any, Callable, Dict, List, Optional
 
-from ..context import InputRequest
+from ..context import InputRequest, Resource
 from ..enums import InvocationMode
 from ..errors import PlatformCode, PlatformError, ToolConfigurationError, ToolInputError
 from .converter import ConversionError, from_json, to_json
@@ -92,6 +92,31 @@ class _Invocation:
     def mode(self) -> InvocationMode:
         return self._c._mode
 
+    @property
+    def tenant_id(self) -> Optional[str]:
+        return self._c._principal_text("tenantId")
+
+    @property
+    def operation(self) -> Optional[str]:
+        return self._c._principal_text("operation")
+
+    @property
+    def resources(self) -> List[Resource]:
+        items = (self._c._principal or {}).get("resources")
+        return [Resource(r["kind"], r["locator"]) for r in items if isinstance(r, dict)
+                and isinstance(r.get("kind"), str) and isinstance(r.get("locator"), str)] if isinstance(items, list) else []
+
+    @property
+    def delegation_chain(self) -> List[str]:
+        chain = (self._c._principal or {}).get("chain")
+        return [a for a in chain if isinstance(a, str)] if isinstance(chain, list) else []
+
+    def require_user(self) -> str:
+        """The verified user; refuses without one, including every standalone run (OLO M4.3)."""
+        if self.user_id is None or self.tenant_id is None:
+            raise PlatformError(PlatformCode.CLAIMS_UNAVAILABLE, "This tool requires a verified user")
+        return self.user_id
+
     def __repr__(self) -> str:
         return "Invocation(%s, %s)" % (self.tool_id, self.invocation_id)
 
@@ -145,6 +170,7 @@ class StandaloneContext:
         self._agent_id: Optional[str] = None
         self._user_id: Optional[str] = None
         self._catalog_revision: Optional[int] = None
+        self._principal: Optional[Dict[str, Any]] = None
         self.invocation = _Invocation(self)
         self.cancellation = _Cancellation(self)
         self.log = logging.Logger("toolgate.tool." + tool_id, logging.DEBUG)
@@ -240,6 +266,16 @@ class StandaloneContext:
         self._agent_id = agent_id
         self._user_id = user_id
         self._catalog_revision = catalog_revision
+
+    def attach_principal(self, principal: Any) -> None:
+        """The principal the Tool Host verified in the Control permit (reserved claim ``toolgate``); governed only."""
+        self._principal = principal if isinstance(principal, dict) else None
+        self._user_id = self._principal_text("userId")
+        self._agent_id = self._principal_text("agentId")
+
+    def _principal_text(self, field: str) -> Optional[str]:
+        value = (self._principal or {}).get(field)
+        return value if isinstance(value, str) else None
 
     def pending_input(self) -> Optional[Dict[str, Any]]:
         """The InputRequiredResult this round ends with, or None. It is recorded before InputNeeded is raised, so a
