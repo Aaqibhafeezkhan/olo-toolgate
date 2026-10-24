@@ -28,6 +28,9 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Order num
            *, context: ToolContext) -> OrderResult: ...
 ```
 
+`reconciliation=Reconciliation.MANUAL` (or `DOWNSTREAM_IDEMPOTENCY`, `STATUS_LOOKUP`) on `server_tool` / `client_tool` follows the
+same rules as Java.
+
 `@authorization(action="memory.read", resources="olo://{tenant}/conversation/{conversationId}")` below `@server_tool` or
 `@client_tool` is the Python form of Java `@Authorization`, with the same rules.
 

@@ -3,6 +3,7 @@
 package io.ololabs.examples.notify;
 
 import io.ololabs.toolgate.sdk.annotations.AuthType;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.Destination;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
@@ -59,7 +60,7 @@ public class WebhookNotify {
                     + " with the same reference returns the first result instead of sending twice.",
             useWhen = "Use it to raise an alert or tell a team about something the user asked to share.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference", routes = "hook.post",
-            errors = @ErrorDecl(code = "CHANNEL_NOT_ALLOWED", description = "The channel is not in AllowedChannels."))
+            errors = @ErrorDecl(code = "CHANNEL_NOT_ALLOWED", description = "The channel is not in AllowedChannels."), reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @Idempotency(header = "Idempotency-Key")
     @Example(arguments = "{\"channel\":\"ops-alerts\",\"title\":\"Disk almost full\",\"text\":\"/var is 93% used on app-1\","
             + "\"severity\":\"warning\",\"reference\":\"disk-app-1-2026-10-12\"}",

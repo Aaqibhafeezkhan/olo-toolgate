@@ -320,7 +320,8 @@ async fn tools_call(
         let state = serde_json::to_value(&outcome.invocation.state).unwrap_or(Value::Null);
         return Ok(
             json!({"content":[{"type":"text","text":format!("Invocation ended: {}", state.as_str().unwrap_or("UNKNOWN"))}],
-            "structuredContent":{"invocationId":outcome.invocation.id,"state":state},"isError":true}),
+            "structuredContent":{"invocationId":outcome.invocation.id,"state":state,
+                "reconciliation":outcome.invocation.reconciliation},"isError":true}),
         );
     }
     if !matches!(

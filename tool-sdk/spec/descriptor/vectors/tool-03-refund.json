@@ -31,6 +31,7 @@
     { "code": "ALREADY_REFUNDED", "description": "The order was already refunded", "retryable": false },
     { "code": "PSP_BUSY", "description": "The payment provider asked us to retry", "retryable": true }
   ],
+  "reconciliation": "DOWNSTREAM_IDEMPOTENCY",
   "effect": { "safety": "NON_IDEMPOTENT", "destructive": true, "openWorld": true },
   "businessKey": { "required": true, "namespace": "TENANT", "argument": "refundKey", "idempotencyHeader": "Idempotency-Key", "idempotencyScope": "BUSINESS_KEY" },
   "execution": { "async": true, "maxDurationMs": 900000, "stateless": true, "maxConcurrency": 4, "cancelIfAbandoned": false },

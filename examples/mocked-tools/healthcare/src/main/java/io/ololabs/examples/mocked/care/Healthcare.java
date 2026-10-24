@@ -3,6 +3,7 @@
 package io.ololabs.examples.mocked.care;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -238,7 +239,7 @@ public class Healthcare {
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
             errors = {
                 @ErrorDecl(code = "PATIENT_NOT_FOUND", description = "No patient has that record number."),
-                @ErrorDecl(code = "SLOT_NOT_AVAILABLE", description = "No open slot has that id.")})
+                @ErrorDecl(code = "SLOT_NOT_AVAILABLE", description = "No open slot has that id.")}, reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"mrn\":\"MRN-1002\",\"slotId\":\"S-999\",\"reason\":\"BP review\",\"reference\":\"r-1\"}",
             expectedError = "SLOT_NOT_AVAILABLE")
     public Booking book(

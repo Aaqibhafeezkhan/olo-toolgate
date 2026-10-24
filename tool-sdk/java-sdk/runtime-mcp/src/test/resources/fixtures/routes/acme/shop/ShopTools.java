@@ -3,6 +3,7 @@
 package acme.shop;
 
 import io.ololabs.toolgate.sdk.annotations.AuthType;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.Destination;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.HttpAuth;
@@ -86,7 +87,7 @@ public class ShopTools {
     }
 
     @ServerTool(name = "shop.refund", title = "Refund", description = "Refunds an order.", effect = EffectSafety.NON_IDEMPOTENT,
-            routes = "orders.refund")
+            routes = "orders.refund", reconciliation = Reconciliation.MANUAL)
     @Secret(name = "ShopClient", type = ValueType.OBJECT)
     public Map<String, Object> refund(@Param(description = "Order") String id, ToolContext context) {
         return context.http().route("orders.refund").pathVar("orderId", id).body(Map.of("reason", "LATE", "lines", List.of(1, 2)))
@@ -94,7 +95,7 @@ public class ShopTools {
     }
 
     @ServerTool(name = "shop.refund-later", title = "Refund later", description = "Refunds an order as a task.",
-            effect = EffectSafety.NON_IDEMPOTENT, async = true, routes = "orders.refund")
+            effect = EffectSafety.NON_IDEMPOTENT, async = true, routes = "orders.refund", reconciliation = Reconciliation.MANUAL)
     @Secret(name = "ShopClient", type = ValueType.OBJECT)
     public Map<String, Object> refundLater(@Param(description = "Order") String id, ToolContext context) {
         return refund(id, context);

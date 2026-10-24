@@ -3,6 +3,7 @@
 package io.ololabs.examples.mocked.loans;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -194,7 +195,7 @@ public class BankLoan {
                     + " with the same reference returns the first record.",
             useWhen = "Use it only after the user confirms the decision.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
-            errors = @ErrorDecl(code = "APPLICANT_NOT_FOUND", description = "No applicant has that id."))
+            errors = @ErrorDecl(code = "APPLICANT_NOT_FOUND", description = "No applicant has that id."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"applicantId\":\"A-1001\",\"decision\":\"APPROVE\",\"amount\":25000,\"reference\":\"case-77\"}",
             expectedOutput = "{\"decisionId\":\"LD-f706ae1c\",\"applicantId\":\"A-1001\",\"decision\":\"APPROVE\",\"amount\":25000.0,"
                     + "\"nextStep\":\"Offer letter queued for e-signature.\"}")

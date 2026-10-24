@@ -66,7 +66,7 @@ class EnterpriseVaultTest {
     store.transaction(admin.tenant(),true,tx->{var current=tx.enterprise().invocation(i.id());
         tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nextFence,i.id(),DirectoryService.digest(graph.codec.json(current.evaluation())),current.authorizationEpoch(),EnterpriseConformanceTest.NOW+10000,null));
         tx.enterprise().consumeNonce(nextFence,EnterpriseConformanceTest.NOW);
-        tx.enterprise().saveInvocation(new EnterpriseInvocation(current.id(),current.requestDigest(),current.evaluation(),current.state(),current.revision()+1,current.authorizationEpoch(),nextFence,current.expiresAtUnixMs(),current.completedResources(),current.downstreamIdempotencyKey(),current.resultDigest(),current.diagnosticId()),EnterpriseConformanceTest.NOW,current.revision());return null;});
+        tx.enterprise().saveInvocation(new EnterpriseInvocation(current.id(),current.requestDigest(),current.evaluation(),current.state(),current.revision()+1,current.authorizationEpoch(),nextFence,current.expiresAtUnixMs(),current.completedResources(),current.downstreamIdempotencyKey(),current.resultDigest(),current.diagnosticId(),current.reconciliation()),EnterpriseConformanceTest.NOW,current.revision());return null;});
     assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status());
     assertEquals("runtime-only-value",graph.codec.model(vault.deliver(admin.tenant(),tx->"device",body,nextFence,ops).body(),EnterpriseSecretDelivery.class).value());
     store.transaction(admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Ids.Kind.GRANT.id("human-secret"));tx.save(before,new Directory(before.revision()+1,entries));return null;});

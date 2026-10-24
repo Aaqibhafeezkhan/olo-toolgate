@@ -3,6 +3,7 @@
 package io.ololabs.examples.downloads;
 
 import io.ololabs.toolgate.sdk.annotations.Destination;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
@@ -67,7 +68,7 @@ public class FileDownload {
             effect = EffectSafety.IDEMPOTENT, routes = "file.get", maxDurationMs = 60_000,
             errors = {
                 @ErrorDecl(code = "FILE_EXISTS", description = "A file with that name is already saved; pass overwrite."),
-                @ErrorDecl(code = "NOT_FOUND", description = "The file server has no such file.")})
+                @ErrorDecl(code = "NOT_FOUND", description = "The file server has no such file.")}, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @Example(arguments = "{\"path\":\"../secrets/key.pem\"}", expectedError = "INVALID_ARGUMENT")
     @Example(arguments = "{\"path\":\"reports/missing.csv\"}", expectedError = "NOT_FOUND",
             exchanges = "exchanges/missing.json")

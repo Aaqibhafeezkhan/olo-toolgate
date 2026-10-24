@@ -244,7 +244,7 @@ class RuntimeTest(unittest.TestCase):
         build = compiled(SOURCE + '''
 charge_calls = 0
 @server_tool(name="charge", title="Charge", description="Charge", effect=EffectSafety.NON_IDEMPOTENT,
-             destructive=True, business_key_argument="key")
+             destructive=True, business_key_argument="key", reconciliation=Reconciliation.MANUAL)
 def charge(key: Annotated[str, Param(description="Key")], amount: Annotated[int, Param(description="Amount")] = 1) -> Out:
     global charge_calls
     charge_calls += 1

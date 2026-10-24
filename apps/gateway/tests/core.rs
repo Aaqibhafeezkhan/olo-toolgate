@@ -344,6 +344,9 @@ impl RelayPort for Authority {
             i.evaluation.tool_digest = r.tool_digest.clone();
             i.evaluation.package_digest = r.package_digest.clone();
             i.expires_at_unix_ms = unix_ms().unwrap() + 60000;
+            if self.ended.is_some() {
+                i.reconciliation = Some(ReconciliationMethod::Manual);
+            }
             i.state = if let Some(ended) = self.ended.clone() {
                 ended
             } else if self.ask {
@@ -646,6 +649,10 @@ async fn mcp_reports_an_ended_invocation_and_never_runs_it_again() {
         assert_eq!(code, StatusCode::OK, "{name}");
         assert_eq!(body["result"]["structuredContent"]["state"], name);
         assert_eq!(body["result"]["isError"], true);
+        assert_eq!(
+            body["result"]["structuredContent"]["reconciliation"],
+            "MANUAL"
+        );
         assert!(
             a.submission.lock().unwrap().is_none(),
             "{name} was dispatched"

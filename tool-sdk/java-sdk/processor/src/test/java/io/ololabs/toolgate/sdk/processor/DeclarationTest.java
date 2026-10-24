@@ -160,17 +160,60 @@ class DeclarationTest {
     @Test
     void nonIdempotentDestructiveToolsRequireABusinessKey() {
         Compilation.Result r = ok(tools("", """
-                @ServerTool(name = "items.delete", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true)
+                @ServerTool(name = "items.delete", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true,
+                        reconciliation = Reconciliation.MANUAL)
                 public Out delete() { return null; }
-                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT)
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.MANUAL)
                 public Out create() { return null; }
                 @ServerTool(name = "items.purge", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true,
-                        requiresBusinessKey = BusinessKey.NOT_REQUIRED)
+                        requiresBusinessKey = BusinessKey.NOT_REQUIRED, reconciliation = Reconciliation.MANUAL)
                 public Out purge() { return null; }
             """, GENERATION));
         assertTrue(r.descriptor("items.delete").contains("\"businessKey\":{\"namespace\":\"AGENT\",\"required\":true}"));
         assertTrue(r.descriptor("items.create").contains("\"businessKey\":{\"namespace\":\"AGENT\",\"required\":false}"));
         assertTrue(r.descriptor("items.purge").contains("\"businessKey\":{\"namespace\":\"AGENT\",\"required\":false}"));
+    }
+
+    /** OLO M5.4: a tool with side effects declares how an unknown outcome is settled, consistently with its other declarations. */
+    @Test
+    void sideEffectingToolsDeclareTheirReconciliationMethod() {
+        fails(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT)
+                public Out create() { return null; }
+            """, GENERATION), "has side effects", "declare reconciliation");
+        fails(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.STATUS_LOOKUP)
+                public Out create() { return null; }
+            """, GENERATION), "needs a @Reconcile tool");
+        fails(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
+                public Out create() { return null; }
+            """, GENERATION), "needs @Idempotency");
+        fails(tools("", """
+                @ServerTool(name = "items.get", title = "T", description = "D", effect = EffectSafety.READ_ONLY,
+                        reconciliation = Reconciliation.MANUAL)
+                public Out get() { return null; }
+            """, GENERATION), "no effect to reconcile");
+        var r = ok(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.STATUS_LOOKUP)
+                public Out create() { return null; }
+                @ServerTool(name = "items.status", title = "T", description = "D", effect = EffectSafety.READ_ONLY)
+                @Reconcile(tool = "items.create")
+                public Out status() { return null; }
+                @ServerTool(name = "items.put", title = "T", description = "D", effect = EffectSafety.IDEMPOTENT,
+                        reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
+                public Out put() { return null; }
+                @ServerTool(name = "items.touch", title = "T", description = "D")
+                public Out touch() { return null; }
+            """, GENERATION));
+        assertTrue(r.descriptor("items.create").contains("\"reconciliation\":\"STATUS_LOOKUP\""));
+        assertTrue(r.descriptor("items.put").contains("\"reconciliation\":\"DOWNSTREAM_IDEMPOTENCY\""));
+        assertFalse(r.descriptor("items.status").contains("reconciliation"));
+        assertFalse(r.descriptor("items.touch").contains("reconciliation"), "an UNKNOWN effect is settled manually by ToolGate");
     }
 
     @Test

@@ -1790,6 +1790,8 @@ pub struct EnterpriseInvocation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result_digest: Option<String>,
     pub diagnostic_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconciliation: Option<ReconciliationMethod>,
 }
 /// Scoped durable effect states. A cursor does not disclose hidden rows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2654,6 +2656,16 @@ pub enum PackageState {
     #[serde(rename = "REVOKED")]
     Revoked,
 }
+/// Canonical ReconciliationMethod wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReconciliationMethod {
+    #[serde(rename = "DOWNSTREAM_IDEMPOTENCY")]
+    DownstreamIdempotency,
+    #[serde(rename = "STATUS_LOOKUP")]
+    StatusLookup,
+    #[serde(rename = "MANUAL")]
+    Manual,
+}
 /// A leased client rechecks the exact pending operation online before execution.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2935,6 +2947,8 @@ pub struct ToolDefinition {
     pub actions: Vec<ToolAction>,
     pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconciliation: Option<ReconciliationMethod>,
 }
 /// Canonical UserRole wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

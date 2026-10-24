@@ -2449,6 +2449,8 @@ pub struct ToolDescriptor {
     pub toolsets: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authorization: Option<ToolAuthorization>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconciliation: Option<ToolReconciliation>,
 }
 /// Effect settings with defaults resolved.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2571,6 +2573,16 @@ pub struct ToolLimits {
     pub max_output_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_argument_properties: Option<u64>,
+}
+/// Canonical ToolReconciliation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolReconciliation {
+    #[serde(rename = "DOWNSTREAM_IDEMPOTENCY")]
+    DownstreamIdempotency,
+    #[serde(rename = "STATUS_LOOKUP")]
+    StatusLookup,
+    #[serde(rename = "MANUAL")]
+    Manual,
 }
 /// Declared configuration and identity inputs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

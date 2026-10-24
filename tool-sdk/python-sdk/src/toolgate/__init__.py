@@ -11,7 +11,7 @@ from .context import (CancellationToken, HttpClient, InputRequest, Invocation, J
 from .declarations import (ErrorDecl, Global, JwtClaim, Param, Secret, Variable, client_tool, destination, example,
                            http_auth, http_route, idempotency, reconcile, server_tool, tcp_destination, tool_package,
                            tool_variables)
-from .enums import (AuthType, BusinessKey, EffectSafety, HttpMethod, IdempotencyScope, InvocationMode, KeyNamespace,
+from .enums import (AuthType, Reconciliation, BusinessKey, EffectSafety, HttpMethod, IdempotencyScope, InvocationMode, KeyNamespace,
                     OpenWorld, RuntimeTier, SecretScope, Streaming, ValueType)
 from .errors import (PlatformCode, PlatformError, ToolBusinessError, ToolConfigurationError, ToolError,
                      ToolInputError, ToolRetryableError, UpstreamError)
@@ -25,7 +25,7 @@ __all__ = [
     "ErrorDecl", "Global", "JwtClaim", "Param", "Secret", "Variable", "client_tool", "destination", "example",
     "http_auth", "http_route", "idempotency", "reconcile", "server_tool", "tcp_destination", "tool_package",
     "tool_variables",
-    "AuthType", "BusinessKey", "EffectSafety", "HttpMethod", "IdempotencyScope", "InvocationMode", "KeyNamespace",
+    "AuthType", "Reconciliation", "BusinessKey", "EffectSafety", "HttpMethod", "IdempotencyScope", "InvocationMode", "KeyNamespace",
     "OpenWorld", "RuntimeTier", "SecretScope", "Streaming", "ValueType",
     "PlatformCode", "PlatformError", "ToolBusinessError", "ToolConfigurationError", "ToolError", "ToolInputError",
     "ToolRetryableError", "UpstreamError",

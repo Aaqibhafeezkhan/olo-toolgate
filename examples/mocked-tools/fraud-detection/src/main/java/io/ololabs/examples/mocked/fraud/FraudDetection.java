@@ -3,6 +3,7 @@
 package io.ololabs.examples.mocked.fraud;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -137,7 +138,7 @@ public class FraudDetection {
                     + " case. A repeat with the same reference returns the first case.",
             useWhen = "Use it for CRITICAL risk, or when the analyst or customer confirms fraud.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
-            errors = @ErrorDecl(code = "NOT_FOUND", description = "No transaction or account has that id."))
+            errors = @ErrorDecl(code = "NOT_FOUND", description = "No transaction or account has that id."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"transactionId\":\"T-404\",\"reason\":\"x\",\"reference\":\"r\"}", expectedError = "NOT_FOUND")
     public Freeze freezeCard(
             @Param(description = "The suspicious transaction", maxLength = 20) String transactionId,

@@ -15,7 +15,7 @@ import os
 import sys
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence, Tuple, Union
 
-from .enums import (AuthType, BusinessKey, EffectSafety, HttpMethod, IdempotencyScope, KeyNamespace, OpenWorld,
+from .enums import (AuthType, Reconciliation, BusinessKey, EffectSafety, HttpMethod, IdempotencyScope, KeyNamespace, OpenWorld,
                     RuntimeTier, SecretScope, Streaming, ValueType)
 
 __all__ = [
@@ -395,7 +395,7 @@ class ToolDeclaration(Declaration):
                  destructive: bool, open_world: Any, async_: bool, max_duration_ms: Optional[int], stateless: bool,
                  max_concurrency: Optional[int], routes: Any, tcp: Any, requires_business_key: Any,
                  business_key_namespace: Any, business_key_argument: str, cancel_if_abandoned: bool,
-                 errors: Sequence[ErrorDecl], toolsets: Any) -> None:
+                 errors: Sequence[ErrorDecl], toolsets: Any, reconciliation: Any = None) -> None:
         super().__init__()
         self.name = name
         self.title = title or ""
@@ -427,6 +427,7 @@ class ToolDeclaration(Declaration):
         self.cancel_if_abandoned = bool(cancel_if_abandoned)
         self.errors = tuple(errors or ())
         self.toolsets = _strings(toolsets)
+        self.reconciliation = None if reconciliation is None else Reconciliation(reconciliation)
         self.handler: Optional[Callable[..., Any]] = None
 
     def __call__(self, handler: Any) -> Any:
@@ -455,10 +456,11 @@ class server_tool(ToolDeclaration):
                  tcp: Union[str, Iterable[str]] = (), requires_business_key: Union[bool, BusinessKey, None] = None,
                  business_key_namespace: KeyNamespace = KeyNamespace.AGENT, business_key_argument: str = "",
                  cancel_if_abandoned: bool = False, errors: Sequence[ErrorDecl] = (),
-                 toolsets: Union[str, Iterable[str]] = ()) -> None:
+                 toolsets: Union[str, Iterable[str]] = (), reconciliation: Optional[Reconciliation] = None) -> None:
         super().__init__(name, title, text, description, use_when, effect, destructive, open_world, async_,
                          max_duration_ms, stateless, max_concurrency, routes, tcp, requires_business_key,
-                         business_key_namespace, business_key_argument, cancel_if_abandoned, errors, toolsets)
+                         business_key_namespace, business_key_argument, cancel_if_abandoned, errors, toolsets,
+                         reconciliation)
 
 
 class client_tool(ToolDeclaration):
@@ -475,10 +477,12 @@ class client_tool(ToolDeclaration):
                  business_key_namespace: KeyNamespace = KeyNamespace.AGENT, business_key_argument: str = "",
                  cancel_if_abandoned: bool = False, errors: Sequence[ErrorDecl] = (),
                  toolsets: Union[str, Iterable[str]] = (),
-                 tiers: Union[RuntimeTier, Iterable[RuntimeTier]] = (RuntimeTier.OCI_SANDBOX,)) -> None:
+                 tiers: Union[RuntimeTier, Iterable[RuntimeTier]] = (RuntimeTier.OCI_SANDBOX,),
+                 reconciliation: Optional[Reconciliation] = None) -> None:
         super().__init__(name, title, text, description, use_when, effect, destructive, open_world, async_,
                          max_duration_ms, stateless, max_concurrency, (), (), requires_business_key,
-                         business_key_namespace, business_key_argument, cancel_if_abandoned, errors, toolsets)
+                         business_key_namespace, business_key_argument, cancel_if_abandoned, errors, toolsets,
+                         reconciliation)
         if isinstance(tiers, (str, RuntimeTier)):
             tiers = (tiers,)
         self.tiers = tuple(RuntimeTier(t) for t in tiers)

@@ -69,9 +69,22 @@ public final class EnterpriseOperations {
         var context=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),current.sessionEpoch(),current.credentialEpoch(),c.bindingId(),c.deviceId());
         var e=i.evaluation();
         var evaluation=new EnterpriseEvaluation(context,e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),e.nowUnixMs(),e.authorityRevision(),e.online(),e.amountMinorUnits(),e.operation());
-        var next=new EnterpriseInvocation(i.id(),i.requestDigest(),evaluation,i.state(),i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId());
+        var next=new EnterpriseInvocation(i.id(),i.requestDigest(),evaluation,i.state(),i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation());
         tx.enterprise().saveInvocation(next,now,i.revision());audit(tx,actor,"INVOCATION_RENEWED",next);return next;}
-    private EnterpriseInvocation changed(EnterpriseInvocation i,EnterpriseInvocationState state,String nonce,List<ResourceDescriptor> completed,String result){return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),state,i.revision()+1,i.authorizationEpoch(),nonce,i.expiresAtUnixMs(),completed,i.downstreamIdempotencyKey(),result,i.diagnosticId());}
+    /** The reconciliation method the tool declared (OLO M5.4); a tool with effects that declared none is settled manually. */
+    private ReconciliationMethod reconciliation(Directory directory,String toolId){
+        var entry=directory.entries().get(Kind.TOOL.id(toolId));if(entry==null)return ReconciliationMethod.MANUAL;
+        var declared=codec.model(entry.document(),ControlTool.class).definition().reconciliation();
+        return declared!=null?declared:ReconciliationMethod.MANUAL;}
+    /** OLO M5.4: replaying the key of an OUTCOME_UNKNOWN call of a DOWNSTREAM_IDEMPOTENCY tool queues it again, so it is
+     *  resent under the same invocation and the same arguments, and the target deduplicates by its idempotency key.
+     *  STATUS_LOOKUP and MANUAL calls stay unknown until reconciled; nothing else is ever resent. */
+    private EnterpriseInvocation reconciled(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,long now){
+        if(i.state()!=EnterpriseInvocationState.OUTCOME_UNKNOWN||i.reconciliation()!=ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY)return i;
+        var resend=changed(i,EnterpriseInvocationState.QUEUED,null,i.completedResources(),null);
+        var queued=new EnterpriseInvocation(resend.id(),resend.requestDigest(),resend.evaluation(),resend.state(),resend.revision(),resend.authorizationEpoch(),null,now+lifetime,resend.completedResources(),resend.downstreamIdempotencyKey(),null,resend.diagnosticId(),resend.reconciliation());
+        tx.enterprise().saveInvocation(queued,now,i.revision());audit(tx,actor,"RECONCILIATION_RESEND",queued);return queued;}
+    private EnterpriseInvocation changed(EnterpriseInvocation i,EnterpriseInvocationState state,String nonce,List<ResourceDescriptor> completed,String result){return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),state,i.revision()+1,i.authorizationEpoch(),nonce,i.expiresAtUnixMs(),completed,i.downstreamIdempotencyKey(),result,i.diagnosticId(),i.reconciliation());}
     /** M4.4: who, as whom, through which workload, what operation on which resources, the decision, the policy and
      *  authorization epoch, and the resulting state, as separate audit fields. Never arguments, payloads or credentials;
      *  more than 16 resources are recorded by count and digest only. */
@@ -128,10 +141,10 @@ public final class EnterpriseOperations {
             var placed=tx.enterprise().invocation(request.context().requestId());
             var e=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),request.context(),chosen!=null?chosen:placed!=null?placed.evaluation().context().deviceId():placement.place(tx,request.context(),now,request.request(),request.toolDigest(),request.packageDigest()),request.request(),request.toolDigest(),request.packageDigest(),now);
             String digest=requestDigest(e,request.downstreamIdempotencyKey());var previous=tx.enterprise().invocation(e.context().requestId());
-            if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();previous=renewed(tx,actor,previous,e.context(),now);decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
+            if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();previous=renewed(tx,actor,previous,e.context(),now);previous=reconciled(tx,actor,previous,now);decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
             if(tx.enterprise().invocationsSince(Math.max(0,now-lifetime))>=capacity)throw Failure.conflict();var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,now,false,budgets);long epoch=tx.enterprise().authorizationEpoch();
             var state=decision.decision()==Decision.ASK?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
-            var i=new EnterpriseInvocation(e.context().requestId(),digest,e,state,1L,epoch,null,now+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),request.downstreamIdempotencyKey(),null,decision.diagnosticId());
+            var i=new EnterpriseInvocation(e.context().requestId(),digest,e,state,1L,epoch,null,now+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),request.downstreamIdempotencyKey(),null,decision.diagnosticId(),reconciliation(tx.load(),e.toolId()));
             for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),now);tx.enterprise().saveInvocation(i,now,0);if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
             audit(tx,actor,"INVOCATION_SUBMIT",i);return reply(i,i.revision());});
     }
@@ -249,7 +262,7 @@ public final class EnterpriseOperations {
             var next=new EnterpriseApproval(a.id(),a.approvalType(),a.invocationId(),a.requestDigest(),a.authorizationEpoch(),a.directoryRevision(),a.obligationIds(),reviews,state,a.revision()+1,a.expiresAtUnixMs());tx.enterprise().saveApproval(next,a.revision());
             if(state==EnterpriseApprovalState.APPROVED){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var approved=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);
                 // The approved operation resumes (M5.5) with a fresh dispatch window, however long the review took.
-                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),now+lifetime,approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId());tx.enterprise().saveInvocation(queued,now,i.revision());}
+                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),now+lifetime,approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId(),approved.reconciliation());tx.enterprise().saveInvocation(queued,now,i.revision());}
             tx.audit(actor.id(),"OPERATION_"+state.name()+(new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId())?"_SUPER_ADMIN":""),"approval:"+a.id(),next.revision(),i.evaluation().context().requestId(),a.requestDigest());var reply=reply(next,next.revision());tx.remember(actor.id(),key,hash,reply);return reply;});
     }
     public Store.Reply report(Ids.TenantId tenant,String authenticatedDevice,String document){

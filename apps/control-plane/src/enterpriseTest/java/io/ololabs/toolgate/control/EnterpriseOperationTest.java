@@ -50,7 +50,7 @@ class EnterpriseOperationTest {
                 original.toolDigest(),original.packageDigest(),null),"device").body(),EnterpriseInvocation.class);
         var finished=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.SUCCEEDED,
                 i.revision()+1,i.authorizationEpoch(),"host-fence",i.expiresAtUnixMs(),i.evaluation().resources(),
-                i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId());
+                i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId(),i.reconciliation());
         store.transaction(gateway.tenant(),true,tx->{
             tx.enterprise().saveInvocation(finished,clock.millis(),i.revision());tx.packages().saveToolHost("device","{}");
             tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),"device","FINISHED",i.expiresAtUnixMs(),
@@ -156,6 +156,20 @@ class EnterpriseOperationTest {
     @Test void requesterCannotReviewOwnOperationEvenWithManagementRole(){graph.policy("ask",Decision.ASK);saveGraph();var i=submit("request");var a=approval(i);var self=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"d".repeat(64),true,false,"alice");assertThrows(Failure.class,()->operations.decide(self,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),"ask",EnterpriseReviewDecision.APPROVE)),"self"));}
     @Test void approvedOperationNeverManufacturesMissingGrant(){graph.policy("ask",Decision.ASK);saveGraph();var i=submit("request");approve(approval(i),"ask");graph.remove(Kind.GRANT,"human");saveGraph();var queued=store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation(i.id()));assertThrows(Failure.class,()->reserve(queued));}
     @Test void approvalRevocationAfterReservationStopsConsumption(){graph.policy("ask",Decision.ASK);saveGraph();var i=submit("request");var a=approve(approval(i),"ask");var queued=store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation(i.id()));var r=reserve(queued);operations.decide(reviewer,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),"ask",EnterpriseReviewDecision.REVOKE)),"revoke");assertThrows(Failure.class,()->consume(r));}
+    /** M5.4: an unknown outcome of a DOWNSTREAM_IDEMPOTENCY tool is resent by replaying its key; the target deduplicates. */
+    @Test void downstreamIdempotentToolsAreResentWhenTheirKeyIsReplayed(){
+        var old=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var definition=graph.codec.model(graph.codec.json(old.definition()).replaceFirst("[{]","{\"reconciliation\":\"DOWNSTREAM_IDEMPOTENCY\","),ToolDefinition.class);
+        graph.add(Kind.TOOL,new ControlTool(old.id(),old.name(),old.enabled(),old.revision()+1,definition,old.extractorId(),old.version(),old.packageDigest()));saveGraph();
+        var i=consume(reserve(submit("resend")));
+        assertEquals(ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY,i.reconciliation());
+        var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);
+        operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report));
+        var resent=submit("resend");
+        assertEquals("resend",resent.id());assertEquals(EnterpriseInvocationState.QUEUED,resent.state());
+        assertEquals(i.requestDigest(),resent.requestDigest());
+        assertEquals(EnterpriseInvocationState.RESERVED,reserve(resent).invocation().state());}
+    @Test void invocationsRecordTheirToolsReconciliationMethod(){assertEquals(ReconciliationMethod.MANUAL,submit("manual").reconciliation());}
     @Test void unknownExternalOutcomeCannotTriggerBlindRetry(){var i=consume(reserve(submit("request")));var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report)).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());assertThrows(Failure.class,()->reserve(unknown));assertEquals(unknown,submit("request"));}
     @Test void successRequiresEveryResourceAndAResultDigest(){var i=consume(reserve(submit("request")));assertThrows(Failure.class,()->operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,List.of(),EnterpriseConformanceTest.DIGEST))));var success=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST);assertEquals(EnterpriseInvocationState.SUCCEEDED,graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(success)).body(),EnterpriseInvocation.class).state());}
     @Test void responseRetrievalChecksRevokedAuthorization(){var i=consume(reserve(submit("request")));assertEquals(200,operations.get(gateway,i.id()).status());graph.remove(Kind.GRANT,"human");saveGraph();assertThrows(Failure.class,()->operations.get(gateway,i.id()));}

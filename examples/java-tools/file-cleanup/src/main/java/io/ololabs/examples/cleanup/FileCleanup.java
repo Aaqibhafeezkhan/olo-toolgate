@@ -3,6 +3,7 @@
 package io.ololabs.examples.cleanup;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Global;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -70,7 +71,7 @@ public class FileCleanup {
                     + " Lists them by default; deletes them only with dryRun false.",
             useWhen = "Use it to free disk space from old logs or exports. Run it as a dry run first and show the user"
                     + " what would be deleted before deleting.",
-            effect = EffectSafety.IDEMPOTENT, destructive = true, maxDurationMs = 60_000, maxConcurrency = 1)
+            effect = EffectSafety.IDEMPOTENT, destructive = true, maxDurationMs = 60_000, maxConcurrency = 1, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @Example(arguments = "{\"path\":\"/\",\"olderThanDays\":30}", expectedError = "CONFIGURATION")
     public Cleanup oldFiles(
             @Param(description = "Directory to clean: one of the cleanup roots or a directory inside one", maxLength = 500)
