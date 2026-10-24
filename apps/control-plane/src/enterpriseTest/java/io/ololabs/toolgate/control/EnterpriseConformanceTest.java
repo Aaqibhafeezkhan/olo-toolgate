@@ -42,7 +42,7 @@ class EnterpriseConformanceTest {
         add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-a","Devices A",true,1L,List.of("device")));
         add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-b","Devices B",true,1L,List.of("device")));
         add(Kind.DEVICE_EVIDENCE,new ControlDeviceEvidence("evidence","Verified device evidence",true,1L,"device",List.of("managed"),"in","10.1.2.3",NOW-1000,NOW+1000000));
-        add(Kind.EXTRACTOR,new ControlResourceExtractor("extractor","Reviewed extractor",true,1L,EnterpriseExtractorKind.FIELDS,"1.0.0",List.of(new ExtractorField("/path",ResourceKind.FILE,false)),List.of(),32L,null,null));
+        add(Kind.EXTRACTOR,new ControlResourceExtractor("extractor","Reviewed extractor",true,1L,EnterpriseExtractorKind.FIELDS,"1.0.0",List.of(new ExtractorField("/path",ResourceKind.FILE,false)),List.of(),32L,null,null,null));
         var definition=codec.model("{\"id\":\"tool\",\"name\":\"Tool\",\"description\":\"Untrusted description\",\"actions\":[{\"name\":\"read\",\"resourceKinds\":[\"FILE\"]},{\"name\":\"write\",\"resourceKinds\":[\"FILE\"]}],\"inputSchema\":{\"type\":\"object\"},\"outputSchema\":{\"type\":\"object\"}}",ToolDefinition.class);
         add(Kind.TOOL,new ControlTool("tool","Tool",true,1L,definition,"extractor","1.0.0",DIGEST));
         add(Kind.TOOL_GROUP,new ControlToolGroup("tools-a","Tools A",true,1L,List.of("tool")));
@@ -132,7 +132,7 @@ class EnterpriseConformanceTest {
     @Test void emptySelectorsDoNotMeanWildcard() {var s=scope("tools-a","devices-a");grant("human","team-a",EnterpriseSourceType.TEAM,EnterpriseGrantPurpose.HUMAN,new EnterpriseScope(new GroupSelection(List.of(),false),s.deviceGroups(),s.actions(),s.allActions(),s.resources(),s.conditions()));assertEquals(Decision.BLOCK,decide(context(RequestMode.HUMAN,"binding-a")).decision());}
     @Test void numericNetworkChecksNeverResolveHostNames() {assertTrue(NetworkRange.parse("10.0.0.0/8").contains("10.1.2.3"));assertFalse(NetworkRange.parse("10.0.0.0/8").contains("example.test"));assertThrows(IllegalArgumentException.class,()->NetworkRange.parse("example.test/8"));}
     @Test void sourceAndDestinationAndAllBatchMembersAreExtracted() {
-        var extractor=new ControlResourceExtractor("batch","Batch",true,1L,EnterpriseExtractorKind.FILESYSTEM,"1.0.0",List.of(new ExtractorField("/sources",ResourceKind.FILE,true),new ExtractorField("/destination",ResourceKind.FILE,false)),List.of(),32L,null,null);
+        var extractor=new ControlResourceExtractor("batch","Batch",true,1L,EnterpriseExtractorKind.FILESYSTEM,"1.0.0",List.of(new ExtractorField("/sources",ResourceKind.FILE,true),new ExtractorField("/destination",ResourceKind.FILE,false)),List.of(),32L,null,null,null);
         var request=codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"sources\":[\"data/a\",\"data/b\"],\"destination\":\"data/c\"}}",AuthorizationRequest.class);
         assertEquals(3,new ResourceExtraction(codec).extract(extractor,request).resources().size());
     }
