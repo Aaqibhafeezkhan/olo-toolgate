@@ -101,6 +101,47 @@ final class ServerPackagesTest {
     }
     private JsonNode node(String document) throws Exception { return JSON.readTree(document); }
 
+    @Test void deploymentPrivateRangesAreExplicitHostAndPortScopedAndCannotApprovePublicOrMetadataNetworks() throws Exception {
+        var codec = new ContractCodec();
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("private-egress.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant");
+        var actor = TestSupport.seed(store, codec, tenant, "root");
+        var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        String digest = node(packages.upload(actor,zip(files()),"upload").body()).path("packageDigest").asText();
+        var request=JSON.createObjectNode().put("packageDigest",digest);
+        request.putObject("globals").put("ItemsApiHost","items.internal");
+        var range=request.putArray("privateRanges").addObject().put("host","items.internal").put("cidr","172.18.0.0/16");
+        range.putArray("ports").add(443);
+        var deployed=node(packages.deploy(actor,request.toString(),"deploy").body());
+        var profile=store.transaction(tenant,false,tx -> nodeUnchecked(tx.packages().document(deployed.path("serviceProfileDigest").asText())));
+        assertEquals("172.18.0.0/16",profile.path("privateRanges").get(0).path("cidr").asText());
+        for(String cidr:List.of("0.0.0.0/0","169.254.169.254/32","127.0.0.0/8","172.16.0.0/8","not-a-cidr")) {
+            range.put("cidr",cidr);
+            assertThrows(Failure.class,()->packages.deploy(actor,request.toString(),"bad-network"));
+        }
+        range.put("cidr","172.18.0.0/16");range.put("host","other.internal");
+        assertThrows(Failure.class,()->packages.deploy(actor,request.toString(),"bad-host"));
+        range.put("host","items.internal");range.putArray("ports").add(8443);
+        assertThrows(Failure.class,()->packages.deploy(actor,request.toString(),"bad-port"));
+        request.remove("privateRanges");
+        request.putObject("destinationTls").putObject("undeclared").putArray("spkiPins");
+        assertThrows(Failure.class,()->packages.deploy(actor,request.toString(),"bad-destination"));
+        request.putObject("destinationTls").putObject("items-api").put("caBundle","not a certificate").putArray("spkiPins");
+        assertThrows(Failure.class,()->packages.deploy(actor,request.toString(),"bad-trust"));
+        // A real PEM CA is much larger than the old 256-character contract bound.
+        var trust=java.security.KeyStore.getInstance(java.nio.file.Path.of(System.getProperty("java.home"),"lib","security","cacerts").toFile(),"changeit".toCharArray());
+        var certificate=trust.getCertificate(trust.aliases().nextElement());
+        String pem="-----BEGIN CERTIFICATE-----\n"+Base64.getMimeEncoder(64,new byte[]{10}).encodeToString(certificate.getEncoded())+"\n-----END CERTIFICATE-----\n";
+        assertTrue(pem.length()>256);
+        request.putObject("destinationTls").putObject("items-api").put("caBundle",pem).putArray("spkiPins");
+        var trusted=node(packages.deploy(actor,request.toString(),"valid-trust").body());
+        var trustedProfile=store.transaction(tenant,false,tx -> nodeUnchecked(tx.packages().document(trusted.path("serviceProfileDigest").asText())));
+        assertEquals(pem,trustedProfile.path("destinations").get(0).path("tls").path("caBundle").asText());
+    }
+    private static JsonNode nodeUnchecked(String value) {
+        try{return JSON.readTree(value);}catch(Exception failure){throw new IllegalStateException(failure);}
+    }
+
     @Test void archiveRulesMatchThePackager() throws Exception {
         var codec = new ContractCodec(); var files = files();
         var verified = PackageArchive.validate(zip(files), document -> (JsonNode) codec.value(document));

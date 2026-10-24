@@ -33,6 +33,19 @@ public final class ServerPackages {
     private final Store store; private final Codec codec; private final EnterpriseOperations operations; private final Clock clock;
     public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock) { this.store = store; this.codec = codec; this.operations = operations; this.clock = clock; }
 
+    private static void validateDestinationTls(String id,JsonNode tls) {
+        // Platform mTLS must retain normal CA/hostname validation; SPKI-only validation is insufficient.
+        if (Set.of("olo-memory","olo-rag").contains(id) && !tls.path("spkiPins").isEmpty()) throw Failure.validation();
+        if (tls.has("caBundle")) {
+            try {
+                byte[] pem=tls.path("caBundle").asText().getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+                var certificates=java.security.cert.CertificateFactory.getInstance("X.509")
+                    .generateCertificates(new java.io.ByteArrayInputStream(pem));
+                if(certificates.isEmpty()||certificates.size()>32)throw Failure.validation();
+            } catch(java.security.cert.CertificateException invalid) {throw Failure.validation();}
+        }
+    }
+
     private JsonNode node(String document) { return (JsonNode) codec.value(document); }
     private Store.Reply reply(int status, Object value) { return new Store.Reply(status, codec.json(value), 0); }
     private static Failure notFound() { return new Failure(ErrorCode.NOT_FOUND, 404, "Package not found"); }
@@ -160,12 +173,16 @@ public final class ServerPackages {
                 if (!typed(declaration, value)) throw Failure.validation();
                 globals.set(name, value);
             });
+            var approvedTls = request.destinationTls() == null ? Map.<String,JsonNode>of() : request.destinationTls();
+            if (!destinations.keySet().containsAll(approvedTls.keySet())) throw Failure.validation();
             var profileDestinations = JSON.arrayNode();
             destinations.forEach((id, declaration) -> {
                 var host = request.globals().get(declaration.get("hostSetting").asText());
                 if (host == null || !host.isTextual() || !host.asText().matches("[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?")) throw Failure.validation();
                 var tls = JSON.objectNode(); tls.set("spkiPins", declaration.path("spkiPins").deepCopy());
                 if (declaration.has("caBundle")) tls.set("caBundle", declaration.get("caBundle"));
+                if (approvedTls.containsKey(id)) tls = (ObjectNode) approvedTls.get(id).deepCopy();
+                validateDestinationTls(id,tls);
                 var destination = profileDestinations.addObject().put("id", id).put("scheme", "https").put("host", host.asText()).put("port", declaration.get("port").asInt());
                 destination.set("tls", tls); destination.put("mode", "BROKERED");
             });
@@ -174,7 +191,20 @@ public final class ServerPackages {
             var profile = JSON.objectNode().put("profileId", "sp-" + packageId).put("revision", revision).put("packageId", packageId);
             profile.set("destinations", profileDestinations);
             var profileRoutes = profile.putArray("routes"); routes.values().forEach(profileRoutes::add);
-            profile.putArray("privateRanges");
+            var ranges = profile.putArray("privateRanges");
+            for (var range : request.privateRanges() == null ? List.<io.ololabs.toolgate.contracts.v2.PrivateRangeApproval>of() : request.privateRanges()) {
+                var ports = java.util.stream.StreamSupport.stream(profileDestinations.spliterator(),false)
+                    .filter(d -> d.path("host").asText().equals(range.host())).map(d -> d.path("port").asLong()).collect(java.util.stream.Collectors.toSet());
+                if (range.ports().isEmpty() || !ports.containsAll(range.ports())) throw Failure.validation();
+                try {
+                    var network=NetworkRange.parse(range.cidr());
+                    String address=java.net.InetAddress.getByAddress(network.address()).getHostAddress();
+                    boolean privateOnly=List.of("10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","100.64.0.0/10","fc00::/7").stream()
+                        .map(NetworkRange::parse).anyMatch(base -> network.address().length==base.address().length && network.prefix()>=base.prefix() && base.contains(address));
+                    if(!privateOnly)throw Failure.validation();
+                } catch (IllegalArgumentException | java.net.UnknownHostException invalid) { throw Failure.validation(); }
+                ranges.add(node(codec.json(range)));
+            }
             String profileDigest = Canonical.digest(profile), globalsDigest = Canonical.digest(globals);
             tx.packages().saveDocument(profileDigest, codec.json(profile));
             tx.packages().saveDocument(globalsDigest, codec.json(globals));

@@ -1438,6 +1438,10 @@ pub struct PackageDeploymentRequest {
     pub host_ids: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_group_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_ranges: Option<Vec<PrivateRangeApproval>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_tls: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Enable exactly the reviewed digest with this binding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

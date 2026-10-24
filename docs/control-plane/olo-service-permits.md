@@ -98,3 +98,21 @@ row-security tests include the new authority and cancellation tables.
 
 M6 must run the same cases against the actual memory/RAG services and stores. M8 measures the real-stack timing and
 result-release behavior. Passing this protocol qualification does not claim that those application services exist.
+
+## Deploying private application services
+
+Package deployment accepts operator-controlled `privateRanges` and `destinationTls` in addition to host globals.
+A range must name a declared destination host, contain only that host's declared ports, and fit wholly within
+RFC 1918, CGNAT or IPv6 ULA space. Public, loopback, link-local/metadata and wider containing ranges are refused.
+The broker still checks every resolved address at connect time. An approval cannot override its forbidden-address rules.
+
+`destinationTls` is keyed by the declared destination ID. Each value is `{caBundle:"<inline PEM>",spkiPins:[]}`
+for a private CA; bundles are bounded to 64 KiB and parsed as X.509 certificates before deployment. This is not a
+filesystem path or key reference. Unknown destination IDs and malformed bundles are refused. `olo-memory` and
+`olo-rag` cannot use pin-only TLS: their mTLS transport retains normal CA and hostname verification.
+The settings are included in the canonical, revisioned service-profile digest pinned by the executor permit.
+Only an administrator holding package.deploy may set them; package authors cannot approve their own private ranges.
+
+For example, deploy `olo.memory` to `ServiceHost=olo-memory`, approve only the actual private subnet for that host
+on TCP 8443, and set `destinationTls["olo-memory"]` to its server CA PEM. Do the same separately for `olo-rag`.
+Never grant `0.0.0.0/0`, use a TLS verification bypass, or install a database credential in an executor.
