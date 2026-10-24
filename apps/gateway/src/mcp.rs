@@ -307,10 +307,27 @@ async fn tools_call(
             json!({"content":[{"type":"text","text":"Approval required"}],"structuredContent":{"invocationId":outcome.invocation.id,"state":"PENDING_APPROVAL"},"isError":true}),
         );
     }
+    // OLO M5.4: a replayed key whose invocation ended reports how it ended. OUTCOME_UNKNOWN in particular is never run
+    // again here: the caller reconciles it instead of resending.
+    if matches!(
+        outcome.invocation.state,
+        EnterpriseInvocationState::Failed
+            | EnterpriseInvocationState::Cancelled
+            | EnterpriseInvocationState::Expired
+            | EnterpriseInvocationState::Partial
+            | EnterpriseInvocationState::OutcomeUnknown
+    ) {
+        let state = serde_json::to_value(&outcome.invocation.state).unwrap_or(Value::Null);
+        return Ok(
+            json!({"content":[{"type":"text","text":format!("Invocation ended: {}", state.as_str().unwrap_or("UNKNOWN"))}],
+            "structuredContent":{"invocationId":outcome.invocation.id,"state":state},"isError":true}),
+        );
+    }
     if !matches!(
         outcome.invocation.state,
         EnterpriseInvocationState::Queued
             | EnterpriseInvocationState::Reserved
+            | EnterpriseInvocationState::Dispatched
             | EnterpriseInvocationState::Executing
             | EnterpriseInvocationState::Succeeded
     ) {

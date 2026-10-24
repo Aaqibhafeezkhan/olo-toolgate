@@ -104,6 +104,47 @@ class EnterpriseOperationTest {
         assertEquals("read",e.get("operation").asText());assertEquals("FILE:data/report.txt",e.get("resources").get(0).asText());assertEquals("ALLOW",e.get("decision").asText());
         assertEquals("DELEGATED",e.get("mode").asText());
     }
+    EnterpriseInvocationRequest epochs(String id,String path,long session,long credential){var r=request(id,path);var c=r.context();
+        var renewed=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),session,credential,c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
+        return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey());}
+    EnterpriseInvocation submitted(EnterpriseInvocationRequest r){return graph.codec.model(operations.submit(gateway,graph.codec.json(r)).body(),EnterpriseInvocation.class);}
+    /** M5.3: the same logical operation with changed arguments is a conflict and never creates or changes an invocation. */
+    @Test void changedArgumentsUnderTheSameKeyAreAConflict(){var first=submit("op-1");
+        var conflict=assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(request("op-1","data/other.txt"))));
+        assertEquals(409,conflict.status());
+        assertEquals(first,store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-1")));}
+    /** M5.3: rotating the workload credential replays the same invocation under the current credential epoch. */
+    @Test void aRotatedCredentialReplaysTheSameInvocation(){var first=submit("op-2");
+        graph.remove(Kind.WORKLOAD_BINDING,"workload");
+        graph.add(Kind.WORKLOAD_BINDING,new ControlWorkloadBinding("workload","workload",true,2L,"agent",RequestMode.DELEGATED,"gateway","workload-subject","gateway",EnterpriseConformanceTest.PROOF,2L,EnterpriseConformanceTest.NOW+100000,"alice",null,1L,null,null));saveGraph();
+        assertThrows(Failure.class,()->submitted(epochs("op-2","data/report.txt",1L,1L)),"the old credential no longer decides");
+        var replay=submitted(epochs("op-2","data/report.txt",1L,2L));
+        assertEquals(first.id(),replay.id());assertEquals(first.requestDigest(),replay.requestDigest());assertEquals(2L,replay.evaluation().context().credentialEpoch());
+        assertEquals("op-2",store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-2")).id());}
+    /** M5.3: a replay never revives an invocation for a session that was revoked meanwhile. */
+    @Test void aRevokedSessionCannotReplayItsInvocation(){submit("op-3");
+        graph.remove(Kind.IDENTITY_BINDING,"identity-alice");
+        graph.add(Kind.IDENTITY_BINDING,new ControlIdentityBinding("identity-alice","Alice identity",true,2L,"alice","https://identity.example","alice-subject",2L,EnterpriseConformanceTest.NOW-1000,EnterpriseConformanceTest.NOW,1L,"REVIEWED",0L));saveGraph();
+        assertThrows(Failure.class,()->submitted(epochs("op-3","data/report.txt",1L,1L)));}
+    /** M5.3: concurrent submissions of one key create exactly one invocation, and every caller gets it. */
+    @Test void concurrentSubmissionsOfOneKeyCreateExactlyOneInvocation()throws Exception{var pool=Executors.newFixedThreadPool(6);
+        try{var jobs=new ArrayList<Future<String>>();for(int n=0;n<6;n++)jobs.add(pool.submit(()->submit("op-4").id()));
+            for(var job:jobs)assertEquals("op-4",job.get());}finally{pool.shutdownNow();}
+        assertEquals("op-4",store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-4")).id());}
+    /** M5.5: an operation waits up to the approval expiry, and approval resumes that same invocation with a fresh window. */
+    @Test void approvalResumesTheOriginalInvocationWithAFreshDispatchWindow(){
+        operations.approvalExpiry(EnterpriseOperations.MAX_APPROVAL_EXPIRY_MS);graph.policy("ask",Decision.ASK);saveGraph();
+        var pending=submit("op-5");
+        assertEquals(EnterpriseInvocationState.PENDING_APPROVAL,pending.state());
+        assertEquals(EnterpriseConformanceTest.NOW+EnterpriseOperations.MAX_APPROVAL_EXPIRY_MS,pending.expiresAtUnixMs());
+        approve(approval(pending),"ask");
+        var resumed=store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-5"));
+        assertEquals(EnterpriseInvocationState.QUEUED,resumed.state());
+        assertEquals(EnterpriseConformanceTest.NOW+60000,resumed.expiresAtUnixMs());
+        assertEquals(pending.requestDigest(),resumed.requestDigest());
+        var replay=submit("op-5");
+        assertEquals("op-5",replay.id());assertEquals(EnterpriseInvocationState.QUEUED,replay.state());
+        assertThrows(IllegalArgumentException.class,()->operations.approvalExpiry(EnterpriseOperations.MAX_APPROVAL_EXPIRY_MS+1));}
     @Test void exactInvocationIsDurableAndIdempotentWithoutStoringArguments(){var i=submit("request");assertEquals(EnterpriseInvocationState.QUEUED,i.state());assertEquals(i,submit("request"));assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(request("request","data/other.txt"))));assertFalse(graph.codec.json(i).contains("credentialSha256"));}
     @Test void signedPermitBindsTargetVersionsArgumentsAndFullResourceSet(){var r=reserve(submit("request"));var claims=signer.verify(r.permit());assertEquals("binding-a",claims.bindingId());assertEquals("device",claims.deviceId());var e=r.invocation().evaluation();var other=new EnterprisePermitConsumption("request",r.permit(),e.argumentsDigest(),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/other.txt")),e.toolDigest(),e.packageDigest());assertThrows(Failure.class,()->operations.consume(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(other)));assertEquals(EnterpriseInvocationState.EXECUTING,consume(r).state());}
     @Test void wrongCertificateDeviceAndTenantCannotConsume(){var r=reserve(submit("request"));assertThrows(Failure.class,()->operations.consume(EnterpriseConformanceTest.TENANT,"different",consumption(r)));assertThrows(Failure.class,()->operations.consume(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"device",consumption(r)));}

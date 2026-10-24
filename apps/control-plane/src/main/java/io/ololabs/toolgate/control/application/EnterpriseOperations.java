@@ -16,6 +16,11 @@ import java.util.*;
 public final class EnterpriseOperations {
     private final Store store;private final Codec codec;private final EffectSigner signer;private final Clock clock;
     private final String issuer,audience;private final long lifetime;private final int capacity;
+    /** How long an operation may wait for approval (OLO M2.4: 7 days); defaults to the invocation lifetime. */
+    private volatile long approvalExpiry=-1;
+    public static final long MAX_APPROVAL_EXPIRY_MS=7L*24*60*60*1000;
+    public EnterpriseOperations approvalExpiry(long ms){if(ms<1000||ms>MAX_APPROVAL_EXPIRY_MS)throw new IllegalArgumentException("Approval expiry must be 1 s to 7 days");approvalExpiry=ms;return this;}
+    private long approvalExpiry(){return approvalExpiry>0?approvalExpiry:lifetime;}
     private volatile ClientCheckInPolicy checkIn=ClientCheckInPolicy.configure(null,null,null);
     /** The running check-in policy decides which devices are online for placement. */
     public EnterpriseOperations checkInPolicy(ClientCheckInPolicy value){checkIn=java.util.Objects.requireNonNull(value);return this;}
@@ -38,8 +43,11 @@ public final class EnterpriseOperations {
     private static void gateway(DirectoryService.Actor actor){if(actor.admin()||actor.userId()!=null)throw ManagementAccess.denied();}
     private Store.Reply reply(Object value,long revision){return new Store.Reply(200,codec.json(value),revision);}
     private static String approvalId(String invocation){return "operation-"+DirectoryService.digest(invocation).substring(0,40);}
-    private String requestDigest(EnterpriseEvaluation e,String downstream){
-        return DirectoryService.digest(codec.json(new EnterpriseEvaluation(e.context(),e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),0L,0L,true,e.amountMinorUnits(),e.operation()))+"\n"+(downstream==null?"":downstream));
+    /** The M2.4 request fingerprint: what is asked, by whom, of what. Session and credential epochs are left out, so a
+     *  renewed or rotated credential replays the same invocation; they are rechecked when it is decided. */
+    private String requestDigest(EnterpriseEvaluation e,String downstream){var c=e.context();
+        var stable=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),null,null,c.bindingId(),c.deviceId());
+        return DirectoryService.digest(codec.json(new EnterpriseEvaluation(stable,e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),0L,0L,true,e.amountMinorUnits(),e.operation()))+"\n"+(downstream==null?"":downstream));
     }
     private static EnterpriseEvaluation current(EnterpriseEvaluation e,Directory directory,long now){return new EnterpriseEvaluation(e.context(),e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),now,directory.revision(),true,e.amountMinorUnits(),e.operation());}
     private EnterpriseDecision decide(Ids.TenantId tenant,Store.Session tx,EnterpriseEvaluation e,long now,boolean existing){return decide(tenant,tx,e,now,existing,new java.util.TreeSet<>());}
@@ -53,6 +61,16 @@ public final class EnterpriseOperations {
             var state=i.state()==EnterpriseInvocationState.EXECUTING?EnterpriseInvocationState.OUTCOME_UNKNOWN:EnterpriseInvocationState.EXPIRED;
             var next=changed(i,state,i.reservedNonce(),i.completedResources(),i.resultDigest());tx.enterprise().saveInvocation(next,time,i.revision());tx.audit("effect-watchdog","INVOCATION_"+state.name(),"invocation:"+id,next.revision(),i.evaluation().context().requestId(),i.requestDigest(),evidence(next));i=next;
         }return i;}
+    /** A replay under a renewed or rotated credential: the stored invocation takes the current session and credential
+     *  epochs, so the decision that follows checks the caller's current authority, never the authority it once had. */
+    private EnterpriseInvocation renewed(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,EnterpriseContext current,long now){
+        var c=i.evaluation().context();
+        if(java.util.Objects.equals(c.sessionEpoch(),current.sessionEpoch())&&java.util.Objects.equals(c.credentialEpoch(),current.credentialEpoch()))return i;
+        var context=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),current.sessionEpoch(),current.credentialEpoch(),c.bindingId(),c.deviceId());
+        var e=i.evaluation();
+        var evaluation=new EnterpriseEvaluation(context,e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),e.nowUnixMs(),e.authorityRevision(),e.online(),e.amountMinorUnits(),e.operation());
+        var next=new EnterpriseInvocation(i.id(),i.requestDigest(),evaluation,i.state(),i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId());
+        tx.enterprise().saveInvocation(next,now,i.revision());audit(tx,actor,"INVOCATION_RENEWED",next);return next;}
     private EnterpriseInvocation changed(EnterpriseInvocation i,EnterpriseInvocationState state,String nonce,List<ResourceDescriptor> completed,String result){return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),state,i.revision()+1,i.authorizationEpoch(),nonce,i.expiresAtUnixMs(),completed,i.downstreamIdempotencyKey(),result,i.diagnosticId());}
     /** M4.4: who, as whom, through which workload, what operation on which resources, the decision, the policy and
      *  authorization epoch, and the resulting state, as separate audit fields. Never arguments, payloads or credentials;
@@ -95,16 +113,25 @@ public final class EnterpriseOperations {
         return olo.reserved(c.agentId())||c.chain().stream().anyMatch(h->olo.reserved(h.agentId()));}
     /** A person names the device; it must belong to the execution binding's device group. */
     public Store.Reply submitHuman(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String device){if(actor.userId()==null||device==null||request.context().mode()!=RequestMode.HUMAN||!actor.userId().equals(request.context().userId()))throw ManagementAccess.denied();return submitVerified(actor,request,device);}
-    private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){String document=codec.json(request)+(chosen==null?"":"\n"+chosen);
+    /** M2.4 atomic create: concurrent submissions of one key insert at most one invocation. A submission that loses the
+     *  race is decided once more, so it gets the winner's invocation, or a conflict if its fingerprint differs. */
+    private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){
+        try{return submitOnce(actor,request,chosen);}
+        catch(Failure lost){
+            if(lost.status()!=409||store.transaction(actor.tenant(),false,tx->tx.enterprise().invocation(request.context().requestId()))==null)throw lost;
+            return submitOnce(actor,request,chosen);
+        }
+    }
+    private Store.Reply submitOnce(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){String document=codec.json(request)+(chosen==null?"":"\n"+chosen);
         return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
             // A replay keeps the device the first submission was placed on, whatever the pool's load is now.
             var placed=tx.enterprise().invocation(request.context().requestId());
             var e=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),request.context(),chosen!=null?chosen:placed!=null?placed.evaluation().context().deviceId():placement.place(tx,request.context(),now,request.request(),request.toolDigest(),request.packageDigest()),request.request(),request.toolDigest(),request.packageDigest(),now);
             String digest=requestDigest(e,request.downstreamIdempotencyKey());var previous=tx.enterprise().invocation(e.context().requestId());
-            if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
+            if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();previous=renewed(tx,actor,previous,e.context(),now);decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
             if(tx.enterprise().invocationsSince(Math.max(0,now-lifetime))>=capacity)throw Failure.conflict();var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,now,false,budgets);long epoch=tx.enterprise().authorizationEpoch();
             var state=decision.decision()==Decision.ASK?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
-            var i=new EnterpriseInvocation(e.context().requestId(),digest,e,state,1L,epoch,null,now+lifetime,List.of(),request.downstreamIdempotencyKey(),null,decision.diagnosticId());
+            var i=new EnterpriseInvocation(e.context().requestId(),digest,e,state,1L,epoch,null,now+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),request.downstreamIdempotencyKey(),null,decision.diagnosticId());
             for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),now);tx.enterprise().saveInvocation(i,now,0);if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
             audit(tx,actor,"INVOCATION_SUBMIT",i);return reply(i,i.revision());});
     }
@@ -220,7 +247,9 @@ public final class EnterpriseOperations {
             var state=request.decision()==EnterpriseReviewDecision.REVOKE?EnterpriseApprovalState.REVOKED:request.decision()==EnterpriseReviewDecision.DENY?EnterpriseApprovalState.DENIED:
                 a.obligationIds().stream().allMatch(ob->reviews.stream().anyMatch(r->r.obligationId().equals(ob)&&r.decision()==EnterpriseReviewDecision.APPROVE))?EnterpriseApprovalState.APPROVED:EnterpriseApprovalState.PENDING;
             var next=new EnterpriseApproval(a.id(),a.approvalType(),a.invocationId(),a.requestDigest(),a.authorizationEpoch(),a.directoryRevision(),a.obligationIds(),reviews,state,a.revision()+1,a.expiresAtUnixMs());tx.enterprise().saveApproval(next,a.revision());
-            if(state==EnterpriseApprovalState.APPROVED){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var queued=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);tx.enterprise().saveInvocation(queued,now,i.revision());}
+            if(state==EnterpriseApprovalState.APPROVED){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var approved=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);
+                // The approved operation resumes (M5.5) with a fresh dispatch window, however long the review took.
+                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),now+lifetime,approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId());tx.enterprise().saveInvocation(queued,now,i.revision());}
             tx.audit(actor.id(),"OPERATION_"+state.name()+(new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId())?"_SUPER_ADMIN":""),"approval:"+a.id(),next.revision(),i.evaluation().context().requestId(),a.requestDigest());var reply=reply(next,next.revision());tx.remember(actor.id(),key,hash,reply);return reply;});
     }
     public Store.Reply report(Ids.TenantId tenant,String authenticatedDevice,String document){

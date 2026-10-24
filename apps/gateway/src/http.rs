@@ -518,10 +518,23 @@ async fn authorize(State(s): State<Arc<AppState>>, request: Request) -> Response
     }
 }
 
+/// The invocation a caller's key names (OLO M2.4 dedup key): tenant, mode, the subject (user or service principal),
+/// the acting agent and the delegation chain's agents, plus the caller's key. Credential digests, epochs, expiry and
+/// workload bindings are left out, so renewing or rotating a credential neither changes the key nor starts a second
+/// invocation; Control still checks the current session and credential when the key is replayed.
 pub(crate) fn invocation_id(context: &RequestContext, key: &str) -> String {
-    let mut identity = context.clone();
-    identity.request_id = "identity".into();
-    identity.credential_sha256 = None;
+    let chain: Vec<&str> = context
+        .chain
+        .iter()
+        .map(|hop| hop.agent_id.as_str())
+        .collect();
+    let identity = serde_json::json!({
+        "tenantId": context.tenant_id,
+        "mode": context.mode,
+        "userId": context.user_id,
+        "agentId": context.agent_id,
+        "chain": chain,
+    });
     format!(
         "inv-{}",
         &digest(&serde_json::to_vec(&(identity, key)).expect("serializable identity"))[..48]
@@ -551,4 +564,54 @@ async fn method_not_allowed(request: Request) -> Response {
     r.headers_mut()
         .insert("allow", HeaderValue::from_static("POST"));
     r
+}
+
+#[cfg(test)]
+mod dedup_key {
+    use super::invocation_id;
+    use olo_toolgate_contracts::v2::RequestContext;
+
+    fn context(extra: serde_json::Value) -> RequestContext {
+        let mut base = serde_json::json!({"requestId":"r","tenantId":"10000000-0000-4000-8000-000000000001",
+            "mode":"DELEGATED","credentialKind":"JWT","issuer":"toolgate-control","userId":"user-42","agentId":"agent-a",
+            "workloadBindingId":"w1","chain":[],"sessionEpoch":3,"credentialEpoch":1,"expiresAtUnixMs":1000,
+            "bindingId":"b","credentialSha256":"aa"});
+        for (k, v) in extra.as_object().unwrap() {
+            base[k] = v.clone();
+        }
+        serde_json::from_value(base).unwrap()
+    }
+
+    /// OLO M2.4: renewing or rotating a credential keeps the key; another subject, agent or key never shares it.
+    #[test]
+    fn renewal_and_rotation_keep_the_key_and_identity_changes_it() {
+        let key = invocation_id(&context(serde_json::json!({})), "olo-op-1");
+        let renewed = context(
+            serde_json::json!({"expiresAtUnixMs":9000,"credentialSha256":"bb","credentialEpoch":2,
+            "workloadBindingId":"w2","requestId":"other"}),
+        );
+        assert_eq!(key, invocation_id(&renewed, "olo-op-1"));
+        assert_ne!(
+            key,
+            invocation_id(&context(serde_json::json!({"userId":"user-7"})), "olo-op-1")
+        );
+        assert_ne!(
+            key,
+            invocation_id(
+                &context(serde_json::json!({"agentId":"agent-b"})),
+                "olo-op-1"
+            )
+        );
+        assert_ne!(
+            key,
+            invocation_id(
+                &context(serde_json::json!({"tenantId":"10000000-0000-4000-8000-000000000002"})),
+                "olo-op-1"
+            )
+        );
+        assert_ne!(
+            key,
+            invocation_id(&context(serde_json::json!({})), "olo-op-2")
+        );
+    }
 }
