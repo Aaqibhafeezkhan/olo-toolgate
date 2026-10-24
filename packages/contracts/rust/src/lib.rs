@@ -57,6 +57,12 @@ pub struct BundlePublishRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rollback_of: Option<u64>,
 }
+/// Durable caller-scoped cancellation acknowledgement.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CancellationAccepted {
+    pub cancelled: bool,
+}
 /// Bounded redacted device activity for OS-authenticated local status inspection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2916,6 +2922,74 @@ pub struct SdkBuilderStatus {
     pub configured: bool,
     pub max_source_characters: u64,
     pub groups: Vec<SdkBuilderGroup>,
+}
+/// Canonical ServiceAudience wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServiceAudience {
+    #[serde(rename = "olo-memory")]
+    OloMemory,
+    #[serde(rename = "olo-rag")]
+    OloRag,
+}
+/// Coalesced tenant revocation feed snapshot. Services fail closed if polling becomes stale.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServiceAuthorizationEpoch {
+    pub tenant_id: String,
+    pub authorization_epoch: u64,
+    pub observed_at_unix_ms: u64,
+}
+/// Purpose-specific signed downstream authorization.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermit {
+    pub jws: String,
+}
+/// Control-issued exact-request authorization for a downstream service; times are Unix milliseconds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaims {
+    pub iss: String,
+    pub aud: ServiceAudience,
+    pub tenant_id: String,
+    pub sub: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub act: Option<String>,
+    pub mode: v2::RequestMode,
+    pub operation: String,
+    pub resources: Vec<ResourceDescriptor>,
+    pub request_fingerprint: String,
+    pub executor_key_sha256: String,
+    pub invocation_id: String,
+    pub nonce: String,
+    pub authorization_epoch: u64,
+    pub iat: u64,
+    pub exp: u64,
+    pub execution_nonce: String,
+}
+/// Single-use downstream write permit was consumed under current authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitConsumed {
+    pub authorized: bool,
+}
+/// Service compares these request facts before its write, then consumes the nonce online.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitConsumption {
+    pub permit: ServicePermit,
+    pub operation: String,
+    pub resources: Vec<ResourceDescriptor>,
+    pub request_fingerprint: String,
+    pub executor_key_sha256: String,
+}
+/// Executor request for downstream authorization; scope comes exclusively from the admitted invocation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitIssue {
+    pub invocation_id: String,
+    pub fencing_token: String,
+    pub audience: ServiceAudience,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! The host's calls to Control under its workload certificate. Per invocation (platform-requirements.md §11.3,
-//! §12.8): claim the permit's nonce, fetch a secret for a running invocation, and report the
+//! The host's calls to Control under its workload certificate. Per invocation (platform-requirements.md ÃÆ’â€Å¡§11.3,
+//! ÃÆ’â€Å¡§12.8): claim the permit's nonce, fetch a secret for a running invocation, and report the
 //! outcome. As an enrolled device (`device`): enroll, check in, register and fetch content. The
 //! certificate is either configured or the one enrollment issued, swapped in as it renews.
 
@@ -49,6 +49,7 @@ pub struct Control {
     workload: Option<crate::workload_identity::Workload>,
     roots: Option<Vec<reqwest::Certificate>>,
     client: std::sync::RwLock<reqwest::Client>,
+    identity: std::sync::RwLock<Option<Vec<u8>>>,
 }
 
 impl Control {
@@ -98,6 +99,7 @@ impl Control {
             url: config.url.trim_end_matches('/').to_string(),
             roots,
             client: std::sync::RwLock::new(client),
+            identity: std::sync::RwLock::new(identity),
         })
     }
 
@@ -142,9 +144,33 @@ impl Control {
         }
         let client = build(self.roots.as_ref(), Some(pem))?;
         *self.client.write().unwrap_or_else(|e| e.into_inner()) = client;
+        *self.identity.write().unwrap_or_else(|e| e.into_inner()) = Some(pem.to_vec());
         Ok(())
     }
 
+    /// The host identity stays in the broker; it is never delivered to package code.
+    pub fn service_identity(&self) -> Result<reqwest::Identity, String> {
+        let pem = self.identity.read().unwrap_or_else(|e| e.into_inner());
+        reqwest::Identity::from_pem(pem.as_deref().ok_or("executor mTLS identity required")?)
+            .map_err(|_| "invalid executor identity".into())
+    }
+    pub async fn service_permit(
+        &self,
+        invocation: &str,
+        fence: &str,
+        audience: olo_toolgate_contracts::ServiceAudience,
+    ) -> Result<olo_toolgate_contracts::ServicePermit, ControlError> {
+        self.post(
+            "/service-permits/issue",
+            &olo_toolgate_contracts::ServicePermitIssue {
+                invocation_id: invocation.into(),
+                fencing_token: fence.into(),
+                audience,
+            },
+            None,
+        )
+        .await
+    }
     fn client(&self) -> reqwest::Client {
         self.client
             .read()

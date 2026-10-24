@@ -13,22 +13,23 @@
 
 use crate::control::Control;
 use crate::egress::{self, AddressPolicy, AddressRefused};
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use olo_toolgate_contracts::v2::PrivateRangeApproval;
 use olo_toolgate_contracts::v2::{
     AuthType, DestinationScheme, EgressMode, HttpAuthDeclaration, HttpMethod, RouteDeclaration,
     SecretDeclaration, ServiceDestination, ValueType,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Request headers a tool may never set, whatever the route allows (§11.8.5).
-const FORBIDDEN: [&str; 10] = [
+/// Request headers a tool may never set, whatever the route allows (ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.8.5).
+const FORBIDDEN: [&str; 11] = [
     "authorization",
+    "toolgate-service-permit",
     "proxy-authorization",
     "cookie",
     "host",
@@ -40,8 +41,9 @@ const FORBIDDEN: [&str; 10] = [
     "upgrade",
 ];
 /// Response headers removed before the reply reaches the tool.
-const STRIPPED: [&str; 4] = [
+const STRIPPED: [&str; 5] = [
     "set-cookie",
+    "toolgate-service-permit",
     "set-cookie2",
     "www-authenticate",
     "proxy-authenticate",
@@ -58,7 +60,7 @@ pub struct Invocation {
     pub private_ranges: Vec<PrivateRangeApproval>,
     pub auths: Vec<HttpAuthDeclaration>,
     pub secrets: Vec<SecretDeclaration>,
-    /// Handle → secret name, for secrets delivered into the sandbox.
+    /// Handle ÃÆ’Æ’¢ÃÆ’¢ââ€Å¡¬ ÃÆ’¢ââ€Å¡¬ââ€Å¾¢ secret name, for secrets delivered into the sandbox.
     pub secret_handles: HashMap<String, String>,
     pub development_loopback_http: bool,
     pub control: Arc<Control>,
@@ -375,7 +377,24 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     if let Ok(ip) = destination.host.trim_matches(['[', ']']).parse() {
         policy.check(ip).map_err(|e| refused(e.0))?;
     }
-    let client = {
+    let service_audience = match destination.id.as_str() {
+        "olo-memory" => Some(olo_toolgate_contracts::ServiceAudience::OloMemory),
+        "olo-rag" => Some(olo_toolgate_contracts::ServiceAudience::OloRag),
+        _ => None,
+    };
+    if service_audience.is_some() && (plain || auth.is_some()) {
+        return Err(refused(
+            "service permits require mTLS HTTPS without package credentials",
+        ));
+    }
+    let client = if service_audience.is_some() {
+        egress::client_with_identity(
+            destination,
+            policy.clone(),
+            Some(invocation.control.service_identity().map_err(refused)?),
+        )
+        .map_err(refused)?
+    } else {
         let mut clients = invocation.clients.lock().unwrap();
         match clients.get(&destination.id) {
             Some(c) => c.clone(),
@@ -387,6 +406,21 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         }
     };
 
+    if let Some(audience) = service_audience {
+        let permit = invocation
+            .control
+            .service_permit(
+                &invocation.invocation_id,
+                &invocation.fencing_token,
+                audience,
+            )
+            .await
+            .map_err(|_| refused("downstream service authorization refused"))?;
+        let mut value = reqwest::header::HeaderValue::from_str(&permit.jws)
+            .map_err(|_| refused("invalid service permit"))?;
+        value.set_sensitive(true);
+        outgoing.insert("toolgate-service-permit", value);
+    }
     // Credentials go in last, after every check, and never into the reply.
     if let Some(auth) = auth {
         let value = credential(invocation, auth).await.map_err(refused)?;
@@ -422,6 +456,9 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         .timeout(timeout);
     if let Some(bytes) = request_body {
         request = request.body(bytes);
+    }
+    if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
+        return Err(refused("the invocation has ended"));
     }
     let response = request.send().await.map_err(failure)?;
     let status = response.status().as_u16();
@@ -516,7 +553,7 @@ async fn credential(invocation: &Invocation, auth: &HttpAuthDeclaration) -> Resu
                         return Err(format!(
                             "auth {} needs a secret {{username, password}} or user:password",
                             auth.id
-                        ))
+                        ));
                     }
                 },
                 _ if value.contains(':') => value,
@@ -524,7 +561,7 @@ async fn credential(invocation: &Invocation, auth: &HttpAuthDeclaration) -> Resu
                     return Err(format!(
                         "auth {} needs a secret {{username, password}} or user:password",
                         auth.id
-                    ))
+                    ));
                 }
             };
             Ok(format!("Basic {}", STANDARD.encode(pair)))
@@ -711,18 +748,22 @@ mod tests {
             expand("/c/{code:[A-Z]{3}}", &json!({"code": "EUR"})).unwrap(),
             "/c/EUR"
         );
-        assert!(expand("/items/{id:[0-9]+}", &json!({"id": "4a"}))
-            .unwrap_err()
-            .contains("pattern"));
+        assert!(
+            expand("/items/{id:[0-9]+}", &json!({"id": "4a"}))
+                .unwrap_err()
+                .contains("pattern")
+        );
         for bad in ["..", ".", "a/b", "a%2Fb", "%2e%2e", ""] {
             assert!(
                 expand("/items/{id}", &json!({ "id": bad })).is_err(),
                 "{bad}"
             );
         }
-        assert!(expand("/items/{id}", &json!({}))
-            .unwrap_err()
-            .contains("missing"));
+        assert!(
+            expand("/items/{id}", &json!({}))
+                .unwrap_err()
+                .contains("missing")
+        );
         assert!(expand("/items", &json!({"id": "1"})).is_err());
     }
 }

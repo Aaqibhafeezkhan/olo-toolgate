@@ -4,6 +4,9 @@ package io.ololabs.toolgate.control.application;
 import io.ololabs.toolgate.contracts.*;
 /** Dedicated effect-capability key boundary, independent from policy and identity signing keys. */
 public interface EffectSigner {
+    default ServicePermit signService(ServicePermitClaims claims){throw Failure.unavailable();}
+    default ServicePermitClaims verifyService(ServicePermit permit){throw Failure.unavailable();}
+    default java.util.Map<String,Object> servicePublicKey(){throw Failure.unavailable();}
     EnterpriseSignedPermit sign(EnterprisePermitClaims claims);
     EnterprisePermitClaims verify(EnterpriseSignedPermit permit);
     /** v2 invocation permits for Tool Hosts (platform-requirements.md §11.2): the same key, typ toolgate-invocation-permit+jws. */

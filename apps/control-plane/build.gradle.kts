@@ -14,6 +14,7 @@ check(initialConfiguration.matches(Regex("[A-Za-z0-9-]+"))) { "Invalid initial c
 val initialConfigurationDirectory = rootProject.file("config/initial/$initialConfiguration")
 val contractsVersion = providers.gradleProperty("contractsVersion").getOrElse(rootProject.file("packages/contracts/VERSION").readText().trim())
 dependencies {
+    testImplementation(project(":service-authorization"))
     implementation(enforcedPlatform(libs.quarkus.bom))
     listOf("rest-jackson", "jdbc-postgresql", "flyway", "smallrye-jwt", "smallrye-health",
         "micrometer-registry-prometheus", "opentelemetry", "logging-json", "smallrye-openapi")

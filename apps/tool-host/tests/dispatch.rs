@@ -10,11 +10,11 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rsa::pkcs8::{EncodePublicKey, LineEnding};
 use rsa::signature::{SignatureEncoding, Signer};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -37,6 +37,8 @@ call = {"route": "orders.get", "method": "GET", "destination": "acme-api",
 operation, request = "ROUTE_CALL", call
 if mode == 1:
     call["headers"]["Authorization"] = "Bearer stolen"
+if mode == 5:
+    call["headers"]["Toolgate-Service-Permit"] = "forged"
 if mode == 3:
     operation, request = "FILES_READ", {"path": "notes.txt"}
 if mode == 4:
@@ -563,6 +565,7 @@ async fn the_broker_refuses_what_the_route_does_not_allow() {
     for (mode, reason) in [
         (1, "header Authorization may not be set by a tool"),
         (3, "device files are not available on a Tool Host"),
+        (5, "header Toolgate-Service-Permit may not be set by a tool"),
         (4, "route orders.delete is not granted to this invocation"),
     ] {
         let arguments = json!({"orderId": "123456", "since": mode});

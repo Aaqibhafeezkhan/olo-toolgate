@@ -37,6 +37,10 @@ export interface BundlePublishRequest {
   readonly gracePolicyIds?: ReadonlyArray<string>;
   readonly rollbackOf?: number;
 }
+/** Durable caller-scoped cancellation acknowledgement. */
+export interface CancellationAccepted {
+  readonly cancelled: boolean;
+}
 /** Bounded redacted device activity for OS-authenticated local status inspection. */
 export interface ClientActivity {
   readonly active: ReadonlyArray<ClientCommandActivity>;
@@ -1731,6 +1735,54 @@ export interface SdkBuilderStatus {
 }
 export type SecretReference = string;
 export type SemanticVersion = string;
+export type ServiceAudience = "olo-memory" | "olo-rag";
+/** Coalesced tenant revocation feed snapshot. Services fail closed if polling becomes stale. */
+export interface ServiceAuthorizationEpoch {
+  readonly tenantId: string;
+  readonly authorizationEpoch: number;
+  readonly observedAtUnixMs: number;
+}
+/** Purpose-specific signed downstream authorization. */
+export interface ServicePermit {
+  readonly jws: string;
+}
+/** Control-issued exact-request authorization for a downstream service; times are Unix milliseconds. */
+export interface ServicePermitClaims {
+  readonly iss: string;
+  readonly aud: ServiceAudience;
+  readonly tenantId: string;
+  readonly sub: string;
+  readonly act?: string;
+  readonly mode: V2.RequestMode;
+  readonly operation: string;
+  readonly resources: ReadonlyArray<ResourceDescriptor>;
+  readonly requestFingerprint: string;
+  readonly executorKeySha256: string;
+  readonly invocationId: string;
+  readonly nonce: string;
+  readonly authorizationEpoch: number;
+  readonly iat: number;
+  readonly exp: number;
+  readonly executionNonce: string;
+}
+/** Single-use downstream write permit was consumed under current authority. */
+export interface ServicePermitConsumed {
+  readonly authorized: boolean;
+}
+/** Service compares these request facts before its write, then consumes the nonce online. */
+export interface ServicePermitConsumption {
+  readonly permit: ServicePermit;
+  readonly operation: string;
+  readonly resources: ReadonlyArray<ResourceDescriptor>;
+  readonly requestFingerprint: string;
+  readonly executorKeySha256: string;
+}
+/** Executor request for downstream authorization; scope comes exclusively from the admitted invocation. */
+export interface ServicePermitIssue {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly audience: ServiceAudience;
+}
 export type Sha256 = string;
 /** Endpoint identity foundation wire model. */
 export interface SignedClientDiscovery {

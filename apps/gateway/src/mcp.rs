@@ -5,13 +5,13 @@
 //! Only MCP 2026-07-28 is served. Session-era clients (`initialize`, or an
 //! older `MCP-Protocol-Version` without a `_meta` version) get -32022 listing
 //! the supported version.
-use crate::http::{error, parse, single_header, status, AppState};
+use crate::http::{AppState, error, parse, single_header, status};
 use crate::unix_ms;
 use axum::{
+    Json,
     extract::{Request, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    Json,
 };
 use base64::Engine;
 use olo_toolgate_contracts::v2::{
@@ -21,8 +21,8 @@ use olo_toolgate_contracts::{
     AuthorizationRequest, EnterpriseInvocationState, ErrorCode, RemoteToolState,
     RemoteToolSubmission,
 };
-use serde_json::{json, Value};
-use std::sync::{atomic::Ordering, Arc};
+use serde_json::{Value, json};
+use std::sync::{Arc, atomic::Ordering};
 
 /// The stateless core version.
 pub(crate) const MODERN_VERSION: &str = "2026-07-28";
@@ -187,6 +187,30 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             json!({"supportedVersions":supported_versions(),"capabilities":json!({"tools":{}}),"ttlMs":0,"cacheScope":"private"}),
         ),
         "tools/list" => tools_list(&s, &context, &id).await,
+        "olo/invocations/cancel" => {
+            if let Some(operation) = params["operationId"]
+                .as_str()
+                .filter(|v| !v.is_empty() && v.len() <= 128)
+            {
+                let mut cancellation = context;
+                cancellation.request_id =
+                    crate::http::invocation_id(&cancellation, &json!(operation).to_string());
+                s.gateway
+                    .authority
+                    .cancel(&cancellation)
+                    .await
+                    .map(|v| json!(v))
+                    .map_err(|code| error(code, &correlation.request_id))
+            } else {
+                Err(rpc_error(
+                    StatusCode::BAD_REQUEST,
+                    id.clone(),
+                    -32602,
+                    "Invalid operation id",
+                    Value::Null,
+                ))
+            }
+        }
         "tools/call" => {
             tools_call(
                 &s,
@@ -361,7 +385,7 @@ async fn tools_call(
                     -32000,
                     "Tool permit refused",
                     json!({"code":code}),
-                ))
+                ));
             }
             Ok(permit) => {
                 let dispatch = Dispatch {
@@ -442,7 +466,7 @@ async fn tools_call(
                     -32000,
                     "Local tool execution failed",
                     json!({"code":response.record.error.unwrap_or(ErrorCode::Timeout),"requestId":context.request_id}),
-                ))
+                ));
             }
             _ => {}
         }

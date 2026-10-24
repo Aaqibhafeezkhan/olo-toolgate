@@ -98,6 +98,8 @@ public final class EnterpriseOperations {
         String json=codec.json(m);if(json.length()<=4096)return json;m.remove("resources");return codec.json(m);}
     private void audit(Store.Session tx,DirectoryService.Actor actor,String operation,EnterpriseInvocation i){tx.audit(actor.id(),operation,"invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest(),evidence(i));}
     private void fresh(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation i,long now){
+        Long credentialDeadline=tx.enterprise().userCredentialDeadline(i.id());
+        if(credentialDeadline!=null&&credentialDeadline<=now)throw ManagementAccess.denied();
         if(i.expiresAtUnixMs()<=now||i.authorizationEpoch()!=tx.enterprise().authorizationEpoch())throw ManagementAccess.denied();
         var decision=decide(tenant,tx,i.evaluation(),now,true);
         if(decision.decision()==Decision.ASK){var approval=tx.enterprise().approval(approvalId(i.id()));
@@ -136,10 +138,12 @@ public final class EnterpriseOperations {
         }
     }
     private Store.Reply submitOnce(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){String document=codec.json(request)+(chosen==null?"":"\n"+chosen);
-        return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
+        return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);if(tx.enterprise().operationCancelled(request.context().requestId()))throw Failure.conflict();var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
             // A replay keeps the device the first submission was placed on, whatever the pool's load is now.
             var placed=tx.enterprise().invocation(request.context().requestId());
             var e=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),request.context(),chosen!=null?chosen:placed!=null?placed.evaluation().context().deviceId():placement.place(tx,request.context(),now,request.request(),request.toolDigest(),request.packageDigest()),request.request(),request.toolDigest(),request.packageDigest(),now);
+            Long credentialExpiry=request.context().expiresAtUnixMs();
+            if(credentialExpiry!=null){if(credentialExpiry<=now)throw ManagementAccess.denied();tx.enterprise().userCredentialDeadline(e.context().requestId(),credentialExpiry);}
             String digest=requestDigest(e,request.downstreamIdempotencyKey());var previous=tx.enterprise().invocation(e.context().requestId());
             if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();previous=renewed(tx,actor,previous,e.context(),now);previous=reconciled(tx,actor,previous,now);decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
             if(tx.enterprise().invocationsSince(Math.max(0,now-lifetime))>=capacity)throw Failure.conflict();var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,now,false,budgets);long epoch=tx.enterprise().authorizationEpoch();
@@ -164,7 +168,7 @@ public final class EnterpriseOperations {
             else if(i.state()!=EnterpriseInvocationState.QUEUED)throw Failure.conflict();
             var decision=decide(tenant,tx,i.evaluation(),now,true);String nonce=UUID.randomUUID().toString();long expires=Math.min(i.expiresAtUnixMs(),Math.min(now+10000,decision.validUntilUnixMs()));
             String evalDigest=DirectoryService.digest(codec.json(i.evaluation()));var e=i.evaluation();var approval=tx.enterprise().approval(approvalId(i.id()));var ids=approval==null?List.<String>of():List.of(approval.id());
-            var next=changed(i,EnterpriseInvocationState.RESERVED,nonce,i.completedResources(),null);tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nonce,i.id(),evalDigest,i.authorizationEpoch(),expires,null));tx.enterprise().saveInvocation(next,now,i.revision());tx.audit(actorId,"PERMIT_RESERVE","invocation:"+next.id(),next.revision(),e.context().requestId(),next.requestDigest(),evidence(next));
+            var next=changed(i,EnterpriseInvocationState.RESERVED,nonce,i.completedResources(),null);tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nonce,i.id(),evalDigest,i.authorizationEpoch(),now,expires,null));tx.enterprise().saveInvocation(next,now,i.revision());tx.audit(actorId,"PERMIT_RESERVE","invocation:"+next.id(),next.revision(),e.context().requestId(),next.requestDigest(),evidence(next));
             return new Lease(next,nonce,evalDigest,now,expires,ids);
     }
     String issuer(){return issuer;}
@@ -205,7 +209,7 @@ public final class EnterpriseOperations {
             fresh(tenant,tx,i,now);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
             tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest(),evidence(next));return reply(next,next.revision());});
     }
-    /** v2 consumption by a Tool Host (platform-requirements.md §11.3): the host's certificate names the device the permit is addressed to.
+    /** v2 consumption by a Tool Host (platform-requirements.md ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.3): the host's certificate names the device the permit is addressed to.
      *  The fencing token is the permit's nonce; reports and secret deliveries carry it back. */
     public Store.Reply consumeInvocation(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String document){var request=codec.model(document,io.ololabs.toolgate.contracts.v2.PermitConsumption.class);var claims=signer.verifyInvocation(request.permit());var target=claims.target();
         return authoritative(tenant,"device-effect",request.invocationId(),DirectoryService.digest(document),tx->{long now=now(tx);String authenticatedDevice=certificate.apply(tx);var i=invocation(tx,request.invocationId());var e=i.evaluation();var lease=tx.enterprise().nonce(claims.nonce());
@@ -301,6 +305,19 @@ public final class EnterpriseOperations {
             // Advance past hidden rows; bounded scanning prevents scope filters from leaking tenant totals.
             for(int scan=0;scan<100;scan++){var page=tx.enterprise().approvals(cursor,100);if(page.isEmpty())break;for(var a:page){cursor=a.id();if(approvalVisible(tx,actor,a,now))result.add(a);if(result.size()==limit){remaining=true;break;}}if(remaining||page.size()<100)break;}
             return reply(new EnterpriseApprovalPage(result,remaining?cursor:null),tx.load().revision());});
+    }
+    public Store.Reply cancelFromGateway(DirectoryService.Actor actor,String document){
+        gateway(actor);var c=codec.model(document,io.ololabs.toolgate.contracts.v2.RequestContext.class);
+        if(!actor.tenant().value().equals(c.tenantId()))throw ManagementAccess.denied();
+        return store.transaction(actor.tenant(),true,tx->{var i=tx.enterprise().invocation(c.requestId());
+            if(i!=null){var old=i.evaluation().context();if(old.mode()!=c.mode()||!Objects.equals(old.userId(),c.userId())||!Objects.equals(old.agentId(),c.agentId())||!old.chain().stream().map(h->h.agentId()).toList().equals(c.chain().stream().map(h->h.agentId()).toList()))throw ManagementAccess.denied();}
+            tx.enterprise().cancelOperation(c.requestId());
+            if(i!=null&&!Set.of(EnterpriseInvocationState.SUCCEEDED,EnterpriseInvocationState.FAILED,EnterpriseInvocationState.PARTIAL,EnterpriseInvocationState.OUTCOME_UNKNOWN,EnterpriseInvocationState.CANCELLED,EnterpriseInvocationState.EXPIRED).contains(i.state())){
+                var next=changed(i,i.state()==EnterpriseInvocationState.EXECUTING?EnterpriseInvocationState.OUTCOME_UNKNOWN:EnterpriseInvocationState.CANCELLED,i.reservedNonce(),i.completedResources(),i.resultDigest());
+                tx.enterprise().saveInvocation(next,now(tx),i.revision());audit(tx,actor,"INVOCATION_CANCEL",next);
+                var a=tx.enterprise().approval(approvalId(i.id()));if(a!=null)tx.enterprise().saveApproval(new EnterpriseApproval(a.id(),a.approvalType(),a.invocationId(),a.requestDigest(),a.authorizationEpoch(),a.directoryRevision(),a.obligationIds(),a.reviews(),EnterpriseApprovalState.CANCELLED,a.revision()+1,a.expiresAtUnixMs()),a.revision());
+            }
+            return reply(Map.of("cancelled",true),tx.load().revision());});
     }
     public Store.Reply cancel(DirectoryService.Actor actor,String id,long expected){if(actor.userId()==null)throw ManagementAccess.denied();
         return store.transaction(actor.tenant(),true,tx->{long now=now(tx);var i=invocation(tx,id);if(i.revision()!=expected)throw Failure.conflict();

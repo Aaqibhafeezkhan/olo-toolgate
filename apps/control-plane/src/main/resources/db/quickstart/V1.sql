@@ -76,9 +76,13 @@ CREATE TABLE control_enterprise_invocations(tenant_id varchar(128) REFERENCES co
 -- statement
 CREATE TABLE control_enterprise_approvals(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,approval_id varchar(128) NOT NULL,approval_type varchar(16) NOT NULL CHECK(approval_type IN('OPERATION','CONFIGURATION')),invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,approval_id));
 -- statement
-CREATE TABLE control_enterprise_nonces(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,nonce varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,evaluation_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,consumed_at bigint,PRIMARY KEY(tenant_id,nonce));
+CREATE TABLE control_enterprise_nonces(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,nonce varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,evaluation_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,issued_at bigint NOT NULL,expires_at bigint NOT NULL,consumed_at bigint,PRIMARY KEY(tenant_id,nonce));
 -- statement
 CREATE TABLE control_enterprise_adoptions(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,actor_type varchar(16) NOT NULL,actor_id varchar(128) NOT NULL,directory_revision bigint NOT NULL,snapshot_sequence bigint NOT NULL,graph_digest char(64) NOT NULL,observed_at bigint NOT NULL, authorization_epoch bigint NOT NULL DEFAULT 0,PRIMARY KEY(tenant_id,actor_type,actor_id));
+-- statement
+CREATE TABLE control_invocation_authority(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),invocation_id TEXT NOT NULL,expires_at bigint NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
+-- statement
+CREATE TABLE control_operation_cancellations(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),invocation_id TEXT NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
 -- statement
 CREATE TABLE control_credential_history(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,credential_sha256 TEXT NOT NULL CHECK(length(credential_sha256)=64),PRIMARY KEY(tenant_id,credential_sha256));
 -- statement
@@ -679,3 +683,8 @@ CREATE TRIGGER control_policy_bundles_capacity_update AFTER UPDATE ON control_po
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- END TENANT CAPACITY
+
+-- statement
+CREATE TRIGGER control_operation_cancellations_immutable_update BEFORE UPDATE ON control_operation_cancellations BEGIN SELECT RAISE(ABORT,'immutable cancellation'); END;
+-- statement
+CREATE TRIGGER control_operation_cancellations_immutable_delete BEFORE DELETE ON control_operation_cancellations BEGIN SELECT RAISE(ABORT,'immutable cancellation'); END;
