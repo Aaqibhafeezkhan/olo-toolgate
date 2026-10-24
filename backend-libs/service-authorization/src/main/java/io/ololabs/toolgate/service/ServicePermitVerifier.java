@@ -67,6 +67,9 @@ public final class ServicePermitVerifier {
             signature.update((parts[0]+"."+parts[1]).getBytes(StandardCharsets.US_ASCII));
             if(!signature.verify(Base64.getUrlDecoder().decode(parts[2])))throw denied();
             var claims=JSON.readValue(Base64.getUrlDecoder().decode(parts[1]),ServicePermitClaims.class);
+            // D1/D3: platform data is authorized for the user, never an agent actor. Background work only indexes.
+            if(claims.act()!=null || claims.mode()==io.ololabs.toolgate.contracts.v2.RequestMode.DELEGATED
+                || (claims.mode()==io.ololabs.toolgate.contracts.v2.RequestMode.SERVICE && !request.operation().equals("rag.update")))throw denied();
             long now=clock.millis();
             String digest=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(request.exactBody()));
             if(!issuer.equals(claims.iss())||audience!=claims.aud()||!request.tenant().equals(claims.tenantId())

@@ -30,11 +30,12 @@ class ServicePermitBridgeTest {
         var original=rig.request(id,"x");
         var body=rig.graph.codec.model("{\"toolId\":\"tool\",\"action\":\"memory.append\",\"arguments\":{\"path\":\"olo://"+rig.gateway.tenant().value()+"/conversation/c1\"}}",AuthorizationRequest.class);
         var c=original.context();
-        var bound=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),c.delegatedSessionEpoch(),EnterpriseConformanceTest.NOW+15000,c.bindingId(),c.credentialSha256());
+        var bound=new RequestContext(c.requestId(),c.tenantId(),RequestMode.HUMAN,CredentialKind.STATIC_TOKEN,null,c.userId(),null,null,List.of(),c.sessionEpoch(),null,null,EnterpriseConformanceTest.NOW+15000,c.bindingId(),null);
         return new EnterpriseInvocationRequest(bound,body,original.toolDigest(),original.packageDigest(),null);
     }
+    Store.Reply submit(EnterpriseInvocationRequest request){return rig.operations.submitHuman(new DirectoryService.Actor(rig.gateway.tenant(),"d".repeat(64),false,false,"alice"),request,"device");}
     EnterpriseInvocation start(String id){
-        var i=rig.graph.codec.model(rig.operations.submit(rig.gateway,rig.graph.codec.json(request(id))).body(),EnterpriseInvocation.class);
+        var i=rig.graph.codec.model(submit(request(id)).body(),EnterpriseInvocation.class);
         return rig.consume(rig.reserve(i));
     }
     ServicePermit issue(EnterpriseInvocation i){return rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",KEY,
@@ -42,7 +43,7 @@ class ServicePermitBridgeTest {
     ServicePermitConsumption consumption(ServicePermit p){var c=rig.signer.verifyService(p);return new ServicePermitConsumption(p,c.operation(),c.resources(),c.requestFingerprint(),KEY);}
     @Test void admittedIdentityScopeAndBodyReachTheServiceAndTheNonceIsSingleUse(){
         var i=start("service-write");var p=issue(i);assertEquals(p,issue(i));var c=rig.signer.verifyService(p);
-        assertEquals("alice",c.sub());assertEquals("agent",c.act());assertEquals(rig.gateway.tenant().value(),c.tenantId());
+        assertEquals("alice",c.sub());assertNull(c.act());assertEquals(rig.gateway.tenant().value(),c.tenantId());
         assertEquals(i.evaluation().resources(),c.resources());assertEquals(i.evaluation().argumentsDigest(),c.requestFingerprint());
         assertEquals(15000,c.exp()-c.iat());
         permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(p)));
@@ -64,10 +65,10 @@ class ServicePermitBridgeTest {
         assertThrows(Failure.class,()->permits.issue(rig.gateway.tenant(),tx->"other",KEY,rig.graph.codec.json(new ServicePermitIssue("service-forgery","wrong-fence",ServiceAudience.olo_memory))));
     }
     @Test void queuedAndApprovalCallsCannotObtainAPermit(){
-        var queued=rig.graph.codec.model(rig.operations.submit(rig.gateway,rig.graph.codec.json(request("queued"))).body(),EnterpriseInvocation.class);
+        var queued=rig.graph.codec.model(submit(request("queued")).body(),EnterpriseInvocation.class);
         assertThrows(Failure.class,()->issue(queued));
         rig.graph.policy("ask",Decision.ASK);rig.saveGraph();
-        var waiting=rig.graph.codec.model(rig.operations.submit(rig.gateway,rig.graph.codec.json(request("waiting"))).body(),EnterpriseInvocation.class);
+        var waiting=rig.graph.codec.model(submit(request("waiting")).body(),EnterpriseInvocation.class);
         assertThrows(Failure.class,()->issue(waiting));
     }
     @Test void cancelledExecutionCannotConsumeItsPreviouslyIssuedPermit(){
@@ -96,7 +97,7 @@ class ServicePermitBridgeTest {
     @Test void cancellationBeforeSubmissionIsDurableAndNeverCreatesAnEffect(){
         var request=request("cancel-before-submit");
         rig.operations.cancelFromGateway(rig.gateway,rig.graph.codec.json(request.context()));
-        assertThrows(Failure.class,()->rig.operations.submit(rig.gateway,rig.graph.codec.json(request)));
+        assertThrows(Failure.class,()->submit(request));
         assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().invocation(request.context().requestId())));
         assertEquals(Boolean.TRUE,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().operationCancelled(request.context().requestId())));
     }

@@ -66,6 +66,8 @@ pub struct Invocation {
     pub control: Arc<Control>,
     /// Set when the invocation ends; the broker refuses everything afterwards.
     pub closed: AtomicBool,
+    /// A single-use downstream write capability was dispatched; a lost/error reply needs reconciliation.
+    pub service_effect_started: AtomicBool,
     clients: Mutex<HashMap<String, reqwest::Client>>,
 }
 
@@ -97,6 +99,7 @@ impl Invocation {
             development_loopback_http,
             control,
             closed: AtomicBool::new(false),
+            service_effect_started: AtomicBool::new(false),
             clients: Mutex::new(HashMap::new()),
         }
     }
@@ -406,6 +409,8 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         }
     };
 
+    let service_write =
+        service_audience.is_some() && !matches!(path.as_str(), "/v1/memory.read" | "/v1/rag.query");
     if let Some(audience) = service_audience {
         let permit = invocation
             .control
@@ -459,6 +464,11 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     }
     if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
         return Err(refused("the invocation has ended"));
+    }
+    if service_write {
+        invocation
+            .service_effect_started
+            .store(true, Ordering::SeqCst);
     }
     let response = request.send().await.map_err(failure)?;
     let status = response.status().as_u16();

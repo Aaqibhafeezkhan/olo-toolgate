@@ -1073,3 +1073,18 @@ async fn cancellation_uses_authenticated_identity_and_the_original_operation_key
     assert!(a.submission.lock().unwrap().is_none());
     assert_eq!(a.reservations.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn identity_extension_reports_only_authenticated_binding_without_authorizing_a_tool() {
+    let a = Arc::new(Authority::default());
+    let (code, body) = call(runtime_router(state(a.clone())), mcp("olo/identity", None)).await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(body["result"]["tenantId"], context().tenant_id);
+    assert_eq!(body["result"]["agentId"], context().agent_id.unwrap());
+    assert_eq!(body["result"]["userId"], context().user_id.unwrap());
+    assert_eq!(body["result"]["mode"], "DELEGATED");
+    assert_eq!(body["result"]["ttlMs"], 0);
+    assert!(body["result"].get("credentialSha256").is_none());
+    assert!(a.submission.lock().unwrap().is_none());
+    assert_eq!(a.reservations.load(Ordering::SeqCst), 0);
+}

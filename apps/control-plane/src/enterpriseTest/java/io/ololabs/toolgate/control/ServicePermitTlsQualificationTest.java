@@ -73,9 +73,9 @@ class ServicePermitTlsQualificationTest {
                 try(var client=(SSLSocket)tls.getSocketFactory().createSocket("localhost",server.getLocalPort())){
                     client.startHandshake();assertEquals(1,client.getInputStream().read());
                 }
-                var principal=result.get(15,TimeUnit.SECONDS);assertEquals("alice",principal.sub());assertEquals("agent",principal.act());
+                var principal=result.get(15,TimeUnit.SECONDS);assertEquals("alice",principal.sub());assertNull(principal.act());
                 try(var connection=DriverManager.getConnection("jdbc:sqlite:"+storage);var rows=connection.createStatement().executeQuery("SELECT tenant,subject,actor FROM effects")){
-                    assertTrue(rows.next());assertEquals(rig.gateway.tenant().value(),rows.getString(1));assertEquals("alice",rows.getString(2));assertEquals("agent",rows.getString(3));assertFalse(rows.next());
+                    assertTrue(rows.next());assertEquals(rig.gateway.tenant().value(),rows.getString(1));assertEquals("alice",rows.getString(2));assertNull(rows.getString(3));assertFalse(rows.next());
                 }
             } finally {pool.shutdownNow();}
         }

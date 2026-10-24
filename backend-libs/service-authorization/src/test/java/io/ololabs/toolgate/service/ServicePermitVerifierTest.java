@@ -67,4 +67,15 @@ class ServicePermitVerifierTest {
         for(var bad:List.of(signed("toolgate-effect-permit+jws","effect-key",c),signed("olo-service-permit+jws","unknown-key",c)))
             assertThrows(SecurityException.class,()->verifier.authorizeKey(bad,request("memory.read"),EXECUTOR));
     }
+    @Test void agentActorsAndServiceMemoryAccessCannotAuthorizePlatformData()throws Exception{
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var original=permit("memory.read");
+        var c=json.readValue(Base64.getUrlDecoder().decode(original.jws().split("\\.")[1]),ServicePermitClaims.class);
+        for(var mode:List.of(RequestMode.DELEGATED,RequestMode.SERVICE)) {
+            var bad=new ServicePermitClaims(c.iss(),c.aud(),c.tenantId(),c.sub(),mode==RequestMode.DELEGATED?"agent":null,
+                mode,c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce());
+            var token=signed("olo-service-permit+jws","effect-key",bad);
+            assertThrows(SecurityException.class,()->verifier.authorizeKey(token,request("memory.read"),EXECUTOR));
+        }
+    }
 }
