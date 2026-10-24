@@ -13,14 +13,14 @@
 
 use crate::control::Control;
 use crate::egress::{self, AddressPolicy, AddressRefused};
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use olo_toolgate_contracts::v2::PrivateRangeApproval;
 use olo_toolgate_contracts::v2::{
     AuthType, DestinationScheme, EgressMode, HttpAuthDeclaration, HttpMethod, RouteDeclaration,
     SecretDeclaration, ServiceDestination, ValueType,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -758,22 +758,18 @@ mod tests {
             expand("/c/{code:[A-Z]{3}}", &json!({"code": "EUR"})).unwrap(),
             "/c/EUR"
         );
-        assert!(
-            expand("/items/{id:[0-9]+}", &json!({"id": "4a"}))
-                .unwrap_err()
-                .contains("pattern")
-        );
+        assert!(expand("/items/{id:[0-9]+}", &json!({"id": "4a"}))
+            .unwrap_err()
+            .contains("pattern"));
         for bad in ["..", ".", "a/b", "a%2Fb", "%2e%2e", ""] {
             assert!(
                 expand("/items/{id}", &json!({ "id": bad })).is_err(),
                 "{bad}"
             );
         }
-        assert!(
-            expand("/items/{id}", &json!({}))
-                .unwrap_err()
-                .contains("missing")
-        );
+        assert!(expand("/items/{id}", &json!({}))
+            .unwrap_err()
+            .contains("missing"));
         assert!(expand("/items", &json!({"id": "1"})).is_err());
     }
 }

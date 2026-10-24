@@ -8,18 +8,18 @@
 //! for a host the Gateway cannot reach: a laptop behind NAT runs tools exactly as a server does.
 
 use crate::broker::Invocation;
-use crate::config::{CEILING, Config};
+use crate::config::{Config, CEILING};
 use crate::control::{Control, ControlError};
 use crate::permit::{PermitError, Verifier};
 use crate::runner::{self, Launch, Ran};
 use crate::store::{Prepared, Store, StoreError};
 use crate::{digest, now_ms, random_hex};
-use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
-use axum::http::{StatusCode, header};
+use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
+use axum::Router;
 use olo_toolgate_contracts::v2::{
     AdmissionKind, AdmissionResponse, Dispatch, InvocationOutcome, InvocationPermitClaims,
     InvocationResultReport, Permission, PermitConsumption, RefusalReason, ResultFrame,
@@ -27,9 +27,9 @@ use olo_toolgate_contracts::v2::{
 };
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
+use std::sync::Arc;
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 
 pub struct Host {
     pub(crate) config: Config,
