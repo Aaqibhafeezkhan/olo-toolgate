@@ -187,6 +187,9 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             json!({"supportedVersions":supported_versions(),"capabilities":json!({"tools":{}}),"ttlMs":0,"cacheScope":"private"}),
         ),
         "tools/list" => tools_list(&s, &context, &id).await,
+        // Read-only authenticated binding evidence. Carries no credential and grants no tool access.
+        "olo/identity" => Ok(json!({"tenantId":context.tenant_id,"mode":context.mode,
+            "userId":context.user_id,"agentId":context.agent_id,"chain":context.chain,"ttlMs":0,"cacheScope":"private"})),
         "olo/invocations/cancel" => {
             if let Some(operation) = params["operationId"]
                 .as_str()

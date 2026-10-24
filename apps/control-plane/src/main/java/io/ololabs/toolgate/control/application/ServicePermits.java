@@ -28,6 +28,7 @@ public final class ServicePermits {
             if(admission==null||admission.consumedAt()==null)throw ManagementAccess.denied();
             operations.requireFresh(tenant,tx,i);
             String op=i.evaluation().action();
+            if(c.mode()==RequestMode.DELEGATED || (c.mode()==RequestMode.SERVICE&&!op.equals("rag.update")))throw ManagementAccess.denied();
             if(!audience(op).equals(request.audience())||i.evaluation().resources().isEmpty()
                 ||i.evaluation().resources().stream().anyMatch(r->r.kind()!=ResourceKind.CUSTOM||!r.locator().startsWith("olo://"+tenant.value()+"/")))throw ManagementAccess.denied();
             String subject=c.mode()==RequestMode.SERVICE?c.agentId():c.userId();

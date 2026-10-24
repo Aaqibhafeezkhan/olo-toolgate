@@ -32,6 +32,10 @@ args = inp["arguments"]
 mode = args.get("since", 0)
 if mode == 2:
     sys.exit(3)
+if mode == 6:
+    print(json.dumps({"kind":"RESULT","resultType":"complete","content":[],"isError":True,
+        "error":{"code":"OUTCOME_UNKNOWN","message":"commit acknowledgement lost","retryable":False}}), flush=True)
+    sys.exit(0)
 call = {"route": "orders.get", "method": "GET", "destination": "acme-api",
         "variables": {"orderId": args["orderId"]}, "query": {}, "headers": {"X-On-Behalf-Of": inp["claims"].get("UserName", "")}}
 operation, request = "ROUTE_CALL", call
@@ -700,6 +704,19 @@ async fn a_process_that_dies_is_failed_or_unknown_by_the_ledger_class() {
     assert_eq!(lines[1]["outcome"], "OUTCOME_UNKNOWN");
     assert_eq!(
         rig.seen.lock().unwrap().reports.last().unwrap()["outcome"],
+        "OUTCOME_UNKNOWN"
+    );
+}
+
+#[tokio::test]
+async fn an_explicit_uncertain_commit_is_not_downgraded_to_a_failed_tool() {
+    let rig = rig!();
+    let arguments = json!({"orderId": "123456", "since": 6});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[1]["outcome"], "OUTCOME_UNKNOWN");
+    assert_eq!(
+        rig.seen.lock().unwrap().reports[0]["outcome"],
         "OUTCOME_UNKNOWN"
     );
 }

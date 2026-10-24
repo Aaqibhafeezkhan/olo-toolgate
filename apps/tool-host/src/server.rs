@@ -8,18 +8,18 @@
 //! for a host the Gateway cannot reach: a laptop behind NAT runs tools exactly as a server does.
 
 use crate::broker::Invocation;
-use crate::config::{Config, CEILING};
+use crate::config::{CEILING, Config};
 use crate::control::{Control, ControlError};
 use crate::permit::{PermitError, Verifier};
 use crate::runner::{self, Launch, Ran};
 use crate::store::{Prepared, Store, StoreError};
 use crate::{digest, now_ms, random_hex};
+use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::Router;
 use olo_toolgate_contracts::v2::{
     AdmissionKind, AdmissionResponse, Dispatch, InvocationOutcome, InvocationPermitClaims,
     InvocationResultReport, Permission, PermitConsumption, RefusalReason, ResultFrame,
@@ -27,9 +27,9 @@ use olo_toolgate_contracts::v2::{
 };
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
+use std::sync::atomic::Ordering;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 
 pub struct Host {
     pub(crate) config: Config,
@@ -254,7 +254,7 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
     let claims = match host.verifier.verify(jws, now_ms()) {
         Ok(claims) => claims,
         Err(PermitError::Expired) => {
-            return Err(refusal(&claimed_id(jws), RefusalReason::PermitExpired))
+            return Err(refusal(&claimed_id(jws), RefusalReason::PermitExpired));
         }
         Err(PermitError::Invalid(why)) => {
             tracing::info!(target: "toolgate::audit", why, "permit invalid");
@@ -505,8 +505,27 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 tracing::warn!(invocation_id = %id, "run events still pending at the result report");
             }
             invocation.closed.store(true, Ordering::SeqCst);
-            let unknown = claims.requires_execution_ledger;
+            let service_write = invocation.service_effect_started.load(Ordering::SeqCst);
+            let unknown = claims.requires_execution_ledger || service_write;
             match ran {
+                Ran::Frame(frame)
+                    if frame.is_error
+                        && (service_write
+                            || frame
+                                .error
+                                .as_ref()
+                                .is_some_and(|e| e.code == "OUTCOME_UNKNOWN")) =>
+                {
+                    (
+                        InvocationOutcome::OutcomeUnknown,
+                        error_frame(
+                            "OUTCOME_UNKNOWN",
+                            "The downstream write may have committed; reconcile its storage receipt",
+                            false,
+                        ),
+                        None,
+                    )
+                }
                 Ran::Frame(frame) if frame.is_error => (InvocationOutcome::Failed, frame, None),
                 Ran::Frame(frame) => (InvocationOutcome::Completed, frame, None),
                 Ran::TimedOut if unknown => (
