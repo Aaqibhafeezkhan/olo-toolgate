@@ -253,7 +253,8 @@ class RuntimeTest {
                 @ToolPackage(id = "acme.keyed", name = "K", publisher = "Acme")
                 @Global(name = "Region", type = ValueType.STRING)
                 public class Tools {
-                    @ServerTool(name = "orders.cancel", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true)
+                    @ServerTool(name = "orders.cancel", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true,
+                            reconciliation = Reconciliation.MANUAL)
                     public java.util.Map<String, Object> cancel() { return java.util.Map.of(); }
                 }
                 """));

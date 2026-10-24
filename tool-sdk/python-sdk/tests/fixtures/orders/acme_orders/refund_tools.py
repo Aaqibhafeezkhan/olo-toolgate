@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated, Any, Dict
 
-from toolgate import (EffectSafety, ErrorDecl, KeyNamespace, Param, Secret, ToolContext, ValueType, idempotency,
+from toolgate import (EffectSafety, ErrorDecl, KeyNamespace, Param, Reconciliation, Secret, ToolContext, ValueType, idempotency,
                       reconcile, server_tool)
 
 
@@ -39,7 +39,7 @@ class RefundTools:
                  business_key_argument="refundKey",
                  errors=[ErrorDecl("PSP_BUSY", "The payment provider asked us to retry", retryable=True),
                          ErrorDecl("ALREADY_REFUNDED", "The order was already refunded")],
-                 toolsets="payments")
+                 toolsets="payments", reconciliation=Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @idempotency(header="Idempotency-Key")
     async def refund(self, order_id: Annotated[str, Param(name="orderId", description="Order number",
                                                           pattern="^[0-9]{6,12}$")],

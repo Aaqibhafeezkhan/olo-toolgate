@@ -23,7 +23,7 @@ from ..declarations import (ATTACHED_ATTRIBUTE, REGISTRY_ATTRIBUTE, Declaration,
                             Secret, ToolDeclaration, ToolPackageDeclaration, client_tool, destination, example,
                             http_auth, http_route, idempotency, reconcile, server_tool, tcp_destination,
                             tool_variables, device_file_access, authorization)
-from ..enums import AuthType, BusinessKey, EffectSafety, OpenWorld, SecretScope, ValueType
+from ..enums import AuthType, Reconciliation, BusinessKey, EffectSafety, OpenWorld, SecretScope, ValueType
 from ..jcs import canonical, sha256, sorted_utf16, utf16_key, utf16_length
 from . import schemas as S
 from .problems import BuildFailed, Problem, Site
@@ -579,6 +579,9 @@ class _Builder:
         d["execution"] = self.execution(t, site)
         if name in self.reconcilers:
             d["reconcileTool"] = self.reconcilers[name]
+        reconciliation = self.reconciliation(t, name, attached, site)
+        if reconciliation is not None:
+            d["reconciliation"] = reconciliation
         if is_client:
             if not t.tiers:
                 raise Problem(site, "a client tool needs at least one tier")
@@ -842,6 +845,26 @@ class _Builder:
             out["idempotencyHeader"] = idems[0].header
             out["idempotencyScope"] = idems[0].scope.value
         return out
+
+    def reconciliation(self, t: ToolDeclaration, name: str, attached: Sequence[Any], site: Site) -> Optional[str]:
+        """OLO M5.4: a tool with side effects declares how an unknown outcome is settled, consistently."""
+        r = t.reconciliation
+        if t.effect is EffectSafety.READ_ONLY:
+            if r is not None:
+                raise Problem(site, "read-only tool " + name + " declares reconciliation; it has no effect to reconcile")
+            return None
+        if r is None:
+            if t.effect in (EffectSafety.IDEMPOTENT, EffectSafety.NON_IDEMPOTENT):
+                raise Problem(site, "tool %s has side effects (effect = %s); declare reconciliation = DOWNSTREAM_IDEMPOTENCY,"
+                              " STATUS_LOOKUP or MANUAL" % (name, t.effect.value))
+            return None
+        if r is Reconciliation.STATUS_LOOKUP and name not in self.reconcilers:
+            raise Problem(site, "reconciliation = STATUS_LOOKUP needs a reconcile tool for " + name)
+        if (r is Reconciliation.DOWNSTREAM_IDEMPOTENCY and t.effect is not EffectSafety.IDEMPOTENT
+                and not any(isinstance(x, idempotency) for x in attached)):
+            raise Problem(site, "reconciliation = DOWNSTREAM_IDEMPOTENCY needs idempotency (a key the target deduplicates)"
+                          " or effect = IDEMPOTENT")
+        return r.value
 
     def execution(self, t: ToolDeclaration, site: Site) -> Dict[str, Any]:
         ceiling = 900_000 if t.async_ else 60_000

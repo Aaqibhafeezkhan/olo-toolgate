@@ -197,6 +197,8 @@ struct Authority {
     polls: AtomicUsize,
     /// A repeated call: the invocation already succeeded and Control holds the Tool Host's result.
     replayed: bool,
+    /// A repeated call whose invocation already ended in this state.
+    ended: Option<EnterpriseInvocationState>,
 }
 impl Authority {
     /// The host claims the call on the second poll and finishes it on the third.
@@ -342,7 +344,12 @@ impl RelayPort for Authority {
             i.evaluation.tool_digest = r.tool_digest.clone();
             i.evaluation.package_digest = r.package_digest.clone();
             i.expires_at_unix_ms = unix_ms().unwrap() + 60000;
-            i.state = if self.ask {
+            if self.ended.is_some() {
+                i.reconciliation = Some(ReconciliationMethod::Manual);
+            }
+            i.state = if let Some(ended) = self.ended.clone() {
+                ended
+            } else if self.ask {
                 EnterpriseInvocationState::PendingApproval
             } else if self.replayed {
                 EnterpriseInvocationState::Succeeded
@@ -620,6 +627,38 @@ async fn authoritative_timeout_is_bounded() {
     let (code, body) = call(runtime_router(s), req("/access/invocations", payload())).await;
     assert_eq!(code, StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(body["code"], "TIMEOUT");
+}
+/// OLO M5.4: a repeated key whose invocation ended reports the state, and nothing is dispatched again.
+#[tokio::test]
+async fn mcp_reports_an_ended_invocation_and_never_runs_it_again() {
+    for (ended, name) in [
+        (EnterpriseInvocationState::OutcomeUnknown, "OUTCOME_UNKNOWN"),
+        (EnterpriseInvocationState::Failed, "FAILED"),
+        (EnterpriseInvocationState::Cancelled, "CANCELLED"),
+        (EnterpriseInvocationState::Expired, "EXPIRED"),
+    ] {
+        let a = Arc::new(Authority {
+            ended: Some(ended),
+            ..Default::default()
+        });
+        let (code, body) = call(
+            runtime_router(state(a.clone())),
+            mcp("tools/call", Some("files.read")),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK, "{name}");
+        assert_eq!(body["result"]["structuredContent"]["state"], name);
+        assert_eq!(body["result"]["isError"], true);
+        assert_eq!(
+            body["result"]["structuredContent"]["reconciliation"],
+            "MANUAL"
+        );
+        assert!(
+            a.submission.lock().unwrap().is_none(),
+            "{name} was dispatched"
+        );
+        assert!(a.permit.lock().unwrap().is_none(), "{name} got a permit");
+    }
 }
 #[tokio::test]
 async fn mcp_uses_original_arguments_and_reports_approval_without_dispatch() {

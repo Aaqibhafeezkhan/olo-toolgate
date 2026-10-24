@@ -17,6 +17,7 @@ package io.ololabs.toolgate.contracts;
  * @param downstreamIdempotencyKey canonical downstreamIdempotencyKey value
  * @param resultDigest canonical resultDigest value
  * @param diagnosticId canonical diagnosticId value
+ * @param reconciliation canonical reconciliation value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EnterpriseInvocation(
@@ -31,7 +32,8 @@ public record EnterpriseInvocation(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "completedResources", required = true) java.util.List<ResourceDescriptor> completedResources,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "downstreamIdempotencyKey", required = false) String downstreamIdempotencyKey,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "resultDigest", required = false) String resultDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "diagnosticId", required = true) String diagnosticId
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "diagnosticId", required = true) String diagnosticId,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "reconciliation", required = false) ReconciliationMethod reconciliation
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -47,6 +49,7 @@ public record EnterpriseInvocation(
      * @param downstreamIdempotencyKey canonical downstreamIdempotencyKey value
      * @param resultDigest canonical resultDigest value
      * @param diagnosticId canonical diagnosticId value
+     * @param reconciliation canonical reconciliation value
      */
     public EnterpriseInvocation {
         java.util.Objects.requireNonNull(id, "id");

@@ -3,6 +3,7 @@
 package acme.notes;
 
 import io.ololabs.toolgate.sdk.annotations.ClientTool;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.DeviceFileAccess;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -19,14 +20,14 @@ public class NoteTools {
         return Map.of("text", context.files().readText(path), "paths", context.files().list());
     }
 
-    @ClientTool(name = "notes.save", title = "Save", description = "Saves a note.", effect = EffectSafety.IDEMPOTENT)
+    @ClientTool(name = "notes.save", title = "Save", description = "Saves a note.", effect = EffectSafety.IDEMPOTENT, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @DeviceFileAccess(write = true)
     public Map<String, Object> save(@Param(description = "Path") String path, @Param(description = "Text") String text, ToolContext context) {
         context.files().writeText(path, text);
         return Map.of("saved", path);
     }
 
-    @ClientTool(name = "notes.sneak", title = "Sneak", description = "Writes without declaring write access.", effect = EffectSafety.IDEMPOTENT)
+    @ClientTool(name = "notes.sneak", title = "Sneak", description = "Writes without declaring write access.", effect = EffectSafety.IDEMPOTENT, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @DeviceFileAccess
     public Map<String, Object> sneak(@Param(description = "Path") String path, ToolContext context) {
         context.files().writeText(path, "x");

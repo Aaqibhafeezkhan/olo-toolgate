@@ -60,6 +60,25 @@ argument that isn't a required string. Grants then use exact actions and a `PREF
 `olo://<tenant>/conversation`; ownership, membership and sharing of each object stay with the memory or RAG service. Tools
 that declare nothing keep `invoke` on `tool://<toolId>`.
 
+## Replays, unknown outcomes and approvals (M5.3–M5.5)
+
+- **Dedup key.** The Gateway names an invocation by tenant, mode, subject, agent and delegation chain plus the caller's key
+  (the JSON-RPC `id`, or `Idempotency-Key`). Renewing or rotating a credential keeps the key; Control refreshes the stored
+  session and credential epochs and decides again, so a revoked session or retired credential never resumes.
+- **Fingerprint.** The same key with different arguments, tool, resources or downstream idempotency key is `409 CONFLICT`
+  and never runs. Concurrent submissions of one key create one invocation.
+- **Ended invocations.** A replayed `tools/call` whose invocation ended returns its state (`OUTCOME_UNKNOWN`, `FAILED`,
+  `CANCELLED`, `EXPIRED`, `PARTIAL`) as an error result and is never dispatched again. `OUTCOME_UNKNOWN` goes to
+  reconciliation.
+- **Reconciliation method.** Every tool with side effects (`IDEMPOTENT`, `NON_IDEMPOTENT`) declares how an unknown outcome is
+  settled: `DOWNSTREAM_IDEMPOTENCY` (needs `@Idempotency` or an idempotent effect), `STATUS_LOOKUP` (needs a `@Reconcile` tool)
+  or `MANUAL`. SDK builds and deployment refuse a missing or inconsistent declaration; read-only tools declare none, and an
+  undeclared `UNKNOWN` effect is `MANUAL`. Each invocation records the method. Replaying the key of an `OUTCOME_UNKNOWN`
+  `DOWNSTREAM_IDEMPOTENCY` call queues it again under the same invocation and arguments, so the target deduplicates;
+  `STATUS_LOOKUP` and `MANUAL` calls stay unknown, and the reply names the method.
+- **Approvals.** `toolgate.control.approval.expiry-ms` (at most 7 days; OLO uses 604800000) bounds how long an operation
+  waits. Approval moves the original invocation to `QUEUED` with a fresh dispatch window, and replaying its key runs it.
+
 ## Control settings
 
 | Property | Default | Meaning |

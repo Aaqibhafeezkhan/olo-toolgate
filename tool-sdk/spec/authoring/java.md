@@ -39,6 +39,10 @@ Exact Java surface of the [authoring contract](README.md). Package `io.ololabs.t
 @Target(METHOD) @interface Authorization { String action(); String[] resources(); }
 ```
 
+`reconciliation` (`Reconciliation.DOWNSTREAM_IDEMPOTENCY`, `STATUS_LOOKUP` or `MANUAL`) is required on a `@ServerTool` or
+`@ClientTool` whose `effect` is `IDEMPOTENT` or `NON_IDEMPOTENT`: `DOWNSTREAM_IDEMPOTENCY` needs `@Idempotency` (or `IDEMPOTENT`),
+`STATUS_LOOKUP` needs a `@Reconcile` tool, and a `READ_ONLY` tool declares none. It tells ToolGate how an unknown outcome is settled.
+
 `@Authorization` gives the tool its single permission and per-call resources (descriptor `authorization`). Without it a tool
 is one `invoke` action on `tool://<toolId>`. Each resource template starts `<scheme>://{tenant}/`; ToolGate fills `{tenant}` with
 the verified tenant and every other `{name}` with the required string argument of that name, which must be an opaque id

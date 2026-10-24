@@ -504,6 +504,8 @@ public final class DescriptorProcessor extends AbstractProcessor {
             d.put("businessKey", businessKey(t, method, properties.keySet()));
             d.put("execution", execution(t, method));
             if (reconcilers.containsKey(name)) d.put("reconcileTool", reconcilers.get(name));
+            String reconciliation = reconciliation(t, method, name, reconcilers.containsKey(name));
+            if (reconciliation != null) d.put("reconciliation", reconciliation);
             if (isClient) d.put("tiers", tiers(client.tiers(), method));
 
             Set<String> routeIds = new TreeSet<>(unique(Arrays.asList(t.routes), "route", method));
@@ -736,6 +738,32 @@ public final class DescriptorProcessor extends AbstractProcessor {
             return m;
         }
 
+        /** OLO M5.4: a tool with side effects declares how an unknown outcome is settled, consistently with what it declares. */
+        private String reconciliation(Tool t, ExecutableElement method, String name, boolean lookup) {
+            io.ololabs.toolgate.sdk.annotations.Reconciliation r = t.reconciliation();
+            if (t.effect() == EffectSafety.READ_ONLY) {
+                if (r != io.ololabs.toolgate.sdk.annotations.Reconciliation.UNDECLARED) {
+                    throw new Problem(method, "read-only tool " + name + " declares reconciliation; it has no effect to reconcile");
+                }
+                return null;
+            }
+            if (r == io.ololabs.toolgate.sdk.annotations.Reconciliation.UNDECLARED) {
+                if (t.effect() == EffectSafety.IDEMPOTENT || t.effect() == EffectSafety.NON_IDEMPOTENT) {
+                    throw new Problem(method, "tool " + name + " has side effects (effect = " + t.effect()
+                            + "); declare reconciliation = DOWNSTREAM_IDEMPOTENCY, STATUS_LOOKUP or MANUAL");
+                }
+                return null;
+            }
+            if (r == io.ololabs.toolgate.sdk.annotations.Reconciliation.STATUS_LOOKUP && !lookup) {
+                throw new Problem(method, "reconciliation = STATUS_LOOKUP needs a @Reconcile tool for " + name);
+            }
+            if (r == io.ololabs.toolgate.sdk.annotations.Reconciliation.DOWNSTREAM_IDEMPOTENCY
+                    && method.getAnnotation(Idempotency.class) == null && t.effect() != EffectSafety.IDEMPOTENT) {
+                throw new Problem(method, "reconciliation = DOWNSTREAM_IDEMPOTENCY needs @Idempotency (a key the target deduplicates) or effect = IDEMPOTENT");
+            }
+            return r.name();
+        }
+
         private Map<String, Object> execution(Tool t, ExecutableElement method) {
             long ceiling = t.async ? 900_000 : 60_000;
             long duration = t.maxDurationMs == -1 ? (t.async ? 900_000 : 30_000) : t.maxDurationMs;
@@ -961,20 +989,21 @@ public final class DescriptorProcessor extends AbstractProcessor {
             long maxDurationMs, boolean stateless, int maxConcurrency, String[] routes, String[] tcp,
             io.ololabs.toolgate.sdk.annotations.BusinessKey requiresBusinessKey,
             io.ololabs.toolgate.sdk.annotations.KeyNamespace namespace, String businessKeyArgument,
-            boolean cancelIfAbandoned, ErrorDecl[] errors, String[] toolsets) {
+            boolean cancelIfAbandoned, ErrorDecl[] errors, String[] toolsets,
+            io.ololabs.toolgate.sdk.annotations.Reconciliation reconciliation) {
 
         static Tool of(ServerTool s) {
             return new Tool(s.title(), s.text(), s.description(), s.useWhen(), s.effect(), s.destructive(), s.openWorld(),
                     s.async(), s.maxDurationMs(), s.stateless(), s.maxConcurrency(), s.routes(), s.tcp(),
                     s.requiresBusinessKey(), s.businessKeyNamespace(), s.businessKeyArgument(), s.cancelIfAbandoned(),
-                    s.errors(), s.toolsets());
+                    s.errors(), s.toolsets(), s.reconciliation());
         }
 
         static Tool of(ClientTool c) {
             return new Tool(c.title(), c.text(), c.description(), c.useWhen(), c.effect(), c.destructive(), c.openWorld(),
                     c.async(), c.maxDurationMs(), c.stateless(), c.maxConcurrency(), new String[0], new String[0],
                     c.requiresBusinessKey(), c.businessKeyNamespace(), c.businessKeyArgument(), c.cancelIfAbandoned(),
-                    c.errors(), c.toolsets());
+                    c.errors(), c.toolsets(), c.reconciliation());
         }
     }
 

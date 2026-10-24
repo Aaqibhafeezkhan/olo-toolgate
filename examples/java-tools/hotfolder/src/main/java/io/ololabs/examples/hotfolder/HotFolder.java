@@ -3,6 +3,7 @@
 package io.ololabs.examples.hotfolder;
 
 import io.ololabs.toolgate.sdk.annotations.ClientTool;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.DeviceFileAccess;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.Example;
@@ -101,7 +102,7 @@ public class HotFolder {
     }
 
     @ClientTool(name = "write_text", title = "Write a text file", description = "Creates or replaces a text file.",
-            effect = EffectSafety.IDEMPOTENT)
+            effect = EffectSafety.IDEMPOTENT, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @DeviceFileAccess(write = true)
     @Example(arguments = "{\"path\":\"selftest.txt\",\"text\":\"ok\"}", expectedOutput = "{\"written\":true}")
     public Written writeText(@Param(description = "File path", maxLength = 1024) String path,
@@ -111,7 +112,7 @@ public class HotFolder {
     }
 
     @ClientTool(name = "append_text", title = "Append to a text file", description = "Appends text, creating the file when needed.",
-            effect = EffectSafety.NON_IDEMPOTENT)
+            effect = EffectSafety.NON_IDEMPOTENT, reconciliation = Reconciliation.MANUAL)
     @DeviceFileAccess(write = true)
     @Example(arguments = "{\"path\":\"selftest.txt\",\"text\":\"ok\"}", expectedOutput = "{\"written\":true}")
     public Written appendText(@Param(description = "File path", maxLength = 1024) String path,
@@ -120,7 +121,7 @@ public class HotFolder {
         return new Written(true);
     }
 
-    @ClientTool(name = "mkdir", title = "Create a folder", description = "Creates a folder inside the HotFolder.", effect = EffectSafety.IDEMPOTENT)
+    @ClientTool(name = "mkdir", title = "Create a folder", description = "Creates a folder inside the HotFolder.", effect = EffectSafety.IDEMPOTENT, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @DeviceFileAccess(write = true)
     @Example(arguments = "{\"path\":\"selftest\"}", expectedOutput = "{\"created\":true}")
     public Created mkdir(@Param(description = "Folder path", maxLength = 1024) String path, ToolContext context) {
@@ -130,7 +131,7 @@ public class HotFolder {
     }
 
     @ClientTool(name = "move", title = "Move a file", description = "Moves a file to a new path that does not exist yet.",
-            effect = EffectSafety.NON_IDEMPOTENT)
+            effect = EffectSafety.NON_IDEMPOTENT, reconciliation = Reconciliation.MANUAL)
     @DeviceFileAccess(write = true)
     @Example(arguments = "{\"path\":\"missing.txt\",\"destination\":\"moved.txt\"}", expectedOutput = "{\"moved\":false}")
     public Moved move(@Param(description = "File to move", maxLength = 1024) String path,
@@ -143,7 +144,7 @@ public class HotFolder {
     }
 
     @ClientTool(name = "copy", title = "Copy a file", description = "Copies a file to a new path that does not exist yet.",
-            effect = EffectSafety.NON_IDEMPOTENT)
+            effect = EffectSafety.NON_IDEMPOTENT, reconciliation = Reconciliation.MANUAL)
     @DeviceFileAccess(write = true)
     @Example(arguments = "{\"path\":\"missing.txt\",\"destination\":\"copied.txt\"}", expectedOutput = "{\"copied\":false}")
     public Copied copy(@Param(description = "File to copy", maxLength = 1024) String path,

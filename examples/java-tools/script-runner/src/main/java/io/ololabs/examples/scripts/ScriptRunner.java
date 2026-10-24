@@ -3,6 +3,7 @@
 package io.ololabs.examples.scripts;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Global;
@@ -79,7 +80,7 @@ public class ScriptRunner {
             effect = EffectSafety.NON_IDEMPOTENT, maxDurationMs = 60_000, maxConcurrency = 4,
             errors = {
                 @ErrorDecl(code = "SCRIPT_NOT_FOUND", description = "No allowlisted script has that name."),
-                @ErrorDecl(code = "SCRIPT_FAILED_TO_START", description = "The interpreter could not be started.")})
+                @ErrorDecl(code = "SCRIPT_FAILED_TO_START", description = "The interpreter could not be started.")}, reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"script\":\"../../etc/passwd\"}", expectedError = "INVALID_ARGUMENT")
     @Example(arguments = "{\"script\":\"cleanup.sh\",\"arguments\":[\"a && rm -rf /\"]}", expectedError = "INVALID_ARGUMENT")
     public ScriptRun run(

@@ -3,6 +3,7 @@
 package io.ololabs.examples.mocked.incidents;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -188,7 +189,7 @@ public class ServerRecovery {
                     + " repeat with the same reference returns the first result instead of acting twice.",
             useWhen = "Use it only after reading the crash report and runbook, and after the user approves the action.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
-            errors = @ErrorDecl(code = "HOST_NOT_FOUND", description = "No host or service has that name."))
+            errors = @ErrorDecl(code = "HOST_NOT_FOUND", description = "No host or service has that name."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"host\":\"app-02\",\"service\":\"payments-api\",\"action\":\"ROLLBACK_DEPLOY\",\"reference\":\"INC-5001-a1\"}")
     public Remediation remediate(
             @Param(description = "Host", maxLength = 64) String host,
@@ -241,7 +242,7 @@ public class ServerRecovery {
             description = "Sets an incident's status and adds a note to its timeline (mocked: nothing is stored). Stakeholders"
                     + " are notified on MITIGATED and RESOLVED.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
-            errors = @ErrorDecl(code = "INCIDENT_NOT_FOUND", description = "No open incident has that id."))
+            errors = @ErrorDecl(code = "INCIDENT_NOT_FOUND", description = "No open incident has that id."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"incidentId\":\"INC-5001\",\"status\":\"MITIGATED\",\"note\":\"Rolled back to 2.13.4\",\"reference\":\"u1\"}",
             expectedOutput = "{\"incidentId\":\"INC-5001\",\"status\":\"MITIGATED\",\"timelineEntry\":\"MITIGATED: Rolled back to 2.13.4\","
                     + "\"notified\":[\"#inc-5001\",\"payments-oncall\",\"status page\"]}")

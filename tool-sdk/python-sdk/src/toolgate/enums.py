@@ -39,6 +39,13 @@ class EffectSafety(_Named):
     UNKNOWN = "UNKNOWN"
 
 
+class Reconciliation(_Named):
+    """How an unknown outcome of a side-effecting tool is settled (OLO M5.4); equivalent to Java Reconciliation."""
+    DOWNSTREAM_IDEMPOTENCY = "DOWNSTREAM_IDEMPOTENCY"
+    STATUS_LOOKUP = "STATUS_LOOKUP"
+    MANUAL = "MANUAL"
+
+
 class HttpMethod(_Named):
     GET = "GET"
     HEAD = "HEAD"

@@ -600,6 +600,15 @@
         "resources"
       ]
     },
+    "ToolReconciliation": {
+      "type": "string",
+      "enum": [
+        "DOWNSTREAM_IDEMPOTENCY",
+        "STATUS_LOOKUP",
+        "MANUAL"
+      ],
+      "description": "How an unknown outcome of this tool is settled (OLO M5.4): resend with the same downstream idempotency key, look the effect up with the reconcile tool, or an operator decides."
+    },
     "ToolDescriptor": {
       "type": "object",
       "description": "Semantic tool descriptor, generation 1. Identical in standalone and governed mode.",
@@ -719,6 +728,9 @@
         },
         "authorization": {
           "$ref": "descriptor.schema.json#/$defs/ToolAuthorization"
+        },
+        "reconciliation": {
+          "$ref": "descriptor.schema.json#/$defs/ToolReconciliation"
         }
       },
       "required": [

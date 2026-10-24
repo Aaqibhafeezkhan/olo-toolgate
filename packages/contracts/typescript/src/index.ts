@@ -1062,6 +1062,7 @@ export interface EnterpriseInvocation {
   readonly downstreamIdempotencyKey?: string;
   readonly resultDigest?: string;
   readonly diagnosticId: string;
+  readonly reconciliation?: ReconciliationMethod;
 }
 /** Scoped durable effect states. A cursor does not disclose hidden rows. */
 export interface EnterpriseInvocationPage {
@@ -1583,6 +1584,7 @@ export interface PackageManifest {
   readonly compatibility: PackageCompatibility;
 }
 export type PackageState = "ABSENT" | "STAGING" | "READY" | "FAILED" | "REVOKED";
+export type ReconciliationMethod = "DOWNSTREAM_IDEMPOTENCY" | "STATUS_LOOKUP" | "MANUAL";
 /** A leased client rechecks the exact pending operation online before execution. */
 export interface RemoteToolAuthorization {
   readonly requestId: string;
@@ -1752,6 +1754,7 @@ export interface ToolDefinition {
   readonly actions: ReadonlyArray<ToolAction>;
   readonly inputSchema: Record<string, unknown>;
   readonly outputSchema: Record<string, unknown>;
+  readonly reconciliation?: ReconciliationMethod;
 }
 export type UserRole = "BASIC" | "ADMINISTRATOR" | "SUPER_ADMIN";
 export const CONTRACT_SET_VERSION = "0.10.0-dev" as const;

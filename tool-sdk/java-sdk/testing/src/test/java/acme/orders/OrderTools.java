@@ -3,6 +3,7 @@
 package acme.orders;
 
 import io.ololabs.toolgate.sdk.annotations.AuthType;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.Destination;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
@@ -47,7 +48,7 @@ public class OrderTools {
     }
 
     @ServerTool(name = "orders.cancel", title = "Cancel", description = "Cancels an order.", effect = EffectSafety.IDEMPOTENT,
-            routes = "orders.cancel", async = true)
+            routes = "orders.cancel", async = true, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @JwtClaim(name = "sub", claim = "sub")
     public Map<String, Object> cancel(@Param(description = "Order id") String orderId, ToolContext context) {
         context.http().route("orders.cancel").pathVar("orderId", orderId).body(Map.of("by", OrderToolsVars.jwt(context).sub())).send(Void.class);

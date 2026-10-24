@@ -3,6 +3,7 @@
 package io.ololabs.examples.mocked.claims;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -154,7 +155,7 @@ public class InsuranceClaims {
             errors = {
                 @ErrorDecl(code = "POLICY_NOT_FOUND", description = "No policy has that id."),
                 @ErrorDecl(code = "NOT_COVERED", description = "The policy does not cover this loss; the message says why.")
-            })
+            }, reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"policyId\":\"POL-2003\",\"peril\":\"FIRE\",\"lossAmount\":9000,\"incidentDate\":\"2026-09-01\","
             + "\"description\":\"Kitchen fire\",\"reference\":\"fnol-1\"}", expectedError = "NOT_COVERED")
     public Filed fileClaim(

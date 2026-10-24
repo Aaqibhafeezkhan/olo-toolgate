@@ -1294,6 +1294,7 @@ export interface ToolDescriptor {
   readonly permissions: ReadonlyArray<Permission>;
   readonly toolsets: ReadonlyArray<string>;
   readonly authorization?: ToolAuthorization;
+  readonly reconciliation?: ToolReconciliation;
 }
 /** Effect settings with defaults resolved. */
 export interface ToolEffect {
@@ -1369,6 +1370,7 @@ export interface ToolLimits {
   readonly maxArgumentProperties?: number;
 }
 export type ToolLocalName = string;
+export type ToolReconciliation = "DOWNSTREAM_IDEMPOTENCY" | "STATUS_LOOKUP" | "MANUAL";
 /** Declared configuration and identity inputs. */
 export interface ToolVariables {
   readonly globals: ReadonlyArray<GlobalDeclaration>;

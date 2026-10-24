@@ -136,6 +136,8 @@ public final class ClientReleases {
             authorization.locatorTemplates(extractor);
             var definition = JSON.objectNode().put("id", toolId).put("name", toolId).put("description", d.path("description").asText(toolId));
             definition.putArray("actions").addObject().put("name", authorization.action()).putArray("resourceKinds").add("CUSTOM");
+            String reconciliation = PackageReconciliation.of(d);
+            if (reconciliation != null) definition.put("reconciliation", reconciliation);
             definition.set("inputSchema", d.get("inputSchema")); definition.set("outputSchema", d.get("outputSchema"));
             var controlTool = JSON.objectNode().put("id", toolId).put("name", toolId).put("enabled", true).put("revision", 1);
             controlTool.set("definition", definition); controlTool.put("extractorId", extractorId).put("version", version).put("packageDigest", managed);

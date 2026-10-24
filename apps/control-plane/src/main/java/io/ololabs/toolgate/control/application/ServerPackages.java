@@ -194,6 +194,8 @@ public final class ServerPackages {
                 put(entries, Kind.EXTRACTOR, extractorId, extractor, true);
                 var definition = JSON.objectNode().put("id", toolId).put("name", toolId).put("description", descriptor.path("description").asText(toolId));
                 definition.putArray("actions").addObject().put("name", authorization.action()).putArray("resourceKinds").add("CUSTOM");
+                String reconciliation = PackageReconciliation.of(descriptor);
+                if (reconciliation != null) definition.put("reconciliation", reconciliation);
                 definition.set("inputSchema", descriptor.get("inputSchema"));
                 definition.set("outputSchema", descriptor.path("outputSchema").isObject() ? descriptor.get("outputSchema") : JSON.objectNode().put("type", "object"));
                 var controlTool = JSON.objectNode().put("id", toolId).put("name", toolId).put("enabled", false).put("revision", 1);

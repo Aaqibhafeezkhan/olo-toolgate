@@ -11,6 +11,7 @@ package io.ololabs.toolgate.contracts;
  * @param actions canonical actions value
  * @param inputSchema canonical inputSchema value
  * @param outputSchema canonical outputSchema value
+ * @param reconciliation canonical reconciliation value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ToolDefinition(
@@ -19,7 +20,8 @@ public record ToolDefinition(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "description", required = true) String description,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "actions", required = true) java.util.List<ToolAction> actions,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "inputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> inputSchema,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "outputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> outputSchema
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "outputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> outputSchema,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "reconciliation", required = false) ReconciliationMethod reconciliation
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +31,7 @@ public record ToolDefinition(
      * @param actions canonical actions value
      * @param inputSchema canonical inputSchema value
      * @param outputSchema canonical outputSchema value
+     * @param reconciliation canonical reconciliation value
      */
     public ToolDefinition {
         java.util.Objects.requireNonNull(id, "id");

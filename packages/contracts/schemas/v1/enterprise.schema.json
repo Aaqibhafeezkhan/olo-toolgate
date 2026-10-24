@@ -1312,6 +1312,9 @@
         },
         "diagnosticId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "reconciliation": {
+          "$ref": "tool.schema.json#/$defs/ReconciliationMethod"
         }
       },
       "required": [

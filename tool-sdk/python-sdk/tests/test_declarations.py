@@ -111,16 +111,17 @@ class DeclarationTest(unittest.TestCase):
     def test_non_idempotent_destructive_tools_require_a_business_key(self):
         r = self.ok(tools("", '''
             @server_tool(name="items.delete", title="T", description="D", effect=EffectSafety.NON_IDEMPOTENT,
-                         destructive=True)
+                         destructive=True, reconciliation=Reconciliation.MANUAL)
             def delete(self) -> Out:
                 return None
 
-            @server_tool(name="items.create", title="T", description="D", effect=EffectSafety.NON_IDEMPOTENT)
+            @server_tool(name="items.create", title="T", description="D", effect=EffectSafety.NON_IDEMPOTENT,
+                         reconciliation=Reconciliation.MANUAL)
             def create(self) -> Out:
                 return None
 
             @server_tool(name="items.purge", title="T", description="D", effect=EffectSafety.NON_IDEMPOTENT,
-                         destructive=True, requires_business_key=False)
+                         destructive=True, requires_business_key=False, reconciliation=Reconciliation.MANUAL)
             def purge(self) -> Out:
                 return None
             '''))
@@ -388,3 +389,45 @@ class AuthorizationDeclarationTest(unittest.TestCase):
                 ''' % (action, resource))
             self.assertFalse(r.success, resource)
             self.assertIn(fragment, r.errors)
+
+
+class ReconciliationDeclarationTest(unittest.TestCase):
+    """OLO M5.4: a tool with side effects declares how an unknown outcome is settled, as in Java."""
+
+    def test_side_effecting_tools_declare_a_consistent_method(self):
+        missing = tools("", '''
+            @server_tool(name="items.create", title="T", description="D", effect=EffectSafety.NON_IDEMPOTENT)
+            def create(self) -> Out:
+                return None
+            ''')
+        self.assertFalse(missing.success)
+        self.assertIn("declare reconciliation", missing.errors)
+        for method, fragment in (("STATUS_LOOKUP", "needs a reconcile tool"), ("DOWNSTREAM_IDEMPOTENCY", "needs idempotency")):
+            r = tools("", '''
+                @server_tool(name="items.create", title="T", description="D", effect=EffectSafety.NON_IDEMPOTENT,
+                             reconciliation=Reconciliation.%s)
+                def create(self) -> Out:
+                    return None
+                ''' % method)
+            self.assertFalse(r.success, method)
+            self.assertIn(fragment, r.errors)
+        read_only = tools("", '''
+            @server_tool(name="items.get", title="T", description="D", effect=EffectSafety.READ_ONLY,
+                         reconciliation=Reconciliation.MANUAL)
+            def get(self) -> Out:
+                return None
+            ''')
+        self.assertIn("no effect to reconcile", read_only.errors)
+        ok = tools("", '''
+            @server_tool(name="items.put", title="T", description="D", effect=EffectSafety.IDEMPOTENT,
+                         reconciliation=Reconciliation.DOWNSTREAM_IDEMPOTENCY)
+            def put(self) -> Out:
+                return None
+
+            @server_tool(name="items.touch", title="T", description="D")
+            def touch(self) -> Out:
+                return None
+            ''')
+        self.assertTrue(ok.success, ok.errors)
+        self.assertIn('"reconciliation":"DOWNSTREAM_IDEMPOTENCY"', ok.descriptor("items.put"))
+        self.assertNotIn("reconciliation", ok.descriptor("items.touch"))

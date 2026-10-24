@@ -3,6 +3,7 @@
 package io.ololabs.examples.mocked.hr;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.JwtClaim;
@@ -153,7 +154,7 @@ public class HrHelpdesk {
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
             errors = {
                 @ErrorDecl(code = "INSUFFICIENT_BALANCE", description = "Not enough leave of that type left."),
-                @ErrorDecl(code = "NOT_AN_EMPLOYEE", description = "The signed-in user is not in the directory.")})
+                @ErrorDecl(code = "NOT_AN_EMPLOYEE", description = "The signed-in user is not in the directory.")}, reconciliation = Reconciliation.MANUAL)
     @JwtClaim(name = "employeeId", claim = "employee_id")
     public LeaveRequest requestLeave(
             @Param(description = "Type", enumValues = {"ANNUAL", "SICK", "PARENTAL"}) String type,

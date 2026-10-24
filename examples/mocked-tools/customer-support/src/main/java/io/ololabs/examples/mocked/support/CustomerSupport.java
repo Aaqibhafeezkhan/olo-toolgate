@@ -3,6 +3,7 @@
 package io.ololabs.examples.mocked.support;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
@@ -166,7 +167,7 @@ public class CustomerSupport {
             description = "Opens a support ticket for a customer (mocked: nothing is stored). A repeat with the same"
                     + " reference returns the first ticket.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
-            errors = @ErrorDecl(code = "NOT_FOUND", description = "No such customer or order."))
+            errors = @ErrorDecl(code = "NOT_FOUND", description = "No such customer or order."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"customerId\":\"C-501\",\"category\":\"DELIVERY\",\"subject\":\"Desk delayed\",\"description\":\"O-9002 is late\","
             + "\"reference\":\"chat-1\"}", expectedOutput = "{\"ticketId\":\"TCK-eaeb9111\",\"queue\":\"logistics\",\"firstResponseHours\":4}")
     public Ticket createTicket(

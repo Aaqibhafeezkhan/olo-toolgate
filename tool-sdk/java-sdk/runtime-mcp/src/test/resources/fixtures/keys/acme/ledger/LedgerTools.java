@@ -3,6 +3,7 @@
 package acme.ledger;
 
 import io.ololabs.toolgate.sdk.annotations.Destination;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.HttpMethod;
 import io.ololabs.toolgate.sdk.annotations.HttpRoute;
@@ -32,60 +33,60 @@ public class LedgerTools {
     public record Answer(String ok) {}
 
     @ServerTool(name = "ledger.refund", title = "Refund", description = "Refunds once per key.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true, businessKeyArgument = "refundKey")
+            destructive = true, businessKeyArgument = "refundKey", reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> refund(@Param(description = "Order") String orderId, @Param(description = "Key") String refundKey,
             ToolContext context) {
         return Map.of("run", ran("refund"), "orderId", orderId, "key", context.invocation().businessKey().orElse(""));
     }
 
     @ServerTool(name = "ledger.transfer", title = "Transfer", description = "Tenant-wide key.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true, businessKeyNamespace = KeyNamespace.TENANT, businessKeyArgument = "ref")
+            destructive = true, businessKeyNamespace = KeyNamespace.TENANT, businessKeyArgument = "ref", reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> transfer(@Param(description = "Ref") String ref) {
         return Map.of("run", ran("transfer"));
     }
 
     @ServerTool(name = "ledger.expense", title = "Expense", description = "Per user.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true, businessKeyNamespace = KeyNamespace.DELEGATED_USER, businessKeyArgument = "ref")
+            destructive = true, businessKeyNamespace = KeyNamespace.DELEGATED_USER, businessKeyArgument = "ref", reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> expense(@Param(description = "Ref") String ref) {
         return Map.of("run", ran("expense"));
     }
 
     @ServerTool(name = "ledger.pay", title = "Pay", description = "Forwards its key upstream.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true, businessKeyArgument = "ref", routes = "payments.create")
+            destructive = true, businessKeyArgument = "ref", routes = "payments.create", reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @Idempotency(header = "Idempotency-Key", scope = IdempotencyScope.BUSINESS_KEY)
     public Map<String, Object> pay(@Param(description = "Ref") String ref, ToolContext context) {
         return context.http().route("payments.create").body(Map.of("amount", 5)).send(Map.class);
     }
 
     @ServerTool(name = "ledger.charge", title = "Charge", description = "Forwards a per-invocation key.", effect = EffectSafety.IDEMPOTENT,
-            routes = "payments.create")
+            routes = "payments.create", reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @Idempotency(header = "Idempotency-Key", scope = IdempotencyScope.PER_INVOCATION)
     public Map<String, Object> charge(ToolContext context) {
         return context.http().route("payments.create").body(Map.of("amount", 1)).send(Map.class);
     }
 
     @ServerTool(name = "ledger.void", title = "Void", description = "Key only in the header.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true)
+            destructive = true, reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> voidIt(ToolContext context) {
         return Map.of("run", ran("void"), "key", context.invocation().businessKey().orElse(""));
     }
 
     @ServerTool(name = "ledger.slow", title = "Slow", description = "Runs a while.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true, businessKeyArgument = "ref")
+            destructive = true, businessKeyArgument = "ref", reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> slow(@Param(description = "Ref") String ref) throws InterruptedException {
         Thread.sleep(800);
         return Map.of("run", ran("slow"));
     }
 
     @ServerTool(name = "ledger.export", title = "Export", description = "A task per key.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true, async = true, businessKeyArgument = "ref")
+            destructive = true, async = true, businessKeyArgument = "ref", reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> export(@Param(description = "Ref") String ref) throws InterruptedException {
         Thread.sleep(300);
         return Map.of("run", ran("export"));
     }
 
     @ServerTool(name = "ledger.confirm", title = "Confirm", description = "Asks first.", effect = EffectSafety.NON_IDEMPOTENT,
-            destructive = true, businessKeyArgument = "ref")
+            destructive = true, businessKeyArgument = "ref", reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> confirm(@Param(description = "Ref") String ref, ToolContext context) {
         Answer a = context.requestInput(InputRequest.of("Sure?", Map.of("type", "object", "properties", Map.of("ok", Map.of("type", "string")),
                 "required", java.util.List.of("ok")), Answer.class));

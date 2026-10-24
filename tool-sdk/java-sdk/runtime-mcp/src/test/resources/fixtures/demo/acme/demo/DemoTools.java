@@ -3,6 +3,7 @@
 package acme.demo;
 
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.Global;
 import io.ololabs.toolgate.sdk.annotations.JwtClaim;
@@ -82,7 +83,7 @@ public class DemoTools {
     }
 
     @ServerTool(name = "demo.write", title = "Write", description = "Not idempotent.", effect = EffectSafety.NON_IDEMPOTENT,
-            errors = @ErrorDecl(code = "BUSY", description = "Try later", retryable = true))
+            errors = @ErrorDecl(code = "BUSY", description = "Try later", retryable = true), reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> write() {
         throw new ToolRetryableError("BUSY", "Busy now");
     }
