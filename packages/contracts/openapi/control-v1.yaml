@@ -9041,6 +9041,125 @@ paths:
           description: Expired, already reported or stale
         '503':
           description: Dependency unavailable
+  /api/control/v1/access/invocations/cancel:
+    post:
+      operationId: cancelCallerOperation
+      description: Gateway role only. Persists cancellation even before first submission.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/CancellationAccepted
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
+  /api/control/v1/access/service-permits/issue:
+    post:
+      operationId: issueServicePermit
+      description: Direct admitted executor device certificate and fencing token required.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermit
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitIssue
+  /api/control/v1/access/service-permits/{audience}/consume:
+    post:
+      operationId: consumeServicePermit
+      description: Dedicated toolgate-service-{audience} role; exact request facts and current authority checked.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitConsumed
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitConsumption
+  /api/control/v1/access/service-permits/{audience}/epoch:
+    get:
+      operationId: serviceAuthorizationEpoch
+      description: Dedicated service role; coalesced tenant revocation feed snapshot.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServiceAuthorizationEpoch
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+  /api/control/v1/access/service-permits/{audience}/jwks:
+    get:
+      operationId: servicePermitKeys
+      description: Dedicated service role; current purpose-separated Control effect verification key.
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Authenticated key-discovery result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [kty, alg, use, kid, n, e]
+        '403':
+          description: Dedicated service role for this audience and tenant required
 components:
   securitySchemes:
     adminAccessToken:

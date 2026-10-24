@@ -1,9 +1,9 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 use axum::{
-    body::{to_bytes, Body},
-    http::{Request, StatusCode},
     Router,
+    body::{Body, to_bytes},
+    http::{Request, StatusCode},
 };
 use olo_toolgate_contracts::v2::{self, RequestContext, RequestMode};
 use olo_toolgate_contracts::*;
@@ -12,15 +12,15 @@ use olo_toolgate_gateway::{
     auth::{Authenticator, Credential},
     config::Config,
     digest,
-    http::{management_router, runtime_router, AppState},
+    http::{AppState, management_router, runtime_router},
     relay::{PortFuture, RelayPort},
     unix_ms,
-    validation::{strict_json, Contracts},
+    validation::{Contracts, strict_json},
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
 };
 use tower::ServiceExt;
 const TOKEN: &str = "enterprise-test-credential-00000000000000000000000000000000";
@@ -58,21 +58,25 @@ fn tenant_bound_credentials_reject_foreign_mounts_and_keep_the_old_set_on_reload
     let before = auth.loaded();
     let mut foreign = credential();
     foreign.context.tenant_id = "10000000-0000-4000-8000-000000000002".into();
-    assert!(Authenticator::new(vec![foreign.clone()], &contracts, now)
-        .unwrap()
-        .for_tenant(tenant)
-        .is_err());
-    assert!(auth
-        .reload(
+    assert!(
+        Authenticator::new(vec![foreign.clone()], &contracts, now)
+            .unwrap()
+            .for_tenant(tenant)
+            .is_err()
+    );
+    assert!(
+        auth.reload(
             &serde_json::to_vec(&vec![foreign]).unwrap(),
             &contracts,
             now
         )
-        .is_err());
+        .is_err()
+    );
     assert_eq!(auth.loaded(), before);
-    assert!(auth
-        .authenticate(TOKEN, "still-owned".into(), now)
-        .is_some());
+    assert!(
+        auth.authenticate(TOKEN, "still-owned".into(), now)
+            .is_some()
+    );
 }
 #[tokio::test]
 async fn public_metadata_is_anonymous_but_keeps_host_and_uuid_fences_and_fixed_tls_source() {
@@ -181,6 +185,7 @@ async fn host_and_expected_uuid_fences_run_before_authority_calls() {
 }
 #[derive(Default)]
 struct Authority {
+    cancellations: Mutex<Vec<RequestContext>>,
     failure: bool,
     pending: bool,
     substitute: bool,
@@ -246,6 +251,15 @@ impl Authority {
     }
 }
 impl RelayPort for Authority {
+    fn cancel<'a>(
+        &'a self,
+        c: &'a RequestContext,
+    ) -> PortFuture<'a, Result<CancellationAccepted, ErrorCode>> {
+        Box::pin(async move {
+            self.cancellations.lock().unwrap().push(c.clone());
+            Ok(CancellationAccepted { cancelled: true })
+        })
+    }
     fn permit<'a>(
         &'a self,
         r: &'a v2::PermitReservationRequest,
@@ -478,16 +492,18 @@ fn credentials_bind_all_facts_and_cannot_be_human_or_rebound() {
             .and_then(|credential| Authenticator::new(vec![credential], &contracts, 1).ok());
         assert!(rejected.is_none(), "{change}");
     }
-    assert!(auth
-        .authenticate(
+    assert!(
+        auth.authenticate(
             "unknown-credential-0000000000000000000000000000000000",
             "r".into(),
             2
         )
-        .is_none());
-    assert!(auth
-        .authenticate(TOKEN, "r".into(), c.expires_at_unix_ms)
-        .is_none());
+        .is_none()
+    );
+    assert!(
+        auth.authenticate(TOKEN, "r".into(), c.expires_at_unix_ms)
+            .is_none()
+    );
     assert!(Authenticator::new(vec![c.clone(), c.clone()], &contracts, 1).is_err());
     let mut human = c.clone();
     human.context.mode = RequestMode::Human;
@@ -740,11 +756,13 @@ async fn transport_limits_and_readiness_are_separate() {
         call(runtime_router(s.clone()), r).await.0,
         StatusCode::FORBIDDEN
     );
-    assert!(!state(Arc::new(Authority {
-        failure: true,
-        ..Default::default()
-    }))
-    .ready());
+    assert!(
+        !state(Arc::new(Authority {
+            failure: true,
+            ..Default::default()
+        }))
+        .ready()
+    );
     let response = management_router(s)
         .oneshot(
             Request::builder()
@@ -1033,4 +1051,25 @@ async fn credential_reload_validates_the_whole_file_and_keeps_the_live_set_on_er
     let contracts = Contracts::new().unwrap();
     let loaded = Authenticator::from_bytes(&good, &contracts, 1).unwrap();
     assert_eq!(loaded.loaded(), (digest(&good), 1));
+}
+
+#[tokio::test]
+async fn cancellation_uses_authenticated_identity_and_the_original_operation_key_without_dispatch()
+{
+    let a = Arc::new(Authority::default());
+    let mut r = mcp("olo/invocations/cancel", None);
+    *r.body_mut()=Body::from(json!({"jsonrpc":"2.0","id":"cancel-1","method":"olo/invocations/cancel","params":{
+        "operationId":"olo-op-original","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}
+    }}).to_string());
+    let (code, body) = call(runtime_router(state(a.clone())), r).await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(body["result"]["cancelled"], true);
+    let cancelled = a.cancellations.lock().unwrap();
+    assert_eq!(cancelled.len(), 1);
+    assert_eq!(cancelled[0].user_id, context().user_id);
+    assert_eq!(cancelled[0].agent_id, context().agent_id);
+    assert!(cancelled[0].request_id.starts_with("inv-"));
+    assert!(a.invocation.lock().unwrap().is_none());
+    assert!(a.submission.lock().unwrap().is_none());
+    assert_eq!(a.reservations.load(Ordering::SeqCst), 0);
 }

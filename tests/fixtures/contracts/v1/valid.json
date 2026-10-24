@@ -25,6 +25,9 @@
     "lifetimeMs": 60000,
     "graceMs": 0
   },
+  "CancellationAccepted": {
+    "cancelled": true
+  },
   "ClientActivity": {
     "active": [],
     "events": [],
@@ -2516,6 +2519,59 @@
   },
   "SecretReference": "secret://example/token",
   "SemanticVersion": "0.1.0-dev",
+  "ServiceAudience": "olo-memory",
+  "ServiceAuthorizationEpoch": {
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "authorizationEpoch": 7,
+    "observedAtUnixMs": 1791450000000
+  },
+  "ServicePermit": {
+    "jws": "e30.e30.c2ln"
+  },
+  "ServicePermitClaims": {
+    "iss": "control",
+    "aud": "olo-memory",
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "sub": "alice",
+    "mode": "HUMAN",
+    "operation": "memory.append",
+    "resources": [
+      {
+        "kind": "CUSTOM",
+        "locator": "olo://10000000-0000-4000-8000-000000000001/conversation/c1"
+      }
+    ],
+    "requestFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "executorKeySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "invocationId": "inv-1",
+    "nonce": "nonce-1",
+    "authorizationEpoch": 7,
+    "iat": 1791450000000,
+    "exp": 1791450015000,
+    "executionNonce": "fence-1"
+  },
+  "ServicePermitConsumed": {
+    "authorized": true
+  },
+  "ServicePermitConsumption": {
+    "permit": {
+      "jws": "e30.e30.c2ln"
+    },
+    "operation": "memory.append",
+    "resources": [
+      {
+        "kind": "CUSTOM",
+        "locator": "olo://10000000-0000-4000-8000-000000000001/conversation/c1"
+      }
+    ],
+    "requestFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "executorKeySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "ServicePermitIssue": {
+    "invocationId": "inv-1",
+    "fencingToken": "fence-1",
+    "audience": "olo-memory"
+  },
   "Sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "SignedClientDiscovery": {
     "payload": "AA",

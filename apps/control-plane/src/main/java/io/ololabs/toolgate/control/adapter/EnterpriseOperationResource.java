@@ -47,6 +47,8 @@ public class EnterpriseOperationResource {
     public Response health(){var actor=gateway();store.transaction(actor.tenant(),false,tx->{tx.load();tx.enterprise().authorizationEpoch();return null;});return Response.ok("{\"ready\":true}").header("Cache-Control","no-store").build();}
     @POST @Path("invocations") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response submit(String document){return reply(operations.submit(gateway(),body(document)));}
+    @POST @Path("invocations/cancel") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response cancelFromGateway(String document){return reply(operations.cancelFromGateway(gateway(),body(document)));}
     @POST @Path("invocations/reserve") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response reserve(String document){return reply(v2(document,"audience")?packages.permit(gateway(),document,correlation.id()):operations.reserve(gateway(),body(document)));}
     /** Pull mode: the Gateway hands Control a dispatch for a Tool Host that fetches its calls, then polls for the answer. */

@@ -3072,6 +3072,228 @@
         "binding",
         "context"
       ]
+    },
+    "CancellationAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cancelled"
+      ],
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "description": "Durable caller-scoped cancellation acknowledgement."
+    },
+    "ServicePermitClaims": {
+      "type": "object",
+      "description": "Control-issued exact-request authorization for a downstream service; times are Unix milliseconds.",
+      "additionalProperties": false,
+      "required": [
+        "iss",
+        "aud",
+        "tenantId",
+        "sub",
+        "mode",
+        "operation",
+        "resources",
+        "requestFingerprint",
+        "executorKeySha256",
+        "invocationId",
+        "nonce",
+        "authorizationEpoch",
+        "iat",
+        "exp",
+        "executionNonce"
+      ],
+      "properties": {
+        "iss": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "aud": {
+          "$ref": "#/$defs/ServiceAudience"
+        },
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sub": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "act": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "mode": {
+          "$ref": "../v2/common.schema.json#/$defs/RequestMode"
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "resource.schema.json#/$defs/ResourceDescriptor"
+          }
+        },
+        "requestFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "executorKeySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "nonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "iat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exp": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "executionNonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      }
+    },
+    "ServicePermitIssue": {
+      "type": "object",
+      "description": "Executor request for downstream authorization; scope comes exclusively from the admitted invocation.",
+      "additionalProperties": false,
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "audience"
+      ],
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "audience": {
+          "$ref": "#/$defs/ServiceAudience"
+        }
+      }
+    },
+    "ServicePermit": {
+      "type": "object",
+      "description": "Purpose-specific signed downstream authorization.",
+      "additionalProperties": false,
+      "required": [
+        "jws"
+      ],
+      "properties": {
+        "jws": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        }
+      }
+    },
+    "ServicePermitConsumption": {
+      "type": "object",
+      "description": "Service compares these request facts before its write, then consumes the nonce online.",
+      "additionalProperties": false,
+      "required": [
+        "permit",
+        "operation",
+        "resources",
+        "requestFingerprint",
+        "executorKeySha256"
+      ],
+      "properties": {
+        "permit": {
+          "$ref": "#/$defs/ServicePermit"
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "resource.schema.json#/$defs/ResourceDescriptor"
+          }
+        },
+        "requestFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "executorKeySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServiceAuthorizationEpoch": {
+      "type": "object",
+      "description": "Coalesced tenant revocation feed snapshot. Services fail closed if polling becomes stale.",
+      "additionalProperties": false,
+      "required": [
+        "tenantId",
+        "authorizationEpoch",
+        "observedAtUnixMs"
+      ],
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "observedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "ServiceAudience": {
+      "type": "string",
+      "description": "Audience of an OLO downstream service.",
+      "enum": [
+        "olo-memory",
+        "olo-rag"
+      ]
+    },
+    "ServicePermitConsumed": {
+      "type": "object",
+      "description": "Single-use downstream write permit was consumed under current authority.",
+      "additionalProperties": false,
+      "required": [
+        "authorized"
+      ],
+      "properties": {
+        "authorized": {
+          "type": "boolean"
+        }
+      }
     }
   }
 }

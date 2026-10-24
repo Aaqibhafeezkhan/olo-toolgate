@@ -98,7 +98,7 @@ tasks.register("publishContractsToMavenLocal") {
 // The Java Tool SDK publishes to build/sdk-repo, for local builds and the plugin end-to-end run (tool-sdk/java-sdk/e2e).
 val javaSdkModules = listOf(
     ":sdk-java-api", ":sdk-java-processor", ":sdk-java-protocol", ":sdk-java-runtime-mcp", ":sdk-java-testing",
-    ":sdk-java-build", ":sdk-java-gradle-plugin", ":sdk-java-maven-plugin",
+    ":sdk-java-build", ":sdk-java-gradle-plugin", ":sdk-java-maven-plugin", ":service-authorization",
 )
 configure(javaSdkModules.map { project(it) }) {
     apply(plugin = "maven-publish")

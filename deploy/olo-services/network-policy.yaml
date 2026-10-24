@@ -1,0 +1,22 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+# Apply in the dedicated olo-knowledge namespace. Its labels and ports are the fresh-install contract.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: toolgate-only-knowledge-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: olo-knowledge
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: toolgate
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: tool-host
+      ports:
+        - protocol: TCP
+          port: 8443

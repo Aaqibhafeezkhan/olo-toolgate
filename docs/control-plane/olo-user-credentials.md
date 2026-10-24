@@ -119,3 +119,12 @@ claims cannot use that name. The Java SDK lifts it into `Invocation`: `tenantId(
 standalone run.
 
 See the [threat model](../security/threat-models/olo-integration.md) for the residual risks.
+
+## Running invocations and downstream services
+
+Control persists the verified Gateway credential deadline separately from invocation/approval lifetime. A verified
+renewal can extend that non-secret deadline without changing the dedup key or fingerprint. All effect freshness
+checks reject expired credential authority. The OLO backend limits its credentials to 15 seconds; downstream service
+permits are capped by the same deadline, so successive permits cannot extend stale authority beyond that lifetime.
+See [OLO service permits](olo-service-permits.md) for the executor-to-service bridge, authenticated revocation snapshots,
+key discovery, transaction/reconciliation rules, new-install network policy and cancellation extension.

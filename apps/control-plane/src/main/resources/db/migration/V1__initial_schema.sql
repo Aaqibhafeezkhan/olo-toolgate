@@ -317,7 +317,7 @@ CREATE INDEX control_enterprise_invocation_window ON control_enterprise_invocati
 
 CREATE TABLE control_enterprise_approvals(tenant_id varchar(128) NOT NULL,approval_id varchar(128) NOT NULL,approval_type varchar(16) NOT NULL CHECK(approval_type IN('OPERATION','CONFIGURATION')),invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,approval_id));
 
-CREATE TABLE control_enterprise_nonces(tenant_id varchar(128) NOT NULL,nonce varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,evaluation_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,consumed_at bigint,PRIMARY KEY(tenant_id,nonce));
+CREATE TABLE control_enterprise_nonces(tenant_id varchar(128) NOT NULL,nonce varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,evaluation_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,issued_at bigint NOT NULL,expires_at bigint NOT NULL,consumed_at bigint,PRIMARY KEY(tenant_id,nonce));
 
 CREATE TABLE control_enterprise_adoptions(tenant_id varchar(128) NOT NULL,actor_type varchar(16) NOT NULL,actor_id varchar(128) NOT NULL,directory_revision bigint NOT NULL,snapshot_sequence bigint NOT NULL,graph_digest char(64) NOT NULL,observed_at bigint NOT NULL,PRIMARY KEY(tenant_id,actor_type,actor_id),authorization_epoch bigint NOT NULL DEFAULT 0);
 
@@ -327,6 +327,10 @@ CREATE TRIGGER control_epoch_guard BEFORE UPDATE ON control_tenant_authority FOR
 
 GRANT SELECT,INSERT,UPDATE ON control_authorization_outbox,control_enterprise_invocations,control_enterprise_approvals,control_enterprise_nonces,control_enterprise_adoptions TO toolgate_control_runtime;
 
+CREATE TABLE control_invocation_authority(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,expires_at bigint NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
+GRANT SELECT,INSERT,UPDATE ON control_invocation_authority TO toolgate_control_runtime;
+CREATE TABLE control_operation_cancellations(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
+GRANT SELECT,INSERT ON control_operation_cancellations TO toolgate_control_runtime;
 CREATE TABLE control_credential_history(tenant_id varchar(128) NOT NULL,credential_sha256 char(64) NOT NULL,PRIMARY KEY(tenant_id,credential_sha256));
 
 GRANT SELECT,INSERT ON control_credential_history TO toolgate_control_runtime;
@@ -334,6 +338,7 @@ GRANT SELECT,INSERT ON control_credential_history TO toolgate_control_runtime;
 CREATE FUNCTION control_credential_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable credential history'; END $$;
 
 CREATE TRIGGER control_credential_history_immutable BEFORE UPDATE OR DELETE ON control_credential_history FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
+CREATE TRIGGER control_operation_cancellations_immutable BEFORE UPDATE OR DELETE ON control_operation_cancellations FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
 
 CREATE TABLE control_reviewed_recovery(tenant_id varchar(128) NOT NULL,review_digest char(64) NOT NULL,PRIMARY KEY(tenant_id,review_digest));
 
@@ -907,6 +912,8 @@ BEGIN
         'control_configuration_changes',
         'control_console_devices',
         'control_credential_history',
+        'control_operation_cancellations',
+        'control_invocation_authority',
         'control_endpoint_configurations',
         'control_endpoints',
         'control_enrollments',

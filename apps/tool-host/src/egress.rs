@@ -178,7 +178,19 @@ pub fn client(
     destination: &ServiceDestination,
     policy: AddressPolicy,
 ) -> Result<reqwest::Client, String> {
+    client_with_identity(destination, policy, None)
+}
+
+/// Downstream services authenticate the same host key Control binds into their permits.
+pub fn client_with_identity(
+    destination: &ServiceDestination,
+    policy: AddressPolicy,
+    identity: Option<reqwest::Identity>,
+) -> Result<reqwest::Client, String> {
     let _ = rustls::crypto::ring::default_provider().install_default();
+    if identity.is_some() && !destination.tls.spki_pins.is_empty() {
+        return Err("service mTLS requires CA-verified HTTPS".into());
+    }
     let mut builder = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -187,6 +199,9 @@ pub fn client(
         .connect_timeout(Duration::from_secs(10))
         .pool_max_idle_per_host(2)
         .dns_resolver(Arc::new(CheckedResolver(policy)));
+    if let Some(identity) = identity {
+        builder = builder.identity(identity);
+    }
     let tls = &destination.tls;
     if !tls.spki_pins.is_empty() {
         let pins = tls
@@ -312,9 +327,11 @@ mod tests {
             assert!(p.check(ip.parse().unwrap()).is_err(), "{ip}");
         }
         assert!(p.check("93.184.216.34".parse().unwrap()).is_ok());
-        assert!(policy(vec![], true)
-            .check("127.0.0.1".parse().unwrap())
-            .is_ok());
+        assert!(
+            policy(vec![], true)
+                .check("127.0.0.1".parse().unwrap())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -333,9 +350,11 @@ mod tests {
             ports: vec![8443],
             ..range
         };
-        assert!(policy(vec![other_port], false)
-            .check("10.1.2.3".parse().unwrap())
-            .is_err());
+        assert!(
+            policy(vec![other_port], false)
+                .check("10.1.2.3".parse().unwrap())
+                .is_err()
+        );
     }
 
     #[test]

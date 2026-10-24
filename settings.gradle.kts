@@ -54,3 +54,6 @@ project(":sdk-java-maven-plugin").projectDir = file("tool-sdk/java-sdk/maven-plu
 
 include(":sdk-java-conformance-server")
 project(":sdk-java-conformance-server").projectDir = file("tool-sdk/java-sdk/conformance-server")
+
+include(":service-authorization")
+project(":service-authorization").projectDir = file("backend-libs/service-authorization")

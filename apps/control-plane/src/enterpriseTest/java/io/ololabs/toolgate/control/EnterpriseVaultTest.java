@@ -39,7 +39,7 @@ class EnterpriseVaultTest {
     assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status(),"An unconsumed reservation is not executing authority");
     ops.consume(admin.tenant(),"device",graph.codec.json(new EnterprisePermitConsumption(i.id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest())));
     String foreignFence=UUID.randomUUID().toString();
-    store.transaction(admin.tenant(),true,tx->{tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(foreignFence,"another-invocation",DirectoryService.digest("another-evaluation"),r.invocation().authorizationEpoch(),EnterpriseConformanceTest.NOW+10000,null));tx.enterprise().consumeNonce(foreignFence,EnterpriseConformanceTest.NOW);return null;});
+    store.transaction(admin.tenant(),true,tx->{tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(foreignFence,"another-invocation",DirectoryService.digest("another-evaluation"),r.invocation().authorizationEpoch(),EnterpriseConformanceTest.NOW,EnterpriseConformanceTest.NOW+10000,null));tx.enterprise().consumeNonce(foreignFence,EnterpriseConformanceTest.NOW);return null;});
     for(String invalid:new String[]{null,""," ",foreignFence,"x".repeat(129)})
         assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,invalid,ops)).status());
     assertFalse(store.transaction(admin.tenant(),false,tx->tx.auditPage(0,100)).contains("SECRET_DELIVER"),"Denied fences never deliver or audit a secret");
@@ -64,7 +64,7 @@ class EnterpriseVaultTest {
     // A subsequent attempt invalidates the first fence, even for the same tenant/device/invocation.
     String nextFence=UUID.randomUUID().toString();
     store.transaction(admin.tenant(),true,tx->{var current=tx.enterprise().invocation(i.id());
-        tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nextFence,i.id(),DirectoryService.digest(graph.codec.json(current.evaluation())),current.authorizationEpoch(),EnterpriseConformanceTest.NOW+10000,null));
+        tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nextFence,i.id(),DirectoryService.digest(graph.codec.json(current.evaluation())),current.authorizationEpoch(),EnterpriseConformanceTest.NOW,EnterpriseConformanceTest.NOW+10000,null));
         tx.enterprise().consumeNonce(nextFence,EnterpriseConformanceTest.NOW);
         tx.enterprise().saveInvocation(new EnterpriseInvocation(current.id(),current.requestDigest(),current.evaluation(),current.state(),current.revision()+1,current.authorizationEpoch(),nextFence,current.expiresAtUnixMs(),current.completedResources(),current.downstreamIdempotencyKey(),current.resultDigest(),current.diagnosticId(),current.reconciliation()),EnterpriseConformanceTest.NOW,current.revision());return null;});
     assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status());

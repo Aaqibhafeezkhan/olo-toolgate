@@ -7,6 +7,10 @@ import java.util.List;
 
 /** All methods run inside the tenant transaction which also commits audit and directory state. */
 public interface EnterpriseStore {
+    Long userCredentialDeadline(String id);
+    void userCredentialDeadline(String id,long expiresAt);
+    boolean operationCancelled(String id);
+    void cancelOperation(String id);
     long authorizationEpoch();
     EnterpriseOperationalStatus operationalStatus(long now);
     EnterpriseInvocation invocation(String id);
@@ -46,5 +50,5 @@ public interface EnterpriseStore {
     List<VaultKey> vaultKeys();
     void insertVaultKey(VaultKey key);
     void updateVaultKey(VaultKey key,String expectedState);
-    record Nonce(String id,String invocationId,String evaluationDigest,long authorizationEpoch,long expiresAt,Long consumedAt) {}
+    record Nonce(String id,String invocationId,String evaluationDigest,long authorizationEpoch,long issuedAt,long expiresAt,Long consumedAt) {}
 }

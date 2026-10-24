@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //! Optional bounded Control relay. No agent bearer credential crosses this service boundary.
-use crate::validation::{strict_json, Contracts};
+use crate::validation::{Contracts, strict_json};
 use olo_toolgate_contracts::v2::{
     Dispatch, PermitReservationRequest, RequestContext, SignedInvocationPermit,
     ToolHostDispatchStatus,
@@ -69,6 +69,12 @@ impl RelayConfig {
     }
 }
 pub trait RelayPort: Send + Sync {
+    fn cancel<'a>(
+        &'a self,
+        _context: &'a RequestContext,
+    ) -> PortFuture<'a, Result<CancellationAccepted, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
     fn invoke<'a>(
         &'a self,
         request: &'a EnterpriseInvocationRequest,
@@ -292,6 +298,16 @@ impl HttpRelay {
     }
 }
 impl RelayPort for HttpRelay {
+    fn cancel<'a>(
+        &'a self,
+        context: &'a RequestContext,
+    ) -> PortFuture<'a, Result<CancellationAccepted, ErrorCode>> {
+        Box::pin(self.post(
+            "/api/control/v1/access/invocations/cancel",
+            context,
+            "CancellationAccepted",
+        ))
+    }
     fn invoke<'a>(
         &'a self,
         request: &'a EnterpriseInvocationRequest,
