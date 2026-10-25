@@ -10,6 +10,7 @@ COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties VERSION TOOL
 COPY gradle/ gradle/
 COPY packages/contracts/ packages/contracts/
 COPY backend-libs/package-archive/ backend-libs/package-archive/
+COPY backend-libs/service-authorization/ backend-libs/service-authorization/
 COPY config/initial/ config/initial/
 COPY apps/control-plane/build.gradle.kts apps/control-plane/build.gradle.kts
 COPY apps/marketplace-api/build.gradle.kts apps/marketplace-api/build.gradle.kts
