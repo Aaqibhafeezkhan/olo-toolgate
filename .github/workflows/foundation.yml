@@ -41,6 +41,10 @@ jobs:
     - name: Python, contract, PHP and Helm gates
       run: |
         python tools/check.py --ci-common --ci-part python
+    - name: Verify Quickstart security and restore fixtures before image builds
+      env:
+        PYTHONPATH: apps/quickstart
+      run: python -m unittest discover -s tests/quickstart -v
   ui:
     runs-on: ubuntu-24.04
     env:

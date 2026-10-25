@@ -22,7 +22,7 @@ class RestoreTests(unittest.TestCase):
    records=[('USER',dict(id='user',name='User',enabled=True,revision=1)),('TEAM',dict(id='team-default',name='Default',enabled=True,revision=1,userIds=['user'],roleIds=['management'])),('ROLE',dict(id='management',enabled=True,revision=1)),('WORKLOAD_BINDING',dict(id='workload',enabled=True,revision=1,credentialEpoch=3)),('IDENTITY_BINDING',dict(id='identity',enabled=True,revision=1,sessionEpoch=2,sessionsValidAfterUnixMs=0))]
    for kind,doc in records:c.execute('INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,?,?,?,?)',('00000000-0000-4000-8000-000000000001',kind,doc['id'],1,json.dumps(doc)))
    c.execute("INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,authorization_epoch,created_at,expires_at,revision,document) VALUES('00000000-0000-4000-8000-000000000001','running',?,'EXECUTING',9,1,2,1,?)",('a'*64,json.dumps(dict(id='running',state='EXECUTING',revision=1))))
-   c.execute("INSERT INTO control_enterprise_nonces(tenant_id,nonce,invocation_id,evaluation_digest,authorization_epoch,expires_at,consumed_at) VALUES('00000000-0000-4000-8000-000000000001','consumed','running',?,9,2,1)",('a'*64,))
+   c.execute("INSERT INTO control_enterprise_nonces(tenant_id,nonce,invocation_id,evaluation_digest,authorization_epoch,issued_at,expires_at,consumed_at) VALUES('00000000-0000-4000-8000-000000000001','consumed','running',?,9,1,2,1)",('a'*64,))
    c.execute("INSERT INTO control_credential_history(tenant_id,credential_sha256) VALUES('00000000-0000-4000-8000-000000000001',?)",('f'*64,))
    # Package, deployment, profile and release state, which restore keeps exactly, and Tool Host dispatches.
    package='sha256:'+'b'*64
