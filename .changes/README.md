@@ -1,5 +1,9 @@
 # Contributor release notes
 
+Start by copying the fully annotated [root sample](../RELEASE-NOTE-SAMPLE.yaml).
+It explains every field, when to keep or remove optional sections, and how to
+choose the next available sequence number and your name for the filename.
+
 Add a YAML file under the active collection in `config.json`, currently
 `v0.1.0-beta.1/`. Name it `<number>-<name>.yaml`, for example
 `3-your-name.yaml`. Use your own name and optional GitHub login; do not include
