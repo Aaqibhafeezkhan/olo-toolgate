@@ -43,6 +43,15 @@ class AdmissionTests(unittest.TestCase):
             events=document.get('on',document.get(True,{}))
             if not any(event in events for event in ('push','pull_request','workflow_dispatch','workflow_run','schedule','issue_comment')):
                 continue
+            if path.name=='pr-policy.yml':
+                self.assertEqual(set(events),{'pull_request'})
+                self.assertEqual(document['permissions'],{'contents':'read'})
+                self.assertEqual(set(document['jobs']),{'contribution-policy'})
+                job=document['jobs']['contribution-policy']
+                self.assertLessEqual(job['timeout-minutes'],5)
+                for field in ('if','secrets','environment'):
+                    self.assertNotIn(field,job)
+                continue
             if path.name=='tenant-qualification.yml':
                 # Manual evidence collection; automatic native checks belong to CI.
                 self.assertEqual(set(events),{'workflow_dispatch'})
@@ -138,13 +147,17 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotIn('main_only',pipeline['jobs']['admission'].get('with',{}))
         self.assertNotIn('release',pipeline['jobs'])
 
-    def test_no_workflow_is_triggered_by_pull_requests(self):
+    def test_only_read_only_contribution_policy_is_triggered_by_pull_requests(self):
         root=Path(__file__).resolve().parents[2]
         for path in (root/'.github/workflows').glob('*.yml'):
             document=yaml.safe_load(path.read_text())
             events=document.get('on',document.get(True,{}))
             with self.subTest(workflow=path.name):
-                self.assertNotIn('pull_request',events)
+                if path.name=='pr-policy.yml':
+                    self.assertEqual(set(events),{'pull_request'})
+                    self.assertEqual(document['permissions'],{'contents':'read'})
+                else:
+                    self.assertNotIn('pull_request',events)
                 self.assertNotIn('pull_request_target',events)
 
     def test_unified_ci_is_the_only_main_push_entrypoint(self):
