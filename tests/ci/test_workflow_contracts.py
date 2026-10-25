@@ -10,6 +10,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class EarlyGateTests(unittest.TestCase):
+    def test_langchain_restart_and_package_contracts_run_before_image_builds(self):
+        foundation = yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
+        steps = foundation['jobs']['python']['steps']
+        gate = next(step for step in steps if 'examples/langchain -p test_manage.py' in step.get('run', ''))
+        self.assertIn('examples/langchain -p test_packages.py', gate['run'])
+        self.assertNotIn('if', gate)
+        self.assertNotIn('continue-on-error', gate)
+
     def test_quickstart_restore_and_security_fixtures_run_before_image_builds(self):
         foundation = yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
         steps = foundation['jobs']['python']['steps']

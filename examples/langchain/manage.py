@@ -38,11 +38,45 @@ def load_environment():
                 os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
+class DockerCommandError(ValueError):
+    def __init__(self, service, operation, reason, exit_code=None, retryable=False):
+        self.retryable = retryable
+        record = dict(service=service if service in ('quickstart', 'linux-device') else 'other',
+                      operation=operation, reason=reason, exitCode=exit_code)
+        # Only fixed classifications are retained. Command arguments, stdin,
+        # stdout and stderr can carry credentials and never enter this artifact.
+        try:
+            folder = ROOT/'build/langchain'
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder/'command-failures.jsonl'
+            if not path.exists() or path.stat().st_size < 65536:
+                with path.open('a', encoding='utf-8') as stream:
+                    stream.write(json.dumps(record)+'\n')
+        except OSError:
+            pass
+        super().__init__(f'{record["service"]} {operation} failed: {reason} (exit {exit_code}); '
+                         'see build/langchain/command-failures.jsonl and Compose logs')
+
+
 def docker(service, arguments, input=None):
-    result = subprocess.run(COMPOSE + ['exec', '-T', service] + arguments,
-                            input=input, capture_output=True, text=True, timeout=60, cwd=HERE)
+    status_read = service == 'linux-device' and arguments == ['cat', '/run/olo-toolgate/device-status.json']
+    operation = 'read-device-status' if status_read else 'container-command'
+    try:
+        result = subprocess.run(COMPOSE + ['exec', '-T', service] + arguments,
+                                input=input, capture_output=True, text=True, timeout=5 if status_read else 60, cwd=HERE)
+    except subprocess.TimeoutExpired:
+        raise DockerCommandError(service, operation, 'command-timeout') from None
     if result.returncode:
-        raise ValueError(f'{service} command failed; inspect docker compose logs (private output withheld)')
+        error = (result.stderr or '').lower()
+        reason = 'command-failed'
+        if status_read and '/run/olo-toolgate/device-status.json' in error and 'no such file' in error:
+            reason = 'status-not-published'
+        elif status_read and ('is restarting' in error or 'is not running' in error):
+            reason = 'container-not-ready'
+        elif 'permission denied' in error:
+            reason = 'permission-denied'
+        raise DockerCommandError(service, operation, reason, result.returncode,
+                                 retryable=reason in ('status-not-published', 'container-not-ready'))
     return result.stdout.strip()
 
 
@@ -96,6 +130,39 @@ def linux_status():
     return json.loads(docker('linux-device', ['cat', '/run/olo-toolgate/device-status.json']))
 
 
+def ready_linux_status(device=None, seen_after=0):
+    try:
+        status = linux_status()
+    except DockerCommandError as failure:
+        if failure.retryable:
+            return None
+        raise
+    if not isinstance(status, dict):
+        raise ValueError('Invalid local device status')
+    identity = status.get('deviceId')
+    if identity is not None and (not isinstance(identity, str) or not re.fullmatch(r'device-[0-9a-f]{32}', identity)):
+        raise ValueError('Invalid local device identity')
+    if device and identity and identity != device:
+        raise ValueError('The local device identity changed during restart')
+    if status.get('state') in ('REVOKED', 'DENIED'):
+        raise ValueError('The local device is not authorized')
+    updated = status.get('updatedAtUnixMs')
+    if identity and status.get('state') == 'ACTIVE' and type(updated) is int and updated > seen_after:
+        return status
+    return None
+
+
+def wait_linux_status(timeout=30):
+    deadline = time.monotonic()+timeout
+    while True:
+        status = ready_linux_status()
+        if status:
+            return status
+        if time.monotonic() >= deadline:
+            raise ValueError('The local device status did not become ready; inspect device startup logs')
+        time.sleep(2)
+
+
 def wait_device(config, device, seen_after=0, timeout=90):
     deadline = time.monotonic() + timeout
     while True:
@@ -113,7 +180,7 @@ def gateway_url():
     return 'https://localhost:' + os.environ.get('TOOLGATE_TLS_PORT', '18451')
 
 
-def sync_deployment_metadata():
+def sync_deployment_metadata(local_status=None):
     """Collect only public Docker facts; runtime device keys and peer addresses stay authoritative."""
     result=subprocess.run(COMPOSE+['ps','-q','quickstart','linux-device','registry'],capture_output=True,text=True,check=True,timeout=30,cwd=HERE)
     ids=result.stdout.split()
@@ -138,7 +205,10 @@ def sync_deployment_metadata():
         "('TOOL_HOST_PULL','tool-host-remote.json','hostId')] if (p/n).exists()});"
         "print(json.dumps(r))"]))
     records={device:details(quickstart,kind) for kind,device in local.items() if device}
-    records[linux_status()['deviceId']]=details(endpoint,'ENDPOINT_CLIENT')
+    # Reuse the identity verified by the recovery barrier. The supervisor can
+    # temporarily remove its status file while refreshing busy native health.
+    local_status = local_status if local_status is not None else wait_linux_status()
+    records[local_status['deviceId']]=details(endpoint,'ENDPOINT_CLIENT')
     document=dict(gatewaySystemName=quickstart['Config']['Hostname'],devices=records)
     docker('quickstart',['/opt/quickstart-python/bin/python','-c',
         "import sys,json;sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
@@ -248,19 +318,38 @@ def load_mimic():
     return module
 
 
-def wait_package_executor(config, release, device, seen_after, timeout=240):
+def wait_package_executor(config, release, device, seen_after, timeout=240, local_device=False):
     """A fresh heartbeat can precede package recovery after a service restart."""
     deadline = time.monotonic()+timeout
     while True:
         status = config.api('/api/control/v1/endpoint/devices/'+device)
         reported = (status.get('report') or {}).get('packages', [])
-        if status.get('lastSeenUnixMs', 0) >= seen_after and any(
+        if status.get('lastSeenUnixMs', 0) > seen_after and any(
                 package['packageId'] == release['packageId'] and package['version'] == release['version']
                 and package['state'] == 'READY' for package in reported):
-            return
+            if not local_device:
+                return None
+            local = ready_linux_status(device, seen_after)
+            if local:
+                return local
         if time.monotonic() >= deadline:
-            raise ValueError('The signed package executor did not recover after restart; inspect device activation logs')
+            raise ValueError('The signed package executor/local status did not recover after restart; inspect device activation logs')
         time.sleep(2)
+
+
+def recover_device(config, selection, release):
+    local_device = selection['platform'] == 'linux'
+    if local_device:
+        result = subprocess.run(COMPOSE + ['restart', 'linux-device'], capture_output=True, text=True, cwd=HERE)
+        if result.returncode:
+            raise ValueError('Could not reconnect this example\'s Linux device')
+    # The old process can check in during shutdown. Capture the cutoff only
+    # after restart completes, so its heartbeat and READY report cannot qualify.
+    reconnect_after = int(time.time() * 1000)
+    print('Waiting for a post-restart device check-in and package recovery.', flush=True)
+    wait_device(config, selection['deviceId'], seen_after=reconnect_after, timeout=360)
+    return wait_package_executor(config, release, selection['deviceId'], reconnect_after,
+                                 local_device=local_device)
 
 
 def verify_discovery(selection, directory, target, timeout=30):
@@ -370,19 +459,9 @@ def provision(args):
     if result.returncode:
         raise ValueError('Could not restart this example\'s Quickstart to load its credential')
     wait_ready()
-    # Shutdown grace still permits old-process check-ins. Only a heartbeat after
-    # the replacement Gateway is ready proves the device has reconnected.
-    reconnect_after = int(time.time() * 1000)
-    if selection['platform'] == 'linux':
-        # Clear retry backoff from the gateway restart; identity/files stay in volumes.
-        result = subprocess.run(COMPOSE + ['restart', 'linux-device'], capture_output=True, text=True, cwd=HERE)
-        if result.returncode:
-            raise ValueError('Could not reconnect this example\'s Linux device')
-    print('Waiting for a fresh device check-in after the Gateway restart (up to 6 minutes for client retry backoff).', flush=True)
-    wait_device(config, device, seen_after=reconnect_after, timeout=360)
-    wait_package_executor(config, release, device, reconnect_after)
+    local_status = recover_device(config, selection, release)
     verify_discovery(selection, directory, args.target)
-    sync_deployment_metadata()
+    sync_deployment_metadata(local_status)
     print(f'Configured {selection["platform"]}: {device} in {DEVICE_GROUP}. Configuration applied through the Control API. Credentials expire in 24 hours.')
     print('Private runner credentials: ' + str(directory))
 

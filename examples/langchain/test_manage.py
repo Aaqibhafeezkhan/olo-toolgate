@@ -5,6 +5,7 @@ import contextlib
 from copy import deepcopy
 import io
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -203,7 +204,7 @@ class DeploymentMetadataTests(unittest.TestCase):
         replies=[SimpleNamespace(stdout='a'*64+'\n'+'b'*64+'\n'+'c'*64+'\n'),SimpleNamespace(stdout=json.dumps(containers))]
         with patch.object(manage.subprocess,'run',side_effect=replies), \
                 patch.object(manage,'docker',side_effect=[json.dumps(identities),'']) as docker, \
-                patch.object(manage,'linux_status',return_value=dict(deviceId=LINUX)),contextlib.redirect_stdout(io.StringIO()):
+                patch.object(manage,'linux_status',return_value=dict(deviceId=LINUX,state='ACTIVE',updatedAtUnixMs=NOW)),contextlib.redirect_stdout(io.StringIO()):
             document=manage.sync_deployment_metadata()
         rows=document['devices']
         self.assertEqual(set(rows),{'tool-host-local','tool-host-remote',LINUX})
@@ -215,6 +216,16 @@ class DeploymentMetadataTests(unittest.TestCase):
         self.assertNotIn('SECRET',json.dumps(document))
         self.assertEqual(json.loads(docker.call_args.args[2]),document)
 
+    def test_verified_identity_is_not_reread_from_a_transient_status_file(self):
+        containers=[self.container('quickstart','a'*64,'172.18.0.2'),self.container('linux-device','b'*64,'172.18.0.3'),self.container('registry','c'*64,'172.18.0.2')]
+        replies=[SimpleNamespace(stdout='a'*64+'\n'+'b'*64+'\n'+'c'*64),SimpleNamespace(stdout=json.dumps(containers))]
+        local=dict(deviceId=LINUX,state='ACTIVE',updatedAtUnixMs=NOW)
+        with patch.object(manage.subprocess,'run',side_effect=replies), \
+                patch.object(manage,'docker',side_effect=['{}','']), \
+                patch.object(manage,'linux_status',side_effect=AssertionError('Do not reopen the status file')), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertIn(LINUX,manage.sync_deployment_metadata(local)['devices'])
+
     def test_missing_shared_network_stops_before_export(self):
         containers=[self.container('quickstart','a'*64,'172.18.0.2'),self.container('linux-device','b'*64,'172.18.0.3'),self.container('registry','c'*64,'172.18.0.2')]
         containers[1]['NetworkSettings']['Networks']={}
@@ -225,6 +236,12 @@ class DeploymentMetadataTests(unittest.TestCase):
 
 
 class PackageRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        temporary=tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root=patch.object(manage,'ROOT',Path(temporary.name))
+        root.start();self.addCleanup(root.stop)
+
     def test_fresh_heartbeat_is_not_enough_until_expected_runtime_is_ready(self):
         release={'packageId':'examples.hotfolder','version':'0.1.0'}
         package={**release,'state':'READY'}
@@ -235,6 +252,107 @@ class PackageRecoveryTests(unittest.TestCase):
         with patch.object(manage.time,'sleep'):
             manage.wait_package_executor(config,release,LINUX,100)
         self.assertEqual(config.api.call_count,3)
+
+    def test_restart_finishes_before_the_heartbeat_cutoff_is_taken(self):
+        now=[100.0]
+        def restart(*args,**kwargs):
+            now[0]=200.0
+            return SimpleNamespace(returncode=0)
+        config=object();release=dict(packageId='examples.hotfolder',version='0.1.0')
+        local=dict(deviceId=LINUX,state='ACTIVE',updatedAtUnixMs=200001)
+        with patch.object(manage.subprocess,'run',side_effect=restart), \
+                patch.object(manage.time,'time',side_effect=lambda:now[0]), \
+                patch.object(manage,'wait_device') as wait, \
+                patch.object(manage,'wait_package_executor',return_value=local) as package:
+            self.assertEqual(local,manage.recover_device(config,registration(LINUX,'linux'),release))
+        wait.assert_called_once_with(config,LINUX,seen_after=200000,timeout=360)
+        package.assert_called_once_with(config,release,LINUX,200000,local_device=True)
+
+    def test_old_heartbeat_and_missing_or_stale_local_status_cannot_pass_recovery(self):
+        release=dict(packageId='examples.hotfolder',version='0.1.0')
+        report=dict(packages=[dict(**release,state='READY')])
+        config=SimpleNamespace(api=unittest.mock.Mock(side_effect=[
+            dict(lastSeenUnixMs=99,report=report),dict(lastSeenUnixMs=100,report=report),
+            *[dict(lastSeenUnixMs=101,report=report)]*3]))
+        missing=manage.DockerCommandError('linux-device','read-device-status','status-not-published',1,True)
+        stale=dict(deviceId=LINUX,state='ACTIVE',updatedAtUnixMs=99)
+        fresh=dict(stale,updatedAtUnixMs=101)
+        with patch.object(manage,'linux_status',side_effect=[missing,stale,fresh]), \
+                patch.object(manage.time,'sleep') as sleep:
+            self.assertEqual(fresh,manage.wait_package_executor(config,release,LINUX,100,local_device=True))
+        self.assertEqual(config.api.call_count,5)
+        self.assertEqual(sleep.call_count,4)
+
+    def test_recovery_timeout_is_not_extended_for_missing_local_status(self):
+        release=dict(packageId='examples.hotfolder',version='0.1.0')
+        config=SimpleNamespace(api=lambda path:dict(lastSeenUnixMs=101,report=dict(packages=[dict(**release,state='READY')])))
+        missing=manage.DockerCommandError('linux-device','read-device-status','status-not-published',1,True)
+        with patch.object(manage,'linux_status',side_effect=missing), \
+                patch.object(manage.time,'monotonic',side_effect=[0,241]), \
+                self.assertRaisesRegex(ValueError,'did not recover'):
+            manage.wait_package_executor(config,release,LINUX,100,local_device=True)
+
+    def test_changed_identity_or_malformed_status_fails_immediately(self):
+        for status in (dict(deviceId=WINDOWS,state='ACTIVE',updatedAtUnixMs=NOW),[],None):
+            with self.subTest(status=status),patch.object(manage,'linux_status',return_value=status), \
+                    self.assertRaises(ValueError):
+                manage.ready_linux_status(LINUX,100)
+
+    def test_windows_recovery_does_not_restart_the_local_linux_device(self):
+        config=object();release={}
+        with patch.object(manage.subprocess,'run') as restart, \
+                patch.object(manage,'wait_device'),patch.object(manage,'wait_package_executor') as package:
+            manage.recover_device(config,registration(WINDOWS,'windows'),release)
+        restart.assert_not_called()
+        self.assertFalse(package.call_args.kwargs['local_device'])
+
+
+class CommandDiagnosticsTests(unittest.TestCase):
+    def setUp(self):
+        temporary=tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root=Path(temporary.name)
+        root=patch.object(manage,'ROOT',self.root)
+        root.start();self.addCleanup(root.stop)
+
+    def test_only_a_missing_status_read_is_retryable(self):
+        reply=SimpleNamespace(returncode=1,stdout='',stderr='cat: /run/olo-toolgate/device-status.json: No such file or directory')
+        with patch.object(manage.subprocess,'run',return_value=reply) as run:
+            with self.assertRaises(manage.DockerCommandError) as status:
+                manage.linux_status()
+            self.assertTrue(status.exception.retryable)
+            with self.assertRaises(manage.DockerCommandError) as mutation:
+                manage.docker('linux-device',['python','-c','write configuration'])
+            self.assertFalse(mutation.exception.retryable)
+        self.assertEqual(run.call_count,2)
+
+    def test_failure_artifact_and_message_exclude_private_command_data(self):
+        secret='private-test-value'
+        reply=SimpleNamespace(returncode=7,stdout=secret,stderr='Permission denied '+secret)
+        with patch.object(manage.subprocess,'run',return_value=reply),self.assertRaises(manage.DockerCommandError) as error:
+            manage.docker('quickstart',['python','-c',secret],secret)
+        self.assertFalse(error.exception.retryable)
+        self.assertNotIn(secret,str(error.exception))
+        text=(self.root/'build/langchain/command-failures.jsonl').read_text()
+        self.assertNotIn(secret,text)
+        self.assertEqual(json.loads(text),dict(service='quickstart',operation='container-command',reason='permission-denied',exitCode=7))
+
+    def test_command_timeout_is_sanitized_and_not_replayed(self):
+        with patch.object(manage.subprocess,'run',side_effect=subprocess.TimeoutExpired('private-command',60)) as run, \
+                self.assertRaises(manage.DockerCommandError) as error:
+            manage.docker('linux-device',['cat','/run/olo-toolgate/device-status.json'])
+        self.assertNotIn('private-command',str(error.exception))
+        self.assertFalse(error.exception.retryable)
+        self.assertEqual(run.call_count,1)
+
+    def test_permission_failure_does_not_enter_the_readiness_retry_loop(self):
+        reply=SimpleNamespace(returncode=1,stdout='',stderr='Permission denied')
+        with patch.object(manage.subprocess,'run',return_value=reply) as run, \
+                patch.object(manage.time,'sleep') as sleep, \
+                self.assertRaisesRegex(manage.DockerCommandError,'permission-denied'):
+            manage.wait_linux_status()
+        run.assert_called_once()
+        sleep.assert_not_called()
 
 
 class DeploymentTrustTests(unittest.TestCase):
