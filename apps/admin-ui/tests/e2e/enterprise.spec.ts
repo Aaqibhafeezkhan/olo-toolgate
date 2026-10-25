@@ -71,6 +71,7 @@ test('real group administration, inherited provenance and review impact are acce
     async function applyDraft(){
       const link=page.getByRole('link',{name:'Review configuration draft'});
       const href=(await link.getAttribute('href'))!;
+      const detailPath='/api/control/v1/configuration-changes/'+new URLSearchParams(href.split('?')[1]).get('id');
       await link.click();
       const confirmation='I reviewed the affected groups, inherited access, complete configuration and digests.';
       await page.getByLabel(confirmation).check();
@@ -94,18 +95,26 @@ test('real group administration, inherited provenance and review impact are acce
       await expect(page.getByRole('alert')).toBeVisible();
       for(const reviewer of reviewers.slice(0,requiredReviews!)){
         const [detail]=await Promise.all([
-          reviewer.waitForResponse(response=>new URL(response.url()).pathname==='/api/control/v1/configuration-changes/'+new URLSearchParams(href.split('?')[1]).get('id')&&response.request().method()==='GET'),
+          reviewer.waitForResponse(response=>new URL(response.url()).pathname===detailPath&&response.request().method()==='GET'),
           reviewer.goto(origin+'/console/'+href)
         ]);
         expect(detail.status(),'Independent reviewer can read the exact submitted change').toBe(200);
         await reviewer.getByLabel(confirmation).check();
-        await reviewer.getByRole('button',{name:'Approve exact configuration'}).click();
+        const [approved]=await Promise.all([
+          reviewer.waitForResponse(response=>new URL(response.url()).pathname===detailPath+'/transition'
+            &&response.request().method()==='POST'&&response.request().postDataJSON().action==='APPROVE'),
+          reviewer.getByRole('button',{name:'Approve exact configuration'}).click()
+        ]);
+        expect(approved.status(),'Independent approval committed before the next reviewer reads the change').toBe(200);
         await expect(reviewer.getByLabel(confirmation)).not.toBeChecked();
       }
-      // Reopen the exact draft after independent review. The acceptance gate
-      // checks current workflow state, not an incidental queue-refresh request.
-      // Refresh/retry behavior is covered deterministically in component tests.
-      await page.goto(origin+'/console/'+href);
+      // Navigating to the same hash does not reload this mounted screen. Use
+      // its refresh action to read the reviews committed in the other sessions.
+      const [refreshed]=await Promise.all([
+        page.waitForResponse(response=>new URL(response.url()).pathname===detailPath&&response.request().method()==='GET'),
+        page.getByRole('button',{name:'Refresh changes',exact:true}).click()
+      ]);
+      expect(refreshed.status(),'Maker reloads the current independent reviews').toBe(200);
       await expect(page.getByRole('region',{name:'Configuration impact'}).getByText('APPROVED',{exact:true})).toBeVisible();
       await expect(page.getByRole('button',{name:'Apply reviewed change'})).toBeVisible();
       await page.getByLabel(confirmation).check();
