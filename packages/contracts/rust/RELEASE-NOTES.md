@@ -13,6 +13,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Downstream memory/RAG authorization epoch reads reserve a writer transaction
+  because they persist the anti-rollback clock. This prevents a read-only SQLite
+  transaction from returning 503 before a service can verify its execution permit.
+
 - Java tools ship as one self-contained executable. `toolgatePackage` and the Maven `package`
   goal stage `artifacts/tool.jar`, a deterministic fat jar of the tool jar and its whole runtime
   class path with `Main-Class: io.ololabs.toolgate.runtime.Main`, in place of `app.jar` and
