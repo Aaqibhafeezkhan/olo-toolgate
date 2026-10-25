@@ -1,3 +1,5 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
 # FILENAME: <next-available-sequence-number>-<Your-First-Name>-<Your-Last-Name>.yaml
 # Example: 3-Your-Name.yaml if 1 and 2 are the highest existing sequence numbers.
 # Check the target collection first; choose the highest number + 1, with no leading zeros.
@@ -16,8 +18,6 @@
 # reviewer, tester, documentation, release-manager, product-owner. Multiple roles are allowed.
 # After copying, run: python tools/release/notes.py --check
 # Preview with: python tools/release/notes.py --output build/release-notes
-# Copyright 2026 OLO Labs
-# SPDX-License-Identifier: Apache-2.0
 
 # REQUIRED: keep 1; this selects the current fragment format, not the product version.
 schemaVersion: 1

@@ -28,10 +28,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -65,10 +68,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -107,10 +113,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -140,10 +149,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -173,10 +185,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -214,10 +229,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -260,10 +278,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -311,10 +332,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -359,10 +383,13 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install validation dependencies
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
-        rustup show
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
