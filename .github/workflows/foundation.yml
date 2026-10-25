@@ -48,6 +48,10 @@ jobs:
       env:
         PYTHONPATH: apps/quickstart
       run: python -m unittest discover -s tests/quickstart -v
+    - name: Verify LangChain lifecycle and package contracts before image builds
+      run: |
+        python -m unittest discover -s examples/langchain -p test_manage.py -v
+        python -m unittest discover -s examples/langchain -p test_packages.py -v
   ui:
     runs-on: ubuntu-24.04
     env:

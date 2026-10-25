@@ -102,7 +102,17 @@ docker compose logs --tail 100 quickstart linux-device registry
 ```
 
 CI retains `langchain-diagnostics` with container status and bounded logs before
-cleanup. An unhealthy device is a startup/executor failure; a failed rollout is
+cleanup. `command-failures.jsonl` records command categories, exit codes and fixed
+failure reasons, without command arguments, credentials or captured output.
+After a device restart, setup requires a heartbeat newer than restart completion,
+the expected package's READY report, and a fresh ACTIVE local status for the same
+device. Only missing status publication or a not-yet-running container is retried;
+permission failures, changed identities and malformed status fail immediately.
+Metadata export reuses that verified identity so a concurrent health refresh
+cannot invalidate setup by temporarily removing its status file. Lifecycle and
+package regression tests also run in the early foundation gate.
+
+An unhealthy device is a startup/executor failure; a failed rollout is
 a package activation failure; an empty catalog requires checking grants, package
 digests and current device reports. Do not increase timeouts to hide these errors.
 Rerun setup for expired credentials or changed Gateway trust; it never silently
