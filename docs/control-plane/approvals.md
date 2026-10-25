@@ -26,6 +26,15 @@ Permits last at most ten seconds with zero grace. Device connection approval is
 separate: an approved device still needs enabled identities, complete grants and
 the exact operation approval. Unlimited connection approval never extends a permit.
 
+An operation review also updates the original invocation in the same transaction:
+denial ends a pending invocation as `FAILED`; revocation before dispatch ends it as
+`CANCELLED`. Revocation after dispatch may have begun records `OUTCOME_UNKNOWN`,
+because stopping authorization cannot prove an external effect did not happen.
+The approval record retains the actual `DENIED` or `REVOKED` review reason. An exact
+retry returns this original terminal invocation rather than a fresh approval wait.
+Even a tool declaring downstream idempotency cannot automatically resend an unknown
+invocation whose approval was revoked, expired or invalidated by an authority change.
+
 ## Diagnose an approval failure
 
 Inspect the invocation, pending obligations, current reviewer authority, revision,

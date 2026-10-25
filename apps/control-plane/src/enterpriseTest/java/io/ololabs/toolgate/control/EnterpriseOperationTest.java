@@ -156,6 +156,31 @@ class EnterpriseOperationTest {
     @Test void requesterCannotReviewOwnOperationEvenWithManagementRole(){graph.policy("ask",Decision.ASK);saveGraph();var i=submit("request");var a=approval(i);var self=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"d".repeat(64),true,false,"alice");assertThrows(Failure.class,()->operations.decide(self,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),"ask",EnterpriseReviewDecision.APPROVE)),"self"));}
     @Test void approvedOperationNeverManufacturesMissingGrant(){graph.policy("ask",Decision.ASK);saveGraph();var i=submit("request");approve(approval(i),"ask");graph.remove(Kind.GRANT,"human");saveGraph();var queued=store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation(i.id()));assertThrows(Failure.class,()->reserve(queued));}
     @Test void approvalRevocationAfterReservationStopsConsumption(){graph.policy("ask",Decision.ASK);saveGraph();var i=submit("request");var a=approve(approval(i),"ask");var queued=store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation(i.id()));var r=reserve(queued);operations.decide(reviewer,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),"ask",EnterpriseReviewDecision.REVOKE)),"revoke");assertThrows(Failure.class,()->consume(r));}
+    @Test void deniedApprovalEndsTheOriginalInvocationAndReplayDoesNotWaitAgain(){
+        graph.policy("ask",Decision.ASK);saveGraph();var invocation=submit("denied-original");var pending=approval(invocation);
+        operations.decide(reviewer,pending.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(pending.revision(),"ask",EnterpriseReviewDecision.DENY)),"deny-original");
+        var denied=submit("denied-original");
+        assertEquals(invocation.id(),denied.id());assertEquals(EnterpriseInvocationState.FAILED,denied.state());
+        assertEquals(EnterpriseApprovalState.DENIED,approval(denied).state());assertThrows(Failure.class,()->reserve(denied));
+    }
+    @Test void revokedQueuedApprovalCancelsBeforeDispatchAndCannotBeResumed(){
+        graph.policy("ask",Decision.ASK);saveGraph();var invocation=submit("revoked-original");var approved=approve(approval(invocation),"ask");
+        operations.decide(reviewer,approved.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(approved.revision(),"ask",EnterpriseReviewDecision.REVOKE)),"revoke-original");
+        var cancelled=submit("revoked-original");
+        assertEquals(invocation.id(),cancelled.id());assertEquals(EnterpriseInvocationState.CANCELLED,cancelled.state());
+        assertThrows(Failure.class,()->reserve(cancelled));
+    }
+    @Test void revocationDuringAnExecutingEffectRetainsAnUnknownOutcome(){
+        var old=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var definition=graph.codec.model(graph.codec.json(old.definition()).replaceFirst("[{]","{\"reconciliation\":\"DOWNSTREAM_IDEMPOTENCY\","),ToolDefinition.class);
+        graph.add(Kind.TOOL,new ControlTool(old.id(),old.name(),old.enabled(),old.revision()+1,definition,old.extractorId(),old.version(),old.packageDigest()));
+        graph.policy("ask",Decision.ASK);saveGraph();var invocation=submit("executing-original");var approved=approve(approval(invocation),"ask");
+        var executing=consume(reserve(submit("executing-original")));assertEquals(EnterpriseInvocationState.EXECUTING,executing.state());
+        operations.decide(reviewer,approved.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(approved.revision(),"ask",EnterpriseReviewDecision.REVOKE)),"revoke-executing");
+        var unknown=submit("executing-original");
+        assertEquals(invocation.id(),unknown.id());assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());
+        assertThrows(Failure.class,()->reserve(unknown));
+    }
     /** M5.4: an unknown outcome of a DOWNSTREAM_IDEMPOTENCY tool is resent by replaying its key; the target deduplicates. */
     @Test void downstreamIdempotentToolsAreResentWhenTheirKeyIsReplayed(){
         var old=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);

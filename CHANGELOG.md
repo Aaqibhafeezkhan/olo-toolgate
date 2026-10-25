@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Denied and revoked operation approvals atomically end the original invocation.
+  Revocation after dispatch retains an unknown outcome for reconciliation, and
+  invalidated approvals cannot trigger a downstream-idempotency resend.
+
 - Downstream memory/RAG authorization epoch reads reserve a writer transaction
   because they persist the anti-rollback clock. This prevents a read-only SQLite
   transaction from returning 503 before a service can verify its execution permit.
