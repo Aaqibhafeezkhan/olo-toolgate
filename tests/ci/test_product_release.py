@@ -154,6 +154,10 @@ class VersionPropagationTests(unittest.TestCase):
                     shutil.copyfile(ROOT/name, path)
             before = {p.relative_to(target).as_posix():p.read_bytes() for p in (target/'packages/contracts/schemas').rglob('*.json')}
             prepare.stamp(target, release())
+            rendered = (target/'RELEASE-NOTES.md').read_text()
+            self.assertIn('# OLO ToolGate 1.0.0-beta.42 release notes', rendered)
+            for language in ('java', 'rust', 'typescript', 'php'):
+                self.assertEqual(rendered, (target/f'packages/contracts/{language}/RELEASE-NOTES.md').read_text())
             self.assertEqual((target/'VERSION').read_text().strip(), '1.0.0-beta.42')
             self.assertEqual((target/'packages/contracts/VERSION').read_text().strip(), '1.0.0-beta.42')
             self.assertEqual(tomllib.loads((target/'Cargo.toml').read_text())['workspace']['package']['version'], '1.0.0-beta.42')

@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
+import sys
 import yaml
 from tools.ci.pr_policy import check_paths
 from tools.release import notes
@@ -85,3 +87,15 @@ class PullRequestPolicyTest(unittest.TestCase):
         gate = next(step for step in steps if 'pr_policy.py --base' in step.get('run', ''))
         self.assertNotIn('if', gate)
         self.assertNotIn('continue-on-error', gate)
+
+    def test_release_cli_generates_current_notes_from_another_directory(self):
+        self.write()
+        (self.root/'packages/contracts').mkdir(parents=True)
+        (self.root/'VERSION').write_text('1.2.3\n')
+        (self.root/'packages/contracts/VERSION').write_text('1.2.3\n')
+        (self.root/'CHANGELOG.md').write_text('# Changelog\n\n- Current fix.\n')
+        result = subprocess.run([sys.executable, str(notes.ROOT/'tools/release/notes.py'),
+            '--source', str(self.root), '--output', str(self.root/'assets')],
+            cwd=self.root, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn('Current fix.', (self.root/'assets/RELEASE-NOTES.md').read_text())

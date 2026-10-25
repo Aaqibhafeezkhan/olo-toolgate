@@ -6,9 +6,11 @@ import html
 import json
 from pathlib import Path
 import re
+import sys
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 VERSION = re.compile(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?')
 FILENAME = re.compile(r'([1-9][0-9]*)-[^/\\]+\.ya?ml')
 TYPES = ('breaking', 'added', 'changed', 'fixed', 'security', 'docs', 'internal')

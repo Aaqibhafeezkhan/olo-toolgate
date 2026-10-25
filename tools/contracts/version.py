@@ -19,7 +19,7 @@ def release_notes(root=None):
     root = ROOT if root is None else root
     product = (root/'VERSION').read_text(encoding='utf-8').strip()
     contracts = (root/'packages/contracts/VERSION').read_text(encoding='utf-8').strip()
-    return ("<!-- GENERATED FILE: release process; do not edit -->\n"
+    return ("<!-- GENERATED FILE: tools/contracts/version.py; do not edit -->\n"
         + f"# OLO ToolGate {product} release notes\n\nContracts version: `{contracts}`.\n\n"
         + "License: Apache-2.0. See LICENSE and bundled third-party notices/SBOMs.\n\n"
         + (root/'CHANGELOG.md').read_text(encoding='utf-8'))
