@@ -79,7 +79,9 @@ public final class ServicePermits {
         });
     }
     public Store.Reply epoch(DirectoryService.Actor service) {
-        return store.transaction(service.tenant(),false,tx->new Store.Reply(200,codec.json(new ServiceAuthorizationEpoch(
+        // Reading the epoch also persists the anti-rollback clock. Reserve a
+        // writer transaction before borrowing a connection (including SQLite).
+        return store.transaction(service.tenant(),true,tx->new Store.Reply(200,codec.json(new ServiceAuthorizationEpoch(
             service.tenant().value(),tx.enterprise().authorizationEpoch(),operations.clock(tx))),tx.load().revision()));
     }
     public Map<String,Object> keys(){return Map.of("keys",List.of(operations.signer().servicePublicKey()));}
