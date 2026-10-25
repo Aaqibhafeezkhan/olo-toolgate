@@ -1,6 +1,6 @@
 # Contributor release notes
 
-Start by copying the fully annotated [root sample](../RELEASE-NOTE-SAMPLE.yaml).
+Start by copying the fully annotated [sample](RELEASE-NOTE-SAMPLE.yaml).
 It explains every field, when to keep or remove optional sections, and how to
 choose the next available sequence number and your name for the filename.
 
