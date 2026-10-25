@@ -29,6 +29,61 @@ The [JSON Schema](fragment.schema.json) rejects unknown fields, missing author
 details, invalid types and empty changes. Duplicate YAML keys are rejected.
 Only numbered `.yaml`/`.yml` files belong inside a version directory.
 
+## Shared work and release-ready context
+
+The fragment's `contributor` records its primary author. A change can additionally
+credit multiple `contributors`, identify multiple accountable `owners`, reference
+multiple `pullRequests`, and link `tickets` from Jira, GitHub Issues, or another
+tracker. Each ticket can carry its own owner, collaborators, and an owner-provided
+summary with `summaryAuthor` attribution. This supports work handled by several
+people without requiring duplicate release-note entries.
+
+Ask the ticket owner for a concise, approved, user-facing `summary`; capture the
+benefit in `impact`, upgrade steps in `migration`, and affected readers in
+`audience`. These fields are optional so small fixes remain easy to submit.
+For shared work, list each person's name and optional GitHub login explicitly.
+`pr` remains supported; it is merged with `pullRequests` and displayed once.
+
+Example change (ticket and PR references below are illustrative):
+
+```yaml
+  - type: fixed
+    component: Tool Host
+    summary: Resume interrupted tasks without duplicating completed effects.
+    impact: Operators can recover work after a worker restart.
+    migration: Restart workers after updating.
+    audience: [operators, developers]
+    pullRequests: [123, 124]
+    owners:
+      - name: Rahul Nigam
+        github: olo-labs
+    contributors:
+      - name: Rahul Nigam
+        github: olo-labs
+      - name: Anupriya Srivastava
+        github: olo-orgs
+    tickets:
+      - system: jira
+        id: TG-123
+        url: https://jira.example.com/browse/TG-123
+        summary: Recover in-progress tasks after an interrupted deployment.
+        owner:
+          name: Rahul Nigam
+          github: olo-labs
+        summaryAuthor:
+          name: Rahul Nigam
+          github: olo-labs
+        contributors:
+          - name: Anupriya Srivastava
+            github: olo-orgs
+```
+
+Ticket `system` is `jira`, `github`, or `other`. A ticket needs an `id` and HTTPS
+`url`; owner, summary author and collaborators use the same person structure as
+the primary contributor. Add only references and descriptions suitable for the
+release audience. All supplied fields appear in the JSON artifact; contextual
+details and ticket links also appear under the change in the rendered notes.
+
 From the repository root:
 
 ```sh

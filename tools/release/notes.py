@@ -6,6 +6,7 @@ import html
 import json
 from pathlib import Path
 import re
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = re.compile(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?')
@@ -74,6 +75,15 @@ def text(value):
     return re.sub(r'([\\`*_{}\[\]()#+.!|>-])', r'\\\1', value)
 
 
+def person_text(person):
+    return text(person['name'])+(' (@'+person['github']+')' if 'github' in person else '')
+
+
+def people_text(people):
+    # Preserve author order while crediting an identical record only once.
+    return ', '.join(dict.fromkeys(person_text(person) for person in people))
+
+
 def render(version, fragments):
     lines = ['## Contributor changes for '+version, '']
     for kind in TYPES:
@@ -82,13 +92,29 @@ def render(version, fragments):
             continue
         lines += ['### '+kind.title(), '']
         for fragment, change in entries:
-            person = fragment['contributor']
-            author = text(person['name'])
-            if 'github' in person:
-                author += ' (@'+person['github']+')'
+            author = people_text([fragment['contributor']]+change.get('contributors', []))
             prefix = text(change['component'])+': ' if 'component' in change else ''
-            pr = ' (#'+str(change['pr'])+')' if 'pr' in change else ''
+            prs = sorted(set(change.get('pullRequests', [])+([change['pr']] if 'pr' in change else [])))
+            pr = ' ('+', '.join('#'+str(number) for number in prs)+')' if prs else ''
             lines.append('- '+prefix+text(change['summary'])+' — '+author+pr)
+            for field in ('impact', 'migration'):
+                if field in change:
+                    lines.append('  - '+field.title()+': '+text(change[field]))
+            if 'audience' in change:
+                lines.append('  - Audience: '+', '.join(change['audience']))
+            if 'owners' in change:
+                lines.append('  - Owners: '+people_text(change['owners']))
+            for ticket in change.get('tickets', []):
+                # Schema limits references to HTTPS; encode Markdown delimiters.
+                reference = ticket['system'].upper()+' ['+text(ticket['id'])+']('+quote(ticket['url'], safe=':/?#=&%.-_~')+')'
+                lines.append('  - Ticket: '+reference)
+                if 'summary' in ticket:
+                    lines.append('    - Summary: '+text(ticket['summary']))
+                for field, label in [('owner', 'Owner'), ('summaryAuthor', 'Summary by')]:
+                    if field in ticket:
+                        lines.append('    - '+label+': '+person_text(ticket[field]))
+                if 'contributors' in ticket:
+                    lines.append('    - Contributors: '+people_text(ticket['contributors']))
         lines.append('')
     return '\n'.join(lines)+'\n'
 

@@ -134,6 +134,44 @@ class ReleaseNotesTests(unittest.TestCase):
         self.assertNotIn('[click](', rendered)
         self.assertIn('\\# heading', rendered)
 
+    def test_shared_work_ticket_owner_summary_and_professional_metadata_survive_generation(self):
+        rahul = dict(name='Rahul Nigam', github='olo-labs')
+        anupriya = dict(name='Anupriya Srivastava', github='olo-orgs')
+        change = self.document['changes'][0]
+        change.update(contributors=[self.document['contributor'], rahul, anupriya], owners=[rahul, anupriya],
+                      pullRequests=[456, 123], impact='Operators can recover interrupted work.',
+                      migration='Restart the worker after updating.', audience=['operators', 'developers'],
+                      tickets=[dict(system='jira', id='TG-123', url='https://jira.example.com/browse/TG-123?q=(test)',
+                                    summary='Owner-approved recovery summary.', owner=rahul, summaryAuthor=rahul,
+                                    contributors=[rahul, anupriya])])
+        self.write('1-contributor.yaml')
+        notes.generate(self.root, self.output)
+        manifest = json.loads((self.output/'contributors.json').read_text())
+        self.assertEqual(manifest['fragments'][0]['changes'][0], change)
+        rendered = (self.output/'RELEASE-NOTES.generated.md').read_text()
+        self.assertIn('(#123, #456)', rendered)
+        self.assertIn('Owners: Rahul Nigam (@olo-labs), Anupriya Srivastava (@olo-orgs)', rendered)
+        self.assertIn('Summary by: Rahul Nigam (@olo-labs)', rendered)
+        self.assertIn('TG-123?q=%28test%29)', rendered)
+        self.assertIn('Impact: Operators', rendered)
+        self.assertIn('Migration: Restart', rendered)
+        credit = next(line for line in rendered.splitlines() if line.startswith('- '))
+        self.assertEqual(credit.count('Contributor (@contributor)'), 1)
+
+    def test_invalid_ticket_collaborator_and_pr_metadata_is_rejected(self):
+        for field, value in [('pullRequests', [0]), ('pullRequests', [True]), ('pullRequests', [1, 1]),
+                             ('owners', []), ('contributors', [dict(github='missing-name')]),
+                             ('audience', ['unknown']), ('impact', ' '),
+                             ('tickets', [dict(system='jira', id='TG-1')]),
+                             ('tickets', [dict(system='jira', id='TG-1', url='javascript:alert(1)')]),
+                             ('tickets', [dict(system='jira', id='TG-1', url='https://example.com', owner='someone')])]:
+            with self.subTest(field=field, value=value):
+                doc = copy.deepcopy(self.document)
+                doc['changes'][0][field] = value
+                self.write('1-contributor.yaml', doc)
+                with self.assertRaises(ValueError):
+                    notes.load(self.root)
+
     def test_manual_overlay_renders_selected_source_notes(self):
         info = dict(sourceCommit='a'*40)
         destination = self.root/'overlay'
