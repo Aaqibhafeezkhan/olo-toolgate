@@ -368,6 +368,10 @@ async fn without_a_local_gateway_credential_local_calls_are_refused() {
 #[tokio::test]
 #[ignore = "requires tools/client/runtime_check.py real Docker fixture provisioning"]
 async fn real_engine_runs_hello_world_over_tool_protocol_v2() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .with_test_writer()
+        .try_init();
     let image = std::env::var("TOOLGATE_RUNTIME_TEST_IMAGE").expect("real image evidence required");
     let state = PathBuf::from(std::env::var("TOOLGATE_RUNTIME_TEST_STATE").unwrap());
     let engine = PathBuf::from(std::env::var("TOOLGATE_RUNTIME_TEST_ENGINE").unwrap());
@@ -423,7 +427,11 @@ async fn real_engine_runs_hello_world_over_tool_protocol_v2() {
         }),
     )
     .unwrap();
-    assert!(manager.prepare().await.unwrap().ready);
+    let health = manager.prepare().await.unwrap();
+    assert!(
+        health.ready,
+        "Managed runtime preparation rejected: {health:?}"
+    );
     for (index, (arguments, expected)) in [
         (json!({}), "Hello World"),
         (json!({"text": "Anupriya"}), "Hello Anupriya"),

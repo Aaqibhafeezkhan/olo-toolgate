@@ -26,8 +26,10 @@ class DebugManagementTests(unittest.TestCase):
             ROOT/'VERSION', ROOT/'packages/contracts/VERSION', ROOT/'CHANGELOG.md',
             ROOT/'LICENSE', ROOT/'NOTICE.md', ROOT/'debug/manage.ps1',
             ROOT/'tools/contracts/version.py', ROOT/'tools/contracts/generate.py',
-            ROOT/'tools/ci/preflight.py',
+            ROOT/'tools/ci/preflight.py', ROOT/'tools/contracts/fixtures.py',
         }
+        from tools.contracts import fixtures
+        sources.update(fixtures.outputs())
         # v1 schemas reference v2 definitions, so copy every supported version.
         for ver in generate.VERSIONS:
             sources.update((ROOT/'packages/contracts/schemas'/ver).glob('*.json'))

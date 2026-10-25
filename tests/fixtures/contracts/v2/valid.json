@@ -2614,5 +2614,12 @@
   "McpRefreshRequest": {
     "invocationId": "inv-42",
     "fencingToken": "fence-42"
-  }
+  },
+  "ToolAuthorization": {
+    "action": "memory.append",
+    "resources": [
+      "olo://{tenant}/conversation/{conversationId}"
+    ]
+  },
+  "ToolReconciliation": "STATUS_LOOKUP"
 }

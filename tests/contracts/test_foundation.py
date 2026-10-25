@@ -141,7 +141,34 @@ class FoundationTests(unittest.TestCase):
                     # compatibility checks for every other error-envelope field.
                     current = copy.deepcopy(current)
                     current['$defs']['ErrorCode']['enum'] = schema['$defs']['ErrorCode']['enum']
+                if name == 'tool.schema.json':
+                    # The fresh-install reconciliation contract requires current
+                    # readers. Its exact extension and archived rejection are
+                    # proved below; every other frozen field stays checked.
+                    current = copy.deepcopy(current)
+                    del current['$defs']['ToolDefinition']['properties']['reconciliation']
                 compatible(schema,current,name)
+
+    def test_reconciliation_requires_current_readers_without_weakening_other_fields(self):
+        baseline = schemas_at(ROOT/'tests/fixtures/contracts/v1/schemas')
+        archived = validators(baseline)['ToolDefinition']
+        tool = copy.deepcopy(self.fixtures['ToolDefinition'])
+        tool.pop('reconciliation', None)
+        archived.validate(tool)
+        self.assertEqual(
+            {'$ref':'tool.schema.json#/$defs/ReconciliationMethod'},
+            self.schemas['tool.schema.json']['$defs']['ToolDefinition']['properties']['reconciliation'])
+        methods = ['DOWNSTREAM_IDEMPOTENCY','STATUS_LOOKUP','MANUAL']
+        self.assertEqual(methods, self.schemas['tool.schema.json']['$defs']['ReconciliationMethod']['enum'])
+        for method in methods:
+            with self.subTest(method=method):
+                current = dict(tool, reconciliation=method)
+                self.validators['ToolDefinition'].validate(current)
+                with self.assertRaises(ValidationError):archived.validate(current)
+        with self.assertRaises(ValidationError):
+            self.validators['ToolDefinition'].validate(dict(tool, reconciliation='RETRY_ALWAYS'))
+        with self.assertRaises(ValueError):
+            compatible(baseline['tool.schema.json'],self.schemas['tool.schema.json'])
 
     def test_tenant_error_codes_require_the_current_reader(self):
         baseline = schemas_at(ROOT/'tests/fixtures/contracts/v1/schemas')

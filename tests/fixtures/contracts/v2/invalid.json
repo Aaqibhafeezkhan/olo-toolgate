@@ -3168,5 +3168,39 @@
         "fencingToken": "fence-42"
       }
     }
+  ],
+  "ToolAuthorization": [
+    {
+      "case": "unverified literal tenant",
+      "value": {
+        "action": "memory.read",
+        "resources": [
+          "olo://tenant-a/conversation/{conversationId}"
+        ]
+      }
+    },
+    {
+      "case": "empty resource scope",
+      "value": {
+        "action": "memory.read",
+        "resources": []
+      }
+    },
+    {
+      "case": "identity override",
+      "value": {
+        "action": "memory.read",
+        "resources": [
+          "olo://{tenant}/conversation/{conversationId}"
+        ],
+        "subjectUserId": "other-user"
+      }
+    }
+  ],
+  "ToolReconciliation": [
+    {
+      "case": "unsupported retry policy",
+      "value": "RETRY_ALWAYS"
+    }
   ]
 }

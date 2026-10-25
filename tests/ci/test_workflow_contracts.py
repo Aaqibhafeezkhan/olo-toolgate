@@ -10,6 +10,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class EarlyGateTests(unittest.TestCase):
+    def test_quickstart_restore_and_security_fixtures_run_before_image_builds(self):
+        foundation = yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
+        steps = foundation['jobs']['python']['steps']
+        gate = next(step for step in steps if 'tests/quickstart' in step.get('run', ''))
+        self.assertEqual('apps/quickstart', gate['env']['PYTHONPATH'])
+        self.assertNotIn('if', gate)
+        self.assertNotIn('continue-on-error', gate)
+
     def test_manual_ci_reuses_all_unified_stages_after_bypassing_admission(self):
         manual = yaml.load((ROOT/'.github/workflows/ci-manual.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual(manual['name'], 'ToolGate CI - Manual')
