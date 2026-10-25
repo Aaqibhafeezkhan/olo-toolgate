@@ -33,7 +33,7 @@ final class ContractRoundTripTest {
             assertEquals(fixture.getValue(), mapper.readTree(mapper.writeValueAsString(model)), fixture.getKey());
             checked++;
         }
-        assertEquals(276, checked);
+        assertEquals(278, checked);
         assertEquals(ContractSet.NAME, ContractSet.current().name());
         assertEquals(System.getProperty("toolgate.contractsVersion"), ContractSet.current().version());
     }

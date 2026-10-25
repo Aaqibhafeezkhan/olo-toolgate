@@ -340,6 +340,18 @@
     "occurredAt": "2026-10-02T00:00:00Z",
     "requestDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
+  "ControlAuditEvidence": {
+    "authorizationEpoch": 1,
+    "invocationId": "inv-1",
+    "mode": "HUMAN",
+    "operation": "memory.append",
+    "policyRevision": 1,
+    "resourceCount": 1,
+    "resourcesDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "SUCCEEDED",
+    "subjectUserId": "user-1",
+    "toolId": "memory-append"
+  },
   "ControlAuditPage": {
     "items": [
       {
@@ -2297,6 +2309,7 @@
     }
   },
   "PackageState": "READY",
+  "ReconciliationMethod": "STATUS_LOOKUP",
   "RemoteToolAuthorization": {
     "requestId": "request",
     "leaseId": "lease",
@@ -2605,18 +2618,5 @@
       "type": "number"
     }
   },
-  "UserRole": "BASIC",
-  "ReconciliationMethod": "STATUS_LOOKUP",
-  "ControlAuditEvidence": {
-    "authorizationEpoch": 1,
-    "invocationId": "inv-1",
-    "mode": "HUMAN",
-    "operation": "memory.append",
-    "policyRevision": 1,
-    "resourceCount": 1,
-    "resourcesDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "state": "SUCCEEDED",
-    "subjectUserId": "user-1",
-    "toolId": "memory-append"
-  }
+  "UserRole": "BASIC"
 }
