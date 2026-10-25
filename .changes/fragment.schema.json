@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToolGate contributor release-note fragment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contributor", "changes"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "contributor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
+        "github": {"type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"}
+      }
+    },
+    "changes": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["type", "summary"],
+        "properties": {
+          "type": {"enum": ["breaking", "added", "changed", "fixed", "security", "docs", "internal"]},
+          "summary": {"type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S"},
+          "component": {"type": "string", "minLength": 1, "maxLength": 120, "pattern": "\\S"},
+          "pr": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

@@ -152,6 +152,7 @@ def main():
         run(['cargo','test','-p','olo-toolgate-gateway','--locked']); return
     if not args.ci_common:
         python('tools/ci/preflight.py')
+        python('tools/release/notes.py', '--check')
         python('-m','unittest','discover','-s','tests/ci','-v')
     if part('python'):
         python('tools/ui/generate.py','--check')

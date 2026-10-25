@@ -32,6 +32,8 @@ Discuss large changes in an issue before implementation.
 
 ## Before a pull request
 
+- Add your contributor details and release-note changes as a versioned YAML
+  [fragment](.changes/README.md) under `.changes/v0.1.0-beta.1/`.
 - Run the relevant [verification commands](docs/testing/README.md), including
   `python tools/check.py` for the full repository check. Java changes also use
   `./gradlew javaCheck` (`gradlew.bat javaCheck` on Windows).

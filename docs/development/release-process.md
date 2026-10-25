@@ -17,6 +17,12 @@ All first-party artifacts share one version. Registry writes are not atomic:
 inspect partial publication and follow the operator guide before retrying. Reuse
 matching artifact bytes; never replace a conflicting published version.
 
+Contributor changes accumulate in [versioned YAML fragments](../../.changes/README.md).
+Development and prepared release bundles include the combined release notes,
+contributor-only notes and machine-readable contributor manifest from the selected
+source commit. The planned collection version is independent of allocated build
+numbers. Update `.changes/config.json` when starting the next release collection.
+
 See [CI ownership](ci-check-ownership.md), [admission](ci-admission.md),
 [verification](../testing/README.md) and [compatibility](../architecture/compatibility.md)
 for validation boundaries. Build provenance does not imply OS signing: development

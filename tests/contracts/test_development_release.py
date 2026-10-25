@@ -51,6 +51,8 @@ class DevelopmentReleaseTests(unittest.TestCase):
             (publication/'pom-default.xml').write_bytes(b'prepared pom')
             (root/'target/package').mkdir(parents=True)
             (root/'RELEASE-NOTES.md').write_text('source notes',encoding='utf-8')
+            from tools.release.notes import generate
+            generate(root, root/'release-notes')
             chart=root/'deploy/helm/olo-toolgate';chart.mkdir(parents=True)
             (chart/'values.yaml').write_text('global:\n  imageRegistry: fixture\n',encoding='utf-8')
             info={'commit':'a'*40,'binaryVersion':'1.0.0','libraryVersion':'1.0.0-dev.fixture','dockerTag':'dev-fixture'}
@@ -60,6 +62,8 @@ class DevelopmentReleaseTests(unittest.TestCase):
                  patch.dict(os.environ,{'GITHUB_RUN_NUMBER':'1','DOCKERHUB_NAMESPACE':'fixture'}):
                 manual_development.build()
             self.assertEqual((assets/'toolgate-contracts-1.0.0-dev.fixture.pom').read_bytes(),b'prepared pom')
+            self.assertEqual((assets/'RELEASE-NOTES.md').read_text(), 'source notes\n')
+            self.assertEqual(json.loads((assets/'contributors.json').read_text())['fragments'], [])
 
     def test_manual_publication_uses_prepared_assets_on_a_fresh_runner(self):
         sha='a'*40

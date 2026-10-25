@@ -101,6 +101,12 @@ def prepare_assets(selected):
     (shared.OUTPUT/'MAVEN_VERSION').write_text(version+'\n',encoding='utf-8')
     (assets/'tagged-release.json').write_text(json.dumps(dict(commit=os.environ['RELEASE_SHA'],
         ciRuns=selected,releaseTag=version_tag(),mavenVersion=version),indent=2)+'\n',encoding='utf-8')
+    from tools.release.notes import generate
+    generate(shared.ROOT, assets)
+    # Legacy tag publication compares product documents with foundation evidence.
+    # Keep that contract while attaching and publishing the combined notes too.
+    (assets/'RELEASE-NOTES.md').replace(assets/'RELEASE-NOTES.combined.md')
+    shutil.copyfile(folder/'RELEASE-NOTES.md', assets/'RELEASE-NOTES.md')
     checksum_assets()
 
 
@@ -178,6 +184,6 @@ def finalize():
     assets=shared.OUTPUT/'assets'
     arguments=['gh','release','create',tag,*[str(p) for p in sorted(assets.iterdir()) if p.is_file()],
         '--repo',repo,'--verify-tag','--title','OLO ToolGate '+version,'--generate-notes',
-        '--notes-file',str(shared.ROOT/'RELEASE-NOTES.md')]
+        '--notes-file',str(assets/'RELEASE-NOTES.combined.md')]
     if '-' in version:arguments.append('--prerelease')
     shared.run(*arguments)

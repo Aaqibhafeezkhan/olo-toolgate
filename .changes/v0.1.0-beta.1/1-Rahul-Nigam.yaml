@@ -1,0 +1,19 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+schemaVersion: 1
+contributor:
+  name: Rahul Nigam
+  github: olo-labs
+changes:
+  - type: added
+    component: Authorization and SDKs
+    summary: Core contributor to ToolGate's authorization platform, including tenant-bound tool permissions and resources, verified user principals, delegated credentials, and invocation audit evidence across Control, Gateway, Tool Host, and the Java and Python SDKs.
+    pr: 191
+  - type: added
+    component: MCP proxy and service deployment
+    summary: Delivered tenant-isolated MCP server registration, scanning, approval, quarantine, and Tool Host proxy execution, alongside scoped private service deployment and platform service identity enforcement.
+    pr: 178
+  - type: changed
+    component: Reliability and release engineering
+    summary: Improved cancellation and reconciliation of side-effecting tools, credential-independent deduplication, device recovery and TLS trust, parallel CI stages, manual development builds, and release documentation.
+    pr: 192

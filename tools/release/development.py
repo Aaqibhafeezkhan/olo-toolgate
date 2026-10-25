@@ -175,6 +175,8 @@ def prepare(run_id=None):
     (assets/'development-release.json').write_text(json.dumps({'commit':sha,'ciRuns':selected,
         'mavenVersion':version,'javaAssetVersion':java_version,'binaryVersion':manifest['version'],'releaseTag':'dev-'+sha+'-'+os.environ['GITHUB_RUN_ID'],
         'dockerTag':'dev-'+sha[:12]},indent=2)+'\n')
+    from tools.release.notes import generate
+    generate(ROOT, assets)
 
 
 def publish():
@@ -193,7 +195,7 @@ def publish():
     images=image_publication.publish(run,repo,sha,namespace,IMAGES,'dev-'+sha[:12],prepare=prepare_image)
     metadata['images']=images
     (assets/'development-release.json').write_text(json.dumps(metadata,indent=2)+'\n')
-    for document in ('LICENSE', 'NOTICE.md', 'RELEASE-NOTES.md'):
+    for document in ('LICENSE', 'NOTICE.md'):
         shutil.copyfile(ROOT/document, assets/document)
     checksums=''.join(f'{digest(path)}  {path.name}\n' for path in sorted(assets.iterdir()) if path.is_file() and path.name!='SHA256SUMS')
     (assets/'SHA256SUMS').write_text(checksums)

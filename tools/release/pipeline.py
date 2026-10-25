@@ -44,6 +44,8 @@ def selection():
 
 
 def verify_source(source, info):
+    from tools.release.notes import load
+    load(source)
     if prepare.run('git', 'rev-parse', 'HEAD', cwd=source) != info['commit']:
         raise ValueError('Checkout does not match immutable prepared commit')
     release = identity.load(source)
@@ -144,6 +146,8 @@ def collect(source):
                    verification='passed', tests='passed', nativePlatforms=6)
     prepare.write_json(assets/'build-manifest.json', receipt)
     verify_packages(info, assets)
+    from tools.release.notes import generate
+    generate(source, assets)
     checksum_assets(assets)
     checksums = {p.relative_to(OUTPUT).as_posix():digest(p) for p in sorted(OUTPUT.rglob('*')) if p.is_file()}
     prepare.write_json(OUTPUT/'bundle-checksums.json', checksums)
