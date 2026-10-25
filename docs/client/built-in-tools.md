@@ -11,6 +11,45 @@ own runtime credential, allowing independent device filters. Disabling HotFolder
 leaves compute available. Every effect still needs fresh Gateway authorization
 and any required ASK permit; green readiness and registration do not grant access.
 
+See [Run Your First Tool](../getting-started/first-tool.md) for the initial setup and calculator walkthrough.
+
+## Validate JSON
+
+Choose `json.validate` from the built-in tool catalog. Its only argument is
+`text`, a string containing the JSON document to parse. It checks JSON syntax;
+it does not validate the document against a JSON Schema.
+
+Valid input:
+
+```json
+{
+  "text": "{\"name\":\"Amina\",\"active\":true}"
+}
+```
+
+Expected output:
+
+```json
+{
+  "valid": true
+}
+```
+
+Malformed input:
+
+```json
+{
+  "text": "{\"name\":\"Amina\",}"
+}
+```
+
+Expected result: the call is rejected with the safe `VALIDATION` error code.
+The client does not expose parser details in the error response.
+
+These examples demonstrate input handling only. The caller still needs the
+appropriate tool access and current authorization; installing or discovering a
+tool does not grant permission to run it.
+
 ## Self-healing tool selection
 
 Installed authorization profiles describe the client executable and carry no grants.
