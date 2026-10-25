@@ -4,6 +4,7 @@ schemaVersion: 1
 contributor:
   name: Anupriya Srivastava
   github: olo-orgs
+  roles: [core-contributor]
 changes:
   - type: added
     component: Tool SDK delivery

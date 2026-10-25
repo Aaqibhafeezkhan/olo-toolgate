@@ -76,7 +76,8 @@ def text(value):
 
 
 def person_text(person):
-    return text(person['name'])+(' (@'+person['github']+')' if 'github' in person else '')
+    roles = ' ('+', '.join(role.replace('-', ' ') for role in person['roles'])+')' if 'roles' in person else ''
+    return text(person['name'])+(' (@'+person['github']+')' if 'github' in person else '')+roles
 
 
 def people_text(people):
@@ -94,7 +95,8 @@ def render(version, fragments):
         for fragment, change in entries:
             author = people_text([fragment['contributor']]+change.get('contributors', []))
             prefix = text(change['component'])+': ' if 'component' in change else ''
-            prs = sorted(set(change.get('pullRequests', [])+([change['pr']] if 'pr' in change else [])))
+            references = change.get('pullRequests', [])+([change['pr']] if 'pr' in change else [])
+            prs = sorted({reference if isinstance(reference, int) else reference['number'] for reference in references})
             pr = ' ('+', '.join('#'+str(number) for number in prs)+')' if prs else ''
             lines.append('- '+prefix+text(change['summary'])+' — '+author+pr)
             for field in ('impact', 'migration'):
@@ -104,6 +106,14 @@ def render(version, fragments):
                 lines.append('  - Audience: '+', '.join(change['audience']))
             if 'owners' in change:
                 lines.append('  - Owners: '+people_text(change['owners']))
+            for reference in sorted((item for item in references if isinstance(item, dict)), key=lambda item: item['number']):
+                label = '#'+str(reference['number'])
+                if 'url' in reference:
+                    label = '['+label+']('+quote(reference['url'], safe=':/?#=&%.-_~')+')'
+                lines.append('  - PR '+label+(': '+text(reference['title']) if 'title' in reference else ''))
+                for field in ('owners', 'contributors', 'reviewers'):
+                    if field in reference:
+                        lines.append('    - '+field.title()+': '+people_text(reference[field]))
             for ticket in change.get('tickets', []):
                 # Schema limits references to HTTPS; encode Markdown delimiters.
                 reference = ticket['system'].upper()+' ['+text(ticket['id'])+']('+quote(ticket['url'], safe=':/?#=&%.-_~')+')'

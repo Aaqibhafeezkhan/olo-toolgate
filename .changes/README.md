@@ -10,12 +10,14 @@ The initial collection summarizes core contributors Rahul Nigam (`olo-labs`) and
 Anupriya Srivastava (`olo-orgs`) using repository history and associated PRs.
 Extend their `changes` lists as work lands. Integration/merge contributions are
 described as such rather than attributed as original implementation work.
+Both initial records use `roles: [core-contributor]`.
 
 ```yaml
 schemaVersion: 1
 contributor:
   name: Your Name
   github: your-login # optional, without @
+  roles: [contributor] # optional, may contain multiple roles
 changes:
   - type: fixed
     component: Gateway # optional
@@ -44,6 +46,15 @@ benefit in `impact`, upgrade steps in `migration`, and affected readers in
 For shared work, list each person's name and optional GitHub login explicitly.
 `pr` remains supported; it is merged with `pullRequests` and displayed once.
 
+People may have multiple `roles`: `core-contributor`, `core-maintainer`,
+`maintainer`, `contributor`, `author`, `reviewer`, `tester`, `documentation`,
+`release-manager`, or `product-owner`. Roles can describe a person's standing in
+their primary contributor record or their participation in a particular feature,
+PR or ticket. They are attribution metadata and do not grant repository access.
+A feature's `owners` and each PR's `owners` are independent lists, so shared
+ownership can be recorded at both levels. Structured PR entries can also include
+`title`, HTTPS `url`, `contributors` and `reviewers`.
+
 Example change (ticket and PR references below are illustrative):
 
 ```yaml
@@ -53,7 +64,21 @@ Example change (ticket and PR references below are illustrative):
     impact: Operators can recover work after a worker restart.
     migration: Restart workers after updating.
     audience: [operators, developers]
-    pullRequests: [123, 124]
+    pullRequests:
+      - number: 123
+        title: Recover interrupted tasks
+        owners: # multiple owners for this PR, independent of feature owners
+          - name: Rahul Nigam
+            github: olo-labs
+            roles: [core-contributor, author]
+          - name: Anupriya Srivastava
+            github: olo-orgs
+            roles: [core-contributor, reviewer]
+        reviewers:
+          - name: Anupriya Srivastava
+            github: olo-orgs
+            roles: [reviewer]
+      - 124 # a bare PR number is also supported
     owners:
       - name: Rahul Nigam
         github: olo-labs

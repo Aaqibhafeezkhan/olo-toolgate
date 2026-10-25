@@ -164,13 +164,38 @@ class ReleaseNotesTests(unittest.TestCase):
                              ('audience', ['unknown']), ('impact', ' '),
                              ('tickets', [dict(system='jira', id='TG-1')]),
                              ('tickets', [dict(system='jira', id='TG-1', url='javascript:alert(1)')]),
-                             ('tickets', [dict(system='jira', id='TG-1', url='https://example.com', owner='someone')])]:
+                             ('tickets', [dict(system='jira', id='TG-1', url='https://example.com', owner='someone')]),
+                             ('contributors', [dict(name='Name', roles=['unknown'])]),
+                             ('owners', [dict(name='Name', roles=[])]),
+                             ('owners', [dict(name='Name', roles=['reviewer', 'reviewer'])]),
+                             ('pullRequests', [dict(number=0)]),
+                             ('pullRequests', [dict(number=1, owners=[])]),
+                             ('pullRequests', [dict(number=1, reviewers=[dict(github='missing-name')])])]:
             with self.subTest(field=field, value=value):
                 doc = copy.deepcopy(self.document)
                 doc['changes'][0][field] = value
                 self.write('1-contributor.yaml', doc)
                 with self.assertRaises(ValueError):
                     notes.load(self.root)
+
+    def test_individual_prs_and_features_support_multiple_owners_with_roles(self):
+        owners = [dict(name='Rahul Nigam', github='olo-labs', roles=['core-contributor', 'author']),
+                  dict(name='Anupriya Srivastava', github='olo-orgs', roles=['core-contributor', 'reviewer'])]
+        reviewer = dict(name='Reviewer', roles=['core-maintainer', 'reviewer'])
+        change = self.document['changes'][0]
+        change.update(owners=owners, pullRequests=[456, dict(number=123, title='Shared feature',
+                      url='https://github.com/olo-labs/olo-toolgate/pull/123', owners=owners,
+                      contributors=owners, reviewers=[reviewer])])
+        self.write('1-contributor.yaml')
+        notes.generate(self.root, self.output)
+        rendered = (self.output/'RELEASE-NOTES.generated.md').read_text()
+        self.assertIn('(#123, #456)', rendered)
+        self.assertIn('PR [#123](https://github.com/olo-labs/olo-toolgate/pull/123): Shared feature', rendered)
+        self.assertEqual(rendered.count('Owners: Rahul Nigam'), 2)
+        self.assertIn('Anupriya Srivastava (@olo-orgs) (core contributor, reviewer)', rendered)
+        self.assertIn('Reviewers: Reviewer (core maintainer, reviewer)', rendered)
+        manifest = json.loads((self.output/'contributors.json').read_text())
+        self.assertEqual(manifest['fragments'][0]['changes'][0]['pullRequests'][1]['owners'], owners)
 
     def test_manual_overlay_renders_selected_source_notes(self):
         info = dict(sourceCommit='a'*40)

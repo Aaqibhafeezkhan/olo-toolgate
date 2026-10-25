@@ -4,6 +4,7 @@ schemaVersion: 1
 contributor:
   name: Rahul Nigam
   github: olo-labs
+  roles: [core-contributor]
 changes:
   - type: added
     component: Authorization and SDKs
