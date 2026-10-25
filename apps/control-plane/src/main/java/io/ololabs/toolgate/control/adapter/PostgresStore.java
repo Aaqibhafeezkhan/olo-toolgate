@@ -24,6 +24,8 @@ public class PostgresStore implements Store {
     private final javax.sql.DataSource dataSource;
     private final ContractCodec codec;
     private final DirectoryCache directoryCache;
+    private final java.util.concurrent.locks.ReentrantLock localWriter = new java.util.concurrent.locks.ReentrantLock(true);
+    private volatile boolean adapterKnown, localDatabase;
     private boolean ownsDataSource;
     private TenantAdmission admission=new TenantAdmission(0,8);
     @Inject
@@ -43,6 +45,26 @@ public class PostgresStore implements Store {
     PostgresStore(javax.sql.DataSource dataSource, ContractCodec codec, DirectoryCache cache) {
         this.dataSource = dataSource; this.codec = codec; this.directoryCache = cache;
     }
+    private boolean localDatabase() {
+        if (!adapterKnown) synchronized (localWriter) {
+            if (!adapterKnown) try (var connection = dataSource.getConnection()) {
+                localDatabase = SqliteState.local(connection); adapterKnown = true;
+            } catch (SQLException failure) { throw Failure.unavailable(); }
+        }
+        return localDatabase;
+    }
+    private record WriterLease(java.util.concurrent.locks.ReentrantLock lock) implements AutoCloseable {
+        public void close() { lock.unlock(); }
+    }
+    private WriterLease writerLease(boolean write) {
+        if (!write || !localDatabase()) return null;
+        // Waiting SQLite writers must not borrow connections needed by WAL readers.
+        // Keep admission bounded and retain the database's three-second busy limit.
+        try {
+            if (!localWriter.tryLock(3, java.util.concurrent.TimeUnit.SECONDS)) throw Failure.unavailable();
+            return new WriterLease(localWriter);
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw Failure.unavailable(); }
+    }
     @jakarta.annotation.PreDestroy
     void close() { if (ownsDataSource && dataSource instanceof AgroalDataSource pool) pool.close(); }
     public <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work) {
@@ -54,7 +76,7 @@ public class PostgresStore implements Store {
     }
     @SuppressWarnings("try") // The admission lease releases its slot on every transaction exit.
     private <T> T transaction(TenantId tenant, boolean write, boolean platform, java.util.function.BiFunction<Connection, Session, T> work) {
-        try (var lease=platform?null:admission.enter(tenant);var connection = dataSource.getConnection()) {
+        try (var lease=platform?null:admission.enter(tenant);var writer=writerLease(write);var connection = dataSource.getConnection()) {
             boolean local = SqliteState.local(connection);
             if (local) {
                 // WAL readers use a stable snapshot without reserving the single writer.
