@@ -34,6 +34,7 @@ impl Contracts {
             ("EnterpriseReservationRequest", "v1/enterprise"),
             ("EnterpriseReservation", "v1/enterprise"),
             ("EnterpriseAuthorizationOutcome", "v1/enterprise"),
+            ("CancellationAccepted", "v1/enterprise"),
             ("LocalToolCatalog", "v1/endpoint"),
             ("RemoteToolSubmission", "v1/endpoint"),
             ("RemoteToolResponse", "v1/endpoint"),

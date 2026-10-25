@@ -10,3 +10,8 @@ changes:
     summary: End denied approval waits and preserve uncertain effects after approval revocation.
     impact: Callers retain the original invocation and cannot silently resume revoked work.
     audience: [operators, developers]
+  - type: fixed
+    component: Gateway
+    summary: Register the canonical cancellation acknowledgement response validator.
+    impact: A successful Control cancellation is returned to its caller instead of a validation error.
+    audience: [operators, developers]

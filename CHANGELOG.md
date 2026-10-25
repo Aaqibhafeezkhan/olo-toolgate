@@ -6,6 +6,9 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Gateway validates the canonical cancellation acknowledgement, so a successful
+  cancellation is returned to callers instead of an erroneous validation failure.
+
 - Denied and revoked operation approvals atomically end the original invocation.
   Revocation after dispatch retains an unknown outcome for reconciliation, and
   invalidated approvals cannot trigger a downstream-idempotency resend.
