@@ -32,10 +32,13 @@ Discuss large changes in an issue before implementation.
 
 ## Before a pull request
 
-- Add your contributor details and release-note changes as a versioned YAML
-  [fragment](.changes/README.md) under `.changes/v0.1.0-beta.1/`. Copy the
-  [fully annotated sample](.changes/RELEASE-NOTE-SAMPLE.yaml), rename it with the next
-  available sequence number and your name, and replace the example information.
+- Contributor [fragments](.changes/README.md) are optional and credit actual people.
+  Do not add OpenAI, Codex, ChatGPT or other AI-assistant identities as contributors,
+  owners or reviewers, and do not invent human attribution for AI-assisted work.
+  Describe user-visible changes in `CHANGELOG.md` when appropriate.
+- Leave tracked `RELEASE-NOTES.md` files unchanged in pull requests. The release
+  process generates current release notes from the versions, changelog and optional
+  human-contributor fragments. The PR policy check enforces this boundary.
 - Run the relevant [verification commands](docs/testing/README.md), including
   `python tools/check.py` for the full repository check. Java changes also use
   `./gradlew javaCheck` (`gradlew.bat javaCheck` on Windows).

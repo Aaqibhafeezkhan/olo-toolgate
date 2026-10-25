@@ -4,7 +4,14 @@ Start by copying the fully annotated [sample](RELEASE-NOTE-SAMPLE.yaml).
 It explains every field, when to keep or remove optional sections, and how to
 choose the next available sequence number and your name for the filename.
 
-Add a YAML file under the active collection in `config.json`, currently
+Fragments are optional; ordinary fixes do not need a new contributor record.
+Credit actual people only. AI assistants (including OpenAI Codex and ChatGPT) must
+not appear in filenames or contributor, owner, reviewer or summary-author records.
+Do not substitute an invented human author. CI validates attribution on every PR.
+Tracked `RELEASE-NOTES.md` files are release snapshots, not files to regenerate in
+ordinary PRs. Current notes are generated into release assets during release.
+
+When human attribution is needed, add a YAML file under the active collection in `config.json`, currently
 `v0.1.0-beta.1/`. Name it `<number>-<name>.yaml`, for example
 `3-your-name.yaml`. Use your own name and optional GitHub login; do not include
 email addresses or private details. Multiple files per contributor are allowed.

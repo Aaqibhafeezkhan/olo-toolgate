@@ -12,6 +12,23 @@ ROOT = Path(__file__).resolve().parents[2]
 VERSION = re.compile(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?')
 FILENAME = re.compile(r'([1-9][0-9]*)-[^/\\]+\.ya?ml')
 TYPES = ('breaking', 'added', 'changed', 'fixed', 'security', 'docs', 'internal')
+AI_IDENTITY = re.compile(r'(?i)(?:openai|codex|chatgpt|github[\s_-]*copilot|claude[\s_-]*(?:code|ai)|gemini[\s_-]*(?:cli|ai))')
+PEOPLE_FIELDS = {'contributor', 'contributors', 'owners', 'owner', 'reviewers', 'summaryAuthor'}
+
+
+def human_attribution(value, path):
+    """Reject assistant credit, while permitting product names in change descriptions."""
+    if isinstance(value, list):
+        for item in value:
+            human_attribution(item, path)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            if key in PEOPLE_FIELDS:
+                people = item if isinstance(item, list) else [item]
+                for person in people:
+                    if isinstance(person, dict) and any(AI_IDENTITY.search(str(person.get(field, ''))) for field in ('name', 'github')):
+                        raise ValueError(f'{path}: AI identities cannot receive contributor attribution')
+            human_attribution(item, path)
 
 
 def yaml_document(path):
@@ -63,6 +80,9 @@ def load(root, version=None):
         errors = sorted(validator.iter_errors(document), key=lambda e: str(list(e.path)))
         if errors:
             raise ValueError(f'{path}: {errors[0].message}')
+        if AI_IDENTITY.search(path.stem):
+            raise ValueError(f'{path}: AI identities cannot name contributor fragments')
+        human_attribution(document, path)
         fragments.append(dict(file=path.relative_to(root).as_posix(), **document))
     if not fragments:
         raise ValueError('Release-note collection is empty: '+str(folder))
@@ -132,7 +152,11 @@ def render(version, fragments):
 def generate(root, output, version=None):
     version, fragments = load(root, version)
     output.mkdir(parents=True, exist_ok=True)
-    baseline = (root/'RELEASE-NOTES.md').read_text(encoding='utf-8')
+    if all((root/path).is_file() for path in ('VERSION', 'packages/contracts/VERSION', 'CHANGELOG.md')):
+        from tools.contracts.version import release_notes
+        baseline = release_notes(root)
+    else:
+        baseline = (root/'RELEASE-NOTES.md').read_text(encoding='utf-8')
     generated = render(version, fragments) if version else ''
     (output/'RELEASE-NOTES.generated.md').write_text(generated, encoding='utf-8', newline='\n')
     (output/'contributors.json').write_text(json.dumps(dict(schemaVersion=1, version=version, fragments=fragments),

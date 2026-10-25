@@ -8,6 +8,13 @@ The product jobs are:
 1. **Prepare release branch** creates a versioned source snapshot. It does not build or publish.
 2. **Build and release binaries** builds/tests that snapshot, or publishes an existing verified build.
 
+Release notes are generated during release into the release assets, using the
+current product/contracts versions, `CHANGELOG.md` and optional human-contributor
+fragments. Ordinary PRs leave tracked `RELEASE-NOTES.md` snapshots unchanged;
+`tools/contracts/version.py` does not rewrite them. The **PR contribution policy**
+check rejects generated-note edits and AI-assistant contributor attribution.
+Configure `contribution-policy` as a required status check on protected branches.
+
 Run both workflows with **Use workflow from: main**. The source branch is a separate input;
 the release workflow definition always comes from main. Merge the workflow/tooling changes to
 main before the first run. These jobs do not depend on `TOOLGATE_CI_ENABLED` or an `RC:` PR title.

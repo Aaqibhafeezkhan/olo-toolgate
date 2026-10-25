@@ -14,6 +14,17 @@ PRERELEASE = r'(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
 SEMVER = re.compile(rf'{NUMERIC}\.{NUMERIC}\.{NUMERIC}(?:-{PRERELEASE}(?:\.{PRERELEASE})*)?')
 
 
+def release_notes(root=None):
+    """Render current notes at release time without modifying tracked snapshots."""
+    root = ROOT if root is None else root
+    product = (root/'VERSION').read_text(encoding='utf-8').strip()
+    contracts = (root/'packages/contracts/VERSION').read_text(encoding='utf-8').strip()
+    return ("<!-- GENERATED FILE: release process; do not edit -->\n"
+        + f"# OLO ToolGate {product} release notes\n\nContracts version: `{contracts}`.\n\n"
+        + "License: Apache-2.0. See LICENSE and bundled third-party notices/SBOMs.\n\n"
+        + (root/'CHANGELOG.md').read_text(encoding='utf-8'))
+
+
 def expected():
     contracts = (ROOT/'packages/contracts/VERSION').read_text(encoding='utf-8').strip()
     product = (ROOT/'VERSION').read_text(encoding='utf-8').strip()
@@ -63,10 +74,6 @@ def expected():
     quickstart_api = ROOT/'packages/contracts/openapi/quickstart-v1.yaml'
     if quickstart_api.exists():
         outputs[quickstart_api] = re.sub(r'^  version: .*', f'  version: {product}', quickstart_api.read_text(encoding='utf-8'), flags=re.M)
-    outputs[ROOT/"RELEASE-NOTES.md"] = ("<!-- GENERATED FILE: tools/contracts/version.py; do not edit -->\n"
-        + f"# OLO ToolGate {product} release notes\n\nContracts version: `{contracts}`.\n\n"
-        + "License: Apache-2.0. See LICENSE and bundled third-party notices/SBOMs.\n\n"
-        + (ROOT/"CHANGELOG.md").read_text(encoding="utf-8"))
     return outputs
 
 

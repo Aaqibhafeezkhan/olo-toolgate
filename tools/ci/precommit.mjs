@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process';
 
 // Git runs hooks from the checkout root. Test the same UI files being committed.
-const paths = ['apps/admin-ui', 'apps/browser-extension', 'packages/contracts', 'tools/contracts', 'tests/fixtures/contracts', 'CHANGELOG.md', 'RELEASE-NOTES.md', 'VERSION', 'package.json', 'package-lock.json', 'tools/ci', '.githooks'];
+const paths = ['apps/admin-ui', 'apps/browser-extension', 'packages/contracts', 'tools/contracts', 'tools/release', 'tests/ci', 'tests/fixtures/contracts', '.changes', '.github/workflows', 'CONTRIBUTING.md', 'CHANGELOG.md', 'RELEASE-NOTES.md', 'VERSION', 'package.json', 'package-lock.json', 'tools/ci', '.githooks'];
 const unstaged = spawnSync('git', ['diff', '--quiet', '--', ...paths]);
 if (unstaged.status !== 0) {
   console.error('Stage your UI/metadata/check changes before committing so the checks verify the committed code.');
@@ -14,6 +14,8 @@ const python = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 
 const metadata = spawnSync(python, ['tools/ci/preflight.py'], { stdio: 'inherit' });
 if (metadata.error) console.error(metadata.error.message);
 if (metadata.status !== 0) process.exit(metadata.status ?? 1);
+const policy = spawnSync(python, ['tools/ci/pr_policy.py', '--staged'], { stdio: 'inherit' });
+if (policy.status !== 0) process.exit(policy.status ?? 1);
 const extensionTests=spawnSync(process.execPath,['--test','apps/browser-extension/tests/protocol.mjs','apps/browser-extension/tests/worker.mjs'],{stdio:'inherit'});
 if(extensionTests.status!==0)process.exit(extensionTests.status??1);
 const secretScan=spawnSync(process.execPath,['tools/ci/secret-scan.mjs'],{stdio:'inherit'});
