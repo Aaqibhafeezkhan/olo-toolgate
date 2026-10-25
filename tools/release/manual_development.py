@@ -84,7 +84,8 @@ def build():
     pom = ROOT/'packages/contracts/java/build/publications/mavenJava/pom-default.xml'
     shutil.copyfile(pom, ASSETS/('toolgate-contracts-'+info['libraryVersion']+'.pom'))
     run(sys.executable, 'tools/release/bundle.py', '--output', str(ASSETS))
-    shutil.copyfile(ROOT/'RELEASE-NOTES.md', ASSETS/'RELEASE-NOTES.md')
+    for document in ('RELEASE-NOTES.md', 'RELEASE-NOTES.generated.md', 'contributors.json'):
+        shutil.copyfile(ROOT/'release-notes'/document, ASSETS/document)
     chart = OUTPUT/'chart'
     shutil.copytree(ROOT/'deploy/helm/olo-toolgate', chart)
     values = chart/'values.yaml'
@@ -95,6 +96,7 @@ def build():
         'package', 'build/manual-development/chart', '--version', info['libraryVersion'],
         '--app-version', version, '--destination', 'build/manual-development/assets')
     (ASSETS/'development-release.json').write_text(json.dumps(info, indent=2)+'\n', encoding='utf-8')
+    checksum_assets(ASSETS)
 
 
 def publish():

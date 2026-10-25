@@ -6,6 +6,7 @@ import io
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -35,6 +36,8 @@ class TaggedReleaseTests(unittest.TestCase):
                'sbom.cdx.json','olo-toolgate-1.2.3.tgz','olo-toolgate-contracts-1.2.3.tar.gz']
         names += [f'toolgate-contracts-1.2.3{c}.jar' for c in ('','-sources','-javadoc')]
         for name in names:(self.foundation/name).write_bytes(('checked '+name).encode())
+        (self.root/'RELEASE-NOTES.md').write_bytes((self.foundation/'RELEASE-NOTES.md').read_bytes())
+        shutil.copytree(ROOT/'.changes', self.root/'.changes')
         (self.foundation/'toolgate-contracts-1.2.3.pom').write_text(
             '<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
             '<groupId>io.github.olo-labs</groupId><artifactId>toolgate-contracts</artifactId>'
@@ -55,6 +58,16 @@ class TaggedReleaseTests(unittest.TestCase):
             folder=self.output/component;folder.mkdir()
             (folder/'image.tar').write_bytes(('tested '+component).encode())
             (folder/'SHA256SUMS').write_text(shared.digest(folder/'image.tar')+'  image.tar\n',encoding='utf-8')
+
+    def test_contributor_assets_preserve_foundation_documents_and_are_checksummed(self):
+        tagged.verified_assets()
+        self.assertEqual((self.assets/'RELEASE-NOTES.md').read_bytes(), (self.foundation/'RELEASE-NOTES.md').read_bytes())
+        combined = (self.assets/'RELEASE-NOTES.combined.md').read_text(encoding='utf-8')
+        self.assertIn('Rahul Nigam', combined)
+        self.assertIn('Anupriya Srivastava', combined)
+        manifest = json.loads((self.assets/'contributors.json').read_text(encoding='utf-8'))
+        self.assertEqual([f['contributor']['github'] for f in manifest['fragments']], ['olo-labs', 'olo-orgs'])
+        self.assertIn('RELEASE-NOTES.combined.md', tagged.verified_files(self.assets))
 
     def foundation_checksums(self):
         (self.foundation/'SHA256SUMS').write_text(''.join(f'{shared.digest(p)}  {p.name}\n'

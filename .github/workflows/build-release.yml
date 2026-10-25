@@ -59,7 +59,9 @@ jobs:
         path: source
         persist-credentials: false
     - name: Check all prepared versions and generated metadata before expensive builds
-      run: python tools/release/pipeline.py verify-source --source source
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/pipeline.py verify-source --source source
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: release-selection
@@ -120,7 +122,9 @@ jobs:
     - name: Verify original gates and collect the exact tested package/image bytes
       env:
         GH_TOKEN: ${{ github.token }}
-      run: python tools/release/pipeline.py collect --source source
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/pipeline.py collect --source source
     - name: Attest checked release assets and source/build manifest
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
       with:

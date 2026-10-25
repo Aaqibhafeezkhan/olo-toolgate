@@ -30,6 +30,7 @@ jobs:
         DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       run: |
+        python -m pip install -r tools/release/notes-requirements.txt
         python tools/release/development.py prepare --run-id "$GITHUB_RUN_ID"
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:

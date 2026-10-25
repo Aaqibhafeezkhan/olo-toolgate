@@ -89,6 +89,10 @@ def overlay(root, destination, info):
         shutil.copyfile(path, target)
     # Build metadata is carried separately from release.json for the build adapter.
     prepare.write_json(destination/'development-source.json', info)
+    # Render using the selected branch's collection before any build/publish job.
+    # Carry the exact bytes in the overlay, including for historical branches.
+    from tools.release.notes import generate
+    generate(root, destination/'release-notes')
 
 
 def main():
