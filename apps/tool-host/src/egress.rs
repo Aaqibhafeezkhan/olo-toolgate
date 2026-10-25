@@ -327,11 +327,9 @@ mod tests {
             assert!(p.check(ip.parse().unwrap()).is_err(), "{ip}");
         }
         assert!(p.check("93.184.216.34".parse().unwrap()).is_ok());
-        assert!(
-            policy(vec![], true)
-                .check("127.0.0.1".parse().unwrap())
-                .is_ok()
-        );
+        assert!(policy(vec![], true)
+            .check("127.0.0.1".parse().unwrap())
+            .is_ok());
     }
 
     #[test]
@@ -350,11 +348,9 @@ mod tests {
             ports: vec![8443],
             ..range
         };
-        assert!(
-            policy(vec![other_port], false)
-                .check("10.1.2.3".parse().unwrap())
-                .is_err()
-        );
+        assert!(policy(vec![other_port], false)
+            .check("10.1.2.3".parse().unwrap())
+            .is_err());
     }
 
     #[test]

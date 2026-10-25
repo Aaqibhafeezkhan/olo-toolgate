@@ -235,6 +235,11 @@ export const operations = {
   postMcpScanFailure: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-scans/{id}/failure' },
   requestMcpRefresh: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-refreshes' },
   reportMcpQuarantine: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-quarantines' },
+  cancelCallerOperation: { method: 'POST', path: '/api/control/v1/access/invocations/cancel' },
+  issueServicePermit: { method: 'POST', path: '/api/control/v1/access/service-permits/issue' },
+  consumeServicePermit: { method: 'POST', path: '/api/control/v1/access/service-permits/{audience}/consume' },
+  serviceAuthorizationEpoch: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/epoch' },
+  servicePermitKeys: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/jwks' },
 } as const;
 export interface DirectoryRecords {
   agentDelegations: ControlAgentDelegation;

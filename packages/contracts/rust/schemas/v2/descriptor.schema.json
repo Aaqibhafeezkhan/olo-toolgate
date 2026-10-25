@@ -22,7 +22,7 @@
         "NON_IDEMPOTENT",
         "UNKNOWN"
       ],
-      "description": "Declared effect safety (platform-requirements.md §11.7)."
+      "description": "Declared effect safety (platform-requirements.md \u00a711.7)."
     },
     "KeyNamespace": {
       "type": "string",
@@ -31,7 +31,7 @@
         "DELEGATED_USER",
         "TENANT"
       ],
-      "description": "Business-key namespace (platform-requirements.md §11.7)."
+      "description": "Business-key namespace (platform-requirements.md \u00a711.7)."
     },
     "IdempotencyScope": {
       "type": "string",
@@ -48,7 +48,7 @@
         "WASI",
         "HOST_NATIVE"
       ],
-      "description": "Client runtime isolation tier (platform-requirements.md §13.4)."
+      "description": "Client runtime isolation tier (platform-requirements.md \u00a713.4)."
     },
     "ValueType": {
       "type": "string",
@@ -67,7 +67,7 @@
         "ARRAY",
         "BINARY"
       ],
-      "description": "Declared value type (authoring/README.md §7)."
+      "description": "Declared value type (authoring/README.md \u00a77)."
     },
     "SecretScope": {
       "type": "string",
@@ -87,7 +87,7 @@
         "CONNECTION",
         "CUSTOM"
       ],
-      "description": "HTTP auth strategy (platform-requirements.md §5.4)."
+      "description": "HTTP auth strategy (platform-requirements.md \u00a75.4)."
     },
     "HttpMethod": {
       "type": "string",
@@ -122,7 +122,7 @@
         "DEVICE_FILES_READ",
         "DEVICE_FILES_WRITE"
       ],
-      "description": "Derived permission (descriptor §2)."
+      "description": "Derived permission (descriptor \u00a72)."
     },
     "ErrorDeclaration": {
       "type": "object",
@@ -344,7 +344,8 @@
         "caBundle": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 65536,
+          "description": "Inline PEM trust bundle; never a filesystem path or URL."
         }
       },
       "required": [

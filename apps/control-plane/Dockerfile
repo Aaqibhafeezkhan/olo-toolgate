@@ -46,6 +46,7 @@ COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties 
 COPY gradle/ gradle/
 COPY packages/contracts/ packages/contracts/
 COPY backend-libs/package-archive/ backend-libs/package-archive/
+COPY backend-libs/service-authorization/ backend-libs/service-authorization/
 COPY apps/control-plane/ apps/control-plane/
 COPY config/initial/ config/initial/
 COPY --from=console /workspace/apps/admin-ui/dist/ apps/admin-ui/dist/

@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/service-profile.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Service profile",
-  "description": "Approved network destinations and routes, enforced by the broker by digest (platform-requirements.md §11.8, §11.9).",
+  "description": "Approved network destinations and routes, enforced by the broker by digest (platform-requirements.md \u00a711.8, \u00a711.9).",
   "$ref": "#/$defs/ServiceProfile",
   "$defs": {
     "EgressMode": {
@@ -22,7 +22,8 @@
         "caBundle": {
           "type": "string",
           "minLength": 0,
-          "maxLength": 256
+          "maxLength": 65536,
+          "description": "Inline PEM trust bundle; never a filesystem path or URL."
         },
         "spkiPins": {
           "type": "array",

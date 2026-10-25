@@ -767,6 +767,8 @@ export interface PackageDeploymentRequest {
   readonly globals: Record<string, unknown>;
   readonly hostIds?: ReadonlyArray<string>;
   readonly deviceGroupIds?: ReadonlyArray<string>;
+  readonly privateRanges?: ReadonlyArray<PrivateRangeApproval>;
+  readonly destinationTls?: Record<string, unknown>;
 }
 /** Enable exactly the reviewed digest with this binding. */
 export interface PackageEnableRequest {

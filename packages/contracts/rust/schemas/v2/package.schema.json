@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Tool package manifest v2",
-  "description": "toolgate-package.json in a .tgpkg (platform-requirements.md §7). Credential values are forbidden.",
+  "description": "toolgate-package.json in a .tgpkg (platform-requirements.md \u00a77). Credential values are forbidden.",
   "$ref": "#/$defs/PackageManifest",
   "$defs": {
     "PackageKind": {
@@ -162,7 +162,7 @@
     },
     "ToolLimits": {
       "type": "object",
-      "description": "Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5).",
+      "description": "Tool resource requests; each at most the platform ceiling (platform-requirements.md \u00a713.5).",
       "additionalProperties": false,
       "properties": {
         "memoryBytes": {
@@ -262,7 +262,7 @@
     },
     "CompositionRecord": {
       "type": "object",
-      "description": "A library merged into the package (composition.md §2).",
+      "description": "A library merged into the package (composition.md \u00a72).",
       "additionalProperties": false,
       "properties": {
         "libraryId": {
@@ -313,7 +313,7 @@
     },
     "ConnectionRequirement": {
       "type": "object",
-      "description": "SaaS connection the package needs (platform-requirements.md §14.3).",
+      "description": "SaaS connection the package needs (platform-requirements.md \u00a714.3).",
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -474,7 +474,7 @@
         "REJECTED",
         "SUSPENDED"
       ],
-      "description": "Package version lifecycle state (platform-requirements.md §8.4)."
+      "description": "Package version lifecycle state (platform-requirements.md \u00a78.4)."
     },
     "ApiChange": {
       "type": "string",
@@ -484,7 +484,7 @@
         "MINOR",
         "MAJOR"
       ],
-      "description": "Minimum SemVer bump the API diff requires (platform-requirements.md §8.3)."
+      "description": "Minimum SemVer bump the API diff requires (platform-requirements.md \u00a78.3)."
     },
     "SecurityDeltaKind": {
       "type": "string",
@@ -503,7 +503,7 @@
         "BUSINESS_KEY_NAMESPACE",
         "UNCLASSIFIED"
       ],
-      "description": "Security delta item kind (platform-requirements.md §8.3)."
+      "description": "Security delta item kind (platform-requirements.md \u00a78.3)."
     },
     "SecurityDeltaItem": {
       "type": "object",
@@ -684,6 +684,23 @@
           },
           "maxItems": 16,
           "uniqueItems": true
+        },
+        "privateRanges": {
+          "type": "array",
+          "description": "Operator-approved private CIDRs scoped to one declared destination host and its declared port. No DNS lookup occurs during approval.",
+          "items": {
+            "$ref": "service-profile.schema.json#/$defs/PrivateRangeApproval"
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "destinationTls": {
+          "type": "object",
+          "description": "Operator trust settings keyed by declared destination ID. Unknown destinations and pin-only platform service TLS are refused.",
+          "maxProperties": 64,
+          "additionalProperties": {
+            "$ref": "service-profile.schema.json#/$defs/TlsSettings"
+          }
         }
       },
       "required": [

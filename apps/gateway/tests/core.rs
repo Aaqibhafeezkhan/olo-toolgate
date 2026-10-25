@@ -1,9 +1,9 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 use axum::{
-    Router,
-    body::{Body, to_bytes},
+    body::{to_bytes, Body},
     http::{Request, StatusCode},
+    Router,
 };
 use olo_toolgate_contracts::v2::{self, RequestContext, RequestMode};
 use olo_toolgate_contracts::*;
@@ -12,15 +12,15 @@ use olo_toolgate_gateway::{
     auth::{Authenticator, Credential},
     config::Config,
     digest,
-    http::{AppState, management_router, runtime_router},
+    http::{management_router, runtime_router, AppState},
     relay::{PortFuture, RelayPort},
     unix_ms,
-    validation::{Contracts, strict_json},
+    validation::{strict_json, Contracts},
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::{
-    Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
+    Arc, Mutex,
 };
 use tower::ServiceExt;
 const TOKEN: &str = "enterprise-test-credential-00000000000000000000000000000000";
@@ -58,25 +58,21 @@ fn tenant_bound_credentials_reject_foreign_mounts_and_keep_the_old_set_on_reload
     let before = auth.loaded();
     let mut foreign = credential();
     foreign.context.tenant_id = "10000000-0000-4000-8000-000000000002".into();
-    assert!(
-        Authenticator::new(vec![foreign.clone()], &contracts, now)
-            .unwrap()
-            .for_tenant(tenant)
-            .is_err()
-    );
-    assert!(
-        auth.reload(
+    assert!(Authenticator::new(vec![foreign.clone()], &contracts, now)
+        .unwrap()
+        .for_tenant(tenant)
+        .is_err());
+    assert!(auth
+        .reload(
             &serde_json::to_vec(&vec![foreign]).unwrap(),
             &contracts,
             now
         )
-        .is_err()
-    );
+        .is_err());
     assert_eq!(auth.loaded(), before);
-    assert!(
-        auth.authenticate(TOKEN, "still-owned".into(), now)
-            .is_some()
-    );
+    assert!(auth
+        .authenticate(TOKEN, "still-owned".into(), now)
+        .is_some());
 }
 #[tokio::test]
 async fn public_metadata_is_anonymous_but_keeps_host_and_uuid_fences_and_fixed_tls_source() {
@@ -492,18 +488,16 @@ fn credentials_bind_all_facts_and_cannot_be_human_or_rebound() {
             .and_then(|credential| Authenticator::new(vec![credential], &contracts, 1).ok());
         assert!(rejected.is_none(), "{change}");
     }
-    assert!(
-        auth.authenticate(
+    assert!(auth
+        .authenticate(
             "unknown-credential-0000000000000000000000000000000000",
             "r".into(),
             2
         )
-        .is_none()
-    );
-    assert!(
-        auth.authenticate(TOKEN, "r".into(), c.expires_at_unix_ms)
-            .is_none()
-    );
+        .is_none());
+    assert!(auth
+        .authenticate(TOKEN, "r".into(), c.expires_at_unix_ms)
+        .is_none());
     assert!(Authenticator::new(vec![c.clone(), c.clone()], &contracts, 1).is_err());
     let mut human = c.clone();
     human.context.mode = RequestMode::Human;
@@ -756,13 +750,11 @@ async fn transport_limits_and_readiness_are_separate() {
         call(runtime_router(s.clone()), r).await.0,
         StatusCode::FORBIDDEN
     );
-    assert!(
-        !state(Arc::new(Authority {
-            failure: true,
-            ..Default::default()
-        }))
-        .ready()
-    );
+    assert!(!state(Arc::new(Authority {
+        failure: true,
+        ..Default::default()
+    }))
+    .ready());
     let response = management_router(s)
         .oneshot(
             Request::builder()

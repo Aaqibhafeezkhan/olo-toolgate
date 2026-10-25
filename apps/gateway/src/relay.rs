@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 //! Optional bounded Control relay. No agent bearer credential crosses this service boundary.
-use crate::validation::{Contracts, strict_json};
+use crate::validation::{strict_json, Contracts};
 use olo_toolgate_contracts::v2::{
     Dispatch, PermitReservationRequest, RequestContext, SignedInvocationPermit,
     ToolHostDispatchStatus,
