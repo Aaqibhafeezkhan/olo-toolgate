@@ -84,10 +84,15 @@ public final class ServicePermitVerifier {
                 default -> throw denied();
             };
             if(read){var epoch=epochs.current(request.tenant());
-                if(epoch==null||epoch.observedAtUnixMs()>now||now-epoch.observedAtUnixMs()>10000||epoch.value()!=claims.authorizationEpoch())throw denied();
+                if(epoch==null||epoch.observedAtUnixMs()>now||now-epoch.observedAtUnixMs()>10000||epoch.value()!=claims.authorizationEpoch())throw new StaleReadEpoch();
             } else if(!consumer.consume(audience,new ServicePermitConsumption(permit,request.operation(),request.resources(),digest,executorKey)))throw denied();
             return new Authorization(claims);
         } catch(java.io.IOException|GeneralSecurityException|IllegalArgumentException invalid){throw denied();}
+    }
+    /** Only reached after signature, peer, identity, exact request and lifetime checks pass. */
+    static final class StaleReadEpoch extends SecurityException {
+        private static final long serialVersionUID = 1L;
+        StaleReadEpoch(){super("Read authorization epoch is stale");}
     }
     private static SecurityException denied(){return new SecurityException("Downstream authorization denied");}
 }
