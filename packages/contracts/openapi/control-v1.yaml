@@ -7263,6 +7263,29 @@ paths:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseDecision
         '403':
           description: Simulation privilege required
+  /api/control/v1/access/insights/admissions:
+    post:
+      operationId: submitInsightsAdmissions
+      description: Gateway admission counters for Operator Insights (ADR 031). Best-effort; a repeated (gatewayId, epoch, sequence) is acknowledged as a duplicate and counted once.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Batch acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsAdmissionAck
+        '400':
+          description: Invalid batch
+        '403':
+          description: Access denied
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsAdmissionBatch
   /api/control/v1/access/invocations:
     get:
       operationId: listEnterpriseInvocations

@@ -48,7 +48,13 @@ async fn run() -> Result<(), &'static str> {
     #[cfg(unix)]
     let mut hangup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
         .map_err(|_| "signal subsystem unavailable")?;
-    let config: Config = read_json(&config_path)?;
+    let mut config: Config = read_json(&config_path)?;
+    // One deployment-wide switch for Operator Insights (ADR 031), shared with Control.
+    if let Ok(mode) = std::env::var("TOOLGATE_INSIGHTS_MODE") {
+        if !mode.is_empty() {
+            config.insights.mode = Some(mode);
+        }
+    }
     let now = unix_ms().ok_or("system clock unavailable")?;
     config.validate(&contracts, now)?;
     let auth = Authenticator::from_bytes(&read_bytes(&credentials_path)?, &contracts, now)?;
@@ -80,6 +86,33 @@ async fn run() -> Result<(), &'static str> {
     });
     let state = AppState::new(gateway, auth, config.clone())?;
     let state = Arc::new(state);
+    // Admission counters reach Control every 10 s; a slow or absent Control only delays them.
+    let mut insights_receiver = shutdown.subscribe();
+    let insights_state = state.clone();
+    let insights_authority = authority.clone();
+    let insights_worker = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _=insights_receiver.changed()=>break,
+                _=tokio::time::sleep(Duration::from_secs(10))=>{}
+            }
+            if let Some(now) = unix_ms() {
+                insights_state
+                    .admissions
+                    .flush(insights_authority.as_ref(), now, false)
+                    .await;
+            }
+        }
+        if let Some(now) = unix_ms() {
+            let _ = tokio::time::timeout(
+                Duration::from_secs(2),
+                insights_state
+                    .admissions
+                    .flush(insights_authority.as_ref(), now, true),
+            )
+            .await;
+        }
+    });
     // SIGHUP: the administrator replaced the credential file atomically. Validate it whole, then swap.
     #[cfg(unix)]
     let reload_worker = {
@@ -154,6 +187,8 @@ async fn run() -> Result<(), &'static str> {
     if !management_task.is_finished() {
         let _ = (&mut management_task).await;
     }
+    // The final admission batch is sent after requests stop, within its own short bound.
+    let _ = tokio::time::timeout(Duration::from_secs(3), insights_worker).await;
     drop(state);
     tracing::info!(
         service = "gateway",

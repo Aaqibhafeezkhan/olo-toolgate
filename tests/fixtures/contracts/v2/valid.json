@@ -308,6 +308,282 @@
       "mode": "form"
     }
   },
+  "InsightsAdmissionAck": {
+    "sequence": 4,
+    "duplicate": false
+  },
+  "InsightsAdmissionBatch": {
+    "gatewayId": "gw-1",
+    "epoch": "e-7f3a",
+    "sequence": 4,
+    "droppedRequests": 0,
+    "counts": [
+      {
+        "bucketStartUnixMs": 1791676800000,
+        "toolId": "acme.orders/orders.refund",
+        "category": "POLICY_DENIED",
+        "count": 3
+      },
+      {
+        "bucketStartUnixMs": 1791676800000,
+        "category": "UNAUTHENTICATED",
+        "count": 1
+      }
+    ]
+  },
+  "InsightsAdmissionCategory": "POLICY_DENIED",
+  "InsightsAdmissionCount": {
+    "bucketStartUnixMs": 1791676800000,
+    "toolId": "acme.orders/orders.refund",
+    "category": "POLICY_DENIED",
+    "count": 3
+  },
+  "InsightsAdmissionPoint": {
+    "bucketStartUnixMs": 1791676800000,
+    "category": "POLICY_DENIED",
+    "count": 3
+  },
+  "InsightsAttempt": {
+    "attemptNumber": 1,
+    "executionId": "ex-7576f712baed62964bc828cdba88bdbe",
+    "executorId": "host-1",
+    "startedAtUnixMs": 1791676800040,
+    "endedAtUnixMs": 1791676800190,
+    "outcome": "SUCCEEDED",
+    "durationMs": 150
+  },
+  "InsightsErrorCategory": "TOOL_ERROR",
+  "InsightsGranularity": "MINUTE",
+  "InsightsInvocation": {
+    "tenantId": "tenant-1",
+    "invocationId": "inv-5",
+    "toolId": "acme.orders/orders.lookup",
+    "action": "invoke",
+    "clientId": "bind-1",
+    "userId": "u1",
+    "agentId": "agent-planner",
+    "toolCallId": "toolu_01A9q",
+    "sessionId": "sess-42",
+    "outcome": "SUCCEEDED",
+    "attempts": 1,
+    "acceptedAtUnixMs": 1791676800000,
+    "queuedAtUnixMs": 1791676800005,
+    "firstStartedAtUnixMs": 1791676800040,
+    "terminalAtUnixMs": 1791676800190,
+    "queueMs": 35,
+    "executionMs": 150,
+    "endToEndMs": 190,
+    "partialCoverage": false
+  },
+  "InsightsInvocationDetail": {
+    "invocation": {
+      "tenantId": "tenant-1",
+      "invocationId": "inv-5",
+      "toolId": "acme.orders/orders.lookup",
+      "action": "invoke",
+      "clientId": "bind-1",
+      "userId": "u1",
+      "agentId": "agent-planner",
+      "toolCallId": "toolu_01A9q",
+      "sessionId": "sess-42",
+      "outcome": "SUCCEEDED",
+      "attempts": 1,
+      "acceptedAtUnixMs": 1791676800000,
+      "queuedAtUnixMs": 1791676800005,
+      "firstStartedAtUnixMs": 1791676800040,
+      "terminalAtUnixMs": 1791676800190,
+      "queueMs": 35,
+      "executionMs": 150,
+      "endToEndMs": 190,
+      "partialCoverage": false
+    },
+    "attempts": [
+      {
+        "attemptNumber": 1,
+        "executionId": "ex-7576f712baed62964bc828cdba88bdbe"
+      }
+    ],
+    "transitions": [
+      {
+        "factSeq": 1,
+        "toState": "QUEUED",
+        "occurredAtUnixMs": 1791676800000
+      },
+      {
+        "factSeq": 2,
+        "fromState": "QUEUED",
+        "toState": "RESERVED",
+        "occurredAtUnixMs": 1791676800020
+      }
+    ],
+    "transitionsRetained": true
+  },
+  "InsightsInvocationPage": {
+    "items": [
+      {
+        "tenantId": "tenant-1",
+        "invocationId": "inv-5",
+        "toolId": "acme.orders/orders.lookup",
+        "action": "invoke",
+        "clientId": "bind-1",
+        "userId": "u1",
+        "agentId": "agent-planner",
+        "toolCallId": "toolu_01A9q",
+        "sessionId": "sess-42",
+        "outcome": "SUCCEEDED",
+        "attempts": 1,
+        "acceptedAtUnixMs": 1791676800000,
+        "queuedAtUnixMs": 1791676800005,
+        "firstStartedAtUnixMs": 1791676800040,
+        "terminalAtUnixMs": 1791676800190,
+        "queueMs": 35,
+        "executionMs": 150,
+        "endToEndMs": 190,
+        "partialCoverage": false
+      }
+    ],
+    "next": "1791676800000:inv-5"
+  },
+  "InsightsMode": "BASIC",
+  "InsightsOutcome": "SUCCEEDED",
+  "InsightsRebuildRequest": {
+    "tenantId": "tenant-1",
+    "fromUnixMs": 1791676800000,
+    "toUnixMs": 1791680400000,
+    "dryRun": true
+  },
+  "InsightsRebuildResult": {
+    "tenantId": "tenant-1",
+    "fromUnixMs": 1791676800000,
+    "toUnixMs": 1791680400000,
+    "cellsCompared": 12,
+    "cellsDiffering": 0,
+    "applied": false
+  },
+  "InsightsSeries": {
+    "granularity": "MINUTE",
+    "fromUnixMs": 1791676800000,
+    "toUnixMs": 1791676860000,
+    "groupBy": "TOOL",
+    "histogramBoundsMs": [
+      1,
+      2,
+      5,
+      10,
+      20,
+      50,
+      100,
+      200,
+      500,
+      1000,
+      2000,
+      5000,
+      10000,
+      30000,
+      60000,
+      120000,
+      300000,
+      600000,
+      1800000,
+      3600000
+    ],
+    "points": [
+      {
+        "bucketStartUnixMs": 1791676800000,
+        "key": "acme.orders/orders.lookup",
+        "outcome": "SUCCEEDED",
+        "count": 3,
+        "durationCount": 3,
+        "durationSumMs": 610,
+        "histogram": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    ],
+    "admissions": [
+      {
+        "bucketStartUnixMs": 1791676800000,
+        "category": "POLICY_DENIED",
+        "count": 3
+      }
+    ]
+  },
+  "InsightsSeriesPoint": {
+    "bucketStartUnixMs": 1791676800000,
+    "key": "acme.orders/orders.lookup",
+    "outcome": "SUCCEEDED",
+    "count": 3,
+    "durationCount": 3,
+    "durationSumMs": 610,
+    "histogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "InsightsSourceGap": {
+    "tenantId": "tenant-1",
+    "gatewayId": "gw-1",
+    "epoch": "e-7f3a",
+    "lastSequence": 4,
+    "missingSequences": 1,
+    "lastSeenUnixMs": 1791676800000,
+    "droppedRequests": 0
+  },
+  "InsightsStatus": {
+    "mode": "BASIC",
+    "generatedAtUnixMs": 1791676860000,
+    "tenants": 2,
+    "unprojectedFacts": 3,
+    "oldestUnprojectedUnixMs": 1791676859000,
+    "summariesSuspendedTenants": 0,
+    "failedTenants": 0,
+    "sourceGaps": []
+  },
+  "InsightsTransition": {
+    "factSeq": 2,
+    "fromState": "QUEUED",
+    "toState": "RESERVED",
+    "occurredAtUnixMs": 1791676800020
+  },
   "InvocationAdmission": {
     "invocationId": "inv-5",
     "state": "AWAITING_APPROVAL",

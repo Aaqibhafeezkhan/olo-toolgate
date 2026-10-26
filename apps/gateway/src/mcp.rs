@@ -415,7 +415,7 @@ async fn tools_call(
     context.request_id = crate::http::invocation_id(&context, &id.to_string());
     let outcome = s
         .gateway
-        .authorize(request.clone(), context.clone())
+        .authorize_with(request.clone(), context.clone(), trace.context.clone())
         .await
         .map_err(|code| {
             rpc_error(
@@ -427,6 +427,13 @@ async fn tools_call(
             )
         })?;
     if outcome.invocation.state == EnterpriseInvocationState::PendingApproval {
+        if let Some(now) = unix_ms() {
+            s.admissions.record(
+                now,
+                Some(name),
+                olo_toolgate_contracts::v2::InsightsAdmissionCategory::ApprovalRequired,
+            );
+        }
         return Ok(
             json!({"content":[{"type":"text","text":"Approval required"}],"structuredContent":{"invocationId":outcome.invocation.id,"state":"PENDING_APPROVAL"},"isError":true}),
         );

@@ -1080,6 +1080,7 @@ export interface EnterpriseInvocationRequest {
   readonly toolDigest: string;
   readonly packageDigest: string;
   readonly downstreamIdempotencyKey?: string;
+  readonly executionContext?: V2.ExecutionContext;
 }
 export type EnterpriseInvocationState = "PENDING_APPROVAL" | "QUEUED" | "RESERVED" | "DISPATCHED" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "PARTIAL" | "OUTCOME_UNKNOWN";
 /** Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected. */

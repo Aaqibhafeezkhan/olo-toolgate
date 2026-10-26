@@ -31,7 +31,7 @@ class ServicePermitBridgeTest {
         var body=rig.graph.codec.model("{\"toolId\":\"tool\",\"action\":\"memory.append\",\"arguments\":{\"path\":\"olo://"+rig.gateway.tenant().value()+"/conversation/c1\"}}",AuthorizationRequest.class);
         var c=original.context();
         var bound=new RequestContext(c.requestId(),c.tenantId(),RequestMode.HUMAN,CredentialKind.STATIC_TOKEN,null,c.userId(),null,null,List.of(),c.sessionEpoch(),null,null,EnterpriseConformanceTest.NOW+15000,c.bindingId(),null);
-        return new EnterpriseInvocationRequest(bound,body,original.toolDigest(),original.packageDigest(),null);
+        return new EnterpriseInvocationRequest(bound,body,original.toolDigest(),original.packageDigest(),null,null);
     }
     Store.Reply submit(EnterpriseInvocationRequest request){return rig.operations.submitHuman(new DirectoryService.Actor(rig.gateway.tenant(),"d".repeat(64),false,false,"alice"),request,"device");}
     EnterpriseInvocation start(String id){
