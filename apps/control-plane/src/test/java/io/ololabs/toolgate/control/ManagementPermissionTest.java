@@ -25,6 +25,27 @@ final class ManagementPermissionTest {
    TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("viewers","Viewers",true,1L,List.of("viewer"),List.of("viewer-role")));
    tx.save(before,new Directory(before.revision()+1,entries));return null;});return store;
  }
+ @Test void tenantAnalyticsReadsOnlyTheVerifiedTenantsTaggedRowsAndRechecksPermissions(){
+  var store=setup("audit.read");packagePermissions(store,2,"audit.read");
+  var other=io.ololabs.toolgate.control.fixtures.Tenants.id("other");
+  TestSupport.seed(store,codec,other,"root");
+  long now=1_791_676_800_000L,from=now-3_600_000;
+  for(var id:List.of(tenant,other))store.transaction(id,true,tx->{
+   long count=id.equals(tenant)?3:91;
+   tx.insights().saveCell(new Insights.Cell("TOOL",io.ololabs.toolgate.contracts.v2.InsightsGranularity.HOUR,from,"same-tool","SUCCEEDED"),
+    new Insights.CellValue(count,0,0,new long[Insights.BUCKETS]));return null;});
+  var insights=new InsightsService(store,InsightsProjector.Settings.defaults(),(cursor,limit)->{throw new AssertionError("Tenant analytics must never enumerate tenants");},store::insightsMode);
+  var analytics=new TenantAnalytics(store,codec,insights);
+  var actor=new DirectoryService.Actor(tenant,"a".repeat(64),true,false,"viewer");
+  var result=analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,from,now,now);
+  assertEquals(tenant.value(),result.tenantId());
+  assertEquals(3,result.series().points().stream().mapToLong(p->p.count()).sum());
+  assertEquals(3,result.tools().points().stream().mapToLong(p->p.count()).sum());
+  assertEquals(400,assertThrows(Failure.class,()->analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,-1,now,now)).status());
+  assertEquals(403,assertThrows(Failure.class,()->analytics.overview(new DirectoryService.Actor(tenant,"b".repeat(64),false,false,"viewer"),io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,from,now,now)).status());
+  packagePermissions(store,3,"user.read");
+  assertEquals(403,assertThrows(Failure.class,()->analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,from,now,now)).status());
+ }
  @Test void resourcePermissionsAreIndependentAndCapabilityResultsUseTheSameVocabulary(){
   var store=setup("user.read");var access=new ManagementAccess(codec);
   store.transaction(tenant,false,tx->{var graph=tx.load();var user=graph.entries().get(Ids.Kind.USER.id("viewer"));

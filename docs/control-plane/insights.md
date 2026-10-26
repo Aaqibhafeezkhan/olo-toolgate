@@ -2,7 +2,7 @@
 
 Operator Insights shows installation operators how tools are used and how they behave across every tenant: call
 volume, outcomes, latency, retries, admission denials, and the history of any one invocation. It is not shown to
-tenant administrators or callers. Design: [ADR 031](../adr/031-execution-correlation-operator-insights.md).
+callers. Tenant administrators with tenant-wide `audit.read` can use the narrower Admin Analytics page described below. Design: [ADR 031](../adr/031-execution-correlation-operator-insights.md).
 
 Insights records metadata only. Tool arguments, outputs, secrets and fencing tokens are never stored.
 
@@ -240,3 +240,25 @@ than summary retention and for tenants currently over quota, because their summa
   refusals are not yet distinguished from tool errors.
 - `INPUT_REQUIRED` and `CANCEL_REQUESTED` do not change the ledger state, so they write no fact.
 - Admission counters do not include kill-switch refusals separately.
+
+## Tenant analytics in Admin
+
+The Admin portal includes **Audit > Analytics** for administrators with tenant-wide
+`audit.read` permission. It shows call counts, outcomes, execution latency, attributed
+admission denials, and busiest tools for the last 24 hours, 7 days, or 30 days.
+Collection must be enabled with `BASIC` or `DETAILED`; no operator certificate is
+needed for this page.
+
+`GET /api/control/v1/analytics?from=<unix-ms>&to=<unix-ms>` authenticates the existing
+Admin bearer token and derives the tenant exclusively from that verified identity.
+It rejects `tenant` and `tenantId` query parameters. Permissions are checked against
+current tenant configuration on every request. The response contains `tenantId`,
+collection `mode`, an aggregate `series`, and a tool-grouped `tools` series.
+Ranges must end at or before the current time and span at most 31 days.
+
+Only `control_insights_cells` and `control_insights_admissions` provide analytics
+data. Both require `tenant_id`; every read uses an equality filter for the verified
+tenant inside that tenant's database transaction, with PostgreSQL forced RLS as an
+additional boundary. Missing, unknown, or other-tenant attribution cannot contribute.
+Installation-wide metrics, operator status, cross-tenant search, and rebuild controls
+are not exposed through this API. Empty results never fall back to global data.

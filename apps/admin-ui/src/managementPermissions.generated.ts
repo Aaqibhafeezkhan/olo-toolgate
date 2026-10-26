@@ -62,6 +62,9 @@ export const managementCatalog = {
     "deviceEvidence": [
       "device_evidence.read"
     ],
+    "analytics": [
+      "audit.read"
+    ],
     "audit": [
       "audit.read"
     ],
