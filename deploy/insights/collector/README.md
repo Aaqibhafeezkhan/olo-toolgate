@@ -82,7 +82,8 @@ that arrives after a minute was exported is visible on the Insights page but is 
 ## Starting queries
 
 These are starting points, not tested dashboards. Vendor-side validation is part of the integration testing stage
-(plan step 7).
+(Stage 7). Delivery to either vendor is not yet verified; see the
+[Stage 7 report](../../../docs/control-plane/insights-stage7.md).
 
 - **Datadog.** Traces appear in APM under service `olo-toolgate`. Example metric queries:
   `sum:toolgate.insights.calls{toolgate.outcome:failed} by {gen_ai.tool.name}.as_count()` and

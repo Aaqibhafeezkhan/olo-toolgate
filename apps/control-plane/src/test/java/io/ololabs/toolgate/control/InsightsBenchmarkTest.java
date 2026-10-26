@@ -15,7 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-/** Stage 7 overhead measurements for ADR 031 §6 (plan §9 Performance and Write amplification). Runs only with
+/** Stage 7 overhead measurements for ADR 031 §6 (Stage 7 Performance and Write amplification gates). Runs only with
  *  TOOLGATE_INSIGHTS_BENCHMARK=1, on SQLite and, when CONTROL_TEST_URL is set, PostgreSQL. Writes
  *  build/insights-benchmark/{database}.json. Single-threaded and local: these numbers bound the synchronous cost
  *  Insights adds to a ledger transition, not end-to-end latency under production load. */

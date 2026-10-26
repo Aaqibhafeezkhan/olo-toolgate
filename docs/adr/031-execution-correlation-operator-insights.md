@@ -1,9 +1,10 @@
 # ADR-031: Execution correlation and operator Insights
 
-**Status:** Proposed
+**Status:** Accepted. Amended during delivery: §10–§13 record the system as built.
 
-The delivery plan is [plan.md](../../plan.md). This record fixes the decisions that plan's step 1 requires before any
-code changes: identifiers and attempt boundaries, the execution-context contract, the transition-fact feed, the
+Operator Insights was delivered in steps on the `feature/olo-insights` branch: this design, propagation, `BASIC`,
+the Insights page, `DETAILED` and export, sessions, then integration testing. This record fixed, before any
+code changes, identifiers and attempt boundaries, the execution-context contract, the transition-fact feed, the
 projection model, budgets, error categories and the operator authority. Later steps implement it; a change after
 acceptance needs an amendment.
 
@@ -305,7 +306,7 @@ DETAILED spans and export follow §9, with these specifics:
 
 ### 12. Amendment: as built in step 6
 
-Sessions and `parent_invocation_id` (plan step 6):
+Sessions and `parent_invocation_id` (step 6):
 
 - **Ingress.** The Gateway reads `parentInvocationId` from `_meta` key `io.ololabs.toolgate/parentInvocationId` or
   the header `Toolgate-Parent-Invocation-Id`. `_meta` wins, as for the other declared IDs. The value must have the
@@ -340,7 +341,7 @@ found that a released client would reject every check-in reply carrying a task o
   that names the feature. Every other client receives the task exactly as released. This also applies when Control
   replays a stored check-in reply.
 - **Effect.** A client without the feature runs the call without trace or execution context and reports no client
-  span. Insights does not yet record this loss on the attempt. That was the plan's `context_delivered` flag, and it
+  span. Insights does not yet record this loss on the attempt. That was the planned `context_delivered` flag, and it
   remains a follow-up.
 - **Rule.** Any later field added to a message an endpoint client decodes needs the same treatment: a named client
   feature, or a protocol version the client negotiates.
@@ -388,7 +389,8 @@ found that a released client would reject every check-in reply carrying a task o
 
 ## Validation
 
-The release gates in plan.md §9, run together in the integration testing stage, and specifically:
+The release gates of the [Stage 7 report](../control-plane/insights-stage7.md), run together in the integration
+testing stage, and specifically:
 
 - `mcp-core/trace-propagation` passes; a package built with an older SDK still runs when it receives `executionContext`.
 - No fencing token appears in any Insights table, span, log, export or response (canary test).

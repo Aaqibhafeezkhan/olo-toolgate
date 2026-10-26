@@ -15,7 +15,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Plan §9 release gates for Operator Insights that the step tests do not already cover (Stage 7): atomic capture,
+/** Release gates for Operator Insights that the step tests do not already cover (Stage 7): atomic capture,
  *  crash recovery, concurrent writers and projectors, late corrections, quota, replay fidelity, NONE, mode
  *  equivalence, canaries, span memory and failure injection. Each runs on SQLite; {@link #theGatesHoldOnPostgres()}
  *  repeats the ones that do not read tables directly on PostgreSQL through the runtime role. */

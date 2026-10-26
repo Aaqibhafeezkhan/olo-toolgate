@@ -1,7 +1,7 @@
 # Operator Insights: Stage 7 integration test report
 
-Plan step 7 (integration testing) ran on the complete `feature/olo-insights` branch: steps 1–6 plus `main` at `5429dfbd`.
-It runs every plan §9 release gate that can be run without external accounts or production-like hardware. The
+Step 7 (integration testing) ran on the complete `feature/olo-insights` branch: steps 1–6 plus `main` at `5429dfbd`.
+It runs every release gate that can be run without external accounts or production-like hardware. The
 performance gates were deferred by decision of the feature owner to
 [#214](https://github.com/olo-labs/olo-toolgate/issues/214).
 
@@ -9,7 +9,7 @@ Design: [ADR 031](../adr/031-execution-correlation-operator-insights.md). Operat
 
 ## Result
 
-| Gate (plan §9) | Result | Evidence |
+| Gate | Result | Evidence |
 | --- | --- | --- |
 | Correlation | Pass | Every attempt gets its own execution ID, derived from its fencing token: `InsightsTest` re-queue, Tool Host `dispatch` tests and the endpoint client trace tests. |
 | Compatibility | Pass after fix | Defect S7-1 (below): released endpoint clients rejected relayed tasks. Older SDK packages ignore `executionContext` (conformance `stdin/v2-execution-context`, Python SDK end-to-end). |
@@ -66,7 +66,7 @@ Not run, because accounts are not available:
 ## Not defects, recorded
 
 - **Flaky test (pre-existing).** `service::tests::power_off_reports_once_and_power_on_resumes_without_reenrollment` in the endpoint client failed once in a loaded full-workspace run. It passed in four isolated runs and in two further full runs of the client crate. It does not touch Insights code.
-- **No `context_delivered` flag.** Plan §2 asked for the attempt summary to record `context_delivered = false` when an old peer could not receive the context. This was not built. An old client now gets the task without context (S7-1), and Insights does not flag the loss. The client execution span is simply absent.
+- **No `context_delivered` flag.** The delivery plan asked for the attempt summary to record `context_delivered = false` when an old peer could not receive the context. This was not built. An old client now gets the task without context (S7-1), and Insights does not flag the loss. The client execution span is simply absent.
 
 ## Running the gates
 
