@@ -89,6 +89,20 @@ final class InsightsOperatorListenerTest {
             HttpResponse.BodyHandlers.ofString());
         assertEquals(400, bad.statusCode());
 
+        // The page: the root redirects to it, and only the page and hashed assets are served, with the console's policy.
+        var root = client(operatorCa, operator).send(HttpRequest.newBuilder(URI.create(status.toString().replace("insights/v1/status", ""))).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(302, root.statusCode());
+        assertEquals("/console/insights.html", root.headers().firstValue("Location").orElse(""));
+        for (var path : List.of("console/index.html", "console/../application.properties", "console/assets/x.map", "console/%2e%2e/secret")) {
+            var refused = client(operatorCa, operator).send(HttpRequest.newBuilder(URI.create(status.toString().replace("insights/v1/status", path))).build(),
+                HttpResponse.BodyHandlers.ofString());
+            assertTrue(refused.statusCode() == 404 || refused.statusCode() == 400, path + " " + refused.statusCode());
+        }
+        var page = client(operatorCa, operator).send(HttpRequest.newBuilder(URI.create(status.toString().replace("insights/v1/status", "console/insights.html"))).build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertTrue(page.headers().firstValue("Content-Security-Policy").orElse("").contains("frame-ancestors 'none'"));
+        assertEquals("nosniff", page.headers().firstValue("X-Content-Type-Options").orElse(""));
+
         // No certificate, or one from another CA: the TLS handshake fails before any route runs.
         assertThrows(java.io.IOException.class, () -> client(operatorCa, null).send(HttpRequest.newBuilder(status).build(), HttpResponse.BodyHandlers.ofString()));
         assertThrows(java.io.IOException.class, () -> client(operatorCa, rogue).send(HttpRequest.newBuilder(status).build(), HttpResponse.BodyHandlers.ofString()));

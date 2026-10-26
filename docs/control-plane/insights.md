@@ -83,7 +83,26 @@ Schemas: [insights.schema.json](../../packages/contracts/schemas/v2/insights.sch
 buckets. Percentiles come from merged histograms, never from averaged percentiles; compute p95 only with 20 or more
 samples and p99 with 100 or more.
 
-## How the numbers are produced
+## The Insights page
+
+Open `https://<operator-host>:<port>/` in a browser that holds an operator client certificate; the listener redirects
+to the page. The page and its assets are served only by the operator listener. The tenant console never serves it,
+and its data requests go to the same origin, so the certificate authenticates them too.
+
+- **Status** comes first. With `NONE` the page explains how to enable Insights and requests nothing else. If the
+  status cannot be read it offers a retry, rather than showing an empty dataset.
+- **Overview:** logical calls, success rate (succeeded ÷ (succeeded + failed), with the counts), failures with
+  partial and unknown outcomes, p50/p95/p99 with the number of measured calls, and admission denials. The page warns
+  when admission counters have gaps.
+- **Calls by outcome** and **Execution duration**: hourly or per-minute UTC buckets chosen from the range, hover
+  details, and a table view for each chart. Buckets past retention are marked expired, never drawn as zero, and a
+  bucket with too few samples has no percentile point.
+- **Busiest tools:** select one to filter the page by it.
+- **Invocations:** browse a tenant's calls by outcome, or find a call in any tenant by its invocation, execution,
+  tool-call, session or agent-run ID. The detail window shows identity and correlation (with copy buttons; declared
+  IDs are marked as unverified), timing, every attempt with its execution ID, and the ledger transitions while they
+  are retained.
+
 
 - **Facts.** One immutable row per state change, numbered per invocation on the ledger row. Lease renewals write none.
 - **Projector.** Every few seconds Control projects each tenant in that tenant's own write transaction, so two Control

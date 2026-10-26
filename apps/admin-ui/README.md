@@ -4,7 +4,9 @@ The current Clients table combines registered devices and pending requests, with
 
 See [Device registry and tool-call controls](../../docs/control-plane/device-registry.md).
 
-React 19 / TypeScript / Vite console, embedded in Control at `/console/`.
+React 19 / TypeScript / Vite console, embedded in Control at `/console/`. A second entry, `insights.html`
+(`src/insights/`), is the installation-operator Insights page; only Control's operator listener serves it
+([Operator Insights](../../docs/control-plane/insights.md)).
 Dashboard and paginated users, teams, tools, policies, clients/device records and
 agents use real Control v1 APIs. User create/edit/delete supports optimistic
 revisions and exact-request idempotency. Other sections provide readable inspection.

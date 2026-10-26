@@ -60,6 +60,8 @@ public class InsightsOperatorListener {
             if (operator(ctx) == null) { ctx.response().setStatusCode(401).end(); return; }
             ctx.next();
         });
+        router.get("/").handler(ctx -> ctx.response().setStatusCode(302).putHeader("Location", "/console/insights.html").putHeader("Cache-Control", "no-store").end());
+        router.get("/console/*").blockingHandler(this::asset, false);
         router.get("/insights/v1/status").blockingHandler(ctx -> respond(ctx, () -> insights.status(System.currentTimeMillis())), false);
         router.get("/insights/v1/series").blockingHandler(ctx -> respond(ctx, () -> {
             var granularity = InsightsGranularity.valueOf(required(ctx, "granularity"));
@@ -75,6 +77,25 @@ public class InsightsOperatorListener {
         router.post("/insights/v1/rebuild").blockingHandler(ctx -> respond(ctx, () -> insights.rebuild(
             codec.model(ctx.body().asString(), InsightsRebuildRequest.class), System.currentTimeMillis())), false);
         return router;
+    }
+
+    /** Only the page and its hashed build assets; nothing else of the console is reachable here. */
+    private static final java.util.regex.Pattern ASSET = java.util.regex.Pattern.compile("insights[.]html|assets/[A-Za-z0-9_-]+([.][A-Za-z0-9_-]+)*[.](js|css|svg|png|woff2)");
+    private static final java.util.Map<String, String> TYPES = java.util.Map.of("html", "text/html; charset=UTF-8", "js", "text/javascript; charset=UTF-8",
+        "css", "text/css; charset=UTF-8", "svg", "image/svg+xml", "png", "image/png", "woff2", "font/woff2");
+    private void asset(RoutingContext ctx) {
+        String path = ctx.normalizedPath().substring("/console/".length());
+        byte[] body = null;
+        if (ASSET.matcher(path).matches()) try (var input = InsightsOperatorListener.class.getResourceAsStream("/META-INF/resources/console/" + path)) {
+            if (input != null) body = input.readAllBytes();
+        } catch (java.io.IOException unreadable) { body = null; }
+        var response = ctx.response();
+        response.putHeader("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+            .putHeader("X-Content-Type-Options", "nosniff").putHeader("Referrer-Policy", "no-referrer");
+        if (body == null) { response.setStatusCode(404).putHeader("Cache-Control", "no-store").end(); return; }
+        response.putHeader("Content-Type", TYPES.get(path.substring(path.lastIndexOf('.') + 1)))
+            .putHeader("Cache-Control", path.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-store")
+            .end(io.vertx.core.buffer.Buffer.buffer(body));
     }
 
     /** The verified operator certificate's subject, or null. TLS already refused clients the operator CA did not sign. */
