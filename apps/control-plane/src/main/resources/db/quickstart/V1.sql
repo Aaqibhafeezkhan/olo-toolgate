@@ -217,7 +217,7 @@ CREATE INDEX control_insights_facts_unprojected ON control_insights_facts(tenant
 -- statement
 CREATE TABLE control_insights_checkpoints(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,last_fact_seq INTEGER NOT NULL CHECK(last_fact_seq>=0),contribution TEXT NOT NULL CHECK(length(CAST(contribution AS BLOB))<=8192),final_at INTEGER,PRIMARY KEY(tenant_id,invocation_id));
 -- statement
-CREATE TABLE control_insights_invocations(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,tool_id TEXT NOT NULL,action TEXT NOT NULL,client_id TEXT,user_id TEXT,agent_id TEXT,tool_call_id TEXT,session_id TEXT,agent_run_id TEXT,outcome TEXT NOT NULL,error_category TEXT,attempts INTEGER NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at INTEGER NOT NULL,approval_requested_at INTEGER,approval_resolved_at INTEGER,queued_at INTEGER,first_started_at INTEGER,terminal_at INTEGER,approval_ms INTEGER,queue_ms INTEGER,execution_ms INTEGER,end_to_end_ms INTEGER,partial_coverage INTEGER NOT NULL CHECK(partial_coverage IN(0,1)),span_state TEXT CHECK(span_state IN('RETAINED','SAMPLED_OUT','DROPPED')),PRIMARY KEY(tenant_id,invocation_id));
+CREATE TABLE control_insights_invocations(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,tool_id TEXT NOT NULL,action TEXT NOT NULL,client_id TEXT,user_id TEXT,agent_id TEXT,tool_call_id TEXT,session_id TEXT,agent_run_id TEXT,parent_invocation_id TEXT,outcome TEXT NOT NULL,error_category TEXT,attempts INTEGER NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at INTEGER NOT NULL,approval_requested_at INTEGER,approval_resolved_at INTEGER,queued_at INTEGER,first_started_at INTEGER,terminal_at INTEGER,approval_ms INTEGER,queue_ms INTEGER,execution_ms INTEGER,end_to_end_ms INTEGER,partial_coverage INTEGER NOT NULL CHECK(partial_coverage IN(0,1)),span_state TEXT CHECK(span_state IN('RETAINED','SAMPLED_OUT','DROPPED')),PRIMARY KEY(tenant_id,invocation_id));
 -- statement
 CREATE INDEX control_insights_invocations_accepted ON control_insights_invocations(tenant_id,accepted_at);
 -- statement
@@ -226,6 +226,8 @@ CREATE INDEX control_insights_invocations_tool_call ON control_insights_invocati
 CREATE INDEX control_insights_invocations_session ON control_insights_invocations(tenant_id,session_id) WHERE session_id IS NOT NULL;
 -- statement
 CREATE INDEX control_insights_invocations_run ON control_insights_invocations(tenant_id,agent_run_id) WHERE agent_run_id IS NOT NULL;
+-- statement
+CREATE INDEX control_insights_invocations_parent ON control_insights_invocations(tenant_id,parent_invocation_id) WHERE parent_invocation_id IS NOT NULL;
 -- statement
 CREATE TABLE control_insights_attempts(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,attempt_number INTEGER NOT NULL CHECK(attempt_number BETWEEN 1 AND 64),execution_id TEXT CHECK(length(execution_id)=35 AND substr(execution_id,1,3)='ex-' AND substr(execution_id,4) NOT GLOB '*[^0-9a-f]*'),executor_id TEXT,started_at INTEGER,ended_at INTEGER,outcome TEXT,duration_ms INTEGER,PRIMARY KEY(tenant_id,invocation_id,attempt_number));
 -- statement

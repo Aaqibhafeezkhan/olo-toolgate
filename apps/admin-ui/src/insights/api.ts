@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import type {InsightsGranularity,InsightsInvocationDetail,InsightsInvocationPage,InsightsSeries,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
+import type {InsightsGranularity,InsightsInvocationDetail,InsightsInvocationPage,InsightsSeries,InsightsSessionPage,InsightsSessionTimeline,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
 
 /** A failed Insights request. The operator listener authenticates with the browser's client certificate, so there is
  *  no token here; a missing certificate fails before any request reaches the page. */
@@ -28,6 +28,9 @@ export function client(fetcher:Fetch=(...args)=>fetch(...args)){
     series:(q:{granularity:InsightsGranularity;from:number;to:number;groupBy?:'TOOL'|'CLIENT';tenant?:string;tool?:string;client?:string})=>get<InsightsSeries>('series',q),
     invocations:(q:{from:number;to:number;tenant?:string;tool?:string;outcome?:string;search?:string;after?:string;limit?:number})=>get<InsightsInvocationPage>('invocations',q),
     detail:(tenant:string,id:string)=>get<InsightsInvocationDetail>(`invocations/${encodeURIComponent(tenant)}/${encodeURIComponent(id)}`),
+    sessions:(q:{tenant:string;from:number;to:number;after?:string;limit?:number})=>get<InsightsSessionPage>('sessions',q),
+    // Session IDs may contain '/', so the timeline takes them as a query parameter.
+    session:(tenant:string,session:string)=>get<InsightsSessionTimeline>('sessions/timeline',{tenant,session}),
   };
 }
 export type InsightsClient=ReturnType<typeof client>;

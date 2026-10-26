@@ -27,6 +27,7 @@ import java.security.*;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** ADR 031 §8: the operator API answers only clients holding a certificate from the operator CA. */
@@ -88,6 +89,15 @@ final class InsightsOperatorListenerTest {
         var bad = client(operatorCa, operator).send(HttpRequest.newBuilder(URI.create(status.toString().replace("status", "series?granularity=WEEK&from=0&to=1"))).build(),
             HttpResponse.BodyHandlers.ofString());
         assertEquals(400, bad.statusCode());
+
+        // Sessions: a tenant is required, and the timeline takes the session ID as a query parameter.
+        String tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-a").value();
+        for (var query : Map.of("sessions?from=0&to=1", 400, "sessions?tenant=" + tenant + "&from=0&to=1", 200,
+                "sessions/timeline?tenant=" + tenant + "&session=sess%2F1", 200, "sessions/timeline?tenant=" + tenant + "&session=bad%20id", 400).entrySet()) {
+            var answer = client(operatorCa, operator).send(HttpRequest.newBuilder(URI.create(status.toString().replace("status", query.getKey()))).build(),
+                HttpResponse.BodyHandlers.ofString());
+            assertEquals((int) query.getValue(), answer.statusCode(), query.getKey() + " " + answer.body());
+        }
 
         // The page: the root redirects to it, and only the page and hashed assets are served, with the console's policy.
         var root = client(operatorCa, operator).send(HttpRequest.newBuilder(URI.create(status.toString().replace("insights/v1/status", ""))).build(), HttpResponse.BodyHandlers.ofString());

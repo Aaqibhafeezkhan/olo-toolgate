@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import type {InsightsGranularity,InsightsOutcome,InsightsSeries,InsightsSeriesPoint} from '@olo-labs/toolgate-contracts/v2';
+import type {InsightsGranularity,InsightsInvocation,InsightsOutcome,InsightsSeries,InsightsSeriesPoint} from '@olo-labs/toolgate-contracts/v2';
 
 /** The time ranges the page offers; custom ranges use the same bucket rule. */
 export const RANGES=[{id:'1h',label:'Last hour',ms:3_600_000},{id:'24h',label:'Last 24 hours',ms:86_400_000},{id:'7d',label:'Last 7 days',ms:604_800_000},{id:'30d',label:'Last 30 days',ms:2_592_000_000}] as const;
@@ -76,6 +76,30 @@ export function ranking(series:InsightsSeries):ToolRow[]{
   }
   return [...rows.entries()].map(([key,r])=>({key,calls:r.calls,failed:r.failed,p95:percentile(r.histogram,series.histogramBoundsMs,0.95),samples:r.histogram.reduce((a,b)=>a+b,0)}))
     .sort((a,b)=>b.calls-a.calls||a.key.localeCompare(b.key));
+}
+
+/** Orders a session's calls depth-first under their declared parents, children by acceptance. A call whose parent is
+ *  not in the set is a root. */
+export function callTree(calls:readonly InsightsInvocation[]):{call:InsightsInvocation;depth:number}[]{
+  const ids=new Set(calls.map(c=>c.invocationId)),children=new Map<string,InsightsInvocation[]>(),out:{call:InsightsInvocation;depth:number}[]=[];
+  const byAcceptance=(a:InsightsInvocation,b:InsightsInvocation)=>a.acceptedAtUnixMs-b.acceptedAtUnixMs||a.invocationId.localeCompare(b.invocationId);
+  for(const c of calls){const p=c.parentInvocationId&&ids.has(c.parentInvocationId)&&c.parentInvocationId!==c.invocationId?c.parentInvocationId:'';children.set(p,[...(children.get(p)??[]),c]);}
+  const seen=new Set<string>();
+  const walk=(parent:string,depth:number)=>{for(const c of (children.get(parent)??[]).sort(byAcceptance)){if(seen.has(c.invocationId))continue;seen.add(c.invocationId);out.push({call:c,depth});walk(c.invocationId,depth+1);}};
+  walk('',0);
+  // A parent cycle has no root; show those calls flat rather than lose them.
+  for(const c of [...calls].sort(byAcceptance))if(!seen.has(c.invocationId)){seen.add(c.invocationId);out.push({call:c,depth:0});}
+  return out;
+}
+
+/** The most calls running at once. A call runs from acceptance to its terminal time, or to `end` while unfinished;
+ *  one ending exactly when another starts does not overlap it. */
+export function peakParallel(calls:readonly InsightsInvocation[],end:number):number{
+  const events=calls.flatMap(c=>[[c.acceptedAtUnixMs,1],[Math.max(c.terminalAtUnixMs??end,c.acceptedAtUnixMs),-1]] as const);
+  events.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  let running=0,peak=0;
+  for(const [,delta] of events){running+=delta;peak=Math.max(peak,running);}
+  return peak;
 }
 
 export function duration(ms:number|null|undefined):string{

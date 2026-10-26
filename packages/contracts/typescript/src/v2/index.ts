@@ -430,6 +430,7 @@ export interface InsightsInvocation {
   readonly toolCallId?: string;
   readonly sessionId?: string;
   readonly agentRunId?: string;
+  readonly parentInvocationId?: string;
   readonly outcome: InsightsOutcome;
   readonly errorCategory?: InsightsErrorCategory;
   readonly attempts: number;
@@ -497,6 +498,32 @@ export interface InsightsSeriesPoint {
   readonly durationCount: number;
   readonly durationSumMs: number;
   readonly histogram: ReadonlyArray<number>;
+}
+/** One caller-declared session in a range: its calls by acceptance time. Session IDs are declared by the caller and not verified. */
+export interface InsightsSession {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly firstAcceptedAtUnixMs: number;
+  readonly lastActivityUnixMs: number;
+  readonly calls: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly unfinished: number;
+  readonly agentRuns: number;
+  readonly tools: number;
+}
+/** A tenant's sessions with calls accepted in the range, most recent activity first. next continues the list. */
+export interface InsightsSessionPage {
+  readonly items: ReadonlyArray<InsightsSession>;
+  readonly next?: string;
+  readonly callsWithoutSession: number;
+}
+/** Every retained call of one session, oldest first, plus calls that declared one of them as parent (nested work), to a bounded depth. */
+export interface InsightsSessionTimeline {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly invocations: ReadonlyArray<InsightsInvocation>;
+  readonly truncated: boolean;
 }
 /** Admission counts that may be missing: a skipped sequence, or an epoch that stopped without a final batch. */
 export interface InsightsSourceGap {

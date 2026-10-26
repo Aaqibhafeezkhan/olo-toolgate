@@ -16,8 +16,14 @@ from tools.release import bundle
 
 class ReleaseDocumentsTests(unittest.TestCase):
     def test_notes_match_versions_and_changelog(self):
-        self.assertEqual(version.expected()[version.ROOT/'RELEASE-NOTES.md'].encode('utf-8'),
-                         (version.ROOT/'RELEASE-NOTES.md').read_bytes())
+        # Release notes are rendered only for release output; ordinary changes keep the tracked snapshot unchanged.
+        self.assertNotIn(version.ROOT/'RELEASE-NOTES.md', version.expected())
+        product=(version.ROOT/'VERSION').read_text(encoding='utf-8').strip()
+        contracts=(version.ROOT/'packages/contracts/VERSION').read_text(encoding='utf-8').strip()
+        notes=version.release_notes()
+        self.assertIn(f'# OLO ToolGate {product} release notes', notes)
+        self.assertIn(f'Contracts version: `{contracts}`.', notes)
+        self.assertTrue(notes.endswith((version.ROOT/'CHANGELOG.md').read_text(encoding='utf-8')))
         for language in ('java', 'rust', 'typescript', 'php'):
             self.assertEqual((version.ROOT/'RELEASE-NOTES.md').read_bytes(),
                 (version.ROOT/'packages/contracts'/language/'RELEASE-NOTES.md').read_bytes())
@@ -26,8 +32,10 @@ class ReleaseDocumentsTests(unittest.TestCase):
         raw=bundle.bundle_bytes()
         self.assertEqual(raw,bundle.bundle_bytes())
         with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
-            for name in ('LICENSE','NOTICE.md','RELEASE-NOTES.md'):
+            for name in ('LICENSE','NOTICE.md'):
                 self.assertEqual(archive.extractfile(name).read(),(bundle.ROOT/name).read_bytes())
+            # The bundle carries notes rendered for this release, not the tracked snapshot.
+            self.assertEqual(archive.extractfile('RELEASE-NOTES.md').read(),version.release_notes().encode('utf-8'))
 
     def test_native_archives_embed_documents_for_all_platforms(self):
         metadata={'packages':[{'id':'client','name':'olo-toolgate-client','version':'0.10.0-dev',

@@ -3,6 +3,7 @@
 package io.ololabs.toolgate.control.application;
 
 import io.ololabs.toolgate.contracts.v2.InsightsGranularity;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -15,6 +16,8 @@ public interface InsightsStore {
     record TenantState(long collectingSince, Long summariesSuspendedSince, long summaryRows) {}
     record Backlog(long facts, Long oldest) {}
     record StoredCell(Insights.Cell cell, Insights.CellValue value) {}
+    record SessionRow(String sessionId, long firstAccepted, long lastActivity, long calls, long succeeded, long failed, long unfinished,
+                      long agentRuns, long tools) {}
 
     // Capture (inside the ledger transaction)
     void insertFact(Insights.Fact fact);
@@ -66,4 +69,11 @@ public interface InsightsStore {
     Map<String, Long> admissions(InsightsGranularity granularity, long from, long to);
     List<Insights.Summary> summaries(Filter filter, String afterCursor, int limit);
     List<Insights.Fact> facts(String invocationId);
+    /** Sessions with calls accepted in [from, to), most recent activity first; afterCursor is {@code lastActivity:sessionId}. */
+    List<SessionRow> sessions(long from, long to, String afterCursor, int limit);
+    long callsWithoutSession(long from, long to);
+    /** One session's summaries, oldest first. */
+    List<Insights.Summary> session(String sessionId, int limit);
+    /** Summaries that declared one of {@code parents} as their parent, oldest first. */
+    List<Insights.Summary> children(Collection<String> parents, int limit);
 }

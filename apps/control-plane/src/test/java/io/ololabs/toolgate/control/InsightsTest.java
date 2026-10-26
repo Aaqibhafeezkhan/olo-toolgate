@@ -220,6 +220,51 @@ final class InsightsTest {
         assertEquals(1, service.invocations(a.value(), from, to, null, null, "SUCCEEDED", null, null, 50).items().size());
     }
 
+    private void declare(Ids.TenantId tenant, String id, String session, String parent) {
+        store.transaction(tenant, true, tx -> { tx.enterprise().insightsContext(id, new ExecutionContext(null, null, null, session, null, parent, null)); return null; });
+    }
+
+    /** ADR 031 §12: sessions group a tenant's calls by declared session ID, and the timeline follows declared parents
+     *  into nested work that did not repeat the session. A parent is kept only when it is another invocation of the
+     *  same tenant. */
+    @Test void sessionsGroupParallelAndNestedCallsWithinTheTenant() {
+        store(InsightsMode.BASIC);
+        for (var id : List.of("inv-1", "inv-2")) { transition(id, "QUEUED", null); declare(a, id, "sess-1", null); }
+        transition("inv-3", "QUEUED", null); declare(a, "inv-3", null, "inv-1");   // nested under inv-1, no session
+        transition("inv-4", "QUEUED", null); declare(a, "inv-4", null, "inv-3");   // nested two levels down
+        transition("inv-5", "QUEUED", null); declare(a, "inv-5", "sess-2", "inv-404"); // unknown parent: dropped
+        transition("inv-7", "QUEUED", null); declare(a, "inv-7", null, "inv-7");   // itself: dropped
+        transition(b, "inv-6", "QUEUED", null, System.currentTimeMillis() + 600_000); declare(b, "inv-6", "sess-1", "inv-1"); // another tenant's ID: dropped
+        for (var state : List.of("RESERVED", "EXECUTING", "SUCCEEDED")) transition("inv-1", state, "n-1");
+        for (var state : List.of("RESERVED", "EXECUTING", "FAILED")) transition("inv-2", state, "n-2");
+        project(a); project(b);
+        var service = service(); long now = System.currentTimeMillis(), from = now - 3_600_000, to = now + 3_600_000;
+
+        var page = service.sessions(a.value(), from, to, null, 50);
+        var sessions = page.items().stream().collect(java.util.stream.Collectors.toMap(InsightsSession::sessionId, s -> s));
+        assertEquals(Set.of("sess-1", "sess-2"), sessions.keySet(), "tenant b's sess-1 is not tenant a's");
+        var one = sessions.get("sess-1");
+        assertEquals(List.of(2L, 1L, 1L, 0L, 1L), List.of(one.calls(), one.succeeded(), one.failed(), one.unfinished(), one.tools()));
+        assertEquals(3L, page.callsWithoutSession());
+        var first = service.sessions(a.value(), from, to, null, 1);
+        assertEquals(1, first.items().size());
+        var second = service.sessions(a.value(), from, to, first.next(), 1);
+        assertEquals(1, second.items().size()); assertNull(second.next());
+        assertNotEquals(first.items().get(0).sessionId(), second.items().get(0).sessionId());
+
+        var timeline = service.session(a.value(), "sess-1");
+        var parents = new HashMap<String, String>();
+        timeline.invocations().forEach(i -> parents.put(i.invocationId(), String.valueOf(i.parentInvocationId())));
+        assertEquals(Map.of("inv-1", "null", "inv-2", "null", "inv-3", "inv-1", "inv-4", "inv-3"), parents);
+        assertFalse(timeline.truncated());
+        assertNull(service.detail(a.value(), "inv-5").invocation().parentInvocationId());
+        assertNull(service.detail(a.value(), "inv-7").invocation().parentInvocationId());
+        assertNull(service.detail(b.value(), "inv-6").invocation().parentInvocationId());
+        assertEquals(List.of("inv-6"), service.session(b.value(), "sess-1").invocations().stream().map(InsightsInvocation::invocationId).toList());
+        assertThrows(Failure.class, () -> service.session(a.value(), "bad id"));
+        assertThrows(Failure.class, () -> service.sessions(a.value(), from, to, "not-a-cursor", 50));
+    }
+
     @Test void theSameRulesHoldOnPostgres() {
         postgres = true;
         noneWritesNoFacts();
@@ -232,6 +277,7 @@ final class InsightsTest {
         rebuildFindsAndRepairsDriftAndRetentionDropsFactsWithTheirCheckpoint();
         admissionBatchesAreCountedOnceAndGapsAreReported();
         operatorQueriesMergeTenantsAndSearchAcrossThem();
+        sessionsGroupParallelAndNestedCallsWithinTheTenant();
     }
 
     @Test void percentilesNeedEnoughSamples() {

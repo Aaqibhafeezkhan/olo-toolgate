@@ -170,6 +170,41 @@ public final class InsightsService {
         return new InsightsInvocationPage(items, next);
     }
 
+    /** A tenant's caller-declared sessions in a range, with how many calls declared none. */
+    public InsightsSessionPage sessions(String tenant, long from, long to, String after, int limit) {
+        if (limit < 1 || limit > 200 || to <= from) throw Failure.validation();
+        var t = new Ids.TenantId(Ids.valid(tenant));
+        return store.transaction(t, false, tx -> {
+            var rows = tx.insights().sessions(from, to, after, limit + 1); String next = null;
+            if (rows.size() > limit) { rows = rows.subList(0, limit); var last = rows.get(limit - 1); next = last.lastActivity() + ":" + last.sessionId(); }
+            var items = rows.stream().map(r -> new InsightsSession(tenant, r.sessionId(), r.firstAccepted(), r.lastActivity(), r.calls(), r.succeeded(), r.failed(),
+                r.unfinished(), r.agentRuns(), r.tools())).toList();
+            return new InsightsSessionPage(items, next, tx.insights().callsWithoutSession(from, to));
+        });
+    }
+
+    static final int TIMELINE = 1000, NESTING = 8;
+    private static final java.util.regex.Pattern DECLARED = java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:/@_-]{0,127}");
+    /** One session's calls, plus calls that declared one of them as parent (nested work that did not repeat the
+     *  session ID), down to {@link #NESTING} levels. Oldest first; at most {@link #TIMELINE} calls. */
+    public InsightsSessionTimeline session(String tenant, String sessionId) {
+        var t = new Ids.TenantId(Ids.valid(tenant));
+        if (sessionId == null || !DECLARED.matcher(sessionId).matches()) throw Failure.validation();
+        return store.transaction(t, false, tx -> {
+            var s = tx.insights(); var calls = new LinkedHashMap<String, Insights.Summary>();
+            for (var c : s.session(sessionId, TIMELINE + 1)) calls.put(c.invocationId, c);
+            List<String> frontier = new ArrayList<>(calls.keySet());
+            for (int depth = 0; depth < NESTING && !frontier.isEmpty() && calls.size() <= TIMELINE; depth++) {
+                var next = new ArrayList<String>();
+                for (var c : s.children(frontier, TIMELINE + 1 - calls.size())) if (calls.putIfAbsent(c.invocationId, c) == null) next.add(c.invocationId);
+                frontier = next;
+            }
+            var items = calls.values().stream().sorted(Comparator.comparingLong((Insights.Summary c) -> c.acceptedAt).thenComparing(c -> c.invocationId))
+                .limit(TIMELINE).map(c -> contract(tenant, c)).toList();
+            return new InsightsSessionTimeline(tenant, sessionId, items, calls.size() > TIMELINE);
+        });
+    }
+
     public InsightsInvocationDetail detail(String tenant, String invocationId) {
         var t = new Ids.TenantId(Ids.valid(tenant)); Ids.valid(invocationId);
         return store.transaction(t, false, tx -> {
@@ -192,7 +227,7 @@ public final class InsightsService {
 
     static InsightsInvocation contract(String tenant, Insights.Summary s) {
         return new InsightsInvocation(tenant, s.invocationId, s.toolId, s.action, s.clientId, s.userId, s.agentId, s.toolCallId, s.sessionId, s.agentRunId,
-            s.outcome(), s.errorCategory(), (long) s.attempts.size(), s.acceptedAt, s.approvalRequestedAt, s.approvalResolvedAt, s.queuedAt,
+            s.parentInvocationId, s.outcome(), s.errorCategory(), (long) s.attempts.size(), s.acceptedAt, s.approvalRequestedAt, s.approvalResolvedAt, s.queuedAt,
             s.firstStartedAt, s.terminalAt, s.approvalMs(), s.queueMs(), s.executionMs(), s.endToEndMs(), s.partialCoverage);
     }
 }

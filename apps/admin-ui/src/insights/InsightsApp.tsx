@@ -1,11 +1,11 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 import {useCallback,useEffect,useMemo,useState,type FormEvent,type ReactNode} from 'react';
-import type {InsightsInvocation,InsightsInvocationDetail,InsightsOutcome,InsightsSeries,InsightsSpan,InsightsSpanState,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
+import type {InsightsInvocation,InsightsInvocationDetail,InsightsOutcome,InsightsSeries,InsightsSession,InsightsSessionTimeline,InsightsSpan,InsightsSpanState,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
 import {EditorDialog} from '../EditorDialog';
 import {client as defaultClient,InsightsError,type InsightsClient} from './api';
 import {LatencyChart,OutcomeChart} from './charts';
-import {RANGES,buckets,duration,granularity,overview,percent,ranking,time,type RangeId} from './model';
+import {RANGES,buckets,callTree,duration,granularity,group,overview,peakParallel,percent,ranking,time,type RangeId} from './model';
 
 type Load<T>={state:'loading'}|{state:'error';error:InsightsError}|{state:'ready';value:T};
 const OUTCOMES:InsightsOutcome[]=['SUCCEEDED','FAILED','PARTIAL','OUTCOME_UNKNOWN','IN_PROGRESS','PENDING_APPROVAL','CANCELLED','EXPIRED'];
@@ -95,6 +95,7 @@ function Workspace({api,status,now}:{api:InsightsClient;status:InsightsStatus;no
       {tools.state==='ready'&&<ToolRanking series={tools.value} select={tool=>{setDraft({...draft,tool,client:''});setFilters({...filters,tool,client:''});}}/>}
     </section>
     <Explorer api={api} from={from} to={to} tenant={filters.tenant} tool={filters.tool}/>
+    <Sessions api={api} from={from} to={to} tenant={filters.tenant}/>
   </>;
 }
 
@@ -155,14 +156,91 @@ function Explorer({api,from,to,tenant,tool}:{api:InsightsClient;from:number;to:n
 }
 
 function Detail({api,row,close}:{api:InsightsClient;row:InsightsInvocation;close:()=>void}){
+  return <EditorDialog title={`Invocation ${row.invocationId}`} close={close} closeLabel="Close invocation details"><DetailBody api={api} row={row}/></EditorDialog>;
+}
+function DetailBody({api,row}:{api:InsightsClient;row:InsightsInvocation}){
   const [detail,setDetail]=useState<Load<InsightsInvocationDetail>>({state:'loading'});
   const load=useCallback(()=>{setDetail({state:'loading'});api.detail(row.tenantId,row.invocationId).then(value=>setDetail({state:'ready',value}),e=>setDetail({state:'error',error:failure(e)}));},[api,row]);
   useEffect(load,[load]);
-  return <EditorDialog title={`Invocation ${row.invocationId}`} close={close} closeLabel="Close invocation details">
+  return <>
     {detail.state==='loading'&&<p role="status">Loading…</p>}
     {detail.state==='error'&&<Problem error={detail.error} retry={load}/>}
     {detail.state==='ready'&&<InvocationDetail detail={detail.value}/>}
+  </>;
+}
+
+function Sessions({api,from,to,tenant}:{api:InsightsClient;from:number;to:number;tenant:string}){
+  const [rows,setRows]=useState<InsightsSession[]>(),[next,setNext]=useState<string>(),[without,setWithout]=useState(0);
+  const [error,setError]=useState<InsightsError>(),[busy,setBusy]=useState(false),[open,setOpen]=useState<string>();
+  const query=useCallback((after?:string)=>{
+    if(!tenant){setRows(undefined);setNext(undefined);return;}
+    setBusy(true);setError(undefined);
+    api.sessions({tenant,from,to,after,limit:50})
+      .then(page=>{setRows(previous=>after?[...(previous??[]),...page.items]:[...page.items]);setNext(page.next);setWithout(page.callsWithoutSession);},e=>setError(failure(e)))
+      .finally(()=>setBusy(false));
+  },[api,tenant,from,to]);
+  useEffect(()=>{query();},[query]);
+  return <section className="insights-section" aria-labelledby="sessions-heading"><h2 id="sessions-heading">Sessions</h2>
+    <p className="muted">Calls grouped by the session ID the caller declared. Session IDs are not verified.</p>
+    {!tenant&&<p className="muted">Set a tenant filter to see its sessions.</p>}
+    {error&&<Problem error={error} retry={()=>query()}/>}
+    {rows&&<p className="insights-note">{without===0?'Every call in this range declared a session.'
+      :`${without.toLocaleString()} call${without===1?'':'s'} in this range declared no session, so ${without===1?'it is':'they are'} not in any session below.`}</p>}
+    {rows&&rows.length===0&&<p className="muted" role="status">No sessions in this range.</p>}
+    {rows&&rows.length>0&&<div className="table-scroll"><table className="insights-table">
+      <thead><tr><th scope="col">Session</th><th scope="col">Last activity (UTC)</th><th scope="col">Calls</th><th scope="col">Succeeded</th><th scope="col">Failed</th>
+        <th scope="col">Unfinished</th><th scope="col">Agent runs</th><th scope="col">Tools</th></tr></thead>
+      <tbody>{rows.map(s=><tr key={s.sessionId}>
+        <th scope="row"><button type="button" className="link-button" onClick={()=>setOpen(s.sessionId)}>{s.sessionId}</button></th>
+        <td>{time(s.lastActivityUnixMs)}</td><td>{s.calls.toLocaleString()}</td><td>{s.succeeded.toLocaleString()}</td>
+        <td>{s.failed?<span className="warning-text">{s.failed.toLocaleString()}</span>:'0'}</td><td>{s.unfinished.toLocaleString()}</td>
+        <td>{s.agentRuns.toLocaleString()}</td><td>{s.tools.toLocaleString()}</td></tr>)}</tbody></table></div>}
+    {next&&<button type="button" disabled={busy} onClick={()=>query(next)}>Load more</button>}
+    {open&&tenant&&<SessionDialog api={api} tenant={tenant} session={open} close={()=>setOpen(undefined)}/>}
+  </section>;
+}
+
+function SessionDialog({api,tenant,session,close}:{api:InsightsClient;tenant:string;session:string;close:()=>void}){
+  const [timeline,setTimeline]=useState<Load<InsightsSessionTimeline>>({state:'loading'}),[call,setCall]=useState<InsightsInvocation>();
+  const load=useCallback(()=>{setTimeline({state:'loading'});api.session(tenant,session).then(value=>setTimeline({state:'ready',value}),e=>setTimeline({state:'error',error:failure(e)}));},[api,tenant,session]);
+  useEffect(load,[load]);
+  return <EditorDialog title={`Session ${session}`} close={close} closeLabel="Close session">
+    {timeline.state==='loading'&&<p role="status">Loading…</p>}
+    {timeline.state==='error'&&<Problem error={timeline.error} retry={load}/>}
+    {timeline.state==='ready'&&(call
+      ?<><button type="button" className="link-button" onClick={()=>setCall(undefined)}>Back to session</button><DetailBody api={api} row={call}/></>
+      :<SessionTimeline timeline={timeline.value} open={setCall}/>)}
   </EditorDialog>;
+}
+
+/** A session's calls on one time axis: overlapping bars are parallel work, indentation is declared nesting. */
+export function SessionTimeline({timeline,open}:{timeline:InsightsSessionTimeline;open:(call:InsightsInvocation)=>void}){
+  const calls=timeline.invocations;
+  if(calls.length===0)return <p className="muted">No retained calls in this session. Call summaries are kept for a limited time.</p>;
+  const ids=new Set(calls.map(c=>c.invocationId)),rows=callTree(calls);
+  // The axis ends at the session's last recorded activity; calls still running reach that edge.
+  const last=Math.max(...calls.map(c=>Math.max(c.terminalAtUnixMs??c.acceptedAtUnixMs,c.acceptedAtUnixMs)));
+  const end=(c:InsightsInvocation)=>Math.max(c.terminalAtUnixMs??last,c.acceptedAtUnixMs);
+  const start=Math.min(...calls.map(c=>c.acceptedAtUnixMs)),total=Math.max(last-start,1);
+  const nested=calls.filter(c=>c.parentInvocationId&&ids.has(c.parentInvocationId)).length,runs=new Set(calls.map(c=>c.agentRunId).filter(Boolean)).size;
+  return <div className="insights-detail">
+    <p className="insights-note">{calls.length.toLocaleString()} call{calls.length===1?'':'s'}{timeline.truncated?' (the first 1,000)':''} over {duration(last-start)} ·
+      at most {peakParallel(calls,last)} running at once · {nested} nested under another call · {runs} agent run{runs===1?'':'s'}.
+      Sessions, agent runs and parents are declared by the caller and not verified.</p>
+    <div className="table-scroll"><table className="insights-table insights-waterfall">
+      <caption className="visually-hidden">Calls of session {timeline.sessionId}, offsets from {time(start)} UTC</caption>
+      <thead><tr><th scope="col">Call</th><th scope="col">Agent run</th><th scope="col">Outcome</th><th scope="col">Start</th><th scope="col">Duration</th>
+        <th scope="col" className="waterfall-track-head">Timeline ({duration(total)})</th></tr></thead>
+      <tbody>{rows.map(({call:c,depth})=><tr key={c.invocationId}>
+        <th scope="row" style={{paddingLeft:10+depth*14}}><button type="button" className="link-button" onClick={()=>open(c)}>{c.toolId}</button> <code>{c.invocationId}</code></th>
+        <td>{c.agentRunId??<span className="muted">—</span>}</td>
+        <td><span className={`outcome-pill outcome-${c.outcome.toLowerCase()}`}>{label(c.outcome)}</span></td>
+        <td>+{duration(c.acceptedAtUnixMs-start)}</td>
+        <td>{c.terminalAtUnixMs==null?<span className="muted">Running</span>:duration(c.terminalAtUnixMs-c.acceptedAtUnixMs)}</td>
+        <td className="waterfall-track" aria-hidden="true"><span className={`waterfall-bar session-bar outcome-${group(c.outcome)}${c.terminalAtUnixMs==null?' running':''}`}
+          style={{left:`min(${(c.acceptedAtUnixMs-start)/total*100}%, calc(100% - 8px))`,width:`max(${c.terminalAtUnixMs==null?8:2}px, ${(end(c)-c.acceptedAtUnixMs)/total*100}%)`}}/></td></tr>)}</tbody>
+    </table></div>
+  </div>;
 }
 
 const SPAN_STATE:Record<InsightsSpanState,string>={
@@ -209,10 +287,11 @@ export function InvocationDetail({detail}:{detail:InsightsInvocationDetail}){
       {i.partialCoverage&&<p className="insights-note" role="note">Insights started collecting after this call was accepted, so its early stages are unknown.</p>}
     </dl></section>
     <section aria-labelledby="d-identity"><h3 id="d-identity">Identity and correlation</h3>
-      <p className="muted">Tool-call, session and run IDs are declared by the caller and are not verified.</p><dl>
+      <p className="muted">Tool-call, session, run and parent IDs are declared by the caller and are not verified. A parent is kept only when it is a call of the same tenant.</p><dl>
       <Field name="Tenant" value={i.tenantId} copy/><Field name="Invocation" value={i.invocationId} copy/>
       <Field name="Client (binding)" value={i.clientId} copy/><Field name="User" value={i.userId} copy/><Field name="Agent" value={i.agentId} copy/>
       <Field name="Tool call" value={i.toolCallId} copy/><Field name="Session" value={i.sessionId} copy/><Field name="Agent run" value={i.agentRunId} copy/>
+      <Field name="Parent invocation" value={i.parentInvocationId} copy/>
     </dl></section>
     <section aria-labelledby="d-timing"><h3 id="d-timing">Timing</h3><dl>
       <Field name="Accepted" value={`${time(i.acceptedAtUnixMs)} UTC`}/>

@@ -365,6 +365,8 @@
     "agentId": "agent-planner",
     "toolCallId": "toolu_01A9q",
     "sessionId": "sess-42",
+    "agentRunId": "run-9",
+    "parentInvocationId": "inv-4",
     "outcome": "SUCCEEDED",
     "attempts": 1,
     "acceptedAtUnixMs": 1791676800000,
@@ -576,6 +578,66 @@
       0,
       0
     ]
+  },
+  "InsightsSession": {
+    "tenantId": "tenant-1",
+    "sessionId": "sess-42",
+    "firstAcceptedAtUnixMs": 1791676800000,
+    "lastActivityUnixMs": 1791676860000,
+    "calls": 7,
+    "succeeded": 5,
+    "failed": 1,
+    "unfinished": 1,
+    "agentRuns": 2,
+    "tools": 3
+  },
+  "InsightsSessionPage": {
+    "items": [
+      {
+        "tenantId": "tenant-1",
+        "sessionId": "sess-42",
+        "firstAcceptedAtUnixMs": 1791676800000,
+        "lastActivityUnixMs": 1791676860000,
+        "calls": 7,
+        "succeeded": 5,
+        "failed": 1,
+        "unfinished": 1,
+        "agentRuns": 2,
+        "tools": 3
+      }
+    ],
+    "next": "1791676860000:sess-42",
+    "callsWithoutSession": 12
+  },
+  "InsightsSessionTimeline": {
+    "tenantId": "tenant-1",
+    "sessionId": "sess-42",
+    "invocations": [
+      {
+        "tenantId": "tenant-1",
+        "invocationId": "inv-5",
+        "toolId": "acme.orders/orders.lookup",
+        "action": "invoke",
+        "clientId": "bind-1",
+        "userId": "u1",
+        "agentId": "agent-planner",
+        "toolCallId": "toolu_01A9q",
+        "sessionId": "sess-42",
+        "agentRunId": "run-9",
+        "parentInvocationId": "inv-4",
+        "outcome": "SUCCEEDED",
+        "attempts": 1,
+        "acceptedAtUnixMs": 1791676800000,
+        "queuedAtUnixMs": 1791676800005,
+        "firstStartedAtUnixMs": 1791676800040,
+        "terminalAtUnixMs": 1791676800190,
+        "queueMs": 35,
+        "executionMs": 150,
+        "endToEndMs": 190,
+        "partialCoverage": false
+      }
+    ],
+    "truncated": false
   },
   "InsightsSourceGap": {
     "tenantId": "tenant-1",

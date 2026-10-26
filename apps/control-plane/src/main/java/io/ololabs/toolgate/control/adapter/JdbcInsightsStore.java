@@ -75,7 +75,7 @@ final class JdbcInsightsStore implements InsightsStore {
     }
 
     private static final String SUMMARY = "invocation_id,tool_id,action,client_id,user_id,agent_id,tool_call_id,session_id,agent_run_id,outcome,error_category,"
-        + "attempts,accepted_at,approval_requested_at,approval_resolved_at,queued_at,first_started_at,terminal_at,partial_coverage";
+        + "attempts,accepted_at,approval_requested_at,approval_resolved_at,queued_at,first_started_at,terminal_at,partial_coverage,parent_invocation_id";
     public Insights.Summary summary(String id) {
         try {
             Insights.Summary s;
@@ -93,6 +93,7 @@ final class JdbcInsightsStore implements InsightsStore {
         s.agentRunId = rows.getString(9); s.state = state(rows.getString(10)); s.cause = cause(rows.getString(11));
         s.acceptedAt = rows.getLong(13); s.approvalRequestedAt = optional(rows, 14); s.approvalResolvedAt = optional(rows, 15);
         s.queuedAt = optional(rows, 16); s.firstStartedAt = optional(rows, 17); s.terminalAt = optional(rows, 18); s.partialCoverage = rows.getBoolean(19);
+        s.parentInvocationId = rows.getString(20);
         return s;
     }
     /** Summary rows store the outcome; the projector keeps the ledger state, so map it back to a representative one. */
@@ -119,7 +120,7 @@ final class JdbcInsightsStore implements InsightsStore {
         var category = s.errorCategory();
         Object[] values = {s.invocationId, s.toolId, s.action, s.clientId, s.userId, s.agentId, s.toolCallId, s.sessionId, s.agentRunId, s.outcome().name(),
             category == null ? null : category.name(), s.attempts.size(), s.acceptedAt, s.approvalRequestedAt, s.approvalResolvedAt, s.queuedAt,
-            s.firstStartedAt, s.terminalAt, s.approvalMs(), s.queueMs(), s.executionMs(), s.endToEndMs(), s.partialCoverage};
+            s.firstStartedAt, s.terminalAt, s.approvalMs(), s.queueMs(), s.executionMs(), s.endToEndMs(), s.partialCoverage, s.parentInvocationId};
         String columns = SUMMARY.replace(",partial_coverage", ",approval_ms,queue_ms,execution_ms,end_to_end_ms,partial_coverage");
         var update = new StringBuilder();
         for (String c : columns.split(",")) if (!c.equals("invocation_id")) update.append(update.isEmpty() ? "" : ",").append(c).append("=excluded.").append(c);
@@ -349,6 +350,54 @@ final class JdbcInsightsStore implements InsightsStore {
         }
         sql.append(" ORDER BY accepted_at DESC,invocation_id DESC LIMIT ?"); values.add(limit);
         try (var s = query(sql.toString(), values.toArray()); var rows = s.executeQuery()) {
+            var out = new ArrayList<Insights.Summary>();
+            while (rows.next()) out.add(summary(rows));
+            for (var s2 : out) attempts(s2);
+            return out;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    /** A call's last activity: its terminal time, or its acceptance while it runs. */
+    private static final String LAST = "max(CASE WHEN terminal_at IS NULL OR terminal_at<accepted_at THEN accepted_at ELSE terminal_at END)";
+    public List<SessionRow> sessions(long from, long to, String after, int limit) {
+        var sql = new StringBuilder("SELECT session_id,min(accepted_at)," + LAST + ",count(*),"
+            + "sum(CASE WHEN outcome='SUCCEEDED' THEN 1 ELSE 0 END),sum(CASE WHEN outcome IN('FAILED','PARTIAL','OUTCOME_UNKNOWN') THEN 1 ELSE 0 END),"
+            + "sum(CASE WHEN outcome IN('PENDING_APPROVAL','IN_PROGRESS') THEN 1 ELSE 0 END),count(DISTINCT agent_run_id),count(DISTINCT tool_id) "
+            + "FROM control_insights_invocations WHERE tenant_id=? AND session_id IS NOT NULL AND accepted_at>=? AND accepted_at<? GROUP BY session_id");
+        var values = new ArrayList<Object>(List.of(from, to));
+        if (after != null) {
+            int colon = after.indexOf(':');
+            if (colon < 1 || colon == after.length() - 1) throw Failure.validation();
+            long last; try { last = Long.parseLong(after.substring(0, colon)); } catch (NumberFormatException invalid) { throw Failure.validation(); }
+            sql.append(" HAVING " + LAST + "<? OR (" + LAST + "=? AND session_id<?)"); values.addAll(List.of(last, last, after.substring(colon + 1)));
+        }
+        sql.append(" ORDER BY 3 DESC,session_id DESC LIMIT ?"); values.add(limit);
+        try (var s = query(sql.toString(), values.toArray()); var rows = s.executeQuery()) {
+            var out = new ArrayList<SessionRow>();
+            while (rows.next()) out.add(new SessionRow(rows.getString(1), rows.getLong(2), rows.getLong(3), rows.getLong(4), rows.getLong(5), rows.getLong(6),
+                rows.getLong(7), rows.getLong(8), rows.getLong(9)));
+            return out;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public long callsWithoutSession(long from, long to) {
+        try (var s = query("SELECT count(*) FROM control_insights_invocations WHERE tenant_id=? AND session_id IS NULL AND accepted_at>=? AND accepted_at<?", from, to);
+             var rows = s.executeQuery()) { rows.next(); return rows.getLong(1); }
+        catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public List<Insights.Summary> session(String sessionId, int limit) {
+        return summaries("SELECT " + SUMMARY + " FROM control_insights_invocations WHERE tenant_id=? AND session_id=? ORDER BY accepted_at,invocation_id LIMIT ?",
+            sessionId, limit);
+    }
+    public List<Insights.Summary> children(Collection<String> parents, int limit) {
+        var out = new ArrayList<Insights.Summary>(); var all = List.copyOf(parents);
+        for (int i = 0; i < all.size() && out.size() < limit; i += 200) {
+            var chunk = all.subList(i, Math.min(all.size(), i + 200)); var values = new ArrayList<Object>(chunk); values.add(limit - out.size());
+            out.addAll(summaries("SELECT " + SUMMARY + " FROM control_insights_invocations WHERE tenant_id=? AND parent_invocation_id IN(?" + ",?".repeat(chunk.size() - 1)
+                + ") ORDER BY accepted_at,invocation_id LIMIT ?", values.toArray()));
+        }
+        return out;
+    }
+    private List<Insights.Summary> summaries(String sql, Object... values) {
+        try (var s = query(sql, values); var rows = s.executeQuery()) {
             var out = new ArrayList<Insights.Summary>();
             while (rows.next()) out.add(summary(rows));
             for (var s2 : out) attempts(s2);
