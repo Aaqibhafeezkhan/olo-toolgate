@@ -287,6 +287,7 @@ export interface Dispatch {
   readonly arguments: Record<string, unknown>;
   readonly traceparent?: string;
   readonly executionContext?: ExecutionContext;
+  readonly collectSpans?: boolean;
 }
 /** Reviewed effect class per tool. */
 export interface EffectApproval {
@@ -450,6 +451,8 @@ export interface InsightsInvocationDetail {
   readonly attempts: ReadonlyArray<InsightsAttempt>;
   readonly transitions: ReadonlyArray<InsightsTransition>;
   readonly transitionsRetained: boolean;
+  readonly spans?: ReadonlyArray<InsightsSpan>;
+  readonly spanState?: InsightsSpanState;
 }
 /** Explorer results, newest first. next continues the search. */
 export interface InsightsInvocationPage {
@@ -505,6 +508,36 @@ export interface InsightsSourceGap {
   readonly lastSeenUnixMs: number;
   readonly droppedRequests: number;
 }
+/** One allowlisted span. Metadata only: never arguments, outputs, URLs, headers or secrets. */
+export interface InsightsSpan {
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly parentSpanId?: string;
+  readonly name: InsightsSpanName;
+  readonly source?: InsightsSpanSource;
+  readonly invocationId: string;
+  readonly executionId?: string;
+  readonly startUnixMs: number;
+  readonly durationMs: number;
+  readonly status: InsightsSpanStatus;
+  readonly routeId?: string;
+  readonly httpStatus?: number;
+  readonly errorCode?: string;
+}
+/** How many spans Control buffered and how many it refused (unknown invocation, wrong executor, over a bound). */
+export interface InsightsSpanAck {
+  readonly accepted: number;
+  readonly refused: number;
+}
+/** Spans from one producer. Best-effort: droppedSpans counts what the producer could not keep. */
+export interface InsightsSpanBatch {
+  readonly spans: ReadonlyArray<InsightsSpan>;
+  readonly droppedSpans?: number;
+}
+export type InsightsSpanName = "GATEWAY_REQUEST" | "GATEWAY_AUTHORIZE" | "GATEWAY_DISPATCH" | "HOST_ADMISSION" | "HOST_EXECUTE" | "HOST_EGRESS" | "CLIENT_EXECUTE";
+export type InsightsSpanSource = "GATEWAY" | "TOOL_HOST" | "CLIENT";
+export type InsightsSpanState = "NOT_COLLECTED" | "PENDING" | "RETAINED" | "SAMPLED_OUT" | "DROPPED";
+export type InsightsSpanStatus = "OK" | "ERROR";
 /** Read first by the operator page: what is collected and how current it is. */
 export interface InsightsStatus {
   readonly mode: InsightsMode;

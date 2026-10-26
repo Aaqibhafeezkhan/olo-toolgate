@@ -653,7 +653,7 @@ CREATE TABLE control_insights_invocations(tenant_id varchar(128) NOT NULL,invoca
     tool_call_id varchar(128),session_id varchar(128),agent_run_id varchar(128),outcome varchar(32) NOT NULL,error_category varchar(32),
     attempts integer NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at bigint NOT NULL,approval_requested_at bigint,approval_resolved_at bigint,
     queued_at bigint,first_started_at bigint,terminal_at bigint,approval_ms bigint,queue_ms bigint,execution_ms bigint,end_to_end_ms bigint,
-    partial_coverage boolean NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
+    partial_coverage boolean NOT NULL,span_state varchar(16) CHECK(span_state IN('RETAINED','SAMPLED_OUT','DROPPED')),PRIMARY KEY(tenant_id,invocation_id));
 CREATE INDEX control_insights_invocations_accepted ON control_insights_invocations(tenant_id,accepted_at);
 CREATE INDEX control_insights_invocations_tool_call ON control_insights_invocations(tenant_id,tool_call_id) WHERE tool_call_id IS NOT NULL;
 CREATE INDEX control_insights_invocations_session ON control_insights_invocations(tenant_id,session_id) WHERE session_id IS NOT NULL;
@@ -674,9 +674,16 @@ CREATE TABLE control_insights_gateway_epochs(tenant_id varchar(128) NOT NULL,gat
     last_sequence bigint NOT NULL CHECK(last_sequence>=0),missing bigint NOT NULL CHECK(missing>=0),dropped bigint NOT NULL CHECK(dropped>=0),
     final boolean NOT NULL,last_seen bigint NOT NULL,PRIMARY KEY(tenant_id,gateway_id,epoch));
 CREATE TABLE control_insights_tenant_state(tenant_id varchar(128) NOT NULL,collecting_since bigint NOT NULL,
-    summaries_suspended_since bigint,summary_rows bigint NOT NULL DEFAULT 0 CHECK(summary_rows>=0),PRIMARY KEY(tenant_id));
+    summaries_suspended_since bigint,summary_rows bigint NOT NULL DEFAULT 0 CHECK(summary_rows>=0),metrics_exported_through bigint,PRIMARY KEY(tenant_id));
+CREATE TABLE control_insights_spans(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,span_id char(16) NOT NULL CHECK(span_id ~ '^[0-9a-f]{16}$'),
+    trace_id char(32) NOT NULL CHECK(trace_id ~ '^[0-9a-f]{32}$'),parent_span_id char(16) CHECK(parent_span_id ~ '^[0-9a-f]{16}$'),name varchar(32) NOT NULL,
+    source varchar(16) NOT NULL CHECK(source IN('GATEWAY','TOOL_HOST','CLIENT')),execution_id char(35) CHECK(execution_id ~ '^ex-[0-9a-f]{32}$'),
+    start_at bigint NOT NULL,duration_ms bigint NOT NULL CHECK(duration_ms BETWEEN 0 AND 86400000),status varchar(8) NOT NULL CHECK(status IN('OK','ERROR')),
+    route_id varchar(128),http_status integer CHECK(http_status BETWEEN 100 AND 599),error_code varchar(64),stored_at bigint NOT NULL,
+    PRIMARY KEY(tenant_id,invocation_id,span_id));
+CREATE INDEX control_insights_spans_stored ON control_insights_spans(tenant_id,stored_at);
 GRANT SELECT,INSERT,UPDATE,DELETE ON control_insights_facts,control_insights_checkpoints,control_insights_invocations,control_insights_attempts,
-    control_insights_cells,control_insights_admissions,control_insights_gateway_epochs,control_insights_tenant_state TO toolgate_control_runtime;
+    control_insights_cells,control_insights_admissions,control_insights_gateway_epochs,control_insights_tenant_state,control_insights_spans TO toolgate_control_runtime;
 
 CREATE TABLE control_package_provisioning(tenant_id varchar(128) NOT NULL,profile_id varchar(128) NOT NULL,
     generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),profile_digest char(71) NOT NULL CHECK(profile_digest ~ '^sha256:[a-f0-9]{64}$'),
@@ -969,7 +976,7 @@ BEGIN
         'control_invocation_event_streams',
         'control_invocation_events',
         'control_insights_facts','control_insights_checkpoints','control_insights_invocations','control_insights_attempts',
-        'control_insights_cells','control_insights_admissions','control_insights_gateway_epochs','control_insights_tenant_state',
+        'control_insights_cells','control_insights_admissions','control_insights_gateway_epochs','control_insights_tenant_state','control_insights_spans',
         'control_invocation_results',
         'control_mcp_approvals',
         'control_mcp_requests',

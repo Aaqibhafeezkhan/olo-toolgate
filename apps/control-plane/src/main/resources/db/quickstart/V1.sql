@@ -217,7 +217,7 @@ CREATE INDEX control_insights_facts_unprojected ON control_insights_facts(tenant
 -- statement
 CREATE TABLE control_insights_checkpoints(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,last_fact_seq INTEGER NOT NULL CHECK(last_fact_seq>=0),contribution TEXT NOT NULL CHECK(length(CAST(contribution AS BLOB))<=8192),final_at INTEGER,PRIMARY KEY(tenant_id,invocation_id));
 -- statement
-CREATE TABLE control_insights_invocations(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,tool_id TEXT NOT NULL,action TEXT NOT NULL,client_id TEXT,user_id TEXT,agent_id TEXT,tool_call_id TEXT,session_id TEXT,agent_run_id TEXT,outcome TEXT NOT NULL,error_category TEXT,attempts INTEGER NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at INTEGER NOT NULL,approval_requested_at INTEGER,approval_resolved_at INTEGER,queued_at INTEGER,first_started_at INTEGER,terminal_at INTEGER,approval_ms INTEGER,queue_ms INTEGER,execution_ms INTEGER,end_to_end_ms INTEGER,partial_coverage INTEGER NOT NULL CHECK(partial_coverage IN(0,1)),PRIMARY KEY(tenant_id,invocation_id));
+CREATE TABLE control_insights_invocations(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,tool_id TEXT NOT NULL,action TEXT NOT NULL,client_id TEXT,user_id TEXT,agent_id TEXT,tool_call_id TEXT,session_id TEXT,agent_run_id TEXT,outcome TEXT NOT NULL,error_category TEXT,attempts INTEGER NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at INTEGER NOT NULL,approval_requested_at INTEGER,approval_resolved_at INTEGER,queued_at INTEGER,first_started_at INTEGER,terminal_at INTEGER,approval_ms INTEGER,queue_ms INTEGER,execution_ms INTEGER,end_to_end_ms INTEGER,partial_coverage INTEGER NOT NULL CHECK(partial_coverage IN(0,1)),span_state TEXT CHECK(span_state IN('RETAINED','SAMPLED_OUT','DROPPED')),PRIMARY KEY(tenant_id,invocation_id));
 -- statement
 CREATE INDEX control_insights_invocations_accepted ON control_insights_invocations(tenant_id,accepted_at);
 -- statement
@@ -237,7 +237,11 @@ CREATE TABLE control_insights_admissions(tenant_id TEXT REFERENCES control_tenan
 -- statement
 CREATE TABLE control_insights_gateway_epochs(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,gateway_id TEXT NOT NULL,epoch TEXT NOT NULL,last_sequence INTEGER NOT NULL CHECK(last_sequence>=0),missing INTEGER NOT NULL CHECK(missing>=0),dropped INTEGER NOT NULL CHECK(dropped>=0),final INTEGER NOT NULL CHECK(final IN(0,1)),last_seen INTEGER NOT NULL,PRIMARY KEY(tenant_id,gateway_id,epoch));
 -- statement
-CREATE TABLE control_insights_tenant_state(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,collecting_since INTEGER NOT NULL,summaries_suspended_since INTEGER,summary_rows INTEGER NOT NULL DEFAULT 0 CHECK(summary_rows>=0),PRIMARY KEY(tenant_id));
+CREATE TABLE control_insights_spans(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,span_id TEXT NOT NULL CHECK(length(span_id)=16 AND span_id NOT GLOB '*[^0-9a-f]*'),trace_id TEXT NOT NULL CHECK(length(trace_id)=32 AND trace_id NOT GLOB '*[^0-9a-f]*'),parent_span_id TEXT CHECK(length(parent_span_id)=16 AND parent_span_id NOT GLOB '*[^0-9a-f]*'),name TEXT NOT NULL,source TEXT NOT NULL CHECK(source IN('GATEWAY','TOOL_HOST','CLIENT')),execution_id TEXT CHECK(length(execution_id)=35 AND substr(execution_id,1,3)='ex-' AND substr(execution_id,4) NOT GLOB '*[^0-9a-f]*'),start_at INTEGER NOT NULL,duration_ms INTEGER NOT NULL CHECK(duration_ms BETWEEN 0 AND 86400000),status TEXT NOT NULL CHECK(status IN('OK','ERROR')),route_id TEXT,http_status INTEGER CHECK(http_status BETWEEN 100 AND 599),error_code TEXT,stored_at INTEGER NOT NULL,PRIMARY KEY(tenant_id,invocation_id,span_id));
+-- statement
+CREATE INDEX control_insights_spans_stored ON control_insights_spans(tenant_id,stored_at);
+-- statement
+CREATE TABLE control_insights_tenant_state(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,collecting_since INTEGER NOT NULL,summaries_suspended_since INTEGER,summary_rows INTEGER NOT NULL DEFAULT 0 CHECK(summary_rows>=0),metrics_exported_through INTEGER,PRIMARY KEY(tenant_id));
 -- statement
 CREATE TRIGGER control_audit_update BEFORE UPDATE ON control_audit BEGIN SELECT RAISE(ABORT,'append-only local state'); END;
 -- statement
@@ -492,6 +496,8 @@ CREATE TRIGGER control_insights_cells_tenant_immutable BEFORE UPDATE OF tenant_i
 CREATE TRIGGER control_insights_admissions_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_admissions WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 -- statement
 CREATE TRIGGER control_insights_gateway_epochs_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_gateway_epochs WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_spans_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_spans WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 -- statement
 CREATE TRIGGER control_insights_tenant_state_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_tenant_state WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 

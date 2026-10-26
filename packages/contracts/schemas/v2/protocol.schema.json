@@ -339,6 +339,10 @@
         },
         "executionContext": {
           "$ref": "protocol.schema.json#/$defs/ExecutionContext"
+        },
+        "collectSpans": {
+          "type": "boolean",
+          "description": "DETAILED Insights: the Tool Host records and uploads its spans for this call (ADR 031 \u00a79)."
         }
       },
       "required": [

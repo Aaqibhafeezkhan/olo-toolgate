@@ -253,6 +253,65 @@ final class JdbcInsightsStore implements InsightsStore {
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
 
+    private static final String SPAN = "span_id,trace_id,parent_span_id,name,source,execution_id,start_at,duration_ms,status,route_id,http_status,error_code";
+    public int saveSpans(String id, List<io.ololabs.toolgate.contracts.v2.InsightsSpan> spans, long now, int cap) {
+        try {
+            long held;
+            try (var s = query("SELECT count(*) FROM control_insights_spans WHERE tenant_id=? AND invocation_id=?", id); var rows = s.executeQuery()) { rows.next(); held = rows.getLong(1); }
+            int stored = 0;
+            for (var span : spans) {
+                if (held + stored >= cap) break;
+                try (var s = query("INSERT INTO control_insights_spans(tenant_id,invocation_id," + SPAN + ",stored_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+                    id, span.spanId(), span.traceId(), span.parentSpanId(), span.name().name(), span.source() == null ? null : span.source().name(), span.executionId(),
+                    span.startUnixMs(), span.durationMs(), span.status().name(), span.routeId(), span.httpStatus() == null ? null : span.httpStatus().intValue(), span.errorCode(), now)) {
+                    stored += s.executeUpdate();
+                }
+            }
+            return stored;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public List<io.ololabs.toolgate.contracts.v2.InsightsSpan> spans(String id) {
+        try (var s = query("SELECT " + SPAN + " FROM control_insights_spans WHERE tenant_id=? AND invocation_id=? ORDER BY start_at,span_id LIMIT 512", id); var rows = s.executeQuery()) {
+            var out = new ArrayList<io.ololabs.toolgate.contracts.v2.InsightsSpan>();
+            while (rows.next()) {
+                long http = rows.getLong(11); boolean noHttp = rows.wasNull();
+                out.add(new io.ololabs.toolgate.contracts.v2.InsightsSpan(rows.getString(2), rows.getString(1), rows.getString(3),
+                    io.ololabs.toolgate.contracts.v2.InsightsSpanName.valueOf(rows.getString(4)), io.ololabs.toolgate.contracts.v2.InsightsSpanSource.valueOf(rows.getString(5)), id,
+                    rows.getString(6), rows.getLong(7), rows.getLong(8), io.ololabs.toolgate.contracts.v2.InsightsSpanStatus.valueOf(rows.getString(9)), rows.getString(10),
+                    noHttp ? null : http, rows.getString(12)));
+            }
+            return out;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public boolean spanState(String id, String state) {
+        try (var s = connection.prepareStatement("UPDATE control_insights_invocations SET span_state=? WHERE tenant_id=? AND invocation_id=?")) {
+            s.setString(1, state); s.setString(2, tenant); s.setString(3, id); return s.executeUpdate() == 1;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public String spanState(String id) {
+        try (var s = query("SELECT span_state FROM control_insights_invocations WHERE tenant_id=? AND invocation_id=?", id); var rows = s.executeQuery()) {
+            return rows.next() ? rows.getString(1) : null;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public Long claimMetrics(long through, long firstEver) {
+        try {
+            Long last;
+            try (var s = query("SELECT metrics_exported_through FROM control_insights_tenant_state WHERE tenant_id=?"); var rows = s.executeQuery()) {
+                if (!rows.next()) return null; last = optional(rows, 1);
+            }
+            long from = last == null ? firstEver : last;
+            if (from >= through) return null;
+            try (var s = connection.prepareStatement("UPDATE control_insights_tenant_state SET metrics_exported_through=? WHERE tenant_id=?")) {
+                s.setLong(1, through); s.setString(2, tenant); s.executeUpdate();
+            }
+            return from;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public int purgeSpans(long storedBefore, int limit) {
+        try (var s = query("DELETE FROM control_insights_spans WHERE tenant_id=? AND stored_at<?", storedBefore)) { return s.executeUpdate(); }
+        catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+
     public List<StoredCell> cells(String series, InsightsGranularity g, long from, long to, String dim) {
         String sql = "SELECT bucket_start,dim,outcome,calls,duration_count,duration_sum,histogram FROM control_insights_cells WHERE tenant_id=? AND series=? AND granularity=? "
             + "AND bucket_start>=? AND bucket_start<?" + (dim == null ? "" : " AND dim=?") + " ORDER BY bucket_start,dim,outcome";

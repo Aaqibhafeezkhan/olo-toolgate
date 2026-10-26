@@ -1051,6 +1051,13 @@
                 "type": "object"
               }
             },
+            "insightsCollectorTo": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "type": "object"
+              }
+            },
             "artifactTo": {
               "type": "array",
               "maxItems": 128,
@@ -2038,6 +2045,50 @@
                 "BASIC",
                 "DETAILED"
               ]
+            },
+            "spans": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sampleRatio": {
+                  "type": "string",
+                  "pattern": "^(0([.][0-9]{1,6})?|1([.]0{1,6})?)$"
+                },
+                "slowMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3600000
+                },
+                "bufferMiB": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "retentionHours": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2160
+                }
+              }
+            },
+            "otlp": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "endpoint": {
+                  "type": "string",
+                  "pattern": "^(https?://[^ ]+)?$"
+                },
+                "environment": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              }
             }
           }
         }
@@ -2112,6 +2163,46 @@
               "networkPolicy": {
                 "properties": {
                   "collectorTo": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["insights", "networkPolicy"],
+            "properties": {
+              "insights": {
+                "required": ["otlp"],
+                "properties": {
+                  "otlp": {
+                    "required": ["endpoint"],
+                    "properties": {
+                      "endpoint": {
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "networkPolicy": {
+                "required": ["enabled"],
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "networkPolicy": {
+                "required": ["insightsCollectorTo"],
+                "properties": {
+                  "insightsCollectorTo": {
                     "minItems": 1
                   }
                 }

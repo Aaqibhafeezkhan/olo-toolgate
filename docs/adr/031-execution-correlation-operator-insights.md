@@ -262,6 +262,46 @@ Implementing BASIC showed simpler or safer choices than §1, §4, §5 and §8 de
 - **The caller's correlation is stored on the first fact** and is excluded from the invocation request's idempotency
   digest, so a retry carrying a new trace span is still the same request.
 
+### 11. Amendment: as built in step 5
+
+DETAILED spans and export follow §9, with these specifics:
+
+- **Producers.**
+  - The Gateway reports request, authorization and dispatch spans.
+  - The Tool Host reports one execution span per attempt and one span per brokered route call.
+  - A client device reports one execution span per relayed run.
+  - Executors report only when asked: `Dispatch.collectSpans` (set by the Gateway) or `RemoteToolTask.collectSpans`
+    (set by Control). They send after the run, in the background.
+  - A host's execution span is the span the tool received as its trace parent, so vendor traces join the tool's own.
+- **Authentication instead of fencing headers.**
+  - The Gateway posts with its Gateway credential.
+  - A Tool Host or device posts with its device certificate to `/access/invocations/{id}/insights/spans`, and only for
+    invocations assigned to that device.
+  - Control checks that the span name fits the sender and sets `source` from the authenticated sender.
+  - It keeps an `executionId` only when it equals the ID derived from the current attempt's fencing token. The token
+    itself is never sent.
+- **Tail sampling per replica.**
+  - Each Control replica buffers undecided spans in memory, bounded by `spans.buffer-mib`.
+  - Decisions use the deterministic rule of §9, so replicas agree unless memory pressure forces an early hash-only
+    decision.
+  - A call running past `slow-ms` is retained early and streamed. Its streamed spans are exported once it finishes.
+  - A call that never finishes is closed as retained after ten minutes.
+  - The decision is recorded as `span_state` on the summary. A decision made before the summary exists is retried
+    on later passes.
+- **Local store.** `control_insights_spans` is tenant-scoped under RLS. It is outside capacity accounting and purged
+  after `spans.retention-hours`. The detail window draws it as a waterfall and explains every `span_state`.
+- **Export.**
+  - Export is hand-written OTLP/HTTP JSON to one endpoint, normally a Collector (`deploy/insights/collector`), so
+    Control carries no vendor SDK or key.
+  - Spans follow the OpenTelemetry GenAI tool-execution convention.
+  - Metrics are delta sums and histograms per closed minute. Each minute is claimed under the tenant's lock
+    (`metrics_exported_through`), so it is exported at most once across replicas.
+  - A failed metrics send is not retried. Corrections after export are not re-sent. After an outage, export backfills
+    at most an hour.
+- **Validated.** Control's exported JSON was accepted and parsed by `otel/opentelemetry-collector-contrib:0.120.0`.
+  The Datadog, New Relic and combined Collector configs validate on that image. Delivery to the vendors is checked in
+  the integration testing stage.
+
 ## Alternatives Considered
 
 - **Fencing token as execution ID:** rejected; it is a capability and would leak through telemetry.

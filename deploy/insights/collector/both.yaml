@@ -1,0 +1,50 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# OpenTelemetry Collector (contrib) fanning OLO ToolGate Insights export out to Datadog and New Relic. Each exporter
+# queues and retries on its own, so one vendor's outage does not hold back the other. See README.md.
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 600
+    spike_limit_mib: 150
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+connectors:
+  datadog/connector: {}
+exporters:
+  datadog:
+    api:
+      key: ${env:DD_API_KEY}
+      site: ${env:DD_SITE:-datadoghq.com}
+    metrics:
+      histograms:
+        mode: distributions
+  otlphttp/newrelic:
+    endpoint: ${env:NEW_RELIC_OTLP_ENDPOINT:-https://otlp.nr-data.net}
+    headers:
+      api-key: ${env:NEW_RELIC_LICENSE_KEY}
+    compression: gzip
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [datadog/connector, datadog, otlphttp/newrelic]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [datadog, otlphttp/newrelic]
+    metrics/apm:
+      receivers: [datadog/connector]
+      processors: [memory_limiter, batch]
+      exporters: [datadog]

@@ -1,0 +1,24 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Example: an Insights Collector beside Control. Pick the vendor file with INSIGHTS_COLLECTOR_CONFIG (datadog.yaml,
+# newrelic.yaml or both.yaml) and point Control at it:
+#   TOOLGATE_INSIGHTS_OTLP_ENDPOINT=http://insights-collector:4318
+# Attach the service to the network Control runs on; do not publish 4318 beyond it (see README.md).
+services:
+  insights-collector:
+    image: ${INSIGHTS_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.120.0}
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./${INSIGHTS_COLLECTOR_CONFIG:-datadog.yaml}:/etc/otelcol/config.yaml:ro
+    environment:
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY:-}
+      NEW_RELIC_OTLP_ENDPOINT: ${NEW_RELIC_OTLP_ENDPOINT:-https://otlp.nr-data.net}
+    expose:
+      - "4318"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    restart: unless-stopped

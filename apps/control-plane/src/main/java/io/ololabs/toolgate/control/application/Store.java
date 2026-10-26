@@ -8,6 +8,8 @@ import java.util.function.Function;
 
 /** Transaction port. Data, audit and idempotency must share a commit/rollback boundary. */
 public interface Store {
+    /** The deployment's Operator Insights mode (ADR 031); NONE unless the store is configured otherwise. */
+    default io.ololabs.toolgate.contracts.v2.InsightsMode insightsMode(){return io.ololabs.toolgate.contracts.v2.InsightsMode.NONE;}
     <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work);
     record ConsoleDeviceRecord(String sessionId,String userId,String deviceId,String nonceDigest,String codeDigest,String csr,String fingerprint,long expiresAt,long verifiedAt){}
     interface Session {

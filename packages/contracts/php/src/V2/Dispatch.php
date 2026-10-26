@@ -11,19 +11,21 @@ final readonly class Dispatch implements \JsonSerializable {
         public SignedInvocationPermit $permit,
         public \stdClass $arguments,
         public ?string $traceparent = null,
-        public ?ExecutionContext $executionContext = null
+        public ?ExecutionContext $executionContext = null,
+        public ?bool $collectSpans = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['permit', 'arguments', 'traceparent', 'executionContext']) || array_diff(['permit', 'arguments'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['permit', 'arguments', 'traceparent', 'executionContext', 'collectSpans']) || array_diff(['permit', 'arguments'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             SignedInvocationPermit::fromArray($data['permit']),
             (object) $data['arguments'],
             array_key_exists('traceparent', $data) ? $data['traceparent'] : null,
-            array_key_exists('executionContext', $data) ? ExecutionContext::fromArray($data['executionContext']) : null
+            array_key_exists('executionContext', $data) ? ExecutionContext::fromArray($data['executionContext']) : null,
+            array_key_exists('collectSpans', $data) ? $data['collectSpans'] : null
         );
     }
 

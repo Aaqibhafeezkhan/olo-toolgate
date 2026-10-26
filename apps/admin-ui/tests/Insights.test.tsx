@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
-import type {InsightsInvocation,InsightsSeries,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
-import {InsightsApp} from '../src/insights/InsightsApp';
+import type {InsightsInvocation,InsightsSeries,InsightsSpan,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
+import {InsightsApp,InvocationDetail,spanTree} from '../src/insights/InsightsApp';
 import {client,InsightsError} from '../src/insights/api';
 import {buckets,granularity,overview,percentile,ranking} from '../src/insights/model';
 import {niceMax,ticks} from '../src/insights/charts';
@@ -113,9 +113,34 @@ describe('page',()=>{
     await within(dialog).findByText('ex-7576f712baed62964bc828cdba88bdbe');
     expect(within(dialog).getByRole('button',{name:'Copy toolu_01A9q'})).toBeTruthy();
     expect(within(dialog).getByText('Tool-call, session and run IDs are declared by the caller and are not verified.')).toBeTruthy();
+    expect(within(dialog).getByText('Spans are collected only while Insights runs in DETAILED mode.')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button',{name:'Close invocation details'}));
     await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
   });
+  it('draws retained spans as a waterfall under their parents, with errors named in text',()=>{
+    const span=(spanId:string,name:InsightsSpan['name'],start:number,durationMs:number,more:Partial<InsightsSpan>={}):InsightsSpan=>
+      ({traceId:'0af7651916cd43dd8448eb211c80319c',spanId,name,invocationId:'inv-1',startUnixMs:NOW+start,durationMs,status:'OK',...more});
+    const spans=[span('c','HOST_EGRESS',40,30,{parentSpanId:'b',routeId:'orders.get',httpStatus:503,status:'ERROR'}),
+      span('a','GATEWAY_REQUEST',0,100,{source:'GATEWAY'}),span('b','HOST_EXECUTE',20,70,{parentSpanId:'a',source:'TOOL_HOST'}),
+      span('d','GATEWAY_AUTHORIZE',5,5,{parentSpanId:'a'}),span('orphan','CLIENT_EXECUTE',10,10,{parentSpanId:'missing'})];
+    expect(spanTree(spans).map(r=>`${r.span.spanId}:${r.depth}`)).toEqual(['a:0','d:1','b:1','c:2','orphan:0']);
+    render(<InvocationDetail detail={{invocation,attempts:[],transitions:[],transitionsRetained:false,spans,spanState:'RETAINED'}}/>);
+    const rows=screen.getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(5);
+    expect(within(rows[3]).getByText('orders.get')).toBeTruthy();
+    expect(within(rows[3]).getByText('Error 503')).toBeTruthy();
+    expect(within(rows[2]).getByText('+20 ms')).toBeTruthy();
+    expect(screen.getByText('Timeline (100 ms)')).toBeTruthy();
+  });
+
+  it('explains why a call has no spans',()=>{
+    const {unmount}=render(<InvocationDetail detail={{invocation,attempts:[],transitions:[],transitionsRetained:false,spans:[],spanState:'SAMPLED_OUT'}}/>);
+    expect(screen.getByText('This call finished normally and was not in the sample, so its spans were discarded.')).toBeTruthy();
+    unmount();
+    render(<InvocationDetail detail={{invocation,attempts:[],transitions:[],transitionsRetained:false,spanState:'DROPPED'}}/>);
+    expect(screen.getByText('Spans were discarded under memory pressure before this call was decided.')).toBeTruthy();
+  });
+
   it('maps failures to safe messages',async()=>{
     const fetcher=vi.fn<typeof fetch>().mockRejectedValue(new TypeError('offline'));
     await expect(client(fetcher).status()).rejects.toEqual(new InsightsError(0,'NETWORK'));

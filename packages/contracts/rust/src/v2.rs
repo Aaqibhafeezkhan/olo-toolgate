@@ -547,6 +547,8 @@ pub struct Dispatch {
     pub traceparent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_context: Option<ExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collect_spans: Option<bool>,
 }
 /// Reviewed effect class per tool.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -887,6 +889,10 @@ pub struct InsightsInvocationDetail {
     pub attempts: Vec<InsightsAttempt>,
     pub transitions: Vec<InsightsTransition>,
     pub transitions_retained: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spans: Option<Vec<InsightsSpan>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span_state: Option<InsightsSpanState>,
 }
 /// Explorer results, newest first. next continues the search.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -983,6 +989,95 @@ pub struct InsightsSourceGap {
     pub missing_sequences: u64,
     pub last_seen_unix_ms: u64,
     pub dropped_requests: u64,
+}
+/// One allowlisted span. Metadata only: never arguments, outputs, URLs, headers or secrets.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSpan {
+    pub trace_id: String,
+    pub span_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_span_id: Option<String>,
+    pub name: InsightsSpanName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<InsightsSpanSource>,
+    pub invocation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    pub start_unix_ms: u64,
+    pub duration_ms: u64,
+    pub status: InsightsSpanStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_status: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+}
+/// How many spans Control buffered and how many it refused (unknown invocation, wrong executor, over a bound).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSpanAck {
+    pub accepted: u64,
+    pub refused: u64,
+}
+/// Spans from one producer. Best-effort: droppedSpans counts what the producer could not keep.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSpanBatch {
+    pub spans: Vec<InsightsSpan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_spans: Option<u64>,
+}
+/// Canonical InsightsSpanName wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanName {
+    #[serde(rename = "GATEWAY_REQUEST")]
+    GatewayRequest,
+    #[serde(rename = "GATEWAY_AUTHORIZE")]
+    GatewayAuthorize,
+    #[serde(rename = "GATEWAY_DISPATCH")]
+    GatewayDispatch,
+    #[serde(rename = "HOST_ADMISSION")]
+    HostAdmission,
+    #[serde(rename = "HOST_EXECUTE")]
+    HostExecute,
+    #[serde(rename = "HOST_EGRESS")]
+    HostEgress,
+    #[serde(rename = "CLIENT_EXECUTE")]
+    ClientExecute,
+}
+/// Canonical InsightsSpanSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanSource {
+    #[serde(rename = "GATEWAY")]
+    Gateway,
+    #[serde(rename = "TOOL_HOST")]
+    ToolHost,
+    #[serde(rename = "CLIENT")]
+    Client,
+}
+/// Canonical InsightsSpanState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanState {
+    #[serde(rename = "NOT_COLLECTED")]
+    NotCollected,
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "RETAINED")]
+    Retained,
+    #[serde(rename = "SAMPLED_OUT")]
+    SampledOut,
+    #[serde(rename = "DROPPED")]
+    Dropped,
+}
+/// Canonical InsightsSpanStatus wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanStatus {
+    #[serde(rename = "OK")]
+    Ok,
+    #[serde(rename = "ERROR")]
+    Error,
 }
 /// Read first by the operator page: what is collected and how current it is.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

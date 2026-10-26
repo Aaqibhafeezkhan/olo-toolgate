@@ -48,6 +48,19 @@ public interface InsightsStore {
     void addAdmission(long bucket, String toolId, String category, long count);
     List<Epoch> epochsWithGaps(long seenBefore, int limit);
 
+    // Spans (DETAILED)
+    /** Stores retained spans, at most {@code cap} per invocation; returns how many were stored. */
+    int saveSpans(String invocationId, List<io.ololabs.toolgate.contracts.v2.InsightsSpan> spans, long now, int cap);
+    List<io.ololabs.toolgate.contracts.v2.InsightsSpan> spans(String invocationId);
+    /** RETAINED, SAMPLED_OUT or DROPPED on the invocation's summary; null when undecided or never collected. */
+    /** Returns false when the summary row does not exist yet. */
+    boolean spanState(String invocationId, String state);
+    String spanState(String invocationId);
+    int purgeSpans(long storedBefore, int limit);
+    /** Claims the next closed minutes for metric export, up to {@code through}; returns the first unclaimed bucket
+     *  start, or null when the tenant has nothing to claim. At most once: a claimed minute is never offered again. */
+    Long claimMetrics(long through, long firstEver);
+
     // Queries
     List<StoredCell> cells(String series, InsightsGranularity granularity, long from, long to, String dim);
     Map<String, Long> admissions(InsightsGranularity granularity, long from, long to);

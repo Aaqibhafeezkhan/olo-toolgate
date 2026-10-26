@@ -86,3 +86,9 @@
 .muted { color:var(--muted); }
 .visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 @media (forced-colors:active) { .insights-plot path,.swatch { forced-color-adjust:none; } }
+.insights-waterfall th[scope="row"] { font-weight:normal; white-space:nowrap; }
+.waterfall-track-head { min-width:200px; }
+.waterfall-track { position:relative; min-width:200px; }
+.waterfall-bar { position:absolute; top:50%; height:10px; margin-top:-5px; border-radius:2px; background:var(--outcome-other); }
+.waterfall-bar.error { background:var(--outcome-failed); }
+@media (forced-colors:active) { .waterfall-bar { forced-color-adjust:none; background:CanvasText; } }

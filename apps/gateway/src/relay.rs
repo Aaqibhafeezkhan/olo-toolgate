@@ -98,6 +98,13 @@ pub trait RelayPort: Send + Sync {
     ) -> PortFuture<'a, Result<olo_toolgate_contracts::v2::InsightsAdmissionAck, ErrorCode>> {
         Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
     }
+    /// Sends DETAILED Insights spans (ADR 031 §9); best-effort, so the default refuses.
+    fn insights_spans<'a>(
+        &'a self,
+        _batch: &'a olo_toolgate_contracts::v2::InsightsSpanBatch,
+    ) -> PortFuture<'a, Result<olo_toolgate_contracts::v2::InsightsSpanAck, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
     /// Hands Control a permitted dispatch for a Tool Host that fetches its calls (pull mode).
     fn relay_dispatch<'a>(
         &'a self,
@@ -353,6 +360,16 @@ impl RelayPort for HttpRelay {
             "/api/control/v1/access/insights/admissions",
             batch,
             "InsightsAdmissionAck",
+        ))
+    }
+    fn insights_spans<'a>(
+        &'a self,
+        batch: &'a olo_toolgate_contracts::v2::InsightsSpanBatch,
+    ) -> PortFuture<'a, Result<olo_toolgate_contracts::v2::InsightsSpanAck, ErrorCode>> {
+        Box::pin(self.post(
+            "/api/control/v1/access/insights/spans",
+            batch,
+            "InsightsSpanAck",
         ))
     }
     fn relay_dispatch<'a>(

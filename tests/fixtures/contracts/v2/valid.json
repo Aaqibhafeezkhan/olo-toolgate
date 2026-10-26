@@ -229,7 +229,8 @@
       "sessionId": "sess-42",
       "agentRunId": "run-9",
       "tracestate": "vendor=opaque"
-    }
+    },
+    "collectSpans": true
   },
   "EffectApproval": {
     "toolId": "acme.orders/orders.refund",
@@ -416,7 +417,24 @@
         "occurredAtUnixMs": 1791676800020
       }
     ],
-    "transitionsRetained": true
+    "transitionsRetained": true,
+    "spans": [
+      {
+        "traceId": "0af7651916cd43dd8448eb211c80319c",
+        "spanId": "b7ad6b7169203331",
+        "parentSpanId": "00f067aa0ba902b7",
+        "name": "HOST_EGRESS",
+        "source": "TOOL_HOST",
+        "invocationId": "inv-5",
+        "executionId": "ex-7576f712baed62964bc828cdba88bdbe",
+        "startUnixMs": 1791676800040,
+        "durationMs": 120,
+        "status": "OK",
+        "routeId": "orders.get",
+        "httpStatus": 200
+      }
+    ],
+    "spanState": "RETAINED"
   },
   "InsightsInvocationPage": {
     "items": [
@@ -568,6 +586,47 @@
     "lastSeenUnixMs": 1791676800000,
     "droppedRequests": 0
   },
+  "InsightsSpan": {
+    "traceId": "0af7651916cd43dd8448eb211c80319c",
+    "spanId": "b7ad6b7169203331",
+    "parentSpanId": "00f067aa0ba902b7",
+    "name": "HOST_EGRESS",
+    "source": "TOOL_HOST",
+    "invocationId": "inv-5",
+    "executionId": "ex-7576f712baed62964bc828cdba88bdbe",
+    "startUnixMs": 1791676800040,
+    "durationMs": 120,
+    "status": "OK",
+    "routeId": "orders.get",
+    "httpStatus": 200
+  },
+  "InsightsSpanAck": {
+    "accepted": 1,
+    "refused": 0
+  },
+  "InsightsSpanBatch": {
+    "spans": [
+      {
+        "traceId": "0af7651916cd43dd8448eb211c80319c",
+        "spanId": "b7ad6b7169203331",
+        "parentSpanId": "00f067aa0ba902b7",
+        "name": "HOST_EGRESS",
+        "source": "TOOL_HOST",
+        "invocationId": "inv-5",
+        "executionId": "ex-7576f712baed62964bc828cdba88bdbe",
+        "startUnixMs": 1791676800040,
+        "durationMs": 120,
+        "status": "OK",
+        "routeId": "orders.get",
+        "httpStatus": 200
+      }
+    ],
+    "droppedSpans": 0
+  },
+  "InsightsSpanName": "HOST_EXECUTE",
+  "InsightsSpanSource": "GATEWAY",
+  "InsightsSpanState": "RETAINED",
+  "InsightsSpanStatus": "ERROR",
   "InsightsStatus": {
     "mode": "BASIC",
     "generatedAtUnixMs": 1791676860000,

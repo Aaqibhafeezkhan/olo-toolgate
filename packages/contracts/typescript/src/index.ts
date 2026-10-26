@@ -1655,6 +1655,7 @@ export interface RemoteToolTask {
   readonly permit: EnterpriseSignedPermit;
   readonly traceparent?: string;
   readonly executionContext?: V2.ExecutionContext;
+  readonly collectSpans?: boolean;
 }
 /** Observed package state, distinct from assigned desired state. */
 export interface ReportedPackage {

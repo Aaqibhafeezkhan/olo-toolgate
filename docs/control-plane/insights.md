@@ -14,7 +14,7 @@ One setting, the same for Control and every Gateway:
 | --- | --- |
 | `NONE` (default) | Nothing is written. No Insights table is touched and the projector does not run. |
 | `BASIC` | Each state-changing ledger transition writes one fact row in the same transaction. Control projects facts into summaries and aggregates; Gateways send admission counters. |
-| `DETAILED` | As `BASIC`. Span collection is added in a later step. |
+| `DETAILED` | As `BASIC`, plus span trees for failed, slow and sampled calls ([Spans](#spans-detailed)). |
 
 Invalid values stop startup. Platform tracing (`toolgate.control.trace-export-enabled`) is unaffected by the mode.
 
@@ -35,6 +35,13 @@ delivery) runs in the background and can never fail or delay a call.
 | `toolgate.control.insights.hour-retention-days` | 90 | Hour aggregates and admission counters |
 | `toolgate.control.insights.day-retention-days` | 396 | Day aggregates |
 | `toolgate.control.insights.interval-ms` | 2000 | Projector cadence |
+| `toolgate.control.insights.spans.sample-ratio` (`TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO`) | 0.1 | DETAILED: share of normal calls whose spans are kept (0–1) |
+| `toolgate.control.insights.spans.slow-ms` (`TOOLGATE_INSIGHTS_SPAN_SLOW_MS`) | 5000 | DETAILED: calls at least this slow end to end are always kept |
+| `toolgate.control.insights.spans.buffer-mib` (`TOOLGATE_INSIGHTS_SPAN_BUFFER_MIB`) | 64 | DETAILED: memory for undecided spans, per Control replica |
+| `toolgate.control.insights.spans.retention-hours` (`TOOLGATE_INSIGHTS_SPAN_RETENTION_HOURS`) | 72 | DETAILED: how long kept spans are stored |
+| `toolgate.control.insights.otlp.endpoint` (`TOOLGATE_INSIGHTS_OTLP_ENDPOINT`) | empty | OTLP/HTTP base URL for export; empty disables it ([Export](#export)) |
+| `toolgate.control.insights.otlp.service-name` (`TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME`) | `olo-toolgate` | `service.name` of exported data |
+| `toolgate.control.insights.otlp.environment` (`TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT`) | empty | `deployment.environment.name` of exported data |
 
 Insights rows do not count toward a tenant's storage capacity, so they can never make a tenant's own writes fail.
 Retention and the quota bound them instead.
@@ -100,8 +107,60 @@ and its data requests go to the same origin, so the certificate authenticates th
 - **Busiest tools:** select one to filter the page by it.
 - **Invocations:** browse a tenant's calls by outcome, or find a call in any tenant by its invocation, execution,
   tool-call, session or agent-run ID. The detail window shows identity and correlation (with copy buttons; declared
-  IDs are marked as unverified), timing, every attempt with its execution ID, and the ledger transitions while they
-  are retained.
+  IDs are marked as unverified), timing, every attempt with its execution ID, the span waterfall (DETAILED), and the
+  ledger transitions while they are retained. When a call has no spans, the window says why: not collected, still
+  being decided, not in the sample, dropped under memory pressure, or past span retention.
+
+## Spans (DETAILED)
+
+In `DETAILED` each component reports timing spans for a call to Control. A span holds only identifiers, timing, a
+status, and where relevant a route ID, HTTP status or allowlisted error code. It never holds arguments, results, URLs,
+headers or free text.
+
+| Span | Reported by | Covers |
+| --- | --- | --- |
+| Gateway request | Gateway | The MCP request, end to end |
+| Gateway authorize | Gateway | Authorization with Control |
+| Gateway dispatch | Gateway | Waiting for the Tool Host or client device |
+| Host execute | Tool Host | One attempt; the span the tool receives as its trace parent |
+| Route call | Tool Host | One brokered route call (route ID, status, timing) |
+| Client execute | Client device | One relayed run on a device |
+
+The Gateway asks executors for spans by setting `collectSpans` on the dispatch, and Control sets it on relayed device
+tasks. Executors send spans after the run, in the background. A failure to send never changes a result.
+
+Control authenticates every sender. The Gateway posts with its Gateway credential. A Tool Host or device posts with
+its own device certificate, and only for invocations it was assigned. Control refuses span names that do not belong
+to the sender. It removes an execution ID that does not match the current attempt, and it overwrites `source` with
+the authenticated sender.
+
+**Tail sampling.** Control buffers each call's spans in memory until the call finishes, then decides once, the same
+way on every replica:
+
+- kept: the call `FAILED`, was `PARTIAL` or `OUTCOME_UNKNOWN`, was `CANCELLED` after an attempt started, or took at
+  least `slow-ms` end to end;
+- otherwise kept when a hash of the invocation ID falls below `sample-ratio`, so retries and replicas agree.
+
+A call still running past `slow-ms` is kept early. Its later spans are stored as they arrive, and all of them are
+exported when it finishes. A call that never finishes is closed as kept after ten minutes. When the buffer is full,
+streamed spans waiting for export are given up first (they stay stored). Then the oldest undecided calls are decided
+early by the hash alone, and calls that lose are marked `DROPPED`. A span that arrives after its call was decided is
+decided again by the same rule. Kept spans are stored for `retention-hours`.
+
+## Export
+
+When `TOOLGATE_INSIGHTS_OTLP_ENDPOINT` is set, Control sends kept spans and per-minute metrics as OTLP/HTTP JSON,
+normally to an OpenTelemetry Collector that forwards to Datadog, New Relic or both. Ready-made Collector configs,
+metric and span names, and starting queries are in [`deploy/insights/collector`](../../deploy/insights/collector/README.md).
+
+- Execution spans are named `execute_tool {tool}` with `gen_ai.tool.name` and `gen_ai.tool.call.id`, following the
+  OpenTelemetry GenAI conventions.
+- Metrics are `toolgate.insights.calls`, `toolgate.insights.duration` (histogram) and `toolgate.insights.admissions`,
+  all delta. A tenant's minute is claimed under its lock before it is sent, so replicas never send it twice. A
+  correction after export is not re-sent.
+- Export is asynchronous and bounded: 20,000 queued spans, exponential backoff, oldest dropped first. It never
+  delays a call or the projector.
+- Exported data is cross-tenant operator data. Keep the Collector in Control's trust zone and do not expose its port.
 
 
 - **Facts.** One immutable row per state change, numbered per invocation on the ledger row. Lease renewals write none.
@@ -133,7 +192,10 @@ than summary retention and for tenants currently over quota, because their summa
 
 ## Limits of this release
 
-- `DETAILED` collects nothing beyond `BASIC` until spans are added (plan step 5).
+- Span decisions are kept per Control replica. A call whose spans reach two replicas may be kept on one and decided
+  on the other; both apply the same rule, so they agree except under memory pressure.
+- Spans are not tied to an MCP session; session views come in plan step 6.
+- An execution ID is kept only on spans of the current attempt. Spans of an earlier attempt that arrive late lose it.
 - The cause of a failure is inferred: a failure after the invocation's deadline is a timeout. `not_started`
   refusals are not yet distinguished from tool errors.
 - `INPUT_REQUIRED` and `CANCEL_REQUESTED` do not change the ledger state, so they write no fact.
