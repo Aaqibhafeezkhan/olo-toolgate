@@ -21,6 +21,44 @@ public final class InsightsService {
         this.store = store; this.settings = settings; this.projector = new InsightsProjector(store, settings); this.tenants = tenants; this.mode = mode;
     }
     public InsightsProjector projector() { return projector; }
+    private volatile InsightsSpanSink spans;
+    /** Set when the mode is DETAILED; without it span uploads are refused and nothing is buffered. */
+    public void spans(InsightsSpanSink sink) { spans = sink; }
+    public InsightsSpanSink spans() { return spans; }
+
+    /** Who uploaded spans: the Gateway (tenant-wide) or an executor device, which may only report its own invocations. */
+    public record SpanSender(InsightsSpanSource source, String deviceId) {}
+
+    /** Checks each span against the ledger before buffering it: the invocation exists, an executor reports only
+     *  invocations placed on it, the span name belongs to the sender, and an execution ID is the attempt's real one.
+     *  Control sets the source from the authenticated sender, never from the span. */
+    public InsightsSpanAck ingestSpans(Ids.TenantId tenant, java.util.function.Function<Store.Session, SpanSender> sender, String onlyInvocation,
+                                       InsightsSpanBatch batch, long now) {
+        var sink = spans;
+        if (sink == null || mode.get() != InsightsMode.DETAILED) return new InsightsSpanAck(0L, (long) batch.spans().size());
+        var accepted = new LinkedHashMap<String, List<InsightsSpan>>(); long refused = store.transaction(tenant, false, tx -> {
+            var who = sender.apply(tx); long out = 0; var ledger = new HashMap<String, io.ololabs.toolgate.contracts.EnterpriseInvocation>();
+            for (var span : batch.spans()) {
+                String id = span.invocationId();
+                if (onlyInvocation != null && !onlyInvocation.equals(id)) { out++; continue; }
+                var i = ledger.computeIfAbsent(id, k -> tx.enterprise().invocation(k));
+                boolean nameFits = switch (who.source()) {
+                    case GATEWAY -> span.name().name().startsWith("GATEWAY_");
+                    case TOOL_HOST -> span.name().name().startsWith("HOST_");
+                    case CLIENT -> span.name() == InsightsSpanName.CLIENT_EXECUTE;
+                };
+                if (i == null || !nameFits || (who.deviceId() != null && !who.deviceId().equals(i.evaluation().context().deviceId()))) { out++; continue; }
+                String execution = span.executionId() != null && i.reservedNonce() != null
+                    && span.executionId().equals(Insights.executionId(tenant.value(), id, i.reservedNonce())) ? span.executionId() : null;
+                accepted.computeIfAbsent(id, k -> new ArrayList<>()).add(new InsightsSpan(span.traceId(), span.spanId(), span.parentSpanId(), span.name(), who.source(), id,
+                    execution, span.startUnixMs(), span.durationMs(), span.status(), span.routeId(), span.httpStatus(), span.errorCode()));
+            }
+            return out;
+        });
+        long taken = 0;
+        for (var e : accepted.entrySet()) { int n = sink.accept(tenant, e.getKey(), e.getValue(), now); taken += n; refused += e.getValue().size() - n; }
+        return new InsightsSpanAck(taken, refused);
+    }
 
     /** One Gateway batch for its own tenant. A repeated (gateway, epoch, sequence) is acknowledged as a duplicate and
      *  counted once; a skipped sequence is recorded as missing. Nothing is stored while Insights is off. */
@@ -141,7 +179,10 @@ public final class InsightsService {
                 a.outcome, a.durationMs())).toList();
             var facts = s.facts(invocationId);
             var transitions = facts.stream().map(f -> new InsightsTransition(f.seq(), f.fromState(), f.toState(), f.occurredAt())).toList();
-            return new InsightsInvocationDetail(contract(tenant, summary), attempts, transitions, !facts.isEmpty());
+            var stored = mode.get() == InsightsMode.DETAILED || s.spanState(invocationId) != null ? s.spans(invocationId) : List.<InsightsSpan>of();
+            String recorded = s.spanState(invocationId);
+            var state = recorded != null ? InsightsSpanState.valueOf(recorded) : mode.get() != InsightsMode.DETAILED ? InsightsSpanState.NOT_COLLECTED : InsightsSpanState.PENDING;
+            return new InsightsInvocationDetail(contract(tenant, summary), attempts, transitions, !facts.isEmpty(), stored, state);
         });
     }
 

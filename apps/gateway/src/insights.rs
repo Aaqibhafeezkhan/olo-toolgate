@@ -7,7 +7,8 @@
 use crate::relay::RelayPort;
 use axum::http::StatusCode;
 use olo_toolgate_contracts::v2::{
-    InsightsAdmissionBatch, InsightsAdmissionCategory, InsightsAdmissionCount,
+    InsightsAdmissionBatch, InsightsAdmissionCategory, InsightsAdmissionCount, InsightsSpan,
+    InsightsSpanBatch, InsightsSpanName, InsightsSpanStatus,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
@@ -51,6 +52,103 @@ impl Settings {
     }
     pub fn enabled(&self) -> bool {
         matches!(self.mode.as_deref(), Some("BASIC" | "DETAILED"))
+    }
+    pub fn detailed(&self) -> bool {
+        self.mode.as_deref() == Some("DETAILED")
+    }
+}
+
+/// Spans held between flushes.
+const MAX_SPANS: usize = 4096;
+
+/// DETAILED Insights spans the Gateway records (ADR 031 §9): the request, the Control authorization and the wait for
+/// the executor. Bounded and best-effort; what cannot be kept is counted and reported with the next batch.
+pub struct Spans {
+    enabled: bool,
+    buffer: Mutex<(Vec<InsightsSpan>, u64)>,
+}
+impl Spans {
+    pub fn new(settings: &Settings) -> Self {
+        Self {
+            enabled: settings.detailed(),
+            buffer: Mutex::new((Vec::new(), 0)),
+        }
+    }
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+    /// Records one span of `trace` (a `traceparent`). `own` is the span ID; `parent` its parent's, if any.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record(
+        &self,
+        name: InsightsSpanName,
+        traceparent: &str,
+        own: String,
+        parent: Option<String>,
+        invocation_id: &str,
+        started_unix_ms: u64,
+        ended_unix_ms: u64,
+        ok: bool,
+    ) {
+        if !self.enabled || traceparent.len() != 55 {
+            return;
+        }
+        let span = InsightsSpan {
+            trace_id: traceparent[3..35].to_owned(),
+            span_id: own,
+            parent_span_id: parent,
+            name,
+            source: None,
+            invocation_id: invocation_id.to_owned(),
+            execution_id: None,
+            start_unix_ms: started_unix_ms,
+            duration_ms: ended_unix_ms
+                .saturating_sub(started_unix_ms)
+                .min(86_400_000),
+            status: if ok {
+                InsightsSpanStatus::Ok
+            } else {
+                InsightsSpanStatus::Error
+            },
+            route_id: None,
+            http_status: None,
+            error_code: None,
+        };
+        let Ok(mut buffer) = self.buffer.lock() else {
+            return;
+        };
+        if buffer.0.len() < MAX_SPANS {
+            buffer.0.push(span);
+        } else {
+            buffer.1 += 1;
+        }
+    }
+    /// Sends what is buffered in batches of at most 512. A failed batch is dropped and counted, never retried: spans
+    /// are diagnostics, and Control's own buffer bounds what it can use.
+    pub async fn flush(&self, relay: &dyn RelayPort) {
+        if !self.enabled {
+            return;
+        }
+        let (spans, dropped) = match self.buffer.lock() {
+            Ok(mut buffer) => (std::mem::take(&mut buffer.0), std::mem::take(&mut buffer.1)),
+            Err(_) => return,
+        };
+        let mut dropped = Some(dropped).filter(|d| *d > 0);
+        for chunk in spans.chunks(512) {
+            let batch = InsightsSpanBatch {
+                spans: chunk.to_vec(),
+                dropped_spans: dropped.take(),
+            };
+            if relay.insights_spans(&batch).await.is_err() {
+                if let Ok(mut buffer) = self.buffer.lock() {
+                    buffer.1 += chunk.len() as u64;
+                }
+            }
+        }
+    }
+    #[cfg(test)]
+    fn held(&self) -> usize {
+        self.buffer.lock().unwrap().0.len()
     }
 }
 
@@ -364,6 +462,33 @@ mod tests {
         let seen = control.seen.lock().unwrap();
         assert_eq!(seen[0].counts.len(), MAX_KEYS);
         assert_eq!(seen[0].dropped_requests, Some(10));
+    }
+
+    #[test]
+    fn spans_are_recorded_only_in_detailed_mode() {
+        let detailed = Spans::new(&Settings {
+            mode: Some("DETAILED".into()),
+            gateway_id: None,
+        });
+        let basic = Spans::new(&Settings {
+            mode: Some("BASIC".into()),
+            gateway_id: None,
+        });
+        let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        for spans in [&detailed, &basic] {
+            spans.record(
+                InsightsSpanName::GatewayRequest,
+                parent,
+                "b7ad6b7169203331".into(),
+                None,
+                "inv-1",
+                10,
+                40,
+                true,
+            );
+        }
+        assert_eq!(detailed.held(), 1);
+        assert_eq!(basic.held(), 0);
     }
 
     #[test]

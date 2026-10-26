@@ -48,15 +48,49 @@ public class InsightsWatchdog {
         return new InsightsService(store, settings, registry::activeAfter, store::insightsMode);
     }
 
+    private InsightsOtlpExporter exporter;
+    private volatile long lastMetrics;
+
     void start(@Observes StartupEvent event, InsightsService service) {
         if (store.insightsMode() == InsightsMode.NONE) return;
         this.service = service;
+        var endpoint = config.getOptionalValue("toolgate.control.insights.otlp.endpoint", String.class).filter(s -> !s.isBlank());
+        if (endpoint.isPresent()) {
+            var uri = java.net.URI.create(endpoint.get().endsWith("/") ? endpoint.get() : endpoint.get() + "/");
+            if (!uri.getScheme().equals("https") && !uri.getScheme().equals("http")) throw new IllegalStateException("toolgate.control.insights.otlp.endpoint must be http(s)");
+            exporter = new InsightsOtlpExporter(new InsightsOtlpExporter.Settings(uri,
+                config.getOptionalValue("toolgate.control.insights.otlp.service-name", String.class).orElse("olo-toolgate"),
+                config.getOptionalValue("toolgate.control.insights.otlp.environment", String.class).orElse(null), 20_000, java.time.Duration.ofSeconds(10)));
+            metrics.gauge("toolgate_control_insights_export_dropped", exporter, InsightsOtlpExporter::dropped);
+            metrics.gauge("toolgate_control_insights_export_failures", exporter, InsightsOtlpExporter::failures);
+        }
+        if (store.insightsMode() == InsightsMode.DETAILED) {
+            var d = io.ololabs.toolgate.control.application.InsightsSpanSink.Settings.defaults();
+            var sink = new io.ololabs.toolgate.control.application.InsightsSpanSink(store, new io.ololabs.toolgate.control.application.InsightsSpanSink.Settings(
+                config.getOptionalValue("toolgate.control.insights.spans.buffer-mib", Long.class).map(m -> m << 20).orElse(d.maxBytes()), d.maxSpansPerInvocation(),
+                config.getOptionalValue("toolgate.control.insights.spans.slow-ms", Long.class).orElse(d.slowMs()),
+                config.getOptionalValue("toolgate.control.insights.spans.sample-ratio", Double.class).orElse(d.sampleRatio()), d.graceMs(),
+                config.getOptionalValue("toolgate.control.insights.spans.retention-hours", Long.class).map(h -> h * 3_600_000L).orElse(d.retentionMs())),
+                exporter == null ? (tenant, summary, spans) -> { } : exporter);
+            if (sink.settings().sampleRatio() < 0 || sink.settings().sampleRatio() > 1) throw new IllegalStateException("toolgate.control.insights.spans.sample-ratio must be 0..1");
+            service.spans(sink);
+            metrics.gauge("toolgate_control_insights_span_buffer_bytes", sink, s -> s.stats().bytes());
+        }
         long interval = config.getOptionalValue("toolgate.control.insights.interval-ms", Long.class).orElse(2_000L);
         sweep = new TenantSweep(32, registry::activeAfter, this::tenant);
         executor = Executors.newSingleThreadScheduledExecutor(r -> { var t = new Thread(r, "toolgate-insights"); t.setDaemon(true); return t; });
         executor.scheduleWithFixedDelay(this::tick, interval, interval, TimeUnit.MILLISECONDS);
     }
     private void tick() {
+        long now = System.currentTimeMillis();
+        try {
+            var sink = service.spans();
+            if (sink != null) sink.resolve(now);
+            if (exporter != null) {
+                exporter.flush(now);
+                if (now - lastMetrics >= 60_000) { lastMetrics = now; exporter.metrics(store, registry::activeAfter, now); }
+            }
+        } catch (RuntimeException failed) { metrics.counter("toolgate_control_insights_export_cycles_total", "result", "failed").increment(); }
         try {
             var result = sweep.tick();
             if (result.cycleComplete() && System.currentTimeMillis() - lastRetention >= 60_000) lastRetention = System.currentTimeMillis();
@@ -74,8 +108,11 @@ public class InsightsWatchdog {
             if (result.facts() < batch) break;
         }
         long now = System.currentTimeMillis();
-        if (now - lastRetention >= 60_000)
+        if (now - lastRetention >= 60_000) {
             metrics.counter("toolgate_control_insights_rows_purged_total").increment(projector.retain(tenant, now));
+            var sink = service.spans();
+            if (sink != null) store.transaction(tenant, true, tx -> tx.insights().purgeSpans(now - sink.settings().retentionMs(), 10_000));
+        }
         // Hourly, compare today's live aggregates with a recomputation from summaries. Drift is reported, never repaired
         // silently: an operator decides whether to apply a rebuild.
         long every = config.getOptionalValue("toolgate.control.insights.reconcile-interval-minutes", Long.class).orElse(60L) * 60_000L;

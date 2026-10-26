@@ -9,13 +9,17 @@ package io.ololabs.toolgate.contracts.v2;
  * @param attempts canonical attempts value
  * @param transitions canonical transitions value
  * @param transitionsRetained canonical transitionsRetained value
+ * @param spans canonical spans value
+ * @param spanState canonical spanState value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record InsightsInvocationDetail(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "invocation", required = true) InsightsInvocation invocation,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "attempts", required = true) java.util.List<InsightsAttempt> attempts,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "transitions", required = true) java.util.List<InsightsTransition> transitions,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "transitionsRetained", required = true) Boolean transitionsRetained
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "transitionsRetained", required = true) Boolean transitionsRetained,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "spans", required = false) java.util.List<InsightsSpan> spans,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "spanState", required = false) InsightsSpanState spanState
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,6 +27,8 @@ public record InsightsInvocationDetail(
      * @param attempts canonical attempts value
      * @param transitions canonical transitions value
      * @param transitionsRetained canonical transitionsRetained value
+     * @param spans canonical spans value
+     * @param spanState canonical spanState value
      */
     public InsightsInvocationDetail {
         java.util.Objects.requireNonNull(invocation, "invocation");
@@ -31,5 +37,6 @@ public record InsightsInvocationDetail(
         java.util.Objects.requireNonNull(transitions, "transitions");
         transitions = transitions == null ? null : java.util.List.copyOf(transitions);
         java.util.Objects.requireNonNull(transitionsRetained, "transitionsRetained");
+        spans = spans == null ? null : java.util.List.copyOf(spans);
     }
 }

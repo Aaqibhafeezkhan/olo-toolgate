@@ -49,6 +49,10 @@ public class EnterpriseOperationResource {
     @POST @Path("insights/admissions") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response insightsAdmissions(String document){var actor=gateway();var batch=codec.model(body(document),io.ololabs.toolgate.contracts.v2.InsightsAdmissionBatch.class);
         return Response.ok(codec.json(insights.ingest(actor.tenant(),batch,System.currentTimeMillis()))).header("Cache-Control","no-store").build();}
+    /** DETAILED Insights spans from the Gateway, for invocations of its own tenant (ADR 031 §9). */
+    @POST @Path("insights/spans") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response insightsSpans(String document){var actor=gateway();var batch=codec.model(body(document),io.ololabs.toolgate.contracts.v2.InsightsSpanBatch.class);
+        return Response.ok(codec.json(insights.ingestSpans(actor.tenant(),tx->new InsightsService.SpanSender(io.ololabs.toolgate.contracts.v2.InsightsSpanSource.GATEWAY,null),null,batch,System.currentTimeMillis()))).header("Cache-Control","no-store").build();}
     @POST @Path("invocations") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response submit(String document){return reply(operations.submit(gateway(),body(document)));}
     @POST @Path("invocations/cancel") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
@@ -81,6 +85,12 @@ public class EnterpriseOperationResource {
     @GET @Path("invocations/{id}/device-outcome") @PermitAll
     public Response deviceOutcome(@PathParam("id")String id){var certificate=peer();return reply(operations.deviceOutcome(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id));}
     /** Run-response frames from the executor that admitted the invocation; the device certificate and fencing token bind them. */
+    /** DETAILED Insights spans from the executor the invocation was placed on, with its device certificate. */
+    @POST @Path("invocations/{id}/insights/spans") @Consumes("application/json") @PermitAll
+    public Response invocationSpans(@PathParam("id")String id,String document){var certificate=peer();var batch=codec.model(body(document),io.ololabs.toolgate.contracts.v2.InsightsSpanBatch.class);
+        return Response.ok(codec.json(insights.ingestSpans(tenant(),tx->{String device=endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId();
+            return new InsightsService.SpanSender(tx.packages().toolHost(device)!=null?io.ololabs.toolgate.contracts.v2.InsightsSpanSource.TOOL_HOST:io.ololabs.toolgate.contracts.v2.InsightsSpanSource.CLIENT,device);},
+            Ids.valid(id),batch,System.currentTimeMillis()))).header("Cache-Control","no-store").build();}
     @POST @Path("invocations/{id}/events") @Consumes("application/json") @PermitAll
     public Response events(@PathParam("id")String id,String document){var certificate=peer();return reply(new RunEvents(store,codec,operations).ingest(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id,body(document)));}
     /** Authorized cursor replay of an invocation's retained run-response events. */

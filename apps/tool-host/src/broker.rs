@@ -68,8 +68,22 @@ pub struct Invocation {
     pub closed: AtomicBool,
     /// A single-use downstream write capability was dispatched; a lost/error reply needs reconciliation.
     pub service_effect_started: AtomicBool,
+    /// Route calls, for DETAILED Insights spans (ADR 031 §9): route ID, timing and status only, never the URL.
+    pub egress: Mutex<Vec<Egress>>,
     clients: Mutex<HashMap<String, reqwest::Client>>,
 }
+
+/// One brokered route call as an Insights span records it.
+#[derive(Debug, Clone)]
+pub struct Egress {
+    pub route_id: String,
+    pub started_unix_ms: u64,
+    pub duration_ms: u64,
+    pub status: Option<u16>,
+    pub refused: bool,
+}
+/// Route calls recorded per invocation; later ones are not recorded.
+const MAX_EGRESS: usize = 256;
 
 impl Invocation {
     #[allow(clippy::too_many_arguments)]
@@ -100,6 +114,7 @@ impl Invocation {
             control,
             closed: AtomicBool::new(false),
             service_effect_started: AtomicBool::new(false),
+            egress: Mutex::new(Vec::new()),
             clients: Mutex::new(HashMap::new()),
         }
     }
@@ -189,6 +204,7 @@ fn audit_secret(invocation: &Invocation, name: &str, decision: &str) {
 
 async fn call(invocation: &Invocation, body: &Value) -> Value {
     let started = Instant::now();
+    let started_unix_ms = crate::now_ms();
     let route_id = body
         .get("route")
         .and_then(Value::as_str)
@@ -225,6 +241,17 @@ async fn call(invocation: &Invocation, body: &Value) -> Value {
         decision,
         "broker call"
     );
+    if let Ok(mut egress) = invocation.egress.lock() {
+        if egress.len() < MAX_EGRESS {
+            egress.push(Egress {
+                route_id: route_id.clone(),
+                started_unix_ms,
+                duration_ms: started.elapsed().as_millis() as u64,
+                status,
+                refused: decision == "refused",
+            });
+        }
+    }
     reply
 }
 

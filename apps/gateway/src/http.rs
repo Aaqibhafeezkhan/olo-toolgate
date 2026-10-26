@@ -45,6 +45,8 @@ pub struct AppState {
     pub tool_hosts: crate::toolhost::ToolHosts,
     /// Operator Insights admission counters, flushed to Control by the server's worker.
     pub admissions: crate::insights::Admissions,
+    /// DETAILED Insights spans, flushed to Control by the server's worker.
+    pub spans: crate::insights::Spans,
     rate: RateLimit,
     sequence: AtomicU64,
     instance: String,
@@ -101,6 +103,7 @@ impl AppState {
             rate: RateLimit::new(config.limits.requests_per_second),
             tool_hosts: crate::toolhost::ToolHosts::new(&config.tool_hosts),
             admissions: crate::insights::Admissions::new(&config.insights, &instance),
+            spans: crate::insights::Spans::new(&config.insights),
             gateway,
             auth,
             config,
@@ -122,6 +125,12 @@ impl AppState {
         let bytes = crate::config::read_bytes(path)?;
         let now = unix_ms().ok_or("system clock unavailable")?;
         self.auth.reload(&bytes, &self.gateway.contracts, now)
+    }
+
+    /// A fresh span ID for this Gateway's own spans: unique per process, not secret.
+    pub(crate) fn span_id(&self) -> String {
+        let n = self.sequence.fetch_add(1, Ordering::Relaxed);
+        digest(format!("{}-span-{n}", self.instance).as_bytes())[..16].to_owned()
     }
 
     fn correlation(&self, headers: &HeaderMap) -> Correlation {

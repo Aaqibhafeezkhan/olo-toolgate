@@ -784,6 +784,36 @@
       ]
     },
     {
+      "name": "control_insights_spans",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "invocation_id",
+        "span_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "DELETE",
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
       "name": "control_insights_tenant_state",
       "classification": "tenant-data",
       "tenantColumn": "tenant_id",

@@ -17,6 +17,8 @@ struct Authorization {
     consumed: tokio::sync::Mutex<bool>,
     /// The fencing token permit consumption returned; run events are bound to it.
     fencing: std::sync::Mutex<Option<String>>,
+    /// This device's span of the call, minted once: the tool's trace parent and the Insights execution span.
+    child: Option<String>,
 }
 impl AuthorizationPort for Authorization {
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()> {
@@ -25,7 +27,7 @@ impl AuthorizationPort for Authorization {
     fn trace(&self) -> crate::trace::RunTrace {
         let fencing = self.fencing.lock().ok().and_then(|f| f.clone());
         crate::trace::run_trace(
-            self.task.traceparent.as_deref(),
+            self.child.clone(),
             self.task.execution_context.as_ref(),
             &self.task.invocation.evaluation.context.tenant_id,
             &self.task.invocation.id,
@@ -123,6 +125,7 @@ async fn execute(
         tool_id: task.request.tool_id,
         arguments: task.request.arguments,
     };
+    let started = crate::now();
     let result = tokio::select! {
         _=cancelled.changed()=>Err(Failure::Revoked),
         outcome=tokio::time::timeout(std::time::Duration::from_millis(valid_until.saturating_sub(crate::now())),manager.invoke(input,valid_until))=>outcome.unwrap_or(Err(Failure::Expired)).map(|output|output.output),
@@ -130,7 +133,42 @@ async fn execute(
     let (frames, dropped) = manager.take_frames();
     manager.shutdown().await?;
     forward_frames(&auth, frames, dropped).await;
+    forward_span(&auth, started, result.is_ok()).await;
     result
+}
+
+/// DETAILED Insights: the run's execution span, when Control asked for spans. Best-effort, after the frames.
+async fn forward_span(auth: &Authorization, started: u64, ok: bool) {
+    let (Some(true), Some(child)) = (auth.task.collect_spans, auth.child.as_deref()) else {
+        return;
+    };
+    let execution = crate::execution::AuthorizationPort::trace(auth)
+        .context
+        .and_then(|c| c.execution_id);
+    let span = crate::trace::execution_span(
+        auth.task.traceparent.as_deref(),
+        child,
+        &auth.task.invocation.id,
+        execution,
+        started,
+        crate::now(),
+        ok,
+    );
+    let batch = olo_toolgate_contracts::v2::InsightsSpanBatch {
+        spans: vec![span],
+        dropped_spans: None,
+    };
+    if let Err(failure) = auth
+        .control
+        .insights_spans(
+            auth.identity.clone(),
+            auth.task.invocation.id.clone(),
+            batch,
+        )
+        .await
+    {
+        tracing::debug!(event = "insights_spans", result = "not_delivered", error = ?failure);
+    }
 }
 
 /// Sends the run's response frames to Control before the result, once retried; the result never waits on a failure.
@@ -199,6 +237,7 @@ impl Job {
             task: task.clone(),
             consumed: tokio::sync::Mutex::new(false),
             fencing: std::sync::Mutex::new(None),
+            child: crate::trace::child_traceparent(task.traceparent.as_deref()),
         });
         let command = activity.begin(&task.request.tool_id);
         let handle = tokio::spawn(async move {

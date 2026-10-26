@@ -593,6 +593,16 @@
         },
         "transitionsRetained": {
           "type": "boolean"
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSpan"
+          },
+          "maxItems": 512
+        },
+        "spanState": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanState"
         }
       },
       "required": [
@@ -662,6 +672,164 @@
         "cellsCompared",
         "cellsDiffering",
         "applied"
+      ]
+    },
+    "InsightsSpanName": {
+      "type": "string",
+      "enum": [
+        "GATEWAY_REQUEST",
+        "GATEWAY_AUTHORIZE",
+        "GATEWAY_DISPATCH",
+        "HOST_ADMISSION",
+        "HOST_EXECUTE",
+        "HOST_EGRESS",
+        "CLIENT_EXECUTE"
+      ],
+      "description": "The fixed set of spans Insights records (ADR 031 \u00a79). There are no free-form names or attributes."
+    },
+    "InsightsSpanSource": {
+      "type": "string",
+      "enum": [
+        "GATEWAY",
+        "TOOL_HOST",
+        "CLIENT"
+      ],
+      "description": "Who produced a span; Control sets it from the authenticated sender."
+    },
+    "InsightsSpanStatus": {
+      "type": "string",
+      "enum": [
+        "OK",
+        "ERROR"
+      ],
+      "description": "Span status."
+    },
+    "InsightsSpanState": {
+      "type": "string",
+      "enum": [
+        "NOT_COLLECTED",
+        "PENDING",
+        "RETAINED",
+        "SAMPLED_OUT",
+        "DROPPED"
+      ],
+      "description": "Why an invocation does or does not have spans: not collected (mode below DETAILED), still buffering, retained, sampled out, or dropped under memory pressure."
+    },
+    "InsightsSpan": {
+      "type": "object",
+      "description": "One allowlisted span. Metadata only: never arguments, outputs, URLs, headers or secrets.",
+      "additionalProperties": false,
+      "properties": {
+        "traceId": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 32,
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "spanId": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 16,
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "parentSpanId": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 16,
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "name": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanName"
+        },
+        "source": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanSource"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "executionId": {
+          "type": "string",
+          "minLength": 35,
+          "maxLength": 35,
+          "pattern": "^ex-[0-9a-f]{32}$"
+        },
+        "startUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "status": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanStatus"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "httpStatus": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "errorCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        }
+      },
+      "required": [
+        "traceId",
+        "spanId",
+        "name",
+        "invocationId",
+        "startUnixMs",
+        "durationMs",
+        "status"
+      ]
+    },
+    "InsightsSpanBatch": {
+      "type": "object",
+      "description": "Spans from one producer. Best-effort: droppedSpans counts what the producer could not keep.",
+      "additionalProperties": false,
+      "properties": {
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSpan"
+          },
+          "maxItems": 512
+        },
+        "droppedSpans": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "spans"
+      ]
+    },
+    "InsightsSpanAck": {
+      "type": "object",
+      "description": "How many spans Control buffered and how many it refused (unknown invocation, wrong executor, over a bound).",
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "refused": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "accepted",
+        "refused"
       ]
     }
   }

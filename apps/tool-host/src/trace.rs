@@ -73,6 +73,94 @@ pub fn execution_context(
     }
 }
 
+/// The host's DETAILED Insights spans for one run: its execution, as the child span the tool also received, and each
+/// brokered route call beneath it. Route ID, timing and status only.
+#[allow(clippy::too_many_arguments)]
+pub fn spans(
+    parent: Option<&str>,
+    own: &str,
+    invocation_id: &str,
+    execution_id: &str,
+    started_unix_ms: u64,
+    ended_unix_ms: u64,
+    error_code: Option<&str>,
+    egress: &[crate::broker::Egress],
+) -> Vec<olo_toolgate_contracts::v2::InsightsSpan> {
+    use olo_toolgate_contracts::v2::{InsightsSpan, InsightsSpanName, InsightsSpanStatus};
+    let trace_id = own[3..35].to_owned();
+    let span_id = own[36..52].to_owned();
+    let code = error_code.filter(|c| error_code_shape(c));
+    let mut out = vec![InsightsSpan {
+        trace_id: trace_id.clone(),
+        span_id: span_id.clone(),
+        parent_span_id: parent
+            .filter(|p| p.len() == 55)
+            .map(|p| p[36..52].to_owned()),
+        name: InsightsSpanName::HostExecute,
+        source: None,
+        invocation_id: invocation_id.to_owned(),
+        execution_id: Some(execution_id.to_owned()),
+        start_unix_ms: started_unix_ms,
+        duration_ms: ended_unix_ms
+            .saturating_sub(started_unix_ms)
+            .min(86_400_000),
+        status: if code.is_some() {
+            InsightsSpanStatus::Error
+        } else {
+            InsightsSpanStatus::Ok
+        },
+        route_id: None,
+        http_status: None,
+        error_code: code.map(str::to_owned),
+    }];
+    for call in egress {
+        let failed = call.refused || call.status.is_none_or(|s| s >= 500);
+        out.push(InsightsSpan {
+            trace_id: trace_id.clone(),
+            span_id: crate::random_hex(8),
+            parent_span_id: Some(span_id.clone()),
+            name: InsightsSpanName::HostEgress,
+            source: None,
+            invocation_id: invocation_id.to_owned(),
+            execution_id: Some(execution_id.to_owned()),
+            start_unix_ms: call.started_unix_ms,
+            duration_ms: call.duration_ms.min(86_400_000),
+            status: if failed {
+                InsightsSpanStatus::Error
+            } else {
+                InsightsSpanStatus::Ok
+            },
+            route_id: Some(call.route_id.clone()).filter(|r| identifier(r)),
+            http_status: call
+                .status
+                .map(u64::from)
+                .filter(|s| (100..600).contains(s)),
+            error_code: call.refused.then(|| "BROKER_REFUSED".to_owned()),
+        });
+    }
+    out
+}
+
+/// An allowlisted error code: upper-case letters, digits and underscores, as the protocol's error codes are.
+fn error_code_shape(c: &str) -> bool {
+    !c.is_empty()
+        && c.len() <= 64
+        && c.bytes().next().is_some_and(|b| b.is_ascii_uppercase())
+        && c.bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+}
+
+/// The contract `Identifier` shape.
+pub fn identifier(v: &str) -> bool {
+    let b = v.as_bytes();
+    !b.is_empty()
+        && b.len() <= 128
+        && b[0].is_ascii_alphanumeric()
+        && b[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || b"._:/-".contains(c))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,6 +191,56 @@ mod tests {
     fn the_execution_id_never_contains_the_fencing_token() {
         let token = "fence-token-for-a-test";
         assert!(!execution_id("t", "i", token).contains(token));
+    }
+
+    #[test]
+    fn spans_describe_the_run_and_its_route_calls_without_urls() {
+        let own = "00-0af7651916cd43dd8448eb211c80319c-1111111111111111-01";
+        let parent = "00-0af7651916cd43dd8448eb211c80319c-2222222222222222-01";
+        let egress = [
+            crate::broker::Egress {
+                route_id: "orders.get".into(),
+                started_unix_ms: 10,
+                duration_ms: 5,
+                status: Some(503),
+                refused: false,
+            },
+            crate::broker::Egress {
+                route_id: "orders.get".into(),
+                started_unix_ms: 20,
+                duration_ms: 1,
+                status: None,
+                refused: true,
+            },
+        ];
+        let execution = "ex-7576f712baed62964bc828cdba88bdbe";
+        let spans = spans(
+            Some(parent),
+            own,
+            "inv-1",
+            execution,
+            5,
+            50,
+            Some("DEADLINE_EXCEEDED"),
+            &egress,
+        );
+        assert_eq!(spans.len(), 3);
+        assert_eq!(spans[0].span_id, "1111111111111111");
+        assert_eq!(spans[0].parent_span_id.as_deref(), Some("2222222222222222"));
+        assert_eq!(spans[0].duration_ms, 45);
+        assert_eq!(spans[0].error_code.as_deref(), Some("DEADLINE_EXCEEDED"));
+        assert!(spans[1..]
+            .iter()
+            .all(|s| s.parent_span_id.as_deref() == Some("1111111111111111")
+                && s.trace_id == spans[0].trace_id));
+        assert_eq!(spans[1].http_status, Some(503));
+        assert_eq!(spans[2].error_code.as_deref(), Some("BROKER_REFUSED"));
+        // Free text is not an allowlisted error code.
+        assert!(
+            super::spans(None, own, "i", execution, 0, 1, Some("boom: x"), &[])[0]
+                .error_code
+                .is_none()
+        );
     }
 
     #[test]

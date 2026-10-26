@@ -26,6 +26,8 @@ def checks(lint=True):
                 'ingress':['--set','control.ingress.enabled=true','--set','control.ingress.className=nginx','--set','control.ingress.tlsSecret=control-tls'],
                 'monitor':['--set','control.serviceMonitor.enabled=true'],
                 'tracing':['--set','control.tracing.enabled=true','--set','control.networkPolicy.collectorTo[0].podSelector.matchLabels.app=collector'],
+                'insights':['--set','control.insights.mode=DETAILED','--set','control.insights.otlp.endpoint=http://insights-collector:4318',
+                            '--set','control.networkPolicy.insightsCollectorTo[0].podSelector.matchLabels.app=insights-collector'],
                 'marketplace':['--set','control.marketplace.enabled=true','--set','control.marketplace.id=olo-orgs','--set','control.marketplace.baseUrl=https://marketplace.example.com',
                                '--set','control.marketplace.keys=olo-orgs-2026:'+'A'*43+'=','--set','control.marketplace.caSecret=marketplace-ca',
                                '--set','control.networkPolicy.marketplaceTo[0].ipBlock.cidr=203.0.113.0/24'],
@@ -58,6 +60,12 @@ def checks(lint=True):
             config = next(doc for doc in docs if doc['kind']=='ConfigMap')['data']
             assert 'sslmode=verify-full' in config['QUARKUS_DATASOURCE_JDBC_URL']
             assert config['TOOLGATE_CONTROL_DEVELOPMENT_MODE']=='false'
+            if name=='insights':
+                assert config['TOOLGATE_INSIGHTS_OTLP_ENDPOINT']=='http://insights-collector:4318' and config['TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO']=='0.1'
+                policy = next(doc for doc in docs if doc['kind']=='NetworkPolicy' and 'Egress' in doc['spec']['policyTypes'])
+                assert any(rule['ports']==[{'protocol':'TCP','port':4318}] for rule in policy['spec']['egress'])
+            else:
+                assert 'TOOLGATE_INSIGHTS_OTLP_ENDPOINT' not in config
             assert config['TOOLGATE_CONTROL_MAX_RECORDS']=='512'
             assert config['TOOLGATE_CONTROL_MAX_CONFIG_BYTES']=='1048576'
             assert config['TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED']==('true' if name=='tracing' else 'false')
@@ -102,6 +110,8 @@ def checks(lint=True):
                   ['--set','control.terminationGracePeriodSeconds=20'],['--set','control.limits.maxRecords=513'],
                   ['--set','control.autoscaling.enabled=true','--set','control.autoscaling.minReplicas=9'],['--set','control.ingress.enabled=true'],
                   ['--set','control.tracing.enabled=true'],['--set','control.clientCheckIn.checkInMs=400'],
+                  ['--set','control.insights.otlp.endpoint=http://insights-collector:4318'],['--set','control.insights.otlp.endpoint=ftp://x'],
+                  ['--set','control.insights.spans.sampleRatio=1.5'],['--set','control.insights.spans.bufferMiB=0'],
                   ['--set','control.clientCheckIn.checkInMs=22000'],['--set','control.clientCheckIn.jitterPct=51'],
                   ['--set','control.marketplace.enabled=true'],
                   ['--set','control.marketplace.enabled=true','--set','control.marketplace.id=olo-orgs','--set','control.marketplace.keys=k:x','--set','control.marketplace.baseUrl=http://marketplace.example.com']):

@@ -222,7 +222,9 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 context: declared_context(meta, &headers, tracestate),
             };
             let invocation_id = crate::http::invocation_id(&context, &id.to_string());
-            tools_call(
+            let started = unix_ms().unwrap_or(0);
+            let request_span = trace.traceparent.clone();
+            let result = tools_call(
                 &s,
                 context,
                 &correlation.request_id,
@@ -232,7 +234,22 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 trace,
             )
             .await
-            .map(|result| with_invocation_reference(result, &invocation_id))
+            .map(|result| with_invocation_reference(result, &invocation_id));
+            // The request span is the Gateway's own span, the parent its executors see.
+            if request_span.len() == 55 {
+                let ok = result.as_ref().is_ok_and(|r| r["isError"] != json!(true));
+                s.spans.record(
+                    olo_toolgate_contracts::v2::InsightsSpanName::GatewayRequest,
+                    &request_span,
+                    request_span[36..52].to_owned(),
+                    None,
+                    &invocation_id,
+                    started,
+                    unix_ms().unwrap_or(started),
+                    ok,
+                );
+            }
+            result
         }
         // ping is not part of 2026-07-28.
         _ => Err(rpc_error(
@@ -352,6 +369,50 @@ fn with_invocation_reference(mut result: Value, invocation_id: &str) -> Value {
     result
 }
 
+/// The Gateway's wait for the executor's answer, recorded as a DETAILED span when it ends, on every return path.
+struct Waiting<'a> {
+    state: &'a AppState,
+    traceparent: String,
+    parent: Option<String>,
+    invocation_id: String,
+    started: u64,
+    ok: std::cell::Cell<bool>,
+}
+impl<'a> Waiting<'a> {
+    fn new(
+        state: &'a AppState,
+        traceparent: String,
+        parent: Option<String>,
+        invocation_id: String,
+    ) -> Self {
+        Self {
+            state,
+            traceparent,
+            parent,
+            invocation_id,
+            started: unix_ms().unwrap_or(0),
+            ok: std::cell::Cell::new(false),
+        }
+    }
+    fn succeeded<T, E>(&self, result: &Result<T, E>) {
+        self.ok.set(result.is_ok());
+    }
+}
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        self.state.spans.record(
+            olo_toolgate_contracts::v2::InsightsSpanName::GatewayDispatch,
+            &self.traceparent,
+            self.state.span_id(),
+            self.parent.clone(),
+            &self.invocation_id,
+            self.started,
+            unix_ms().unwrap_or(self.started),
+            self.ok.get(),
+        );
+    }
+}
+
 /// Authorizes and relays one tool call. Nothing is cached between requests.
 async fn tools_call(
     s: &AppState,
@@ -413,19 +474,34 @@ async fn tools_call(
     };
     let mut context = context;
     context.request_id = crate::http::invocation_id(&context, &id.to_string());
-    let outcome = s
+    let authorizing = unix_ms().unwrap_or(0);
+    let authorized = s
         .gateway
         .authorize_with(request.clone(), context.clone(), trace.context.clone())
-        .await
-        .map_err(|code| {
-            rpc_error(
-                status(&code),
-                id.clone(),
-                -32000,
-                "Authorization failed",
-                json!({"code":code}),
-            )
-        })?;
+        .await;
+    let gateway_span =
+        (trace.traceparent.len() == 55).then(|| trace.traceparent[36..52].to_owned());
+    if let Ok(o) = &authorized {
+        s.spans.record(
+            olo_toolgate_contracts::v2::InsightsSpanName::GatewayAuthorize,
+            &trace.traceparent,
+            s.span_id(),
+            gateway_span.clone(),
+            &o.invocation.id,
+            authorizing,
+            unix_ms().unwrap_or(authorizing),
+            true,
+        );
+    }
+    let outcome = authorized.map_err(|code| {
+        rpc_error(
+            status(&code),
+            id.clone(),
+            -32000,
+            "Authorization failed",
+            json!({"code":code}),
+        )
+    })?;
     if outcome.invocation.state == EnterpriseInvocationState::PendingApproval {
         if let Some(now) = unix_ms() {
             s.admissions.record(
@@ -472,6 +548,12 @@ async fn tools_call(
         return Err(error(ErrorCode::Timeout, request_id));
     }
     let device = outcome.invocation.evaluation.context.device_id.clone();
+    let dispatching = Waiting::new(
+        s,
+        trace.traceparent.clone(),
+        gateway_span,
+        outcome.invocation.id.clone(),
+    );
     if outcome.invocation.state == EnterpriseInvocationState::Queued {
         // A call Control placed on a Tool Host gets a permit for that host. The host runs it
         // whether the Gateway reaches it directly (a configured route) or the host fetches its
@@ -500,6 +582,7 @@ async fn tools_call(
                     arguments: request.arguments.clone(),
                     traceparent: Some(trace.traceparent.clone()),
                     execution_context: trace.context.clone(),
+                    collect_spans: s.spans.enabled().then_some(true),
                 };
                 let invocation_id = &outcome.invocation.id;
                 let dispatched = match s.tool_hosts.url(&device) {
@@ -510,7 +593,9 @@ async fn tools_call(
                     }
                     None => relayed(relay.as_ref(), &dispatch, invocation_id, expires).await,
                 };
-                return host_result(dispatched, invocation_id, id);
+                let answer = host_result(dispatched, invocation_id, id);
+                dispatching.succeeded(&answer);
+                return answer;
             }
         }
     }
@@ -522,7 +607,9 @@ async fn tools_call(
         match relay.dispatch_status(invocation_id).await {
             Ok(state) => {
                 let dispatched = follow(relay.as_ref(), state, invocation_id, expires).await;
-                return host_result(dispatched, invocation_id, id);
+                let answer = host_result(dispatched, invocation_id, id);
+                dispatching.succeeded(&answer);
+                return answer;
             }
             Err(ErrorCode::NotFound) => {}
             Err(code) => return host_result(Err(code), invocation_id, id),
@@ -566,6 +653,7 @@ async fn tools_call(
                 let Some(output) = result.output else {
                     return Err(error(ErrorCode::Validation, request_id));
                 };
+                dispatching.ok.set(true);
                 return Ok(
                     json!({"content":[{"type":"text","text":serde_json::to_string(&output).unwrap_or_default()}],"structuredContent":output,"isError":false}),
                 );

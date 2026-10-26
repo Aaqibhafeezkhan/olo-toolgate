@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 import {useCallback,useEffect,useMemo,useState,type FormEvent,type ReactNode} from 'react';
-import type {InsightsInvocation,InsightsInvocationDetail,InsightsOutcome,InsightsSeries,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
+import type {InsightsInvocation,InsightsInvocationDetail,InsightsOutcome,InsightsSeries,InsightsSpan,InsightsSpanState,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
 import {EditorDialog} from '../EditorDialog';
 import {client as defaultClient,InsightsError,type InsightsClient} from './api';
 import {LatencyChart,OutcomeChart} from './charts';
@@ -165,6 +165,39 @@ function Detail({api,row,close}:{api:InsightsClient;row:InsightsInvocation;close
   </EditorDialog>;
 }
 
+const SPAN_STATE:Record<InsightsSpanState,string>={
+  NOT_COLLECTED:'Spans are collected only while Insights runs in DETAILED mode.',
+  PENDING:'This call is still running or its spans are still being decided. Failed, slow and sampled calls keep them.',
+  RETAINED:'Spans are kept for a limited time and are no longer available for this call.',
+  SAMPLED_OUT:'This call finished normally and was not in the sample, so its spans were discarded.',
+  DROPPED:'Spans were discarded under memory pressure before this call was decided.'};
+
+/** Orders spans depth-first under their parents, children by start time; a span whose parent is absent is a root. */
+export function spanTree(spans:readonly InsightsSpan[]):{span:InsightsSpan;depth:number}[]{
+  const ids=new Set(spans.map(s=>s.spanId)),children=new Map<string,InsightsSpan[]>(),out:{span:InsightsSpan;depth:number}[]=[];
+  const byStart=(a:InsightsSpan,b:InsightsSpan)=>a.startUnixMs-b.startUnixMs||a.name.localeCompare(b.name);
+  for(const s of spans){const p=s.parentSpanId&&ids.has(s.parentSpanId)&&s.parentSpanId!==s.spanId?s.parentSpanId:'';children.set(p,[...(children.get(p)??[]),s]);}
+  const seen=new Set<string>();
+  const walk=(parent:string,depth:number)=>{for(const s of (children.get(parent)??[]).sort(byStart)){if(seen.has(s.spanId))continue;seen.add(s.spanId);out.push({span:s,depth});walk(s.spanId,depth+1);}};
+  walk('',0);
+  return out;
+}
+
+function Waterfall({spans,state}:{spans:readonly InsightsSpan[];state?:InsightsSpanState}){
+  if(spans.length===0)return <p className="muted">{SPAN_STATE[state??'NOT_COLLECTED']}</p>;
+  const rows=spanTree(spans),start=Math.min(...spans.map(s=>s.startUnixMs)),end=Math.max(...spans.map(s=>s.startUnixMs+s.durationMs)),total=Math.max(end-start,1);
+  return <div className="table-scroll"><table className="insights-table insights-waterfall">
+    <caption className="visually-hidden">Spans of this call, offsets from {time(start)} UTC</caption>
+    <thead><tr><th scope="col">Span</th><th scope="col">Source</th><th scope="col">Start</th><th scope="col">Duration</th><th scope="col">Status</th><th scope="col" className="waterfall-track-head">Timeline ({duration(total)})</th></tr></thead>
+    <tbody>{rows.map(({span:s,depth})=><tr key={s.spanId}>
+      <th scope="row" style={{paddingLeft:10+depth*14}}>{s.name==='HOST_EGRESS'?'Route call':label(s.name)}{s.routeId&&<> <code>{s.routeId}</code></>}</th>
+      <td>{s.source?label(s.source):'—'}</td><td>+{duration(s.startUnixMs-start)}</td><td>{duration(s.durationMs)}</td>
+      <td>{s.status==='ERROR'?<span className="warning-text">Error{s.errorCode?` (${s.errorCode})`:''}{s.httpStatus?` ${s.httpStatus}`:''}</span>:`OK${s.httpStatus?` ${s.httpStatus}`:''}`}</td>
+      <td className="waterfall-track" aria-hidden="true"><span className={`waterfall-bar${s.status==='ERROR'?' error':''}`}
+        style={{left:`${(s.startUnixMs-start)/total*100}%`,width:`max(2px, ${s.durationMs/total*100}%)`}}/></td></tr>)}</tbody>
+  </table></div>;
+}
+
 export function InvocationDetail({detail}:{detail:InsightsInvocationDetail}){
   const i=detail.invocation;
   return <div className="insights-detail">
@@ -194,6 +227,7 @@ export function InvocationDetail({detail}:{detail:InsightsInvocationDetail}){
           <td>{a.executionId?<><code>{a.executionId}</code><Copy value={a.executionId}/></>:'—'}</td><td>{a.executorId??'—'}</td>
           <td>{time(a.startedAtUnixMs)}</td><td>{a.outcome?label(a.outcome):'—'}</td><td>{duration(a.durationMs)}</td></tr>)}</tbody></table></div>}
     </section>
+    <section aria-labelledby="d-spans"><h3 id="d-spans">Spans</h3><Waterfall spans={detail.spans??[]} state={detail.spanState}/></section>
     <section aria-labelledby="d-transitions"><h3 id="d-transitions">Ledger transitions</h3>
       {detail.transitionsRetained?<ol className="insights-timeline">{detail.transitions.map(t=><li key={t.factSeq}>
         <time>{time(t.occurredAtUnixMs)}</time> {t.fromState?`${label(t.fromState)} → `:''}{label(t.toState)}</li>)}</ol>

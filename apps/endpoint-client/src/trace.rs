@@ -60,16 +60,16 @@ pub fn child_traceparent(parent: Option<&str>) -> Option<String> {
 }
 
 /// The run's trace: the caller's declared identifiers plus the execution ID of the consumed permit. A relayed device
-/// call has one attempt.
+/// call has one attempt. `child` is this device's span, minted once per call with [`child_traceparent`].
 pub fn run_trace(
-    traceparent: Option<&str>,
+    child: Option<String>,
     declared: Option<&ExecutionContext>,
     tenant_id: &str,
     invocation_id: &str,
     fencing_token: Option<&str>,
 ) -> RunTrace {
     RunTrace {
-        traceparent: child_traceparent(traceparent),
+        traceparent: child,
         context: Some(ExecutionContext {
             execution_id: fencing_token.map(|f| execution_id(tenant_id, invocation_id, f)),
             attempt_number: Some(1),
@@ -79,6 +79,42 @@ pub fn run_trace(
             parent_invocation_id: declared.and_then(|d| d.parent_invocation_id.clone()),
             tracestate: declared.and_then(|d| d.tracestate.clone()),
         }),
+    }
+}
+
+/// The device's DETAILED Insights span for one relayed run: its execution, as the span the tool also received.
+pub fn execution_span(
+    parent: Option<&str>,
+    child: &str,
+    invocation_id: &str,
+    execution_id: Option<String>,
+    started_unix_ms: u64,
+    ended_unix_ms: u64,
+    ok: bool,
+) -> olo_toolgate_contracts::v2::InsightsSpan {
+    use olo_toolgate_contracts::v2::{InsightsSpan, InsightsSpanName, InsightsSpanStatus};
+    InsightsSpan {
+        trace_id: child[3..35].to_owned(),
+        span_id: child[36..52].to_owned(),
+        parent_span_id: parent
+            .filter(|p| p.len() == 55)
+            .map(|p| p[36..52].to_owned()),
+        name: InsightsSpanName::ClientExecute,
+        source: None,
+        invocation_id: invocation_id.to_owned(),
+        execution_id,
+        start_unix_ms: started_unix_ms,
+        duration_ms: ended_unix_ms
+            .saturating_sub(started_unix_ms)
+            .min(86_400_000),
+        status: if ok {
+            InsightsSpanStatus::Ok
+        } else {
+            InsightsSpanStatus::Error
+        },
+        route_id: None,
+        http_status: None,
+        error_code: None,
     }
 }
 
@@ -107,6 +143,20 @@ mod tests {
     }
 
     #[test]
+    fn the_execution_span_is_the_span_the_tool_received() {
+        let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        let child = child_traceparent(Some(parent)).unwrap();
+        let span = execution_span(Some(parent), &child, "inv-1", None, 10, 70, false);
+        assert_eq!(span.span_id, &child[36..52]);
+        assert_eq!(span.parent_span_id.as_deref(), Some("b7ad6b7169203331"));
+        assert_eq!(span.duration_ms, 60);
+        assert_eq!(
+            span.status,
+            olo_toolgate_contracts::v2::InsightsSpanStatus::Error
+        );
+    }
+
+    #[test]
     fn declared_identifiers_and_the_trace_reach_the_run() {
         let declared = ExecutionContext {
             execution_id: Some("ex-00000000000000000000000000000000".into()),
@@ -118,7 +168,13 @@ mod tests {
             tracestate: Some("v=1".into()),
         };
         let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
-        let trace = run_trace(Some(parent), Some(&declared), "t", "i", Some("f"));
+        let trace = run_trace(
+            child_traceparent(Some(parent)),
+            Some(&declared),
+            "t",
+            "i",
+            Some("f"),
+        );
         let context = trace.context.unwrap();
         // Executor-owned members are never taken from the caller.
         assert_eq!(

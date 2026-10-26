@@ -1083,6 +1083,10 @@
         },
         "executionContext": {
           "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
+        },
+        "collectSpans": {
+          "type": "boolean",
+          "description": "DETAILED Insights: the device records and uploads its execution span (ADR 031 \u00a79)."
         }
       },
       "required": [

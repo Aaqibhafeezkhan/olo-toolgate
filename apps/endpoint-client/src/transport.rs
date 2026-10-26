@@ -61,6 +61,15 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, olo_toolgate_contracts::v2::RunEventAck> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
+    /// DETAILED Insights spans of a call Control relayed to this device (ADR 031 §9).
+    fn insights_spans(
+        &self,
+        _identity: DeviceIdentity,
+        _invocation_id: String,
+        _batch: olo_toolgate_contracts::v2::InsightsSpanBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::InsightsSpanAck> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn remote_result(
         &self,
         _identity: DeviceIdentity,
@@ -399,6 +408,27 @@ impl ControlPort for HttpsControl {
                         .encode("EnterprisePermitConsumption", &request)?,
                 ),
                 "EnterpriseInvocation",
+            )
+            .await
+        })
+    }
+    fn insights_spans(
+        &self,
+        identity: DeviceIdentity,
+        invocation_id: String,
+        batch: olo_toolgate_contracts::v2::InsightsSpanBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::InsightsSpanAck> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            let path = format!("/api/control/v1/access/invocations/{invocation_id}/insights/spans");
+            self.request(
+                &client,
+                &path,
+                Some(self.contracts.encode("InsightsSpanBatch", &batch)?),
+                "InsightsSpanAck",
             )
             .await
         })

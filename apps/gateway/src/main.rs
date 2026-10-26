@@ -91,18 +91,31 @@ async fn run() -> Result<(), &'static str> {
     let insights_state = state.clone();
     let insights_authority = authority.clone();
     let insights_worker = tokio::spawn(async move {
+        // Spans every 2 s, admission counters every 10 s.
+        let mut tick = 0u64;
         loop {
             tokio::select! {
                 _=insights_receiver.changed()=>break,
-                _=tokio::time::sleep(Duration::from_secs(10))=>{}
+                _=tokio::time::sleep(Duration::from_secs(2))=>{}
             }
-            if let Some(now) = unix_ms() {
-                insights_state
-                    .admissions
-                    .flush(insights_authority.as_ref(), now, false)
-                    .await;
+            tick += 1;
+            insights_state
+                .spans
+                .flush(insights_authority.as_ref())
+                .await;
+            if tick.is_multiple_of(5) {
+                if let Some(now) = unix_ms() {
+                    insights_state
+                        .admissions
+                        .flush(insights_authority.as_ref(), now, false)
+                        .await;
+                }
             }
         }
+        insights_state
+            .spans
+            .flush(insights_authority.as_ref())
+            .await;
         if let Some(now) = unix_ms() {
             let _ = tokio::time::timeout(
                 Duration::from_secs(2),

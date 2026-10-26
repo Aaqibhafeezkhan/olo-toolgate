@@ -1,0 +1,42 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# OpenTelemetry Collector (contrib) for OLO ToolGate Insights export to Datadog. Control sends OTLP/HTTP JSON to
+# :4318 (toolgate.control.insights.otlp.endpoint). See README.md. Requires DD_API_KEY; DD_SITE defaults to US1.
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+connectors:
+  # APM trace metrics (hits, errors, latency) for the Insights spans.
+  datadog/connector: {}
+exporters:
+  datadog:
+    api:
+      key: ${env:DD_API_KEY}
+      site: ${env:DD_SITE:-datadoghq.com}
+    metrics:
+      histograms:
+        mode: distributions
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [datadog/connector, datadog]
+    metrics:
+      receivers: [otlp, datadog/connector]
+      processors: [memory_limiter, batch]
+      exporters: [datadog]

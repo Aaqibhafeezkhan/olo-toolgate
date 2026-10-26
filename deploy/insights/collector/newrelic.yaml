@@ -1,0 +1,39 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# OpenTelemetry Collector (contrib) for OLO ToolGate Insights export to New Relic over OTLP. Control sends OTLP/HTTP
+# JSON to :4318 (toolgate.control.insights.otlp.endpoint). See README.md. Requires NEW_RELIC_LICENSE_KEY;
+# NEW_RELIC_OTLP_ENDPOINT defaults to the US endpoint (EU: https://otlp.eu01.nr-data.net).
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+exporters:
+  otlphttp/newrelic:
+    endpoint: ${env:NEW_RELIC_OTLP_ENDPOINT:-https://otlp.nr-data.net}
+    headers:
+      api-key: ${env:NEW_RELIC_LICENSE_KEY}
+    compression: gzip
+service:
+  extensions: [health_check]
+  pipelines:
+    # Insights metrics are already delta temporality, which New Relic prefers; no conversion is needed.
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/newrelic]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/newrelic]

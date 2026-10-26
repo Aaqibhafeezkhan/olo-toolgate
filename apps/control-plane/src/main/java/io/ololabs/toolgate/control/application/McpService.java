@@ -65,7 +65,8 @@ public final class McpService {
             var d=device(tx,submission.context(),e.context().deviceId());if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))throw Failure.unavailable();
             long expires=Math.min(i.expiresAtUnixMs(),submission.expiresAtUnixMs());if(d.connectionExpiresAtUnixMs()!=null)expires=Math.min(expires,d.connectionExpiresAtUnixMs());
             var reserved=operations.reserveInSession(tenant,tx,new EnterpriseReservationRequest(i.id(),i.revision()),actor.id());
-            var task=new RemoteToolTask(i.id(),UUID.randomUUID().toString(),submission.request(),expires,reserved.invocation(),reserved.permit(),submission.traceparent(),submission.executionContext());
+            var task=new RemoteToolTask(i.id(),UUID.randomUUID().toString(),submission.request(),expires,reserved.invocation(),reserved.permit(),submission.traceparent(),submission.executionContext(),
+                store.insightsMode()==io.ololabs.toolgate.contracts.v2.InsightsMode.DETAILED?Boolean.TRUE:null);
             if(codec.json(task).getBytes(java.nio.charset.StandardCharsets.UTF_8).length>32768)throw Failure.validation();
             tx.mcp().prune(Math.max(0,now-86400000));if(tx.mcp().count()>=1000||tx.mcp().pending(d.deviceId(),17).size()>=16)throw Failure.conflict();
             var record=new RemoteToolRecord(i.id(),d.deviceId(),e.context().agentId(),e.toolId(),RemoteToolState.WAITING_FOR_POLL,now,expires,null,null,null,null);
@@ -84,7 +85,7 @@ public final class McpService {
             catch(Failure revoked){if(revoked.status()!=403)throw revoked;transition(tx,row,RemoteToolState.FAILED,now,ErrorCode.FORBIDDEN,null,requestId);continue;}
             var nonce=tx.enterprise().nonce(i.reservedNonce());if(nonce==null||nonce.consumedAt()!=null)throw forbidden();
             if(nonce.expiresAt()<=now){var refreshed=operations.reserveInSession(tenant,tx,new EnterpriseReservationRequest(i.id(),i.revision()),"mcp-relay");
-                task=new RemoteToolTask(task.requestId(),task.leaseId(),task.request(),task.expiresAtUnixMs(),refreshed.invocation(),refreshed.permit(),task.traceparent(),task.executionContext());
+                task=new RemoteToolTask(task.requestId(),task.leaseId(),task.request(),task.expiresAtUnixMs(),refreshed.invocation(),refreshed.permit(),task.traceparent(),task.executionContext(),task.collectSpans());
                 tx.mcp().save(new McpStore.Row(row.id(),row.deviceId(),row.state(),row.expiresAt(),row.record(),codec.json(task),row.result()));row=tx.mcp().get(row.id());}
             if(record(row).state()==RemoteToolState.WAITING_FOR_POLL)transition(tx,row,RemoteToolState.SUBMITTED,now,null,null,requestId);return task;
         }return null;

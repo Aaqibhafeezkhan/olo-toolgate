@@ -11,19 +11,23 @@ final readonly class InsightsInvocationDetail implements \JsonSerializable {
         public InsightsInvocation $invocation,
         public array $attempts,
         public array $transitions,
-        public bool $transitionsRetained
+        public bool $transitionsRetained,
+        public ?array $spans = null,
+        public ?InsightsSpanState $spanState = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['invocation', 'attempts', 'transitions', 'transitionsRetained']) || array_diff(['invocation', 'attempts', 'transitions', 'transitionsRetained'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['invocation', 'attempts', 'transitions', 'transitionsRetained', 'spans', 'spanState']) || array_diff(['invocation', 'attempts', 'transitions', 'transitionsRetained'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             InsightsInvocation::fromArray($data['invocation']),
             array_map(static fn ($item) => InsightsAttempt::fromArray($item), $data['attempts']),
             array_map(static fn ($item) => InsightsTransition::fromArray($item), $data['transitions']),
-            $data['transitionsRetained']
+            $data['transitionsRetained'],
+            array_key_exists('spans', $data) ? array_map(static fn ($item) => InsightsSpan::fromArray($item), $data['spans']) : null,
+            array_key_exists('spanState', $data) ? InsightsSpanState::from($data['spanState']) : null
         );
     }
 
