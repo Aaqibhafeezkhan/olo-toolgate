@@ -101,7 +101,8 @@ Step 3 verifies this table against the M5 dedup and reconciliation code paths wi
   IDs such as `call_…` and `toolu_…`. Invalid or duplicated values are dropped, never rejected; they never affect
   admission.
 - Ingress: HTTP headers `Toolgate-Tool-Call-Id`, `Toolgate-Session-Id`, `Toolgate-Agent-Run-Id`; MCP `_meta` keys
-  `io.ololabs.toolgate/toolCallId`, `…/sessionId`, `…/agentRunId`. `_meta` wins over headers.
+  `io.ololabs.toolgate/toolCallId`, `…/sessionId`, `…/agentRunId`. `_meta` wins over headers. Step 6 adds
+  `Toolgate-Parent-Invocation-Id` and `…/parentInvocationId` (§12).
 - Trace context: a valid `traceparent` header wins; otherwise a valid `traceparent` in `_meta` (MCP trace context) is
   continued. Each hop (Gateway, Tool Host, device) keeps the trace ID and sampled flag and uses its own span ID.
   `tracestate` travels only with the parent it arrived with, up to 512 bytes and 32 members, otherwise it is dropped.
@@ -301,6 +302,28 @@ DETAILED spans and export follow §9, with these specifics:
 - **Validated.** Control's exported JSON was accepted and parsed by `otel/opentelemetry-collector-contrib:0.120.0`.
   The Datadog, New Relic and combined Collector configs validate on that image. Delivery to the vendors is checked in
   the integration testing stage.
+
+### 12. Amendment: as built in step 6
+
+Sessions and `parent_invocation_id` (plan step 6):
+
+- **Ingress.** The Gateway reads `parentInvocationId` from `_meta` key `io.ololabs.toolgate/parentInvocationId` or
+  the header `Toolgate-Parent-Invocation-Id`. `_meta` wins, as for the other declared IDs. The value must have the
+  contract `Identifier` shape; otherwise it is dropped. It travels in `ExecutionContext`, so the tool receives it too.
+- **Same-tenant validation.** Control stores a parent only when it names another invocation that exists in the same
+  tenant's ledger when the child is accepted. The check runs inside the child's tenant transaction, under row-level
+  security, so it cannot see or confirm another tenant's IDs. A self-reference or unknown ID is dropped, never
+  rejected.
+- **Projection.** The parent is a summary column (`parent_invocation_id`, indexed per tenant). No aggregate uses it.
+- **Queries.**
+  - `GET /insights/v1/sessions` groups a tenant's summaries by declared session in the range. It reports how many
+    calls declared no session.
+  - `GET /insights/v1/sessions/timeline` returns the session's summaries plus their descendants by declared parent,
+    eight levels deep, at most 1,000 calls. Nested calls appear even when they did not repeat the session ID.
+  - The session ID is a query parameter, because declared IDs may contain `/`.
+- **Page.** A Sessions section, available with a tenant filter, lists sessions. Its timeline shows each call from
+  acceptance to terminal time on one axis: parallel work overlaps, and nesting is indented. A call's detail opens
+  inside the session window.
 
 ## Alternatives Considered
 

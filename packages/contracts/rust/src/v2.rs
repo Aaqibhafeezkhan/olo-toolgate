@@ -856,6 +856,8 @@ pub struct InsightsInvocation {
     pub session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_invocation_id: Option<String>,
     pub outcome: InsightsOutcome,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error_category: Option<InsightsErrorCategory>,
@@ -977,6 +979,39 @@ pub struct InsightsSeriesPoint {
     pub duration_count: u64,
     pub duration_sum_ms: u64,
     pub histogram: Vec<u64>,
+}
+/// One caller-declared session in a range: its calls by acceptance time. Session IDs are declared by the caller and not verified.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSession {
+    pub tenant_id: String,
+    pub session_id: String,
+    pub first_accepted_at_unix_ms: u64,
+    pub last_activity_unix_ms: u64,
+    pub calls: u64,
+    pub succeeded: u64,
+    pub failed: u64,
+    pub unfinished: u64,
+    pub agent_runs: u64,
+    pub tools: u64,
+}
+/// A tenant's sessions with calls accepted in the range, most recent activity first. next continues the list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSessionPage {
+    pub items: Vec<InsightsSession>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+    pub calls_without_session: u64,
+}
+/// Every retained call of one session, oldest first, plus calls that declared one of them as parent (nested work), to a bounded depth.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSessionTimeline {
+    pub tenant_id: String,
+    pub session_id: String,
+    pub invocations: Vec<InsightsInvocation>,
+    pub truncated: bool,
 }
 /// Admission counts that may be missing: a skipped sequence, or an epoch that stopped without a final batch.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

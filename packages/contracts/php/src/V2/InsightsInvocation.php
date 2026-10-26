@@ -22,6 +22,7 @@ final readonly class InsightsInvocation implements \JsonSerializable {
         public ?string $toolCallId = null,
         public ?string $sessionId = null,
         public ?string $agentRunId = null,
+        public ?string $parentInvocationId = null,
         public ?InsightsErrorCategory $errorCategory = null,
         public ?int $approvalRequestedAtUnixMs = null,
         public ?int $approvalResolvedAtUnixMs = null,
@@ -36,7 +37,7 @@ final readonly class InsightsInvocation implements \JsonSerializable {
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['tenantId', 'invocationId', 'toolId', 'action', 'clientId', 'userId', 'agentId', 'toolCallId', 'sessionId', 'agentRunId', 'outcome', 'errorCategory', 'attempts', 'acceptedAtUnixMs', 'approvalRequestedAtUnixMs', 'approvalResolvedAtUnixMs', 'queuedAtUnixMs', 'firstStartedAtUnixMs', 'terminalAtUnixMs', 'approvalMs', 'queueMs', 'executionMs', 'endToEndMs', 'partialCoverage']) || array_diff(['tenantId', 'invocationId', 'toolId', 'action', 'outcome', 'attempts', 'acceptedAtUnixMs', 'partialCoverage'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['tenantId', 'invocationId', 'toolId', 'action', 'clientId', 'userId', 'agentId', 'toolCallId', 'sessionId', 'agentRunId', 'parentInvocationId', 'outcome', 'errorCategory', 'attempts', 'acceptedAtUnixMs', 'approvalRequestedAtUnixMs', 'approvalResolvedAtUnixMs', 'queuedAtUnixMs', 'firstStartedAtUnixMs', 'terminalAtUnixMs', 'approvalMs', 'queueMs', 'executionMs', 'endToEndMs', 'partialCoverage']) || array_diff(['tenantId', 'invocationId', 'toolId', 'action', 'outcome', 'attempts', 'acceptedAtUnixMs', 'partialCoverage'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -54,6 +55,7 @@ final readonly class InsightsInvocation implements \JsonSerializable {
             array_key_exists('toolCallId', $data) ? $data['toolCallId'] : null,
             array_key_exists('sessionId', $data) ? $data['sessionId'] : null,
             array_key_exists('agentRunId', $data) ? $data['agentRunId'] : null,
+            array_key_exists('parentInvocationId', $data) ? $data['parentInvocationId'] : null,
             array_key_exists('errorCategory', $data) ? InsightsErrorCategory::from($data['errorCategory']) : null,
             array_key_exists('approvalRequestedAtUnixMs', $data) ? $data['approvalRequestedAtUnixMs'] : null,
             array_key_exists('approvalResolvedAtUnixMs', $data) ? $data['approvalResolvedAtUnixMs'] : null,

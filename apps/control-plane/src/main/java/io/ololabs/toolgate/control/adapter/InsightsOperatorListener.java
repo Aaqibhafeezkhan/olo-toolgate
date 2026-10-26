@@ -73,6 +73,10 @@ public class InsightsOperatorListener {
             param(ctx, "limit") == null ? 50 : (int) number(ctx, "limit"))), false);
         router.get("/insights/v1/invocations/:tenant/:id").blockingHandler(ctx -> respond(ctx,
             () -> insights.detail(ctx.pathParam("tenant"), ctx.pathParam("id"))), false);
+        router.get("/insights/v1/sessions").blockingHandler(ctx -> respond(ctx, () -> insights.sessions(required(ctx, "tenant"), number(ctx, "from"),
+            number(ctx, "to"), param(ctx, "after"), param(ctx, "limit") == null ? 50 : (int) number(ctx, "limit"))), false);
+        router.get("/insights/v1/sessions/timeline").blockingHandler(ctx -> respond(ctx,
+            () -> insights.session(required(ctx, "tenant"), required(ctx, "session"))), false);
         router.post("/insights/v1/rebuild").handler(BodyHandler.create().setBodyLimit(4096));
         router.post("/insights/v1/rebuild").blockingHandler(ctx -> respond(ctx, () -> insights.rebuild(
             codec.model(ctx.body().asString(), InsightsRebuildRequest.class), System.currentTimeMillis())), false);

@@ -84,6 +84,8 @@ search values are never logged. Self-hosted installations configure the listener
 | `GET /insights/v1/invocations?from=&to=&tenant=[&tool=][&client=][&outcome=][&after=][&limit=]` | `InsightsInvocationPage`, newest first |
 | `GET /insights/v1/invocations?from=&to=&search=ID` | Search across tenants by invocation, execution, tool-call, session or agent-run ID |
 | `GET /insights/v1/invocations/{tenant}/{id}` | `InsightsInvocationDetail`: summary, attempts and, while facts are kept, transitions |
+| `GET /insights/v1/sessions?tenant=&from=&to=[&after=][&limit=]` | `InsightsSessionPage`: the tenant's sessions with calls in the range, most recent activity first, and how many calls declared no session |
+| `GET /insights/v1/sessions/timeline?tenant=&session=` | `InsightsSessionTimeline`: the session's calls and the calls nested under them |
 | `POST /insights/v1/rebuild` (`InsightsRebuildRequest`) | Recomputes a tenant's aggregates for up to 31 days from its summaries; `dryRun` only compares |
 
 Schemas: [insights.schema.json](../../packages/contracts/schemas/v2/insights.schema.json). Series cover at most 2,000
@@ -110,6 +112,35 @@ and its data requests go to the same origin, so the certificate authenticates th
   IDs are marked as unverified), timing, every attempt with its execution ID, the span waterfall (DETAILED), and the
   ledger transitions while they are retained. When a call has no spans, the window says why: not collected, still
   being decided, not in the sample, dropped under memory pressure, or past span retention.
+- **Sessions:** with a tenant filter, the tenant's sessions in the range with their calls, outcomes, agent runs and
+  tools, and how many calls declared no session. Opening a session shows its timeline (see [Sessions](#sessions)).
+
+## Sessions
+
+A session is the `sessionId` a caller declares on its calls (ADR 031 §1). It groups an agent's work across many
+requests. It is not the MCP transport session (`Mcp-Session-Id`), and it is never verified.
+
+A caller can also declare that a call is nested under an earlier one, for example a sub-agent's calls under the call
+that started it:
+
+- `_meta` key `io.ololabs.toolgate/parentInvocationId`, or the header `Toolgate-Parent-Invocation-Id`;
+- the value is the parent's invocation ID, which every tool result names in `_meta` as
+  `io.ololabs.toolgate/invocationId`.
+
+Control keeps a parent only when it is another invocation of the same tenant that still exists in the ledger. Anything
+else is dropped, never rejected, so a wrong or foreign ID cannot fail a call or link into another tenant. Like other
+declared IDs, a parent never affects authentication, routing, policy or approval.
+
+The session timeline shows every retained call with that session ID, plus calls that declared one of them as parent,
+down to eight levels, so nested work appears even when it did not repeat the session ID. It holds at most 1,000 calls
+and says when more exist. Each call is a bar from acceptance to its terminal time:
+
+- overlapping bars are calls that ran in parallel; the header gives the most calls running at once;
+- indentation is declared nesting;
+- a call still running is striped and reaches the session's last recorded activity.
+
+The sessions list counts calls by acceptance time in the selected range. Calls that declared no session are counted
+separately, so the coverage gap is visible. Sessions are built from call summaries, so they follow summary retention.
 
 ## Spans (DETAILED)
 
@@ -194,7 +225,9 @@ than summary retention and for tenants currently over quota, because their summa
 
 - Span decisions are kept per Control replica. A call whose spans reach two replicas may be kept on one and decided
   on the other; both apply the same rule, so they agree except under memory pressure.
-- Spans are not tied to an MCP session; session views come in plan step 6.
+- Sessions and parents are caller-declared. Insights shows them as declared and cannot detect a caller that reuses
+  a session ID for unrelated work.
+- A parent must be accepted before its child declares it; a parent ID that is not yet in the ledger is dropped.
 - An execution ID is kept only on spans of the current attempt. Spans of an earlier attempt that arrive late lose it.
 - The cause of a failure is inferred: a failure after the invocation's deadline is a timeout. `not_started`
   refusals are not yet distinguished from tool errors.

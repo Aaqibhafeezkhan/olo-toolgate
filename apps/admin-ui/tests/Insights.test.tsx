@@ -5,7 +5,7 @@ import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/r
 import type {InsightsInvocation,InsightsSeries,InsightsSpan,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
 import {InsightsApp,InvocationDetail,spanTree} from '../src/insights/InsightsApp';
 import {client,InsightsError} from '../src/insights/api';
-import {buckets,granularity,overview,percentile,ranking} from '../src/insights/model';
+import {buckets,callTree,granularity,overview,peakParallel,percentile,ranking} from '../src/insights/model';
 import {niceMax,ticks} from '../src/insights/charts';
 
 afterEach(cleanup);
@@ -61,6 +61,19 @@ describe('model',()=>{
   });
 });
 
+describe('sessions',()=>{
+  const call=(id:string,at:number,end?:number,parent?:string):InsightsInvocation=>({...invocation,invocationId:id,acceptedAtUnixMs:at,terminalAtUnixMs:end,parentInvocationId:parent});
+  it('nests calls under declared parents in the set and keeps the rest as roots',()=>{
+    const calls=[call('c',30,40,'b'),call('a',0,100),call('b',10,50,'a'),call('d',5,6,'elsewhere'),call('x',1,2,'y'),call('y',2,3,'x')];
+    expect(callTree(calls).map(r=>`${r.call.invocationId}:${r.depth}`)).toEqual(['a:0','b:1','c:2','d:0','x:0','y:0']);
+  });
+  it('counts the most calls running at once, with unfinished calls running to the end',()=>{
+    expect(peakParallel([call('a',0,10),call('b',10,20),call('c',15)],100)).toBe(2);
+    expect(peakParallel([call('a',0,10),call('b',10,20)],100)).toBe(1);
+    expect(peakParallel([],100)).toBe(0);
+  });
+});
+
 describe('page',()=>{
   it('renders with its default client without re-running its effects',async()=>{
     const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify(status('NONE'))));
@@ -112,7 +125,7 @@ describe('page',()=>{
     const dialog=await screen.findByRole('dialog');
     await within(dialog).findByText('ex-7576f712baed62964bc828cdba88bdbe');
     expect(within(dialog).getByRole('button',{name:'Copy toolu_01A9q'})).toBeTruthy();
-    expect(within(dialog).getByText('Tool-call, session and run IDs are declared by the caller and are not verified.')).toBeTruthy();
+    expect(within(dialog).getByText(/^Tool-call, session, run and parent IDs are declared by the caller and are not verified/)).toBeTruthy();
     expect(within(dialog).getByText('Spans are collected only while Insights runs in DETAILED mode.')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button',{name:'Close invocation details'}));
     await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
@@ -139,6 +152,37 @@ describe('page',()=>{
     unmount();
     render(<InvocationDetail detail={{invocation,attempts:[],transitions:[],transitionsRetained:false,spanState:'DROPPED'}}/>);
     expect(screen.getByText('Spans were discarded under memory pressure before this call was decided.')).toBeTruthy();
+  });
+
+  it('groups a tenant session into a timeline of parallel and nested calls',async()=>{
+    const call=(id:string,at:number,ms:number|undefined,more:Partial<InsightsInvocation>={}):InsightsInvocation=>({...invocation,invocationId:id,
+      acceptedAtUnixMs:NOW-10_000+at,terminalAtUnixMs:ms==null?undefined:NOW-10_000+at+ms,outcome:ms==null?'IN_PROGRESS':'SUCCEEDED',sessionId:'team/sess-1',...more});
+    const timeline={tenantId:'tenant-a',sessionId:'team/sess-1',truncated:false,invocations:[
+      call('inv-1',0,1000,{agentRunId:'run-1'}),call('inv-2',200,500,{agentRunId:'run-2',outcome:'FAILED'}),
+      call('inv-3',300,300,{parentInvocationId:'inv-1',sessionId:undefined}),call('inv-4',900,undefined)]};
+    const {api:a,asked}=api('BASIC',{
+      '/insights/v1/sessions':url=>new Response(JSON.stringify(url.pathname.endsWith('/timeline')?timeline
+        :{items:[{tenantId:'tenant-a',sessionId:'team/sess-1',firstAcceptedAtUnixMs:NOW-10_000,lastActivityUnixMs:NOW-9_000,calls:3,succeeded:1,failed:1,unfinished:1,agentRuns:2,tools:1}],
+          callsWithoutSession:4})),
+    });
+    render(<InsightsApp api={a} now={()=>NOW}/>);
+    expect(await screen.findByText('Set a tenant filter to see its sessions.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Tenant'),{target:{value:'tenant-a'}});
+    fireEvent.click(screen.getByRole('button',{name:'Apply'}));
+    fireEvent.click(await screen.findByRole('button',{name:'team/sess-1'}));
+    expect(screen.getByText('4 calls in this range declared no session, so they are not in any session below.')).toBeTruthy();
+    const dialog=await screen.findByRole('dialog');
+    await within(dialog).findByText(/at most 3 running at once · 1 nested under another call · 2 agent runs/);
+    const order=within(dialog).getAllByRole('row').slice(1).map(r=>within(r).getAllByRole('rowheader')[0].textContent);
+    expect(order).toEqual(['acme.orders/orders.lookup inv-1','acme.orders/orders.lookup inv-3','acme.orders/orders.lookup inv-2','acme.orders/orders.lookup inv-4']);
+    expect(within(dialog).getByText('Running')).toBeTruthy();
+    const ask=asked.find(u=>u.pathname==='/insights/v1/sessions/timeline')!;
+    expect(ask.searchParams.get('session')).toBe('team/sess-1');expect(ask.searchParams.get('tenant')).toBe('tenant-a');
+    // A call opens its detail inside the session window, and Back returns to the timeline.
+    fireEvent.click(within(dialog).getAllByRole('button',{name:'acme.orders/orders.lookup'})[1]);
+    await within(dialog).findByText('ex-7576f712baed62964bc828cdba88bdbe');
+    fireEvent.click(within(dialog).getByRole('button',{name:'Back to session'}));
+    await within(dialog).findByText(/at most 3 running at once/);
   });
 
   it('maps failures to safe messages',async()=>{

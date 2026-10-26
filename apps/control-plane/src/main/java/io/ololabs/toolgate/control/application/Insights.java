@@ -91,7 +91,7 @@ public final class Insights {
 
     /** The mutable projection of one invocation; persisted as a summary row plus attempt rows. */
     public static final class Summary {
-        public String invocationId, toolId = "", action = "", clientId, userId, agentId, toolCallId, sessionId, agentRunId;
+        public String invocationId, toolId = "", action = "", clientId, userId, agentId, toolCallId, sessionId, agentRunId, parentInvocationId;
         public String state, cause;
         public long acceptedAt;
         public Long approvalRequestedAt, approvalResolvedAt, queuedAt, firstStartedAt, terminalAt;
@@ -129,7 +129,7 @@ public final class Insights {
         JsonNode context = detail.path("context");
         if (context.isObject()) {
             s.toolCallId = text(context, "toolCallId", s.toolCallId); s.sessionId = text(context, "sessionId", s.sessionId);
-            s.agentRunId = text(context, "agentRunId", s.agentRunId);
+            s.agentRunId = text(context, "agentRunId", s.agentRunId); s.parentInvocationId = text(context, "parentInvocationId", s.parentInvocationId);
         }
         String to = f.toState(); long at = f.occurredAt();
         if (to.equals("PENDING_APPROVAL") && s.approvalRequestedAt == null) s.approvalRequestedAt = at;

@@ -650,7 +650,7 @@ CREATE TABLE control_insights_checkpoints(tenant_id varchar(128) NOT NULL,invoca
     final_at bigint,PRIMARY KEY(tenant_id,invocation_id));
 CREATE TABLE control_insights_invocations(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
     tool_id varchar(256) NOT NULL,action varchar(256) NOT NULL,client_id varchar(128),user_id varchar(128),agent_id varchar(128),
-    tool_call_id varchar(128),session_id varchar(128),agent_run_id varchar(128),outcome varchar(32) NOT NULL,error_category varchar(32),
+    tool_call_id varchar(128),session_id varchar(128),agent_run_id varchar(128),parent_invocation_id varchar(128),outcome varchar(32) NOT NULL,error_category varchar(32),
     attempts integer NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at bigint NOT NULL,approval_requested_at bigint,approval_resolved_at bigint,
     queued_at bigint,first_started_at bigint,terminal_at bigint,approval_ms bigint,queue_ms bigint,execution_ms bigint,end_to_end_ms bigint,
     partial_coverage boolean NOT NULL,span_state varchar(16) CHECK(span_state IN('RETAINED','SAMPLED_OUT','DROPPED')),PRIMARY KEY(tenant_id,invocation_id));
@@ -658,6 +658,7 @@ CREATE INDEX control_insights_invocations_accepted ON control_insights_invocatio
 CREATE INDEX control_insights_invocations_tool_call ON control_insights_invocations(tenant_id,tool_call_id) WHERE tool_call_id IS NOT NULL;
 CREATE INDEX control_insights_invocations_session ON control_insights_invocations(tenant_id,session_id) WHERE session_id IS NOT NULL;
 CREATE INDEX control_insights_invocations_run ON control_insights_invocations(tenant_id,agent_run_id) WHERE agent_run_id IS NOT NULL;
+CREATE INDEX control_insights_invocations_parent ON control_insights_invocations(tenant_id,parent_invocation_id) WHERE parent_invocation_id IS NOT NULL;
 CREATE TABLE control_insights_attempts(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
     attempt_number integer NOT NULL CHECK(attempt_number BETWEEN 1 AND 64),execution_id char(35) CHECK(execution_id ~ '^ex-[0-9a-f]{32}$'),
     executor_id varchar(128),started_at bigint,ended_at bigint,outcome varchar(32),duration_ms bigint,

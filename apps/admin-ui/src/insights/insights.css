@@ -92,3 +92,9 @@
 .waterfall-bar { position:absolute; top:50%; height:10px; margin-top:-5px; border-radius:2px; background:var(--outcome-other); }
 .waterfall-bar.error { background:var(--outcome-failed); }
 @media (forced-colors:active) { .waterfall-bar { forced-color-adjust:none; background:CanvasText; } }
+.session-bar.outcome-succeeded { background:var(--outcome-succeeded); }
+.session-bar.outcome-failed { background:var(--outcome-failed); }
+.session-bar.outcome-partial { background:var(--outcome-partial); }
+.session-bar.outcome-unknown { background:var(--outcome-unknown); }
+.session-bar.outcome-other { background:var(--outcome-other); }
+.session-bar.running { background:repeating-linear-gradient(135deg,var(--outcome-other) 0 4px,transparent 4px 7px); outline:1px solid var(--outcome-other); outline-offset:-1px; }

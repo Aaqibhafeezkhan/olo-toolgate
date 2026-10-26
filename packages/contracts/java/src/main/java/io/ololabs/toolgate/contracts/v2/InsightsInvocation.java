@@ -15,6 +15,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param toolCallId canonical toolCallId value
  * @param sessionId canonical sessionId value
  * @param agentRunId canonical agentRunId value
+ * @param parentInvocationId canonical parentInvocationId value
  * @param outcome canonical outcome value
  * @param errorCategory canonical errorCategory value
  * @param attempts canonical attempts value
@@ -42,6 +43,7 @@ public record InsightsInvocation(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolCallId", required = false) String toolCallId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "sessionId", required = false) String sessionId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agentRunId", required = false) String agentRunId,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "parentInvocationId", required = false) String parentInvocationId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "outcome", required = true) InsightsOutcome outcome,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "errorCategory", required = false) InsightsErrorCategory errorCategory,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "attempts", required = true) Long attempts,
@@ -69,6 +71,7 @@ public record InsightsInvocation(
      * @param toolCallId canonical toolCallId value
      * @param sessionId canonical sessionId value
      * @param agentRunId canonical agentRunId value
+     * @param parentInvocationId canonical parentInvocationId value
      * @param outcome canonical outcome value
      * @param errorCategory canonical errorCategory value
      * @param attempts canonical attempts value

@@ -412,6 +412,10 @@
         "agentRunId": {
           "$ref": "identifiers.schema.json#/$defs/DeclaredId"
         },
+        "parentInvocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier",
+          "description": "The invocation this call declared as its parent; kept only when it exists in the same tenant."
+        },
         "outcome": {
           "$ref": "insights.schema.json#/$defs/InsightsOutcome"
         },
@@ -830,6 +834,131 @@
       "required": [
         "accepted",
         "refused"
+      ]
+    },
+    "InsightsSession": {
+      "type": "object",
+      "description": "One caller-declared session in a range: its calls by acceptance time. Session IDs are declared by the caller and not verified.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sessionId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "firstAcceptedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "lastActivityUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs",
+          "description": "The latest acceptance or terminal time of a call in the session."
+        },
+        "calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "succeeded": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "FAILED, PARTIAL or OUTCOME_UNKNOWN."
+        },
+        "unfinished": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Pending approval or in progress."
+        },
+        "agentRuns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Distinct declared agent runs."
+        },
+        "tools": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Distinct tools."
+        }
+      },
+      "required": [
+        "tenantId",
+        "sessionId",
+        "firstAcceptedAtUnixMs",
+        "lastActivityUnixMs",
+        "calls",
+        "succeeded",
+        "failed",
+        "unfinished",
+        "agentRuns",
+        "tools"
+      ]
+    },
+    "InsightsSessionPage": {
+      "type": "object",
+      "description": "A tenant's sessions with calls accepted in the range, most recent activity first. next continues the list.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSession"
+          },
+          "maxItems": 200
+        },
+        "next": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "callsWithoutSession": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Calls in the range that declared no session ID: the coverage gap of session views."
+        }
+      },
+      "required": [
+        "items",
+        "callsWithoutSession"
+      ]
+    },
+    "InsightsSessionTimeline": {
+      "type": "object",
+      "description": "Every retained call of one session, oldest first, plus calls that declared one of them as parent (nested work), to a bounded depth.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sessionId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "invocations": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsInvocation"
+          },
+          "maxItems": 1000
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "More calls exist than the timeline holds."
+        }
+      },
+      "required": [
+        "tenantId",
+        "sessionId",
+        "invocations",
+        "truncated"
       ]
     }
   }

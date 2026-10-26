@@ -288,6 +288,12 @@ const DECLARED_IDS: [(&str, &str); 3] = [
     ("io.ololabs.toolgate/sessionId", "toolgate-session-id"),
     ("io.ololabs.toolgate/agentRunId", "toolgate-agent-run-id"),
 ];
+/// The `_meta` key and header naming the invocation a call is nested under (ADR 031 §12). Control keeps it only when it
+/// names another invocation of the same tenant.
+const PARENT_INVOCATION: (&str, &str) = (
+    "io.ololabs.toolgate/parentInvocationId",
+    "toolgate-parent-invocation-id",
+);
 /// The `_meta` member through which a tool result names its invocation, for support and operator searches.
 const INVOCATION_REFERENCE: &str = "io.ololabs.toolgate/invocationId";
 
@@ -342,9 +348,16 @@ fn declared_context(
             .filter(|v| crate::http::valid_declared_id(v))
             .map(str::to_owned)
     });
+    let (key, header) = PARENT_INVOCATION;
+    let parent_invocation_id = meta[key]
+        .as_str()
+        .or_else(|| single_header(headers, header))
+        .filter(|v| crate::http::valid_declared_id(v) && !v.contains(['@', '_']))
+        .map(str::to_owned);
     if tool_call_id.is_none()
         && session_id.is_none()
         && agent_run_id.is_none()
+        && parent_invocation_id.is_none()
         && tracestate.is_none()
     {
         return None;
@@ -355,7 +368,7 @@ fn declared_context(
         tool_call_id,
         session_id,
         agent_run_id,
-        parent_invocation_id: None,
+        parent_invocation_id,
         tracestate,
     })
 }
@@ -884,8 +897,22 @@ mod tests {
         assert_eq!(context.session_id.as_deref(), Some("sess-1"));
         assert_eq!(context.agent_run_id.as_deref(), Some("run-1"));
         assert_eq!(context.tracestate.as_deref(), Some("vendor=x"));
+        assert!(context.parent_invocation_id.is_none());
         // The executor sets these from its permit; the caller never does.
         assert!(context.execution_id.is_none() && context.attempt_number.is_none());
+    }
+
+    #[test]
+    fn a_parent_invocation_is_forwarded_only_in_the_identifier_shape() {
+        let meta = json!({"io.ololabs.toolgate/parentInvocationId":"inv-1"});
+        let context = declared_context(&meta, &HeaderMap::new(), None).unwrap();
+        assert_eq!(context.parent_invocation_id.as_deref(), Some("inv-1"));
+        let header = headers(&[("toolgate-parent-invocation-id", "inv-2")]);
+        let context = declared_context(&json!({}), &header, None).unwrap();
+        assert_eq!(context.parent_invocation_id.as_deref(), Some("inv-2"));
+        // Declared IDs may hold '@' and '_'; invocation IDs never do.
+        let meta = json!({"io.ololabs.toolgate/parentInvocationId":"me@example"});
+        assert!(declared_context(&meta, &HeaderMap::new(), None).is_none());
     }
 
     #[test]

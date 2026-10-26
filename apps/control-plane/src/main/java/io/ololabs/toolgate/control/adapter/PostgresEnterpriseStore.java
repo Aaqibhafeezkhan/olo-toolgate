@@ -100,6 +100,9 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         if(context.toolCallId()!=null)declared.put("toolCallId",context.toolCallId());
         if(context.sessionId()!=null)declared.put("sessionId",context.sessionId());
         if(context.agentRunId()!=null)declared.put("agentRunId",context.agentRunId());
+        // A declared parent is kept only when it names another invocation of this tenant (ADR 031 §12).
+        var parent=context.parentInvocationId();
+        if(parent!=null&&!parent.equals(invocationId)&&invocation(parent)!=null)declared.put("parentInvocationId",parent);
         if(!declared.isEmpty())new JdbcInsightsStore(connection,tenant).declare(invocationId,declared.toString());
     }
     public long invocationsSince(long since){try(var s=query("SELECT count(*) FROM control_enterprise_invocations WHERE tenant_id=? AND created_at>=? AND state NOT IN('CANCELLED','EXPIRED')",since);var rows=s.executeQuery()){rows.next();return rows.getLong(1);}catch(SQLException failure){throw Failure.unavailable();}}
