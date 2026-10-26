@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -174,6 +175,13 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     /** The principal the Tool Host verified in the permit; absent in standalone runs. */
     void attachPrincipal(JsonNode verified) { principal = verified != null && verified.isObject() ? verified : null; }
     private JsonNode principal;
+    /** The executor's correlation context and trace parent (ADR 031); governed only, never read for any decision. */
+    void attachExecution(JsonNode context, String traceparent) {
+        execution = context != null && context.isObject() ? context : null;
+        this.traceparent = traceparent;
+    }
+    private JsonNode execution;
+    private String traceparent;
 
     /**
      * Bounded and monotonic (case {@code context/progress}): a fraction outside 0..1, or lower than the last one, is
@@ -307,7 +315,23 @@ final class StandaloneContext implements ToolContext, CancellationToken, Invocat
     @Override public Optional<Long> catalogRevision() { return Optional.empty(); }
     @Override public Instant deadline() { return deadline; }
     @Override public Optional<String> businessKey() { return Optional.ofNullable(businessKey); }
-    @Override public int attempt() { return 1; }
+    @Override public int attempt() {
+        JsonNode attempt = execution == null ? null : execution.get("attemptNumber");
+        return attempt != null && attempt.canConvertToInt() && attempt.asInt() >= 1 ? attempt.asInt() : 1;
+    }
+    @Override public Optional<String> executionId() { return executionText("executionId"); }
+    @Override public Optional<String> toolCallId() { return executionText("toolCallId"); }
+    @Override public Optional<String> sessionId() { return executionText("sessionId"); }
+    @Override public Optional<String> agentRunId() { return executionText("agentRunId"); }
+    @Override public Optional<String> traceparent() { return Optional.ofNullable(traceparent); }
+    @Override public Map<String, String> traceHeaders() {
+        if (traceparent == null) return Map.of();
+        return executionText("tracestate").map(state -> Map.of("traceparent", traceparent, "tracestate", state))
+                .orElse(Map.of("traceparent", traceparent));
+    }
+    private Optional<String> executionText(String field) {
+        return execution != null && execution.path(field).isTextual() ? Optional.of(execution.get(field).asText()) : Optional.empty();
+    }
     @Override public InvocationMode mode() { return invocationMode; }
     @Override public Optional<String> tenantId() { return text("tenantId"); }
     @Override public Optional<String> operation() { return text("operation"); }

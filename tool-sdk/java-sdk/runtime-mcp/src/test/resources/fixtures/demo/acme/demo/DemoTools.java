@@ -146,6 +146,9 @@ public class DemoTools {
         String user = invocation.requireUser();
         return Map.of("user", user, "tenant", invocation.tenantId().orElseThrow(), "agent", invocation.agentId().orElse(""),
                 "operation", invocation.operation().orElse(""), "chain", invocation.delegationChain(),
-                "resources", invocation.resources().stream().map(r -> r.kind() + ":" + r.locator()).toList());
+                "resources", invocation.resources().stream().map(r -> r.kind() + ":" + r.locator()).toList(),
+                "trace", Map.of("execution", invocation.executionId().orElse(""), "attempt", invocation.attempt(),
+                        "call", invocation.toolCallId().orElse(""), "session", invocation.sessionId().orElse(""),
+                        "run", invocation.agentRunId().orElse(""), "headers", invocation.traceHeaders()));
     }
 }

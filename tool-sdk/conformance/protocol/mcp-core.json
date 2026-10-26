@@ -215,11 +215,13 @@
         "gateway",
         "tool-host"
       ],
-      "when": "A request carries traceparent, tracestate and baggage",
+      "when": "A request carries traceparent, tracestate and baggage, as headers or in _meta",
       "then": [
-        "The tool input carries the same traceparent"
+        "The tool input carries a traceparent in the same trace, with the sampled flag kept and the executor's own span ID (ADR 031)",
+        "tracestate reaches the tool input in executionContext; baggage is not propagated"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "apps/gateway/tests/core.rs trace_context_and_declared_ids_reach_the_dispatch, trace_context_in_meta_is_continued_without_a_header; apps/tool-host/tests/dispatch.rs the_tool_input_continues_the_trace_and_carries_the_execution_context"
     },
     {
       "id": "mcp-core/catalog-cache",

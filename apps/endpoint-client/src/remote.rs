@@ -22,6 +22,16 @@ impl AuthorizationPort for Authorization {
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()> {
         Box::pin(async move { self.authorize_bound(request).await.map(|_| ()) })
     }
+    fn trace(&self) -> crate::trace::RunTrace {
+        let fencing = self.fencing.lock().ok().and_then(|f| f.clone());
+        crate::trace::run_trace(
+            self.task.traceparent.as_deref(),
+            self.task.execution_context.as_ref(),
+            &self.task.invocation.evaluation.context.tenant_id,
+            &self.task.invocation.id,
+            fencing.as_deref(),
+        )
+    }
     fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, Option<u64>> {
         Box::pin(async move {
             if request != self.task.request {

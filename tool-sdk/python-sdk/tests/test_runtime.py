@@ -118,6 +118,29 @@ def whoami(*, context: ToolContext) -> Who:
 '''
 
 
+EXECUTION_SOURCE = '''
+from dataclasses import dataclass
+from typing import Dict
+from toolgate import *
+tool_package(id="acme.trace", name="Trace", publisher="Acme")
+
+@dataclass
+class Traced:
+    execution: str
+    attempt: int
+    call: str
+    session: str
+    run: str
+    headers: Dict[str, str]
+
+@server_tool(name="traced", title="Traced", description="Reports the execution context it received")
+def traced(*, context: ToolContext) -> Traced:
+    inv = context.invocation
+    return Traced(inv.execution_id or "", inv.attempt, inv.tool_call_id or "", inv.session_id or "",
+                  inv.agent_run_id or "", inv.trace_headers())
+'''
+
+
 def compiled(source=SOURCE):
     result = compile_package({"__init__": source})
     if not result.success:
@@ -335,6 +358,25 @@ def charge(key: Annotated[str, Param(description="Key")], amount: Annotated[int,
         result = json.loads(output.getvalue().splitlines()[-1])["structuredContent"]
         self.assertEqual({"user": "user-42", "tenant": principal["tenantId"], "agent": "agent-planner", "operation": "read",
                           "chain": ["agent-router"], "resources": ["CUSTOM:olo://memory/user-42"], "claims": ["sub"]}, result)
+
+    def test_governed_execution_context_is_exposed_for_correlation(self):
+        build = compiled(EXECUTION_SOURCE)
+        parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        context = {"executionId": "ex-4f2a9c0e1b7d4e8a9c3f2b1a0d9e8f7c", "attemptNumber": 2,
+                   "toolCallId": "call_7Hq2", "sessionId": "sess-42", "agentRunId": "run-9", "tracestate": "v=1"}
+        inp = {"protocolVersion": 2, "invocationId": "trace-1", "deadlineUnixMs": int(time.time()*1000)+5000,
+               "toolId": "acme.trace/traced", "arguments": {}, "traceparent": parent, "executionContext": context}
+        output = io.BytesIO()
+        self.assertEqual(0, run(io.BytesIO(json.dumps(inp).encode()+b"\n"), output, {}, build))
+        result = json.loads(output.getvalue().splitlines()[-1])["structuredContent"]
+        self.assertEqual({"execution": context["executionId"], "attempt": 2, "call": "call_7Hq2", "session": "sess-42",
+                          "run": "run-9", "headers": {"traceparent": parent, "tracestate": "v=1"}}, result)
+        # An executor that sends no context (older Tool Host, standalone run) leaves every accessor empty.
+        del inp["traceparent"], inp["executionContext"]
+        output = io.BytesIO()
+        self.assertEqual(0, run(io.BytesIO(json.dumps(inp).encode()+b"\n"), output, {}, build))
+        result = json.loads(output.getvalue().splitlines()[-1])["structuredContent"]
+        self.assertEqual({"execution": "", "attempt": 1, "call": "", "session": "", "run": "", "headers": {}}, result)
 
     def test_user_scoped_tools_refuse_without_a_verified_user(self):
         build = compiled(PRINCIPAL_SOURCE)

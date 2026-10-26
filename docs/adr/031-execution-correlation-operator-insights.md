@@ -16,8 +16,12 @@ aggregate view of tool usage, latency or failures across tenants. The pieces exi
   Without an incoming parent the sampled flag is `00`, and `tracestate` is dropped.
 - `ToolInput.traceparent` exists, but the Tool Host and endpoint client set it to `None`; the conformance case
   `mcp-core/trace-propagation` therefore fails.
-- `ToolInput.protocolVersion` is the constant `2` and the Rust and PHP decoders reject unknown fields, so no field can
-  be added without a version change.
+- `ToolInput.protocolVersion` is the constant `2`. The Rust and PHP contract decoders reject unknown fields, but the
+  consumers of `ToolInput` are the SDK runtimes inside the sandbox, and both shipped runtimes (Java `Governed`, Python
+  `governed.py`) check only `protocolVersion` and ignore members they do not know. Control, Gateway, Tool Host and
+  managed clients ship as matching versions ([upgrades.md](../control-plane/upgrades.md)).
+- The signed permit already carries an `attempt` claim, which the Tool Host passes to the tool; the Gateway requests
+  attempt `1` for every reservation.
 - Control owns the ledger ([invocation-state-v2.md](../control-plane/invocation-state-v2.md)). Each transition is one
   transaction with an expected revision and audit. Transition history in `task_document.transitions` is capped at 64,
   and run events are capped and expire after seven days, so neither is a complete history.
@@ -41,8 +45,8 @@ aggregate view of tool usage, latency or failures across tenants. The pieces exi
 | `user_id` | Verified identity | Verified | Absent for SERVICE calls |
 | `agent_id` | Verified identity (`agentId`) | Verified | The plan listed it as declared; it is verified |
 | `invocation_id` | Gateway-generated `invocationId` | Authoritative | Existing; one per admitted invocation |
-| `execution_id` | Derived by Control at T5 (below) | Authoritative | One per consumed permit |
-| `attempt_number` | Assigned by Control at T5 | Authoritative | Replaces the executor-reported value for Insights |
+| `execution_id` | Derived from the fencing token (below) | Authoritative | One per consumed permit |
+| `attempt_number` | The permit's signed `attempt` claim | Authoritative | Control assigns it at T4 (below) |
 | `tool_call_id` | Caller `_meta` / header; generated `tc-…` if absent | Declared | Correlation reference only |
 | `session_id`, `agent_run_id` | Caller `_meta` / header | Declared | `Mcp-Session-Id` is never used as `session_id` |
 | `parent_invocation_id` | Propagated context, same tenant only | Declared | Step 6 |
@@ -58,12 +62,16 @@ execution_id = "ex-" + lowercase hex of SHA-256("toolgate-execution-v1" || 0x00 
                invocationId || 0x00 || fencingToken), first 32 characters
 ```
 
-The nonce has full entropy, so the digest does not reveal it. Every component that already holds the token computes
-the same ID without a new wire field, and Control includes it in the step 2 context for executors that negotiate
-version 3.
+The nonce has full entropy, so the digest does not reveal it. Every component that holds the token computes the same
+ID with no extra wire field: the Tool Host and endpoint client put it in `executionContext` (§2), and Control computes
+it for facts (§4). `tests/fixtures/contracts/execution-id-vectors.json` holds the vectors every implementation must
+reproduce.
 
-**Attempt boundaries.** An attempt is one consumed permit (T5). Control stores `insights_attempts` on the invocation row
-and increments it at T5; the new value is `attempt_number`.
+**Attempt boundaries.** An attempt is one consumed permit (T5). Its number is the permit's signed `attempt` claim,
+which executors already read. Step 3 makes Control assign that claim: it keeps `insights_attempts` on the invocation
+row, increments it each time it reserves a permit (T4), and signs that value instead of the requested one (today
+always `1`). A reserved permit that expires unconsumed (T12) uses a number without becoming an attempt, so numbers
+may skip; they never repeat. A relayed device call has one attempt.
 
 | Situation | Attempts |
 | --- | --- |
@@ -80,19 +88,29 @@ Step 3 verifies this table against the M5 dedup and reconciliation code paths wi
 
 ### 2. Execution-context contract
 
-- `ToolInput.protocolVersion` 3 adds one optional object, `executionContext`:
-  `{executionId, attemptNumber, toolCallId?, sessionId?, agentRunId?, parentInvocationId?, tracestate?}`.
-  Version 2 is unchanged. `traceparent` stays where it is and is sent in both versions.
-- Executors advertise the highest `ToolInput` version they accept with their existing registration. Control sends
-  version 3 only to executors that advertise it; otherwise it sends version 2 and the fact for T5 records
-  `context_delivered = false` with the advertised version. Step 2 confirms the advertisement channel for the Tool Host
-  and the endpoint client and adds it where missing.
-- Declared IDs: at most 128 characters from `[A-Za-z0-9._:@-]`. Invalid values are dropped and counted, never
-  rejected; they never affect admission.
+- **No new tool protocol version.** `ToolInput` (tool protocol 2) gains one optional member, `executionContext`:
+  `{executionId?, attemptNumber?, toolCallId?, sessionId?, agentRunId?, parentInvocationId?, tracestate?}`. The
+  executor always sets `executionId` and `attemptNumber` from its permit and never takes them from the caller.
+  Runtimes must ignore `ToolInput` members they do not know (conformance case `stdin/v2-execution-context`); both
+  shipped SDK runtimes already do, so packages built with older SDKs keep running and simply do not read it. A bump to
+  protocol 3 was rejected: it would need package-range negotiation for no behavioural gain.
+- Platform hops carry the same object. `Dispatch` (Gateway to Tool Host, direct or relayed through Control) and the
+  device relay messages `RemoteToolSubmission` / `RemoteToolTask` gain optional `traceparent` and `executionContext`.
+  No negotiation is needed, because platform components ship as matching versions.
+- Declared IDs use the contract `DeclaredId`: `^[a-zA-Z0-9][a-zA-Z0-9._:/@_-]{0,127}$`, which admits model tool-call
+  IDs such as `call_…` and `toolu_…`. Invalid or duplicated values are dropped, never rejected; they never affect
+  admission.
 - Ingress: HTTP headers `Toolgate-Tool-Call-Id`, `Toolgate-Session-Id`, `Toolgate-Agent-Run-Id`; MCP `_meta` keys
-  `io.ololabs.toolgate/toolCallId`, `…/sessionId`, `…/agentRunId`. `_meta` wins over headers when both are present
-  and differ; the conflict is counted.
-- `tracestate` is kept up to 512 bytes and 32 members, otherwise dropped. Baggage is not propagated.
+  `io.ololabs.toolgate/toolCallId`, `…/sessionId`, `…/agentRunId`. `_meta` wins over headers.
+- Trace context: a valid `traceparent` header wins; otherwise a valid `traceparent` in `_meta` (MCP trace context) is
+  continued. Each hop (Gateway, Tool Host, device) keeps the trace ID and sampled flag and uses its own span ID.
+  `tracestate` travels only with the parent it arrived with, up to 512 bytes and 32 members, otherwise it is dropped.
+  Baggage is not propagated.
+- Every `tools/call` result names its invocation in `_meta["io.ololabs.toolgate/invocationId"]`; every response
+  already carries `X-Request-Id`.
+- SDKs expose the context read-only (Java `Invocation.executionId()`, `toolCallId()`, `sessionId()`, `agentRunId()`,
+  `traceparent()`, `traceHeaders()`; Python equivalents), and `attempt` reads `attemptNumber`. `traceHeaders()` returns
+  only W3C headers, never user, session or tool identifiers.
 - Changes follow the contract generation rules (ADR 001): canonical schema, generated bindings, fixtures and the
   conformance case together.
 
@@ -111,7 +129,7 @@ column is written and no Insights span is produced. Platform tracing (`TraceReda
   rows; no other indexes.
 - Written for T1–T5 and T7–T13 in the transition's own transaction. Not written for T6 (lease renewal) or T14 (purge).
   The transition's existing `UPDATE` of the invocation row increments `insights_fact_seq` (and `insights_attempts` at
-  T5); the fact uses the new values.
+  T4, §1); the fact uses the new values.
 - Atomic with the ledger, like the audit row: an insert failure fails the transition, which retries under the existing
   policy. There is no fail-open path.
 
@@ -126,7 +144,7 @@ Field-to-fact sources:
 | queued | T1 (to `QUEUED`), T2, T11 (re-queue) `occurred_at` |
 | reserved | T4 `occurred_at` |
 | attempt start, `execution_id`, `attempt_number`, executor kind and ID | T5 |
-| `context_delivered`, peer protocol version | T5 |
+| executor and SDK protocol range of the package | T5 |
 | input waits | T7 `occurred_at` pairs |
 | cancel requested | T8 `occurred_at` |
 | attempt end, executor duration, attempt outcome | T9, T10 |
@@ -220,7 +238,9 @@ identity from the authenticated certificate.
 ## Alternatives Considered
 
 - **Fencing token as execution ID:** rejected; it is a capability and would leak through telemetry.
-- **Executor-reported attempt number:** rejected for Insights; Control assigns it at T5.
+- **Executor-reported attempt number:** rejected for Insights; Control assigns it in the signed permit at T4.
+- **Tool protocol 3 for `executionContext`:** rejected; runtimes already ignore unknown members, so an optional member
+  needs no package-range negotiation.
 - **Timestamp or revision scan instead of facts:** rejected; misses intermediate transitions.
 - **Fail-open fact insert with savepoints:** rejected; the failures that stop it stop the ledger write too.
 - **Compaction of finer into coarser rollups:** rejected; late corrections would need reopened buckets.
@@ -246,7 +266,7 @@ identity from the authenticated certificate.
 
 ## Compatibility Impact
 
-- `ToolInput` version 3 is additive and negotiated; version 2 peers keep working and the loss of context is recorded.
+- `executionContext` is an optional `ToolInput` member within tool protocol 2; runtimes that predate it ignore it. Platform hops gain optional members and ship as matching versions.
 - New ingress headers and `_meta` keys are optional.
 - No change to existing APIs, run events or audit records.
 
@@ -260,7 +280,7 @@ identity from the authenticated certificate.
 
 The release gates in plan.md §9, run together in the integration testing stage, and specifically:
 
-- `mcp-core/trace-propagation` passes; mixed version 2 / 3 peers work.
+- `mcp-core/trace-propagation` passes; a package built with an older SDK still runs when it receives `executionContext`.
 - No fencing token appears in any Insights table, span, log, export or response (canary test).
 - Projections equal the ledger after replay, crashes, concurrent workers, T11 re-queues and T13 corrections.
 - Measured overheads meet §6 or this ADR is amended with the measurements.

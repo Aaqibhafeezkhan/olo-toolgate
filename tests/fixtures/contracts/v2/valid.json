@@ -214,6 +214,7 @@
   "DeviceApproval": {
     "autoApprove": false
   },
+  "DeclaredId": "toolu_01A9q",
   "Digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "Dispatch": {
     "permit": {
@@ -221,6 +222,13 @@
     },
     "arguments": {
       "orderId": "123456"
+    },
+    "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+    "executionContext": {
+      "toolCallId": "call_7Hq2",
+      "sessionId": "sess-42",
+      "agentRunId": "run-9",
+      "tracestate": "vendor=opaque"
     }
   },
   "EffectApproval": {
@@ -256,6 +264,15 @@
     "retryable": false
   },
   "EventId": "control:118",
+  "ExecutionContext": {
+    "executionId": "ex-4f2a9c0e1b7d4e8a9c3f2b1a0d9e8f7c",
+    "attemptNumber": 1,
+    "toolCallId": "call_7Hq2",
+    "sessionId": "sess-42",
+    "agentRunId": "run-9",
+    "parentInvocationId": "inv-4",
+    "tracestate": "vendor=opaque"
+  },
   "ExecutionSettings": {
     "async": true,
     "maxDurationMs": 900000,
@@ -1788,7 +1805,13 @@
     "secretHandles": [],
     "deadlineUnixMs": 1791676830000,
     "catalogRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+    "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+    "executionContext": {
+      "executionId": "ex-4f2a9c0e1b7d4e8a9c3f2b1a0d9e8f7c",
+      "attemptNumber": 1,
+      "toolCallId": "call_7Hq2",
+      "sessionId": "sess-42"
+    }
   },
   "ToolKind": "SERVER",
   "ToolLimits": {

@@ -460,8 +460,13 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 deadline_unix_ms: deadline,
                 idempotency_key: None,
                 catalog_revision: claims.catalog_revision.clone(),
-                traceparent: None,
+                traceparent: crate::trace::child_traceparent(dispatch.traceparent.as_deref()),
                 fencing_token: Some(fencing_token.clone()),
+                execution_context: Some(crate::trace::execution_context(
+                    dispatch.execution_context.as_ref(),
+                    &claims,
+                    &fencing_token,
+                )),
             };
             let memory = prepared
                 .tool

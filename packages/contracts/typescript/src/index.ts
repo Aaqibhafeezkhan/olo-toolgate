@@ -1641,6 +1641,8 @@ export interface RemoteToolSubmission {
   readonly expiresAtUnixMs: number;
   readonly context: V2.RequestContext;
   readonly invocationId: string;
+  readonly traceparent?: string;
+  readonly executionContext?: V2.ExecutionContext;
 }
 /** Bounded lease delivered only over device-authenticated polling; executable definitions are never accepted from an agent. */
 export interface RemoteToolTask {
@@ -1650,6 +1652,8 @@ export interface RemoteToolTask {
   readonly expiresAtUnixMs: number;
   readonly invocation: EnterpriseInvocation;
   readonly permit: EnterpriseSignedPermit;
+  readonly traceparent?: string;
+  readonly executionContext?: V2.ExecutionContext;
 }
 /** Observed package state, distinct from assigned desired state. */
 export interface ReportedPackage {

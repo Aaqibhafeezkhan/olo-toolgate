@@ -127,6 +127,32 @@ class GovernedTest {
     }
 
     @Test
+    void executionContextIsExposedForCorrelationOnly() throws IOException {
+        ObjectNode input = input("acme.demo/demo.principal", "{}");
+        input.withObjectProperty("claims").putObject("toolgate").put("tenantId", "10000000-0000-4000-8000-000000000001")
+                .put("mode", "DELEGATED").put("userId", "user-42");
+        String parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+        input.put("traceparent", parent);
+        input.putObject("executionContext").put("executionId", "ex-4f2a9c0e1b7d4e8a9c3f2b1a0d9e8f7c").put("attemptNumber", 2)
+                .put("toolCallId", "call_7Hq2").put("sessionId", "sess-42").put("agentRunId", "run-9").put("tracestate", "v=1");
+        JsonNode trace = run(demo, Map.of(), input).path("structuredContent").path("trace");
+        assertEquals("ex-4f2a9c0e1b7d4e8a9c3f2b1a0d9e8f7c", trace.path("execution").asText(), trace.toString());
+        assertEquals(2, trace.path("attempt").asInt());
+        assertEquals("call_7Hq2", trace.path("call").asText());
+        assertEquals("sess-42", trace.path("session").asText());
+        assertEquals("run-9", trace.path("run").asText());
+        assertEquals(parent, trace.path("headers").path("traceparent").asText());
+        assertEquals("v=1", trace.path("headers").path("tracestate").asText());
+        // An executor that sends no context (an older Tool Host) leaves every accessor empty.
+        input.remove("traceparent");
+        input.remove("executionContext");
+        trace = run(demo, Map.of(), input).path("structuredContent").path("trace");
+        assertEquals("", trace.path("execution").asText());
+        assertEquals(1, trace.path("attempt").asInt());
+        assertTrue(trace.path("headers").isEmpty());
+    }
+
+    @Test
     void userScopedToolsRefuseWithoutAVerifiedUser() throws IOException {
         JsonNode frame = run(demo, Map.of(), input("acme.demo/demo.principal", "{}"));
         assertEquals("CLAIMS_UNAVAILABLE", frame.path("error").path("code").asText(), frame.toString());

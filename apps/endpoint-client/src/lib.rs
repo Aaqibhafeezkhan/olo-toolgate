@@ -26,6 +26,7 @@ pub mod service;
 mod socket;
 pub mod storage;
 pub mod tool_gateway;
+pub mod trace;
 pub mod transport;
 
 /// Fixed, redacted failures; underlying TLS/key/OS error strings never cross IPC or logs.

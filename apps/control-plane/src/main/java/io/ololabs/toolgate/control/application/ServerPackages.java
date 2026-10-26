@@ -546,7 +546,7 @@ public final class ServerPackages {
             if (existing != null) return reply(200, status(current(existing)));
             if (i.state() != EnterpriseInvocationState.QUEUED) throw Failure.conflict();
             var permit = permitIn(tx, actor, new PermitReservationRequest(invocationId, context.deviceId(), 1L, arguments));
-            return relayIn(tx, new io.ololabs.toolgate.contracts.v2.Dispatch(permit, arguments));
+            return relayIn(tx, new io.ololabs.toolgate.contracts.v2.Dispatch(permit, arguments, null, null));
         });
     }
 

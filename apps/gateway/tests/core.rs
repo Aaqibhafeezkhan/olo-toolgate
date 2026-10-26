@@ -953,6 +953,90 @@ async fn a_tool_host_without_a_route_gets_its_calls_through_control() {
     assert_eq!(a.polls.load(Ordering::SeqCst), 3);
     assert!(a.submission.lock().unwrap().is_none());
 }
+/// ADR 031 and conformance case `mcp-core/trace-propagation`: the caller's trace and declared correlation reach the
+/// dispatch, and the result names its invocation. None of it is an authorization input.
+#[tokio::test]
+async fn trace_context_and_declared_ids_reach_the_dispatch() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let mut r = mcp("tools/call", Some("files.read"));
+    let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    r.headers_mut()
+        .insert("traceparent", parent.parse().unwrap());
+    r.headers_mut()
+        .insert("tracestate", "vendor=opaque".parse().unwrap());
+    r.headers_mut()
+        .insert("toolgate-session-id", "sess-42".parse().unwrap());
+    r.headers_mut()
+        .insert("toolgate-agent-run-id", "bad id".parse().unwrap());
+    let mut body: Value = serde_json::from_slice(
+        &axum::body::to_bytes(std::mem::take(r.body_mut()), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    body["params"]["_meta"]["io.ololabs.toolgate/toolCallId"] = json!("toolu_01A9q");
+    *r.body_mut() = Body::from(body.to_string());
+    let (code, body) = call(runtime_router(state(a.clone())), r).await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let relayed = a.relayed.lock().unwrap().clone().unwrap();
+    let traceparent = relayed.traceparent.unwrap();
+    // Same trace and sampled flag; the Gateway's own span.
+    assert_eq!(&traceparent[..36], &parent[..36]);
+    assert_eq!(&traceparent[52..], &parent[52..]);
+    assert_ne!(&traceparent[36..52], &parent[36..52]);
+    let context = relayed.execution_context.unwrap();
+    assert_eq!(context.tool_call_id.as_deref(), Some("toolu_01A9q"));
+    assert_eq!(context.session_id.as_deref(), Some("sess-42"));
+    assert_eq!(
+        context.agent_run_id, None,
+        "an invalid declared ID is dropped"
+    );
+    assert_eq!(context.tracestate.as_deref(), Some("vendor=opaque"));
+    assert!(context.execution_id.is_none() && context.attempt_number.is_none());
+    let invocation = a.invocation.lock().unwrap().as_ref().unwrap().id.clone();
+    assert_eq!(
+        body["result"]["_meta"]["io.ololabs.toolgate/invocationId"],
+        json!(invocation)
+    );
+}
+
+/// MCP trace context in `_meta` is used when the request has no `traceparent` header.
+#[tokio::test]
+async fn trace_context_in_meta_is_continued_without_a_header() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let mut r = mcp("tools/call", Some("files.read"));
+    let parent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00";
+    let mut body: Value = serde_json::from_slice(
+        &axum::body::to_bytes(std::mem::take(r.body_mut()), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    body["params"]["_meta"]["traceparent"] = json!(parent);
+    body["params"]["_meta"]["tracestate"] = json!("congo=t61rcWkgMzE");
+    *r.body_mut() = Body::from(body.to_string());
+    let (code, body) = call(runtime_router(state(a.clone())), r).await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let relayed = a.relayed.lock().unwrap().clone().unwrap();
+    let traceparent = relayed.traceparent.unwrap();
+    assert_eq!(&traceparent[..36], &parent[..36]);
+    assert_eq!(
+        &traceparent[53..],
+        "00",
+        "the caller's sampled flag is kept"
+    );
+    assert_eq!(
+        relayed.execution_context.unwrap().tracestate.as_deref(),
+        Some("congo=t61rcWkgMzE")
+    );
+}
+
 #[tokio::test]
 async fn a_repeated_tool_host_call_returns_the_result_control_kept_without_running_again() {
     let a = Arc::new(Authority {

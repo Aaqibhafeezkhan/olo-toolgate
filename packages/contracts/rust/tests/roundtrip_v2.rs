@@ -74,6 +74,7 @@ fn v2_fixture_round_trips() {
         EffectiveValue,
         EgressMode,
         ErrorDeclaration,
+        ExecutionContext,
         ExecutionSettings,
         FrameKind,
         GatewaySettings,

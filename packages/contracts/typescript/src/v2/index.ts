@@ -202,6 +202,7 @@ export interface ControlSettingsView {
 }
 export type CredentialKind = "STATIC_TOKEN" | "JWT" | "INTROSPECTION";
 export type DeclarationId = string;
+export type DeclaredId = string;
 /** Deployment binding. */
 export interface DeploymentBinding {
   readonly bindingFormatVersion: 1;
@@ -284,6 +285,8 @@ export interface DiscoveryPublicKey {
 export interface Dispatch {
   readonly permit: SignedInvocationPermit;
   readonly arguments: Record<string, unknown>;
+  readonly traceparent?: string;
+  readonly executionContext?: ExecutionContext;
 }
 /** Reviewed effect class per tool. */
 export interface EffectApproval {
@@ -316,6 +319,16 @@ export interface ErrorDeclaration {
   readonly retryable: boolean;
 }
 export type EventId = string;
+/** Correlation context of one execution attempt (ADR 031). executionId and attemptNumber are set by the executor from its permit; the other members are declared by the caller, are never trusted and never affect authorization, routing or policy. */
+export interface ExecutionContext {
+  readonly executionId?: string;
+  readonly attemptNumber?: number;
+  readonly toolCallId?: string;
+  readonly sessionId?: string;
+  readonly agentRunId?: string;
+  readonly parentInvocationId?: string;
+  readonly tracestate?: string;
+}
 /** Execution settings with defaults resolved. */
 export interface ExecutionSettings {
   readonly async: boolean;
@@ -1362,6 +1375,7 @@ export interface ToolInput {
   readonly catalogRevision: string;
   readonly traceparent?: string;
   readonly fencingToken?: string;
+  readonly executionContext?: ExecutionContext;
 }
 export type ToolKind = "SERVER" | "CLIENT";
 /** Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5). */

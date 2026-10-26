@@ -55,7 +55,8 @@ assert response["kind"] == "BROKER_RESPONSE" and response["requestId"] == "b-1",
 reply = response["result"] if "result" in response else {"refused": response["error"]["message"]}
 env = sorted(k for k in os.environ)
 frame = {"kind": "RESULT", "resultType": "complete", "content": [{"type": "text", "text": "ok"}],
-         "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"], "claims": inp["claims"]}, "isError": False}
+         "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"], "claims": inp["claims"],
+             "traceparent": inp.get("traceparent"), "executionContext": inp.get("executionContext")}, "isError": False}
 print(json.dumps(frame))
 "#;
 
@@ -435,8 +436,11 @@ fn permit(rig: &Rig, arguments: &Value, edit: impl FnOnce(&mut Value)) -> (Strin
 
 /// Dispatches and returns the NDJSON lines.
 async fn dispatch(rig: &Rig, jws: &str, arguments: &Value) -> Vec<Value> {
-    let body =
-        serde_json::to_vec(&json!({"permit": {"jws": jws}, "arguments": arguments})).unwrap();
+    send(rig, json!({"permit": {"jws": jws}, "arguments": arguments})).await
+}
+
+async fn send(rig: &Rig, dispatch: Value) -> Vec<Value> {
+    let body = serde_json::to_vec(&dispatch).unwrap();
     let text = reqwest::Client::new()
         .post(&rig.url)
         .body(body)
@@ -481,6 +485,35 @@ async fn a_real_python_sdk_package_runs_through_admission_broker_and_control_rep
     assert!(!seen.events.is_empty());
 }
 
+/// ADR 031 and conformance case `mcp-core/trace-propagation`: the tool input continues the dispatch's trace with the
+/// host's own span, and carries the caller's declared IDs beside the execution ID the host derives. A caller cannot
+/// set the execution ID or attempt.
+#[tokio::test]
+async fn the_tool_input_continues_the_trace_and_carries_the_execution_context() {
+    let rig = rig!();
+    let arguments = json!({"orderId": "123456"});
+    let (jws, id) = permit(&rig, &arguments, |_| {});
+    let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    let lines = send(
+        &rig,
+        json!({"permit": {"jws": jws}, "arguments": arguments, "traceparent": parent,
+            "executionContext": {"executionId": "ex-00000000000000000000000000000000", "attemptNumber": 9,
+                "toolCallId": "toolu_01A9q", "sessionId": "sess-42", "tracestate": "vendor=opaque"}}),
+    )
+    .await;
+    assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
+    let out = &lines[1]["result"]["structuredContent"];
+    let traceparent = out["traceparent"].as_str().unwrap();
+    assert_eq!(&traceparent[..36], &parent[..36]);
+    assert_eq!(&traceparent[52..], &parent[52..]);
+    assert_ne!(&traceparent[36..52], &parent[36..52]);
+    assert_eq!(
+        out["executionContext"],
+        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE),
+            "attemptNumber": 1, "toolCallId": "toolu_01A9q", "sessionId": "sess-42", "tracestate": "vendor=opaque"})
+    );
+}
+
 #[tokio::test]
 async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
     let rig = rig!();
@@ -516,6 +549,13 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
         ])
     );
     assert_eq!(out["globals"], json!({"TimeoutSeconds": 10}));
+    // ADR 031: without caller context the tool still gets its execution ID and signed attempt, and no trace.
+    assert_eq!(out["traceparent"], Value::Null);
+    assert_eq!(
+        out["executionContext"],
+        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE),
+            "attemptNumber": 1})
+    );
     // Without CREDENTIALS_IN_SANDBOX the secret stays with the broker.
     assert_eq!(out["secretHandles"], json!([]));
     // M4.2: the principal comes only from the signed permit, beside the pass-through claims.

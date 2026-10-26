@@ -15,7 +15,8 @@ use axum::{
 };
 use base64::Engine;
 use olo_toolgate_contracts::v2::{
-    Dispatch, InvocationOutcome, PermitReservationRequest, RequestContext, ResultProvenance,
+    Dispatch, ExecutionContext, InvocationOutcome, PermitReservationRequest, RequestContext,
+    ResultProvenance,
 };
 use olo_toolgate_contracts::{
     AuthorizationRequest, EnterpriseInvocationState, ErrorCode, RemoteToolState,
@@ -215,6 +216,12 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             }
         }
         "tools/call" => {
+            let (traceparent, tracestate) = forwarded_trace(&correlation, meta);
+            let trace = Trace {
+                traceparent,
+                context: declared_context(meta, &headers, tracestate),
+            };
+            let invocation_id = crate::http::invocation_id(&context, &id.to_string());
             tools_call(
                 &s,
                 context,
@@ -222,8 +229,10 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 credential_deadline,
                 &id,
                 params,
+                trace,
             )
             .await
+            .map(|result| with_invocation_reference(result, &invocation_id))
         }
         // ping is not part of 2026-07-28.
         _ => Err(rpc_error(
@@ -256,6 +265,93 @@ async fn tools_list(s: &AppState, context: &RequestContext, id: &Value) -> Resul
     }
 }
 
+/// The `_meta` key and header carrying each caller-declared correlation identifier (ADR 031 §2).
+const DECLARED_IDS: [(&str, &str); 3] = [
+    ("io.ololabs.toolgate/toolCallId", "toolgate-tool-call-id"),
+    ("io.ololabs.toolgate/sessionId", "toolgate-session-id"),
+    ("io.ololabs.toolgate/agentRunId", "toolgate-agent-run-id"),
+];
+/// The `_meta` member through which a tool result names its invocation, for support and operator searches.
+const INVOCATION_REFERENCE: &str = "io.ololabs.toolgate/invocationId";
+
+/// Trace context and caller-declared correlation the Gateway forwards with one tool call. None of it is trusted, and
+/// none of it changes authentication, routing, policy or approval.
+pub(crate) struct Trace {
+    traceparent: String,
+    context: Option<ExecutionContext>,
+}
+
+/// The trace a tool call continues: the `traceparent` header when it was valid, else a valid `traceparent` in `_meta`
+/// (MCP trace context), each with the Gateway's own span. `tracestate` travels only with the parent it came with.
+fn forwarded_trace(
+    correlation: &crate::http::Correlation,
+    meta: &Value,
+) -> (String, Option<String>) {
+    if !correlation.inherited {
+        if let Some(parent) = meta["traceparent"]
+            .as_str()
+            .filter(|p| crate::http::valid_traceparent(p))
+        {
+            let traceparent = format!(
+                "00-{}-{}-{}",
+                &parent[3..35],
+                &correlation.traceparent[36..52],
+                &parent[53..55]
+            );
+            let state = meta["tracestate"]
+                .as_str()
+                .filter(|s| crate::http::valid_tracestate(s))
+                .map(str::to_owned);
+            return (traceparent, state);
+        }
+    }
+    (
+        correlation.traceparent.clone(),
+        correlation.tracestate.clone(),
+    )
+}
+
+/// The caller's declared correlation identifiers: `_meta` first, then the matching header. An invalid value is dropped,
+/// never rejected. Returns `None` when there is nothing to forward.
+fn declared_context(
+    meta: &Value,
+    headers: &HeaderMap,
+    tracestate: Option<String>,
+) -> Option<ExecutionContext> {
+    let [tool_call_id, session_id, agent_run_id] = DECLARED_IDS.map(|(key, header)| {
+        meta[key]
+            .as_str()
+            .or_else(|| single_header(headers, header))
+            .filter(|v| crate::http::valid_declared_id(v))
+            .map(str::to_owned)
+    });
+    if tool_call_id.is_none()
+        && session_id.is_none()
+        && agent_run_id.is_none()
+        && tracestate.is_none()
+    {
+        return None;
+    }
+    Some(ExecutionContext {
+        execution_id: None,
+        attempt_number: None,
+        tool_call_id,
+        session_id,
+        agent_run_id,
+        parent_invocation_id: None,
+        tracestate,
+    })
+}
+
+/// Adds the invocation reference to a tool result's `_meta`, keeping the members already there.
+fn with_invocation_reference(mut result: Value, invocation_id: &str) -> Value {
+    if !result["_meta"].is_object() {
+        result["_meta"] = json!({});
+    }
+    result["_meta"][INVOCATION_REFERENCE] = json!(invocation_id);
+    result
+}
+
 /// Authorizes and relays one tool call. Nothing is cached between requests.
 async fn tools_call(
     s: &AppState,
@@ -264,6 +360,7 @@ async fn tools_call(
     credential_deadline: u64,
     id: &Value,
     params: &Value,
+    trace: Trace,
 ) -> Result<Value, Response> {
     let name = params["name"].as_str().unwrap_or("");
     let relay = &s.gateway.authority;
@@ -394,6 +491,8 @@ async fn tools_call(
                 let dispatch = Dispatch {
                     permit,
                     arguments: request.arguments.clone(),
+                    traceparent: Some(trace.traceparent.clone()),
+                    execution_context: trace.context.clone(),
                 };
                 let invocation_id = &outcome.invocation.id;
                 let dispatched = match s.tool_hosts.url(&device) {
@@ -427,6 +526,8 @@ async fn tools_call(
         invocation_id: outcome.invocation.id,
         request,
         expires_at_unix_ms: expires,
+        traceparent: Some(trace.traceparent),
+        execution_context: trace.context,
     };
     let mut response = relay.submit(&submission).await.map_err(|code| {
         rpc_error(
@@ -662,5 +763,59 @@ mod tests {
             json!("X")
         );
         assert!(result["_meta"]["io.modelcontextprotocol/serverInfo"].is_object());
+    }
+
+    fn headers(pairs: &[(&'static str, &str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in pairs {
+            map.append(*name, value.parse().unwrap());
+        }
+        map
+    }
+
+    #[test]
+    fn declared_ids_come_from_meta_before_headers() {
+        let meta = json!({"io.ololabs.toolgate/toolCallId":"call_1","io.ololabs.toolgate/sessionId":"sess-1"});
+        let context = declared_context(
+            &meta,
+            &headers(&[
+                ("toolgate-tool-call-id", "call_header"),
+                ("toolgate-agent-run-id", "run-1"),
+            ]),
+            Some("vendor=x".into()),
+        )
+        .unwrap();
+        assert_eq!(context.tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(context.session_id.as_deref(), Some("sess-1"));
+        assert_eq!(context.agent_run_id.as_deref(), Some("run-1"));
+        assert_eq!(context.tracestate.as_deref(), Some("vendor=x"));
+        // The executor sets these from its permit; the caller never does.
+        assert!(context.execution_id.is_none() && context.attempt_number.is_none());
+    }
+
+    #[test]
+    fn invalid_declared_ids_are_dropped_not_rejected() {
+        let long = "a".repeat(129);
+        let meta = json!({"io.ololabs.toolgate/toolCallId":"bad id","io.ololabs.toolgate/sessionId":long,
+            "io.ololabs.toolgate/agentRunId":7});
+        assert!(declared_context(&meta, &HeaderMap::new(), None).is_none());
+        // A duplicated header is ambiguous and dropped as well.
+        let duplicate = headers(&[("toolgate-session-id", "a"), ("toolgate-session-id", "b")]);
+        assert!(declared_context(&json!({}), &duplicate, None).is_none());
+    }
+
+    #[test]
+    fn tool_results_name_their_invocation() {
+        let result = with_invocation_reference(
+            json!({"content":[],"_meta":{"io.ololabs.toolgate/error":{"code":"X"}}}),
+            "inv-9",
+        );
+        assert_eq!(result["_meta"][INVOCATION_REFERENCE], json!("inv-9"));
+        assert_eq!(
+            result["_meta"]["io.ololabs.toolgate/error"]["code"],
+            json!("X")
+        );
+        let bare = with_invocation_reference(json!({"content":[]}), "inv-9");
+        assert_eq!(bare["_meta"][INVOCATION_REFERENCE], json!("inv-9"));
     }
 }

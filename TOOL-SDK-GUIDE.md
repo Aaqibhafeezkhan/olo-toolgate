@@ -211,6 +211,7 @@ public class Orders {
 - **Pinning.** `spkiPins` on a destination trusts only servers whose certificate chain carries one of those keys.
 - **TCP.** `@TcpDestination` and `context.tcp().connect(id)` (or `socketFactory(id)` for drivers) reach a declared host and port only. TCP is standalone-only for now.
 - **Failures.** A non-2xx response raises `UpstreamError` (`UPSTREAM_4XX`, `UPSTREAM_5XX`); timeouts and connection problems are `UPSTREAM_TIMEOUT` and `UPSTREAM_CONNECTION`. The client never retries and never follows redirects.
+- **Correlation.** Under ToolGate, `context.invocation()` also gives `executionId()` (new for each retry), `attempt()`, and the caller's `toolCallId()`, `sessionId()` and `agentRunId()` (Python: `execution_id`, `attempt`, `tool_call_id`, `session_id`, `agent_run_id`). Use them in logs; never use them for decisions, because the caller declares the last three. To continue the caller's trace downstream, send `traceHeaders()` (Python: `trace_headers()`) on the call. They hold only W3C `traceparent` and `tracestate`, and the route must list those names in its `headers` allowlist. In standalone runs these accessors are empty and `attempt()` is 1.
 
 In development, point a destination at a local mock in `toolgate.dev.json`; a loopback host may use any port and plain `http://`:
 

@@ -6,6 +6,42 @@
   "description": "Tool protocol v2, the one protocol between every tool process and its executor (ADR 027): one ToolInput line and then only BROKER_RESPONSE lines on stdin; LOG, PROGRESS, INPUT_REQUEST and BROKER_REQUEST frames and exactly one final RESULT on stdout. Also the Tool Host admission messages.",
   "$ref": "#/$defs/ToolInput",
   "$defs": {
+    "ExecutionContext": {
+      "type": "object",
+      "description": "Correlation context of one execution attempt (ADR 031). executionId and attemptNumber are set by the executor from its permit; the other members are declared by the caller, are never trusted and never affect authorization, routing or policy.",
+      "additionalProperties": false,
+      "properties": {
+        "executionId": {
+          "type": "string",
+          "minLength": 35,
+          "maxLength": 35,
+          "pattern": "^ex-[0-9a-f]{32}$"
+        },
+        "attemptNumber": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "toolCallId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "sessionId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "agentRunId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "parentInvocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "tracestate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": []
+    },
     "SecretHandle": {
       "type": "object",
       "description": "Secret handle, redeemed per call with the fencing token. Never a value.",
@@ -86,6 +122,9 @@
         },
         "fencingToken": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "executionContext": {
+          "$ref": "protocol.schema.json#/$defs/ExecutionContext"
         }
       },
       "required": [
@@ -291,6 +330,15 @@
         "arguments": {
           "type": "object",
           "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "traceparent": {
+          "type": "string",
+          "minLength": 55,
+          "maxLength": 55,
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        },
+        "executionContext": {
+          "$ref": "protocol.schema.json#/$defs/ExecutionContext"
         }
       },
       "required": [

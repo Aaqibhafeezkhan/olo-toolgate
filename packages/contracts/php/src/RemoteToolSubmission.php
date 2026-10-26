@@ -11,19 +11,23 @@ final readonly class RemoteToolSubmission implements \JsonSerializable {
         public AuthorizationRequest $request,
         public int $expiresAtUnixMs,
         public \OloLabs\ToolGate\Contracts\V2\RequestContext $context,
-        public string $invocationId
+        public string $invocationId,
+        public ?string $traceparent = null,
+        public ?\OloLabs\ToolGate\Contracts\V2\ExecutionContext $executionContext = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['request', 'expiresAtUnixMs', 'context', 'invocationId']) || array_diff(['request', 'expiresAtUnixMs', 'context', 'invocationId'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['request', 'expiresAtUnixMs', 'context', 'invocationId', 'traceparent', 'executionContext']) || array_diff(['request', 'expiresAtUnixMs', 'context', 'invocationId'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             AuthorizationRequest::fromArray($data['request']),
             $data['expiresAtUnixMs'],
             \OloLabs\ToolGate\Contracts\V2\RequestContext::fromArray($data['context']),
-            $data['invocationId']
+            $data['invocationId'],
+            array_key_exists('traceparent', $data) ? $data['traceparent'] : null,
+            array_key_exists('executionContext', $data) ? \OloLabs\ToolGate\Contracts\V2\ExecutionContext::fromArray($data['executionContext']) : null
         );
     }
 
