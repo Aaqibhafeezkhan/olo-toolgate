@@ -54,6 +54,19 @@ data:
   TOOLGATE_CAPACITY_HTTP_CONCURRENCY: {{ printf "%d" (int $g.limits.httpConcurrency) | quote }}
   TOOLGATE_CAPACITY_DATABASE_CONCURRENCY: {{ printf "%d" (int $g.limits.databaseConcurrency) | quote }}
   TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED: {{ $g.tracing.enabled | quote }}
+  TOOLGATE_INSIGHTS_MODE: {{ $g.insights.mode | default "NONE" | quote }}
+  {{- with $g.insights.spans }}
+  TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO: {{ .sampleRatio | default "0.1" | quote }}
+  TOOLGATE_INSIGHTS_SPAN_SLOW_MS: {{ printf "%d" (int (.slowMs | default 5000)) | quote }}
+  TOOLGATE_INSIGHTS_SPAN_BUFFER_MIB: {{ printf "%d" (int (.bufferMiB | default 64)) | quote }}
+  TOOLGATE_INSIGHTS_SPAN_RETENTION_HOURS: {{ printf "%d" (int (.retentionHours | default 72)) | quote }}
+  {{- end }}
+  {{- with $g.insights.otlp }}
+  {{- if .endpoint }}
+  TOOLGATE_INSIGHTS_OTLP_ENDPOINT: {{ .endpoint | quote }}
+  TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: {{ .environment | default "" | quote }}
+  {{- end }}
+  {{- end }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {{ printf "https://%s:%v" $g.tracing.host $g.tracing.port | quote }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: {{ $g.tracing.protocol | quote }}
   TOOLGATE_CONTROL_EFFECT_ENABLED: {{ $g.effect.enabled | quote }}
@@ -513,7 +526,7 @@ spec:
     matchLabels:
       {{- include "olo-toolgate.controlSelector" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
-  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and (eq $g.cache.mode "redis") $g.networkPolicy.cacheTo) (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) (and $g.marketplace.enabled $g.networkPolicy.marketplaceTo) (and $g.clientImages.enabled $g.networkPolicy.registryTo) }}
+  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and (eq $g.cache.mode "redis") $g.networkPolicy.cacheTo) (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.insights.otlp.endpoint $g.networkPolicy.insightsCollectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) (and $g.marketplace.enabled $g.networkPolicy.marketplaceTo) (and $g.clientImages.enabled $g.networkPolicy.registryTo) }}
   egress:
     {{- if and (eq $g.cache.mode "redis") $g.networkPolicy.cacheTo }}
     - ports: [{protocol: TCP, port: {{ $g.cache.port }}}]
@@ -551,6 +564,11 @@ spec:
     - ports: [{protocol: TCP, port: {{ $g.tracing.port }}}]
       to:
         {{- toYaml $g.networkPolicy.collectorTo | nindent 8 }}
+    {{- end }}
+    {{- if and $g.insights.otlp.endpoint $g.networkPolicy.insightsCollectorTo }}
+    - ports: [{protocol: TCP, port: {{ $g.insights.otlp.port | default 4318 }}}]
+      to:
+        {{- toYaml $g.networkPolicy.insightsCollectorTo | nindent 8 }}
     {{- end }}
   {{- else }}
   egress: []

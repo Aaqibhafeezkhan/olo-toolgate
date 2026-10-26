@@ -66,6 +66,25 @@
       "status": "authored"
     },
     {
+      "id": "stdin/v2-execution-context",
+      "title": "The v2 runtime exposes executionContext for correlation only",
+      "requirements": [
+        "docs/adr/031-execution-correlation-operator-insights.md"
+      ],
+      "level": "component",
+      "targets": [
+        "java",
+        "python"
+      ],
+      "perTarget": true,
+      "when": "A v2 runtime receives ToolInput with and without traceparent and executionContext",
+      "then": [
+        "With them, the tool reads the execution ID, attempt, declared IDs and W3C trace headers; without them, the accessors are empty and attempt is 1",
+        "An older runtime that does not know executionContext ignores it and runs the call"
+      ],
+      "status": "authored"
+    },
+    {
       "id": "stdin/v2-output-frames",
       "title": "Each v2 output frame kind is parsed",
       "requirements": [

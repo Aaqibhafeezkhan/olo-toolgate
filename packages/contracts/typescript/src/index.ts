@@ -1080,6 +1080,7 @@ export interface EnterpriseInvocationRequest {
   readonly toolDigest: string;
   readonly packageDigest: string;
   readonly downstreamIdempotencyKey?: string;
+  readonly executionContext?: V2.ExecutionContext;
 }
 export type EnterpriseInvocationState = "PENDING_APPROVAL" | "QUEUED" | "RESERVED" | "DISPATCHED" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "PARTIAL" | "OUTCOME_UNKNOWN";
 /** Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected. */
@@ -1641,6 +1642,8 @@ export interface RemoteToolSubmission {
   readonly expiresAtUnixMs: number;
   readonly context: V2.RequestContext;
   readonly invocationId: string;
+  readonly traceparent?: string;
+  readonly executionContext?: V2.ExecutionContext;
 }
 /** Bounded lease delivered only over device-authenticated polling; executable definitions are never accepted from an agent. */
 export interface RemoteToolTask {
@@ -1650,6 +1653,9 @@ export interface RemoteToolTask {
   readonly expiresAtUnixMs: number;
   readonly invocation: EnterpriseInvocation;
   readonly permit: EnterpriseSignedPermit;
+  readonly traceparent?: string;
+  readonly executionContext?: V2.ExecutionContext;
+  readonly collectSpans?: boolean;
 }
 /** Observed package state, distinct from assigned desired state. */
 export interface ReportedPackage {

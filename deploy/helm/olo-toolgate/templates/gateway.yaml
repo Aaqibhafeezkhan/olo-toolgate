@@ -108,6 +108,7 @@ spec:
           env:
             - {name: TOOLGATE_GATEWAY_CONFIG, value: /etc/toolgate/config/gateway.json}
             - {name: TOOLGATE_GATEWAY_CREDENTIALS, value: /etc/toolgate/credentials/credentials.json}
+            - {name: TOOLGATE_INSIGHTS_MODE, value: {{ $g.insights.mode | default "NONE" | quote }}}
           startupProbe:
             httpGet: {path: /v1/health/live, port: management}
             periodSeconds: 2

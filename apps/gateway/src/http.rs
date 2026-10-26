@@ -43,6 +43,10 @@ pub struct AppState {
     pub draining: AtomicBool,
     pub admission: Semaphore,
     pub tool_hosts: crate::toolhost::ToolHosts,
+    /// Operator Insights admission counters, flushed to Control by the server's worker.
+    pub admissions: crate::insights::Admissions,
+    /// DETAILED Insights spans, flushed to Control by the server's worker.
+    pub spans: crate::insights::Spans,
     rate: RateLimit,
     sequence: AtomicU64,
     instance: String,
@@ -52,7 +56,11 @@ pub struct AppState {
 pub(crate) struct Correlation {
     pub(crate) request_id: String,
     pub(crate) trace_id: String,
-    traceparent: String,
+    pub(crate) traceparent: String,
+    /// The caller's W3C `tracestate`, kept only beside a valid incoming `traceparent` and within bounds (ADR 031).
+    pub(crate) tracestate: Option<String>,
+    /// Whether the trace continues a valid `traceparent` header rather than starting here.
+    pub(crate) inherited: bool,
 }
 /// Header carrying an agent's on-behalf-of workload token beside a user credential (OLO M3.10).
 pub const ACTOR_CREDENTIAL_HEADER: &str = "x-toolgate-actor-credential";
@@ -94,6 +102,8 @@ impl AppState {
             admission: Semaphore::new(config.limits.max_concurrent_requests),
             rate: RateLimit::new(config.limits.requests_per_second),
             tool_hosts: crate::toolhost::ToolHosts::new(&config.tool_hosts),
+            admissions: crate::insights::Admissions::new(&config.insights, &instance),
+            spans: crate::insights::Spans::new(&config.insights),
             gateway,
             auth,
             config,
@@ -117,6 +127,12 @@ impl AppState {
         self.auth.reload(&bytes, &self.gateway.contracts, now)
     }
 
+    /// A fresh span ID for this Gateway's own spans: unique per process, not secret.
+    pub(crate) fn span_id(&self) -> String {
+        let n = self.sequence.fetch_add(1, Ordering::Relaxed);
+        digest(format!("{}-span-{n}", self.instance).as_bytes())[..16].to_owned()
+    }
+
     fn correlation(&self, headers: &HeaderMap) -> Correlation {
         let n = self.sequence.fetch_add(1, Ordering::Relaxed);
         let id = digest(format!("{}-{n}", self.instance).as_bytes());
@@ -131,6 +147,11 @@ impl AppState {
                 &id[32..48],
                 parent.map(|v| &v[53..55]).unwrap_or("00")
             ),
+            tracestate: parent
+                .and(single_header(headers, "tracestate"))
+                .filter(|s| valid_tracestate(s))
+                .map(str::to_owned),
+            inherited: parent.is_some(),
             trace_id,
         }
     }
@@ -223,7 +244,7 @@ pub(crate) fn single_header<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'
     values.next().is_none().then_some(value)
 }
 
-fn valid_traceparent(v: &str) -> bool {
+pub(crate) fn valid_traceparent(v: &str) -> bool {
     v.is_ascii()
         && v.len() == 55
         && v.starts_with("00-")
@@ -236,6 +257,36 @@ fn valid_traceparent(v: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
         && v[3..35].bytes().any(|b| b != b'0')
         && v[36..52].bytes().any(|b| b != b'0')
+}
+
+/// A bounded W3C `tracestate`: at most 512 printable ASCII bytes and 32 `key=value` members. It is carried along for
+/// the caller's tracing system and never read for any decision.
+pub(crate) fn valid_tracestate(v: &str) -> bool {
+    let members: Vec<&str> = v
+        .split(',')
+        .map(|m| m.trim_matches([' ', '\t']))
+        .filter(|m| !m.is_empty())
+        .collect();
+    !v.is_empty()
+        && v.len() <= 512
+        && v.bytes().all(|b| b == b'\t' || (b' '..=b'~').contains(&b))
+        && !members.is_empty()
+        && members.len() <= 32
+        && members.iter().all(|m| {
+            m.split_once('=')
+                .is_some_and(|(k, val)| !k.is_empty() && !val.is_empty())
+        })
+}
+
+/// A caller-declared correlation identifier (`toolCallId`, `sessionId`, `agentRunId`): the contract `DeclaredId` shape.
+pub(crate) fn valid_declared_id(v: &str) -> bool {
+    let b = v.as_bytes();
+    !b.is_empty()
+        && b.len() <= 128
+        && b[0].is_ascii_alphanumeric()
+        && b[1..]
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || b"._:/@_-".contains(c))
 }
 
 pub(crate) fn status(code: &ErrorCode) -> StatusCode {
@@ -275,6 +326,7 @@ pub(crate) fn error(code: ErrorCode, id: &str) -> Response {
 async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next) -> Response {
     let started = Instant::now();
     let mcp_packet = request.uri().path() == "/mcp";
+    let tool = single_header(request.headers(), "mcp-name").map(str::to_owned);
     let correlation = s.correlation(request.headers());
     request.extensions_mut().insert(correlation.clone());
     let span = tracing::info_span!("runtime_request", service="gateway", version=env!("CARGO_PKG_VERSION"), request_id=%correlation.request_id, trace_id=%correlation.trace_id);
@@ -396,6 +448,12 @@ async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next)
         .insert("cache-control", HeaderValue::from_static("no-store"));
     if result.status().is_client_error() || result.status().is_server_error() {
         s.metrics.errors.fetch_add(1, Ordering::Relaxed);
+    }
+    if let (Some(category), Some(now)) = (
+        crate::insights::Admissions::category(result.status()),
+        unix_ms(),
+    ) {
+        s.admissions.record(now, tool.as_deref(), category);
     }
     s.metrics.observe(started.elapsed());
     let _entered = span.enter();
@@ -613,5 +671,33 @@ mod dedup_key {
             key,
             invocation_id(&context(serde_json::json!({})), "olo-op-2")
         );
+    }
+}
+
+#[cfg(test)]
+mod trace_context {
+    use super::{valid_declared_id, valid_tracestate};
+
+    #[test]
+    fn tracestate_is_kept_only_within_bounds() {
+        assert!(valid_tracestate("rojo=00f067aa0ba902b7,congo=t61rcWkgMzE"));
+        assert!(valid_tracestate(" vendor=x , other=y "));
+        assert!(!valid_tracestate(""));
+        assert!(!valid_tracestate("novalue"));
+        assert!(!valid_tracestate("k=v\nk2=v2"));
+        assert!(!valid_tracestate(&"k=v,".repeat(33)));
+        assert!(!valid_tracestate(&format!("k={}", "v".repeat(511))));
+    }
+
+    #[test]
+    fn declared_ids_use_the_identifier_shape() {
+        assert!(valid_declared_id("call_7Hq2"));
+        assert!(valid_declared_id("sess:42/a.b-c"));
+        assert!(valid_declared_id("toolu_01A9q"));
+        assert!(valid_declared_id("agent@example"));
+        assert!(!valid_declared_id(""));
+        assert!(!valid_declared_id("-leading"));
+        assert!(!valid_declared_id("has space"));
+        assert!(!valid_declared_id(&"a".repeat(129)));
     }
 }

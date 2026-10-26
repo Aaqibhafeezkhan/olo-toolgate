@@ -1,0 +1,965 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/insights.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Operator Insights",
+  "description": "Operator Insights (ADR 031): Gateway admission counter batches to Control, and the installation-operator query API. Metadata only: never tool arguments, outputs or secrets.",
+  "$defs": {
+    "InsightsMode": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "BASIC",
+        "DETAILED"
+      ],
+      "description": "Deployment collection mode (TOOLGATE_INSIGHTS_MODE)."
+    },
+    "InsightsAdmissionCategory": {
+      "type": "string",
+      "enum": [
+        "UNAUTHENTICATED",
+        "POLICY_DENIED",
+        "APPROVAL_REQUIRED",
+        "RATE_LIMITED",
+        "KILL_SWITCH",
+        "INVALID_REQUEST"
+      ],
+      "description": "Why the Gateway answered a request without starting an execution."
+    },
+    "InsightsAdmissionCount": {
+      "type": "object",
+      "description": "Requests of one category for one tool in one closed minute bucket.",
+      "additionalProperties": false,
+      "properties": {
+        "bucketStartUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "toolId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "category": {
+          "$ref": "insights.schema.json#/$defs/InsightsAdmissionCategory"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        }
+      },
+      "required": [
+        "bucketStartUnixMs",
+        "category",
+        "count"
+      ]
+    },
+    "InsightsAdmissionBatch": {
+      "type": "object",
+      "description": "Gateway to Control: admission counts since the previous batch of this process epoch. Best-effort; Control ignores a repeated (gatewayId, epoch, sequence) and reports missing sequences as source gaps.",
+      "additionalProperties": false,
+      "properties": {
+        "gatewayId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "epoch": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "lastBatch": {
+          "type": "boolean",
+          "description": "Sent once on graceful shutdown; an epoch that ends without it is a source gap."
+        },
+        "droppedRequests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "counts": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsAdmissionCount"
+          },
+          "maxItems": 4096
+        }
+      },
+      "required": [
+        "gatewayId",
+        "epoch",
+        "sequence",
+        "counts"
+      ]
+    },
+    "InsightsAdmissionAck": {
+      "type": "object",
+      "description": "Control's acknowledgement of one admission batch.",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "duplicate": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sequence",
+        "duplicate"
+      ]
+    },
+    "InsightsOutcome": {
+      "type": "string",
+      "enum": [
+        "PENDING_APPROVAL",
+        "IN_PROGRESS",
+        "SUCCEEDED",
+        "FAILED",
+        "PARTIAL",
+        "CANCELLED",
+        "EXPIRED",
+        "OUTCOME_UNKNOWN"
+      ],
+      "description": "Where an invocation stands, derived from its ledger state."
+    },
+    "InsightsErrorCategory": {
+      "type": "string",
+      "enum": [
+        "POLICY",
+        "TIMEOUT",
+        "CANCELLED",
+        "TOOL_ERROR",
+        "INFRASTRUCTURE",
+        "INVALID_REQUEST",
+        "PARTIAL",
+        "UNKNOWN"
+      ],
+      "description": "Exactly one category per terminal failure (ADR 031 \u00a77)."
+    },
+    "InsightsGranularity": {
+      "type": "string",
+      "enum": [
+        "MINUTE",
+        "HOUR",
+        "DAY"
+      ],
+      "description": "Aggregate bucket size; buckets are UTC and half-open."
+    },
+    "InsightsSourceGap": {
+      "type": "object",
+      "description": "Admission counts that may be missing: a skipped sequence, or an epoch that stopped without a final batch.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "gatewayId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "epoch": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "lastSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "missingSequences": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lastSeenUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "droppedRequests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "tenantId",
+        "gatewayId",
+        "epoch",
+        "lastSequence",
+        "missingSequences",
+        "lastSeenUnixMs",
+        "droppedRequests"
+      ]
+    },
+    "InsightsStatus": {
+      "type": "object",
+      "description": "Read first by the operator page: what is collected and how current it is.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "insights.schema.json#/$defs/InsightsMode"
+        },
+        "generatedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "tenants": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "unprojectedFacts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "oldestUnprojectedUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "summariesSuspendedTenants": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "failedTenants": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "sourceGaps": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSourceGap"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "mode",
+        "generatedAtUnixMs",
+        "tenants",
+        "unprojectedFacts",
+        "summariesSuspendedTenants",
+        "failedTenants",
+        "sourceGaps"
+      ]
+    },
+    "InsightsSeriesPoint": {
+      "type": "object",
+      "description": "One bucket and outcome. histogram holds counts per InsightsSeries.histogramBoundsMs bucket (last is overflow).",
+      "additionalProperties": false,
+      "properties": {
+        "bucketStartUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "key": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "The tool or client ID for a grouped series; empty when not grouped."
+        },
+        "outcome": {
+          "$ref": "insights.schema.json#/$defs/InsightsOutcome"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationSumMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "histogram": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "bucketStartUnixMs",
+        "key",
+        "outcome",
+        "count",
+        "durationCount",
+        "durationSumMs",
+        "histogram"
+      ]
+    },
+    "InsightsAdmissionPoint": {
+      "type": "object",
+      "description": "Admission decisions in one bucket.",
+      "additionalProperties": false,
+      "properties": {
+        "bucketStartUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "category": {
+          "$ref": "insights.schema.json#/$defs/InsightsAdmissionCategory"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "bucketStartUnixMs",
+        "category",
+        "count"
+      ]
+    },
+    "InsightsSeries": {
+      "type": "object",
+      "description": "Aggregates for a range. Data before unavailableBeforeUnixMs has expired at this granularity and is absent, not zero.",
+      "additionalProperties": false,
+      "properties": {
+        "granularity": {
+          "$ref": "insights.schema.json#/$defs/InsightsGranularity"
+        },
+        "fromUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "toUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "groupBy": {
+          "type": "string",
+          "maxLength": 16,
+          "description": "TOOL, CLIENT or empty."
+        },
+        "unavailableBeforeUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "histogramBoundsMs": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "maxItems": 32
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSeriesPoint"
+          },
+          "maxItems": 100000
+        },
+        "admissions": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsAdmissionPoint"
+          },
+          "maxItems": 100000
+        }
+      },
+      "required": [
+        "granularity",
+        "fromUnixMs",
+        "toUnixMs",
+        "groupBy",
+        "histogramBoundsMs",
+        "points",
+        "admissions"
+      ]
+    },
+    "InsightsInvocation": {
+      "type": "object",
+      "description": "One invocation's summary, projected from its transition facts. Durations are absent when not measured.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "clientId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "userId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolCallId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "sessionId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "agentRunId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "parentInvocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier",
+          "description": "The invocation this call declared as its parent; kept only when it exists in the same tenant."
+        },
+        "outcome": {
+          "$ref": "insights.schema.json#/$defs/InsightsOutcome"
+        },
+        "errorCategory": {
+          "$ref": "insights.schema.json#/$defs/InsightsErrorCategory"
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "acceptedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "approvalRequestedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "approvalResolvedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "queuedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "firstStartedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "terminalAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "approvalMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "queueMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "executionMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endToEndMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "partialCoverage": {
+          "type": "boolean",
+          "description": "Collection started after this invocation was admitted, so early stages are unknown."
+        }
+      },
+      "required": [
+        "tenantId",
+        "invocationId",
+        "toolId",
+        "action",
+        "outcome",
+        "attempts",
+        "acceptedAtUnixMs",
+        "partialCoverage"
+      ]
+    },
+    "InsightsInvocationPage": {
+      "type": "object",
+      "description": "Explorer results, newest first. next continues the search.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsInvocation"
+          },
+          "maxItems": 200
+        },
+        "next": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "InsightsAttempt": {
+      "type": "object",
+      "description": "One execution attempt: one consumed permit.",
+      "additionalProperties": false,
+      "properties": {
+        "attemptNumber": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "executionId": {
+          "type": "string",
+          "minLength": 35,
+          "maxLength": 35,
+          "pattern": "^ex-[0-9a-f]{32}$"
+        },
+        "executorId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "startedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "endedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "outcome": {
+          "$ref": "insights.schema.json#/$defs/InsightsOutcome"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "attemptNumber"
+      ]
+    },
+    "InsightsTransition": {
+      "type": "object",
+      "description": "One retained transition fact, for the stage timeline.",
+      "additionalProperties": false,
+      "properties": {
+        "factSeq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "fromState": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "An EnterpriseInvocationState value."
+        },
+        "toState": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "An EnterpriseInvocationState value."
+        },
+        "occurredAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "factSeq",
+        "toState",
+        "occurredAtUnixMs"
+      ]
+    },
+    "InsightsInvocationDetail": {
+      "type": "object",
+      "description": "The detail window: summary, attempts and, while facts are retained, the transitions.",
+      "additionalProperties": false,
+      "properties": {
+        "invocation": {
+          "$ref": "insights.schema.json#/$defs/InsightsInvocation"
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsAttempt"
+          },
+          "maxItems": 64
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsTransition"
+          },
+          "maxItems": 256
+        },
+        "transitionsRetained": {
+          "type": "boolean"
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSpan"
+          },
+          "maxItems": 512
+        },
+        "spanState": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanState"
+        }
+      },
+      "required": [
+        "invocation",
+        "attempts",
+        "transitions",
+        "transitionsRetained"
+      ]
+    },
+    "InsightsRebuildRequest": {
+      "type": "object",
+      "description": "Recompute one tenant's aggregate cells for a range from its summaries. dryRun only compares.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fromUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "toUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "dryRun": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tenantId",
+        "fromUnixMs",
+        "toUnixMs",
+        "dryRun"
+      ]
+    },
+    "InsightsRebuildResult": {
+      "type": "object",
+      "description": "How many cells the recomputation compared and how many differed from the live projection.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fromUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "toUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "cellsCompared": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cellsDiffering": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "applied": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tenantId",
+        "fromUnixMs",
+        "toUnixMs",
+        "cellsCompared",
+        "cellsDiffering",
+        "applied"
+      ]
+    },
+    "InsightsSpanName": {
+      "type": "string",
+      "enum": [
+        "GATEWAY_REQUEST",
+        "GATEWAY_AUTHORIZE",
+        "GATEWAY_DISPATCH",
+        "HOST_ADMISSION",
+        "HOST_EXECUTE",
+        "HOST_EGRESS",
+        "CLIENT_EXECUTE"
+      ],
+      "description": "The fixed set of spans Insights records (ADR 031 \u00a79). There are no free-form names or attributes."
+    },
+    "InsightsSpanSource": {
+      "type": "string",
+      "enum": [
+        "GATEWAY",
+        "TOOL_HOST",
+        "CLIENT"
+      ],
+      "description": "Who produced a span; Control sets it from the authenticated sender."
+    },
+    "InsightsSpanStatus": {
+      "type": "string",
+      "enum": [
+        "OK",
+        "ERROR"
+      ],
+      "description": "Span status."
+    },
+    "InsightsSpanState": {
+      "type": "string",
+      "enum": [
+        "NOT_COLLECTED",
+        "PENDING",
+        "RETAINED",
+        "SAMPLED_OUT",
+        "DROPPED"
+      ],
+      "description": "Why an invocation does or does not have spans: not collected (mode below DETAILED), still buffering, retained, sampled out, or dropped under memory pressure."
+    },
+    "InsightsSpan": {
+      "type": "object",
+      "description": "One allowlisted span. Metadata only: never arguments, outputs, URLs, headers or secrets.",
+      "additionalProperties": false,
+      "properties": {
+        "traceId": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 32,
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "spanId": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 16,
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "parentSpanId": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 16,
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "name": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanName"
+        },
+        "source": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanSource"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "executionId": {
+          "type": "string",
+          "minLength": 35,
+          "maxLength": 35,
+          "pattern": "^ex-[0-9a-f]{32}$"
+        },
+        "startUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "status": {
+          "$ref": "insights.schema.json#/$defs/InsightsSpanStatus"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "httpStatus": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "errorCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        }
+      },
+      "required": [
+        "traceId",
+        "spanId",
+        "name",
+        "invocationId",
+        "startUnixMs",
+        "durationMs",
+        "status"
+      ]
+    },
+    "InsightsSpanBatch": {
+      "type": "object",
+      "description": "Spans from one producer. Best-effort: droppedSpans counts what the producer could not keep.",
+      "additionalProperties": false,
+      "properties": {
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSpan"
+          },
+          "maxItems": 512
+        },
+        "droppedSpans": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "spans"
+      ]
+    },
+    "InsightsSpanAck": {
+      "type": "object",
+      "description": "How many spans Control buffered and how many it refused (unknown invocation, wrong executor, over a bound).",
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "refused": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "accepted",
+        "refused"
+      ]
+    },
+    "InsightsSession": {
+      "type": "object",
+      "description": "One caller-declared session in a range: its calls by acceptance time. Session IDs are declared by the caller and not verified.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sessionId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "firstAcceptedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "lastActivityUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs",
+          "description": "The latest acceptance or terminal time of a call in the session."
+        },
+        "calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "succeeded": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "FAILED, PARTIAL or OUTCOME_UNKNOWN."
+        },
+        "unfinished": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Pending approval or in progress."
+        },
+        "agentRuns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Distinct declared agent runs."
+        },
+        "tools": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Distinct tools."
+        }
+      },
+      "required": [
+        "tenantId",
+        "sessionId",
+        "firstAcceptedAtUnixMs",
+        "lastActivityUnixMs",
+        "calls",
+        "succeeded",
+        "failed",
+        "unfinished",
+        "agentRuns",
+        "tools"
+      ]
+    },
+    "InsightsSessionPage": {
+      "type": "object",
+      "description": "A tenant's sessions with calls accepted in the range, most recent activity first. next continues the list.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsSession"
+          },
+          "maxItems": 200
+        },
+        "next": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "callsWithoutSession": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Calls in the range that declared no session ID: the coverage gap of session views."
+        }
+      },
+      "required": [
+        "items",
+        "callsWithoutSession"
+      ]
+    },
+    "InsightsSessionTimeline": {
+      "type": "object",
+      "description": "Every retained call of one session, oldest first, plus calls that declared one of them as parent (nested work), to a bounded depth.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sessionId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclaredId"
+        },
+        "invocations": {
+          "type": "array",
+          "items": {
+            "$ref": "insights.schema.json#/$defs/InsightsInvocation"
+          },
+          "maxItems": 1000
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "More calls exist than the timeline holds."
+        }
+      },
+      "required": [
+        "tenantId",
+        "sessionId",
+        "invocations",
+        "truncated"
+      ]
+    }
+  }
+}

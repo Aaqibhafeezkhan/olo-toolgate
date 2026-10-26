@@ -64,6 +64,25 @@ final class EndpointTest {
     private void decide(Setup s,EndpointEnrollmentChallenge challenge,EnrollmentChoice choice,String key){var review=review(s,challenge);s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(challenge.userCode(),review.keyFingerprint(),choice,START+604800000,null)),key,"request");}
     private EndpointEnrollmentResult poll(Setup s,EndpointEnrollmentChallenge challenge){return codec.model(s.service.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class);}
     private java.security.cert.X509Certificate certificate(DeviceIdentity identity)throws Exception{return (java.security.cert.X509Certificate)java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(identity.certificatePem().getBytes(java.nio.charset.StandardCharsets.US_ASCII)));}
+    /** ADR 031 §2: released clients reject unknown task members, so a relayed task carries its trace context,
+     *  execution context and span request only to clients that name the feature. */
+    @Test void relayedTaskContextGoesOnlyToClientsThatAcceptIt()throws Exception{
+        var fixture=(com.fasterxml.jackson.databind.node.ObjectNode)new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(java.nio.file.Path.of(System.getProperty("toolgate.fixtures")).toFile()).get("RemoteToolTask");
+        fixture.put("traceparent","00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01").put("collectSpans",true)
+            .putObject("executionContext").put("sessionId","sess-42");
+        var task=codec.model(fixture.toString(),RemoteToolTask.class);
+        assertSame(task,EndpointService.forClient(task,true));
+        var released=EndpointService.forClient(task,false);
+        assertNull(released.traceparent());assertNull(released.executionContext());assertNull(released.collectSpans());
+        assertEquals(new com.fasterxml.jackson.databind.ObjectMapper().readTree(new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(java.nio.file.Path.of(System.getProperty("toolgate.fixtures")).toFile()).get("RemoteToolTask").toString()),
+            new com.fasterxml.jackson.databind.ObjectMapper().readTree(codec.json(released)),"exactly the shape released clients decode");
+        assertNull(EndpointService.forClient(null,false));
+        assertTrue(EndpointService.taskContext("other.v1, remote-task-context.v1"));
+        assertFalse(EndpointService.taskContext(null));assertFalse(EndpointService.taskContext("remote-task-context.v2"));
+    }
+
     @Test void discoveryUsesProductClientVersion()throws Exception{
         var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint");
         var profile=new Store.RuntimeProfile("server","Organization","https://control.example.test","https://gateway.example.test");

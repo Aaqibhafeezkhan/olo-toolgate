@@ -8,6 +8,8 @@ import java.util.function.Function;
 
 /** Transaction port. Data, audit and idempotency must share a commit/rollback boundary. */
 public interface Store {
+    /** The deployment's Operator Insights mode (ADR 031); NONE unless the store is configured otherwise. */
+    default io.ololabs.toolgate.contracts.v2.InsightsMode insightsMode(){return io.ololabs.toolgate.contracts.v2.InsightsMode.NONE;}
     <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work);
     record ConsoleDeviceRecord(String sessionId,String userId,String deviceId,String nonceDigest,String codeDigest,String csr,String fingerprint,long expiresAt,long verifiedAt){}
     interface Session {
@@ -23,6 +25,7 @@ public interface Store {
         default PackageStore packages() { throw Failure.unavailable(); }
         default McpServerStore mcpServers() { throw Failure.unavailable(); }
         default RunEventStore runEvents() { throw Failure.unavailable(); }
+        default InsightsStore insights() { throw Failure.unavailable(); }
         Directory load();
         /** Digest of this tenant's current directory; adapters may reuse a version-checked immutable snapshot. */
         default String adoptionDigest(TenantId tenant, Codec codec) { return EndpointAdoptions.digest(codec, tenant, load()); }

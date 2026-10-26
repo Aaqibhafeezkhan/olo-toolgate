@@ -202,6 +202,7 @@ export interface ControlSettingsView {
 }
 export type CredentialKind = "STATIC_TOKEN" | "JWT" | "INTROSPECTION";
 export type DeclarationId = string;
+export type DeclaredId = string;
 /** Deployment binding. */
 export interface DeploymentBinding {
   readonly bindingFormatVersion: 1;
@@ -284,6 +285,9 @@ export interface DiscoveryPublicKey {
 export interface Dispatch {
   readonly permit: SignedInvocationPermit;
   readonly arguments: Record<string, unknown>;
+  readonly traceparent?: string;
+  readonly executionContext?: ExecutionContext;
+  readonly collectSpans?: boolean;
 }
 /** Reviewed effect class per tool. */
 export interface EffectApproval {
@@ -316,6 +320,16 @@ export interface ErrorDeclaration {
   readonly retryable: boolean;
 }
 export type EventId = string;
+/** Correlation context of one execution attempt (ADR 031). executionId and attemptNumber are set by the executor from its permit; the other members are declared by the caller, are never trusted and never affect authorization, routing or policy. */
+export interface ExecutionContext {
+  readonly executionId?: string;
+  readonly attemptNumber?: number;
+  readonly toolCallId?: string;
+  readonly sessionId?: string;
+  readonly agentRunId?: string;
+  readonly parentInvocationId?: string;
+  readonly tracestate?: string;
+}
 /** Execution settings with defaults resolved. */
 export interface ExecutionSettings {
   readonly async: boolean;
@@ -363,6 +377,211 @@ export interface InputRequestFrame {
   readonly kind: "INPUT_REQUEST";
   readonly requestId: string;
   readonly request: Record<string, unknown>;
+}
+/** Control's acknowledgement of one admission batch. */
+export interface InsightsAdmissionAck {
+  readonly sequence: number;
+  readonly duplicate: boolean;
+}
+/** Gateway to Control: admission counts since the previous batch of this process epoch. Best-effort; Control ignores a repeated (gatewayId, epoch, sequence) and reports missing sequences as source gaps. */
+export interface InsightsAdmissionBatch {
+  readonly gatewayId: string;
+  readonly epoch: string;
+  readonly sequence: number;
+  readonly lastBatch?: boolean;
+  readonly droppedRequests?: number;
+  readonly counts: ReadonlyArray<InsightsAdmissionCount>;
+}
+export type InsightsAdmissionCategory = "UNAUTHENTICATED" | "POLICY_DENIED" | "APPROVAL_REQUIRED" | "RATE_LIMITED" | "KILL_SWITCH" | "INVALID_REQUEST";
+/** Requests of one category for one tool in one closed minute bucket. */
+export interface InsightsAdmissionCount {
+  readonly bucketStartUnixMs: number;
+  readonly toolId?: string;
+  readonly category: InsightsAdmissionCategory;
+  readonly count: number;
+}
+/** Admission decisions in one bucket. */
+export interface InsightsAdmissionPoint {
+  readonly bucketStartUnixMs: number;
+  readonly category: InsightsAdmissionCategory;
+  readonly count: number;
+}
+/** One execution attempt: one consumed permit. */
+export interface InsightsAttempt {
+  readonly attemptNumber: number;
+  readonly executionId?: string;
+  readonly executorId?: string;
+  readonly startedAtUnixMs?: number;
+  readonly endedAtUnixMs?: number;
+  readonly outcome?: InsightsOutcome;
+  readonly durationMs?: number;
+}
+export type InsightsErrorCategory = "POLICY" | "TIMEOUT" | "CANCELLED" | "TOOL_ERROR" | "INFRASTRUCTURE" | "INVALID_REQUEST" | "PARTIAL" | "UNKNOWN";
+export type InsightsGranularity = "MINUTE" | "HOUR" | "DAY";
+/** One invocation's summary, projected from its transition facts. Durations are absent when not measured. */
+export interface InsightsInvocation {
+  readonly tenantId: string;
+  readonly invocationId: string;
+  readonly toolId: string;
+  readonly action: string;
+  readonly clientId?: string;
+  readonly userId?: string;
+  readonly agentId?: string;
+  readonly toolCallId?: string;
+  readonly sessionId?: string;
+  readonly agentRunId?: string;
+  readonly parentInvocationId?: string;
+  readonly outcome: InsightsOutcome;
+  readonly errorCategory?: InsightsErrorCategory;
+  readonly attempts: number;
+  readonly acceptedAtUnixMs: number;
+  readonly approvalRequestedAtUnixMs?: number;
+  readonly approvalResolvedAtUnixMs?: number;
+  readonly queuedAtUnixMs?: number;
+  readonly firstStartedAtUnixMs?: number;
+  readonly terminalAtUnixMs?: number;
+  readonly approvalMs?: number;
+  readonly queueMs?: number;
+  readonly executionMs?: number;
+  readonly endToEndMs?: number;
+  readonly partialCoverage: boolean;
+}
+/** The detail window: summary, attempts and, while facts are retained, the transitions. */
+export interface InsightsInvocationDetail {
+  readonly invocation: InsightsInvocation;
+  readonly attempts: ReadonlyArray<InsightsAttempt>;
+  readonly transitions: ReadonlyArray<InsightsTransition>;
+  readonly transitionsRetained: boolean;
+  readonly spans?: ReadonlyArray<InsightsSpan>;
+  readonly spanState?: InsightsSpanState;
+}
+/** Explorer results, newest first. next continues the search. */
+export interface InsightsInvocationPage {
+  readonly items: ReadonlyArray<InsightsInvocation>;
+  readonly next?: string;
+}
+export type InsightsMode = "NONE" | "BASIC" | "DETAILED";
+export type InsightsOutcome = "PENDING_APPROVAL" | "IN_PROGRESS" | "SUCCEEDED" | "FAILED" | "PARTIAL" | "CANCELLED" | "EXPIRED" | "OUTCOME_UNKNOWN";
+/** Recompute one tenant's aggregate cells for a range from its summaries. dryRun only compares. */
+export interface InsightsRebuildRequest {
+  readonly tenantId: string;
+  readonly fromUnixMs: number;
+  readonly toUnixMs: number;
+  readonly dryRun: boolean;
+}
+/** How many cells the recomputation compared and how many differed from the live projection. */
+export interface InsightsRebuildResult {
+  readonly tenantId: string;
+  readonly fromUnixMs: number;
+  readonly toUnixMs: number;
+  readonly cellsCompared: number;
+  readonly cellsDiffering: number;
+  readonly applied: boolean;
+}
+/** Aggregates for a range. Data before unavailableBeforeUnixMs has expired at this granularity and is absent, not zero. */
+export interface InsightsSeries {
+  readonly granularity: InsightsGranularity;
+  readonly fromUnixMs: number;
+  readonly toUnixMs: number;
+  readonly groupBy: string;
+  readonly unavailableBeforeUnixMs?: number;
+  readonly histogramBoundsMs: ReadonlyArray<number>;
+  readonly points: ReadonlyArray<InsightsSeriesPoint>;
+  readonly admissions: ReadonlyArray<InsightsAdmissionPoint>;
+}
+/** One bucket and outcome. histogram holds counts per InsightsSeries.histogramBoundsMs bucket (last is overflow). */
+export interface InsightsSeriesPoint {
+  readonly bucketStartUnixMs: number;
+  readonly key: string;
+  readonly outcome: InsightsOutcome;
+  readonly count: number;
+  readonly durationCount: number;
+  readonly durationSumMs: number;
+  readonly histogram: ReadonlyArray<number>;
+}
+/** One caller-declared session in a range: its calls by acceptance time. Session IDs are declared by the caller and not verified. */
+export interface InsightsSession {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly firstAcceptedAtUnixMs: number;
+  readonly lastActivityUnixMs: number;
+  readonly calls: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly unfinished: number;
+  readonly agentRuns: number;
+  readonly tools: number;
+}
+/** A tenant's sessions with calls accepted in the range, most recent activity first. next continues the list. */
+export interface InsightsSessionPage {
+  readonly items: ReadonlyArray<InsightsSession>;
+  readonly next?: string;
+  readonly callsWithoutSession: number;
+}
+/** Every retained call of one session, oldest first, plus calls that declared one of them as parent (nested work), to a bounded depth. */
+export interface InsightsSessionTimeline {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly invocations: ReadonlyArray<InsightsInvocation>;
+  readonly truncated: boolean;
+}
+/** Admission counts that may be missing: a skipped sequence, or an epoch that stopped without a final batch. */
+export interface InsightsSourceGap {
+  readonly tenantId: string;
+  readonly gatewayId: string;
+  readonly epoch: string;
+  readonly lastSequence: number;
+  readonly missingSequences: number;
+  readonly lastSeenUnixMs: number;
+  readonly droppedRequests: number;
+}
+/** One allowlisted span. Metadata only: never arguments, outputs, URLs, headers or secrets. */
+export interface InsightsSpan {
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly parentSpanId?: string;
+  readonly name: InsightsSpanName;
+  readonly source?: InsightsSpanSource;
+  readonly invocationId: string;
+  readonly executionId?: string;
+  readonly startUnixMs: number;
+  readonly durationMs: number;
+  readonly status: InsightsSpanStatus;
+  readonly routeId?: string;
+  readonly httpStatus?: number;
+  readonly errorCode?: string;
+}
+/** How many spans Control buffered and how many it refused (unknown invocation, wrong executor, over a bound). */
+export interface InsightsSpanAck {
+  readonly accepted: number;
+  readonly refused: number;
+}
+/** Spans from one producer. Best-effort: droppedSpans counts what the producer could not keep. */
+export interface InsightsSpanBatch {
+  readonly spans: ReadonlyArray<InsightsSpan>;
+  readonly droppedSpans?: number;
+}
+export type InsightsSpanName = "GATEWAY_REQUEST" | "GATEWAY_AUTHORIZE" | "GATEWAY_DISPATCH" | "HOST_ADMISSION" | "HOST_EXECUTE" | "HOST_EGRESS" | "CLIENT_EXECUTE";
+export type InsightsSpanSource = "GATEWAY" | "TOOL_HOST" | "CLIENT";
+export type InsightsSpanState = "NOT_COLLECTED" | "PENDING" | "RETAINED" | "SAMPLED_OUT" | "DROPPED";
+export type InsightsSpanStatus = "OK" | "ERROR";
+/** Read first by the operator page: what is collected and how current it is. */
+export interface InsightsStatus {
+  readonly mode: InsightsMode;
+  readonly generatedAtUnixMs: number;
+  readonly tenants: number;
+  readonly unprojectedFacts: number;
+  readonly oldestUnprojectedUnixMs?: number;
+  readonly summariesSuspendedTenants: number;
+  readonly failedTenants: number;
+  readonly sourceGaps: ReadonlyArray<InsightsSourceGap>;
+}
+/** One retained transition fact, for the stage timeline. */
+export interface InsightsTransition {
+  readonly factSeq: number;
+  readonly fromState?: string;
+  readonly toState: string;
+  readonly occurredAtUnixMs: number;
 }
 /** Response to a v2 POST /access/invocations for NEW and EXISTING reservations. IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE and EXPIRED_KEY are 409 errors with that code and carry nothing else. requestState is present with an ASK outcome for an MRTR client. */
 export interface InvocationAdmission {
@@ -1362,6 +1581,7 @@ export interface ToolInput {
   readonly catalogRevision: string;
   readonly traceparent?: string;
   readonly fencingToken?: string;
+  readonly executionContext?: ExecutionContext;
 }
 export type ToolKind = "SERVER" | "CLIENT";
 /** Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5). */

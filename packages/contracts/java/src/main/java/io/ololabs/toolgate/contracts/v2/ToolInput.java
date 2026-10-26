@@ -19,6 +19,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param catalogRevision canonical catalogRevision value
  * @param traceparent canonical traceparent value
  * @param fencingToken canonical fencingToken value
+ * @param executionContext canonical executionContext value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ToolInput(
@@ -35,7 +36,8 @@ public record ToolInput(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "idempotencyKey", required = false) String idempotencyKey,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "catalogRevision", required = true) String catalogRevision,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "traceparent", required = false) String traceparent,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "fencingToken", required = false) String fencingToken
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "fencingToken", required = false) String fencingToken,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionContext", required = false) ExecutionContext executionContext
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -53,6 +55,7 @@ public record ToolInput(
      * @param catalogRevision canonical catalogRevision value
      * @param traceparent canonical traceparent value
      * @param fencingToken canonical fencingToken value
+     * @param executionContext canonical executionContext value
      */
     public ToolInput {
         java.util.Objects.requireNonNull(protocolVersion, "protocolVersion");

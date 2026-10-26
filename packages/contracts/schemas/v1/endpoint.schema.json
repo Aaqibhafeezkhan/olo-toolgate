@@ -1032,6 +1032,15 @@
         },
         "invocationId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "traceparent": {
+          "type": "string",
+          "minLength": 55,
+          "maxLength": 55,
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        },
+        "executionContext": {
+          "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
         }
       },
       "required": [
@@ -1065,6 +1074,19 @@
         },
         "permit": {
           "$ref": "enterprise.schema.json#/$defs/EnterpriseSignedPermit"
+        },
+        "traceparent": {
+          "type": "string",
+          "minLength": 55,
+          "maxLength": 55,
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        },
+        "executionContext": {
+          "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
+        },
+        "collectSpans": {
+          "type": "boolean",
+          "description": "DETAILED Insights: the device records and uploads its execution span (ADR 031 \u00a79)."
         }
       },
       "required": [

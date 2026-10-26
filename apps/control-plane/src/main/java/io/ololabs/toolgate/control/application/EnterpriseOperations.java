@@ -139,7 +139,10 @@ public final class EnterpriseOperations {
             return submitOnce(actor,request,chosen);
         }
     }
-    private Store.Reply submitOnce(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){String document=codec.json(request)+(chosen==null?"":"\n"+chosen);
+    private Store.Reply submitOnce(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){
+        // Correlation context is not part of the operation: a retry carrying a new trace span is the same request.
+        var operation=request.executionContext()==null?request:new EnterpriseInvocationRequest(request.context(),request.request(),request.toolDigest(),request.packageDigest(),request.downstreamIdempotencyKey(),null);
+        String document=codec.json(operation)+(chosen==null?"":"\n"+chosen);
         return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);if(tx.enterprise().operationCancelled(request.context().requestId()))throw Failure.conflict();var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
             // A replay keeps the device the first submission was placed on, whatever the pool's load is now.
             var placed=tx.enterprise().invocation(request.context().requestId());
@@ -151,7 +154,7 @@ public final class EnterpriseOperations {
             if(tx.enterprise().invocationsSince(Math.max(0,now-lifetime))>=capacity)throw Failure.conflict();var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,now,false,budgets);long epoch=tx.enterprise().authorizationEpoch();
             var state=decision.decision()==Decision.ASK?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
             var i=new EnterpriseInvocation(e.context().requestId(),digest,e,state,1L,epoch,null,now+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),request.downstreamIdempotencyKey(),null,decision.diagnosticId(),reconciliation(tx.load(),e.toolId()));
-            for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),now);tx.enterprise().saveInvocation(i,now,0);if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
+            for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),now);tx.enterprise().saveInvocation(i,now,0);tx.enterprise().insightsContext(i.id(),request.executionContext());if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
             audit(tx,actor,"INVOCATION_SUBMIT",i);return reply(i,i.revision());});
     }
     public Store.Reply reserve(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseReservationRequest.class);

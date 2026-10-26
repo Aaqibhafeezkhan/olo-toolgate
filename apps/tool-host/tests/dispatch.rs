@@ -55,7 +55,8 @@ assert response["kind"] == "BROKER_RESPONSE" and response["requestId"] == "b-1",
 reply = response["result"] if "result" in response else {"refused": response["error"]["message"]}
 env = sorted(k for k in os.environ)
 frame = {"kind": "RESULT", "resultType": "complete", "content": [{"type": "text", "text": "ok"}],
-         "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"], "claims": inp["claims"]}, "isError": False}
+         "structuredContent": {"reply": reply, "env": env, "globals": inp["globals"], "secretHandles": inp["secretHandles"], "claims": inp["claims"],
+             "traceparent": inp.get("traceparent"), "executionContext": inp.get("executionContext")}, "isError": False}
 print(json.dumps(frame))
 "#;
 
@@ -110,6 +111,8 @@ struct Seen {
     queued: Vec<Value>,
     admissions: Vec<Value>,
     results: Vec<Value>,
+    /// DETAILED Insights span batches, by invocation ID.
+    spans: Vec<(String, Value)>,
 }
 
 type Shared = Arc<Mutex<Seen>>;
@@ -147,6 +150,15 @@ async fn control(seen: Shared) -> u16 {
         Json(
             json!({"invocationId": id, "attempt": body["attempt"], "acceptedThrough": through, "duplicates": 0, "refused": 0}),
         )
+    }
+    async fn spans(
+        State(seen): State<Shared>,
+        AxumPath(id): AxumPath<String>,
+        Json(body): Json<Value>,
+    ) -> impl IntoResponse {
+        let accepted = body["spans"].as_array().map_or(0, |s| s.len());
+        seen.lock().unwrap().spans.push((id, body));
+        Json(json!({"accepted": accepted, "refused": 0}))
     }
     async fn secret(headers: HeaderMap, Json(body): Json<Value>) -> axum::response::Response {
         if headers
@@ -201,6 +213,10 @@ async fn control(seen: Shared) -> u16 {
                 post(events),
             )
             .route("/api/control/v1/access/secrets/deliver", post(secret))
+            .route(
+                "/api/control/v1/access/invocations/{id}/insights/spans",
+                post(spans),
+            )
             .with_state(seen),
     )
     .await
@@ -435,8 +451,11 @@ fn permit(rig: &Rig, arguments: &Value, edit: impl FnOnce(&mut Value)) -> (Strin
 
 /// Dispatches and returns the NDJSON lines.
 async fn dispatch(rig: &Rig, jws: &str, arguments: &Value) -> Vec<Value> {
-    let body =
-        serde_json::to_vec(&json!({"permit": {"jws": jws}, "arguments": arguments})).unwrap();
+    send(rig, json!({"permit": {"jws": jws}, "arguments": arguments})).await
+}
+
+async fn send(rig: &Rig, dispatch: Value) -> Vec<Value> {
+    let body = serde_json::to_vec(&dispatch).unwrap();
     let text = reqwest::Client::new()
         .post(&rig.url)
         .body(body)
@@ -481,6 +500,94 @@ async fn a_real_python_sdk_package_runs_through_admission_broker_and_control_rep
     assert!(!seen.events.is_empty());
 }
 
+/// ADR 031 and conformance case `mcp-core/trace-propagation`: the tool input continues the dispatch's trace with the
+/// host's own span, and carries the caller's declared IDs beside the execution ID the host derives. A caller cannot
+/// set the execution ID or attempt.
+#[tokio::test]
+async fn the_tool_input_continues_the_trace_and_carries_the_execution_context() {
+    let rig = rig!();
+    let arguments = json!({"orderId": "123456"});
+    let (jws, id) = permit(&rig, &arguments, |_| {});
+    let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    let lines = send(
+        &rig,
+        json!({"permit": {"jws": jws}, "arguments": arguments, "traceparent": parent,
+            "executionContext": {"executionId": "ex-00000000000000000000000000000000", "attemptNumber": 9,
+                "toolCallId": "toolu_01A9q", "sessionId": "sess-42", "tracestate": "vendor=opaque"}}),
+    )
+    .await;
+    assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
+    let out = &lines[1]["result"]["structuredContent"];
+    let traceparent = out["traceparent"].as_str().unwrap();
+    assert_eq!(&traceparent[..36], &parent[..36]);
+    assert_eq!(&traceparent[52..], &parent[52..]);
+    assert_ne!(&traceparent[36..52], &parent[36..52]);
+    assert_eq!(
+        out["executionContext"],
+        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE),
+            "attemptNumber": 1, "toolCallId": "toolu_01A9q", "sessionId": "sess-42", "tracestate": "vendor=opaque"})
+    );
+}
+
+/// ADR 031 §9: a DETAILED dispatch sends the host's execution span (the span the tool received) and one span per
+/// brokered route call beneath it, after the run and without touching the result. Without the flag nothing is sent.
+#[tokio::test]
+async fn a_detailed_dispatch_sends_the_execution_and_egress_spans_to_control() {
+    let rig = rig!();
+    let arguments = json!({"orderId": "123456"});
+    let (jws, id) = permit(&rig, &arguments, |_| {});
+    let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    let lines = send(
+        &rig,
+        json!({"permit": {"jws": jws}, "arguments": arguments, "traceparent": parent, "collectSpans": true}),
+    )
+    .await;
+    assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
+    let tool_span = lines[1]["result"]["structuredContent"]["traceparent"]
+        .as_str()
+        .unwrap()[36..52]
+        .to_owned();
+    let mut batch = None;
+    for _ in 0..100 {
+        batch = rig.seen.lock().unwrap().spans.first().cloned();
+        if batch.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let (invocation, batch) = batch.expect("spans reach Control");
+    assert_eq!(invocation, id);
+    let spans = batch["spans"].as_array().unwrap();
+    let execute = &spans[0];
+    assert_eq!(execute["name"], "HOST_EXECUTE");
+    assert_eq!(execute["traceId"], "0af7651916cd43dd8448eb211c80319c");
+    assert_eq!(execute["spanId"], tool_span.as_str());
+    assert_eq!(execute["parentSpanId"], "b7ad6b7169203331");
+    assert_eq!(execute["status"], "OK");
+    assert_eq!(
+        execute["executionId"],
+        tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE)
+    );
+    let egress: Vec<_> = spans
+        .iter()
+        .filter(|s| s["name"] == "HOST_EGRESS")
+        .collect();
+    assert!(!egress.is_empty(), "{spans:?}");
+    for span in egress {
+        assert_eq!(span["parentSpanId"], tool_span.as_str());
+        assert_eq!(span["httpStatus"], 200);
+        assert!(span["routeId"].is_string(), "{span}");
+        assert!(span.get("url").is_none());
+    }
+
+    // Without the flag the host sends nothing.
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert_eq!(rig.seen.lock().unwrap().spans.len(), 1);
+}
+
 #[tokio::test]
 async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
     let rig = rig!();
@@ -516,6 +623,13 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
         ])
     );
     assert_eq!(out["globals"], json!({"TimeoutSeconds": 10}));
+    // ADR 031: without caller context the tool still gets its execution ID and signed attempt, and no trace.
+    assert_eq!(out["traceparent"], Value::Null);
+    assert_eq!(
+        out["executionContext"],
+        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE),
+            "attemptNumber": 1})
+    );
     // Without CREDENTIALS_IN_SANDBOX the secret stays with the broker.
     assert_eq!(out["secretHandles"], json!([]));
     // M4.2: the principal comes only from the signed permit, beside the pass-through claims.

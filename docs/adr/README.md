@@ -54,3 +54,4 @@ Use `000-template.md`.
 - [028: Python SDK follows the Java invocation runtime](028-python-sdk-java-parity.md)
 - [029: UUID tenant ownership with shared management and isolated execution](029-tenant-ownership-and-trust-boundaries.md)
 - [030: Existing MCP servers become tenant-owned MCP_PROXY packages](030-mcp-proxy-packages.md)
+- [031: Execution correlation and operator Insights](031-execution-correlation-operator-insights.md) (proposed)

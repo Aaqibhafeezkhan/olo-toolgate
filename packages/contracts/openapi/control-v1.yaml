@@ -7263,6 +7263,52 @@ paths:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseDecision
         '403':
           description: Simulation privilege required
+  /api/control/v1/access/insights/spans:
+    post:
+      operationId: submitInsightsSpans
+      description: DETAILED Operator Insights spans from the Gateway for its tenant's invocations (ADR 031). Best-effort; spans of unknown invocations or with names outside the Gateway's set are refused.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Spans buffered or refused
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanAck
+        '400':
+          description: Invalid batch
+        '403':
+          description: Access denied
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanBatch
+  /api/control/v1/access/insights/admissions:
+    post:
+      operationId: submitInsightsAdmissions
+      description: Gateway admission counters for Operator Insights (ADR 031). Best-effort; a repeated (gatewayId, epoch, sequence) is acknowledged as a duplicate and counted once.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Batch acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsAdmissionAck
+        '400':
+          description: Invalid batch
+        '403':
+          description: Access denied
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsAdmissionBatch
   /api/control/v1/access/invocations:
     get:
       operationId: listEnterpriseInvocations
@@ -7641,6 +7687,33 @@ paths:
                 $ref: ../schemas/v1/endpoint.schema.json#/$defs/RemoteToolResponse
         '403':
           description: Current group grant or target trust denied
+  /api/control/v1/access/invocations/{id}/insights/spans:
+    post:
+      operationId: submitInvocationInsightsSpans
+      description: DETAILED Operator Insights spans from the executor the invocation was placed on, authenticated by its device certificate (ADR 031).
+      responses:
+        '200':
+          description: Spans buffered or refused
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanAck
+        '400':
+          description: Invalid batch
+        '401':
+          description: Direct device certificate required
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanBatch
   /api/control/v1/access/invocations/{id}/events:
     get:
       operationId: invocationRunEvents

@@ -386,6 +386,10 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
     let deadline = claims
         .deadline_unix_ms
         .min(now_ms() + limits.sync_deadline_ms.min(CEILING.sync_deadline_ms));
+    let started = now_ms();
+    // The tool's trace parent and this host's execution span are one span.
+    let traceparent = crate::trace::child_traceparent(dispatch.traceparent.as_deref());
+    let mut egress = Vec::new();
     if let Some(document) = prepared.proxy.clone() {
         // The native MCP proxy runtime: no process, no sandbox.
         let (outcome, result, not_started) = crate::mcp_call::run(
@@ -460,8 +464,13 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 deadline_unix_ms: deadline,
                 idempotency_key: None,
                 catalog_revision: claims.catalog_revision.clone(),
-                traceparent: None,
+                traceparent: traceparent.clone(),
                 fencing_token: Some(fencing_token.clone()),
+                execution_context: Some(crate::trace::execution_context(
+                    dispatch.execution_context.as_ref(),
+                    &claims,
+                    &fencing_token,
+                )),
             };
             let memory = prepared
                 .tool
@@ -505,6 +514,11 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 tracing::warn!(invocation_id = %id, "run events still pending at the result report");
             }
             invocation.closed.store(true, Ordering::SeqCst);
+            egress = invocation
+                .egress
+                .lock()
+                .map(|e| e.clone())
+                .unwrap_or_default();
             let service_write = invocation.service_effect_started.load(Ordering::SeqCst);
             let unknown = claims.requires_execution_ledger || service_write;
             match ran {
@@ -573,7 +587,68 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
     };
     let _ = std::fs::remove_dir_all(&sandbox);
     drop(slot);
+    send_spans(
+        &host,
+        &claims,
+        &dispatch,
+        traceparent.as_deref(),
+        &fencing_token,
+        started,
+        &result,
+        &egress,
+    );
     finish(&host, id, fencing_token, outcome, result, not_started).await
+}
+
+/// DETAILED Insights: the run's spans go to Control in the background when the dispatch asks for them. Best-effort;
+/// a failure never touches the result.
+#[allow(clippy::too_many_arguments)]
+fn send_spans(
+    host: &Arc<Host>,
+    claims: &InvocationPermitClaims,
+    dispatch: &Dispatch,
+    traceparent: Option<&str>,
+    fencing_token: &str,
+    started: u64,
+    result: &ResultFrame,
+    egress: &[crate::broker::Egress],
+) {
+    let (Some(true), Some(own)) = (dispatch.collect_spans, traceparent) else {
+        return;
+    };
+    let execution = crate::trace::execution_id(
+        &claims.identity.tenant_id,
+        &claims.invocation_id,
+        fencing_token,
+    );
+    let code = result.is_error.then(|| {
+        result
+            .error
+            .as_ref()
+            .map(|e| e.code.clone())
+            .unwrap_or_else(|| "TOOL_ERROR".into())
+    });
+    let spans = crate::trace::spans(
+        dispatch.traceparent.as_deref(),
+        own,
+        &claims.invocation_id,
+        &execution,
+        started,
+        now_ms(),
+        code.as_deref(),
+        egress,
+    );
+    let control = host.control.clone();
+    let id = claims.invocation_id.clone();
+    tokio::spawn(async move {
+        let batch = olo_toolgate_contracts::v2::InsightsSpanBatch {
+            spans,
+            dropped_spans: None,
+        };
+        if let Err(e) = control.spans(&id, &batch).await {
+            tracing::debug!(invocation_id = %id, error = ?e, "Insights spans not delivered");
+        }
+    });
 }
 
 /// Reports an invocation's outcome to Control and answers the dispatch with it.

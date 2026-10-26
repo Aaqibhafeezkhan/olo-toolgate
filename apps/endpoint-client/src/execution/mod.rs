@@ -37,6 +37,10 @@ pub trait AuthorizationPort: Send + Sync {
     fn authorize_bound(&self, _request: AuthorizationRequest) -> Call<'_, Option<u64>> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
+    /// The trace context of the call just authorized (ADR 031). Only a relayed call carries one.
+    fn trace(&self) -> crate::trace::RunTrace {
+        crate::trace::RunTrace::default()
+    }
     fn complete(
         &self,
         _request: AuthorizationRequest,
@@ -185,6 +189,7 @@ fn sdk_input(
     request_id: &str,
     arguments: &BTreeMap<String, serde_json::Value>,
     deadline_unix_ms: u64,
+    trace: crate::trace::RunTrace,
 ) -> Result<(Vec<u8>, LocalRuntimeLimits)> {
     let input = olo_toolgate_contracts::v2::ToolInput {
         protocol_version: 2,
@@ -204,8 +209,9 @@ fn sdk_input(
         deadline_unix_ms,
         idempotency_key: None,
         catalog_revision: "device".into(),
-        traceparent: None,
+        traceparent: trace.traceparent,
         fencing_token: None,
+        execution_context: trace.context,
     };
     let mut bytes = serde_json::to_vec(&input).map_err(|_| Failure::Validation)?;
     if bytes.len() as u64
@@ -596,6 +602,7 @@ impl Manager {
             &invocation.request_id,
             &invocation.arguments,
             crate::now().saturating_add(tool.limits.timeout_ms),
+            crate::trace::RunTrace::default(),
         )?;
         let command = adapters::invocation_arguments(&runtime.kind, &tool)?;
         // A self-test never sees or changes the user's files: a tool with file access gets a new, empty area
@@ -702,6 +709,7 @@ impl Manager {
             &invocation.request_id,
             &invocation.arguments,
             deadline,
+            self.authorization.trace(),
         )?;
         let files = self.files.clone();
         let calls = AtomicUsize::new(0);

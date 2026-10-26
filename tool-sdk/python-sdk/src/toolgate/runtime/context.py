@@ -111,6 +111,39 @@ class _Invocation:
         chain = (self._c._principal or {}).get("chain")
         return [a for a in chain if isinstance(a, str)] if isinstance(chain, list) else []
 
+    @property
+    def execution_id(self) -> Optional[str]:
+        """This attempt's execution ID (ADR 031); a retry gets a new one. Absent in standalone runs."""
+        return self._c._execution_text("executionId")
+
+    @property
+    def tool_call_id(self) -> Optional[str]:
+        """The caller's tool-call ID, as declared by the caller. For correlation only: never trust it."""
+        return self._c._execution_text("toolCallId")
+
+    @property
+    def session_id(self) -> Optional[str]:
+        """The caller's session ID, as declared by the caller. For correlation only: never trust it."""
+        return self._c._execution_text("sessionId")
+
+    @property
+    def agent_run_id(self) -> Optional[str]:
+        """The caller's agent-run ID, as declared by the caller. For correlation only: never trust it."""
+        return self._c._execution_text("agentRunId")
+
+    @property
+    def traceparent(self) -> Optional[str]:
+        """The W3C trace parent for calls this tool makes downstream; see ``trace_headers``."""
+        return self._c._traceparent
+
+    def trace_headers(self) -> Dict[str, str]:
+        """W3C trace headers to send on a downstream request. They carry no user, session or tool identifiers."""
+        headers = {"traceparent": self.traceparent} if self.traceparent else {}
+        state = self._c._execution_text("tracestate")
+        if headers and state:
+            headers["tracestate"] = state
+        return headers
+
     def require_user(self) -> str:
         """The verified user; refuses without one, including every standalone run (OLO M4.3)."""
         if self.user_id is None or self.tenant_id is None:
@@ -171,6 +204,8 @@ class StandaloneContext:
         self._user_id: Optional[str] = None
         self._catalog_revision: Optional[int] = None
         self._principal: Optional[Dict[str, Any]] = None
+        self._execution: Optional[Dict[str, Any]] = None
+        self._traceparent: Optional[str] = None
         self.invocation = _Invocation(self)
         self.cancellation = _Cancellation(self)
         self.log = logging.Logger("toolgate.tool." + tool_id, logging.DEBUG)
@@ -272,6 +307,18 @@ class StandaloneContext:
         self._principal = principal if isinstance(principal, dict) else None
         self._user_id = self._principal_text("userId")
         self._agent_id = self._principal_text("agentId")
+
+    def attach_execution(self, execution: Any, traceparent: Any) -> None:
+        """Correlation context from the executor (ADR 031); governed only. Never read for any decision."""
+        self._execution = execution if isinstance(execution, dict) else None
+        self._traceparent = traceparent if isinstance(traceparent, str) else None
+        attempt = (self._execution or {}).get("attemptNumber")
+        if isinstance(attempt, int) and not isinstance(attempt, bool) and attempt >= 1:
+            self._attempt = attempt
+
+    def _execution_text(self, field: str) -> Optional[str]:
+        value = (self._execution or {}).get(field)
+        return value if isinstance(value, str) else None
 
     def _principal_text(self, field: str) -> Optional[str]:
         value = (self._principal or {}).get(field)

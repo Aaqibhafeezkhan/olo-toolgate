@@ -47,7 +47,7 @@ public class EndpointSocket {
                 if(auth.failed()){connections.decrementAndGet();context.response().setStatusCode(auth.cause() instanceof Failure failure?failure.status():503).end();return;}
                 context.request().toWebSocket().onComplete(upgrade->{
                     if(upgrade.failed()){connections.decrementAndGet();return;}
-                    channel(context.vertx(),upgrade.result(),peer,auth.result(),context.request().getHeader("X-ToolGate-System-Name"),context.request().remoteAddress().hostAddress().split("%",2)[0]);
+                    channel(context.vertx(),upgrade.result(),peer,auth.result(),context.request().getHeader("X-ToolGate-System-Name"),EndpointService.taskContext(context.request().getHeader("Toolgate-Client-Features")),context.request().remoteAddress().hostAddress().split("%",2)[0]);
                 });
             });
         });
@@ -57,7 +57,7 @@ public class EndpointSocket {
         var node=new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(body);
         LOG.info(codec.json(java.util.Map.of("service","control","event","protocol_packet","transport","WEBSOCKET","direction",direction,"path",PATH,"requestId",id,"operation",operation,"status",status==null?0L:status,"message",PacketTelemetry.summary(node,0))));
     }
-    private void channel(io.vertx.core.Vertx vertx,ServerWebSocket socket,X509Certificate peer,EndpointService endpoints,String systemName,String ipAddress){
+    private void channel(io.vertx.core.Vertx vertx,ServerWebSocket socket,X509Certificate peer,EndpointService endpoints,String systemName,boolean taskContext,String ipAddress){
         event("CONNECTED");
         var closed=new AtomicBoolean();var busy=new AtomicBoolean();var checking=new AtomicBoolean();
         var pong=new AtomicLong(System.nanoTime());var lastJob=new AtomicLong(System.nanoTime());
@@ -86,7 +86,7 @@ public class EndpointSocket {
                     endpoints.verifySocketPeer(peer);
                     String body=codec.json(request.body());
                     reply=switch(request.operation()){
-                        case CHECK_IN -> checkInWithJitter(()->endpoints.checkIn(peer,body,request.requestId(),systemName,ipAddress),endpoints.checkInPolicy().burstGuardMs());
+                        case CHECK_IN -> checkInWithJitter(()->endpoints.checkIn(peer,body,request.requestId(),systemName,ipAddress,taskContext),endpoints.checkInPolicy().burstGuardMs());
                         case AUTHORIZE -> endpoints.relay().authorize(peer,body);
                         case RESULT -> endpoints.relay().result(peer,body,request.requestId());
                     };

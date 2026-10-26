@@ -10,7 +10,9 @@ import java.util.*;
 /** SQL compare-and-swap and tenant serialization protect replica/restart execution boundaries. */
 final class PostgresEnterpriseStore implements EnterpriseStore {
     private final Connection connection;private final String tenant;private final ContractCodec codec;
-    PostgresEnterpriseStore(Connection connection,String tenant,ContractCodec codec){this.connection=connection;this.tenant=tenant;this.codec=codec;}
+    private final io.ololabs.toolgate.contracts.v2.InsightsMode insights;
+    PostgresEnterpriseStore(Connection connection,String tenant,ContractCodec codec){this(connection,tenant,codec,io.ololabs.toolgate.contracts.v2.InsightsMode.NONE);}
+    PostgresEnterpriseStore(Connection connection,String tenant,ContractCodec codec,io.ololabs.toolgate.contracts.v2.InsightsMode insights){this.connection=connection;this.tenant=tenant;this.codec=codec;this.insights=insights;}
     private PreparedStatement query(String sql,Object... values)throws SQLException{
         var s=connection.prepareStatement(sql);s.setString(1,tenant);for(int i=0;i<values.length;i++)s.setObject(i+2,values[i]);return s;
     }
@@ -65,7 +67,43 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
             }
             if(changed!=1)throw Failure.conflict();
         }catch(SQLException failure){throw Failure.unavailable();}
-        if(!value.state().name().equals(previous))RunEvents.recordState(new JdbcRunEventStore(connection,tenant),value.id(),value.state().name(),System.currentTimeMillis());
+        if(!value.state().name().equals(previous)){
+            long now=System.currentTimeMillis();
+            RunEvents.recordState(new JdbcRunEventStore(connection,tenant),value.id(),value.state().name(),now);
+            if(insights!=io.ololabs.toolgate.contracts.v2.InsightsMode.NONE)captureInsightsFact(value,previous,now);
+        }
+    }
+    /** ADR 031 §4: one immutable fact per state-changing transition, in the ledger's own transaction, so a failure here
+     *  fails the transition like a failed audit write. The per-invocation sequence lives on the ledger row. */
+    private void captureInsightsFact(EnterpriseInvocation value,String previous,long now){
+        long seq;
+        try(var s=connection.prepareStatement(SqliteState.sql(connection,"UPDATE control_enterprise_invocations SET insights_fact_seq=insights_fact_seq+1 WHERE tenant_id=? AND invocation_id=? RETURNING insights_fact_seq"))){
+            s.setString(1,tenant);s.setString(2,value.id());try(var rows=s.executeQuery()){if(!rows.next())throw Failure.conflict();seq=rows.getLong(1);}
+        }catch(SQLException failure){throw Failure.unavailable();}
+        var c=value.evaluation().context();var detail=Insights.JSON.createObjectNode();
+        if(seq==1){
+            detail.put("toolId",value.evaluation().toolId()).put("action",value.evaluation().action());
+            if(c.bindingId()!=null)detail.put("clientId",c.bindingId());if(c.userId()!=null)detail.put("userId",c.userId());if(c.agentId()!=null)detail.put("agentId",c.agentId());
+        }
+        String state=value.state().name(),executionId=null;
+        if(state.equals("EXECUTING")){
+            if(c.deviceId()!=null)detail.put("executorId",c.deviceId());
+            if(value.reservedNonce()!=null)executionId=Insights.executionId(tenant,value.id(),value.reservedNonce());
+        }
+        // The expiry sweep ends an invocation whose deadline passed; any other failure is the tool's report.
+        if((state.equals("FAILED")||state.equals("OUTCOME_UNKNOWN"))&&value.expiresAtUnixMs()<=now)detail.put("cause","LEASE_EXPIRED");
+        new JdbcInsightsStore(connection,tenant).insertFact(new Insights.Fact(value.id(),seq,value.revision(),previous,state,now,executionId,detail.toString()));
+    }
+    public void insightsContext(String invocationId,io.ololabs.toolgate.contracts.v2.ExecutionContext context){
+        if(insights==io.ololabs.toolgate.contracts.v2.InsightsMode.NONE||context==null)return;
+        var declared=Insights.JSON.createObjectNode();
+        if(context.toolCallId()!=null)declared.put("toolCallId",context.toolCallId());
+        if(context.sessionId()!=null)declared.put("sessionId",context.sessionId());
+        if(context.agentRunId()!=null)declared.put("agentRunId",context.agentRunId());
+        // A declared parent is kept only when it names another invocation of this tenant (ADR 031 §12).
+        var parent=context.parentInvocationId();
+        if(parent!=null&&!parent.equals(invocationId)&&invocation(parent)!=null)declared.put("parentInvocationId",parent);
+        if(!declared.isEmpty())new JdbcInsightsStore(connection,tenant).declare(invocationId,declared.toString());
     }
     public long invocationsSince(long since){try(var s=query("SELECT count(*) FROM control_enterprise_invocations WHERE tenant_id=? AND created_at>=? AND state NOT IN('CANCELLED','EXPIRED')",since);var rows=s.executeQuery()){rows.next();return rows.getLong(1);}catch(SQLException failure){throw Failure.unavailable();}}
     public EnterpriseApproval approval(String id){try(var s=query("SELECT document FROM control_enterprise_approvals WHERE tenant_id=? AND approval_id=?",id);var rows=s.executeQuery()){return rows.next()?codec.model(rows.getString(1),EnterpriseApproval.class):null;}catch(SQLException failure){throw Failure.unavailable();}}

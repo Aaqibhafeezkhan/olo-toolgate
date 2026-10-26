@@ -10,6 +10,12 @@
       "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$",
       "maxLength": 128
     },
+    "DeclaredId": {
+      "type": "string",
+      "description": "A caller-declared correlation identifier such as a model tool-call ID (call_..., toolu_...). Never trusted; never an authorization input.",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:/@_-]{0,127}$",
+      "maxLength": 128
+    },
     "SemanticVersion": {
       "type": "string",
       "maxLength": 128,

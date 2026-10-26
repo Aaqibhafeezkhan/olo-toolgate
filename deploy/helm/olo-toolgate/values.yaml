@@ -6,6 +6,9 @@ global:
 gateway:
   enabled: false
   publicOrigin: ''
+  # Operator Insights admission counters (ADR 031); keep equal to control.insights.mode.
+  insights:
+    mode: NONE
   replicaCount: 2
   image:
     repository: olo-toolgate-gateway
@@ -89,6 +92,22 @@ gateway:
 control:
   enabled: false
   defaultTenantAlias: default
+  # Operator Insights (docs/control-plane/insights.md): NONE, BASIC or DETAILED.
+  insights:
+    mode: NONE
+    # DETAILED only: tail sampling of span trees. Failed, partial, unknown and slow calls are always kept.
+    spans:
+      sampleRatio: '0.1'
+      slowMs: 5000
+      bufferMiB: 64
+      retentionHours: 72
+    # Optional OTLP/HTTP export of Insights spans and metrics, normally to an in-cluster OpenTelemetry Collector
+    # (deploy/insights/collector). Empty disables export. Separate from control.tracing (platform traces).
+    otlp:
+      endpoint: ''
+      environment: ''
+      # The port networkPolicy.insightsCollectorTo opens for export.
+      port: 4318
   tenancy:
     mode: single
     # Exact hosts for a default-only initialization; empty derives local and configured endpoint hosts.
@@ -176,6 +195,8 @@ control:
     cacheTo: []
     dnsTo: []
     collectorTo: []
+    # Egress to the Insights export Collector (insights.otlp); required when the endpoint is set.
+    insightsCollectorTo: []
     artifactTo: []
     marketplaceTo: []
     # Egress to the client-tool image registry (clientImages); its port comes from clientImages.registryUrl.

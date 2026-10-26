@@ -9,13 +9,17 @@ package io.ololabs.toolgate.contracts;
  * @param expiresAtUnixMs canonical expiresAtUnixMs value
  * @param context canonical context value
  * @param invocationId canonical invocationId value
+ * @param traceparent canonical traceparent value
+ * @param executionContext canonical executionContext value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record RemoteToolSubmission(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "request", required = true) AuthorizationRequest request,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "expiresAtUnixMs", required = true) Long expiresAtUnixMs,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "context", required = true) io.ololabs.toolgate.contracts.v2.RequestContext context,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationId", required = true) String invocationId
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationId", required = true) String invocationId,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "traceparent", required = false) String traceparent,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionContext", required = false) io.ololabs.toolgate.contracts.v2.ExecutionContext executionContext
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,6 +27,8 @@ public record RemoteToolSubmission(
      * @param expiresAtUnixMs canonical expiresAtUnixMs value
      * @param context canonical context value
      * @param invocationId canonical invocationId value
+     * @param traceparent canonical traceparent value
+     * @param executionContext canonical executionContext value
      */
     public RemoteToolSubmission {
         java.util.Objects.requireNonNull(request, "request");

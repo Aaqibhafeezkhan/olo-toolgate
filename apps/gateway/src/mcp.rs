@@ -15,7 +15,8 @@ use axum::{
 };
 use base64::Engine;
 use olo_toolgate_contracts::v2::{
-    Dispatch, InvocationOutcome, PermitReservationRequest, RequestContext, ResultProvenance,
+    Dispatch, ExecutionContext, InvocationOutcome, PermitReservationRequest, RequestContext,
+    ResultProvenance,
 };
 use olo_toolgate_contracts::{
     AuthorizationRequest, EnterpriseInvocationState, ErrorCode, RemoteToolState,
@@ -215,15 +216,40 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             }
         }
         "tools/call" => {
-            tools_call(
+            let (traceparent, tracestate) = forwarded_trace(&correlation, meta);
+            let trace = Trace {
+                traceparent,
+                context: declared_context(meta, &headers, tracestate),
+            };
+            let invocation_id = crate::http::invocation_id(&context, &id.to_string());
+            let started = unix_ms().unwrap_or(0);
+            let request_span = trace.traceparent.clone();
+            let result = tools_call(
                 &s,
                 context,
                 &correlation.request_id,
                 credential_deadline,
                 &id,
                 params,
+                trace,
             )
             .await
+            .map(|result| with_invocation_reference(result, &invocation_id));
+            // The request span is the Gateway's own span, the parent its executors see.
+            if request_span.len() == 55 {
+                let ok = result.as_ref().is_ok_and(|r| r["isError"] != json!(true));
+                s.spans.record(
+                    olo_toolgate_contracts::v2::InsightsSpanName::GatewayRequest,
+                    &request_span,
+                    request_span[36..52].to_owned(),
+                    None,
+                    &invocation_id,
+                    started,
+                    unix_ms().unwrap_or(started),
+                    ok,
+                );
+            }
+            result
         }
         // ping is not part of 2026-07-28.
         _ => Err(rpc_error(
@@ -256,6 +282,150 @@ async fn tools_list(s: &AppState, context: &RequestContext, id: &Value) -> Resul
     }
 }
 
+/// The `_meta` key and header carrying each caller-declared correlation identifier (ADR 031 §2).
+const DECLARED_IDS: [(&str, &str); 3] = [
+    ("io.ololabs.toolgate/toolCallId", "toolgate-tool-call-id"),
+    ("io.ololabs.toolgate/sessionId", "toolgate-session-id"),
+    ("io.ololabs.toolgate/agentRunId", "toolgate-agent-run-id"),
+];
+/// The `_meta` key and header naming the invocation a call is nested under (ADR 031 §12). Control keeps it only when it
+/// names another invocation of the same tenant.
+const PARENT_INVOCATION: (&str, &str) = (
+    "io.ololabs.toolgate/parentInvocationId",
+    "toolgate-parent-invocation-id",
+);
+/// The `_meta` member through which a tool result names its invocation, for support and operator searches.
+const INVOCATION_REFERENCE: &str = "io.ololabs.toolgate/invocationId";
+
+/// Trace context and caller-declared correlation the Gateway forwards with one tool call. None of it is trusted, and
+/// none of it changes authentication, routing, policy or approval.
+pub(crate) struct Trace {
+    traceparent: String,
+    context: Option<ExecutionContext>,
+}
+
+/// The trace a tool call continues: the `traceparent` header when it was valid, else a valid `traceparent` in `_meta`
+/// (MCP trace context), each with the Gateway's own span. `tracestate` travels only with the parent it came with.
+fn forwarded_trace(
+    correlation: &crate::http::Correlation,
+    meta: &Value,
+) -> (String, Option<String>) {
+    if !correlation.inherited {
+        if let Some(parent) = meta["traceparent"]
+            .as_str()
+            .filter(|p| crate::http::valid_traceparent(p))
+        {
+            let traceparent = format!(
+                "00-{}-{}-{}",
+                &parent[3..35],
+                &correlation.traceparent[36..52],
+                &parent[53..55]
+            );
+            let state = meta["tracestate"]
+                .as_str()
+                .filter(|s| crate::http::valid_tracestate(s))
+                .map(str::to_owned);
+            return (traceparent, state);
+        }
+    }
+    (
+        correlation.traceparent.clone(),
+        correlation.tracestate.clone(),
+    )
+}
+
+/// The caller's declared correlation identifiers: `_meta` first, then the matching header. An invalid value is dropped,
+/// never rejected. Returns `None` when there is nothing to forward.
+fn declared_context(
+    meta: &Value,
+    headers: &HeaderMap,
+    tracestate: Option<String>,
+) -> Option<ExecutionContext> {
+    let [tool_call_id, session_id, agent_run_id] = DECLARED_IDS.map(|(key, header)| {
+        meta[key]
+            .as_str()
+            .or_else(|| single_header(headers, header))
+            .filter(|v| crate::http::valid_declared_id(v))
+            .map(str::to_owned)
+    });
+    let (key, header) = PARENT_INVOCATION;
+    let parent_invocation_id = meta[key]
+        .as_str()
+        .or_else(|| single_header(headers, header))
+        .filter(|v| crate::http::valid_declared_id(v) && !v.contains(['@', '_']))
+        .map(str::to_owned);
+    if tool_call_id.is_none()
+        && session_id.is_none()
+        && agent_run_id.is_none()
+        && parent_invocation_id.is_none()
+        && tracestate.is_none()
+    {
+        return None;
+    }
+    Some(ExecutionContext {
+        execution_id: None,
+        attempt_number: None,
+        tool_call_id,
+        session_id,
+        agent_run_id,
+        parent_invocation_id,
+        tracestate,
+    })
+}
+
+/// Adds the invocation reference to a tool result's `_meta`, keeping the members already there.
+fn with_invocation_reference(mut result: Value, invocation_id: &str) -> Value {
+    if !result["_meta"].is_object() {
+        result["_meta"] = json!({});
+    }
+    result["_meta"][INVOCATION_REFERENCE] = json!(invocation_id);
+    result
+}
+
+/// The Gateway's wait for the executor's answer, recorded as a DETAILED span when it ends, on every return path.
+struct Waiting<'a> {
+    state: &'a AppState,
+    traceparent: String,
+    parent: Option<String>,
+    invocation_id: String,
+    started: u64,
+    ok: std::cell::Cell<bool>,
+}
+impl<'a> Waiting<'a> {
+    fn new(
+        state: &'a AppState,
+        traceparent: String,
+        parent: Option<String>,
+        invocation_id: String,
+    ) -> Self {
+        Self {
+            state,
+            traceparent,
+            parent,
+            invocation_id,
+            started: unix_ms().unwrap_or(0),
+            ok: std::cell::Cell::new(false),
+        }
+    }
+    fn succeeded<T, E>(&self, result: &Result<T, E>) {
+        self.ok.set(result.is_ok());
+    }
+}
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        self.state.spans.record(
+            olo_toolgate_contracts::v2::InsightsSpanName::GatewayDispatch,
+            &self.traceparent,
+            self.state.span_id(),
+            self.parent.clone(),
+            &self.invocation_id,
+            self.started,
+            unix_ms().unwrap_or(self.started),
+            self.ok.get(),
+        );
+    }
+}
+
 /// Authorizes and relays one tool call. Nothing is cached between requests.
 async fn tools_call(
     s: &AppState,
@@ -264,6 +434,7 @@ async fn tools_call(
     credential_deadline: u64,
     id: &Value,
     params: &Value,
+    trace: Trace,
 ) -> Result<Value, Response> {
     let name = params["name"].as_str().unwrap_or("");
     let relay = &s.gateway.authority;
@@ -316,20 +487,42 @@ async fn tools_call(
     };
     let mut context = context;
     context.request_id = crate::http::invocation_id(&context, &id.to_string());
-    let outcome = s
+    let authorizing = unix_ms().unwrap_or(0);
+    let authorized = s
         .gateway
-        .authorize(request.clone(), context.clone())
-        .await
-        .map_err(|code| {
-            rpc_error(
-                status(&code),
-                id.clone(),
-                -32000,
-                "Authorization failed",
-                json!({"code":code}),
-            )
-        })?;
+        .authorize_with(request.clone(), context.clone(), trace.context.clone())
+        .await;
+    let gateway_span =
+        (trace.traceparent.len() == 55).then(|| trace.traceparent[36..52].to_owned());
+    if let Ok(o) = &authorized {
+        s.spans.record(
+            olo_toolgate_contracts::v2::InsightsSpanName::GatewayAuthorize,
+            &trace.traceparent,
+            s.span_id(),
+            gateway_span.clone(),
+            &o.invocation.id,
+            authorizing,
+            unix_ms().unwrap_or(authorizing),
+            true,
+        );
+    }
+    let outcome = authorized.map_err(|code| {
+        rpc_error(
+            status(&code),
+            id.clone(),
+            -32000,
+            "Authorization failed",
+            json!({"code":code}),
+        )
+    })?;
     if outcome.invocation.state == EnterpriseInvocationState::PendingApproval {
+        if let Some(now) = unix_ms() {
+            s.admissions.record(
+                now,
+                Some(name),
+                olo_toolgate_contracts::v2::InsightsAdmissionCategory::ApprovalRequired,
+            );
+        }
         return Ok(
             json!({"content":[{"type":"text","text":"Approval required"}],"structuredContent":{"invocationId":outcome.invocation.id,"state":"PENDING_APPROVAL"},"isError":true}),
         );
@@ -368,6 +561,12 @@ async fn tools_call(
         return Err(error(ErrorCode::Timeout, request_id));
     }
     let device = outcome.invocation.evaluation.context.device_id.clone();
+    let dispatching = Waiting::new(
+        s,
+        trace.traceparent.clone(),
+        gateway_span,
+        outcome.invocation.id.clone(),
+    );
     if outcome.invocation.state == EnterpriseInvocationState::Queued {
         // A call Control placed on a Tool Host gets a permit for that host. The host runs it
         // whether the Gateway reaches it directly (a configured route) or the host fetches its
@@ -394,6 +593,9 @@ async fn tools_call(
                 let dispatch = Dispatch {
                     permit,
                     arguments: request.arguments.clone(),
+                    traceparent: Some(trace.traceparent.clone()),
+                    execution_context: trace.context.clone(),
+                    collect_spans: s.spans.enabled().then_some(true),
                 };
                 let invocation_id = &outcome.invocation.id;
                 let dispatched = match s.tool_hosts.url(&device) {
@@ -404,7 +606,9 @@ async fn tools_call(
                     }
                     None => relayed(relay.as_ref(), &dispatch, invocation_id, expires).await,
                 };
-                return host_result(dispatched, invocation_id, id);
+                let answer = host_result(dispatched, invocation_id, id);
+                dispatching.succeeded(&answer);
+                return answer;
             }
         }
     }
@@ -416,7 +620,9 @@ async fn tools_call(
         match relay.dispatch_status(invocation_id).await {
             Ok(state) => {
                 let dispatched = follow(relay.as_ref(), state, invocation_id, expires).await;
-                return host_result(dispatched, invocation_id, id);
+                let answer = host_result(dispatched, invocation_id, id);
+                dispatching.succeeded(&answer);
+                return answer;
             }
             Err(ErrorCode::NotFound) => {}
             Err(code) => return host_result(Err(code), invocation_id, id),
@@ -427,6 +633,8 @@ async fn tools_call(
         invocation_id: outcome.invocation.id,
         request,
         expires_at_unix_ms: expires,
+        traceparent: Some(trace.traceparent),
+        execution_context: trace.context,
     };
     let mut response = relay.submit(&submission).await.map_err(|code| {
         rpc_error(
@@ -458,6 +666,7 @@ async fn tools_call(
                 let Some(output) = result.output else {
                     return Err(error(ErrorCode::Validation, request_id));
                 };
+                dispatching.ok.set(true);
                 return Ok(
                     json!({"content":[{"type":"text","text":serde_json::to_string(&output).unwrap_or_default()}],"structuredContent":output,"isError":false}),
                 );
@@ -662,5 +871,73 @@ mod tests {
             json!("X")
         );
         assert!(result["_meta"]["io.modelcontextprotocol/serverInfo"].is_object());
+    }
+
+    fn headers(pairs: &[(&'static str, &str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in pairs {
+            map.append(*name, value.parse().unwrap());
+        }
+        map
+    }
+
+    #[test]
+    fn declared_ids_come_from_meta_before_headers() {
+        let meta = json!({"io.ololabs.toolgate/toolCallId":"call_1","io.ololabs.toolgate/sessionId":"sess-1"});
+        let context = declared_context(
+            &meta,
+            &headers(&[
+                ("toolgate-tool-call-id", "call_header"),
+                ("toolgate-agent-run-id", "run-1"),
+            ]),
+            Some("vendor=x".into()),
+        )
+        .unwrap();
+        assert_eq!(context.tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(context.session_id.as_deref(), Some("sess-1"));
+        assert_eq!(context.agent_run_id.as_deref(), Some("run-1"));
+        assert_eq!(context.tracestate.as_deref(), Some("vendor=x"));
+        assert!(context.parent_invocation_id.is_none());
+        // The executor sets these from its permit; the caller never does.
+        assert!(context.execution_id.is_none() && context.attempt_number.is_none());
+    }
+
+    #[test]
+    fn a_parent_invocation_is_forwarded_only_in_the_identifier_shape() {
+        let meta = json!({"io.ololabs.toolgate/parentInvocationId":"inv-1"});
+        let context = declared_context(&meta, &HeaderMap::new(), None).unwrap();
+        assert_eq!(context.parent_invocation_id.as_deref(), Some("inv-1"));
+        let header = headers(&[("toolgate-parent-invocation-id", "inv-2")]);
+        let context = declared_context(&json!({}), &header, None).unwrap();
+        assert_eq!(context.parent_invocation_id.as_deref(), Some("inv-2"));
+        // Declared IDs may hold '@' and '_'; invocation IDs never do.
+        let meta = json!({"io.ololabs.toolgate/parentInvocationId":"me@example"});
+        assert!(declared_context(&meta, &HeaderMap::new(), None).is_none());
+    }
+
+    #[test]
+    fn invalid_declared_ids_are_dropped_not_rejected() {
+        let long = "a".repeat(129);
+        let meta = json!({"io.ololabs.toolgate/toolCallId":"bad id","io.ololabs.toolgate/sessionId":long,
+            "io.ololabs.toolgate/agentRunId":7});
+        assert!(declared_context(&meta, &HeaderMap::new(), None).is_none());
+        // A duplicated header is ambiguous and dropped as well.
+        let duplicate = headers(&[("toolgate-session-id", "a"), ("toolgate-session-id", "b")]);
+        assert!(declared_context(&json!({}), &duplicate, None).is_none());
+    }
+
+    #[test]
+    fn tool_results_name_their_invocation() {
+        let result = with_invocation_reference(
+            json!({"content":[],"_meta":{"io.ololabs.toolgate/error":{"code":"X"}}}),
+            "inv-9",
+        );
+        assert_eq!(result["_meta"][INVOCATION_REFERENCE], json!("inv-9"));
+        assert_eq!(
+            result["_meta"]["io.ololabs.toolgate/error"]["code"],
+            json!("X")
+        );
+        let bare = with_invocation_reference(json!({"content":[]}), "inv-9");
+        assert_eq!(bare["_meta"][INVOCATION_REFERENCE], json!("inv-9"));
     }
 }

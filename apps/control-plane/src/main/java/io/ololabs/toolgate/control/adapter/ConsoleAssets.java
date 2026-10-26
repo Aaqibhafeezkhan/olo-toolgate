@@ -21,6 +21,8 @@ public class ConsoleAssets {
             } catch(java.io.IOException failure){throw new IllegalStateException("Quickstart console artifact unavailable");}
             for(var path:new String[]{"/console/","/console/index.html"})router.get(path).order(-900).handler(context->context.response().putHeader("Content-Type","text/html; charset=UTF-8").end(shell));
         }
+        // The operator Insights page is served only by the operator listener (ADR 031 §8), never on tenant ingress.
+        router.get("/console/insights.html").order(-1100).handler(context -> context.response().setStatusCode(404).putHeader("Cache-Control", "no-store").end());
         router.route("/console/*").order(-1000).handler(context -> {
             context.addHeadersEndHandler(ignored -> {
             var headers = context.response().headers();

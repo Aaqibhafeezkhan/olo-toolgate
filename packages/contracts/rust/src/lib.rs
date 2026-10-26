@@ -1817,6 +1817,8 @@ pub struct EnterpriseInvocationRequest {
     pub package_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downstream_idempotency_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<v2::ExecutionContext>,
 }
 /// Canonical EnterpriseInvocationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2766,6 +2768,10 @@ pub struct RemoteToolSubmission {
     pub expires_at_unix_ms: u64,
     pub context: v2::RequestContext,
     pub invocation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<v2::ExecutionContext>,
 }
 /// Bounded lease delivered only over device-authenticated polling; executable definitions are never accepted from an agent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2777,6 +2783,12 @@ pub struct RemoteToolTask {
     pub expires_at_unix_ms: u64,
     pub invocation: EnterpriseInvocation,
     pub permit: EnterpriseSignedPermit,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<v2::ExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collect_spans: Option<bool>,
 }
 /// Observed package state, distinct from assigned desired state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3140,6 +3152,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",
         include_str!("../schemas/v2/identifiers.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/insights.schema.json",
+        include_str!("../schemas/v2/insights.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/invocation.schema.json",

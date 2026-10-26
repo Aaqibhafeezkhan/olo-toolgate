@@ -135,6 +135,9 @@ def run(input, output, env, build=None):
     config.env = {"TOOLGATE_EXECUTION_TARGET": env.get("TOOLGATE_EXECUTION_TARGET", "SERVER")}
     config.invocation_id = ident
     config.principal = principal if isinstance(principal, dict) else None
+    # Correlation only (ADR 031): never read for any decision. Older executors send neither member.
+    config.execution = value.get("executionContext") if isinstance(value.get("executionContext"), dict) else None
+    config.traceparent = value.get("traceparent") if isinstance(value.get("traceparent"), str) else None
     config.deadline = dt.datetime.fromtimestamp(deadline/1000, dt.timezone.utc)
     config.frames = emit
     try:

@@ -21,7 +21,7 @@ public class EnterpriseOperationResource {
     @Inject io.quarkus.security.identity.SecurityIdentity security;
     @Inject VaultResource vault;
     @Inject DirectoryService directory;
-    @Inject ServerPackages packages;@Inject Correlation correlation;
+    @Inject ServerPackages packages;@Inject Correlation correlation;@Inject InsightsService insights;
     /** v2 bodies extend these endpoints for Tool Hosts; a v2 body is recognised by a field only it has. */
     private boolean v2(String document,String field){return ((com.fasterxml.jackson.databind.JsonNode)codec.value(body(document))).has(field);}
     @POST @Path("simulate") @Consumes("application/json") @io.quarkus.security.Authenticated
@@ -45,6 +45,14 @@ public class EnterpriseOperationResource {
     private static Failure unauthorized(){return new Failure(ErrorCode.UNAUTHORIZED,401,"Direct device certificate required");}
     @GET @Path("health") @RolesAllowed("toolgate-relay-gateway")
     public Response health(){var actor=gateway();store.transaction(actor.tenant(),false,tx->{tx.load();tx.enterprise().authorizationEpoch();return null;});return Response.ok("{\"ready\":true}").header("Cache-Control","no-store").build();}
+    /** Gateway admission counters for Operator Insights (ADR 031); best-effort, deduplicated by (gateway, epoch, sequence). */
+    @POST @Path("insights/admissions") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response insightsAdmissions(String document){var actor=gateway();var batch=codec.model(body(document),io.ololabs.toolgate.contracts.v2.InsightsAdmissionBatch.class);
+        return Response.ok(codec.json(insights.ingest(actor.tenant(),batch,System.currentTimeMillis()))).header("Cache-Control","no-store").build();}
+    /** DETAILED Insights spans from the Gateway, for invocations of its own tenant (ADR 031 §9). */
+    @POST @Path("insights/spans") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response insightsSpans(String document){var actor=gateway();var batch=codec.model(body(document),io.ololabs.toolgate.contracts.v2.InsightsSpanBatch.class);
+        return Response.ok(codec.json(insights.ingestSpans(actor.tenant(),tx->new InsightsService.SpanSender(io.ololabs.toolgate.contracts.v2.InsightsSpanSource.GATEWAY,null),null,batch,System.currentTimeMillis()))).header("Cache-Control","no-store").build();}
     @POST @Path("invocations") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response submit(String document){return reply(operations.submit(gateway(),body(document)));}
     @POST @Path("invocations/cancel") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
@@ -77,6 +85,12 @@ public class EnterpriseOperationResource {
     @GET @Path("invocations/{id}/device-outcome") @PermitAll
     public Response deviceOutcome(@PathParam("id")String id){var certificate=peer();return reply(operations.deviceOutcome(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id));}
     /** Run-response frames from the executor that admitted the invocation; the device certificate and fencing token bind them. */
+    /** DETAILED Insights spans from the executor the invocation was placed on, with its device certificate. */
+    @POST @Path("invocations/{id}/insights/spans") @Consumes("application/json") @PermitAll
+    public Response invocationSpans(@PathParam("id")String id,String document){var certificate=peer();var batch=codec.model(body(document),io.ololabs.toolgate.contracts.v2.InsightsSpanBatch.class);
+        return Response.ok(codec.json(insights.ingestSpans(tenant(),tx->{String device=endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId();
+            return new InsightsService.SpanSender(tx.packages().toolHost(device)!=null?io.ololabs.toolgate.contracts.v2.InsightsSpanSource.TOOL_HOST:io.ololabs.toolgate.contracts.v2.InsightsSpanSource.CLIENT,device);},
+            Ids.valid(id),batch,System.currentTimeMillis()))).header("Cache-Control","no-store").build();}
     @POST @Path("invocations/{id}/events") @Consumes("application/json") @PermitAll
     public Response events(@PathParam("id")String id,String document){var certificate=peer();return reply(new RunEvents(store,codec,operations).ingest(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id,body(document)));}
     /** Authorized cursor replay of an invocation's retained run-response events. */

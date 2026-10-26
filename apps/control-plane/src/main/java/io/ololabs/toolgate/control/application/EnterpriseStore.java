@@ -7,6 +7,8 @@ import java.util.List;
 
 /** All methods run inside the tenant transaction which also commits audit and directory state. */
 public interface EnterpriseStore {
+    /** Merges the caller's declared correlation into the invocation's first Insights fact (ADR 031); a no-op when Insights is off. */
+    default void insightsContext(String invocationId,io.ololabs.toolgate.contracts.v2.ExecutionContext context){}
     Long userCredentialDeadline(String id);
     void userCredentialDeadline(String id,long expiresAt);
     boolean operationCancelled(String id);

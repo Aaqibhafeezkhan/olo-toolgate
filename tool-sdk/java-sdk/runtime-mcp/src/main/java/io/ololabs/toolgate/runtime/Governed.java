@@ -77,6 +77,9 @@ final class Governed {
         config.governedInvocationId = input.path("invocationId").asText();
         config.governedDeadline = java.time.Instant.ofEpochMilli(input.path("deadlineUnixMs").asLong());
         config.governedPrincipal = principal != null && principal.isObject() ? principal : null;
+        // Correlation only (ADR 031). Older executors send neither member.
+        config.governedExecution = input.path("executionContext").isObject() ? input.get("executionContext") : null;
+        config.governedTraceparent = input.path("traceparent").isTextual() ? input.get("traceparent").asText() : null;
         config.responses = frames;
         try {
             config.location = io.ololabs.toolgate.sdk.ExecutionLocation.valueOf(env.getOrDefault("TOOLGATE_EXECUTION_TARGET", "SERVER"));

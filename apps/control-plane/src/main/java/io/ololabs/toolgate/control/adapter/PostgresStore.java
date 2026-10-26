@@ -28,6 +28,10 @@ public class PostgresStore implements Store {
     private volatile boolean adapterKnown, localDatabase;
     private boolean ownsDataSource;
     private TenantAdmission admission=new TenantAdmission(0,8);
+    /** ADR 031: whether ledger transitions write Insights facts. Deployment-wide; NONE writes nothing. */
+    private volatile io.ololabs.toolgate.contracts.v2.InsightsMode insights=io.ololabs.toolgate.contracts.v2.InsightsMode.NONE;
+    public io.ololabs.toolgate.contracts.v2.InsightsMode insightsMode(){return insights;}
+    public void insightsMode(io.ololabs.toolgate.contracts.v2.InsightsMode mode){insights=java.util.Objects.requireNonNull(mode);}
     @Inject
     public PostgresStore(jakarta.enterprise.inject.Instance<AgroalDataSource> dataSource, ContractCodec codec, org.eclipse.microprofile.config.Config config) {
         this(config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
@@ -38,6 +42,7 @@ public class PostgresStore implements Store {
         int cap=config.getOptionalValue("toolgate.capacity.database-concurrency",Integer.class).orElse(Math.max(1,Math.min(8,pool/2)));
         if(pool<2||cap<1||cap>=pool)throw new IllegalStateException("Tenant database concurrency must reserve connections for other tenants");
         admission=new TenantAdmission(0,cap);
+        insights=io.ololabs.toolgate.control.application.Insights.mode(config.getOptionalValue("toolgate.control.insights.mode",String.class).orElse("NONE"));
         ownsDataSource = config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
             && !config.getOptionalValue("toolgate.quickstart.storage", String.class).orElse("sqlite").equals("postgresql");
     }
@@ -165,7 +170,8 @@ public class PostgresStore implements Store {
             try(var s=statement("INSERT INTO control_tenant_runtime_profiles(tenant_id,server_id,organization,control_url,gateway_url) VALUES(?,?,?,?,?)",profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl())){s.executeUpdate();}
             catch(SQLException failure){throw Failure.unavailable();}
         }
-        public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec);}
+        public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec,insights);}
+        public io.ololabs.toolgate.control.application.InsightsStore insights() {return new JdbcInsightsStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.BuilderStore builder() { return new PostgresBuilderStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.RunEventStore runEvents() { return new JdbcRunEventStore(connection, tenant); }

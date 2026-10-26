@@ -216,6 +216,20 @@ impl Control {
         self.post(&path, batch, None).await
     }
 
+    /// DETAILED Insights spans of an invocation this host ran (ADR 031 §9). Best-effort.
+    pub async fn spans(
+        &self,
+        invocation_id: &str,
+        batch: &olo_toolgate_contracts::v2::InsightsSpanBatch,
+    ) -> Result<olo_toolgate_contracts::v2::InsightsSpanAck, ControlError> {
+        self.post(
+            &format!("/invocations/{invocation_id}/insights/spans"),
+            batch,
+            None,
+        )
+        .await
+    }
+
     /// Pull mode: the oldest call Control holds for this host, which the host now owns.
     pub async fn next_dispatch(&self) -> Result<Option<Dispatch>, ControlError> {
         let bytes = self
