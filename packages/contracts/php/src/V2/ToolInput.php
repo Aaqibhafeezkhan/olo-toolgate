@@ -21,12 +21,13 @@ final readonly class ToolInput implements \JsonSerializable {
         public ?string $taskId = null,
         public ?string $idempotencyKey = null,
         public ?string $traceparent = null,
-        public ?string $fencingToken = null
+        public ?string $fencingToken = null,
+        public ?ExecutionContext $executionContext = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['protocolVersion', 'invocationId', 'taskId', 'toolId', 'entryPoint', 'arguments', 'globals', 'claims', 'secretHandles', 'deadlineUnixMs', 'idempotencyKey', 'catalogRevision', 'traceparent', 'fencingToken']) || array_diff(['protocolVersion', 'invocationId', 'toolId', 'entryPoint', 'arguments', 'globals', 'claims', 'secretHandles', 'deadlineUnixMs', 'catalogRevision'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['protocolVersion', 'invocationId', 'taskId', 'toolId', 'entryPoint', 'arguments', 'globals', 'claims', 'secretHandles', 'deadlineUnixMs', 'idempotencyKey', 'catalogRevision', 'traceparent', 'fencingToken', 'executionContext']) || array_diff(['protocolVersion', 'invocationId', 'toolId', 'entryPoint', 'arguments', 'globals', 'claims', 'secretHandles', 'deadlineUnixMs', 'catalogRevision'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         if ($data['protocolVersion'] !== 2) {
@@ -46,7 +47,8 @@ final readonly class ToolInput implements \JsonSerializable {
             array_key_exists('taskId', $data) ? $data['taskId'] : null,
             array_key_exists('idempotencyKey', $data) ? $data['idempotencyKey'] : null,
             array_key_exists('traceparent', $data) ? $data['traceparent'] : null,
-            array_key_exists('fencingToken', $data) ? $data['fencingToken'] : null
+            array_key_exists('fencingToken', $data) ? $data['fencingToken'] : null,
+            array_key_exists('executionContext', $data) ? ExecutionContext::fromArray($data['executionContext']) : null
         );
     }
 

@@ -13,12 +13,14 @@ final readonly class RemoteToolTask implements \JsonSerializable {
         public AuthorizationRequest $request,
         public int $expiresAtUnixMs,
         public EnterpriseInvocation $invocation,
-        public EnterpriseSignedPermit $permit
+        public EnterpriseSignedPermit $permit,
+        public ?string $traceparent = null,
+        public ?\OloLabs\ToolGate\Contracts\V2\ExecutionContext $executionContext = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['requestId', 'leaseId', 'request', 'expiresAtUnixMs', 'invocation', 'permit']) || array_diff(['requestId', 'leaseId', 'request', 'expiresAtUnixMs', 'invocation', 'permit'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['requestId', 'leaseId', 'request', 'expiresAtUnixMs', 'invocation', 'permit', 'traceparent', 'executionContext']) || array_diff(['requestId', 'leaseId', 'request', 'expiresAtUnixMs', 'invocation', 'permit'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -27,7 +29,9 @@ final readonly class RemoteToolTask implements \JsonSerializable {
             AuthorizationRequest::fromArray($data['request']),
             $data['expiresAtUnixMs'],
             EnterpriseInvocation::fromArray($data['invocation']),
-            EnterpriseSignedPermit::fromArray($data['permit'])
+            EnterpriseSignedPermit::fromArray($data['permit']),
+            array_key_exists('traceparent', $data) ? $data['traceparent'] : null,
+            array_key_exists('executionContext', $data) ? \OloLabs\ToolGate\Contracts\V2\ExecutionContext::fromArray($data['executionContext']) : null
         );
     }
 

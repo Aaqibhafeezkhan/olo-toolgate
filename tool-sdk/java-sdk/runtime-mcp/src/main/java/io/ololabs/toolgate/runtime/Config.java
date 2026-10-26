@@ -44,6 +44,10 @@ final class Config {
     java.time.Instant governedDeadline;
     /** The Tool Host's verified principal (claims.toolgate), never part of the tool's declared claims. */
     JsonNode governedPrincipal;
+    /** The executor's correlation context (ToolInput.executionContext, ADR 031); never read for any decision. */
+    JsonNode governedExecution;
+    /** The executor's W3C trace parent for this attempt. */
+    String governedTraceparent;
     /** The device files area: the executor broker on a device; outside one, an in-memory area that starts empty. */
     io.ololabs.toolgate.sdk.context.DeviceFiles deviceFiles;
     final List<String> warnings = new ArrayList<>();

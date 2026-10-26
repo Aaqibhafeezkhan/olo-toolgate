@@ -73,6 +73,7 @@ final class ContractV2RoundTripTest {
         "EffectiveValue",
         "EgressMode",
         "ErrorDeclaration",
+        "ExecutionContext",
         "ExecutionSettings",
         "FrameKind",
         "GatewaySettings",

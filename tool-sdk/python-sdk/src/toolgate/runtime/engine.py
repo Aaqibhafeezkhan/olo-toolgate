@@ -287,6 +287,7 @@ class StandaloneRuntime(ToolCatalog):
         ctx._mode = InvocationMode.GOVERNED if self.config.mode is Mode.GOVERNED else InvocationMode.STANDALONE
         if self.config.mode is Mode.GOVERNED:
             ctx.attach_principal(getattr(self.config, "principal", None))
+            ctx.attach_execution(getattr(self.config, "execution", None), getattr(self.config, "traceparent", None))
         ctx._frames = getattr(self.config, "frames", None)
         permissions = d["permissions"]
         ctx._files = (self.files if "DEVICE_FILES_WRITE" in permissions else ReadOnlyFiles(self.files)) \

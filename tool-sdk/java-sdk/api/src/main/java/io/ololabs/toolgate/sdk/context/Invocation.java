@@ -33,6 +33,19 @@ public interface Invocation {
     /** The agents a delegated call passed through, outermost first; empty for direct calls. */
     List<String> delegationChain();
 
+    /** This attempt's execution ID; a retry gets a new one. Empty in standalone runs. */
+    default Optional<String> executionId() { return Optional.empty(); }
+    /** The caller's tool-call ID, as the caller declared it: for correlation only, never trust it. */
+    default Optional<String> toolCallId() { return Optional.empty(); }
+    /** The caller's session ID, as the caller declared it: for correlation only, never trust it. */
+    default Optional<String> sessionId() { return Optional.empty(); }
+    /** The caller's agent-run ID, as the caller declared it: for correlation only, never trust it. */
+    default Optional<String> agentRunId() { return Optional.empty(); }
+    /** The W3C trace parent for calls this tool makes downstream; see {@link #traceHeaders()}. */
+    default Optional<String> traceparent() { return Optional.empty(); }
+    /** W3C trace headers for a downstream request. They carry no user, session or tool identifiers. */
+    default java.util.Map<String, String> traceHeaders() { return java.util.Map.of(); }
+
     /**
      * The verified user, for tools that act on a user's data. Refuses when there is none, including every standalone
      * run, so such a tool never falls back to acting without a user.

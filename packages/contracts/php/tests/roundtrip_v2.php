@@ -69,6 +69,7 @@ $models = [
     'EffectiveValue',
     'EgressMode',
     'ErrorDeclaration',
+    'ExecutionContext',
     'ExecutionSettings',
     'FrameKind',
     'GatewaySettings',

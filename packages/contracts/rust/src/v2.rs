@@ -543,6 +543,10 @@ pub struct DiscoveryPublicKey {
 pub struct Dispatch {
     pub permit: SignedInvocationPermit,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<ExecutionContext>,
 }
 /// Reviewed effect class per tool.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -599,6 +603,25 @@ pub struct ErrorDeclaration {
     pub code: String,
     pub description: String,
     pub retryable: bool,
+}
+/// Correlation context of one execution attempt (ADR 031). executionId and attemptNumber are set by the executor from its permit; the other members are declared by the caller, are never trusted and never affect authorization, routing or policy.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExecutionContext {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt_number: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_invocation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tracestate: Option<String>,
 }
 /// Execution settings with defaults resolved.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2556,6 +2579,8 @@ pub struct ToolInput {
     pub traceparent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fencing_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<ExecutionContext>,
 }
 /// Canonical ToolKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

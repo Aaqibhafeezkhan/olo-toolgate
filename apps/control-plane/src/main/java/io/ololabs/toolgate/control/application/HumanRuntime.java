@@ -22,7 +22,7 @@ public final class HumanRuntime {
         // A tool placed on a Tool Host runs from its verified package there, through the same permit and relayed dispatch as a
         // Gateway call; its run events and result arrive in the invocation's stream.
         if(hosts.toolHost(actor.tenant(),request.deviceId())){hosts.humanDispatch(actor,invocation.id(),request.request().arguments());var queued=codec.model(operations.get(actor,invocation.id()).body(),EnterpriseInvocation.class);return new Store.Reply(200,codec.json(new EnterpriseHumanOutcome(queued,null)),queued.revision());}
-        var dispatch=codec.model(relay.submit(internal(actor),true,codec.json(new RemoteToolSubmission(request.request(),Math.min(invocation.expiresAtUnixMs(),System.currentTimeMillis()+30000),context,invocation.id())),context.requestId()).body(),RemoteToolResponse.class);
+        var dispatch=codec.model(relay.submit(internal(actor),true,codec.json(new RemoteToolSubmission(request.request(),Math.min(invocation.expiresAtUnixMs(),System.currentTimeMillis()+30000),context,invocation.id(),null,null)),context.requestId()).body(),RemoteToolResponse.class);
         var current=codec.model(operations.get(actor,invocation.id()).body(),EnterpriseInvocation.class);
         return new Store.Reply(200,codec.json(new EnterpriseHumanOutcome(current,dispatch)),current.revision());
     }
