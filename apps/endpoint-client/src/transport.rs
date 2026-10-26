@@ -119,6 +119,17 @@ pub struct HttpsControl {
     packets: crate::diagnostics::PacketLog,
     socket: crate::socket::Channel,
 }
+/// Task members this client accepts beyond the original relay shape. Control sends a relayed task's trace context,
+/// execution context and span request only to clients that name the feature (ADR 031 §2).
+pub const CLIENT_FEATURES: &str = "remote-task-context.v1";
+fn client_features() -> reqwest::header::HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        "toolgate-client-features",
+        reqwest::header::HeaderValue::from_static(CLIENT_FEATURES),
+    );
+    headers
+}
 impl HttpsControl {
     async fn refusal(&self, mut response: reqwest::Response) -> Failure {
         let status = response.status().as_u16();
@@ -176,7 +187,8 @@ impl HttpsControl {
             .timeout(Duration::from_secs(config.request_timeout_seconds))
             .connect_timeout(Duration::from_secs(5))
             .pool_max_idle_per_host(1)
-            .user_agent(concat!("olo-toolgate-client/", env!("CARGO_PKG_VERSION")));
+            .user_agent(concat!("olo-toolgate-client/", env!("CARGO_PKG_VERSION")))
+            .default_headers(client_features());
         if let Some(path) = &config.ca_certificate_path {
             let bytes = crate::storage::read_owned(path, 16384, false)?;
             let root = reqwest::Certificate::from_pem(&bytes).map_err(|_| Failure::Validation)?;
@@ -733,6 +745,17 @@ impl ControlPort for HttpsControl {
 #[cfg(test)]
 mod tenant_tests {
     use super::*;
+    #[test]
+    fn every_request_names_the_task_members_this_client_accepts() {
+        // Control (EndpointService.TASK_CONTEXT) sends a relayed task's trace and execution context only to
+        // clients that name this feature; released clients reject unknown task members.
+        assert_eq!(
+            client_features()
+                .get("toolgate-client-features")
+                .and_then(|v| v.to_str().ok()),
+            Some("remote-task-context.v1")
+        );
+    }
     #[test]
     fn transport_assertion_is_optional_then_immutable_and_canonical() {
         let directory = crate::storage::test_directory("tenant-http");
