@@ -33,6 +33,9 @@ POLICY = {
     'build-release.collect': 'artifacts',
     'build-release.publish': 'publication',
     'admission.admit': 'admission',
+    # A read-only PR gate requires hosted base/head event SHAs; its policy is
+    # covered offline by test_pr_policy, not replayed as a build/publication job.
+    'pr-policy.contribution-policy': 'admission',
     'preflight.metadata': 'replay',
     'foundation.python': 'replay',
     'foundation.ui': 'replay',

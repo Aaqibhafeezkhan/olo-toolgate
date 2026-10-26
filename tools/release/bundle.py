@@ -12,6 +12,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def document_bytes(path):
+    if path == ROOT/'RELEASE-NOTES.md':
+        # Generate only in release output; ordinary PRs retain the tracked snapshot.
+        import sys
+        sys.path.insert(0, str(ROOT))
+        from tools.contracts.version import release_notes
+        return release_notes(ROOT).encode('utf-8')
+    return path.read_bytes()
+
+
 def bundle_bytes():
     contracts = ROOT/'packages/contracts'
     paths = [ROOT/'LICENSE', ROOT/'NOTICE.md', ROOT/'RELEASE-NOTES.md', contracts/'VERSION', contracts/'contract-set.yaml', contracts/'generated-manifest.json']
@@ -21,7 +31,7 @@ def bundle_bytes():
     with gzip.GzipFile(fileobj=buffer, mode='wb', mtime=0, filename='') as compressed:
         with tarfile.open(fileobj=compressed, mode='w') as archive:
             for path in sorted(paths):
-                data = path.read_bytes()
+                data = document_bytes(path)
                 info = tarfile.TarInfo(path.name if path.parent == ROOT else path.relative_to(contracts).as_posix())
                 info.size = len(data)
                 info.mode = 0o644
@@ -43,7 +53,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     if not args.checksums_only:
         for document in ('LICENSE', 'NOTICE.md', 'RELEASE-NOTES.md'):
-            (args.output/document).write_bytes((ROOT/document).read_bytes())
+            (args.output/document).write_bytes(document_bytes(ROOT/document))
         version = (ROOT/'packages/contracts/VERSION').read_text().strip()
         product = (ROOT/'VERSION').read_text().strip()
         (args.output/f'olo-toolgate-contracts-{version}.tar.gz').write_bytes(bundle_bytes())

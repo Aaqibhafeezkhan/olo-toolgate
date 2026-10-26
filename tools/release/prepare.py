@@ -182,6 +182,10 @@ def stamp_versions(root, info):
             '        }\n\n'+marker, 1)
         gradle.write_text(script, encoding='utf-8', newline='\n')
     run(sys.executable, 'tools/contracts/version.py', '--set', info['version'], cwd=root)
+    # Release preparation is the only stage that refreshes tracked note snapshots;
+    # generate.py then embeds the same current notes in every SDK distribution.
+    from tools.contracts.version import release_notes
+    (root/'RELEASE-NOTES.md').write_text(release_notes(root), encoding='utf-8', newline='\n')
     run(sys.executable, 'tools/contracts/generate.py', cwd=root)
     lock = root/'package-lock.json'
     document = json.loads(lock.read_text())

@@ -81,6 +81,8 @@ public final class EnterpriseOperations {
      *  STATUS_LOOKUP and MANUAL calls stay unknown until reconciled; nothing else is ever resent. */
     private EnterpriseInvocation reconciled(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,long now){
         if(i.state()!=EnterpriseInvocationState.OUTCOME_UNKNOWN||i.reconciliation()!=ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY)return i;
+        var approval=tx.enterprise().approval(approvalId(i.id()));
+        if(approval!=null&&(approval.state()!=EnterpriseApprovalState.APPROVED||approval.expiresAtUnixMs()<=now||approval.authorizationEpoch()!=tx.enterprise().authorizationEpoch()))return i;
         var resend=changed(i,EnterpriseInvocationState.QUEUED,null,i.completedResources(),null);
         var queued=new EnterpriseInvocation(resend.id(),resend.requestDigest(),resend.evaluation(),resend.state(),resend.revision(),resend.authorizationEpoch(),null,now+lifetime,resend.completedResources(),resend.downstreamIdempotencyKey(),null,resend.diagnosticId(),resend.reconciliation());
         tx.enterprise().saveInvocation(queued,now,i.revision());audit(tx,actor,"RECONCILIATION_RESEND",queued);return queued;}
@@ -267,6 +269,14 @@ public final class EnterpriseOperations {
             if(state==EnterpriseApprovalState.APPROVED){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var approved=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);
                 // The approved operation resumes (M5.5) with a fresh dispatch window, however long the review took.
                 var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),now+lifetime,approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId(),approved.reconciliation());tx.enterprise().saveInvocation(queued,now,i.revision());}
+            else if((state==EnterpriseApprovalState.DENIED||state==EnterpriseApprovalState.REVOKED)&&Set.of(EnterpriseInvocationState.PENDING_APPROVAL,EnterpriseInvocationState.QUEUED,EnterpriseInvocationState.RESERVED,EnterpriseInvocationState.DISPATCHED,EnterpriseInvocationState.EXECUTING).contains(i.state())){
+                // End the original wait atomically with the review. Once dispatch may have started, cancellation
+                // cannot prove the effect did not happen: retain uncertainty for reconciliation instead.
+                var endedState=state==EnterpriseApprovalState.DENIED?EnterpriseInvocationState.FAILED:
+                    Set.of(EnterpriseInvocationState.DISPATCHED,EnterpriseInvocationState.EXECUTING).contains(i.state())?EnterpriseInvocationState.OUTCOME_UNKNOWN:EnterpriseInvocationState.CANCELLED;
+                var ended=changed(i,endedState,i.reservedNonce(),i.completedResources(),i.resultDigest());
+                tx.enterprise().saveInvocation(ended,now,i.revision());audit(tx,actor,"INVOCATION_APPROVAL_"+state.name(),ended);
+            }
             tx.audit(actor.id(),"OPERATION_"+state.name()+(new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId())?"_SUPER_ADMIN":""),"approval:"+a.id(),next.revision(),i.evaluation().context().requestId(),a.requestDigest());var reply=reply(next,next.revision());tx.remember(actor.id(),key,hash,reply);return reply;});
     }
     public Store.Reply report(Ids.TenantId tenant,String authenticatedDevice,String document){

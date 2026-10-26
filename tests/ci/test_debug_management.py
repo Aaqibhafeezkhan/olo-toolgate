@@ -24,7 +24,7 @@ class DebugManagementTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         sources = set(version.expected()) | {
             ROOT/'VERSION', ROOT/'packages/contracts/VERSION', ROOT/'CHANGELOG.md',
-            ROOT/'LICENSE', ROOT/'NOTICE.md', ROOT/'debug/manage.ps1',
+            ROOT/'LICENSE', ROOT/'NOTICE.md', ROOT/'RELEASE-NOTES.md', ROOT/'debug/manage.ps1',
             ROOT/'tools/contracts/version.py', ROOT/'tools/contracts/generate.py',
             ROOT/'tools/ci/preflight.py', ROOT/'tools/contracts/fixtures.py',
         }
