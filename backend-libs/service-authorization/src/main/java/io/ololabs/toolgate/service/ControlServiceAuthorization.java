@@ -39,8 +39,13 @@ public final class ControlServiceAuthorization {
             ServicePermitVerifier.Request request, SSLSession executor) {
         if(!tenant.equals(request.tenant()))throw denied();
         refresh();
-        return new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null,
-            (a,c)->consume(c)).authorize(permit,request,executor);
+        return withFreshEpoch(()->new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null,
+            (a,c)->consume(c)).authorize(permit,request,executor),()->{refreshedAt=-1;refresh();});
+    }
+    /** Refresh once only for a fully verified read whose signed epoch differs from our cache. */
+    static <T> T withFreshEpoch(Supplier<T> authorize,Runnable refresh) {
+        try{return authorize.get();}
+        catch(ServicePermitVerifier.StaleReadEpoch stale){refresh.run();return authorize.get();}
     }
     private boolean consume(ServicePermitConsumption request) {
         return exchange("consume",request).path("authorized").asBoolean(false);

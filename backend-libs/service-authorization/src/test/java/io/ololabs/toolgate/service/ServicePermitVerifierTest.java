@@ -48,6 +48,38 @@ class ServicePermitVerifierTest {
         var p=permit("memory.read");epoch.set(8);assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.read"),EXECUTOR));
         epoch.set(7);time.set(110001);assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.read"),EXECUTOR));
     }
+    @Test void newReadPermitRefreshesAnOlderCachedEpochExactlyOnce()throws Exception{
+        var p=permit("memory.read");epoch.set(6);var refreshes=new AtomicInteger();
+        var auth=ControlServiceAuthorization.withFreshEpoch(()->verifier.authorizeKey(p,request("memory.read"),EXECUTOR),()->{refreshes.incrementAndGet();epoch.set(7);});
+        assertEquals("alice",auth.claims().sub());assertEquals(1,refreshes.get());assertEquals(0,commits.get());
+    }
+    @Test void revokedReadStillFailsAfterOneRefresh()throws Exception{
+        var p=permit("memory.read");epoch.set(6);var refreshes=new AtomicInteger();
+        assertThrows(SecurityException.class,()->ControlServiceAuthorization.withFreshEpoch(
+            ()->verifier.authorizeKey(p,request("memory.read"),EXECUTOR),()->{refreshes.incrementAndGet();epoch.set(8);}));
+        assertEquals(1,refreshes.get());assertEquals(0,commits.get());
+    }
+    @Test void invalidRequestsNeverTriggerEpochRefresh()throws Exception{
+        var p=permit("memory.read");var refreshes=new AtomicInteger();
+        assertThrows(SecurityException.class,()->ControlServiceAuthorization.withFreshEpoch(
+            ()->verifier.authorizeKey(p,request("memory.read"),"f".repeat(64)),refreshes::incrementAndGet));
+        assertEquals(0,refreshes.get());assertEquals(0,commits.get());
+    }
+    @Test void writeRefusalDoesNotRefreshOrRepeatConsumption()throws Exception{
+        verifier=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("effect-key",key.getPublic()),
+            Clock.fixed(Instant.ofEpochMilli(100000),ZoneOffset.UTC),tenant->new ServicePermitVerifier.Epoch(7,100000),
+            (audience,request)->{commits.incrementAndGet();return false;});
+        var p=permit("memory.append");var refreshes=new AtomicInteger();
+        assertThrows(SecurityException.class,()->ControlServiceAuthorization.withFreshEpoch(
+            ()->verifier.authorizeKey(p,request("memory.append"),EXECUTOR),refreshes::incrementAndGet));
+        assertEquals(1,commits.get());assertEquals(0,refreshes.get());
+    }
+    @Test void failedEpochRefreshNeverFallsBackToTheCachedAuthorization()throws Exception{
+        var p=permit("memory.read");epoch.set(6);var refreshes=new AtomicInteger();
+        assertThrows(SecurityException.class,()->ControlServiceAuthorization.withFreshEpoch(
+            ()->verifier.authorizeKey(p,request("memory.read"),EXECUTOR),()->{refreshes.incrementAndGet();throw new SecurityException("offline");}));
+        assertEquals(1,refreshes.get());assertEquals(0,commits.get());
+    }
     @Test void delayedCommitMustRollBackAfterPermitDeadline()throws Exception{
         var authorization=verifier.authorizeKey(permit("memory.append"),request("memory.append"),EXECUTOR);
         time.set(115000);assertThrows(SecurityException.class,authorization::checkCommitDeadline);
