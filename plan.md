@@ -88,9 +88,10 @@ trace_id / span_id: observability only; one invocation may span several traces
 | `client_id` | Calling application | Gateway credential | Verified |
 | `user_id` | User the call runs for | Authenticated context; absent for service calls | Verified |
 | `invocation_id` | One admitted invocation | Control (existing `invocationId`) | Authoritative |
-| `execution_id` | One fenced execution attempt | Control, bound to the permit nonce / fencing token | Authoritative |
+| `execution_id` | One fenced execution attempt | Control, a one-way digest of the fencing token (ADR 031 §1); the token itself never leaves its existing paths | Authoritative |
 | `tool_call_id` | Caller's logical call reference | Caller; generated if absent | Declared |
-| `session_id`, `agent_id`, `agent_run_id` | Workflow context | Caller metadata (`Mcp-Session-Id` is a transport session, not this) | Declared |
+| `agent_id` | Calling agent | Verified identity (`agentId`) | Verified |
+| `session_id`, `agent_run_id` | Workflow context | Caller metadata (`Mcp-Session-Id` is a transport session, not this) | Declared |
 | `parent_invocation_id` | Nested call (later phase) | Propagated context, validated to be same tenant | Declared |
 | `trace_id`, `span_id` | Distributed trace | W3C trace context or generated | Untrusted input |
 | `request_id`, `control_request_id` | Transport request at gateway / Control | Existing generators | Authoritative |
@@ -436,9 +437,9 @@ exceeds its budget in Stage 7, move the sink into a separate Control-owned proce
 
 ### Access
 
-- Access requires an installation-operator role. step 1 decides whether that is the `SUPER_ADMIN` portal role
-  ([ADR 022](docs/adr/022-super-administrator-review-exception.md)) or a dedicated permission; no tenant-scoped
-  management role can grant it.
+- Access requires installation-operator authority. `SUPER_ADMIN` cannot provide it, because it is resolved from one
+  tenant's directory. [ADR 031 §8](docs/adr/031-execution-correlation-operator-insights.md) proposes a separate
+  operator listener with operator client certificates; no tenant credential is accepted there.
 - Insights APIs live under a separate operator path, are absent from the tenant API surface and OpenAPI, and ignore
   any tenant selection that would widen scope. Tenant filters are query inputs checked by the operator role, never
   routing.
