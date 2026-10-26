@@ -33,7 +33,7 @@ class EnterpriseOperationTest {
         gateway=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"a".repeat(64),false);reviewer=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"c".repeat(64),true,false,"admin");
     }
     void saveGraph(){store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{var d=tx.load();tx.save(d,new Directory(d.revision()+1,graph.entries));return null;});}
-    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null);}
+    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null,null);}
     EnterpriseInvocation submit(String id){return graph.codec.model(operations.submit(gateway,graph.codec.json(request(id,"data/report.txt"))).body(),EnterpriseInvocation.class);}
     EnterpriseReservation reserve(EnterpriseInvocation i){return graph.codec.model(operations.reserve(gateway,graph.codec.json(new EnterpriseReservationRequest(i.id(),i.revision()))).body(),EnterpriseReservation.class);}
     String consumption(EnterpriseReservation r){var e=r.invocation().evaluation();return graph.codec.json(new EnterprisePermitConsumption(r.invocation().id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest()));}
@@ -47,7 +47,7 @@ class EnterpriseOperationTest {
                 null,"alice",null,null,List.of(),1L,null,null,null,"binding-a",null);
         var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
         var i=graph.codec.model(operations.submitHuman(alice,new EnterpriseInvocationRequest(context,original.request(),
-                original.toolDigest(),original.packageDigest(),null),"device").body(),EnterpriseInvocation.class);
+                original.toolDigest(),original.packageDigest(),null,null),"device").body(),EnterpriseInvocation.class);
         var finished=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.SUCCEEDED,
                 i.revision()+1,i.authorizationEpoch(),"host-fence",i.expiresAtUnixMs(),i.evaluation().resources(),
                 i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId(),i.reconciliation());
@@ -84,7 +84,7 @@ class EnterpriseOperationTest {
 
     EnterpriseInvocationRequest delegated(String id,CredentialKind kind,String issuer){var r=request(id,"data/report.txt");
         var c=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,kind,issuer,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);
-        return new EnterpriseInvocationRequest(c,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey());}
+        return new EnterpriseInvocationRequest(c,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null);}
     /** M3.10: an on-behalf-of binding takes its user only from a verified user credential of the configured issuer. */
     @Test void onBehalfOfBindingNeedsAVerifiedUserCredential(){
         graph.remove(Kind.WORKLOAD_BINDING,"workload");graph.workload("workload","agent",RequestMode.DELEGATED,null,null);saveGraph();
@@ -106,7 +106,7 @@ class EnterpriseOperationTest {
     }
     EnterpriseInvocationRequest epochs(String id,String path,long session,long credential){var r=request(id,path);var c=r.context();
         var renewed=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),session,credential,c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
-        return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey());}
+        return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null);}
     EnterpriseInvocation submitted(EnterpriseInvocationRequest r){return graph.codec.model(operations.submit(gateway,graph.codec.json(r)).body(),EnterpriseInvocation.class);}
     /** M5.3: the same logical operation with changed arguments is a conflict and never creates or changes an invocation. */
     @Test void changedArgumentsUnderTheSameKeyAreAConflict(){var first=submit("op-1");

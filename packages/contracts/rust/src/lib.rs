@@ -1817,6 +1817,8 @@ pub struct EnterpriseInvocationRequest {
     pub package_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downstream_idempotency_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<v2::ExecutionContext>,
 }
 /// Canonical EnterpriseInvocationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3148,6 +3150,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",
         include_str!("../schemas/v2/identifiers.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/insights.schema.json",
+        include_str!("../schemas/v2/insights.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/invocation.schema.json",

@@ -169,6 +169,7 @@ export const operations = {
   getDeviceGroupMembership: { method: 'GET', path: '/api/control/v1/devices/{id}/groups' },
   updateDeviceGroupMembership: { method: 'PUT', path: '/api/control/v1/devices/{id}/groups' },
   simulateEnterpriseAccess: { method: 'POST', path: '/api/control/v1/access/simulate' },
+  submitInsightsAdmissions: { method: 'POST', path: '/api/control/v1/access/insights/admissions' },
   listEnterpriseInvocations: { method: 'GET', path: '/api/control/v1/access/invocations' },
   submitEnterpriseInvocation: { method: 'POST', path: '/api/control/v1/access/invocations' },
   reserveEnterprisePermit: { method: 'POST', path: '/api/control/v1/access/invocations/reserve' },

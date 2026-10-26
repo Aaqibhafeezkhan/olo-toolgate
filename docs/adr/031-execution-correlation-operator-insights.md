@@ -235,6 +235,33 @@ and `hash(invocation_id)`; invocations that pass their slow threshold are flushe
 replica. Endpoint and host uploads use the run-event authentication and fencing checks, and Control rewrites resource
 identity from the authenticated certificate.
 
+### 10. Amendment: as built in step 3
+
+Implementing BASIC showed simpler or safer choices than §1, §4, §5 and §8 described. These replace them:
+
+- **Projector ownership is the tenant transaction.** Control already runs every tenant write under a per-tenant lock
+  (`pg_advisory_xact_lock`, or SQLite's single writer). The projector projects one tenant per write transaction, so it
+  holds the same lock as ledger transitions: two replicas never project one tenant at once, and a projection never
+  interleaves with a transition. The partition and lease table of §5 is not needed. Checkpoints still make every
+  application idempotent.
+- **Attempt numbers come from the facts.** The projector numbers attempts by counting transitions into `EXECUTING`;
+  the `insights_attempts` column of §4 is not added. The permit's signed `attempt` claim, which the Gateway still
+  requests as `1`, is unchanged here and stays a separate follow-up.
+- **Admission counters all come from the Gateway**, best-effort with source-gap reporting. Control-side denials are
+  answered through the Gateway, which counts them from the response status, so Control does not count them a second
+  time.
+- **Insights tables are outside tenant capacity accounting**, so Insights rows can never make a tenant's own writes
+  fail. Retention and the summary quota bound them.
+- **Facts are written only when the ledger state changes.** `INPUT_REQUIRED` (T7) and `CANCEL_REQUESTED` (T8) leave
+  `state` unchanged and write none. The failure cause is inferred: a `FAILED` or `OUTCOME_UNKNOWN` written after the
+  invocation's deadline is a timeout. The `not_started` and lease columns are not written by current code, so an
+  executor's refusal before start is not yet distinguished from a tool error.
+- **Times are Control commit times.** Executor-measured durations are not reported to Control yet.
+- **Operator audit goes to a log category** (`toolgate.audit.insights`) with the certificate subject, because
+  `control_audit` is tenant-scoped and there is no installation-level audit table.
+- **The caller's correlation is stored on the first fact** and is excluded from the invocation request's idempotency
+  digest, so a retry carrying a new trace span is still the same request.
+
 ## Alternatives Considered
 
 - **Fencing token as execution ID:** rejected; it is a capability and would leak through telemetry.

@@ -23,6 +23,7 @@ public interface Store {
         default PackageStore packages() { throw Failure.unavailable(); }
         default McpServerStore mcpServers() { throw Failure.unavailable(); }
         default RunEventStore runEvents() { throw Failure.unavailable(); }
+        default InsightsStore insights() { throw Failure.unavailable(); }
         Directory load();
         /** Digest of this tenant's current directory; adapters may reuse a version-checked immutable snapshot. */
         default String adoptionDigest(TenantId tenant, Codec codec) { return EndpointAdoptions.digest(codec, tenant, load()); }

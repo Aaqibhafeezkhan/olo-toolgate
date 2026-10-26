@@ -57,12 +57,16 @@ pub struct Config {
     /// OLO user credentials issued by Control (M3.4); without it, HUMAN bearers are refused.
     #[serde(default)]
     pub user_credentials: Option<crate::user_credential::Settings>,
+    /// Operator Insights admission counters (ADR 031); off unless the mode is BASIC or DETAILED.
+    #[serde(default)]
+    pub insights: crate::insights::Settings,
 }
 
 impl Config {
     /// Invalid or unbounded configuration prevents startup.
     pub fn validate(&self, _contracts: &Contracts, _now: u64) -> Result<(), &'static str> {
         self.control.validate()?;
+        self.insights.validate()?;
         if let Some(users) = &self.user_credentials {
             users.validate()?;
         }

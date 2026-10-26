@@ -72,7 +72,7 @@ CREATE TABLE "control_records"(tenant_id TEXT REFERENCES control_tenants(tenant_
 -- statement
 CREATE TABLE control_authorization_outbox(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,revision bigint NOT NULL,authorization_epoch bigint NOT NULL,occurred_at bigint NOT NULL,published_at bigint,PRIMARY KEY(tenant_id,revision));
 -- statement
-CREATE TABLE control_enterprise_invocations(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,state varchar(32) NOT NULL,authorization_epoch bigint NOT NULL,created_at bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL, tool_id TEXT CHECK(length(tool_id) BETWEEN 1 AND 256), package_id TEXT CHECK(length(package_id) BETWEEN 1 AND 128), package_digest TEXT CHECK(length(package_digest)=71 AND substr(package_digest,1,7)='sha256:' AND substr(package_digest,8) NOT GLOB '*[^0-9a-f]*'), pool_id TEXT CHECK(length(pool_id) BETWEEN 1 AND 128), runtime_digest TEXT CHECK(length(runtime_digest)=71 AND substr(runtime_digest,1,7)='sha256:' AND substr(runtime_digest,8) NOT GLOB '*[^0-9a-f]*'), effect_safety TEXT CHECK(effect_safety IN('READ_ONLY','IDEMPOTENT','NON_IDEMPOTENT','UNKNOWN')), requires_execution_ledger INTEGER CHECK(requires_execution_ledger IN(0,1)), lease_holder TEXT CHECK(length(lease_holder) BETWEEN 1 AND 256), lease_expires_at INTEGER CHECK(lease_expires_at BETWEEN 0 AND 9007199254740991), cancel_requested_at INTEGER CHECK(cancel_requested_at BETWEEN 0 AND 9007199254740991), not_started INTEGER NOT NULL DEFAULT 0 CHECK(not_started IN(0,1)), task_id TEXT CHECK(length(task_id) BETWEEN 22 AND 64 AND task_id NOT GLOB '*[^A-Za-z0-9_-]*'), task_state TEXT, task_owner_digest TEXT CHECK(length(task_owner_digest)=64 AND task_owner_digest NOT GLOB '*[^0-9a-f]*'), task_retain_until INTEGER CHECK(task_retain_until BETWEEN 0 AND 9007199254740991), task_input_deadline_at INTEGER CHECK(task_input_deadline_at BETWEEN 0 AND 9007199254740991), task_last_polled_at INTEGER CHECK(task_last_polled_at BETWEEN 0 AND 9007199254740991), task_document TEXT CHECK(length(CAST(task_document AS BLOB))<=32768),PRIMARY KEY(tenant_id,invocation_id));
+CREATE TABLE control_enterprise_invocations(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,state varchar(32) NOT NULL,authorization_epoch bigint NOT NULL,created_at bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL, tool_id TEXT CHECK(length(tool_id) BETWEEN 1 AND 256), package_id TEXT CHECK(length(package_id) BETWEEN 1 AND 128), package_digest TEXT CHECK(length(package_digest)=71 AND substr(package_digest,1,7)='sha256:' AND substr(package_digest,8) NOT GLOB '*[^0-9a-f]*'), pool_id TEXT CHECK(length(pool_id) BETWEEN 1 AND 128), runtime_digest TEXT CHECK(length(runtime_digest)=71 AND substr(runtime_digest,1,7)='sha256:' AND substr(runtime_digest,8) NOT GLOB '*[^0-9a-f]*'), effect_safety TEXT CHECK(effect_safety IN('READ_ONLY','IDEMPOTENT','NON_IDEMPOTENT','UNKNOWN')), requires_execution_ledger INTEGER CHECK(requires_execution_ledger IN(0,1)), lease_holder TEXT CHECK(length(lease_holder) BETWEEN 1 AND 256), lease_expires_at INTEGER CHECK(lease_expires_at BETWEEN 0 AND 9007199254740991), cancel_requested_at INTEGER CHECK(cancel_requested_at BETWEEN 0 AND 9007199254740991), not_started INTEGER NOT NULL DEFAULT 0 CHECK(not_started IN(0,1)), task_id TEXT CHECK(length(task_id) BETWEEN 22 AND 64 AND task_id NOT GLOB '*[^A-Za-z0-9_-]*'), task_state TEXT, task_owner_digest TEXT CHECK(length(task_owner_digest)=64 AND task_owner_digest NOT GLOB '*[^0-9a-f]*'), task_retain_until INTEGER CHECK(task_retain_until BETWEEN 0 AND 9007199254740991), task_input_deadline_at INTEGER CHECK(task_input_deadline_at BETWEEN 0 AND 9007199254740991), task_last_polled_at INTEGER CHECK(task_last_polled_at BETWEEN 0 AND 9007199254740991), task_document TEXT CHECK(length(CAST(task_document AS BLOB))<=32768), insights_fact_seq INTEGER NOT NULL DEFAULT 0 CHECK(insights_fact_seq>=0),PRIMARY KEY(tenant_id,invocation_id));
 -- statement
 CREATE TABLE control_enterprise_approvals(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,approval_id varchar(128) NOT NULL,approval_type varchar(16) NOT NULL CHECK(approval_type IN('OPERATION','CONFIGURATION')),invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,approval_id));
 -- statement
@@ -210,6 +210,34 @@ CREATE INDEX control_console_devices_expiry ON control_console_devices(tenant_id
 CREATE INDEX control_invocation_event_stream_retention ON control_invocation_event_streams(tenant_id,retain_until) WHERE purged_at IS NULL;
 -- statement
 CREATE UNIQUE INDEX control_invocation_event_identity ON control_invocation_events(tenant_id,invocation_id,fencing_token,sequence) WHERE sequence IS NOT NULL;
+-- statement
+CREATE TABLE control_insights_facts(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,fact_seq INTEGER NOT NULL CHECK(fact_seq BETWEEN 1 AND 9007199254740991),revision INTEGER NOT NULL,from_state TEXT,to_state TEXT NOT NULL,occurred_at INTEGER NOT NULL CHECK(occurred_at BETWEEN 0 AND 9007199254740991),execution_id TEXT CHECK(length(execution_id)=35 AND substr(execution_id,1,3)='ex-' AND substr(execution_id,4) NOT GLOB '*[^0-9a-f]*'),detail TEXT NOT NULL CHECK(length(CAST(detail AS BLOB))<=8192),projected_at INTEGER,PRIMARY KEY(tenant_id,invocation_id,fact_seq));
+-- statement
+CREATE INDEX control_insights_facts_unprojected ON control_insights_facts(tenant_id,invocation_id,fact_seq) WHERE projected_at IS NULL;
+-- statement
+CREATE TABLE control_insights_checkpoints(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,last_fact_seq INTEGER NOT NULL CHECK(last_fact_seq>=0),contribution TEXT NOT NULL CHECK(length(CAST(contribution AS BLOB))<=8192),final_at INTEGER,PRIMARY KEY(tenant_id,invocation_id));
+-- statement
+CREATE TABLE control_insights_invocations(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,tool_id TEXT NOT NULL,action TEXT NOT NULL,client_id TEXT,user_id TEXT,agent_id TEXT,tool_call_id TEXT,session_id TEXT,agent_run_id TEXT,outcome TEXT NOT NULL,error_category TEXT,attempts INTEGER NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at INTEGER NOT NULL,approval_requested_at INTEGER,approval_resolved_at INTEGER,queued_at INTEGER,first_started_at INTEGER,terminal_at INTEGER,approval_ms INTEGER,queue_ms INTEGER,execution_ms INTEGER,end_to_end_ms INTEGER,partial_coverage INTEGER NOT NULL CHECK(partial_coverage IN(0,1)),PRIMARY KEY(tenant_id,invocation_id));
+-- statement
+CREATE INDEX control_insights_invocations_accepted ON control_insights_invocations(tenant_id,accepted_at);
+-- statement
+CREATE INDEX control_insights_invocations_tool_call ON control_insights_invocations(tenant_id,tool_call_id) WHERE tool_call_id IS NOT NULL;
+-- statement
+CREATE INDEX control_insights_invocations_session ON control_insights_invocations(tenant_id,session_id) WHERE session_id IS NOT NULL;
+-- statement
+CREATE INDEX control_insights_invocations_run ON control_insights_invocations(tenant_id,agent_run_id) WHERE agent_run_id IS NOT NULL;
+-- statement
+CREATE TABLE control_insights_attempts(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,invocation_id TEXT NOT NULL,attempt_number INTEGER NOT NULL CHECK(attempt_number BETWEEN 1 AND 64),execution_id TEXT CHECK(length(execution_id)=35 AND substr(execution_id,1,3)='ex-' AND substr(execution_id,4) NOT GLOB '*[^0-9a-f]*'),executor_id TEXT,started_at INTEGER,ended_at INTEGER,outcome TEXT,duration_ms INTEGER,PRIMARY KEY(tenant_id,invocation_id,attempt_number));
+-- statement
+CREATE INDEX control_insights_attempts_execution ON control_insights_attempts(tenant_id,execution_id) WHERE execution_id IS NOT NULL;
+-- statement
+CREATE TABLE control_insights_cells(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,series TEXT NOT NULL CHECK(series IN('TOOL','CLIENT')),granularity TEXT NOT NULL CHECK(granularity IN('MINUTE','HOUR','DAY')),bucket_start INTEGER NOT NULL,dim TEXT NOT NULL,outcome TEXT NOT NULL,calls INTEGER NOT NULL CHECK(calls>=0),duration_count INTEGER NOT NULL CHECK(duration_count>=0),duration_sum INTEGER NOT NULL CHECK(duration_sum>=0),histogram TEXT NOT NULL CHECK(length(CAST(histogram AS BLOB))<=1024),PRIMARY KEY(tenant_id,series,granularity,bucket_start,dim,outcome));
+-- statement
+CREATE TABLE control_insights_admissions(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,bucket_start INTEGER NOT NULL,tool_id TEXT NOT NULL,category TEXT NOT NULL,count INTEGER NOT NULL CHECK(count>=0),PRIMARY KEY(tenant_id,bucket_start,tool_id,category));
+-- statement
+CREATE TABLE control_insights_gateway_epochs(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,gateway_id TEXT NOT NULL,epoch TEXT NOT NULL,last_sequence INTEGER NOT NULL CHECK(last_sequence>=0),missing INTEGER NOT NULL CHECK(missing>=0),dropped INTEGER NOT NULL CHECK(dropped>=0),final INTEGER NOT NULL CHECK(final IN(0,1)),last_seen INTEGER NOT NULL,PRIMARY KEY(tenant_id,gateway_id,epoch));
+-- statement
+CREATE TABLE control_insights_tenant_state(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,collecting_since INTEGER NOT NULL,summaries_suspended_since INTEGER,summary_rows INTEGER NOT NULL DEFAULT 0 CHECK(summary_rows>=0),PRIMARY KEY(tenant_id));
 -- statement
 CREATE TRIGGER control_audit_update BEFORE UPDATE ON control_audit BEGIN SELECT RAISE(ABORT,'append-only local state'); END;
 -- statement
@@ -450,6 +478,22 @@ CREATE TRIGGER control_invocation_event_streams_tenant_immutable BEFORE UPDATE O
 
 -- statement
 CREATE TRIGGER control_invocation_events_tenant_immutable BEFORE UPDATE OF tenant_id ON control_invocation_events WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_facts_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_facts WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_checkpoints_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_checkpoints WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_invocations_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_invocations WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_attempts_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_attempts WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_cells_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_cells WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_admissions_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_admissions WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_gateway_epochs_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_gateway_epochs WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_insights_tenant_state_tenant_immutable BEFORE UPDATE OF tenant_id ON control_insights_tenant_state WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 
 -- statement
 CREATE TRIGGER control_package_provisioning_tenant_immutable BEFORE UPDATE OF tenant_id ON control_package_provisioning WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;

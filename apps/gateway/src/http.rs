@@ -43,6 +43,8 @@ pub struct AppState {
     pub draining: AtomicBool,
     pub admission: Semaphore,
     pub tool_hosts: crate::toolhost::ToolHosts,
+    /// Operator Insights admission counters, flushed to Control by the server's worker.
+    pub admissions: crate::insights::Admissions,
     rate: RateLimit,
     sequence: AtomicU64,
     instance: String,
@@ -98,6 +100,7 @@ impl AppState {
             admission: Semaphore::new(config.limits.max_concurrent_requests),
             rate: RateLimit::new(config.limits.requests_per_second),
             tool_hosts: crate::toolhost::ToolHosts::new(&config.tool_hosts),
+            admissions: crate::insights::Admissions::new(&config.insights, &instance),
             gateway,
             auth,
             config,
@@ -314,6 +317,7 @@ pub(crate) fn error(code: ErrorCode, id: &str) -> Response {
 async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next) -> Response {
     let started = Instant::now();
     let mcp_packet = request.uri().path() == "/mcp";
+    let tool = single_header(request.headers(), "mcp-name").map(str::to_owned);
     let correlation = s.correlation(request.headers());
     request.extensions_mut().insert(correlation.clone());
     let span = tracing::info_span!("runtime_request", service="gateway", version=env!("CARGO_PKG_VERSION"), request_id=%correlation.request_id, trace_id=%correlation.trace_id);
@@ -435,6 +439,12 @@ async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next)
         .insert("cache-control", HeaderValue::from_static("no-store"));
     if result.status().is_client_error() || result.status().is_server_error() {
         s.metrics.errors.fetch_add(1, Ordering::Relaxed);
+    }
+    if let (Some(category), Some(now)) = (
+        crate::insights::Admissions::category(result.status()),
+        unix_ms(),
+    ) {
+        s.admissions.record(now, tool.as_deref(), category);
     }
     s.metrics.observe(started.elapsed());
     let _entered = span.enter();

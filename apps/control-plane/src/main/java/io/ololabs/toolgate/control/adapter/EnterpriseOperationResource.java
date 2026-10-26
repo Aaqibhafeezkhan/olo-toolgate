@@ -21,7 +21,7 @@ public class EnterpriseOperationResource {
     @Inject io.quarkus.security.identity.SecurityIdentity security;
     @Inject VaultResource vault;
     @Inject DirectoryService directory;
-    @Inject ServerPackages packages;@Inject Correlation correlation;
+    @Inject ServerPackages packages;@Inject Correlation correlation;@Inject InsightsService insights;
     /** v2 bodies extend these endpoints for Tool Hosts; a v2 body is recognised by a field only it has. */
     private boolean v2(String document,String field){return ((com.fasterxml.jackson.databind.JsonNode)codec.value(body(document))).has(field);}
     @POST @Path("simulate") @Consumes("application/json") @io.quarkus.security.Authenticated
@@ -45,6 +45,10 @@ public class EnterpriseOperationResource {
     private static Failure unauthorized(){return new Failure(ErrorCode.UNAUTHORIZED,401,"Direct device certificate required");}
     @GET @Path("health") @RolesAllowed("toolgate-relay-gateway")
     public Response health(){var actor=gateway();store.transaction(actor.tenant(),false,tx->{tx.load();tx.enterprise().authorizationEpoch();return null;});return Response.ok("{\"ready\":true}").header("Cache-Control","no-store").build();}
+    /** Gateway admission counters for Operator Insights (ADR 031); best-effort, deduplicated by (gateway, epoch, sequence). */
+    @POST @Path("insights/admissions") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response insightsAdmissions(String document){var actor=gateway();var batch=codec.model(body(document),io.ololabs.toolgate.contracts.v2.InsightsAdmissionBatch.class);
+        return Response.ok(codec.json(insights.ingest(actor.tenant(),batch,System.currentTimeMillis()))).header("Cache-Control","no-store").build();}
     @POST @Path("invocations") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response submit(String document){return reply(operations.submit(gateway(),body(document)));}
     @POST @Path("invocations/cancel") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")

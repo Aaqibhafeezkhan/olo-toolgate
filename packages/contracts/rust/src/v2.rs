@@ -732,6 +732,282 @@ pub struct InputRequestFrame {
     pub request_id: String,
     pub request: std::collections::BTreeMap<String, serde_json::Value>,
 }
+/// Control's acknowledgement of one admission batch.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionAck {
+    pub sequence: u64,
+    pub duplicate: bool,
+}
+/// Gateway to Control: admission counts since the previous batch of this process epoch. Best-effort; Control ignores a repeated (gatewayId, epoch, sequence) and reports missing sequences as source gaps.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionBatch {
+    pub gateway_id: String,
+    pub epoch: String,
+    pub sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_batch: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_requests: Option<u64>,
+    pub counts: Vec<InsightsAdmissionCount>,
+}
+/// Canonical InsightsAdmissionCategory wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsAdmissionCategory {
+    #[serde(rename = "UNAUTHENTICATED")]
+    Unauthenticated,
+    #[serde(rename = "POLICY_DENIED")]
+    PolicyDenied,
+    #[serde(rename = "APPROVAL_REQUIRED")]
+    ApprovalRequired,
+    #[serde(rename = "RATE_LIMITED")]
+    RateLimited,
+    #[serde(rename = "KILL_SWITCH")]
+    KillSwitch,
+    #[serde(rename = "INVALID_REQUEST")]
+    InvalidRequest,
+}
+/// Requests of one category for one tool in one closed minute bucket.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionCount {
+    pub bucket_start_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
+    pub category: InsightsAdmissionCategory,
+    pub count: u64,
+}
+/// Admission decisions in one bucket.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionPoint {
+    pub bucket_start_unix_ms: u64,
+    pub category: InsightsAdmissionCategory,
+    pub count: u64,
+}
+/// One execution attempt: one consumed permit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAttempt {
+    pub attempt_number: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<InsightsOutcome>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+}
+/// Canonical InsightsErrorCategory wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsErrorCategory {
+    #[serde(rename = "POLICY")]
+    Policy,
+    #[serde(rename = "TIMEOUT")]
+    Timeout,
+    #[serde(rename = "CANCELLED")]
+    Cancelled,
+    #[serde(rename = "TOOL_ERROR")]
+    ToolError,
+    #[serde(rename = "INFRASTRUCTURE")]
+    Infrastructure,
+    #[serde(rename = "INVALID_REQUEST")]
+    InvalidRequest,
+    #[serde(rename = "PARTIAL")]
+    Partial,
+    #[serde(rename = "UNKNOWN")]
+    Unknown,
+}
+/// Canonical InsightsGranularity wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsGranularity {
+    #[serde(rename = "MINUTE")]
+    Minute,
+    #[serde(rename = "HOUR")]
+    Hour,
+    #[serde(rename = "DAY")]
+    Day,
+}
+/// One invocation's summary, projected from its transition facts. Durations are absent when not measured.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsInvocation {
+    pub tenant_id: String,
+    pub invocation_id: String,
+    pub tool_id: String,
+    pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_run_id: Option<String>,
+    pub outcome: InsightsOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_category: Option<InsightsErrorCategory>,
+    pub attempts: u64,
+    pub accepted_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_requested_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_resolved_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queued_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_started_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_to_end_ms: Option<u64>,
+    pub partial_coverage: bool,
+}
+/// The detail window: summary, attempts and, while facts are retained, the transitions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsInvocationDetail {
+    pub invocation: InsightsInvocation,
+    pub attempts: Vec<InsightsAttempt>,
+    pub transitions: Vec<InsightsTransition>,
+    pub transitions_retained: bool,
+}
+/// Explorer results, newest first. next continues the search.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsInvocationPage {
+    pub items: Vec<InsightsInvocation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+}
+/// Canonical InsightsMode wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsMode {
+    #[serde(rename = "NONE")]
+    None,
+    #[serde(rename = "BASIC")]
+    Basic,
+    #[serde(rename = "DETAILED")]
+    Detailed,
+}
+/// Canonical InsightsOutcome wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsOutcome {
+    #[serde(rename = "PENDING_APPROVAL")]
+    PendingApproval,
+    #[serde(rename = "IN_PROGRESS")]
+    InProgress,
+    #[serde(rename = "SUCCEEDED")]
+    Succeeded,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "PARTIAL")]
+    Partial,
+    #[serde(rename = "CANCELLED")]
+    Cancelled,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+    #[serde(rename = "OUTCOME_UNKNOWN")]
+    OutcomeUnknown,
+}
+/// Recompute one tenant's aggregate cells for a range from its summaries. dryRun only compares.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsRebuildRequest {
+    pub tenant_id: String,
+    pub from_unix_ms: u64,
+    pub to_unix_ms: u64,
+    pub dry_run: bool,
+}
+/// How many cells the recomputation compared and how many differed from the live projection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsRebuildResult {
+    pub tenant_id: String,
+    pub from_unix_ms: u64,
+    pub to_unix_ms: u64,
+    pub cells_compared: u64,
+    pub cells_differing: u64,
+    pub applied: bool,
+}
+/// Aggregates for a range. Data before unavailableBeforeUnixMs has expired at this granularity and is absent, not zero.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSeries {
+    pub granularity: InsightsGranularity,
+    pub from_unix_ms: u64,
+    pub to_unix_ms: u64,
+    pub group_by: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable_before_unix_ms: Option<u64>,
+    pub histogram_bounds_ms: Vec<u64>,
+    pub points: Vec<InsightsSeriesPoint>,
+    pub admissions: Vec<InsightsAdmissionPoint>,
+}
+/// One bucket and outcome. histogram holds counts per InsightsSeries.histogramBoundsMs bucket (last is overflow).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSeriesPoint {
+    pub bucket_start_unix_ms: u64,
+    pub key: String,
+    pub outcome: InsightsOutcome,
+    pub count: u64,
+    pub duration_count: u64,
+    pub duration_sum_ms: u64,
+    pub histogram: Vec<u64>,
+}
+/// Admission counts that may be missing: a skipped sequence, or an epoch that stopped without a final batch.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSourceGap {
+    pub tenant_id: String,
+    pub gateway_id: String,
+    pub epoch: String,
+    pub last_sequence: u64,
+    pub missing_sequences: u64,
+    pub last_seen_unix_ms: u64,
+    pub dropped_requests: u64,
+}
+/// Read first by the operator page: what is collected and how current it is.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsStatus {
+    pub mode: InsightsMode,
+    pub generated_at_unix_ms: u64,
+    pub tenants: u64,
+    pub unprojected_facts: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oldest_unprojected_unix_ms: Option<u64>,
+    pub summaries_suspended_tenants: u64,
+    pub failed_tenants: u64,
+    pub source_gaps: Vec<InsightsSourceGap>,
+}
+/// One retained transition fact, for the stage timeline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsTransition {
+    pub fact_seq: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_state: Option<String>,
+    pub to_state: String,
+    pub occurred_at_unix_ms: u64,
+}
 /// Response to a v2 POST /access/invocations for NEW and EXISTING reservations. IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE and EXPIRED_KEY are 409 errors with that code and carry nothing else. requestState is present with an ASK outcome for an MRTR client.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2735,6 +3011,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",
         include_str!("../schemas/v2/identifiers.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/insights.schema.json",
+        include_str!("../schemas/v2/insights.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/invocation.schema.json",

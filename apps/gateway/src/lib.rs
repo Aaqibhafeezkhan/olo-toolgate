@@ -7,6 +7,7 @@ pub mod config;
 mod diagnostics;
 pub mod discovery;
 pub mod http;
+pub mod insights;
 pub mod limits;
 mod mcp;
 pub mod relay;
