@@ -223,6 +223,13 @@ than summary retention and for tenants currently over quota, because their summa
 
 ## Limits of this release
 
+- An endpoint client that predates relayed trace context (it does not send `Toolgate-Client-Features:
+  remote-task-context.v1`) runs relayed calls without trace or execution context and reports no client span. Insights
+  does not yet mark these attempts.
+- The overhead budgets of ADR 031 §6 are not yet measured on production-like hardware
+  ([#214](https://github.com/olo-labs/olo-toolgate/issues/214)). Release-gate results are in the
+  [Stage 7 report](insights-stage7.md).
+
 - Span decisions are kept per Control replica. A call whose spans reach two replicas may be kept on one and decided
   on the other; both apply the same rule, so they agree except under memory pressure.
 - Sessions and parents are caller-declared. Insights shows them as declared and cannot detect a caller that reuses

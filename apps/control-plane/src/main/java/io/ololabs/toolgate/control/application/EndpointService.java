@@ -329,17 +329,34 @@ public final class EndpointService {
     }
     /** Configured gateway name sent to devices in enrollment and check-in replies. */
     private String serverName(Store.Session tx){return new ServerSettingsService(store,codec,checkInPolicy).current(tx).gateway().gatewayName();}
-    private Store.Reply interval(Store.Reply reply,String serverName) {
+    /** Feature a client names in {@code Toolgate-Client-Features} when it accepts a relayed task's trace context,
+     *  execution context and span request (ADR 031 §2). Released clients reject unknown task members, so they get
+     *  the task without them. */
+    public static final String TASK_CONTEXT="remote-task-context.v1";
+    public static boolean taskContext(String features){
+        if(features==null||features.length()>512)return false;
+        for(var feature:features.split(","))if(feature.trim().equals(TASK_CONTEXT))return true;
+        return false;
+    }
+    /** The task in the shape the client accepts: without the members a client that did not name the feature rejects. */
+    public static RemoteToolTask forClient(RemoteToolTask task,boolean taskContext){
+        if(task==null||taskContext)return task;
+        return new RemoteToolTask(task.requestId(),task.leaseId(),task.request(),task.expiresAtUnixMs(),task.invocation(),task.permit(),null,null,null);
+    }
+    private Store.Reply interval(Store.Reply reply,String serverName,boolean taskContext) {
         var ack=codec.model(reply.body(),EndpointCheckInAck.class);
         long now=clock.millis();var identity=ack.identity()!=null&&ack.identity().expiresAtUnixMs()<=now?null:ack.identity();
         // Preserve exact recent replies, but a lost response recovered after a long outage must
         // not reinstall an expired certificate or fail the client's current clock-skew check.
         long serverTime=now-ack.serverTimeUnixMs()>300000?now:ack.serverTimeUnixMs();
         long next=checkInPolicy.nextIntervalMs();
-        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,next,identity,ack.adoption(),ack.task(),serverName);
+        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,next,identity,ack.adoption(),forClient(ack.task(),taskContext),serverName);
         return new Store.Reply(reply.status(),codec.json(negotiated),reply.revision());
     }
     public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,String systemName,String ipAddress) {
+        return checkIn(peer,body,requestId,systemName,ipAddress,true);
+    }
+    public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,String systemName,String ipAddress,boolean taskContext) {
         available();
         if(systemName!=null&&(systemName.length()>255||!systemName.matches("[a-zA-Z0-9._-]+")))throw Failure.validation();
         if(ipAddress!=null&&(ipAddress.length()>45||!ipAddress.matches("[0-9a-fA-F:.]{2,45}")))throw Failure.validation();
@@ -349,7 +366,7 @@ public final class EndpointService {
             var device=codec.model(row.document(),EndpointDeviceRecord.class);binding(claims,device);active(tx,device);
             if(!device.deviceId().equals(check.report().deviceId()))throw forbidden();
             if(check.report().appliedRevision()!=0||!check.report().packages().isEmpty())FleetService.validateReport(tx,codec,check.report());
-            if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),serverName(tx));}
+            if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),serverName(tx),taskContext);}
             if(check.sequence()!=device.reportSequence()+1)throw Failure.conflict();
             // Only the device's owner switches its power; the report that says so is sent at once.
             boolean off=DevicePlacement.poweredOff(check.report()),switched=off!=DevicePlacement.poweredOff(device.report());
@@ -364,7 +381,7 @@ public final class EndpointService {
             var updated=new EndpointDeviceRecord(device.deviceId(),tenant.value(),device.userId(),fingerprint,EndpointState.ACTIVE,device.revision()+1,now,check.sequence(),check.report(),device.connectionExpiresAtUnixMs(),device.connectionApproved(),device.approvalRevision(),systemName==null?device.systemName():systemName,ipAddress==null?device.ipAddress():ipAddress);
             var response=reply(ack,updated.revision());tx.saveEndpoint(new Store.EndpointRecord(row.id(),row.fingerprint(),codec.json(updated),row.csr(),digest,response.body()));
             tx.audit(fingerprint,renewed==null?"DEVICE_CHECK_IN":"DEVICE_RENEW","endpoint:"+row.id(),updated.revision(),requestId,digest);
-            if(switched)tx.audit(fingerprint,off?"DEVICE_POWER_OFF":"DEVICE_POWER_ON","endpoint:"+row.id(),updated.revision(),requestId,digest);return interval(response,serverName(tx));
+            if(switched)tx.audit(fingerprint,off?"DEVICE_POWER_OFF":"DEVICE_POWER_ON","endpoint:"+row.id(),updated.revision(),requestId,digest);return interval(response,serverName(tx),taskContext);
         });
     }
     public EndpointDeviceRecord authenticate(Store.Session tx,java.security.cert.X509Certificate peer,long now){

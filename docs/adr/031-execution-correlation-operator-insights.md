@@ -325,6 +325,26 @@ Sessions and `parent_invocation_id` (plan step 6):
   acceptance to terminal time on one axis: parallel work overlaps, and nesting is indented. A call's detail opens
   inside the session window.
 
+### 13. Amendment: endpoint clients after Stage 7
+
+§2 assumed every hop ships as a matching version. That holds for the Gateway, Control and the Tool Host. It does not
+hold for endpoint clients: they run on users' devices and update on their own schedule, `minimumClientVersion` is
+not enforced for relayed calls, and they decode `RemoteToolTask` with unknown members rejected. Integration testing
+found that a released client would reject every check-in reply carrying a task once Control set the new members
+(Stage 7 report, S7-1).
+
+- **Signal.** A client names the task members it accepts in the request header
+  `Toolgate-Client-Features: remote-task-context.v1`. It sends the header on HTTPS check-ins and on the WebSocket
+  upgrade. Older Controls ignore it.
+- **Shape.** Control adds `traceparent`, `executionContext` and `collectSpans` to a relayed task only for a client
+  that names the feature. Every other client receives the task exactly as released. This also applies when Control
+  replays a stored check-in reply.
+- **Effect.** A client without the feature runs the call without trace or execution context and reports no client
+  span. Insights does not yet record this loss on the attempt. That was the plan's `context_delivered` flag, and it
+  remains a follow-up.
+- **Rule.** Any later field added to a message an endpoint client decodes needs the same treatment: a named client
+  feature, or a protocol version the client negotiates.
+
 ## Alternatives Considered
 
 - **Fencing token as execution ID:** rejected; it is a capability and would leak through telemetry.
