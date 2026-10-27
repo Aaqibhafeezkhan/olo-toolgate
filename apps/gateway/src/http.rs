@@ -294,6 +294,7 @@ pub(crate) fn status(code: &ErrorCode) -> StatusCode {
         ErrorCode::Validation | ErrorCode::InvalidTenantId => StatusCode::BAD_REQUEST,
         ErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
         ErrorCode::Forbidden | ErrorCode::TenantMismatch => StatusCode::FORBIDDEN,
+        ErrorCode::Conflict => StatusCode::CONFLICT,
         ErrorCode::NotFound | ErrorCode::TenantUnavailable => StatusCode::NOT_FOUND,
         ErrorCode::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
         ErrorCode::Timeout => StatusCode::GATEWAY_TIMEOUT,
@@ -677,6 +678,14 @@ mod dedup_key {
 #[cfg(test)]
 mod trace_context {
     use super::{valid_declared_id, valid_tracestate};
+
+    #[test]
+    fn durable_conflicts_remain_client_conflicts() {
+        assert_eq!(
+            super::status(&super::ErrorCode::Conflict),
+            super::StatusCode::CONFLICT
+        );
+    }
 
     #[test]
     fn tracestate_is_kept_only_within_bounds() {
