@@ -10,7 +10,7 @@ and [WebVTT captions](toolgate-overview.vtt) are also available.
 
 | Time | On-screen explanation |
 | --- | --- |
-| 00:00–00:06 | **Control what AI can do.** Build, distribute, authorize and govern tools across users, agents and devices. |
+| 00:00–00:06 | **Zero Trust for Agentic AI.** Secure every tool boundary: identity, policy enforcement, least-privilege access and end-to-end auditability. |
 | 00:06–00:12 | **One request. Clear boundaries.** An agent calls `hotfolder.write_text`. The Gateway checks access before a protected effect. |
 | 00:12–00:18 | **Access starts with groups.** Groups hold access mappings. Default groups grant no access; new verified users start disabled. |
 | 00:18–00:24 | **Allow. Ask. Block.** Allow permits an authorized action. Ask requires independent approval. Block prevents execution. |
@@ -38,8 +38,8 @@ The media and source are distributed under this repository's Apache-2.0 license.
 
 ## Live console and OLO incident walkthrough
 
-The README has four focused sets: audit/approvals (15 steps), device/client (14),
-tools/access (15) and workspace administration (12). The generator rejects a set
+The README has four focused sets: audit/approvals, device/client, tools/access
+and workspace administration. The generator rejects a set
 outside 10–15 frames. [Follow each set step by step](TOURS.md); [tours.json](tours.json)
 records the explicit order and source-image checksums for earlier device captures.
 

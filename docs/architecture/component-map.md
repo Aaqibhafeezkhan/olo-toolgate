@@ -8,11 +8,11 @@
 | Endpoint Client | Rust | Device identity, signed package tools in a sandbox, the brokered files area | Current Control authorization and runtime confinement remain required |
 | Tool Host | Rust | Server Java tool admission, verified content, broker and execution | Container/network isolation and result outbox remain unfinished |
 | Quickstart | Combined services | Single-node evaluation with local state/custody | No HA guarantee |
-| Marketplace API/Worker/Drupal | Java/PHP scaffolds | Planned catalog, publication workflow and community UI | Community provenance never creates organization authority |
 
 Control already supports importing from a configured external OLO Orgs registry;
 see [Marketplace integration](../control-plane/marketplace-integration.md).
-The scaffold applications in this repository are separate from that import client.
+The Marketplace itself lives in a separate private repository and is hosted at
+[aol-labs.org](https://aol-labs.org).
 
 Read [trust boundaries](trust-boundaries.md) and
 [device controls](../control-plane/device-registry.md). Create an

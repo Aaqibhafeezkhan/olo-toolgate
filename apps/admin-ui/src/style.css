@@ -93,6 +93,10 @@ small,.hint {
   font-weight:700;
   color:var(--muted);
   margin:0}
+.tagline {
+  font-weight:600;
+  color:var(--accent);
+  margin:6px 0 14px}
 .intro {
   color:var(--muted);
   max-width:720px}

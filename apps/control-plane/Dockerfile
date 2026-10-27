@@ -50,8 +50,6 @@ COPY backend-libs/service-authorization/ backend-libs/service-authorization/
 COPY apps/control-plane/ apps/control-plane/
 COPY config/initial/ config/initial/
 COPY --from=console /workspace/apps/admin-ui/dist/ apps/admin-ui/dist/
-COPY apps/marketplace-api/build.gradle.kts apps/marketplace-api/build.gradle.kts
-COPY apps/marketplace-worker/build.gradle.kts apps/marketplace-worker/build.gradle.kts
 # Gradle configures every project included in settings, including the SDK modules.
 COPY tool-sdk/java-sdk/ tool-sdk/java-sdk/
 COPY tool-sdk/json-sdk/ tool-sdk/json-sdk/

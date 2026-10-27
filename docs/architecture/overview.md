@@ -40,7 +40,8 @@ Managed endpoint packages use signed fleet assignments and OCI confinement.
 The server Tool Host supports Java execution, content verification and brokered
 routes; container/network isolation and a durable result outbox are not implemented. These execution paths have different current limits.
 
-The public Marketplace is planned infrastructure with scaffold applications.
+The Marketplace is developed in a separate private repository and hosted at
+[aol-labs.org](https://aol-labs.org).
 A future community signature will establish release provenance, never organization
 deployment authority or runtime permission.
 

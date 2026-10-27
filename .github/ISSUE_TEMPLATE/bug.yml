@@ -22,9 +22,6 @@ body:
         - Control Plane
         - Admin UI
         - Endpoint Client
-        - Marketplace API
-        - Marketplace Worker
-        - Drupal
         - Quickstart
         - Documentation
         - Not sure

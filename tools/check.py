@@ -81,7 +81,7 @@ def publication_proof(prebuilt_ui=False):
     with zipfile.ZipFile(artifact/f'toolgate-contracts-{version}.jar') as jar:
         if 'io/ololabs/toolgate/contracts/EnterpriseDecision.class' not in jar.namelist(): raise SystemExit('Published generated models missing')
         if 'META-INF/LICENSE' not in jar.namelist(): raise SystemExit('Published license missing')
-    tasks = [f':{service}:build' for service in ('control-plane','marketplace-api','marketplace-worker')]
+    tasks = [f':{service}:build' for service in ('control-plane',)]
     if prebuilt_ui: tasks.insert(0, '-PprebuiltAdminUi=true')
     updates = ['--write-locks'] if os.environ.get('TOOLGATE_UPDATE_LOCKS') == '1' else []
     run(['gradle','-PusePublishedContracts=true',f'-PcontractsRepository={local.as_posix()}','--rerun-tasks',*updates,*tasks])

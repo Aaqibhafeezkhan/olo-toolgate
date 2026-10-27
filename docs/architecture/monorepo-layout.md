@@ -2,7 +2,7 @@
 
 | Directory | Contents |
 |---|---|
-| `apps/` | Gateway, Control, console, Quickstart, endpoint client, Tool Host and Marketplace scaffolds |
+| `apps/` | Gateway, Control, console, Quickstart, endpoint client and Tool Host |
 | `crates/` | Shared Rust libraries |
 | `backend-libs/` | Shared Java libraries |
 | `packages/contracts/` | Canonical schemas/OpenAPI and generated Rust, Java, TypeScript and PHP bindings |

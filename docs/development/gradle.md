@@ -9,8 +9,6 @@ OLO ToolGate uses Gradle Kotlin DSL for Java modules.
 ```text
 :contracts-java
 :control-plane
-:marketplace-api
-:marketplace-worker
 ```
 
 ## Requirements
@@ -63,8 +61,6 @@ Then:
   -PusePublishedContracts=true \
   -PcontractsVersion=0.1.0-SNAPSHOT \
   :control-plane:build \
-  :marketplace-api:build \
-  :marketplace-worker:build
 ```
 
 The Java modules then resolve:
