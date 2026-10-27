@@ -13,6 +13,7 @@ export type TenantAnalyticsOverview = {
   tenantId:string; mode:'NONE'|'BASIC'|'DETAILED';
   series:import('@olo-labs/toolgate-contracts/v2').InsightsSeries;
   tools:import('@olo-labs/toolgate-contracts/v2').InsightsSeries;
+  invocations?:import('@olo-labs/toolgate-contracts/v2').InsightsInvocationPage|null;
 };
 export type MarketplaceVerdict = { readonly compatible: boolean; readonly reasons: readonly string[] };
 export type MarketplacePublisherSummary = { readonly slug: string; readonly displayName: string; readonly organization?: string | null; readonly avatarMediaId?: string | null; readonly profileUrl?: string | null };
@@ -203,8 +204,10 @@ export class ControlClient {
   permissionSnapshot=()=>this.permissionVersion;
   subscribePermissions=(listener:()=>void)=>{this.permissionListeners.add(listener);return()=>{this.permissionListeners.delete(listener);};};
   async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;this.permissionSet=new Set(session.permissions??[]);this.permissionVersion++;this.permissionListeners.forEach(listener=>listener());return session;}
-  analytics(from:number,to:number,signal?:AbortSignal):Promise<TenantAnalyticsOverview>{
-    return this.send({method:'GET',path:'/api/control/v1/analytics'},{query:new URLSearchParams({from:String(from),to:String(to)}),signal});
+  analytics(from:number,to:number,signal?:AbortSignal,tool?:string,after?:string):Promise<TenantAnalyticsOverview>{
+    const query=new URLSearchParams({from:String(from),to:String(to)});
+    if(tool)query.set('tool',tool);if(after)query.set('after',after);
+    return this.send({method:'GET',path:'/api/control/v1/analytics'},{query,signal});
   }
   audit(cursor:string,signal?:AbortSignal):Promise<ControlAuditPage>{return this.send(operations.listAudit,{query:new URLSearchParams({cursor,limit:'50'}),signal});}
   record<K extends DirectoryKind>(kind:K,id:string):Promise<DirectoryRecords[K]> {return this.send(getOperations[kind],{id});}

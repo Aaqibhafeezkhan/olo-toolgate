@@ -262,3 +262,14 @@ tenant inside that tenant's database transaction, with PostgreSQL forced RLS as 
 additional boundary. Missing, unknown, or other-tenant attribution cannot contribute.
 Installation-wide metrics, operator status, cross-tenant search, and rebuild controls
 are not exposed through this API. Empty results never fall back to global data.
+
+
+Select a tool link in **Busiest tools** to drill into that tool's tenant-scoped
+calls, outcomes and latency. Links use `#analytics?tool=<encoded-tool-id>` and
+support browser back/forward. The detail view lists recent invocations, outcome,
+execution duration and declared session, with paging and an **All tools** link.
+The API accepts optional `tool` and `after` filters; both remain bound to the
+verified tenant and the current `audit.read` permission. Unknown tools return
+empty results; they never fall back to unfiltered or other-tenant data.
+Tool-filtered views omit admission counts because the current series API does
+not expose tool-filtered admission aggregates.
