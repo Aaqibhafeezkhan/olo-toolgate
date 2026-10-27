@@ -69,6 +69,16 @@ val enterpriseTests = sourceSets.create("enterpriseTest") {
 sourceSets.test { java.srcDir("src/sharedTest/java") }
 sourceSets.test { resources.srcDir("src/enterpriseTest/resources") }
 enterpriseTests.java.srcDir("src/sharedTest/java")
+// The enforced Quarkus 3.40 BOM pins Guava 33.6.0; 33.7.2 fixes CVE-2026-102554.
+val guava = libs.guava.get()
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == guava.group && requested.name == guava.name) {
+            useVersion(guava.version!!)
+            because("CVE-2026-102554")
+        }
+    }
+}
 configurations[enterpriseTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
 configurations[enterpriseTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 tasks.register<Test>("enterpriseTest") {
