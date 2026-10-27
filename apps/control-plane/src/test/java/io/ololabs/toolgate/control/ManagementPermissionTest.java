@@ -53,6 +53,14 @@ final class ManagementPermissionTest {
   assertEquals("same-tool",drilldown.invocations().items().getFirst().toolId());
   var missing=analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,from,now,now,"missing-tool",null);
   assertTrue(missing.series().points().isEmpty());assertTrue(missing.invocations().items().isEmpty());
+  for(long skew:List.of(1_000L,300_000L)){
+   var ahead=analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,from,now+skew,now);
+   assertEquals(now,ahead.series().toUnixMs());assertEquals(now,ahead.tools().toUnixMs());
+   assertEquals(3,ahead.series().points().stream().mapToLong(p->p.count()).sum());
+  }
+  assertEquals(400,assertThrows(Failure.class,()->analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,now+1,now+3_600_000,now)).status());
+  assertEquals(400,assertThrows(Failure.class,()->analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,now,from,now)).status());
+  assertEquals(400,assertThrows(Failure.class,()->analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,now-32L*86_400_000,now,now)).status());
   assertEquals(400,assertThrows(Failure.class,()->analytics.overview(actor,io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,-1,now,now)).status());
   assertEquals(403,assertThrows(Failure.class,()->analytics.overview(new DirectoryService.Actor(tenant,"b".repeat(64),false,false,"viewer"),io.ololabs.toolgate.contracts.v2.InsightsMode.BASIC,from,now,now)).status());
   packagePermissions(store,3,"user.read");
