@@ -70,18 +70,12 @@ The call and the authorization travel separate paths. Gateway dispatches the cal
 Control decides and issues the permit; the executor will not act until it redeems
 that permit with Control.
 
-```mermaid
-flowchart LR
-    A["AI agent / MCP client"] -->|"1 · tool call"| G("Gateway")
-    G <-->|"2 · authorize: identity, grants, policy, ASK review"| C{"Control Plane"}
-    G -->|"3 · dispatch authorized call"| X["Endpoint Client / Tool Host"]
-    X <-.->|"4 · redeem single-use permit online"| C
-    X -->|"5 · execute within permit scope"| R[("Target resource")]
-
-    style G fill:#1f6feb,stroke:#388bfd,stroke-width:2px,color:#fff
-    style C fill:#d29922,stroke:#f1e05a,stroke-width:2px,color:#000
-    style X fill:#238636,stroke:#2ea043,stroke-width:2px,color:#fff
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/architecture-dark.svg">
+    <img src="docs/media/architecture-light.svg" width="560" alt="AI Agent / MCP Client calls the ToolGate Gateway, which dispatches to the Tool Host / Endpoint and asks the Control Plane to authorize; the Control Plane holds permit authority over the executor, which acts on the target resource">
+  </picture>
+</p>
 
 Control never forwards calls, and Gateway never signs permits or authorizes from a
 cached policy. See [architecture](ARCHITECTURE.md),
