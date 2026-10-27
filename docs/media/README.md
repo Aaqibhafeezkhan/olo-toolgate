@@ -36,21 +36,83 @@ It uses the existing OLO logo, contains no live credentials or device data, and
 does not contact a running ToolGate instance. `imageio-ffmpeg` supplies the encoder.
 The media and source are distributed under this repository's Apache-2.0 license.
 
-## Real console screenshots
+## Live console and OLO incident walkthrough
 
-Captured with a headless browser from the running local `0.10.0-dev` console on
-October 13, 2026, at 1440×900 and scaled to 1800 px wide, with a Windows and a Linux
-client connected. The README shows them as rotating tours (`console-tour.gif`, `device-flow.gif` and one per
-area), built from these stills: the device registration steps (`device-flow-*.jpg`) and
-the console pages (`console-*.jpg`, with `-light` variants in the light theme).
+The current console/operator sliders are built from unmodified browser JPEG originals.
 
-The Windows device client screens (`device-client-*.jpg`: tray menu, status, activity
-log) were captured on the Windows device itself and placed on a 16:10 backdrop.
+## Current capture refresh
 
-These are captures of the actual application, with no fabricated UI or replacement
-data. They contain no passwords, tokens or private user details. The device screens
-show the local demo devices' identifiers, key fingerprints and a private network
-address. Capturing the screens did not change access configuration; the Windows
-client was approved by an administrator as part of the registration flow shown. The
-tours are built from the stills with Pillow (1024×640, a caption bar, 3 s per screen with a short
-crossfade). The video renderer does not regenerate screenshots.
+**In progress:** 49 fresh capture entries from the October 27 GPU-backed walkthrough. Older captures and the accidentally expired sign-in view are excluded from the new sliders. The capture session ended before every view was collected; the remaining views are listed below. This is not a complete end-to-end model qualification.
+
+**Model:** Qwen2.5 7B (`qwen2.5:7b`) through Ollama 0.40.11 on four NVIDIA Quadro P4000 GPUs, driver 582.99. RAG uses one short fictional runbook and one retrieved passage. Every new capture pauses for two seconds after the requested page/state loads.
+
+A native diagnosis completed and was read from governed history after a reload; [Chat refresh defect #25](https://github.com/olo-labs/olo-mono/issues/25) tracks that UI issue. The model also produced unsupported diagnosis claims and initially invalid delegation JSON; [model qualification #26](https://github.com/olo-labs/olo-mono/issues/26) tracks these separately. The retry reached a real independent ToolGate approval. Its final recovery result was not captured. Approval and tool-call screenshots are actual records; model-generated prose requires review.
+
+The separate scripted acceptance passed real authorization, worker-crash recovery, three Temporal child workflows and approval terminal checks. That evidence does not qualify native model behavior. Operator session `ui-tour-fixture-checks` contains caller-declared acceptance correlations, not verified Chat session identity. Scheduled Studio pages remain placeholders.
+
+[Capture integrity and remaining coverage](capture-status.json) · [Capture manifest](screenshots.json)
+
+## Fresh snapshot index
+
+| Screen | View |
+| --- | --- |
+| [console-sign-in](screenshots/console-sign-in.jpg) | ToolGate tenant console sign-in |
+| [console-overview](screenshots/console-overview.jpg) | Loaded tenant overview and scoped demo directories |
+| [console-approvals-pending](screenshots/console-approvals-pending.jpg) | Live Ollama remediation waiting for independent approval |
+| [console-approval-review](screenshots/console-approval-review.jpg) | Independent reviewer checks the exact delegated remediation invocation |
+| [console-approval-approved](screenshots/console-approval-approved.jpg) | Independent approval recorded; original invocation resumes through ToolGate |
+| [console-tools](screenshots/console-tools.jpg) | Tools · current incident walkthrough |
+| [console-toolGroups](screenshots/console-toolGroups.jpg) | Tool groups · current incident walkthrough |
+| [console-grants](screenshots/console-grants.jpg) | Access grants · current incident walkthrough |
+| [console-bindings](screenshots/console-bindings.jpg) | Execution bindings · current incident walkthrough |
+| [console-policies](screenshots/console-policies.jpg) | Policies · current incident walkthrough |
+| [console-extractors](screenshots/console-extractors.jpg) | Resource extractors · current incident walkthrough |
+| [console-users](screenshots/console-users.jpg) | Users · current incident walkthrough |
+| [console-teams](screenshots/console-teams.jpg) | Teams · current incident walkthrough |
+| [console-roles](screenshots/console-roles.jpg) | Typed roles · current incident walkthrough |
+| [console-identityBindings](screenshots/console-identityBindings.jpg) | Human identities · current incident walkthrough |
+| [console-delegations](screenshots/console-delegations.jpg) | Human delegations · current incident walkthrough |
+| [console-agents](screenshots/console-agents.jpg) | Agents · current incident walkthrough |
+| [console-agentGroups](screenshots/console-agentGroups.jpg) | Agent groups · current incident walkthrough |
+| [console-workloadBindings](screenshots/console-workloadBindings.jpg) | Workload identities · current incident walkthrough |
+| [console-agentDelegations](screenshots/console-agentDelegations.jpg) | Agent delegations · current incident walkthrough |
+| [console-devices](screenshots/console-devices.jpg) | Devices · current incident walkthrough |
+| [console-deviceGroups](screenshots/console-deviceGroups.jpg) | Device groups · current incident environment |
+| [console-deviceEvidence](screenshots/console-deviceEvidence.jpg) | Device evidence · current incident walkthrough |
+| [console-mapping](screenshots/console-mapping.jpg) | Agent Group tool mapping · current incident walkthrough |
+| [console-config-server](screenshots/console-config-server.jpg) | Server · current incident walkthrough |
+| [console-config-device](screenshots/console-config-device.jpg) | Device · current incident walkthrough |
+| [console-config-backup](screenshots/console-config-backup.jpg) | Backup/Restore · current incident walkthrough |
+| [console-mcp-servers](screenshots/console-mcp-servers.jpg) | MCP servers · current incident walkthrough |
+| [console-about](screenshots/console-about.jpg) | About · current incident walkthrough |
+| [console-config-reviews](screenshots/console-config-reviews.jpg) | Configuration reviews · current incident walkthrough |
+| [console-outcomes](screenshots/console-outcomes.jpg) | Effect outcomes · current incident walkthrough |
+| [console-simulation](screenshots/console-simulation.jpg) | Access simulation · current incident walkthrough |
+| [console-server-packages](screenshots/console-server-packages.jpg) | Server packages · deployed official incident package |
+| [console-builder](screenshots/console-builder.jpg) | Tool builder · current incident walkthrough |
+| [console-local](screenshots/console-local.jpg) | Local vault · current incident environment |
+| [console-requests](screenshots/console-requests.jpg) | Client tool requests · current incident walkthrough |
+| [console-enroll](screenshots/console-enroll.jpg) | Enroll device · current incident walkthrough |
+| [console-fleet](screenshots/console-fleet.jpg) | Packages · current incident walkthrough |
+| [console-analytics](screenshots/console-analytics.jpg) | Tenant Analytics · actual memory, RAG and incident tool calls |
+| [console-analytics-full](screenshots/console-analytics-full.jpg) | Full tenant Analytics page with per-tool call counts |
+| [console-analytics-tool](screenshots/console-analytics-tool.jpg) | Remediation tool drilldown · actual calls and outcomes |
+| [operator-sign-in](screenshots/operator-sign-in.jpg) | Labelled operator test gateway with separate mTLS certificate |
+| [console-audit](screenshots/console-audit.jpg) | ToolGate audit trail with actor and request correlation |
+| [operator-usage-charts](screenshots/operator-usage-charts.jpg) | Operator usage charts and busiest tools · scrolled dashboard |
+| [console-approvals](screenshots/console-approvals.jpg) | Approval requests in the current incident environment |
+| [console-analytics-tools](screenshots/console-analytics-tools.jpg) | Actual tool-call counts for memory, RAG and the incident agents |
+| [console-overview-light](screenshots/console-overview-light.jpg) | Current tenant console in light theme |
+| [operator-session-timeline](screenshots/operator-session-timeline.jpg) | Caller-declared fixture session · denial, cancellation and expiry checks |
+| [operator-denied-detail](screenshots/operator-denied-detail.jpg) | Denied test operation · identity, spans and ledger transitions |
+
+## Pending retakes
+
+- `console-downloads-full.jpg` — Retake in the current GPU-backed walkthrough; previous capture excluded.
+- `console-tool-picker.jpg` — Retake in the current GPU-backed walkthrough; previous capture excluded.
+- `console-triage-tool-scope.jpg` — Retake in the current GPU-backed walkthrough; previous capture excluded.
+- `console-test.jpg` — Session expired before capture; sign-in page excluded.
+- `operator-overview.jpg` — Capture the dashboard heading and overview cards; the saved view contains charts and busiest tools.
+- `operator-invocation-detail.jpg` — required new state not captured.
+
+Also finish the remaining Temporal detail tabs and successful operator invocation/attempt views.

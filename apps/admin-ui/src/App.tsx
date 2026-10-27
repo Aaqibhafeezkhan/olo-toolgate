@@ -257,7 +257,19 @@ function Dashboard({ client }: { client: ControlClient }) {
   const [error,setError] = useState<unknown>(); const [attempt,setAttempt] = useState(0);
   useEffect(() => {
     const abort = new AbortController(); setCounts({}); setError(undefined);
-    Promise.all(directorySections.map(async ([kind]) => { const page = await client.list(kind, undefined, abort.signal); return [kind,{ count:page.items.length, more:!!page.nextCursor }] as const; }))
+    const load = async () => {
+      const values: Array<readonly [DirectoryKind,{ count:number; more:boolean }]> = [];
+      // Leave capacity for authentication, polling and other tenant requests.
+      for (let offset=0;offset<directorySections.length;offset+=4) {
+        if (abort.signal.aborted) return values;
+        values.push(...await Promise.all(directorySections.slice(offset,offset+4).map(async ([kind]) => {
+          const page=await client.list(kind,undefined,abort.signal);
+          return [kind,{count:page.items.length,more:!!page.nextCursor}] as const;
+        })));
+      }
+      return values;
+    };
+    load()
       .then(values => { if (!abort.signal.aborted) setCounts(Object.fromEntries(values)); })
       .catch(failure => { if (!abort.signal.aborted) setError(failure); });
     return () => abort.abort();

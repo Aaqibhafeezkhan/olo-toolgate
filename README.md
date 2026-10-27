@@ -59,6 +59,10 @@ current behavior and limitations.
   <img src="docs/media/operator-insights-tour.gif" width="100%" alt="Operator Insights: usage, outcomes, invocation details, attempts, spans and session timelines">
 </p>
 
+**OLO walkthrough model:** Qwen2.5 7B (`qwen2.5:7b`) through Ollama on four NVIDIA
+Quadro P4000 GPUs, with one short fictional RAG runbook. ToolGate governs the calls;
+separate deterministic acceptance traffic uses a labelled scripted model.
+
 These tours were captured from a fresh local `0.10.0-dev` installation on October 27,
 2026, including the tenant Analytics and tool drilldown changes on `main`.
 [Browse every captured page and the verification notes](docs/media/README.md).

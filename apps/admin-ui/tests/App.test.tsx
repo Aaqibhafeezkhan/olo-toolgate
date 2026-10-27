@@ -14,6 +14,24 @@ async function connect() {
   fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}}); fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'})); await screen.findByRole('navigation'); }
 
 describe('Management shell states', () => {
+  it('bounds overview directory requests while still loading every count', async () => {
+    let active=0, peak=0, count=0;
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(input:RequestInfo|URL)=>{
+      const url=new URL(String(input),'http://localhost');
+      if(url.searchParams.get('limit')==='50'){
+        count++;active++;peak=Math.max(peak,active);
+        await new Promise(resolve=>setTimeout(resolve,20));
+        active--;
+      }
+      return response();
+    }));
+    render(<App/>);await connect();
+    await waitFor(()=>expect(document.querySelectorAll('.stat').length).toBe(18));
+    expect(count).toBeGreaterThanOrEqual(18);
+    expect(peak).toBeGreaterThan(0);
+    // The shell also loads its current-user directory record independently.
+    expect(peak).toBeLessThanOrEqual(5);
+  });
   it('shows the tenant display name and UUID separately', async () => {
     const tenantId='10000000-0000-4000-8000-000000000001';
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async(input:RequestInfo|URL)=>String(input).endsWith('/admin-session')
