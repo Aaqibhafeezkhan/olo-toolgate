@@ -64,43 +64,85 @@ or read the [transcript and screenshot guide](docs/media/README.md).
 
 ## See it work
 
-Full-resolution screens for each flow are in the [tour guide](docs/media/TOURS.md).
+> 💡 **Tip:** For individual, high-resolution step frames or manual navigation, browse the
+> [Step-by-Step Tour Guide](docs/media/TOURS.md). Every snapshot is in the repository:
+> console and operator screens in [`docs/media/screenshots`](docs/media/screenshots) and
+> device/client captures in [`docs/media`](docs/media).
 
-### Audit, approvals and tool calls
+<details open>
+<summary><strong>🛡️ Audit, approvals and tool calls</strong>: follow one request from ASK to evidence</summary>
+<br>
 
 <p align="center">
   <img src="docs/media/audit-flow.gif" width="100%" alt="Audit flow: requests, independent approval, outcomes, Analytics tool calls and Operator Insights">
 </p>
 
-Follow a request through independent review, its recorded outcome, audit evidence,
-tenant Analytics and Operator Insights. The example uses Qwen2.5 7B through Ollama
-with one short RAG runbook; scripted acceptance traffic is labelled.
+**What to look for in the loop:**
 
-### Devices and device client
+- 🛡️ Tool requests arriving at the boundary and queuing in Approval requests.
+- 🛑 A live remediation call waiting on an `ASK` policy for independent approval.
+- 👤 The reviewer checking the exact delegated invocation before approving it.
+- ✅ The original invocation resuming through ToolGate, then its outcome and audit trail.
+- 📊 Tenant Analytics per-tool counts and a drilldown, then Operator Insights.
+
+The example uses Qwen2.5 7B through Ollama with one short RAG runbook; scripted
+acceptance traffic is labelled.
+
+</details>
+
+<details>
+<summary><strong>💻 Devices and device client</strong>: enroll, verify and approve a device</summary>
+<br>
 
 <p align="center">
   <img src="docs/media/device-flow.gif" width="100%" alt="Device flow: native client, enrollment, fingerprint review, approval, connection, activity log and device administration">
 </p>
 
-Enroll a device, compare its key fingerprint, approve it and inspect its activity.
+**What to look for in the loop:**
+
+- 💻 The device client opening from the tray and reporting its status.
+- 🔑 Enrollment pausing until an administrator compares the key fingerprint.
+- ✅ The approved device connecting, with its details and activity log.
+- 🗂️ Devices, device groups, device evidence and packages in the console.
+
 Earlier enrollment/client captures are labelled in the tour guide.
 
-### Tools and delegated access
+</details>
+
+<details>
+<summary><strong>🧰 Tools and delegated access</strong>: least privilege from tool to execution binding</summary>
+<br>
 
 <p align="center">
   <img src="docs/media/console-tools-tour.gif" width="100%" alt="Tools and access flow: authoring, packages, groups, agents, delegation, grants, policies, execution bindings and access simulation">
 </p>
 
-Build and distribute tools, map agent capabilities, constrain delegated access and
-inspect the final execution boundary.
+**What to look for in the loop:**
 
-### Workspace administration
+- 🧰 Tools built, packaged and grouped, with resource extractors.
+- 🤖 Agents, agent groups and workload identities.
+- 🤝 Human and agent delegations constraining what an agent may act on.
+- 📜 Grants, ALLOW / ASK / BLOCK policies and execution bindings.
+- 🔍 Access simulation showing the final decision before anything runs.
+
+</details>
+
+<details>
+<summary><strong>⚙️ Workspace administration</strong>: people, identities and server settings</summary>
+<br>
 
 <p align="center">
   <img src="docs/media/console-administration.gif" width="100%" alt="Workspace administration flow: sign-in, overview, themes, people, identities, MCP servers, settings, backup, vault and version">
 </p>
 
-Sign in and configure people, identities, MCP servers and server settings.
+**What to look for in the loop:**
+
+- 🔐 Tenant sign-in and the workspace overview, in dark and light themes.
+- 👥 Users, teams, typed roles and human identities.
+- 🔌 MCP servers and server settings.
+- 💾 Backup/restore, the local vault and the About page.
+
+</details>
 
 Screens were captured from a local `0.10.0-dev` installation on October 27, 2026.
 Enabled tools and grants are fictional demo configuration, not installation defaults.
