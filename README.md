@@ -30,10 +30,16 @@ proceed.
 - **End-to-end auditability.** Requests, approvals, decisions and outcomes are
   recorded per tenant, with Analytics and Operator Insights on every tool call.
 
-```text
-AI agent / MCP client ─▶ Gateway ─▶ Control: identity, policy, approval, permit
-                           │
-                           └─▶ Endpoint Client or Tool Host: executes under the permit
+```mermaid
+graph LR
+    A[AI Agent / MCP Client] -->|1. Request Call| B(OLO Gateway Proxy)
+    B -->|2. Evaluate Policy| C{Control Plane}
+    C -->|3. Issue Single-Use Permit| D[Endpoint Client / Tool Host]
+    D -->|4. Execute Tool Boundary| E[(Target Resource)]
+
+    style B fill:#1f6feb,stroke:#388bfd,stroke-width:2px,color:#fff
+    style C fill:#d29922,stroke:#f1e05a,stroke-width:2px,color:#000
+    style D fill:#238636,stroke:#2ea043,stroke-width:2px,color:#fff
 ```
 
 ## Who it is for
@@ -108,7 +114,7 @@ and several SDK, integration and distribution features remain unfinished; each
 describes design relationships; it is not a certification claim.
 
 The OLO Marketplace is developed in a separate private repository and hosted at
-[aol-labs.org](https://aol-labs.org). Control can import from it through the
+[olo-labs.org](https://olo-labs.org). Control can import from it through the
 [Marketplace integration](docs/control-plane/marketplace-integration.md).
 
 ## Contribute

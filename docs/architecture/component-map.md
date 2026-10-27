@@ -12,7 +12,7 @@
 Control already supports importing from a configured external OLO Orgs registry;
 see [Marketplace integration](../control-plane/marketplace-integration.md).
 The Marketplace itself lives in a separate private repository and is hosted at
-[aol-labs.org](https://aol-labs.org).
+[olo-labs.org](https://olo-labs.org).
 
 Read [trust boundaries](trust-boundaries.md) and
 [device controls](../control-plane/device-registry.md). Create an

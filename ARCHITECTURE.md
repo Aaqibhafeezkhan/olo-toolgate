@@ -19,7 +19,7 @@ Control fails closed. Tools execute outside the Control process.
 
 Quickstart combines services for single-node evaluation. Production separates
 services and external state/custody. The Marketplace is developed in a separate
-private repository, hosted at [aol-labs.org](https://aol-labs.org), and does not
+private repository, hosted at [olo-labs.org](https://olo-labs.org), and does not
 participate in current runtime authorization.
 
 Read the [architecture overview](docs/architecture/overview.md),

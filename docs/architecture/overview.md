@@ -41,7 +41,7 @@ The server Tool Host supports Java execution, content verification and brokered
 routes; container/network isolation and a durable result outbox are not implemented. These execution paths have different current limits.
 
 The Marketplace is developed in a separate private repository and hosted at
-[aol-labs.org](https://aol-labs.org).
+[olo-labs.org](https://olo-labs.org).
 A future community signature will establish release provenance, never organization
 deployment authority or runtime permission.
 

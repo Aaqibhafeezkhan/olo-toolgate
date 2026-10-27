@@ -1,7 +1,7 @@
 # Marketplace
 
 The OLO Marketplace is developed in a separate private repository and hosted at
-[aol-labs.org](https://aol-labs.org). This repository contains no Marketplace
+[olo-labs.org](https://olo-labs.org). This repository contains no Marketplace
 applications.
 
 ToolGate Control can import packages from a configured external registry that
