@@ -1,0 +1,139 @@
+{
+  "minimumFrames": 10,
+  "maximumFrames": 15,
+  "historicalDeviceCaptures": [
+    {
+      "file": "device-client-tray-menu.jpg",
+      "title": "Open the device client from its tray menu",
+      "sha256": "f2a9394ee8156b851df8c0a8a57132d15072e2cd99d4fab2c69aa71704fe05f7",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    },
+    {
+      "file": "device-client-status.jpg",
+      "title": "Inspect device client status",
+      "sha256": "b436f9cd89f7519639662893eed8aedf052fdf948f7a42e3870673ca9dc0c22f",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    },
+    {
+      "file": "device-client-activity-log.jpg",
+      "title": "Review the device client activity log",
+      "sha256": "47a4bcba1aa1739e283d149afe9a6aa52271e5ca4612417a152ab006c77f0333",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    },
+    {
+      "file": "device-flow-1-enroll.jpg",
+      "title": "Connect a device for enrollment",
+      "sha256": "12795227d0f1bf7bb903a86f3e5ae514219d995e844c89e7219e1fccebb4e9f6",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    },
+    {
+      "file": "device-flow-2-waiting-for-approval.jpg",
+      "title": "Device waits for administrator approval",
+      "sha256": "2b16d83090798d288c8e4cf72ab1d7fa8a8e4cd4f5d3723865ce78d65b48e0a6",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    },
+    {
+      "file": "device-flow-3-compare-fingerprint.jpg",
+      "title": "Compare the device fingerprint before approval",
+      "sha256": "6fa425fcbcc378479e709ccdba6db2d5a3e943da0b01009b45ea035c10cec032",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    },
+    {
+      "file": "device-flow-4-approved-and-connected.jpg",
+      "title": "Approved device connects",
+      "sha256": "7be38c779bd0f054d066aad7818d87a287a3f87a8fa17fba650de84d4b280e80",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    },
+    {
+      "file": "device-flow-5-connected-device-details.jpg",
+      "title": "Inspect the connected device details",
+      "sha256": "027de815a1f2e292f7eb0c8f9e4c499315838938759bfe055db65e88462b3526",
+      "provenance": "Earlier repository capture, not the October 27 Ollama session"
+    }
+  ],
+  "tours": [
+    {
+      "file": "audit-flow.gif",
+      "title": "Audit, approvals and tool-call evidence",
+      "frames": [
+        "screenshots/console-requests.jpg",
+        "screenshots/console-approvals.jpg",
+        "screenshots/console-approvals-pending.jpg",
+        "screenshots/console-approval-review.jpg",
+        "screenshots/console-approval-approved.jpg",
+        "screenshots/console-outcomes.jpg",
+        "screenshots/console-audit.jpg",
+        "screenshots/console-analytics.jpg",
+        "screenshots/console-analytics-tools.jpg",
+        "screenshots/console-analytics-tool.jpg",
+        "screenshots/operator-sign-in.jpg",
+        "screenshots/operator-usage-charts.jpg",
+        "screenshots/operator-session-timeline.jpg",
+        "screenshots/operator-denied-detail.jpg",
+        "screenshots/console-config-reviews.jpg"
+      ]
+    },
+    {
+      "file": "device-flow.gif",
+      "title": "Device enrollment and client operation",
+      "frames": [
+        "device-client-tray-menu.jpg",
+        "device-client-status.jpg",
+        "screenshots/console-enroll.jpg",
+        "device-flow-1-enroll.jpg",
+        "device-flow-2-waiting-for-approval.jpg",
+        "device-flow-3-compare-fingerprint.jpg",
+        "device-flow-4-approved-and-connected.jpg",
+        "device-flow-5-connected-device-details.jpg",
+        "device-client-activity-log.jpg",
+        "screenshots/console-devices.jpg",
+        "screenshots/console-deviceGroups.jpg",
+        "screenshots/console-deviceEvidence.jpg",
+        "screenshots/console-fleet.jpg",
+        "screenshots/console-config-device.jpg"
+      ]
+    },
+    {
+      "file": "console-tools-tour.gif",
+      "title": "Tools and delegated access",
+      "frames": [
+        "screenshots/console-tools.jpg",
+        "screenshots/console-builder.jpg",
+        "screenshots/console-server-packages.jpg",
+        "screenshots/console-toolGroups.jpg",
+        "screenshots/console-extractors.jpg",
+        "screenshots/console-agents.jpg",
+        "screenshots/console-agentGroups.jpg",
+        "screenshots/console-workloadBindings.jpg",
+        "screenshots/console-delegations.jpg",
+        "screenshots/console-agentDelegations.jpg",
+        "screenshots/console-mapping.jpg",
+        "screenshots/console-grants.jpg",
+        "screenshots/console-policies.jpg",
+        "screenshots/console-bindings.jpg",
+        "screenshots/console-simulation.jpg"
+      ]
+    },
+    {
+      "file": "console-administration.gif",
+      "title": "Workspace and administration",
+      "frames": [
+        "screenshots/console-sign-in.jpg",
+        "screenshots/console-overview.jpg",
+        "screenshots/console-overview-light.jpg",
+        "screenshots/console-users.jpg",
+        "screenshots/console-teams.jpg",
+        "screenshots/console-roles.jpg",
+        "screenshots/console-identityBindings.jpg",
+        "screenshots/console-mcp-servers.jpg",
+        "screenshots/console-config-server.jpg",
+        "screenshots/console-config-backup.jpg",
+        "screenshots/console-local.jpg",
+        "screenshots/console-about.jpg"
+      ]
+    }
+  ],
+  "individualOnly": [
+    "screenshots/console-analytics-full.jpg"
+  ]
+}

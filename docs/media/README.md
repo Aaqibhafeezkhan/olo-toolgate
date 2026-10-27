@@ -3,8 +3,8 @@
 # ToolGate in 36 seconds
 
 [Watch the video](toolgate-overview.mp4). This is a captioned, silent overview,
-not a recording of a live installation. The README uses an animated GIF preview
-linked to the H.264 MP4. [WebVTT captions](toolgate-overview.vtt) are also available.
+not a recording of a live installation. An [animated GIF preview](toolgate-overview.gif)
+and [WebVTT captions](toolgate-overview.vtt) are also available.
 
 ## Transcript
 
@@ -38,11 +38,27 @@ The media and source are distributed under this repository's Apache-2.0 license.
 
 ## Live console and OLO incident walkthrough
 
-The current console/operator sliders are built from unmodified browser JPEG originals.
+The README has four focused sets: audit/approvals (15 steps), device/client (14),
+tools/access (15) and workspace administration (12). The generator rejects a set
+outside 10–15 frames. [Follow each set step by step](TOURS.md); [tours.json](tours.json)
+records the explicit order and source-image checksums for earlier device captures.
+
+Current console/operator frames use the unmodified browser JPEG originals. The
+device set also includes eight existing repository enrollment/client images, each
+captioned **Earlier capture**. They come from a separate earlier session, not the
+October 27 Ollama run. Native client images retain their existing backdrop. All
+original files are kept unchanged. The full-page Analytics image is linked
+individually rather than added as a long slide.
+
+Rebuild the four sets with Pillow:
+
+```bash
+python tools/docs/build_console_tours.py
+```
 
 ## Current capture refresh
 
-**In progress:** 49 fresh capture entries from the October 27 GPU-backed walkthrough. Older captures and the accidentally expired sign-in view are excluded from the new sliders. The capture session ended before every view was collected; the remaining views are listed below. This is not a complete end-to-end model qualification.
+**In progress:** 49 fresh capture entries from the October 27 GPU-backed walkthrough. The expired sign-in view is excluded. Eight earlier device/client captures supplement the device set and are labelled separately. The capture session ended before every view was collected; the remaining views are listed below. This is not a complete end-to-end model qualification.
 
 **Model:** Qwen2.5 7B (`qwen2.5:7b`) through Ollama 0.40.11 on four NVIDIA Quadro P4000 GPUs, driver 582.99. RAG uses one short fictional runbook and one retrieved passage. Every new capture pauses for two seconds after the requested page/state loads.
 
