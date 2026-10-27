@@ -119,6 +119,17 @@ cached policy. See [architecture](ARCHITECTURE.md),
 | [Tool distribution](docs/client/package-deployment.md) | Package, version and deliver signed tools to devices and Tool Hosts | Available; Java and Python authoring, TypeScript and .NET are specifications |
 | [Audit and analytics](docs/control-plane/insights.md) | Correlate identities, decisions and outcomes; tenant Analytics and Operator Insights | Available |
 
+### Governing an MCP server in five steps
+
+1. **Register** the server's HTTPS URL, credential and Tool Host pool. Control contacts nothing.
+2. **Scan.** A Tool Host lists the server's tools; Control stores an immutable snapshot with a digest per tool.
+3. **Approve** the tools to expose. ToolGate packages them, and each starts disabled.
+4. **Grant** them to agent groups like any other tool, under ALLOW / ASK / BLOCK policies.
+5. **Execute and audit.** Agents call through the Gateway. The Tool Host runs each call under its
+   permit, validates the arguments and connects with the approved key pins; every call is recorded.
+
+Details: [MCP proxy guide](docs/gateway/mcp-proxy.md).
+
 ## See it work
 
 <p align="center">
