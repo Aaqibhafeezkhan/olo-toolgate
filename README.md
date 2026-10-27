@@ -49,14 +49,22 @@ current behavior and limitations.
 ## Console and devices
 
 <p align="center">
-  <img src="docs/media/console-tour.gif" width="100%" alt="ToolGate console: users, tools, groups, grants, policies and devices">
+  <img src="docs/media/console-tour.gif" width="100%" alt="Current ToolGate console pages, including tenant Analytics, users, tools, grants, policies and approvals">
 </p>
 <p align="center">
-  <img src="docs/media/device-flow.gif" width="100%" alt="Device enrollment: request approval, compare the key fingerprint, approve and connect">
+  <img src="docs/media/device-flow.gif" width="100%" alt="Current ToolGate device, enrollment, device evidence and package pages">
 </p>
 
-These tours were captured from a local `0.10.0-dev` installation on October 13,
-2026. Their enabled tools and grants are demo configuration, not installation defaults.
+<p align="center">
+  <img src="docs/media/operator-insights-tour.gif" width="100%" alt="Operator Insights: usage, outcomes, invocation details, attempts, spans and session timelines">
+</p>
+
+These tours were captured from a fresh local `0.10.0-dev` installation on October 27,
+2026, including the tenant Analytics and tool drilldown changes on `main`.
+[Browse every captured page and the verification notes](docs/media/README.md).
+Enabled tools and grants are fictional demo configuration, not installation defaults.
+The operator tour uses a labelled local test gateway holding an ephemeral operator
+client certificate; the operator listener retains its separate mTLS protection.
 
 ## Evaluate for your organization
 
