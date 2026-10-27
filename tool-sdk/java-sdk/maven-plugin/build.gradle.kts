@@ -22,6 +22,9 @@ dependencies {
         // Preserve Maven 3's XML API while fixing CVE-2025-67030 in the 3.x line.
         compileOnly("org.codehaus.plexus:plexus-utils:3.6.1")
         testImplementation("org.codehaus.plexus:plexus-utils:3.6.1")
+        // Maven 3.9 brings Guava 33.4.8; 33.7.2 fixes CVE-2026-102554.
+        compileOnly(libs.guava)
+        testImplementation(libs.guava)
     }
 }
 
