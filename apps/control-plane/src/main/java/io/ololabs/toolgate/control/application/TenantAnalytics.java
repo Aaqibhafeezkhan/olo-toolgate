@@ -26,7 +26,9 @@ public final class TenantAnalytics {
             new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "audit.read", now);
             return null;
         });
-        if (from < 0 || to <= from || to > now || to - from > 31L * 86_400_000) throw Failure.validation();
+        // The window end comes from the viewer's clock, which may run ahead of the server's; clamp rather than reject.
+        to = Math.min(to, now);
+        if (from < 0 || to <= from || to - from > 31L * 86_400_000) throw Failure.validation();
         if (tool != null && (tool.isBlank() || tool.length() > 256) || after != null && tool == null) throw Failure.validation();
         var granularity = to - from <= 48L * 3_600_000 ? InsightsGranularity.HOUR : InsightsGranularity.DAY;
         String tenant = actor.tenant().value();
