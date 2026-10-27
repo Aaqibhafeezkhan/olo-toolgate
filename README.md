@@ -1,119 +1,249 @@
 # OLO ToolGate
 
-> **Control what AI can do.**
+> **Zero Trust for Agentic AI.**
+> **Secure Every Tool Boundary.**
 
-OLO ToolGate is a self-hosted control plane for building, distributing and governing
-AI tools across people, agents and devices. It combines group-based access,
-ALLOW / ASK / BLOCK policies, reviewed configuration, device enrollment and
-auditable execution.
+OLO ToolGate is an open-source, self-hosted security gateway for AI agents, MCP
+servers and tool execution.
 
-[Get started](docs/getting-started/one-minute-quickstart.md) ·
-[Documentation](docs/README.md) · [Build a tool](TOOL-SDK-GUIDE.md) ·
-[Contribute](CONTRIBUTING.md) · [Enterprise evaluation](docs/enterprise-access-control/README.md) ·
-[Multitenant deployment](docs/deployment/multitenant.md)
+Enforce identity, least-privilege access, runtime authorization, human approvals and
+auditable execution at every governed tool boundary.
 
-[Watch the captioned overview](https://github.com/olo-labs/olo-toolgate/raw/refs/heads/main/docs/media/toolgate-overview.mp4)
-or read the [transcript and screenshot guide](docs/media/README.md).
+**Status:** development release (`0.10.0-dev`). See [current limits](#production-and-security-status).
 
-## Run ToolGate
+[Quickstart](#quickstart) · [Documentation](docs/README.md) ·
+[Security model](docs/security/README.md) ·
+[Enterprise evaluation](docs/enterprise-access-control/README.md) ·
+[Build a tool](TOOL-SDK-GUIDE.md) · [Contribute](CONTRIBUTING.md)
 
-Use the [Quickstart walkthrough](docs/getting-started/one-minute-quickstart.md)
-for a local, single-node evaluation. The [Compose helpers](deploy/compose/QuickStart/README.md)
-manage deployment and retain the data volume. For a source build, follow the
-[development guide](docs/development/README.md).
+## Why ToolGate
 
-Fresh installations create management identities and protected default groups.
-Tools and agents require explicit enablement, grants and execution bindings.
-Device approval alone never grants permission to run a tool.
+AI agents act through tools: they write files, call APIs and change systems. Each
+tool call crosses a trust boundary. ToolGate sits on that boundary and decides, at
+the moment of the call, whether it may proceed. The executor cannot act without
+that decision.
 
-## What is available
+- **Verified identities.** Each call is checked against the identities that apply
+  to it: the calling agent or workload, the human it acts for when there is one, and
+  the executor (an enrolled device or a Tool Host). New users and agents start
+  disabled; device approval alone never grants access.
+- **Policy at every call.** ALLOW, ASK or BLOCK is evaluated against current
+  authority before any protected effect. ASK routes the call to independent human
+  approval.
+- **Least privilege by default.** Fresh installations grant nothing. Access comes
+  only from explicit group grants, delegated scopes and execution bindings.
+- **Enforced at the executor.** Executors run a call only under a single-use permit
+  from Control, consumed online. If Control is unavailable, nothing runs; cached
+  metadata never authorizes offline execution.
+- **End-to-end auditability.** Requests, approvals, decisions and outcomes are
+  recorded per tenant and correlated to the identities involved.
 
-| Area | Start here |
-|---|---|
-| Console, users, teams, groups and reviewed configuration | [Administration](docs/control-plane/README.md) |
-| Current authorization, approvals and single-use permits | [Security model](docs/security/README.md) |
-| Device enrollment, package tools on devices and the files area | [Endpoint client](docs/client/README.md) |
-| Java tool authoring, packaging and standalone MCP | [Java SDK](tool-sdk/java-sdk/README.md) |
-| Server Java tools, placement and direct or queued dispatch | [Tool Host](apps/tool-host/README.md) |
-| Deployment, recovery and diagnosis | [Operations](docs/operations/README.md) |
+## Quickstart
 
-This repository is a development release. Tool Host sandbox isolation and several
-SDK, integration and distribution features remain unfinished. The Marketplace
-applications are scaffolds. Each [component guide](docs/README.md) describes its
-current behavior and limitations.
+Quickstart is a local, single-node evaluation. It runs Control, Gateway, the console
+and local execution in one container with SQLite.
 
-## Four focused demo flows
+**Prerequisites:** Docker with Compose, and Git.
 
-Each set contains 10–15 screens, with one screen per step. Individual full-resolution
-images remain available in the [snapshot index](docs/media/README.md) and the
-[step-by-step tour guide](docs/media/TOURS.md).
+```bash
+git clone https://github.com/olo-labs/olo-toolgate.git
+cd olo-toolgate/deploy/compose/QuickStart
+sh manage.sh deploy        # Windows: .\manage.ps1 deploy
+```
 
-### 1. Audit, approvals and tool calls · 15 steps
+The helper creates `.env` from `.env.example` on first run and keeps the data volume
+across restarts. The default image, `ololab/olo-toolgate-quickstart:dev`, is a mutable
+development tag, so it may not match the version shown in this README; check the
+version and build on the console's **About** page after deployment. For a
+reproducible evaluation, copy `.env.example` to `.env` first and set `QUICKSTART_IMAGE`
+to a versioned tag or an image digest (`ololab/olo-toolgate-quickstart@sha256:…`); see
+[development releases](docs/development/development-releases.md).
+
+**What you get:** the console at `http://localhost:8080/console/`, with separate
+`admin`, `reviewer-1` and `reviewer-2` accounts. Their generated passwords are in the
+container's private `/data/credentials.json`; see [first login](docs/getting-started/first-login.md).
+
+**What you still do:** a fresh installation runs nothing. Tools and the local agent
+start disabled with zero runtime rights, by design. Follow
+[your first tool](docs/getting-started/first-tool.md) to enroll a device, grant
+access and make a governed call. The full walkthrough is in the
+[Quickstart guide](docs/getting-started/one-minute-quickstart.md).
+
+## Architecture
+
+The call and the authorization travel separate paths. Gateway dispatches the call;
+Control decides and issues the permit; the executor will not act until it redeems
+that permit with Control.
+
+```mermaid
+block-beta
+  columns 5
+  space:2 A["<b>AI Agent / MCP Client</b>"] space:2
+  space:5
+  space:2 G["<b>ToolGate Gateway</b><br/>Authenticated request routing"] space:2
+  space:5
+  X["<b>Tool Host / Endpoint</b><br/>Permit-enforced execution"] space:3 C["<b>Control Plane</b><br/>Policy / permits"]
+  space:5
+  R["Target Resource"] space:4
+
+  A --> G
+  G -- "Dispatch" --> X
+  G -- "Authorize" --> C
+  C -- "permit authority" --> X
+  X --> R
+
+  classDef gateway fill:#2563eb22,stroke:#3b82f6,stroke-width:1.5px
+  classDef control fill:#d49b3622,stroke:#d49b36,stroke-width:1.5px
+  classDef executor fill:#13856622,stroke:#138566,stroke-width:1.5px
+  classDef resource fill:#8881,stroke:#8889,stroke-width:1px
+  class A,G gateway
+  class C control
+  class X executor
+  class R resource
+```
+
+Control never forwards calls, and Gateway never signs permits or authorizes from a
+cached policy. See [architecture](ARCHITECTURE.md),
+[core data flows](docs/architecture/data-flows.md) and
+[trust boundaries](docs/architecture/trust-boundaries.md).
+
+## Capabilities
+
+| Capability | What it does | Status |
+|---|---|---|
+| [MCP governance](docs/gateway/mcp-proxy.md) | Put existing MCP servers behind ToolGate policy, approval and audit without changing them | Available |
+| [Runtime policy](docs/security/README.md) | ALLOW / ASK / BLOCK on every tool invocation, against current authority | Available |
+| [Delegated authority](docs/security/enterprise-access-control.md) | Constrain what an agent may do on behalf of a person or another agent | Available |
+| [Zero-trust execution](docs/control-plane/approvals.md) | Single-use, Control-signed permits checked at the execution boundary | Available; Tool Host container/network isolation unfinished |
+| [Human approval](docs/control-plane/approvals.md) | Independent review of sensitive calls before they run | Available |
+| [Tool distribution](docs/client/package-deployment.md) | Package, version and deliver signed tools to devices and Tool Hosts | Available; Java and Python authoring, TypeScript and .NET are specifications |
+| [Audit and analytics](docs/control-plane/insights.md) | Correlate identities, decisions and outcomes; tenant Analytics and Operator Insights | Available |
+
+### Governing an MCP server in five steps
+
+1. **Register** the server's HTTPS URL, credential and Tool Host pool. Control contacts nothing.
+2. **Scan.** A Tool Host lists the server's tools; Control stores an immutable snapshot with a digest per tool.
+3. **Approve** the tools to expose. ToolGate packages them, and each starts disabled.
+4. **Grant** them to agent groups like any other tool, under ALLOW / ASK / BLOCK policies.
+5. **Execute and audit.** Agents call through the Gateway. The Tool Host runs each call under its
+   permit, validates the arguments and connects with the approved key pins; every call is recorded.
+
+Details: [MCP proxy guide](docs/gateway/mcp-proxy.md).
+
+## See it work
 
 <p align="center">
-  <img src="docs/media/audit-flow.gif" width="100%" alt="15-step audit flow: requests, independent approval, outcomes, Analytics tool calls and Operator Insights">
+  <img src="docs/media/audit-flow.gif" width="100%" alt="Audit flow: requests, independent approval, outcomes, Analytics tool calls and Operator Insights">
 </p>
 
-Follow a request through independent review, its recorded outcome, audit evidence,
-tenant Analytics and Operator Insights. The OLO example uses **Qwen2.5 7B through
-Ollama on four Quadro P4000 GPUs**, with one short RAG runbook; separate scripted
-acceptance traffic is labelled.
+**Audit, approvals and tool calls.** A live remediation call waits on an `ASK`
+policy, an independent reviewer checks the exact invocation, and the approved call
+resumes through ToolGate into its outcome, audit trail and Analytics. The example
+uses Qwen2.5 7B through Ollama; scripted acceptance traffic is labelled.
 
-### 2. Devices and device client · 14 steps
+> 💡 **Tip:** For individual, high-resolution step frames or manual navigation, browse the
+> [Step-by-Step Tour Guide](docs/media/TOURS.md). Every snapshot is in the repository:
+> console and operator screens in [`docs/media/screenshots`](docs/media/screenshots) and
+> device/client captures in [`docs/media`](docs/media).
+
+<details>
+<summary><strong>💻 Devices and device client</strong>: enroll, verify and approve a device</summary>
+<br>
 
 <p align="center">
-  <img src="docs/media/device-flow.gif" width="100%" alt="14-step device flow: native client, enrollment, fingerprint review, approval, connection, activity log and device administration">
+  <img src="docs/media/device-flow.gif" width="100%" alt="Device flow: native client, enrollment, fingerprint review, approval, connection, activity log and device administration">
 </p>
 
-Open the client, enroll a device, compare its fingerprint, approve it and inspect
-connection/activity before browsing device groups, evidence and packages. Eight
-existing enrollment/client images are labelled **Earlier capture** in the tour;
-they are not from the October 27 OLO session. Device enrollment requires no model.
+**What to look for in the loop:**
 
-### 3. Tools and delegated access · 15 steps
+- 💻 The device client opening from the tray and reporting its status.
+- 🔑 Enrollment pausing until an administrator compares the key fingerprint.
+- ✅ The approved device connecting, with its details and activity log.
+- 🗂️ Devices, device groups, device evidence and packages in the console.
+
+Earlier enrollment/client captures are labelled in the tour guide.
+
+</details>
+
+<details>
+<summary><strong>🧰 Tools and delegated access</strong>: least privilege from tool to execution binding</summary>
+<br>
 
 <p align="center">
-  <img src="docs/media/console-tools-tour.gif" width="100%" alt="15-step tools and access flow: authoring, packages, groups, agents, delegation, grants, policies, execution bindings and access simulation">
+  <img src="docs/media/console-tools-tour.gif" width="100%" alt="Tools and access flow: authoring, packages, groups, agents, delegation, grants, policies, execution bindings and access simulation">
 </p>
 
-Build and distribute tools, map agent capabilities, constrain delegated access and
-inspect the final execution boundary. These are the ToolGate controls around the
-Qwen2.5 7B OLO example; the console itself requires no model.
+**What to look for in the loop:**
 
-### 4. Workspace administration · 12 steps
+- 🧰 Tools built, packaged and grouped, with resource extractors.
+- 🤖 Agents, agent groups and workload identities.
+- 🤝 Human and agent delegations constraining what an agent may act on.
+- 📜 Grants, ALLOW / ASK / BLOCK policies and execution bindings.
+- 🔍 Access simulation showing the final decision before anything runs.
+
+</details>
+
+<details>
+<summary><strong>⚙️ Workspace administration</strong>: people, identities and server settings</summary>
+<br>
 
 <p align="center">
-  <img src="docs/media/console-administration.gif" width="100%" alt="12-step workspace administration flow: sign-in, overview, themes, people, identities, MCP servers, settings, backup, vault and version">
+  <img src="docs/media/console-administration.gif" width="100%" alt="Workspace administration flow: sign-in, overview, themes, people, identities, MCP servers, settings, backup, vault and version">
 </p>
 
-Sign in, inspect the workspace and configure people, identities and server settings.
-These administration screens require no model.
+**What to look for in the loop:**
 
-Current console and operator screens were captured from a fresh local `0.10.0-dev`
-installation on October 27, 2026, including tenant Analytics and tool drilldowns.
-Earlier device/client frames are identified individually in the tour guide.
-[Browse every captured page and the verification notes](docs/media/README.md).
+- 🔐 Tenant sign-in and the workspace overview, in dark and light themes.
+- 👥 Users, teams, typed roles and human identities.
+- 🔌 MCP servers and server settings.
+- 💾 Backup/restore, the local vault and the About page.
+
+</details>
+
+Screens were captured from a local `0.10.0-dev` installation on October 27, 2026.
 Enabled tools and grants are fictional demo configuration, not installation defaults.
-The operator tour uses a labelled local test gateway holding an ephemeral operator
-client certificate; the operator listener retains its separate mTLS protection.
 
-## Evaluate for your organization
+## Production and security status
 
-Control evaluates current authority before protected effects. Gateway routes
-requests, and registered executors enforce the permit and resource boundary.
-Unavailable authority fails closed; cached metadata does not permit offline execution.
+ToolGate is a development release. The authorization path described above is
+enforced today; the following are **not yet** in place:
 
-Start with the [enterprise evaluation guide](docs/enterprise-access-control/README.md)
-for supported scope, implementation evidence, deployment requirements and known
-limitations. [Standards alignment](docs/enterprise-access-control/standards-alignment.md)
-describes design relationships; it is not a certification claim.
+- **Tool Host isolation:** process launch and broker checks exist, but container
+  and network isolation are unfinished.
+- **Durable result retry:** the Tool Host result outbox is not implemented.
+- **Offline protected effects** and **nested or dynamic groups** are unsupported.
+- **Quickstart** is single-node evaluation software with no HA guarantee.
+- **Authoring:** Java and Python implementations are available; TypeScript and .NET
+  authoring APIs remain specifications.
 
-## Contribute
+Recorded acceptance and performance results apply to the tested revision and
+environment; they do not establish your deployment's readiness, capacity or
+compliance. [Standards alignment](docs/enterprise-access-control/standards-alignment.md)
+describes design relationships, not a certification.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), choose a component from the
-[architecture map](docs/architecture/component-map.md), and use the
-[development commands](docs/development/README.md). Small fixes, tests,
-documentation and examples are welcome. Discuss proposed work in GitHub issues.
+Before production, read the [enterprise evaluation guide](docs/enterprise-access-control/README.md),
+[threat model](docs/security/threat-model.md) and
+[production deployment](docs/deployment/production.md). For multiple tenants, see
+[multitenant deployment](docs/deployment/multitenant.md).
+
+The OLO Marketplace is developed in a separate private repository and hosted at
+[olo-labs.org](https://olo-labs.org). Control can import from it through the
+[Marketplace integration](docs/control-plane/marketplace-integration.md).
+
+## Developers and contributors
+
+| You want to | Start here |
+|---|---|
+| Build and package a tool | [Tool SDK guide](TOOL-SDK-GUIDE.md) · [Java SDK](tool-sdk/java-sdk/README.md) · [examples](examples/README.md) |
+| Govern an existing MCP server | [MCP proxy guide](docs/gateway/mcp-proxy.md) · [example](examples/mcp-proxy/README.md) |
+| Run server-side tools | [Tool Host](apps/tool-host/README.md) |
+| Build from source | [Development guide](docs/development/README.md) |
+| Contribute | [CONTRIBUTING.md](CONTRIBUTING.md) · [architecture map](docs/architecture/component-map.md) |
+
+Small fixes, tests, documentation and examples are welcome. Discuss larger work in
+GitHub issues.
+
+## Project resources
 
 [Support](SUPPORT.md) · [Report a vulnerability](SECURITY.md) ·
 [Governance](GOVERNANCE.md) · [Code of conduct](CODE_OF_CONDUCT.md) ·

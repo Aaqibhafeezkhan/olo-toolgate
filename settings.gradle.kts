@@ -22,12 +22,6 @@ project(":package-archive").projectDir = file("backend-libs/package-archive")
 include(":control-plane")
 project(":control-plane").projectDir = file("apps/control-plane")
 
-include(":marketplace-api")
-project(":marketplace-api").projectDir = file("apps/marketplace-api")
-
-include(":marketplace-worker")
-project(":marketplace-worker").projectDir = file("apps/marketplace-worker")
-
 include(":sdk-java-api")
 project(":sdk-java-api").projectDir = file("tool-sdk/java-sdk/api")
 

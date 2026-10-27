@@ -1,17 +1,14 @@
-# Marketplace status
+# Marketplace
 
-The Marketplace API, worker and Drupal applications are buildable scaffolds.
-They do not provide a complete hosted publication/moderation service.
-Control does implement import from a configured external OLO Orgs registry;
-follow [Marketplace integration](../control-plane/marketplace-integration.md) for
-the current settings, trust checks and supported import path.
+The OLO Marketplace is developed in a separate private repository and hosted at
+[olo-labs.org](https://olo-labs.org). This repository contains no Marketplace
+applications.
 
-The intended boundary keeps catalog, publisher and immutable version authority
-in the API; isolated scan/build/sign/publish orchestration in the worker; and
-community/publisher UI in Drupal. A community release signature must never grant
-organization deployment or runtime permission.
+ToolGate Control can import packages from a configured external registry that
+implements the [external registry API contract](../api/marketplace-api.md). Follow
+[Marketplace integration](../control-plane/marketplace-integration.md) for the
+current settings, trust checks and supported import path.
 
-Contributors can inspect the [external registry API contract](../api/marketplace-api.md),
-[Control import guide](../control-plane/marketplace-integration.md),
-and the [component map](../architecture/component-map.md). The external API contract and import guide apply to that integration, not to the scaffold applications. Current tool authors should use the
+A community release signature establishes provenance only. It never grants
+organization deployment authority or runtime permission. Tool authors should use the
 [Java SDK and package workflow](../../TOOL-SDK-GUIDE.md).

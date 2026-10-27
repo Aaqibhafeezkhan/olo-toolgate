@@ -45,7 +45,8 @@ keep only the existing smaller checks. See the
 [local CI tools README](../../tools/ci/README.md#commit-checks) for setup and usage.
 
 The workspace includes working Gateway, Control, Quickstart, console, client and
-Java Tool SDK implementations; Marketplace applications remain scaffolds.
+Java Tool SDK implementations. The Marketplace lives in a separate private
+repository and is hosted at [olo-labs.org](https://olo-labs.org).
 `make dev` remains a scaffold. Use the [development guide](README.md) for current
 startup commands. `make check` is implemented and never silently skips a gate.
 
@@ -152,7 +153,7 @@ publication remains registry opt-in; their identities and source packages exist.
 
 Helm OCI is `oci://ghcr.io/olo-labs/charts/olo-toolgate:<chart-version>`.
 Reserved runtime image names are `ghcr.io/olo-labs/olo-toolgate-{quickstart,
-gateway,control,marketplace-api,marketplace-worker}:<product-version>`.
+gateway,control}:<product-version>`.
 No image is built or published until its owning module delivers a real service.
 
 If drift fails, regenerate and inspect the schema diff before accepting it.

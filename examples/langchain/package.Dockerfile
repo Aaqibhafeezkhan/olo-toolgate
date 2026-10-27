@@ -13,8 +13,6 @@ COPY backend-libs/package-archive/ backend-libs/package-archive/
 COPY backend-libs/service-authorization/ backend-libs/service-authorization/
 COPY config/initial/ config/initial/
 COPY apps/control-plane/build.gradle.kts apps/control-plane/build.gradle.kts
-COPY apps/marketplace-api/build.gradle.kts apps/marketplace-api/build.gradle.kts
-COPY apps/marketplace-worker/build.gradle.kts apps/marketplace-worker/build.gradle.kts
 COPY tool-sdk/java-sdk/ tool-sdk/java-sdk/
 COPY tool-sdk/json-sdk/ tool-sdk/json-sdk/
 COPY examples/java-tools/ examples/java-tools/

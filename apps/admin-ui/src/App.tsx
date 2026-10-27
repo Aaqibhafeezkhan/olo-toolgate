@@ -176,7 +176,7 @@ export function App({initialLogin}:{initialLogin?:LoginLink}={}) {
   }
   return <><a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     {!client ? <main id="main" tabIndex={-1} className="connect-page"><header className="login-header"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /> <span>ToolGate</span></div>
-      <ThemePicker /></header><div className="connect-card"><p className="eyebrow">Organization console</p><h1>Manage your workspace</h1>
+      <ThemePicker /></header><div className="connect-card"><p className="eyebrow">Organization console</p><h1>Manage your workspace</h1><p className="tagline">Zero Trust for Agentic AI. Secure Every Tool Boundary.</p>
         {quickstart ? <p role="status" className="notice">Quickstart · Single node · Non-HA{tenantName?` · Tenant: ${tenantName}`:''}{tenant?` · Tenant ID: ${tenant}`:''}.</p> : <p>Connect to Control with an access token issued by your organization’s identity provider.</p>}
         {!quickstart && <p>Workspace: {window.location.hostname}</p>}
         {!safeOrigin() && <div role="alert" className="notice error">Open this console over HTTPS before connecting.</div>}
@@ -248,6 +248,7 @@ function MenuIcon({name}:{name:string}) { return <svg className="menu-icon" view
 
 function About() {
   return <section aria-labelledby="about-heading"><div className="page-heading"><h1 id="about-heading">About ToolGate</h1></div>
+    <p className="tagline">Zero Trust for Agentic AI. Secure Every Tool Boundary.</p>
     <dl><dt>Version</dt><dd>{__APP_VERSION__}</dd><dt>Build</dt><dd>{__APP_BUILD__}</dd></dl>
     <p>OLO Labs · Licensed under Apache-2.0</p></section>;
 }

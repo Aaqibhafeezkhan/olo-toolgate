@@ -50,7 +50,7 @@ def main():
         with Image.open(ROOT/name) as result:
             if result.n_frames!=len(entries):raise ValueError('GIF frame count differs from the tour plan')
         print(name,len(frames),(ROOT/name).stat().st_size)
-        guide.extend([f"## {tour['title']} · {len(entries)} steps",'',f"[Animated tour]({name})",'',
+        guide.extend([f"## {tour['title']}",'',f"[Animated tour]({name})",'',
             '| Step | Screen | Capture |','| --- | --- | --- |'])
         for i,entry in enumerate(entries,1):
             source='Earlier capture' if entry['file'] in historical else 'October 27 console/operator'

@@ -37,7 +37,7 @@ execution, availability and recovery requirements before adopting it.
 Quickstart is single-node evaluation software. Tool Host process launch and broker
 checks exist, but container/network isolation and durable result retry remain
 unfinished. Managed endpoint OCI confinement is a different execution path.
-Marketplace applications are scaffolds. Java and Python authoring implementations
+The Marketplace is hosted separately at [olo-labs.org](https://olo-labs.org). Java and Python authoring implementations
 are available; TypeScript and .NET authoring APIs remain specifications.
 
 Nested/dynamic groups and offline protected effects are unsupported. Recorded

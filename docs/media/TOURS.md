@@ -3,7 +3,7 @@
 Four focused sets with 10–15 screens each. All links open the original saved images.
 Earlier device/client captures are explicitly marked; current console/operator captures are from October 27, 2026.
 
-## Audit, approvals and tool-call evidence · 15 steps
+## Audit, approvals and tool-call evidence
 
 [Animated tour](audit-flow.gif)
 
@@ -25,7 +25,7 @@ Earlier device/client captures are explicitly marked; current console/operator c
 | 14 | [Denied test operation · identity, spans and ledger transitions](screenshots/operator-denied-detail.jpg) | October 27 console/operator |
 | 15 | [Configuration reviews · current incident walkthrough](screenshots/console-config-reviews.jpg) | October 27 console/operator |
 
-## Device enrollment and client operation · 14 steps
+## Device enrollment and client operation
 
 [Animated tour](device-flow.gif)
 
@@ -46,7 +46,7 @@ Earlier device/client captures are explicitly marked; current console/operator c
 | 13 | [Packages · current incident walkthrough](screenshots/console-fleet.jpg) | October 27 console/operator |
 | 14 | [Device · current incident walkthrough](screenshots/console-config-device.jpg) | October 27 console/operator |
 
-## Tools and delegated access · 15 steps
+## Tools and delegated access
 
 [Animated tour](console-tools-tour.gif)
 
@@ -68,7 +68,7 @@ Earlier device/client captures are explicitly marked; current console/operator c
 | 14 | [Execution bindings · current incident walkthrough](screenshots/console-bindings.jpg) | October 27 console/operator |
 | 15 | [Access simulation · current incident walkthrough](screenshots/console-simulation.jpg) | October 27 console/operator |
 
-## Workspace and administration · 12 steps
+## Workspace and administration
 
 [Animated tour](console-administration.gif)
 
