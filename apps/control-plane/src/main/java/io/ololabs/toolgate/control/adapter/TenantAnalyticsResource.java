@@ -18,11 +18,12 @@ public class TenantAnalyticsResource {
     @Inject ContractCodec codec;
     @Inject InsightsService insights;
     @GET public Response overview(@QueryParam("from") Long from, @QueryParam("to") Long to,
+                                  @QueryParam("tool") String tool, @QueryParam("after") String after,
                                   @QueryParam("tenant") String tenant, @QueryParam("tenantId") String tenantId) {
         var actor = actors.management();
         // Reject tenant-selection attempts rather than silently accepting a misleading filter.
         if (tenant != null || tenantId != null || from == null || to == null) throw Failure.validation();
-        var result = new TenantAnalytics(store, codec, insights).overview(actor, store.insightsMode(), from, to, System.currentTimeMillis());
+        var result = new TenantAnalytics(store, codec, insights).overview(actor, store.insightsMode(), from, to, System.currentTimeMillis(), tool, after);
         return Response.ok(codec.json(result)).header("Cache-Control", "no-store").build();
     }
 }
