@@ -51,8 +51,13 @@ cd olo-toolgate/deploy/compose/QuickStart
 sh manage.sh deploy        # Windows: .\manage.ps1 deploy
 ```
 
-The helper creates `.env` from `.env.example` on first run (default image
-`ololab/olo-toolgate-quickstart:dev`) and keeps the data volume across restarts.
+The helper creates `.env` from `.env.example` on first run and keeps the data volume
+across restarts. The default image, `ololab/olo-toolgate-quickstart:dev`, is a mutable
+development tag, so it may not match the version shown in this README; check the
+version and build on the console's **About** page after deployment. For a
+reproducible evaluation, copy `.env.example` to `.env` first and set `QUICKSTART_IMAGE`
+to a versioned tag or an image digest (`ololab/olo-toolgate-quickstart@sha256:…`); see
+[development releases](docs/development/development-releases.md).
 
 **What you get:** the console at `http://localhost:8080/console/`, with separate
 `admin`, `reviewer-1` and `reviewer-2` accounts. Their generated passwords are in the
