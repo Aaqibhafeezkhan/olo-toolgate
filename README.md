@@ -71,33 +71,31 @@ Control decides and issues the permit; the executor will not act until it redeem
 that permit with Control.
 
 ```mermaid
-flowchart TD
-    A["<b>AI Agent / MCP Client</b>"]
-    G["<b>ToolGate Gateway</b><br/>Authenticated request routing"]
-    X["<b>Tool Host / Endpoint</b><br/>Permit-enforced execution"]
-    C["<b>Control Plane</b><br/>Policy / permits"]
-    R["Target Resource"]
+block-beta
+  columns 5
+  space:2 A["<b>AI Agent / MCP Client</b>"] space:2
+  space:5
+  space:2 G["<b>ToolGate Gateway</b><br/>Authenticated request routing"] space:2
+  space:5
+  X["<b>Tool Host / Endpoint</b><br/>Permit-enforced execution"] space:3 C["<b>Control Plane</b><br/>Policy / permits"]
+  space:5
+  R["Target Resource"] space:4
 
-    A --> G
-    G -->|Dispatch| X
-    G -->|Authorize| C
-    C -.->|permit authority| X
-    X --> R
+  A --> G
+  G -- "Dispatch" --> X
+  G -- "Authorize" --> C
+  C -- "permit authority" --> X
+  X --> R
 
-    classDef gateway fill:#2563eb22,stroke:#3b82f6,stroke-width:1.5px
-    classDef control fill:#d49b3622,stroke:#d49b36,stroke-width:1.5px
-    classDef executor fill:#13856622,stroke:#138566,stroke-width:1.5px
-    classDef resource fill:#8881,stroke:#8889,stroke-width:1px
-    class A,G gateway
-    class C control
-    class X executor
-    class R resource
-    linkStyle 1 stroke:#3b82f6,stroke-width:1.5px
-    linkStyle 2,3 stroke:#d49b36,stroke-width:1.5px
-    linkStyle 4 stroke:#138566,stroke-width:1.5px
+  classDef gateway fill:#2563eb22,stroke:#3b82f6,stroke-width:1.5px
+  classDef control fill:#d49b3622,stroke:#d49b36,stroke-width:1.5px
+  classDef executor fill:#13856622,stroke:#138566,stroke-width:1.5px
+  classDef resource fill:#8881,stroke:#8889,stroke-width:1px
+  class A,G gateway
+  class C control
+  class X executor
+  class R resource
 ```
-
-Solid lines carry the call; the dashed line is permit authority.
 
 Control never forwards calls, and Gateway never signs permits or authorizes from a
 cached policy. See [architecture](ARCHITECTURE.md),
