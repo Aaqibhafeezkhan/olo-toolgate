@@ -127,18 +127,18 @@ public final class JwtVerifier implements IdentityVerifier {
             switch (alg.substring(0, 2)) {
                 case "RS" -> {
                     if (!(key instanceof RSAPublicKey rsa) || rsa.getModulus().bitLength() < 2048) return false;
-                    s = Signature.getInstance("SHA" + bits + "withRSA");
+                    s = switch (alg) { case "RS256" -> Signature.getInstance("SHA256withRSA"); case "RS384" -> Signature.getInstance("SHA384withRSA"); case "RS512" -> Signature.getInstance("SHA512withRSA"); default -> throw new IllegalArgumentException("Unsupported RSA algorithm"); };
                 }
                 case "PS" -> {
                     if (!(key instanceof RSAPublicKey rsa) || rsa.getModulus().bitLength() < 2048) return false;
                     s = Signature.getInstance("RSASSA-PSS");
-                    s.setParameter(new PSSParameterSpec("SHA-" + bits, "MGF1", new MGF1ParameterSpec("SHA-" + bits), bits / 8, 1));
+                    s.setParameter(switch (alg) { case "PS256" -> new PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1); case "PS384" -> new PSSParameterSpec("SHA-384", "MGF1", MGF1ParameterSpec.SHA384, 48, 1); case "PS512" -> new PSSParameterSpec("SHA-512", "MGF1", MGF1ParameterSpec.SHA512, 64, 1); default -> throw new IllegalArgumentException("Unsupported PSS algorithm"); });
                 }
                 case "ES" -> {
                     int field = bits == 512 ? 521 : bits;
                     if (!(key instanceof ECPublicKey ec) || ec.getParams().getCurve().getField().getFieldSize() != field) return false;
                     if (signature.length != 2 * ((field + 7) / 8)) return false;
-                    s = Signature.getInstance("SHA" + bits + "withECDSAinP1363Format");
+                    s = switch (alg) { case "ES256" -> Signature.getInstance("SHA256withECDSAinP1363Format"); case "ES384" -> Signature.getInstance("SHA384withECDSAinP1363Format"); case "ES512" -> Signature.getInstance("SHA512withECDSAinP1363Format"); default -> throw new IllegalArgumentException("Unsupported EC algorithm"); };
                 }
                 default -> {
                     return false;

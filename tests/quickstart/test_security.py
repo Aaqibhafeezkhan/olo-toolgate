@@ -272,3 +272,14 @@ class SecurityTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class OriginTargetTests(unittest.TestCase):
+    def test_origin_target_rejects_external_and_ambiguous_urls(self):
+        for target in ('https://evil.example/a', '//evil.example/a', '/a\\b', '/a\r\nHost: evil', '/a#fragment'):
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                quickstart.origin_target(target)
+
+    def test_origin_target_preserves_local_query(self):
+        self.assertEqual(quickstart.origin_target('/api/control/v1/devices?limit=2'), '/api/control/v1/devices?limit=2')
+

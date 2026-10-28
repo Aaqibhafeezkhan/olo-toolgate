@@ -119,9 +119,9 @@ final class InsightsBenchmarkTest {
                 out.put("rowsPerFact", Math.round(rows * 100.0 / facts) / 100.0);
             }
         } else {
-            try (var c = java.sql.DriverManager.getConnection(db.url(), "control_migrator", System.getenv("CONTROL_TEST_PASSWORD")); var s = c.createStatement()) {
+            try (var c = java.sql.DriverManager.getConnection(db.url(), "control_migrator", System.getenv("CONTROL_TEST_PASSWORD"))) {
                 for (var t : List.of("control_insights_facts", "control_insights_checkpoints", "control_insights_invocations", "control_insights_attempts", "control_insights_cells"))
-                    try (var r = s.executeQuery("SELECT pg_total_relation_size('" + t + "')")) { r.next(); out.put(t + "Bytes", r.getLong(1)); }
+                    try (var query = c.prepareStatement("SELECT pg_total_relation_size(?)")) { query.setString(1,t); try(var r=query.executeQuery()){r.next(); out.put(t + "Bytes", r.getLong(1));} }
                 out.put("factBytesPerFact", (Long) out.get("control_insights_factsBytes") / facts);
             }
         }

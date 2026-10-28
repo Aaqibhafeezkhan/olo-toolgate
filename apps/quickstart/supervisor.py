@@ -377,6 +377,16 @@ def dependencies_ready():
         return False
 
 
+def origin_target(value):
+    """Only origin-form targets may reach the fixed loopback upstream."""
+    if not isinstance(value, str) or not value.startswith('/') or value.startswith('//') or any(ord(c)<32 or ord(c)==127 for c in value) or '\\' in value:
+        raise ValueError('Invalid local request target')
+    target = urllib.parse.urlsplit(value)
+    if target.scheme or target.netloc or target.fragment:
+        raise ValueError('Invalid local request target')
+    return urllib.parse.urlunsplit(('', '', target.path, target.query, ''))
+
+
 def call(path, token=None, body=None, port=8082, secure=False, method=None, extra_headers=None):
     client = http.client.HTTPSConnection('127.0.0.1', port, timeout=10, context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt'))) if secure else http.client.HTTPConnection('127.0.0.1', port, timeout=10)
     headers = {'Content-Type': 'application/json', 'X-Request-ID': secrets.token_hex(16)}
@@ -384,7 +394,7 @@ def call(path, token=None, body=None, port=8082, secure=False, method=None, extr
     if body is not None: headers['Idempotency-Key'] = secrets.token_hex(16)
     if extra_headers: headers.update(extra_headers)
     try:
-        client.request(method or ('POST' if body is not None else 'GET'), path, json.dumps(body).encode() if body is not None else None, headers)
+        client.request(method or ('POST' if body is not None else 'GET'), origin_target(path), json.dumps(body).encode() if body is not None else None, headers)
         response = client.getresponse(); raw = response.read(2*1024*1024+1)
         if len(raw)>2*1024*1024: raise ValueError()
         return response.status, raw, dict(response.getheaders())
@@ -889,7 +899,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if mcp_http: forwarded.update(('accept','mcp-protocol-version','mcp-method','mcp-name'))
                 headers = {k:v for k,v in self.headers.items() if k.lower() in forwarded}
                 try:
-                    client.request(self.command, self.path, raw or None, headers)
+                    client.request(self.command, origin_target(self.path), raw or None, headers)
                     response = client.getresponse(); limit = 131072 if mcp_http else 64*1024*1024
                     body = response.read(limit+1)
                     if len(body)>limit: raise ValueError()

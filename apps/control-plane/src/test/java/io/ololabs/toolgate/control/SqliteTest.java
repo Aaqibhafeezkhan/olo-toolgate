@@ -86,7 +86,7 @@ final class SqliteTest {
             byte[] bytes;try(var input=SqliteTest.class.getResourceAsStream("/db/quickstart/V1.sql")){bytes=new String(java.util.Objects.requireNonNull(input).readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).replace("\r\n","\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);}
             var script=new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
             for(var sql:script.split("(?m)^-- statement\\s*$"))if(!sql.isBlank())statement.execute(sql);
-            statement.execute("INSERT INTO quickstart_migrations VALUES(1,'"+DirectoryService.digest(bytes)+"')");
+            try(var insert=c.prepareStatement("INSERT INTO quickstart_migrations VALUES(1,?)")){insert.setString(1,DirectoryService.digest(bytes));insert.executeUpdate();}
             io.ololabs.toolgate.control.fixtures.Tenants.provision(c);
             statement.execute("INSERT INTO control_records VALUES('3ddfb462-d173-3b24-823b-17d134680296','USER','kept',1,'{\"id\":\"kept\",\"name\":\"Kept\",\"enabled\":true,\"revision\":1}')");
         }

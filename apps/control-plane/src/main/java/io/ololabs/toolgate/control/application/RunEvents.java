@@ -151,7 +151,7 @@ public final class RunEvents {
             var i = operations.invocationIn(tx, invocationId); long now = operations.clock(tx);
             operations.requireRead(tx, actor, i, now);
             var events = tx.runEvents(); var stream = events.stream(invocationId);
-            var rows = events.page(invocationId, after, limit + 1); boolean more = rows.size() > limit;
+            var rows = events.page(invocationId, after, Math.incrementExact(limit)); boolean more = rows.size() > limit;
             var page = JSON.objectNode().put("invocationId", invocationId).put("state", i.state().name()).put("terminal", TERMINAL.contains(i.state()));
             if (i.evaluation().toolId() != null) page.put("toolId", i.evaluation().toolId());
             if (i.evaluation().context().deviceId() != null) page.put("executorId", i.evaluation().context().deviceId());

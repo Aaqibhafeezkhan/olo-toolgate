@@ -15,7 +15,7 @@ public final class VaultEncryption {
         byte[] nonce=new byte[12];new java.security.SecureRandom().nextBytes(nonce);
         try {
             var cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,new SecretKeySpec(key,"AES"),new GCMParameterSpec(128,nonce));cipher.updateAAD(context);
-            byte[] encrypted=cipher.doFinal(plaintext),packet=Arrays.copyOf(nonce,nonce.length+encrypted.length);
+            byte[] encrypted=cipher.doFinal(plaintext),packet=Arrays.copyOf(nonce,Math.addExact(nonce.length,encrypted.length));
             System.arraycopy(encrypted,0,packet,nonce.length,encrypted.length);return PREFIX+Base64.getEncoder().encodeToString(packet);
         } catch(java.security.GeneralSecurityException invalid) {throw Failure.unavailable();}
     }

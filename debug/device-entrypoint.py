@@ -244,7 +244,7 @@ def main(configure=None):
         else:
             # A recreated container gets the current executable and retains its protected identity.
             shutil.copyfile('/opt/toolgate/client', CLIENT)
-            os.chmod(CLIENT, 0o755)
+            os.chmod(CLIENT, 0o700)
         if configure is not None:
             configure(config)
         supervise()
