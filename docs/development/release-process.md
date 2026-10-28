@@ -1,5 +1,10 @@
 # Release process
 
+Release branches are long-lived major lines such as `release/1.x`. Compatible
+patch and minor releases share the line; breaking changes start a new major
+line. Each new release build reserves an immutable version and source commit.
+See [How to release ToolGate](how-to-release.md).
+
 Use the [release operator guide](how-to-release.md) for repository setup, version
 allocation, release branch preparation, build inspection, publication and retries.
 It is the maintained source for registry credentials and release outputs.
@@ -7,8 +12,8 @@ It is the maintained source for registry credentials and release outputs.
 - **ToolGate CI** validates push/manual runs admitted by the RC and CI enablement gates.
 - **ToolGate CI - Manual** runs the same full validation stages on explicit dispatch,
   bypassing those admission gates. Use it to qualify the source before preparing a release.
-- **Prepare release branch** creates an immutable versioned source snapshot.
-- **Build and release binaries** tests that snapshot and optionally publishes its
+- **Prepare release branch** initializes a long-lived major release line without allocating a build.
+- **Build and release binaries** pins a commit and allocates a build on the release line, then tests and optionally publishes its
   verified artifacts under the protected `production-release` environment.
 - **Manual development release** builds and publishes development packages without
   tests; see [development releases](development-releases.md). It is not release qualification.

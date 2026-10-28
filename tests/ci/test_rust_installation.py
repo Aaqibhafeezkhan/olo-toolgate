@@ -26,6 +26,9 @@ class RustInstallationTests(unittest.TestCase):
                 continue
             with self.subTest(job=name):
                 self.assertEqual('${{ runner.temp }}/toolgate-rustup', steps[0]['env']['RUSTUP_HOME'])
+                self.assertEqual('${{ runner.temp }}/toolgate-cargo', steps[0]['env']['CARGO_HOME'])
+                self.assertIn('CARGO_HOME=%s', steps[0]['run'])
+                self.assertIn('$GITHUB_PATH', steps[0]['run'])
                 self.assertIn('"$RUSTUP_HOME" >> "$GITHUB_ENV"', steps[0]['run'])
                 self.assertNotIn('continue-on-error', steps[0])
                 self.assertNotIn('rustup show', steps[0]['run'])

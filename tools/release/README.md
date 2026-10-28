@@ -1,9 +1,14 @@
 # Release
 
+Release branches are long-lived major lines such as `release/1.x`. Compatible
+patch and minor releases share the line; breaking changes start a new major
+line. Each new release build reserves an immutable version and source commit.
+See [How to release ToolGate](../../docs/development/how-to-release.md).
+
 For product releases, use the two manual jobs documented in
 [How to release ToolGate](../../docs/development/how-to-release.md):
-`create-release-branch.yml` prepares an immutable source/version, and
-`build-release.yml` builds/tests or publishes its retained bundle. All first-party
+`create-release-branch.yml` initializes a major release line, and
+`build-release.yml` allocates each immutable build, tests it and publishes or reuses its retained bundle. All first-party
 release artifacts share one SemVer such as `1.0.0-beta.42`. Product publication uses
 the `production-release` environment; development publication remains separate.
 

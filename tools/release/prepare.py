@@ -85,7 +85,7 @@ def emit(info, **extra):
     print(json.dumps(values, indent=2))
 
 
-def allocate(branch, commit, base, channel):
+def allocate(branch, commit, base, channel, release_branch=None):
     identity.versions(base, 1, channel)  # Validate before contacting GitHub.
     if branch != 'main' and not branch.startswith('release/'):
         raise ValueError('Select main or release/* as the source')
@@ -124,6 +124,9 @@ def allocate(branch, commit, base, channel):
             highest = max(highest, int(match[1]))
     info = dict(schemaVersion=1, **identity.versions(base, highest+1, channel),
                 sourceBranch=branch, sourceCommit=sha, requestedCommit=commit, prepareRun=run_id)
+    if release_branch:
+        info['branch'] = release_branch
+        identity.validate(info)
     if channel == 'Stable' and any(ref(name) for name in ('tags/v'+base, 'tags/prepared/'+base, 'heads/release/'+base)):
         raise ValueError('Stable package version is already reserved; choose a new base version')
     create_tag(prefix+str(info['build']), sha, info)
@@ -255,6 +258,9 @@ def commit_branch(root, info):
 
 
 def resolve(branch):
+    if re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', branch):
+        from tools.release.line import resolve as resolve_line
+        return resolve_line(branch)
     if not branch.startswith('release/'):
         raise ValueError('Select a prepared release/* branch')
     run('git', 'check-ref-format', 'refs/heads/'+branch)
@@ -312,9 +318,10 @@ def main():
             emit(info, commit=commit_branch(root, info))
     else:
         sha, info = resolve(os.environ['RELEASE_BRANCH'])
-        if os.environ.get('GITHUB_REF') != 'refs/heads/'+info['branch'] or os.environ.get('GITHUB_SHA') != sha:
-            raise ValueError('Release workflow must run on the exact prepared release branch commit')
         reuse = os.environ.get('BUILD_RUN_ID', '').strip()
+        line_reuse = reuse and re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', info['branch'])
+        if os.environ.get('GITHUB_REF') != 'refs/heads/'+info['branch'] or (os.environ.get('GITHUB_SHA') != sha and not line_reuse):
+            raise ValueError('Release workflow must run on the exact prepared release branch commit')
         if reuse and not re.fullmatch(r'[1-9][0-9]*', reuse):
             raise ValueError('Build run ID must be empty or a numeric Actions run ID')
         build_run = claim(sha, info, reuse)

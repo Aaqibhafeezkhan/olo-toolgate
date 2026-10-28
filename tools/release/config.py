@@ -35,12 +35,17 @@ def materialize(root=ROOT, build=None, selection=None):
     if existing.is_file() and json.loads(existing.read_text()).get('channel') == 'Development':
         return  # An explicitly selected development overlay already has its immutable identity.
     ref = os.environ.get('GITHUB_REF_NAME', '')
+    major_line = re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', ref)
+    if major_line and (major_line[1] != config['version'].split('.')[0] or config['tag'] == 'dev'):
+        raise ValueError('Release line major/channel differs from version.json')
     match = re.fullmatch(r'(?:release/|v)'+re.escape(config['version'])+r'-(dev|beta|rc)\.([1-9][0-9]*)', ref)
     if match and match[1] != config['tag']:
         raise ValueError('Branch or tag channel differs from version.json')
     number = build if build is not None else (int(match[2]) if match else int(os.environ.get('GITHUB_RUN_NUMBER', '1')))
     info = dict(schemaVersion=1, **coordinates(config, number),
                 sourceBranch='main', sourceCommit=prepare.run('git', 'rev-parse', 'HEAD', cwd=root))
+    if major_line:
+        info.update(branch=ref, sourceBranch=ref)
     if selection:
         selected = json.loads(selection.read_text())
         if selected['baseVersion'] != config['version'] or identity.CHANNELS[selected['channel']] != config['tag']:

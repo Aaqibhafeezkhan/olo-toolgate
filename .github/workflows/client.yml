@@ -193,7 +193,7 @@ jobs:
       source_sha:
         type: string
         default: ''
-        description: Prepared source commit; workflow controls remain on main
+        description: Source commit pinned by the calling workflow
       shared_checks:
         type: boolean
         default: false

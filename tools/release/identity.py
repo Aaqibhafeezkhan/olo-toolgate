@@ -29,6 +29,11 @@ def versions(base, build, channel):
 
 def validate(info):
     expected = versions(info['baseVersion'], info['build'], info['channel'])
+    line = re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', info.get('branch', ''))
+    if line:
+        if line[1] != info['baseVersion'].split('.')[0]:
+            raise ValueError('Release line must match the major version')
+        expected['branch'] = info['branch']
     if any(info.get(key) != value for key, value in expected.items()):
         raise ValueError('Release identity/version mapping mismatch')
     if info.get('schemaVersion') != 1 or not SHA.fullmatch(info.get('sourceCommit', '')):

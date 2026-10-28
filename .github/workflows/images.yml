@@ -11,7 +11,7 @@ name: Tested production images
       source_sha:
         type: string
         default: ''
-        description: Prepared source commit; workflow controls remain on main
+        description: Source commit pinned by the calling workflow
       run_tests:
         type: boolean
         default: true

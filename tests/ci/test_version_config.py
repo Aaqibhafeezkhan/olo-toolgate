@@ -60,6 +60,21 @@ class VersionConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'channel differs'):
                     config.materialize(root)
 
+    def test_major_release_line_accepts_minor_updates_and_rejects_breaking_sync(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_file = root/'version.json'
+            config_file.write_text(json.dumps(dict(version='1.1.0', tag='beta')))
+            with patch.dict(os.environ, GITHUB_REF_NAME='release/1.x', GITHUB_RUN_NUMBER='2', GITHUB_WORKFLOW='CI'), \
+                    patch.object(prepare, 'run', return_value='a'*40), \
+                    patch.object(prepare, 'stamp_versions') as stamp:
+                config.materialize(root)
+                self.assertEqual(stamp.call_args.args[1]['branch'], 'release/1.x')
+                self.assertEqual(stamp.call_args.args[1]['version'], '1.1.0-beta.2')
+                config_file.write_text(json.dumps(dict(version='2.0.0', tag='beta')))
+                with self.assertRaisesRegex(ValueError, 'major/channel'):
+                    config.materialize(root)
+
     def test_invalid_and_extra_config_fields_fail(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
