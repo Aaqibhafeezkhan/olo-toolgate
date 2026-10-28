@@ -1,0 +1,60 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: Coverage and Sonar summary
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: quality-summary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  reports:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+      SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+      SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Java tests and JaCoCo reports
+        id: coverage
+        continue-on-error: true
+        run: ./gradlew --no-daemon test jacocoTestReport
+      - name: Sonar analysis (reporting only)
+        id: sonar
+        if: ${{ !cancelled() && steps.coverage.outcome == 'success' && env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' && env.SONAR_PROJECT_KEY != '' }}
+        continue-on-error: true
+        run: ./gradlew --no-daemon sonar -Dsonar.qualitygate.wait=false
+      - name: Build summary
+        if: always()
+        env:
+          COVERAGE_OUTCOME: ${{ steps.coverage.outcome }}
+          SONAR_OUTCOME: ${{ steps.sonar.outcome }}
+        run: python tools/ci/quality_summary.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: java-coverage-and-sonar
+          path: |
+            **/build/reports/jacoco/test/
+            **/build/reports/tests/
+            build/sonar/report-task.txt
+          if-no-files-found: warn

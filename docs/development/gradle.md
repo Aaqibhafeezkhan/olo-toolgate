@@ -95,3 +95,24 @@ in the IDE when a server and project are available; do not commit access tokens.
 The initial repository uses a checksum-verifying bootstrap script because the architecture scaffold was created before a generated wrapper JAR was available.
 
 Maintainers should replace it with Gradle's standard generated wrapper files as soon as possible and commit the official `gradle-wrapper.jar` after verifying its published SHA-256 checksum.
+
+## PR and main baseline reports
+
+The `Coverage and Sonar summary` workflow runs on every pull request and push
+ to `main`. Its job summary lists per-module and total Java line/branch coverage,
+scanner status, and a link to Sonar results when available. HTML/XML reports are
+available in the `java-coverage-and-sonar` artifact. Failures are visible but
+non-blocking; no coverage threshold or Sonar quality gate is enforced.
+
+In GitHub Settings > Secrets and variables > Actions, add:
+
+- Secret `SONAR_TOKEN`: an analysis token for your Sonar project.
+- Variable `SONAR_HOST_URL`: your Sonar server URL or Cloud endpoint.
+- Variable `SONAR_PROJECT_KEY`: the project key from Sonar.
+- Variable `SONAR_ORGANIZATION`: your organization key, for SonarQube Cloud.
+
+Sonar analysis is skipped until credentials/configuration are supplied, and on
+fork PRs without secrets. JaCoCo reporting still runs. Configure Sonar's GitHub
+integration to see server-side findings on the PR. SonarLint remains the IDE
+extension; CI uses SonarScanner for Gradle. This workflow covers Java modules
+included in the root build, not independent example builds or Rust/TypeScript.

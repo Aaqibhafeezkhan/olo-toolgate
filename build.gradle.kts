@@ -11,6 +11,17 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     base
+    id("org.sonarqube") version "7.5.0.8588"
+}
+
+sonar {
+    properties {
+        property("sonar.projectKey", providers.environmentVariable("SONAR_PROJECT_KEY").getOrElse("olo-labs_olo-toolgate"))
+        providers.environmentVariable("SONAR_ORGANIZATION").orNull?.takeIf { it.isNotBlank() }?.let {
+            property("sonar.organization", it)
+        }
+        property("sonar.qualitygate.wait", "false")
+    }
 }
 
 group = "io.ololabs.toolgate"
