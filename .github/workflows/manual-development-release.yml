@@ -56,6 +56,11 @@ jobs:
         name: manual-development-selection
         path: build/manual-development/selection
     - name: Stamp development packages without publication credentials
+      env:
+        # Selected source scripts must not access the controller's Actions cache.
+        ACTIONS_CACHE_URL: ''
+        ACTIONS_RESULTS_URL: ''
+        ACTIONS_RUNTIME_TOKEN: ''
       run: |
         python -m pip install -r tools/requirements.txt
         python tools/release/development_source.py prepare --source source

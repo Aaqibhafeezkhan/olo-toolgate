@@ -23,7 +23,6 @@ FROZEN_MANIFESTS={
     'tool-sdk/spec/sdk-compat/2026-10-10/pins/java/pom.xml': '7cf421828127e135a438ab40dc5ed1bd28a76090ec454a497d6d18f5f11ad8db',
     'tool-sdk/spec/sdk-compat/2026-10-10/pins/python/requirements.txt': 'd5c1605b4cef2ec930eb74c7eb402ee25713a31e160d4ffe41dbf636b087d8e2',
     'tool-sdk/spec/sdk-compat/2026-10-10/pins/dotnet/packages.lock.json': '4be1899fecb965ecd9f7559187d8c47f1985f5014c05450a1c768e937e1a03e0',
-    'tool-sdk/spec/sdk-compat/2026-10-10/pins/typescript/package-lock.json': '8eb5fa030de95c035f8ebb931de2903d6c428cc20ecd835c7261bd406fb1335d',
 }
 
 
