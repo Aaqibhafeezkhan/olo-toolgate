@@ -62,8 +62,15 @@ jobs:
         ACTIONS_RESULTS_URL: ''
         ACTIONS_RUNTIME_TOKEN: ''
       run: |
-        python -m pip install -r tools/requirements.txt
-        python tools/release/development_source.py prepare --source source
+        docker build --file tools/release/source-prepare.Dockerfile --tag toolgate-source-prepare .
+        mkdir -p build/manual-development/overlay
+        docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+          --user "$(id -u):$(id -g)" --env HOME=/tmp \
+          --volume "$PWD:/controller:ro" \
+          --volume "$PWD/source:/controller/source:rw" \
+          --volume "$PWD/build/manual-development/overlay:/controller/build/manual-development/overlay:rw" \
+          --workdir /controller toolgate-source-prepare \
+          python tools/release/development_source.py prepare --source source
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: manual-development-source

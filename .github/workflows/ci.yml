@@ -39,3 +39,8 @@ jobs:
     uses: ./.github/workflows/images.yml
     with:
       run_tests: true
+  coverage:
+    needs: preflight
+    uses: ./.github/workflows/quality-summary.yml
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

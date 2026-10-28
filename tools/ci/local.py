@@ -28,6 +28,7 @@ IMAGE = 'olo-toolgate-local-ci:runner'
 
 # Coverage policy, NOT a second list of commands. New jobs require a decision.
 POLICY = {
+    'quality-summary.reports': 'hosted-report',
     'create-release-branch.prepare': 'publication',
     'build-release.select': 'publication',
     'build-release.collect': 'artifacts',
@@ -77,6 +78,7 @@ POLICY = {
     'manual-development-release.publish-marketplace': 'publication',
 }
 REASONS = {
+    'hosted-report': 'Reporting-only coverage collection and Sonar upload use hosted repository variables, optional secrets and Actions summaries; collector helpers can run independently locally.',
     'python-matrix': 'Requires the hosted Python 3.10–3.14 and Linux, Windows and macOS matrix; foundation also runs the SDK tests locally on Python 3.12.',
     'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',
     'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',

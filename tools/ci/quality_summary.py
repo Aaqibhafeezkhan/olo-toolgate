@@ -28,7 +28,7 @@ def summary(root):
         lines += ['', 'No coverage XML reports were generated. See the Java test step logs.']
     else:
         values = [f'{100*c/(c+m):.2f}%' if c+m else 'N/A' for c, m in totals.values()]
-        lines.append(f'| **Total** | **{values[0]}** | **{values[1]}** |')
+        lines.append(f'| **Available module reports only** | **{values[0]}** | **{values[1]}** |')
     task = root / 'build/sonar/report-task.txt'
     if task.exists():
         properties = dict(line.split('=', 1) for line in task.read_text().splitlines() if '=' in line)
@@ -40,5 +40,9 @@ def summary(root):
 
 
 if __name__ == '__main__':
+    from coverage_inventory import append_summary
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
         output.write(summary(Path.cwd()))
+        for language in ('TYPESCRIPT', 'JAVASCRIPT', 'PYTHON', 'RUST'):
+            output.write(f"\n{language} collector: {os.getenv(language + '_OUTCOME', 'unknown')}\n")
+        output.write(append_summary(Path.cwd()))

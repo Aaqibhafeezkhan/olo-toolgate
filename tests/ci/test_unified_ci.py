@@ -109,7 +109,7 @@ class SharedCheckOwnershipTests(unittest.TestCase):
 
     def test_main_calls_one_shared_stage_and_one_platform_matrix(self):
         jobs = workflow('ci.yml')['jobs']
-        self.assertEqual(set(jobs), {'admission','preflight','foundation','clients','images'})
+        self.assertEqual(set(jobs), {'admission','preflight','foundation','clients','images','coverage'})
         for name in ('preflight','clients'):
             self.assertTrue(jobs[name]['with']['shared_checks'])
         self.assertEqual(set(jobs['images']['needs']), {'foundation','clients'})

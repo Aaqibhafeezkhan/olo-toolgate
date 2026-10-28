@@ -1,0 +1,16 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+[run]
+branch = True
+parallel = True
+source = apps/quickstart,tool-sdk/python-sdk/src,tools
+relative_files = True
+omit = */tests/*,*/test_*.py,*/__pycache__/*
+
+[report]
+include_namespace_packages = True
+show_missing = True
+skip_empty = False
+
+[xml]
+output = build/coverage/python.xml

@@ -8,10 +8,27 @@ import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
+import org.gradle.api.tasks.SourceSetContainer
 
 plugins {
     base
+    jacoco
     id("org.sonarqube") version "7.5.0.8588"
+}
+
+tasks.register<JacocoReport>("jacocoRootReport") {
+    group = "verification"
+    description = "Reports all compiled Java production classes, including modules without tests."
+    val javaProjects = provider { subprojects.filter { it.plugins.hasPlugin("java") } }
+    sourceDirectories.from(javaProjects.map { projects -> projects.map { it.extensions.getByType<SourceSetContainer>()["main"].allSource.srcDirs } })
+    classDirectories.from(javaProjects.map { projects -> projects.map { it.extensions.getByType<SourceSetContainer>()["main"].output.classesDirs } })
+    executionData.from(provider { subprojects.map { it.layout.buildDirectory.file("jacoco/test.exec").get().asFile }.filter { it.exists() } })
+    reports { xml.required.set(true); html.required.set(true) }
+}
+
+jacoco { toolVersion = "0.8.16" }
+configurations.matching { it.name == "jacocoAgent" || it.name == "jacocoAnt" }.configureEach {
+    resolutionStrategy.deactivateDependencyLocking()
 }
 
 sonar {
@@ -21,6 +38,11 @@ sonar {
             property("sonar.organization", it)
         }
         property("sonar.qualitygate.wait", "false")
+        property("sonar.sources", "tools,apps/admin-ui/src,apps/browser-extension,apps/quickstart,apps/gateway/src,apps/endpoint-client/src,apps/tool-host/src,tool-sdk/cli/src,tool-sdk/python-sdk/src,packages/contracts/typescript/src,packages/contracts/rust/src,packages/tenant-identity")
+        property("sonar.exclusions", "**/tests/**,**/test/**,**/*.test.*,**/*.d.ts,**/build/**,**/dist/**,**/node_modules/**")
+        property("sonar.javascript.lcov.reportPaths", "build/coverage/typescript/lcov.info,build/coverage/javascript/lcov.info")
+        property("sonar.python.coverage.reportPaths", "build/coverage/python.xml")
+        property("sonar.rust.lcov.reportPaths", "build/coverage/rust.lcov")
     }
 }
 
@@ -59,6 +81,11 @@ tasks.named("build") {
 
 subprojects {
     plugins.withType<JavaPlugin> {
+        extensions.configure<org.sonarqube.gradle.SonarExtension> {
+            properties {
+                property("sonar.coverage.jacoco.xmlReportPaths", rootProject.layout.buildDirectory.file("reports/jacoco/jacocoRootReport/jacocoRootReport.xml").get().asFile.absolutePath)
+            }
+        }
         apply(plugin = "jacoco")
         extensions.configure<JacocoPluginExtension> {
             toolVersion = "0.8.16"
