@@ -8,6 +8,21 @@ pluginManagement {
     }
 }
 
+// Plugin classpaths are separate from application dependency constraints.
+// Apply security patches before each project's plugins are resolved.
+gradle.beforeProject {
+    buildscript.configurations.configureEach {
+        resolutionStrategy.eachDependency {
+            when ("${requested.group}:${requested.name}") {
+                "com.google.guava:guava" -> useVersion("33.7.2-jre")
+                "com.fasterxml.jackson.core:jackson-core",
+                "com.fasterxml.jackson.core:jackson-databind" -> useVersion("2.22.3")
+                "org.codehaus.plexus:plexus-utils" -> useVersion("4.0.3")
+            }
+        }
+    }
+}
+
 rootProject.name = "olo-toolgate"
 
 include(":sdk-json")
