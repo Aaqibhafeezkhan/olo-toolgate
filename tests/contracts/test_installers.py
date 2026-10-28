@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import json
 from pathlib import Path
+from tools.client.extension import ROOT as PRODUCT_ROOT
 from tools.client.installer import linux_bytes, payload, embed_chrome
 
 
@@ -17,7 +18,10 @@ class InstallerTests(unittest.TestCase):
             directory=Path(temporary)/'payload'
             embed_chrome(directory,42)
             manifest=json.loads((directory/'chrome-extension/manifest.json').read_text())
-            self.assertTrue(manifest['version'].endswith('.42'))
+            identity = PRODUCT_ROOT/'release.json'
+            build = json.loads(identity.read_text())['build'] if identity.is_file() else 42
+            self.assertTrue(manifest['version'].endswith('.'+str(build)))
+            self.assertEqual(manifest['version_name'], (PRODUCT_ROOT/'VERSION').read_text().strip())
             self.assertTrue((directory/'chrome-extension'/manifest['background']['service_worker']).is_file())
             self.assertTrue((directory/'chrome-extension/LICENSE').is_file())
             self.assertFalse(list(directory.rglob('*.zip')))
