@@ -48,11 +48,12 @@ def expected():
         if path == 'apps/admin-ui/package.json':
             content['dependencies']['@olo-labs/toolgate-contracts'] = contracts
         outputs[p] = json.dumps(content, indent=2) + '\n'
-    for example in (ROOT/'core-mcp').glob('*/toolgate.json'):
-        content = json.loads(example.read_text(encoding='utf-8'))
-        if 'sdkVersion' in content:
-            content['sdkVersion'] = product
-            outputs[example] = json.dumps(content, indent=2) + '\n'
+    for collection in ('core-mcp', 'examples'):
+        for example in (ROOT/collection).glob('*/toolgate.json'):
+            content = json.loads(example.read_text(encoding='utf-8'))
+            if 'sdkVersion' in content:
+                content['sdkVersion'] = product
+                outputs[example] = json.dumps(content, indent=2) + '\n'
     chart = ROOT/'deploy/helm/olo-toolgate/Chart.yaml'
     outputs[chart] = re.sub(r'^version: .*', f'version: {product}', chart.read_text(encoding='utf-8'), flags=re.M)
     outputs[chart] = re.sub(r'^appVersion: .*', f'appVersion: "{product}"', outputs[chart], flags=re.M)

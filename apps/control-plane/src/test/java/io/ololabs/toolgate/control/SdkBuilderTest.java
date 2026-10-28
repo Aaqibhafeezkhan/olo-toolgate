@@ -28,7 +28,7 @@ class SdkBuilderTest {
     private String project() throws Exception {
         var fixtures = json.readTree(Path.of(System.getProperty("toolgate.fixtures")).toFile());
         var root = (ObjectNode) json.readTree(fixtures.path("SdkBuilderSave").path("source").asText());
-        root.put("id", "acme.orders").put("version", "0.1.0");
+        root.put("id", "acme.orders").put("version", "0.1.0").put("sdkVersion", JsonProject.sdkVersion());
         var tool = root.path("tools").get(1).deepCopy(); ((ObjectNode)tool).put("name", "items.get");
         root.putArray("tools").add(tool);
         return new String(JsonProject.parse(json.writeValueAsBytes(root)).source(), StandardCharsets.UTF_8);
