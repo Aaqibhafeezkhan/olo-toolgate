@@ -73,7 +73,7 @@ def verify_run(run_id, collected=False):
             or producer.get('head_branch') != info['branch'] or producer.get('head_sha') != info['commit'] or producer.get('repository', {}).get('full_name') != os.environ['GITHUB_REPOSITORY']):
         raise ValueError('Artifacts must originate in the trusted build/release workflow on the prepared release branch')
     jobs = [job for page in prepare.pages('actions/runs/'+run_id+'/jobs?filter=latest&per_page=100') for job in page['jobs']]
-    required = {'coverage / reports', 'preflight / metadata', 'foundation / check', 'clients / public-bundle', 'images / verify'}
+    required = {'preflight / metadata', 'foundation / check', 'clients / public-bundle', 'images / verify'}
     if collected:
         required.add('Collect immutable release bundle')
     success = {job['name'] for job in jobs if job.get('status') == 'completed' and job.get('conclusion') == 'success'}

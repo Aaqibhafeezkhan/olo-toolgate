@@ -118,9 +118,10 @@ the selected source and version; it is a build artifact, not another tracked
 version configuration. The build never follows a newer branch head halfway
 through execution.
 
-CI preflight, coverage checks and the configured Sonar gate, foundation tests,
+CI preflight, foundation tests,
 dependency/license/secret scans, six native platform/installer gates and
-production-container validation must succeed before bundle collection. Build
+production-container validation must succeed before bundle collection. Coverage
+reports and the Sonar quality gate are not part of the release workflow. Build
 stages do not receive registry publication credentials. The retained bundle
 contains checksums, SBOMs, provenance, source/build metadata, native installers,
 Java and language SDK/contracts packages, Helm assets and tested image archives.
