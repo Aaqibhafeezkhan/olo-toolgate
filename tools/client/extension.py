@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'apps/browser-extension'
 
 def package(output, build=0):
+    if type(build) is not int or not 0 <= build <= 65535:
+        raise ValueError('Chrome version components must fit 0..65535')
     version = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
     release = json.loads((ROOT/'release.json').read_text()) if (ROOT/'release.json').is_file() else None
     if release:
