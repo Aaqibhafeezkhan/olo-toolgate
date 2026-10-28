@@ -38,7 +38,7 @@ class VersionConfigTests(unittest.TestCase):
             root = Path(temporary)
             (root/'version.json').write_text(json.dumps(dict(version='1.0.0', tag='dev')))
             before = (root/'version.json').read_bytes()
-            with patch.dict(os.environ, GITHUB_RUN_NUMBER='7', GITHUB_WORKFLOW='CI'), \
+            with patch.dict(os.environ, GITHUB_REF_NAME='main', GITHUB_RUN_NUMBER='7', GITHUB_WORKFLOW='CI'), \
                     patch.object(prepare, 'run', return_value='a'*40), \
                     patch.object(prepare, 'stamp_versions') as stamp:
                 for attempt in ('1', '2'):
