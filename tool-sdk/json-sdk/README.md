@@ -29,12 +29,13 @@ builds first and starts the generated SDK runtime in development mode. Only
 server-eligible exports are discoverable in standalone mode. Use ToolHarness
 or an authorized governed device runtime to test client declarations.
 
-Example project:
+Example project (replace `sdkVersion` with your installed SDK version; the
+repository series and channel are defined in [version.json](../../version.json)):
 
 ```json
 {
   "schemaVersion": 1,
-  "sdkVersion": "0.10.0-dev",
+  "sdkVersion": "1.0.0-dev.1",
   "id": "acme.greetings",
   "name": "Greetings",
   "publisher": "acme",

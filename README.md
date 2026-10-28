@@ -9,7 +9,9 @@ servers and tool execution.
 Enforce identity, least-privilege access, runtime authorization, human approvals and
 auditable execution at every governed tool boundary.
 
-**Status:** development release (`0.10.0-dev`). See [current limits](#production-and-security-status).
+**Version and channel:** see this branch's [version configuration](version.json) and the
+[published releases](https://github.com/olo-labs/olo-toolgate/releases). For deployment
+readiness, see [current limits](#production-and-security-status).
 
 [Quickstart](#quickstart) · [Documentation](docs/README.md) ·
 [Security model](docs/security/README.md) ·
@@ -53,7 +55,7 @@ sh manage.sh deploy        # Windows: .\manage.ps1 deploy
 
 The helper creates `.env` from `.env.example` on first run and keeps the data volume
 across restarts. The default image, `ololab/olo-toolgate-quickstart:dev`, is a mutable
-development tag, so it may not match the version shown in this README; check the
+development tag, so its version can change between deployments; check the
 version and build on the console's **About** page after deployment. For a
 reproducible evaluation, copy `.env.example` to `.env` first and set `QUICKSTART_IMAGE`
 to a versioned tag or an image digest (`ololab/olo-toolgate-quickstart@sha256:…`); see

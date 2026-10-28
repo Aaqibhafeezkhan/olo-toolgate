@@ -17,6 +17,10 @@ The examples on this page use the field names from those schemas, with safe
 placeholder values. Optional fields are often left out. Where this page and a
 schema disagree, the schema wins. Please report the difference.
 
+Version values such as `1.0.0-dev.1` are illustrative. The branch series and
+channel are defined in [version.json](../../version.json); the running service
+reports its actual build version.
+
 Route inventory was checked against `apps/gateway/src/http.rs`,
 `apps/gateway/src/mcp.rs` and the JAX-RS resources in
 `apps/control-plane/src/main/java/io/ololabs/toolgate/control/adapter/`.
@@ -368,7 +372,7 @@ Mcp-Method: server/discover
     "ttlMs": 0,
     "cacheScope": "private",
     "resultType": "complete",
-    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "0.10.0-dev"}}
+    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "1.0.0-dev.1"}}
   }
 }
 ```
@@ -406,7 +410,7 @@ Mcp-Method: tools/list
     "ttlMs": 0,
     "cacheScope": "private",
     "resultType": "complete",
-    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "0.10.0-dev"}}
+    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "1.0.0-dev.1"}}
   }
 }
 ```
@@ -465,7 +469,7 @@ Tool Host result (paths 1 and 2):
     "isError": false,
     "structuredContent": {"path": "workspace/readme.txt", "bytes": 1824},
     "resultType": "complete",
-    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "0.10.0-dev"}}
+    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "1.0.0-dev.1"}}
   }
 }
 ```
@@ -482,7 +486,7 @@ Client device relay result (path 3). The tool output is returned both as
     "structuredContent": {"path": "workspace/readme.txt", "bytes": 1824},
     "isError": false,
     "resultType": "complete",
-    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "0.10.0-dev"}}
+    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "1.0.0-dev.1"}}
   }
 }
 ```
@@ -499,7 +503,7 @@ An administrator decides it in Control ([section 9](#9-control-access-invocation
     "structuredContent": {"invocationId": "inv-6c1f0e…", "state": "PENDING_APPROVAL"},
     "isError": true,
     "resultType": "complete",
-    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "0.10.0-dev"}}
+    "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "olo-toolgate-gateway", "version": "1.0.0-dev.1"}}
   }
 }
 ```
@@ -1330,7 +1334,7 @@ On first login, also send `newPassword` (16–128 characters).
 
 ```json
 // GET /api/quickstart/v1/status
-{"mode": "Quickstart", "tenant": "10000000-0000-4000-8000-000000000001", "nonHa": true, "ready": true, "version": "0.10.0-dev", "passwordRequired": true, "database": "sqlite", "authority": "online"}
+{"mode": "Quickstart", "tenant": "10000000-0000-4000-8000-000000000001", "nonHa": true, "ready": true, "version": "1.0.0-dev.1", "passwordRequired": true, "database": "sqlite", "authority": "online"}
 ```
 
 ---

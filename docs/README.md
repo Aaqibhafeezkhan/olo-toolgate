@@ -1,5 +1,8 @@
 # ToolGate documentation
 
+For this branch's version series and channel, see [version.json](../version.json).
+For available build versions and artifacts, see the [published releases](https://github.com/olo-labs/olo-toolgate/releases).
+
 Choose the guide for the task you are doing. Current operating instructions live
 with their component, including its supported behavior and current limitations.
 
