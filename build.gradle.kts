@@ -6,6 +6,8 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     base
@@ -46,6 +48,23 @@ tasks.named("build") {
 
 subprojects {
     plugins.withType<JavaPlugin> {
+        apply(plugin = "jacoco")
+        extensions.configure<JacocoPluginExtension> {
+            toolVersion = "0.8.16"
+        }
+        // Tool dependencies are pinned above, independently of application locks.
+        configurations.matching { it.name == "jacocoAgent" || it.name == "jacocoAnt" }.configureEach {
+            resolutionStrategy.deactivateDependencyLocking()
+        }
+        tasks.named<JacocoReport>("jacocoTestReport") {
+            dependsOn(tasks.named("test"))
+            reports {
+                xml.required.set(true)
+                html.required.set(true)
+                csv.required.set(false)
+            }
+        }
+        tasks.named("test") { finalizedBy("jacocoTestReport") }
         extensions.configure<JavaPluginExtension> {
             toolchain {
                 languageVersion.set(JavaLanguageVersion.of(21))
