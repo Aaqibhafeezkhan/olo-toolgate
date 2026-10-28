@@ -48,7 +48,7 @@ class InitialSchemaTest {
             assertThrows(java.sql.SQLException.class,()->s.executeUpdate("UPDATE control_tenant_authority SET authorization_epoch=0 WHERE tenant_id='1d800192-ef48-30b6-bf10-81fc1f4ae68f'"));
             c.rollback();
             for(var table:java.util.List.of("control_access_migration_archive","control_approvals","control_permit_leases")){
-                try(var rows=s.executeQuery("SELECT to_regclass('"+table+"')")){assertTrue(rows.next());assertNull(rows.getString(1));}
+                try(var query=c.prepareStatement("SELECT to_regclass(?)")){query.setString(1,table);try(var rows=query.executeQuery()){assertTrue(rows.next());assertNull(rows.getString(1));}}
             }
         }
     }

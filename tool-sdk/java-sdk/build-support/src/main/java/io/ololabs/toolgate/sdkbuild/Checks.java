@@ -55,7 +55,22 @@ public final class Checks {
     /** Whether git tracks {@code file}; false when the directory is not a repository or git is missing. */
     static boolean tracked(Path directory, String file) {
         try {
-            Process git = new ProcessBuilder("git", "ls-files", "--error-unmatch", "--", file).directory(directory.toFile())
+            Path executable = null;
+            String path = System.getenv("PATH");
+            if (path == null) return false;
+            String name = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") ? "git.exe" : "git";
+            for (String entry : path.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+                if (entry.isBlank()) continue;
+                Path folder = Path.of(entry);
+                if (!folder.isAbsolute()) continue;
+                Path candidate = folder.resolve(name);
+                if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
+                    candidate = candidate.toRealPath();
+                    if (!candidate.startsWith(directory.toRealPath())) { executable = candidate; break; }
+                }
+            }
+            if (executable == null) return false;
+            Process git = new ProcessBuilder(executable.toString(), "ls-files", "--error-unmatch", "--", file).directory(directory.toFile())
                     .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
             if (!git.waitFor(30, TimeUnit.SECONDS)) {
                 git.destroyForcibly();
