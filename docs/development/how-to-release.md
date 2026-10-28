@@ -83,7 +83,7 @@ Open **Actions → Prepare release branch → Run workflow**, select workflow br
 |---|---|
 | `source_branch` | `main`, or an existing `release/*` branch |
 | `source_commit` | `latest`, or a full 40-character commit SHA reachable from that branch |
-| `base_version` | `1.0.0` |
+| `version.json` | `1.0.0` |
 | `channel` | `Beta` |
 
 `latest` is resolved once. A retry of the same Actions preparation run retains the original
@@ -95,7 +95,7 @@ CLI equivalent:
 
 ```sh
 gh workflow run create-release-branch.yml --ref main \
-  -f source_branch=main -f source_commit=latest -f base_version=1.0.0 -f channel=Beta
+  -f source_branch=main -f source_commit=latest -f channel=Beta
 ```
 
 For an older commit or a previous release branch:
@@ -104,7 +104,7 @@ For an older commit or a previous release branch:
 gh workflow run create-release-branch.yml --ref main \
   -f source_branch=release/1.0.0-beta.42 \
   -f source_commit=0123456789abcdef0123456789abcdef01234567 \
-  -f base_version=1.0.0 -f channel=Beta
+ -f channel=Beta
 ```
 
 Replace the example SHA with a real ancestor of the selected branch.
@@ -220,3 +220,26 @@ release-specific notes. Other major/minor series remain separate. See the
 [annotated contribution template](../../.changes/RELEASE-NOTE-SAMPLE.yaml).
 Run `python tools/release/notes.py --check --version v1.0.0-beta.1`
 before preparation; CI and release source validation also validate contributions.
+
+## Central version and channel
+
+`version.json` is the only manually maintained version configuration. Both
+branches share the same source and generated development baseline. Main sets
+`{"version": "1.0.0", "tag": "dev"}`; the release branch sets the same version
+with `"tag": "beta"` (or `"rc"`). Only this file differs between synchronized
+branches. Supported tags are `dev`, `beta`, `rc`, and `stable`.
+
+Build initialization runs `python tools/release/config.py` to derive VERSION,
+package manifests, lockfiles, SDK metadata, Helm versions and browser extension
+versions in the build checkout. These generated build changes are not merged
+back into either source branch. Local builds can specify `--build 1`.
+Development workflow run number 1 produces `1.0.0-dev.1`; retries reuse the same
+version. A prepared beta build number 1 produces `1.0.0-beta.1`, and RC build
+number 1 produces `1.0.0-rc.1`. Python packages use equivalent PEP 440 forms.
+
+Release preparation reads the base version from the selected source's config,
+allocates its immutable build number, and commits only the channel config change.
+The annotated preparation tag records provenance; `release.json` is generated
+in build checkouts and is not a second tracked configuration file. Existing
+preparation/build reservations remain immutable: use a new allocated build number
+when the old prepared source has changed. All existing release checks still apply.

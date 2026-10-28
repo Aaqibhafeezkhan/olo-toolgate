@@ -8,7 +8,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 CORE = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 SHA = re.compile(r'[0-9a-f]{40}')
-CHANNELS = {'Beta': 'beta', 'RC': 'rc', 'Stable': None}
+CHANNELS = {'Dev': 'dev', 'Beta': 'beta', 'RC': 'rc', 'Stable': None}
 
 
 def versions(base, build, channel):
@@ -16,7 +16,7 @@ def versions(base, build, channel):
     if not match or any(int(n) > 65535 for n in match.groups()):
         raise ValueError('Base version must be MAJOR.MINOR.PATCH with components <= 65535')
     if type(build) is not int or not 1 <= build <= 65535 or channel not in CHANNELS:
-        raise ValueError('Build must be 1..65535; channel must be Beta, RC or Stable')
+        raise ValueError('Build must be 1..65535; channel must be Dev, Beta, RC or Stable')
     # Stable package coordinates deliberately omit the build: one immutable stable version.
     package = base if channel == 'Stable' else f'{base}-{CHANNELS[channel]}.{build}'
     display = package

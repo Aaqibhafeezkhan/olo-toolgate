@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toolgate-sdk"
-version = "0.10.0.dev0"
+version = "1.0.0.dev1"
 description = "ToolGate Tool SDK for Python: authoring API, descriptor generation, MCP runtime, harness and build commands"
 readme = "README.md"
 license = { text = "Apache-2.0" }

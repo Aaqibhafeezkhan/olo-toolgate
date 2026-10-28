@@ -25,7 +25,7 @@ public record ContractSet(
     /** Stable package identity. */
     public static final String NAME = "olo-toolgate-contracts";
     /** Canonical contract-set version. */
-    public static final String VERSION = "0.10.0-dev";
+    public static final String VERSION = "1.0.0-dev.1";
     /** Embedded canonical schema inventory. */
     public static final java.util.List<String> SCHEMA_FILES = java.util.List.of("bundle.schema.json","client.schema.json","common.schema.json","control.schema.json","deployment.schema.json","endpoint.schema.json","enterprise.schema.json","error.schema.json","execution.schema.json","fleet.schema.json","identifiers.schema.json","local-tools.schema.json","package.schema.json","policy.schema.json","resource.schema.json","runtime.schema.json","sdk-builder.schema.json","tool.schema.json");
     /** Current contract-set marker.

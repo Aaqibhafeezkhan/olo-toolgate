@@ -33,7 +33,8 @@ class ReleaseNotesTests(unittest.TestCase):
 
     def test_repository_collection_is_valid(self):
         version, fragments = notes.load(notes.ROOT)
-        self.assertEqual(version, 'v1.0')
+        expected = 'v'+json.loads((notes.ROOT/'release.json').read_text())['version'] if (notes.ROOT/'release.json').is_file() else 'v1.0'
+        self.assertEqual(version, expected)
         self.assertTrue(fragments)
 
     def test_series_contributions_follow_beta_rc_stable_and_patch_releases(self):

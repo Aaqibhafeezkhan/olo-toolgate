@@ -14,11 +14,6 @@ name: Prepare release branch
         type: string
         default: latest
         required: true
-      base_version:
-        description: MAJOR.MINOR.PATCH (build number is allocated automatically)
-        type: string
-        default: 1.0.0
-        required: true
       channel:
         description: Release channel
         type: choice
@@ -50,7 +45,6 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         SOURCE_BRANCH: ${{ inputs.source_branch }}
         SOURCE_COMMIT: ${{ inputs.source_commit }}
-        BASE_VERSION: ${{ inputs.base_version }}
         CHANNEL: ${{ inputs.channel }}
       run: python tools/release/prepare.py allocate
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

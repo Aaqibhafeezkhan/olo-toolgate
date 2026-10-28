@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: OLO ToolGate Control Plane API
-  version: 0.10.0-dev
+  version: 1.0.0-dev.1
   description: Tenant-scoped group administration with reviewed configuration changes
     and online current authorization. Signed snapshots describe configuration; execution
     requires a separately signed single-use permit.

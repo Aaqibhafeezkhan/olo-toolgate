@@ -15,13 +15,13 @@ members = [
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/olo-labs/olo-toolgate"
-version = "0.10.0-dev"
+version = "1.0.0-dev.1"
 
 [workspace.dependencies]
 olo-toolgate-tenant-identity = { path = "packages/tenant-identity/rust" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-olo-toolgate-contracts = { path = "packages/contracts/rust", version = "0.10.0-dev" }
+olo-toolgate-contracts = { path = "packages/contracts/rust", version = "1.0.0-dev.1" }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time", "io-util", "test-util", "fs", "process"] }
 jsonschema = { version = "0.58.4", default-features = false }

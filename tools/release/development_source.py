@@ -32,20 +32,24 @@ def select(branch, commit):
     sha = head if commit == 'latest' else commit
     if sha != head and prepare.api('compare/'+sha+'...'+head)['status'] not in ('ahead', 'identical'):
         raise ValueError('Selected commit must belong to the source branch history')
-    source_version = base64.b64decode(prepare.api('contents/VERSION?ref='+sha)['content']).decode().strip()
-    base = source_version.split('-')[0]
+    configured = prepare.api('contents/version.json?ref='+sha, missing=True)
+    if configured:
+        base = json.loads(base64.b64decode(configured['content']))['version']
+    else:
+        source_version = base64.b64decode(prepare.api('contents/VERSION?ref='+sha)['content']).decode().strip()
+        base = source_version.split('-')[0]
     numeric = identity.versions(base, int(os.environ['GITHUB_RUN_NUMBER']), 'Beta')
     run_id, attempt = os.environ['GITHUB_RUN_ID'], os.environ.get('GITHUB_RUN_ATTEMPT', '1')
     if not all(re.fullmatch('[1-9][0-9]*', value) for value in (run_id, attempt)):
         raise ValueError('Invalid workflow run identity')
-    version = f'{base}-dev.{run_id}.{attempt}.g{sha[:12]}'
+    version = f"{base}-dev.{numeric['build']}"
     key = branch_key(branch)
     return dict(schemaVersion=1, sourceBranch=branch, sourceCommit=sha, commit=sha,
                 requestedCommit=commit, baseVersion=base, build=numeric['build'],
                 channel='Development', version=version, displayVersion=version,
                 numericVersion=numeric['numericVersion'], macosBuild=numeric['macosBuild'],
                 binaryVersion=version, libraryVersion=version, dockerTag=version,
-                releaseTag='dev-'+key+'-'+run_id+'-'+attempt, branchKey=key,
+                releaseTag='v'+version, branchKey=key,
                 runId=run_id, runAttempt=attempt, verification='not-run', tests='not-run',
                 ciRuns={}, trigger='workflow_dispatch')
 
@@ -77,6 +81,7 @@ def overlay(root, destination, info):
         shutil.copyfile(ROOT/name, root/name)
     names = prepare.run('git', 'diff', '--name-only', '-z', cwd=root).split('\0')
     names += prepare.run('git', 'ls-files', '--others', '--exclude-standard', '-z', cwd=root).split('\0')
+    names += ['release.json']
     names += ['tools/release/'+name+'.py' for name in ('manual_development', 'development_source', 'prepare', 'identity')]
     for name in set(names)-{''}:
         relative = Path(name)

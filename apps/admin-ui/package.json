@@ -1,7 +1,7 @@
 {
   "name": "@olo-labs/toolgate-admin-ui",
   "private": true,
-  "version": "0.10.0-dev",
+  "version": "1.0.0-dev.1",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@olo-labs/toolgate-contracts": "0.10.0-dev",
+    "@olo-labs/toolgate-contracts": "1.0.0-dev.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

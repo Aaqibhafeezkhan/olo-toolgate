@@ -1271,7 +1271,7 @@ dependencies = [
 
 [[package]]
 name = "olo-toolgate-client"
-version = "0.10.0-dev"
+version = "1.0.0-dev.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -1302,7 +1302,7 @@ dependencies = [
 
 [[package]]
 name = "olo-toolgate-contracts"
-version = "0.10.0-dev"
+version = "1.0.0-dev.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1310,7 +1310,7 @@ dependencies = [
 
 [[package]]
 name = "olo-toolgate-gateway"
-version = "0.10.0-dev"
+version = "1.0.0-dev.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "olo-toolgate-tenant-identity"
-version = "0.10.0-dev"
+version = "1.0.0-dev.1"
 dependencies = [
  "base64 0.22.1",
  "jsonschema",
@@ -1354,7 +1354,7 @@ dependencies = [
 
 [[package]]
 name = "olo-toolgate-tool-host"
-version = "0.10.0-dev"
+version = "1.0.0-dev.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2306,7 +2306,7 @@ dependencies = [
 
 [[package]]
 name = "toolgate-cli"
-version = "0.10.0-dev"
+version = "1.0.0-dev.1"
 dependencies = [
  "crc32fast",
  "flate2",

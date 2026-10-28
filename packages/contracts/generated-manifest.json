@@ -1,5 +1,5 @@
 {
-  "version": "0.10.0-dev",
+  "version": "1.0.0-dev.1",
   "schemaSha256": {
     "packages/contracts/schemas/v1/bundle.schema.json": "4056c803153e58fbc7b220c70423d288fbc547f4f02f93e8432e2c846ee720a4",
     "packages/contracts/schemas/v1/client.schema.json": "7f90eba0d390d4df0a485c4c84df5fa20606bde6646d6baebe16fca3844478fb",

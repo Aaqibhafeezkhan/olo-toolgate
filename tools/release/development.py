@@ -170,11 +170,11 @@ def prepare(run_id=None):
         return
     java_version=prepare_development_java_assets()
     base=java_version.split('-')[0]
-    version=f"{base}-dev.{os.environ['GITHUB_RUN_ID']}.g{sha[:12]}"
+    version=f"{base}-dev.{os.environ['GITHUB_RUN_NUMBER']}"
     (OUTPUT/'MAVEN_VERSION').write_text(version+'\n')
     (assets/'development-release.json').write_text(json.dumps({'commit':sha,'ciRuns':selected,
-        'mavenVersion':version,'javaAssetVersion':java_version,'binaryVersion':manifest['version'],'releaseTag':'dev-'+sha+'-'+os.environ['GITHUB_RUN_ID'],
-        'dockerTag':'dev-'+sha[:12]},indent=2)+'\n')
+        'mavenVersion':version,'javaAssetVersion':java_version,'binaryVersion':manifest['version'],'releaseTag':'v'+version,
+        'dockerTag':version},indent=2)+'\n')
     from tools.release.notes import generate
     generate(ROOT, assets)
 
@@ -192,7 +192,7 @@ def publish():
         folder=OUTPUT/component
         verify_checksums(folder)
         run('docker','load','-i',str(folder/'image.tar'))
-    images=image_publication.publish(run,repo,sha,namespace,IMAGES,'dev-'+sha[:12],prepare=prepare_image)
+    images=image_publication.publish(run,repo,sha,namespace,IMAGES,metadata['dockerTag'],prepare=prepare_image)
     metadata['images']=images
     (assets/'development-release.json').write_text(json.dumps(metadata,indent=2)+'\n')
     for document in ('LICENSE', 'NOTICE.md'):

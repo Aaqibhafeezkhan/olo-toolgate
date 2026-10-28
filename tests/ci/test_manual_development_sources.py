@@ -27,7 +27,9 @@ class ManualSourceTests(unittest.TestCase):
         self.addCleanup(env.stop)
 
     def select(self, branch='feature/test', commit='latest', status='ahead'):
-        def api(path):
+        def api(path, **kwargs):
+            if path.startswith('contents/version.json'):
+                return {'content':base64.b64encode(b'{"version":"1.0.0","tag":"dev"}').decode()}
             if path.startswith('git/ref/'):
                 return {'object':{'sha':SHA}}
             if path.startswith('compare/'):
@@ -42,7 +44,7 @@ class ManualSourceTests(unittest.TestCase):
                 info = self.select(branch)
             self.assertEqual(info['sourceCommit'], SHA)
             self.assertEqual({info[k] for k in ('version','displayVersion','libraryVersion','binaryVersion','dockerTag')},
-                             {'1.0.0-dev.123456.1.g'+SHA[:12]})
+                             {'1.0.0-dev.42'})
             self.assertEqual(info['numericVersion'], '1.0.0.42')
             reserve.assert_not_called()
 
@@ -55,14 +57,14 @@ class ManualSourceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.select(commit=commit)
 
-    def test_branch_aliases_are_safe_distinct_and_attempts_get_fresh_versions(self):
+    def test_branch_aliases_are_safe_and_retries_reuse_the_build_version(self):
         self.assertNotEqual(source.branch_key('feature/a'), source.branch_key('feature-a'))
         self.assertRegex(source.branch_key('Feature/Hello.World'), r'^[a-z0-9-]+$')
         first = self.select()
         with patch.dict(os.environ, GITHUB_RUN_ATTEMPT='2'):
             second = self.select()
-        self.assertNotEqual(first['version'], second['version'])
-        self.assertNotEqual(first['releaseTag'], second['releaseTag'])
+        self.assertEqual(first['version'], second['version'])
+        self.assertEqual(first['releaseTag'], second['releaseTag'])
         with patch.dict(os.environ, GITHUB_RUN_NUMBER='65536'), self.assertRaises(ValueError):
             self.select()
 

@@ -137,7 +137,10 @@ def write_json(path, value):
 def stamp(root, info):
     """Run source-compatible generators without registry credentials or network dependency updates."""
     identity.validate(info)
-    stamp_versions(root, info)
+    if (root/'version.json').is_file():
+        write_json(root/'version.json', dict(version=info['baseVersion'], tag=identity.CHANNELS[info['channel']] or 'stable'))
+    else:
+        stamp_versions(root, info)
 
 
 def stamp_versions(root, info):
@@ -149,7 +152,8 @@ def stamp_versions(root, info):
                  'tools/client/package.py', 'apps/endpoint-client/packaging/windows-setup.iss'):
         destination=root/name
         destination.parent.mkdir(parents=True,exist_ok=True)
-        shutil.copyfile(ROOT/name,destination)
+        if (ROOT/name).resolve() != destination.resolve():
+            shutil.copyfile(ROOT/name,destination)
     old = (root/'VERSION').read_text().strip()
     mapping = root/'config/initial/releases.json'
     configurations = json.loads(mapping.read_text())
@@ -223,8 +227,10 @@ def commit_branch(root, info):
     branch = ref('heads/'+info['branch'])
     if branch:
         sha = branch['object']['sha']
-        existing = json.loads(base64.b64decode(api('contents/release.json?ref='+sha)['content']))
-        if existing != info:
+        metadata_path = 'version.json' if (root/'version.json').is_file() else 'release.json'
+        existing = json.loads(base64.b64decode(api('contents/'+metadata_path+'?ref='+sha)['content']))
+        expected = dict(version=info['baseVersion'], tag=identity.CHANNELS[info['channel']] or 'stable') if metadata_path == 'version.json' else info
+        if existing != expected:
             raise ValueError('Existing release branch has different preparation metadata')
         commit = api('git/commits/'+sha)
         if commit['tree']['sha'] != expected_tree or [parent['sha'] for parent in commit['parents']] != [info['sourceCommit']]:
@@ -260,8 +266,12 @@ def resolve(branch):
     current = ref('heads/'+branch)
     if current is None or info['branch'] != branch or current['object']['sha'] != sha:
         raise ValueError('Prepared branch moved; prepare a new release/build number')
-    manifest = json.loads(base64.b64decode(api('contents/release.json?ref='+sha)['content']))
-    if manifest != info:
+    tree = api('git/trees/'+sha)
+    configured = any(item['path'] == 'version.json' for item in tree['tree'])
+    path = 'version.json' if configured else 'release.json'
+    manifest = json.loads(base64.b64decode(api('contents/'+path+'?ref='+sha)['content']))
+    expected = dict(version=info['baseVersion'], tag=identity.CHANNELS[info['channel']] or 'stable') if configured else info
+    if manifest != expected:
         raise ValueError('Prepared commit manifest differs from immutable preparation record')
     return sha, info
 
@@ -288,7 +298,9 @@ def main():
     parser.add_argument('--root', type=Path)
     args = parser.parse_args()
     if args.operation == 'allocate':
-        info = allocate(os.environ['SOURCE_BRANCH'], os.environ['SOURCE_COMMIT'], os.environ['BASE_VERSION'], os.environ['CHANNEL'])
+        source_ref = os.environ['SOURCE_BRANCH'] if os.environ['SOURCE_COMMIT'] == 'latest' else os.environ['SOURCE_COMMIT']
+        config = json.loads(base64.b64decode(api('contents/version.json?ref='+quote(source_ref, safe=''))['content']))
+        info = allocate(os.environ['SOURCE_BRANCH'], os.environ['SOURCE_COMMIT'], config['version'], os.environ['CHANNEL'])
         write_json(ROOT/'build-release-reservation.json', info)
         emit(info)
     elif args.operation in ('stamp', 'commit'):
