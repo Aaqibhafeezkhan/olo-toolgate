@@ -38,7 +38,12 @@ def https_fixture():
                        .public_key(key.public_key()).serial_number(x509.random_serial_number())
                        .not_valid_before(now-datetime.timedelta(minutes=1))
                        .not_valid_after(now+datetime.timedelta(days=1))
-                       .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
+                       .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+                       .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+                       .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(signer.public_key()), critical=False)
+                       .add_extension(x509.KeyUsage(digital_signature=True, content_commitment=False,
+                                      key_encipherment=not ca, data_encipherment=False, key_agreement=False,
+                                      key_cert_sign=ca, crl_sign=ca, encipher_only=None, decipher_only=None), critical=True))
             if not ca:
                 builder = builder.add_extension(x509.SubjectAlternativeName([
                     x509.IPAddress(ipaddress.ip_address('127.0.0.1'))]), critical=False)

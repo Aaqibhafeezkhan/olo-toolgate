@@ -2,6 +2,7 @@
   "copyright": "Copyright 2026 OLO Labs",
   "license": "Apache-2.0",
   "releases": {
-    "0.10.0-dev": "standard-v1"
+    "0.10.0-dev": "standard-v1",
+    "1.0.0-dev.1": "standard-v1"
   }
 }

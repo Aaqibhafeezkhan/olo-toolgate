@@ -19,7 +19,10 @@ class JsonSdkWorkerTest {
     private Path javaExecutable() { return Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java"); }
     private byte[] source() throws Exception {
         var json = new com.fasterxml.jackson.databind.ObjectMapper();
-        return json.readTree(Path.of(System.getProperty("toolgate.fixtures")).toFile()).path("SdkBuilderSave").path("source").asText().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var source = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(
+                json.readTree(Path.of(System.getProperty("toolgate.fixtures")).toFile()).path("SdkBuilderSave").path("source").asText());
+        source.put("sdkVersion", System.getProperty("toolgate.productVersion"));
+        return json.writeValueAsBytes(source);
     }
     @Test void builderWorkerAndStandaloneSdkProduceIdenticalPackagesAndSourceArchives() throws Exception {
         Path root = Path.of(System.getProperty("toolgate.workerWorkRoot")); Files.createDirectories(root);

@@ -54,6 +54,7 @@ tasks.register<Test>("sdkWorkerTest") {
     val cli = providers.environmentVariable("TOOLGATE_CLI").getOrElse("")
     doFirst { require(cli.isNotBlank()) { "sdkWorkerTest requires TOOLGATE_CLI pointing to the verified native package CLI" } }
     systemProperty("toolgate.cli", cli)
+    systemProperty("toolgate.productVersion", rootProject.file("VERSION").readText().trim())
     systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
     systemProperty("toolgate.sdkLibraries", rootProject.file("tool-sdk/json-sdk/build/install/toolgate-json-sdk/lib").absolutePath)
     systemProperty("toolgate.workerWorkRoot", rootProject.file("build/sdk-worker-e2e").absolutePath)

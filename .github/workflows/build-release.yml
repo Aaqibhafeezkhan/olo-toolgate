@@ -57,6 +57,7 @@ jobs:
     - name: Check all prepared versions and generated metadata before expensive builds
       run: |
         python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py --root source --selection build-release-selection.json
         python tools/release/pipeline.py verify-source --source source
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
@@ -134,6 +135,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py --root source --selection build-release-selection.json
         python tools/release/pipeline.py collect --source source
     - name: Attest checked release assets and source/build manifest
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be

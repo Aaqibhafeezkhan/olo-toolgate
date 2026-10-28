@@ -8,6 +8,12 @@
 // The SDK comes from the local Maven repository (`./gradlew publishJavaSdkToMavenLocal` at the repository root) until
 // it is on Maven Central. Pass -PtoolgateSdkRepo=<directory or URL> to use another repository, such as build/sdk-repo.
 pluginManagement {
+    plugins {
+        val sdkVersion = providers.gradleProperty("toolgateSdkVersion").orNull
+            ?: file("../../VERSION").takeIf { it.isFile }?.readText()?.trim()
+            ?: error("Set -PtoolgateSdkVersion to the installed ToolGate SDK version")
+        id("io.ololabs.toolgate.sdk") version sdkVersion
+    }
     repositories {
         providers.gradleProperty("toolgateSdkRepo").orNull?.let { maven { url = uri(it) } }
         mavenLocal()

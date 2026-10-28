@@ -14,7 +14,7 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from ._version import SDK_VERSION
+from ._version import SDK_VERSION, CONTRACTS_VERSION
 from .descriptor import build_project
 
 BOOTSTRAP = '''# Generated ToolGate Python executable. Native wheel contents are loaded from a private temporary directory.
@@ -130,7 +130,7 @@ def stage(root=None, output=None):
     manifest = {"schemaVersion": 2, "kind": "SDK", "id": result.index["id"], "version": project.version,
                 "publisher": result.index["publisher"], "sdk": {"language": "PYTHON", "version": SDK_VERSION,
                     "protocol": {"min": 2, "max": 2}, "descriptorGeneration": 1},
-                "compatibility": {"contractsVersion": "0.10.0-dev"},
+                "compatibility": {"contractsVersion": CONTRACTS_VERSION},
                 "runtimes": [{"runtimeId": "python", "language": "python", "version": "3.10"}],
                 "tools": [{"descriptor": d, "runtimeId": "python", "entryPoint": "toolgate.runtime",
                            "artifactIds": ["tool"]} for d in result.descriptors.values()],
@@ -138,8 +138,6 @@ def stage(root=None, output=None):
                                "runtimeId": "python"}], "credentialReferences": [], "connections": [],
                 "composition": [], "limits": {"maxTools": 64, "maxDescriptorBytes": 1048576}}
     # Match the source contract version at SDK build time, never a moving repository at execution time.
-    from ._version import CONTRACTS_VERSION
-    manifest["compatibility"]["contractsVersion"] = CONTRACTS_VERSION
     (out / "toolgate-package.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
     return out
 

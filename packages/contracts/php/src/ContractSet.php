@@ -27,7 +27,7 @@ final readonly class ContractSet implements \JsonSerializable {
         return (object) array_filter(get_object_vars($this), static fn ($v) => $v !== null);
     }
     public const NAME = 'olo-toolgate-contracts';
-    public const VERSION = '0.10.0-dev';
+    public const VERSION = '1.0.0-dev.1';
     /** Current canonical contract-set identity. */
     public static function current(): self { return new self(self::NAME, self::VERSION); }
 }

@@ -1,8 +1,10 @@
 # Production deployment preparation
 
+ToolGate is in Beta Release. See the [current limitations](../enterprise-access-control/README.md#current-limits) and linked enhancement tickets before qualification.
+
 Deploy matching Control, Gateway, console, contract and client versions. Control
 uses external PostgreSQL; Gateway requires live Control authority. Quickstart is
-single-node evaluation software and does not establish high availability.
+single-node evaluation software and does not establish high availability ([#241](https://github.com/olo-labs/olo-toolgate/issues/241)).
 
 ## External prerequisites
 
@@ -29,5 +31,5 @@ with the intended topology. Measure your workload; the repository's small-fixtur
 results are not a capacity commitment.
 
 Review [current limitations](../enterprise-access-control/README.md), especially
-unfinished Tool Host isolation and delivery. Marketplace, additional vault
+unfinished Tool Host isolation and delivery ([#230](https://github.com/olo-labs/olo-toolgate/issues/230)). Marketplace, additional vault
 adapters and multi-region operation must not be assumed available.

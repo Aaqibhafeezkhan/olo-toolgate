@@ -1,62 +1,53 @@
 # How to release ToolGate
 
-Product releases use two manual GitHub Actions jobs. For a development package
-from any branch, use [Manual development release](development-releases.md).
+ToolGate is in Beta Release. Review the [current security and production limits](../../README.md#production-and-security-status) and their enhancement tickets before deployment.
 
-The product jobs are:
+## Branch and version model
 
-1. **Prepare release branch** creates a versioned source snapshot. It does not build or publish.
-2. **Build and release binaries** builds/tests that snapshot, or publishes an existing verified build.
+Use a long-lived branch for each supported major version:
 
-Release notes are generated during release into the release assets, using the
-current product/contracts versions, `CHANGELOG.md` and optional human-contributor
-fragments. Ordinary PRs leave tracked `RELEASE-NOTES.md` snapshots unchanged;
-`tools/contracts/version.py` does not rewrite them. The **PR contribution policy**
-check rejects generated-note edits and AI-assistant contributor attribution.
-Configure `contribution-policy` as a required status check on protected branches.
+| Branch | Version config | Purpose |
+|---|---|---|
+| `main` | `version: 1.0.0`, `tag: dev` | Compatible development builds such as `1.0.0-dev.1` |
+| `release/1.x` | `version: 1.0.0`, `tag: beta` | Qualified releases such as `1.0.0-beta.1` |
+| `release/2.x` | `version: 2.0.0`, `tag: beta` | A future breaking major version |
 
-Run both workflows with **Use workflow from: main**. The source branch is a separate input;
-the release workflow definition always comes from main. Merge the workflow/tooling changes to
-main before the first run. These jobs do not depend on `TOOLGATE_CI_ENABLED` or an `RC:` PR title.
+`version.json` is the only manually maintained version/channel configuration.
+Supported channel tags are `dev`, `beta`, `rc` and `stable`. The source trees of
+synchronized main and release branches differ only in this file. Package
+manifests, `VERSION`, SDK bindings, Helm metadata and platform versions are
+materialized in build checkouts; do not manually change individual versions.
+The shared checked-in generated baseline is the same on both branches.
 
-## One version across the tool
+The release branch moves as reviewed compatible changes arrive. Each release
+build selects an exact source commit and allocates an immutable identity.
+A new workflow dispatch increments the release counter even when source code is
+unchanged. Retrying the same Actions run retains its original number. Failed
+reservations are not recycled; gaps are expected. Numbers are allocated per
+base version and shared across release channels. Published stable versions omit
+the counter and cannot be published again with different bytes.
 
-Use `1.0.0-beta.42` everywhere: product, contracts, Java SDK, TypeScript/Rust/PHP distributions,
-native clients, authoring CLI, Tool Host, installers, UI, images, Helm chart and GitHub Release.
-No publisher derives a different development version or uses its Actions run number as the
-release build number. Protocol/schema identifiers keep their compatibility meaning.
+Examples:
 
-| Identity | Example |
-|---|---|
-| Base version | `1.0.0` |
-| Allocated build | `42` |
-| Channel | `Beta` |
-| Product and package version | `1.0.0-beta.42` |
-| Source branch | `main` or an existing `release/*` branch |
-| Prepared release branch | `release/1.0.0-beta.42` |
-| Final release tag | `v1.0.0-beta.42` |
-| Windows installer / Chrome numeric version | `1.0.0.42` |
-| macOS short version / numeric build | `1.0.0` / `1.0.42` |
+- `1.0.0-beta.1`, `1.0.0-beta.2`, then `1.0.0-rc.3`, then `1.0.0`.
+- A bug fix after stable: update the shared base version to `1.0.1`, retain the
+  release branch, qualify and publish `1.0.1`.
+- A compatible feature: update the base version to `1.1.0` and use the same
+  `release/1.x` branch, optionally going through beta and RC again.
+- A breaking change: advance main to major 2 and initialize `release/2.x`.
+  Never synchronize breaking version-2 changes into `release/1.x`.
 
-Numeric platform fields are derived representations of the same release. The macOS build
-encoding is `(build // 10000 + 1).((build % 10000) // 100).(build % 100)`, which stays within
-Apple's numeric component limits. Build/core components are limited to 65535 for Windows/Chrome.
-
-The build counter is shared by all source branches and channels for the same base version.
-Preparing another `1.0.0` release increments the build: `.42`, `.43`, etc. It does **not**
-increment the minor version. Enter `1.1.0` explicitly to begin that release series.
-Allocated numbers are never reused, including failed or abandoned preparations.
-
-`Beta` produces `1.0.0-beta.42`; `RC` produces `1.0.0-rc.43`. `Stable` produces `1.0.0`,
-with its allocated numeric build retained in metadata. A stable package version can be
-prepared/released only once; choose a new base version for subsequent stable changes.
+The workflow rejects a release branch whose major disagrees with its config.
+Maintainers must still review API/behavior compatibility; a version number alone
+cannot prove that a source change is backward compatible.
 
 ## One-time repository setup
 
+
 - Enable Actions read/write permissions and allow the repository to publish GitHub Packages.
 - Create the **production-release** environment. Restrict it to workflow executions on
-  `main`; configure reviewers if your release policy requires them. Both workflows run on
-  main even when the code being released comes from another allowed source branch.
+  `release/*` (including `release/1.x`); configure reviewers if your release policy requires them.
+  Initialization runs on main; build and publication run on the release line.
 - GitHub npm, Maven and GHCR use the built-in `GITHUB_TOKEN` by default. Existing package
   access settings must grant this repository access.
 - For a custom Maven repository, set environment variable `MAVEN_REPOSITORY_URL` and
@@ -65,8 +56,9 @@ prepared/released only once; choose a new base version for subsequent stable cha
 - For Maven Central, set `MAVEN_REPOSITORY_URL` to
   `https://central.sonatype.com/api/v1/publisher/upload`, configure the Portal username/password
   plus `MAVEN_GPG_PRIVATE_KEY` and `MAVEN_GPG_PASSPHRASE`. See [signing setup](../../tools/release/README.md).
-- Protect prepared `release/*` branches and the `prepared/*`, `release-builds/*`,
-  `release-runs/*`, `published/*`, `central-deployments/*`, and `v*` tags against updates/deletion.
+- Protect `release/*` branches against force pushes/deletion and require reviewed PRs
+  for updates. Protect the `prepared/*`, `release-builds/*`, `release-runs/*`,
+  `published/*`, `central-deployments/*`, and `v*` tags against updates/deletion.
   Permit the release automation to create new refs. These refs store immutable preparation,
   counter, build-run and publication records; do not delete them to reset a counter or retry.
 - Allow 90-day Actions artifact retention, or adjust the two workflows to the repository's
@@ -75,94 +67,87 @@ prepared/released only once; choose a new base version for subsequent stable cha
 No Docker Hub credential is needed for this release path. Versioned images go to GHCR.
 Existing development workflows remain separate and retain their own credentials/behavior.
 
-## Job 1: prepare the release branch
+## Initialize a release line once
 
-Open **Actions → Prepare release branch → Run workflow**, select workflow branch **main**, and enter:
-
-| Input | Value |
-|---|---|
-| `source_branch` | `main`, or an existing `release/*` branch |
-| `source_commit` | `latest`, or a full 40-character commit SHA reachable from that branch |
-| `base_version` | `1.0.0` |
-| `channel` | `Beta` |
-
-`latest` is resolved once. A retry of the same Actions preparation run retains the original
-commit and build number even if main has advanced. To prepare another release, start a new run.
-Branch choices are validated text inputs; GitHub's custom choice inputs do not dynamically
-enumerate branches.
-
-CLI equivalent:
+Merge the release tooling into main first. Open **Actions → Prepare release branch**,
+run on **main**, and choose the source branch/commit and channel. The base version
+comes from the selected source's `version.json`.
 
 ```sh
 gh workflow run create-release-branch.yml --ref main \
-  -f source_branch=main -f source_commit=latest -f base_version=1.0.0 -f channel=Beta
+  -f source_branch=main -f source_commit=latest -f channel=Beta
 ```
 
-For an older commit or a previous release branch:
+A full 40-character ancestor commit SHA may replace `latest`. Initialization
+creates `release/<major>.x` with the selected source tree and a channel-only
+config change. It does not allocate a release build number. If the line already
+exists, initialization refuses to overwrite it; use a synchronization PR.
+
+Existing build-numbered branches and their immutable preparation tags remain
+historical records. Do not move tags or reuse an old reserved version for new
+source bytes. The active version-1 line is `release/1.x`.
+
+## Synchronize compatible changes from main
+
+1. Land reviewed fixes or compatible features on main.
+2. Set the shared base version for the intended patch or minor release in
+   `version.json`; main retains `tag: dev`.
+3. Open a synchronization PR into `release/1.x`. Keep the release channel
+   (`beta`, `rc`, or `stable`) in that branch's config while taking the intended
+   compatible base version and source changes from main.
+4. Run and pass the CI/security checks, review the source diff and merge.
+5. Dispatch the release workflow from the release branch itself.
+
+Do not force-push the release line. When main starts breaking work for the next
+major, maintain the old line using compatible fix PRs/backports instead of
+merging the breaking changes. Bring applicable fixes into main as well.
+
+## Build and optionally publish
+
+Open **Actions → Build and release binaries**, select **release/1.x**, choose
+`build-only` or `build-and-publish`, and leave `build_run_id` empty for a new build.
 
 ```sh
-gh workflow run create-release-branch.yml --ref main \
-  -f source_branch=release/1.0.0-beta.42 \
-  -f source_commit=0123456789abcdef0123456789abcdef01234567 \
-  -f base_version=1.0.0 -f channel=Beta
+gh workflow run build-release.yml --ref release/1.x -f mode=build-only
 ```
 
-Replace the example SHA with a real ancestor of the selected branch.
+The workflow reads the config at the dispatch commit, reserves the next number,
+and records immutable `release-builds/<base>/<number>`, `prepared/<version>` and
+`release-runs/<version>` bookkeeping tags. The generated `release.json` records
+the selected source and version; it is a build artifact, not another tracked
+version configuration. The build never follows a newer branch head halfway
+through execution.
 
-The summary reports the resulting branch, version, source commit and prepared commit.
-The branch contains `release.json`, synchronized versions/lockfiles/generated bindings,
-release notes and the source version's existing initial-configuration bundle mapping.
-Preparation carries current standalone packaging adapters into older source trees; the
-prepared commit records those changes. It does not merge unrelated changes from main.
+CI preflight, coverage checks and the configured Sonar gate, foundation tests,
+dependency/license/secret scans, six native platform/installer gates and
+production-container validation must succeed before bundle collection. Build
+stages do not receive registry publication credentials. The retained bundle
+contains checksums, SBOMs, provenance, source/build metadata, native installers,
+Java and language SDK/contracts packages, Helm assets and tested image archives.
+Publication uses the `production-release` environment and any configured approval.
 
-An immutable `prepared/<version>` tag records the prepared commit. Do not add fixes to
-this branch: prepare a new release from a source branch containing the fixes.
-
-## Job 2: build, inspect, and publish
-
-Open **Actions → Build and release binaries → Run workflow**, select the prepared workflow branch **release/<version>**:
-
-| Input | First build |
-|---|---|
-| Workflow branch | Branch from Job 1, e.g. `release/1.0.0-beta.42` |
-| `mode` | `build-only` |
-| `build_run_id` | Leave empty |
+For a single build/test/publish run:
 
 ```sh
-gh workflow run build-release.yml --ref release/1.0.0-beta.42 \
-  -f mode=build-only
+gh workflow run build-release.yml --ref release/1.x -f mode=build-and-publish
 ```
 
-The workflow runs on the exact prepared release branch commit. It runs CI preflight,
-blocking coverage checks and the Sonar quality gate when configured, foundation tests/scans, all six native platform builds and
-installer checks, and production container validation. Build/test stages have no publishing
-credentials. Foundation and native builds reuse the existing workflows; publication does
-not rebuild Java libraries or containers.
-
-After success, download the **release-bundle** artifact. It contains checksummed native
-installers/distributions, Java libraries and SDK JARs, Rust `.crate`, TypeScript tarball,
-PHP ZIP, raw contracts, UI bundle, Helm chart, licenses, compatibility metadata, SBOMs,
-the five tested image archives and `build-manifest.json`. Native distributions also carry
-the authoring CLI and Tool Host for their platform. Windows ZIPs remain internal build inputs;
-the public Windows installation artifact is the combined `.setup.exe`.
-
-Record the original build Actions run ID from the summary or run URL. To publish those
-exact bytes, run **the same second workflow** again:
+To publish an already successful build's exact bytes, including after the branch
+has moved, supply its original Actions run ID:
 
 ```sh
-gh workflow run build-release.yml --ref release/1.0.0-beta.42 \
-  -f mode=build-and-publish \
-  -f build_run_id=123456789
+gh workflow run build-release.yml --ref release/1.x \
+  -f mode=build-and-publish -f build_run_id=123456789
 ```
 
-Replace `123456789` with the original build run ID. Build/test jobs are skipped in reuse
-mode, and the original run's successful gates, immutable build reservation, source/version
-identity and complete checksums are verified before publication.
-
-For a single build-and-publish run, choose `build-and-publish` and leave `build_run_id` empty.
-Publication waits for all checks and any configured production environment approval.
+Reuse must identify the same release line and trusted original workflow. Its
+source commit, reservation, original successful gates and bundle checksums are
+verified. A foreign line/run or incomplete bundle is rejected. Reuse does not
+allocate a number or rebuild packages. Use **Re-run failed jobs** to continue the
+same build; dispatch a fresh run with no reuse ID for a new release number.
 
 ## Published outputs
+
 
 | Output | Destination |
 |---|---|
@@ -183,40 +168,32 @@ tag; the `beta`, `rc` or stable `latest` npm alias advances only after finalizat
 moves backwards. Container `dev`/`latest` aliases are not changed. GitHub stable releases
 also leave the repository's `latest` selection unchanged.
 
-`build-manifest.json` records the prepared source commit, original build run and trusted
-main controller commit. Attestations identify the controller workflow; this manifest binds
-its artifacts to the separately selected source tree. `registry-publication.json` records
+`build-manifest.json` records the pinned release source commit, original build run and trusted
+release workflow commit. Attestations identify the controller workflow; this manifest binds
+its artifacts to the pinned source tree from that release line. `registry-publication.json` records
 registry coordinates and container digests. Check these with the included checksums.
 
-## Retry and recovery
+## Artifact versions and documentation
 
-- **Preparation interrupted:** use **Re-run failed jobs** on the same preparation run. Its
-  reservation pins the source/build and resumes branch/tag creation without force-pushing.
-- **Build/test failure before collection:** re-run failed jobs in the original build run.
-  If source changes are needed, fix the source and prepare a new build number.
-- **Build succeeded; publishing failed:** rerun the failed publishing job, or run Job 2 with
-  the original `build_run_id`. The same bundle is downloaded; no binaries are rebuilt.
-- **Some registries succeeded:** matching images/packages/charts are verified and reused;
-  missing outputs are uploaded. Conflicting bytes stop publication and are never replaced.
-- **Central validation/publishing timeout:** the deployment ID is recorded in the summary
-  and an immutable tag; retries poll that deployment instead of uploading a second one.
-  If the upload response was lost before an ID was received, inspect the Portal before
-  retrying. A partially visible Central version must finish propagating before reuse.
-- **Prepared branch changed:** publication fails. Prepare a new release; do not move the
-  preparation tag or rewrite an existing release version.
-- **Artifacts expired/deleted:** the version cannot be rebuilt for publication. Prepare a
-  new build number. Preserve/download bundles before the retention period expires.
+Local build preparation is `python tools/release/config.py --build 1`.
+Development workflow run number 1 yields `1.0.0-dev.1`; release counter 1 in the
+beta channel yields `1.0.0-beta.1`. Python uses equivalent PEP 440 syntax and
+platform stores use numeric versions derived from the same identity. Development
+validation builds may use their workflow run number; only release builds reserve
+an authoritative release counter. GitHub release tags are `v<version>`.
 
-Cross-registry publication is not atomic. A failed run can leave packages visible before
-the complete GitHub Release exists; use the original run and publication records to recover.
-The old `ci.yml` version-tag trigger is removed so these jobs own product release publication.
+Use [version.json](../../version.json) for current branch version/channel links.
+Generated metadata contains build-derived literals. Historical changelogs,
+screenshots and qualification records retain their recorded versions. Dependency
+pins and independently versioned example tools are separate from product versions.
 
-## Contribution collections
+Shared contributor collections, such as `.changes/v1.0/`, are included in each
+corresponding 1.0 release. Exact-version collections add release-specific notes.
+Start a `.changes/v1.1/` collection for a new minor series; preserve the old
+records. See the [contribution guide](../../.changes/README.md) and
+[annotated template](../../.changes/RELEASE-NOTE-SAMPLE.yaml). Contribution assets
+are generated during release; do not regenerate tracked release-note snapshots
+in ordinary PRs.
 
-The shared `.changes/v1.0/` collection is included in each 1.0 beta, RC, stable
-and patch release from its selected source commit. Exact-version collections add
-release-specific notes. Other major/minor series remain separate. See the
-[contributor guide](../../.changes/README.md) and
-[annotated contribution template](../../.changes/RELEASE-NOTE-SAMPLE.yaml).
-Run `python tools/release/notes.py --check --version v1.0.0-beta.1`
-before preparation; CI and release source validation also validate contributions.
+For manual development artifacts, use [development releases](development-releases.md).
+For current boundaries, see [production and security status](../../README.md#production-and-security-status).

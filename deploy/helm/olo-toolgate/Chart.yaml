@@ -4,8 +4,8 @@ apiVersion: v2
 name: olo-toolgate
 description: OLO ToolGate foundation chart; intentionally contains no workloads
 type: application
-version: 0.10.0-dev
-appVersion: "0.10.0-dev"
+version: 1.0.0-dev.1
+appVersion: "1.0.0-dev.1"
 home: https://github.com/olo-labs/olo-toolgate
 sources:
   - https://github.com/olo-labs/olo-toolgate

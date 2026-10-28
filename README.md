@@ -9,7 +9,11 @@ servers and tool execution.
 Enforce identity, least-privilege access, runtime authorization, human approvals and
 auditable execution at every governed tool boundary.
 
-**Status:** development release (`0.10.0-dev`). See [current limits](#production-and-security-status).
+**Status:** ToolGate is in Beta Release.
+
+**Version and channel:** see this branch's [version configuration](version.json) and the
+[published releases](https://github.com/olo-labs/olo-toolgate/releases). For deployment
+readiness, see [current limits](#production-and-security-status).
 
 [Quickstart](#quickstart) · [Documentation](docs/README.md) ·
 [Security model](docs/security/README.md) ·
@@ -53,7 +57,7 @@ sh manage.sh deploy        # Windows: .\manage.ps1 deploy
 
 The helper creates `.env` from `.env.example` on first run and keeps the data volume
 across restarts. The default image, `ololab/olo-toolgate-quickstart:dev`, is a mutable
-development tag, so it may not match the version shown in this README; check the
+development tag, so its version can change between deployments; check the
 version and build on the console's **About** page after deployment. For a
 reproducible evaluation, copy `.env.example` to `.env` first and set `QUICKSTART_IMAGE`
 to a versioned tag or an image digest (`ololab/olo-toolgate-quickstart@sha256:…`); see
@@ -114,9 +118,9 @@ cached policy. See [architecture](ARCHITECTURE.md),
 | [MCP governance](docs/gateway/mcp-proxy.md) | Put existing MCP servers behind ToolGate policy, approval and audit without changing them | Available |
 | [Runtime policy](docs/security/README.md) | ALLOW / ASK / BLOCK on every tool invocation, against current authority | Available |
 | [Delegated authority](docs/security/enterprise-access-control.md) | Constrain what an agent may do on behalf of a person or another agent | Available |
-| [Zero-trust execution](docs/control-plane/approvals.md) | Single-use, Control-signed permits checked at the execution boundary | Available; Tool Host container/network isolation unfinished |
+| [Zero-trust execution](docs/control-plane/approvals.md) | Single-use, Control-signed permits checked at the execution boundary | Available; Tool Host container/network isolation unfinished ([#230](https://github.com/olo-labs/olo-toolgate/issues/230)) |
 | [Human approval](docs/control-plane/approvals.md) | Independent review of sensitive calls before they run | Available |
-| [Tool distribution](docs/client/package-deployment.md) | Package, version and deliver signed tools to devices and Tool Hosts | Available; Java and Python authoring, TypeScript and .NET are specifications |
+| [Tool distribution](docs/client/package-deployment.md) | Package, version and deliver signed tools to devices and Tool Hosts | Available; Java and Python authoring; TypeScript [#242](https://github.com/olo-labs/olo-toolgate/issues/242) and .NET [#243](https://github.com/olo-labs/olo-toolgate/issues/243) are specifications |
 | [Audit and analytics](docs/control-plane/insights.md) | Correlate identities, decisions and outcomes; tenant Analytics and Operator Insights | Available |
 
 ### Governing an MCP server in five steps
@@ -205,16 +209,21 @@ Enabled tools and grants are fictional demo configuration, not installation defa
 
 ## Production and security status
 
-ToolGate is a development release. The authorization path described above is
+ToolGate is in Beta Release. The authorization path described above is
 enforced today; the following are **not yet** in place:
 
 - **Tool Host isolation:** process launch and broker checks exist, but container
-  and network isolation are unfinished.
+  and network isolation are unfinished. Enhancement: [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
 - **Durable result retry:** the Tool Host result outbox is not implemented.
-- **Offline protected effects** and **nested or dynamic groups** are unsupported.
-- **Quickstart** is single-node evaluation software with no HA guarantee.
+  Enhancement: [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
+- **Offline protected effects:** unsupported; live Control authority remains
+  required. Design review: [#239](https://github.com/olo-labs/olo-toolgate/issues/239).
+- **Nested or dynamic groups:** unsupported. Enhancement: [#240](https://github.com/olo-labs/olo-toolgate/issues/240).
+- **Quickstart:** single-node evaluation software with no HA guarantee.
+  Production HA qualification: [#241](https://github.com/olo-labs/olo-toolgate/issues/241).
 - **Authoring:** Java and Python implementations are available; TypeScript and .NET
-  authoring APIs remain specifications.
+  authoring APIs remain specifications. Implementations: TypeScript [#242](https://github.com/olo-labs/olo-toolgate/issues/242)
+  and .NET [#243](https://github.com/olo-labs/olo-toolgate/issues/243).
 
 Recorded acceptance and performance results apply to the tested revision and
 environment; they do not establish your deployment's readiness, capacity or

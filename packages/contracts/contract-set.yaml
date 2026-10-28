@@ -1,7 +1,7 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: olo-toolgate-contracts
-version: 0.10.0-dev
+version: 1.0.0-dev.1
 
 canonical:
   schemas: schemas

@@ -1815,5 +1815,5 @@ export interface ToolDefinition {
   readonly reconciliation?: ReconciliationMethod;
 }
 export type UserRole = "BASIC" | "ADMINISTRATOR" | "SUPER_ADMIN";
-export const CONTRACT_SET_VERSION = "0.10.0-dev" as const;
+export const CONTRACT_SET_VERSION = "1.0.0-dev.1" as const;
 export const CONTRACT_SET_NAME = "olo-toolgate-contracts" as const;

@@ -1,5 +1,8 @@
 # Deployment
 
+ToolGate is in Beta Release. See [production and security status](../../README.md#production-and-security-status)
+for current limitations and their open enhancement tickets.
+
 - [Quickstart walkthrough](../getting-started/one-minute-quickstart.md): local evaluation.
 - [Quickstart configuration and recovery](quickstart.md).
 - [Docker Compose](docker-compose.md): existing deployment helpers.

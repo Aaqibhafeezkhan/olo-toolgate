@@ -21,3 +21,10 @@ tasks.processResources {
     inputs.properties(versions)
     filesMatching("json-sdk.properties") { expand(versions) }
 }
+
+// Keep the positive test project aligned with the SDK under test.
+tasks.processTestResources {
+    val versions = mapOf("sdkVersion" to project.version.toString())
+    inputs.properties(versions)
+    filesMatching("hello-world/toolgate.json") { expand(versions) }
+}

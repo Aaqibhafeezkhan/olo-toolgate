@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: OLO ToolGate Gateway Core
-  version: 0.10.0-dev
+  version: 1.0.0-dev.1
   description: Online enterprise group authority with explicit HUMAN, DELEGATED and
     SERVICE modes. This gateway accepts workload credentials; HUMAN sessions use verified
     Control authentication. Every effect consumes a Control permit using the target

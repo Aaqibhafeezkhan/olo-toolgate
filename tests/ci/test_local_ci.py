@@ -63,6 +63,9 @@ class LocalCiTests(unittest.TestCase):
         source['steps'].append({'name': 'New gate', 'run': 'python tools/new_gate.py'})
         body = local.replay_document('foundation.scans', self.workflows)['jobs']['replay']
         expected=copy.deepcopy(source['steps'])
+        for step in expected:
+            if step.get('name') == 'Derive build versions from version.json':
+                del step['env']
         del expected[0]['with']['ref']
         expected.insert(1, copy.deepcopy(local.WORKSPACE_SETUP))
         self.assertEqual(body['steps'][1:], expected)
@@ -71,6 +74,16 @@ class LocalCiTests(unittest.TestCase):
         self.assertIn('needs', source)
         body['steps'].clear()
         self.assertTrue(source['steps'])
+
+    def test_version_initialization_replay_removes_only_the_reviewed_token_context(self):
+        source = self.workflows['foundation']['jobs']['python']
+        original = next(step for step in source['steps'] if step.get('name') == 'Derive build versions from version.json')
+        replay = local.replay_document('foundation.python', self.workflows)['jobs']['replay']
+        self.assertNotIn('github.token', json.dumps(replay))
+        self.assertEqual(original['env'], {'GH_TOKEN': '${{ github.token }}'})
+        original['run'] += 'gh release create unsafe\n'
+        with self.assertRaisesRegex(ValueError, 'publication or credentials'):
+            local.replay_document('foundation.python', self.workflows)
 
     def test_jobs_consuming_same_run_artifacts_are_staged_not_replayed(self):
         rows = {row['id']: row for row in local.inventory(self.workflows)}

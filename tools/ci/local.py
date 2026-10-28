@@ -79,7 +79,7 @@ POLICY = {
 }
 REASONS = {
     'hosted-report': 'Reporting-only coverage collection and Sonar upload use hosted repository variables, optional secrets and Actions summaries; collector helpers can run independently locally.',
-    'python-matrix': 'Requires the hosted Python 3.10–3.14 and Linux, Windows and macOS matrix; foundation also runs the SDK tests locally on Python 3.12.',
+    'python-matrix': 'Requires the hosted Python 3.10â€“3.14 and Linux, Windows and macOS matrix; foundation also runs the SDK tests locally on Python 3.12.',
     'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',
     'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',
     'native': 'Requires all six native VMs and system service/installer support.',
@@ -210,6 +210,13 @@ def inventory(workflows):
 
 def replay_body(key, document, job):
     body = copy.deepcopy(job)
+    # Hosted release builds read their immutable preparation record. Local job
+    # replay derives versions solely from the checkout, without a GitHub token.
+    for step in body.get('steps', []):
+        if (step.get('name') == 'Derive build versions from version.json'
+                and step.get('run') == 'python -m pip install -r tools/release/notes-requirements.txt\npython tools/release/config.py\n'
+                and step.get('env') == {'GH_TOKEN': '${{ github.token }}'}):
+            del step['env']
     if key.startswith('foundation.'):
         if body.get('env', {}).get('TOOLGATE_BUILD') == "${{ inputs.build_number || 'local' }}":
             body['env']['TOOLGATE_BUILD'] = 'local'

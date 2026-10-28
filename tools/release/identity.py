@@ -8,7 +8,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 CORE = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 SHA = re.compile(r'[0-9a-f]{40}')
-CHANNELS = {'Beta': 'beta', 'RC': 'rc', 'Stable': None}
+CHANNELS = {'Dev': 'dev', 'Beta': 'beta', 'RC': 'rc', 'Stable': None}
 
 
 def versions(base, build, channel):
@@ -16,7 +16,7 @@ def versions(base, build, channel):
     if not match or any(int(n) > 65535 for n in match.groups()):
         raise ValueError('Base version must be MAJOR.MINOR.PATCH with components <= 65535')
     if type(build) is not int or not 1 <= build <= 65535 or channel not in CHANNELS:
-        raise ValueError('Build must be 1..65535; channel must be Beta, RC or Stable')
+        raise ValueError('Build must be 1..65535; channel must be Dev, Beta, RC or Stable')
     # Stable package coordinates deliberately omit the build: one immutable stable version.
     package = base if channel == 'Stable' else f'{base}-{CHANNELS[channel]}.{build}'
     display = package
@@ -29,6 +29,11 @@ def versions(base, build, channel):
 
 def validate(info):
     expected = versions(info['baseVersion'], info['build'], info['channel'])
+    line = re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', info.get('branch', ''))
+    if line:
+        if line[1] != info['baseVersion'].split('.')[0]:
+            raise ValueError('Release line must match the major version')
+        expected['branch'] = info['branch']
     if any(info.get(key) != value for key, value in expected.items()):
         raise ValueError('Release identity/version mapping mismatch')
     if info.get('schemaVersion') != 1 or not SHA.fullmatch(info.get('sourceCommit', '')):

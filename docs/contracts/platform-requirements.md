@@ -98,7 +98,7 @@ These row IDs are used by failure-injection conformance cases. Control's actual
 states and transaction boundaries are specified in
 [invocation state v2](../control-plane/invocation-state-v2.md). Control owns all
 durable authority; Gateway and Tool Host never write its database directly.
-Host isolation and durable result spooling are requirements, not support claims;
+Host isolation and durable result spooling are requirements, not support claims (implementation: [#230](https://github.com/olo-labs/olo-toolgate/issues/230));
 see the [Tool Host guide](../../apps/tool-host/README.md) for implemented boundaries.
 
 | Row | Boundary | Required durability and failure behavior |

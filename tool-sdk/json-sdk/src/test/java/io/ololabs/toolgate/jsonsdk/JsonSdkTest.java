@@ -96,7 +96,7 @@ class JsonSdkTest {
                 source.replace("\"schemaVersion\": 1", "\"schemaVersion\": 1, \"schemaVersion\": 1"),
                 source.replace("\"schemaVersion\": 1", "\"schemaVersion\": 4294967297"),
                 source.replace("\"maxLength\": 128", "\"maxLength\": 4294967424"),
-                source.replace("\"sdkVersion\": \"0.10.0-dev\"", "\"sdkVersion\": \"9.9.9\""),
+                source.replace("\"sdkVersion\": \"" + JsonProject.sdkVersion() + "\"", "\"sdkVersion\": \"9.9.9\""),
                 source.replace("\"default\": \"World\"", "\"default\": 5"),
                 source.replace("\"default\": \"World\"", "\"default\": \"\\ud800\""),
                 source.replace("\"input\": \"text\"", "\"input\": \"secret\""),

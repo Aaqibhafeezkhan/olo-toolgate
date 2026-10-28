@@ -3,7 +3,9 @@
 # Release initial configuration
 
 `releases.json` maps each application release to a versioned bundle directory.
-`0.10.0-dev` uses `standard-v1/`. New releases can reuse it or select another bundle.
+The shared source baseline uses `standard-v1/`. Build preparation derives the
+application version from [version.json](../../version.json) and adds its mapping
+to the selected bundle. New releases can reuse it or select another bundle.
 Missing mappings fail the build instead of choosing another release's defaults.
 
 | File | Editable initial configuration |

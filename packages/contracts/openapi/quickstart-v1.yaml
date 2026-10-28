@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: ToolGate single-node Quickstart composition API
-  version: 0.10.0-dev
+  version: 1.0.0-dev.1
   description: Local evaluation only. Admin sessions are RS256 bearer JWTs; no cookies. Never expose loopback HTTP publicly.
 security:
   - adminJwt: []

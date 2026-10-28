@@ -239,3 +239,6 @@ deploy/compose/GatewayControl/custody/
 
 *.tgpkg
 .seed
+
+# Generated build identity; version.json is the tracked source of truth.
+/release.json

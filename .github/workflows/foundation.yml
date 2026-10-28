@@ -27,14 +27,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -71,14 +80,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -116,14 +134,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -152,14 +179,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -188,14 +224,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -232,14 +277,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -281,14 +335,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -335,14 +398,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -386,14 +458,23 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - name: Install validation dependencies
       env:
         RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         python -m pip install -r tools/requirements.txt
         python -m pip install setuptools wheel
         python tools/ci/install_rust.py
         printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         curl --fail --location --proto '=https' -o helm-v3.17.3-linux-amd64.tar.gz https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz
         curl --fail --location --proto '=https' -o helm.sha256 https://get.helm.sh/helm-v3.17.3-linux-amd64.tar.gz.sha256sum
         sha256sum --check helm.sha256
@@ -468,6 +549,12 @@ jobs:
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
       with:
         python-version: ${{ matrix.python }}
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
     - run: python -m pip install -e "tool-sdk/python-sdk[identity,build]"
     - run: python -m unittest discover -s tool-sdk/python-sdk/tests -v
     - run: python -m pip wheel --no-deps --wheel-dir build/python-dist tool-sdk/python-sdk
@@ -481,4 +568,4 @@ jobs:
       source_sha:
         type: string
         default: ''
-        description: Prepared source commit; workflow controls remain on main
+        description: Source commit pinned by the calling workflow

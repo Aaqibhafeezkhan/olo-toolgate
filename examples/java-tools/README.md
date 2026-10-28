@@ -58,7 +58,7 @@ toolgate check
 toolgate pack
 ```
 
-Each example's `gradlew` runs the shared build in this directory, so the CLI works there without a Gradle install. To build against another SDK repository, such as `build/sdk-repo` from `./gradlew publishJavaSdkLocally`, pass `-PtoolgateSdkRepo=<path or URL>`.
+Each example's `gradlew` runs the shared build in this directory, so the CLI works there without a Gradle install. To build against another SDK repository, such as `build/sdk-repo` from `./gradlew publishJavaSdkLocally`, pass `-PtoolgateSdkRepo=<path or URL>`. The SDK plugin version comes from the repository's generated `VERSION` file; outside this repository, set `-PtoolgateSdkVersion=<installed SDK version>` explicitly.
 
 ## Run one
 

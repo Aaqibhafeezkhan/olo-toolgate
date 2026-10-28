@@ -10,7 +10,7 @@ The same source code and the same package serve both. You never write MCP plumbi
 
 The guide uses Java. The [Python SDK](tool-sdk/python-sdk/README.md) implements
 the same authoring and execution path, with `toolgate init --lang python`.
-TypeScript and .NET follow the same specified contract
+TypeScript ([#242](https://github.com/olo-labs/olo-toolgate/issues/242)) and .NET ([#243](https://github.com/olo-labs/olo-toolgate/issues/243)) follow the same specified contract
 ([spec/authoring](tool-sdk/spec/authoring/README.md)).
 
 This file is also bundled in the published SDK: inside the `toolgate-sdk-api` jar as `META-INF/toolgate/TOOL-SDK-GUIDE.md`, and printed by `toolgate guide`.

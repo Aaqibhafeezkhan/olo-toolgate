@@ -4,7 +4,7 @@
 openapi: 3.1.0
 info:
   title: OLO ToolGate Control Plane API (proposed v2 additions)
-  version: 0.10.0-dev
+  version: 1.0.0-dev.1
   description: Proposed at design gate D1 (ADRs 014, 015, 018, 020, 021), with the invocation, reserve and task endpoints
     added at D2 (ADR 016). Not served. Milestone M1 moves each operation into the served file when it is implemented, so the
     served contract never advertises an unimplemented endpoint.

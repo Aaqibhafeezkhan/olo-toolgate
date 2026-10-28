@@ -48,6 +48,12 @@ def expected():
         if path == 'apps/admin-ui/package.json':
             content['dependencies']['@olo-labs/toolgate-contracts'] = contracts
         outputs[p] = json.dumps(content, indent=2) + '\n'
+    for collection in ('core-mcp', 'examples'):
+        for example in (ROOT/collection).glob('*/toolgate.json'):
+            content = json.loads(example.read_text(encoding='utf-8'))
+            if 'sdkVersion' in content:
+                content['sdkVersion'] = product
+                outputs[example] = json.dumps(content, indent=2) + '\n'
     chart = ROOT/'deploy/helm/olo-toolgate/Chart.yaml'
     outputs[chart] = re.sub(r'^version: .*', f'version: {product}', chart.read_text(encoding='utf-8'), flags=re.M)
     outputs[chart] = re.sub(r'^appVersion: .*', f'appVersion: "{product}"', outputs[chart], flags=re.M)
@@ -74,6 +80,8 @@ def expected():
     quickstart_api = ROOT/'packages/contracts/openapi/quickstart-v1.yaml'
     if quickstart_api.exists():
         outputs[quickstart_api] = re.sub(r'^  version: .*', f'  version: {product}', quickstart_api.read_text(encoding='utf-8'), flags=re.M)
+    for proposed in (ROOT/'packages/contracts/openapi/proposed').glob('*.proposed.yaml'):
+        outputs[proposed] = re.sub(r'^  version: .*', f'  version: {product}', proposed.read_text(encoding='utf-8'), flags=re.M)
     return outputs
 
 
