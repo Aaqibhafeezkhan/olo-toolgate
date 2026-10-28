@@ -33,8 +33,6 @@ jobs:
     env:
       TOOLGATE_RELEASE_BUILD: ${{ inputs.build_number }}
       TOOLGATE_QUALIFICATION_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
-      RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
-      CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
@@ -64,9 +62,13 @@ jobs:
       shell: bash
       env:
         NATIVE_TARGET: ${{ matrix.target }}
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
       run: |
         rustup set default-host "$NATIVE_TARGET"
         python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
         printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
     - name: Verify native target and source
       shell: bash

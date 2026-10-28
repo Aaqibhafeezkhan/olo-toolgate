@@ -18,13 +18,17 @@ spec.loader.exec_module(installer)
 class RustInstallationTests(unittest.TestCase):
     def test_native_clients_install_pinned_rust_before_using_it(self):
         job = yaml.safe_load((ROOT/'.github/workflows/client.yml').read_text())['jobs']['native']
-        self.assertEqual('${{ runner.temp }}/toolgate-rustup', job['env']['RUSTUP_HOME'])
-        self.assertEqual('${{ runner.temp }}/toolgate-cargo', job['env']['CARGO_HOME'])
+        self.assertNotIn('RUSTUP_HOME', job['env'])
+        self.assertNotIn('CARGO_HOME', job['env'])
         steps = job['steps']
         install = next(step for step in steps if 'python tools/ci/install_rust.py' in step.get('run', ''))
         self.assertEqual(install['shell'], 'bash')
         self.assertEqual(install['env']['NATIVE_TARGET'], '${{ matrix.target }}')
+        self.assertEqual('${{ runner.temp }}/toolgate-rustup', install['env']['RUSTUP_HOME'])
+        self.assertEqual('${{ runner.temp }}/toolgate-cargo', install['env']['CARGO_HOME'])
         self.assertIn('rustup set default-host "$NATIVE_TARGET"', install['run'])
+        self.assertIn('RUSTUP_HOME=%s', install['run'])
+        self.assertIn('CARGO_HOME=%s', install['run'])
         self.assertIn('$GITHUB_PATH', install['run'])
         verify = next(step for step in steps if step.get('name') == 'Verify native target and source')
         self.assertLess(steps.index(install), steps.index(verify))
