@@ -56,6 +56,7 @@ class FixtureServer:
         self.scheme = 'http'
         if cert:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.load_cert_chain(cert, key)
             self.httpd.socket = context.wrap_socket(self.httpd.socket, server_side=True)
             self.scheme = 'https'

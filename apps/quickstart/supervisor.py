@@ -161,7 +161,7 @@ def atomic(path, value):
     if path.is_symlink(): raise ValueError('Unsafe state path')
     temp = path.with_name(path.name + '.' + secrets.token_hex(8))
     try:
-        with temp.open('xb') as output:
+        with os.fdopen(os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as output:
             output.write(value if isinstance(value, bytes) else value.encode())
             output.flush(); os.fsync(output.fileno())
         temp.replace(path)
