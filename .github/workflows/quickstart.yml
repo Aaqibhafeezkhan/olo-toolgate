@@ -26,7 +26,7 @@ jobs:
     needs: clients
     runs-on: ubuntu-24.04
     env:
-      RUSTUP_HOME: ${{ runner.temp }}/toolgate-quickstart-rustup
+      RUSTUP_HOME: /tmp/toolgate-quickstart-rustup
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -46,7 +46,7 @@ jobs:
           path: deploy/client-assets/release
       - name: Install isolated pinned Rust toolchain
         env:
-          RUSTUP_HOME: ${{ runner.temp }}/toolgate-quickstart-rustup
+          RUSTUP_HOME: /tmp/toolgate-quickstart-rustup
         run: |
           rustup show
 
