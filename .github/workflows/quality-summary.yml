@@ -67,6 +67,9 @@ jobs:
           cargo install cargo-llvm-cov --locked --version 0.6.21
           mkdir -p build/coverage
           cargo llvm-cov --workspace --all-targets --locked --lcov --output-path build/coverage/rust.lcov
+      - name: Normalize coverage paths for Sonar
+        if: ${{ !cancelled() }}
+        run: python tools/ci/normalize_coverage.py
       - name: Sonar analysis (reporting only)
         id: sonar
         if: ${{ !cancelled() && env.SONAR_HOST_URL != '' && env.SONAR_PROJECT_KEY != '' }}
