@@ -268,7 +268,7 @@ class LocalCiTests(unittest.TestCase):
             description = 'composition.md \u00a72; \u03bb'
             (schemas / 'fixture.json').write_text(json.dumps({'$defs': {
                 'Fixture': {'type': 'object', 'description': description}}}, ensure_ascii=False), encoding='utf-8')
-            with patch.object(generate, 'CONTRACTS', contracts), patch('pathlib.io.open', windows_open):
+            with patch.object(generate, 'CONTRACTS', contracts), patch('io.open', windows_open):
                 self.assertEqual(generate.definitions('v2')['Fixture']['description'], description)
 
     def run_mocked(self, selected=None, failure=False, fingerprints=None):

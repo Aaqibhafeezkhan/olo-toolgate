@@ -72,10 +72,15 @@ class AdmissionTests(unittest.TestCase):
                 self.assertEqual(set(events),{'workflow_dispatch'})
                 self.assertNotIn('admission',jobs)
                 self.assertEqual(document['permissions'],{'contents':'read','pull-requests':'read'})
-                self.assertEqual(set(jobs),{'preflight','foundation','clients','images'})
-                for job in jobs.values():
+                self.assertEqual(set(jobs),{'preflight','foundation','clients','images','coverage'})
+                for name,job in jobs.items():
                     self.assertNotIn('if',job)
-                    self.assertNotIn('secrets',job)
+                    if name=='coverage':
+                        self.assertEqual(job['needs'],'preflight')
+                        self.assertEqual(job['uses'],'./.github/workflows/quality-summary.yml')
+                        self.assertEqual(job['secrets'],{'SONAR_TOKEN':'${{ secrets.SONAR_TOKEN }}'})
+                    else:
+                        self.assertNotIn('secrets',job)
                 continue
             if path.name in ('create-release-branch.yml','build-release.yml'):
                 # Operator-selected product releases have their own immutable-source
