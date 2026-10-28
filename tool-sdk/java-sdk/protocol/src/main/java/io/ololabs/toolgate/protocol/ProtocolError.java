@@ -37,6 +37,13 @@ public final class ProtocolError extends RuntimeException {
         return new ProtocolError(MISSING_REQUIRED_CLIENT_CAPABILITY, "Missing required client capability", data);
     }
 
+    /** {@code -32021} for a client capability such as {@code elicitation}, as {@code data.requiredCapabilities}. */
+    public static ProtocolError missingCapability(String capability) {
+        com.fasterxml.jackson.databind.node.ObjectNode data = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        data.putObject("requiredCapabilities").putObject(capability);
+        return new ProtocolError(MISSING_REQUIRED_CLIENT_CAPABILITY, "Missing required client capability", data);
+    }
+
     public int code() { return code; }
     public JsonNode data() { return data; }
 }

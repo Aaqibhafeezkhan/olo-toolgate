@@ -13,6 +13,9 @@ import java.util.*;
 public final class StandardAccessPresets {
     private static final JsonNode CATALOG=load();
     private StandardAccessPresets() {}
+    public static Map<String,String> provenance(Codec codec) {
+        return Map.of("source","release-initial-configuration:"+CATALOG.path("bundleId").asText(),"digest",DirectoryService.digest(codec.json(CATALOG)));
+    }
     private static JsonNode load() {
         try(var input=StandardAccessPresets.class.getResourceAsStream("/initial-configuration/manifest.json")) {
             if(input==null)throw new IllegalStateException("Access presets missing");

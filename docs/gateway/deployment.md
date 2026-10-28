@@ -4,6 +4,8 @@
 
 Use [online configuration](configuration.md), purpose-separated external keys and verified HTTPS between Gateway and Control. The isolated loopback fixture transport is explicitly identified in reports and is not a production TLS claim. Runtime and restricted management listeners remain separate. Readiness observes Core within five seconds, while each protected effect checks current authority directly.
 
+For multiple tenants, deploy separate Gateway releases/processes with their own UUID, host list, workload credential Secret and Control service-token Secret. Replicas of one release share that tenant binding. Shared Control and PostgreSQL retain tenant request/RLS isolation. Execution routes and Tool Host pools must belong to the same tenant; do not mount another tenant's credentials or executor access into this Gateway. The chart requires an explicit UUID and authority list and requires an enabled ingress host to appear in that list. This selects a shared Control plane with separate tenant ingress/execution boundaries; a Gateway process does not dynamically select another tenant's relay credential.
+
 `python tools/enterprise/helm.py` validates install/upgrade manifests and rejects missing custody, untrusted authority URLs and retired local policy/approval settings. Kubernetes execution and organizational network/TLS provisioning are separate deployment responsibilities; a manifest render does not establish cluster availability or enterprise capacity.
 
 Inspect bounded reason/correlation IDs, readiness, metrics and [revocation/recovery runbooks](../enterprise-access-control/operations.md). Do not print workload tokens, raw arguments, secret values or signed bearer capabilities in operational diagnostics.

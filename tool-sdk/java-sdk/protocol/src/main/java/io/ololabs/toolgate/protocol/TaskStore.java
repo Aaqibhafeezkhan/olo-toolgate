@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * The task store port of adapter A2 (protocol-layer.md §3). Memory in standalone mode here; Control in governed
+ * The task store port of adapter A2 (protocol-layer.md §3). Memory or SQLite in standalone mode; Control in governed
  * mode. Lookups by owner return empty for another owner exactly as for an unknown id.
  */
 public interface TaskStore {
@@ -34,6 +34,6 @@ public interface TaskStore {
     /** Removes the tasks whose retention ended by {@code now} and returns them. */
     List<TaskRecord> purgeExpired(Instant now);
 
-    /** Every stored task, for the abandonment sweep. */
-    List<TaskRecord> all();
+    /** Every task that has not ended, for the abandonment sweep. */
+    List<TaskRecord> active();
 }

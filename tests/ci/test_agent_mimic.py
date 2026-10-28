@@ -13,27 +13,27 @@ spec=importlib.util.spec_from_file_location('agent_mimic',ROOT/'debug/agent-mimi
 mimic=importlib.util.module_from_spec(spec);spec.loader.exec_module(mimic)
 
 class ScriptTests(unittest.TestCase):
-    def test_repeats_only_existing_write_then_reads_log(self):
+    def test_repeats_only_existing_write_then_reads_it_back(self):
         calls=[]
         class Agent:
             def rpc(self,method,params=None):
                 calls.append((method,params))
-                if params['name']=='hotfolder.write_text':return {'structuredContent':{'success':True}}
-                return {'structuredContent':{'file':'packets.jsonl','entry':{'direction':'RECEIVE'}}}
+                if params['name']=='examples.hotfolder/write_text':return {'structuredContent':{'written':True}}
+                return {'structuredContent':{'exists':True,'text':mimic.TEXT}}
         with contextlib.redirect_stdout(io.StringIO()),patch.object(mimic.time,'monotonic',side_effect=[0,1,2,8]),patch.object(mimic.time,'sleep') as sleep:
             mimic.mimic(Agent(),'rahul-nigam.txt',8)
-        self.assertEqual([params['name'] for _,params in calls],['hotfolder.write_text','hotfolder.write_text','client.read_log_entry'])
+        self.assertEqual([params['name'] for _,params in calls],['examples.hotfolder/write_text','examples.hotfolder/write_text','examples.hotfolder/read_text'])
         self.assertEqual(calls[0],calls[1])
         sleep.assert_called_once_with(0.25)
-    def test_repeated_write_failure_stops_without_reading_log(self):
+    def test_repeated_write_failure_stops_without_reading(self):
         calls=[]
         class Agent:
             def rpc(self,method,params=None):
                 calls.append(params['name'])
-                return {'structuredContent':{'success':len(calls)==1}}
+                return {'structuredContent':{'written':len(calls)==1}}
         with contextlib.redirect_stdout(io.StringIO()),patch.object(mimic.time,'monotonic',side_effect=[0,1,2]),patch.object(mimic.time,'sleep'),self.assertRaises(ValueError):
             mimic.mimic(Agent(),'rahul-nigam.txt',8)
-        self.assertEqual(calls,['hotfolder.write_text','hotfolder.write_text'])
+        self.assertEqual(calls,['examples.hotfolder/write_text','examples.hotfolder/write_text'])
     def test_invalid_duration_sends_nothing(self):
         class Agent:
             def rpc(self,*args):raise AssertionError('Invalid duration must not call the gateway')
@@ -45,29 +45,27 @@ class ScriptTests(unittest.TestCase):
         class Agent:
             def rpc(self,method,params=None):
                 calls.append(params['name'])
-                return {'structuredContent':{'success':True}} if len(calls)==1 else {'structuredContent':{'file':'packets.jsonl','entry':{}}}
+                return {'structuredContent':{'written':True}} if len(calls)==1 else {'structuredContent':{'exists':True,'text':mimic.TEXT}}
         with contextlib.redirect_stdout(io.StringIO()),patch.object(mimic.time,'monotonic',side_effect=[0,20]),patch.object(mimic.time,'sleep') as sleep:
             mimic.mimic(Agent(),'rahul-nigam.txt',8)
-        self.assertEqual(calls,['hotfolder.write_text','client.read_log_entry'])
+        self.assertEqual(calls,['examples.hotfolder/write_text','examples.hotfolder/read_text'])
         sleep.assert_not_called()
     def test_only_calls_two_tools_and_prints_their_responses(self):
         calls=[]
         class Agent:
             def rpc(self,method,params=None):
                 calls.append((method,params))
-                if params['name']=='hotfolder.write_text':return {'structuredContent':{'success':True}}
-                return {'structuredContent':{'file':'packets.jsonl','entry':{'direction':'RECEIVE','requestId':'mcp-123'}}}
+                if params['name']=='examples.hotfolder/write_text':return {'structuredContent':{'written':True}}
+                return {'structuredContent':{'exists':True,'text':mimic.TEXT}}
         output=io.StringIO()
-        with contextlib.redirect_stdout(output):entry=mimic.mimic(Agent(),'rahul-nigam.txt')
+        with contextlib.redirect_stdout(output):content=mimic.mimic(Agent(),'rahul-nigam.txt')
         self.assertEqual([call[0] for call in calls],['tools/call','tools/call'])
-        self.assertEqual(calls[0][1],{'name':'hotfolder.write_text','arguments':{'path':'rahul-nigam.txt','text':'My Name is Rahul Nigam'}})
-        self.assertEqual(calls[1][1],{'name':'client.read_log_entry','arguments':{}})
-        self.assertEqual(entry['requestId'],'mcp-123')
-        self.assertEqual(output.getvalue().count('"direction"'),1)
+        self.assertEqual(calls[0][1],{'name':'examples.hotfolder/write_text','arguments':{'path':'rahul-nigam.txt','text':'My Name is Rahul Nigam'}})
+        self.assertEqual(calls[1][1],{'name':'examples.hotfolder/read_text','arguments':{'path':'rahul-nigam.txt'}})
+        self.assertEqual(content['text'],mimic.TEXT)
         self.assertIn('Client file-write response:',output.getvalue())
-        self.assertIn('"success": true',output.getvalue())
-        self.assertIn('Client log response:',output.getvalue())
-        self.assertIn('"file": "packets.jsonl"',output.getvalue())
+        self.assertIn('"written": true',output.getvalue())
+        self.assertIn('Client file-read response:',output.getvalue())
     def test_rejected_call_stops_without_setup_or_second_call(self):
         calls=[]
         class Agent:
@@ -81,7 +79,7 @@ class ScriptTests(unittest.TestCase):
         class Agent:
             def rpc(self,method,params=None):
                 calls.append(method)
-                return {'structuredContent':{'success':False}}
+                return {'structuredContent':{'written':False}}
         with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(ValueError):mimic.mimic(Agent(),'rahul-nigam.txt')
         self.assertEqual(calls,['tools/call'])
     def test_uses_configured_trust_instead_of_an_exported_debug_ca(self):

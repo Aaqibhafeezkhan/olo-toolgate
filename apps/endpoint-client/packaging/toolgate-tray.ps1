@@ -31,6 +31,7 @@ $script:trustTask = $null
 $script:trustClient = $null
 $script:trustChecked = [DateTime]::MinValue
 $script:enrollAfterSwitch = $null
+$script:trayPower = 'on'
 function Test-ToolGateGatewayAddress([string]$Address) {
     return ($Address -match '^https://[a-zA-Z0-9.\[\]:-]+$') -or ($Address -match '^http://(127\.0\.0\.1|localhost):[0-9]{1,5}$')
 }
@@ -41,10 +42,22 @@ function Get-ToolGateKnownGateways {
     try { $known = [IO.File]::ReadAllText($trayIndex) | ConvertFrom-Json } catch { return @() }
     return @($known | Where-Object { $_.serverUrl -and (Test-ToolGateGatewayAddress ([string]$_.serverUrl)) })
 }
-# The protected client verifies the gateway and its certificate; the tray only asks for elevation.
+# One OS-authenticated presence check, with no implicit approval request or service reset.
+function Invoke-ToolGateRefresh {
+    try {
+        Start-Process -FilePath $trayClient -ArgumentList 'check-in' -WindowStyle Hidden
+        $script:trayDetail = 'Checking the gateway server state...'
+    } catch { $script:trayDetail = 'Could not check the gateway server state.' }
+}
+# The protected client verifies the gateway and its certificate when focus or trust changes.
 function Invoke-ToolGateConfigure([string]$Target) {
     if (-not (Test-ToolGateGatewayAddress $Target)) {
         $script:trayDetail = 'Use an https:// gateway URL or a local console address such as http://127.0.0.1:18091.'
+        return
+    }
+    $settings = Get-ToolGateGatewaySettings
+    if ($settings -and ($Target -eq [string]$settings.serverUrl -or $Target -eq [string]$settings.localConsoleUrl) -and -not $script:trustChanged) {
+        Invoke-ToolGateRefresh
         return
     }
     $peer = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -55,6 +68,14 @@ function Invoke-ToolGateConfigure([string]$Target) {
         $script:enrollAfterSwitch = Get-Date
         $script:trayDetail = "Connecting to $Target..."
     } catch { $script:trayDetail = 'Gateway change was cancelled or could not start.' }
+}
+# The owner's power switch. Only this local command changes it; no gateway or console can.
+function Invoke-ToolGatePower([string]$Mode) {
+    try {
+        Start-Process -FilePath $trayClient -ArgumentList "power $Mode" -WindowStyle Hidden
+        $script:trayPower = $Mode
+        $script:trayDetail = if ($Mode -eq 'off') { 'Switching this device off...' } else { 'Switching this device on...' }
+    } catch { $script:trayDetail = 'Could not change the power switch.' }
 }
 function Invoke-ToolGateRepair {
     $settings = Get-ToolGateGatewaySettings
@@ -106,12 +127,14 @@ $trayStatus.add_Click({
     if (-not $script:statusWindow -or $script:statusWindow.IsDisposed) {
         $script:statusWindow = New-ToolGateStatusWindow -LogoPath $trayLogo
     }
-    Update-ToolGateStatusWindow -Form $script:statusWindow -Detail $script:trayDetail -Activity $script:activitySnapshot -Available $script:activityAvailable -Connections $script:connections
+    Update-ToolGateStatusWindow -Form $script:statusWindow -Detail $script:trayDetail -Activity $script:activitySnapshot -Available $script:activityAvailable -Connections $script:connections -Power $script:trayPower
     $script:statusWindow.Show()
     $script:statusWindow.Activate()
 })
+$trayPowerItem = $trayMenu.Items.Add('Power off')
+$trayPowerItem.add_Click({ Invoke-ToolGatePower $(if ($script:trayPower -eq 'off') { 'on' } else { 'off' }) })
 $trayConsole = $trayMenu.Items.Add('Open ToolGate console')
-$trayEnroll = $trayMenu.Items.Add('Enroll this device')
+$trayEnroll = $trayMenu.Items.Add('Request device approval')
 $trayEnroll.add_Click({
     Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'RemoteSigned', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $PSScriptRoot 'toolgate-enroll.ps1')`"") -WindowStyle Hidden
 })
@@ -133,7 +156,13 @@ $trayRepair = New-Object System.Windows.Forms.ToolStripMenuItem('Repair gateway 
 $trayRepair.add_Click({ Invoke-ToolGateRepair })
 [void]$trayMenu.Items.Insert(3, $trayRepair)
 $trayMenu.add_Opening({
+    $trayPowerItem.Text = if ($script:trayPower -eq 'off') { 'Power on' } else { 'Power off' }
+    $trayPowerItem.Image = if ($script:trayPower -eq 'off') { $trayOfflineImage } else { $trayConnectedImage }
     $traySwitch.DropDownItems.Clear()
+    $trayConfiguration = New-Object System.Windows.Forms.ToolStripMenuItem('Configuration')
+    $trayConfiguration.ToolTipText = 'Check the current gateway once and apply its server state'
+    $trayConfiguration.add_Click({ Invoke-ToolGateRefresh })
+    [void]$traySwitch.DropDownItems.Add($trayConfiguration)
     $trayCurrent = Get-ToolGateGatewaySettings
     foreach ($trayGateway in @(Get-ToolGateKnownGateways)) {
         $trayTarget = if ($trayGateway.consoleUrl) { [string]$trayGateway.consoleUrl } else { [string]$trayGateway.serverUrl }
@@ -167,10 +196,15 @@ $trayPackets.add_Click({
     } catch { $script:trayDetail = 'Packet viewer was cancelled or could not start.' }
 })
 $trayUninstall = $trayMenu.Items.Add('Uninstall ToolGate...')
+. (Join-Path $PSScriptRoot 'toolgate-uninstall.ps1')
 $trayUninstall.add_Click({
-    $trayUninstaller = Join-Path $trayRoot 'unins000.exe'
-    try { Start-Process -FilePath $trayUninstaller -Verb RunAs }
-    catch { $script:trayDetail = 'Uninstall was cancelled or could not start.' }
+    try {
+        $trayUninstaller = Get-ToolGateUninstaller $trayRoot
+        Start-Process -FilePath $trayUninstaller -Verb RunAs
+    } catch {
+        $script:trayDetail = 'Uninstall was cancelled or could not start.'
+        [void][System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'ToolGate uninstall', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    }
 })
 function Get-ToolGateClientOutput {
     param([string]$Arguments, [string]$Pattern)
@@ -224,7 +258,10 @@ $trayTimer.add_Tick({
             if ($trayHealth.error -or -not $trayHealth.state) { throw 'Health unavailable' }
             $trayState = [string]$trayHealth.state
             $script:trayState = $trayState
-            $traySummary = Get-ToolGateHealthSummary $trayHealth
+            # Activity-only IPC: never waits behind a check-in.
+            $trayPowerState = Get-ToolGateClientOutput -Arguments 'power status' -Pattern '^(on|off)$'
+            if ($trayPowerState -ne 'Unavailable') { $script:trayPower = $trayPowerState }
+            $traySummary = Get-ToolGateHealthSummary $trayHealth $script:trayPower
             $trayStatusText = $traySummary.Status
             $trayGuidance = $traySummary.Guidance
             Update-ToolGateTrustCheck ($trayHealth.ready -and $trayState -eq 'ACTIVE')
@@ -239,7 +276,7 @@ $trayTimer.add_Tick({
                     $script:enrollAfterSwitch = $null
                 }
             }
-            $script:trayDetail = "Service running`r`nStatus: $trayStatusText`r`n$trayGuidance`r`nSuccessful check-ins: $($trayHealth.successfulCheckIns)`r`nFailed check-ins: $($trayHealth.failedCheckIns)"
+            $script:trayDetail = "Service running`r`nPower: $(if ($script:trayPower -eq 'off') { 'Off' } else { 'On' })`r`nStatus: $trayStatusText`r`n$trayGuidance`r`nSuccessful check-ins: $($trayHealth.successfulCheckIns)`r`nFailed check-ins: $($trayHealth.failedCheckIns)"
             # The icon color always follows the gateway in focus; background gateways show in the menu.
             $trayFocused = @($script:connections | Where-Object { $_.focused })
             $trayName = if ($trayFocused.Count -and $trayFocused[0].serverName) { [string]$trayFocused[0].serverName + ': ' } else { '' }
@@ -300,7 +337,7 @@ $activityTimer.add_Tick({
     }
     $windowOpen = $script:statusWindow -and -not $script:statusWindow.IsDisposed
     if ($windowOpen) {
-        Update-ToolGateStatusWindow -Form $script:statusWindow -Detail $script:trayDetail -Activity $script:activitySnapshot -Available $script:activityAvailable -Connections $script:connections
+        Update-ToolGateStatusWindow -Form $script:statusWindow -Detail $script:trayDetail -Activity $script:activitySnapshot -Available $script:activityAvailable -Connections $script:connections -Power $script:trayPower
     }
     # The Switch gateway menu and tooltip also use the snapshot, so refresh it slowly while the window is closed.
     if (-not $script:activityProcess -and ($windowOpen -or ((Get-Date) - $script:connectionsChecked).TotalSeconds -ge 5)) {

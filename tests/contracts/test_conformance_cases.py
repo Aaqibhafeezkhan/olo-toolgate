@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Design gate D3: conformance cases are authored for every suite in plan.md §21.
+"""Design gate D3: conformance cases are authored for every suite in platform-requirements.md §21.
 
 These checks keep the case files well formed and tie them to the designs they test:
 every Tool Host threat names an existing case, every invocation transition and
@@ -99,7 +99,7 @@ class ConformanceCaseTests(unittest.TestCase):
 
     def test_every_persistence_row_has_a_failure_case(self):
         covered = {int(m.group(1)) for _, case in self.cases for r in case['requirements']
-                   for m in [re.search(r'plan\.md §12\.7 row (\d+)$', r)] if m}
+                   for m in [re.search(r'platform-requirements\.md §12\.7 row (\d+)$', r)] if m}
         self.assertEqual(covered, set(range(1, 12)))
 
     def test_every_composition_error_has_a_case(self):

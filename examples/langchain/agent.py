@@ -14,7 +14,7 @@ from langchain.agents import create_agent
 from langchain_core.tools import StructuredTool, ToolException
 from langchain_openrouter import ChatOpenRouter
 
-TOOLS = {'hotfolder.list', 'hotfolder.read_text', 'hotfolder.write_text', 'client.read_log_entry'}
+TOOLS = {'examples.hotfolder/list', 'examples.hotfolder/read_text', 'examples.hotfolder/write_text'}
 USE_CASES = {
     'tickets': ('support-tickets.json', 'support-triage.md',
         'Triage the fictional support queue. Rank open tickets by customer impact, '
@@ -33,25 +33,25 @@ def tools_for(gateway, allowed_read_paths=None, output_path=None, writes=None):
     catalog = gateway.rpc('tools/list')['tools']
     available = {item['name']: item for item in catalog if item['name'] in TOOLS}
     if set(available) != TOOLS:
-        raise ValueError('The target must expose list, read, write and activity tools; missing: '
+        raise ValueError('The target must expose the installed HotFolder list, read and write tools; missing: '
                          + ', '.join(sorted(TOOLS - set(available))) + '. Run deploy.bat again (manage.py setup); '
                          'it checks discovery and names the cause.')
     result = {}
     def make_call(name):
         def call(**arguments):
             # A narrow application scope complements the Gateway's actual access checks.
-            if name == 'hotfolder.read_text' and allowed_read_paths is not None:
+            if name == 'examples.hotfolder/read_text' and allowed_read_paths is not None:
                 if arguments.get('path') not in allowed_read_paths:
                     raise ToolException('Read only these exact relative paths: ' + ', '.join(sorted(allowed_read_paths)))
-            if name == 'hotfolder.write_text' and output_path is not None:
+            if name == 'examples.hotfolder/write_text' and output_path is not None:
                 if arguments.get('path') != output_path:
                     raise ToolException('Write only this exact relative path: ' + output_path)
             reply = gateway.rpc('tools/call', {'name': name, 'arguments': arguments})
             output = reply.get('structuredContent')
             if not isinstance(output, dict):
                 raise ValueError('ToolGate did not return structured tool output')
-            if name == 'hotfolder.write_text':
-                if output.get('success') is not True:
+            if name == 'examples.hotfolder/write_text':
+                if output.get('written') is not True:
                     raise ValueError('The device did not confirm the write')
                 if writes is not None:
                     writes.append(dict(arguments))
@@ -60,13 +60,13 @@ def tools_for(gateway, allowed_read_paths=None, output_path=None, writes=None):
     for name, record in available.items():
         schema = deepcopy(record['inputSchema'])
         description = record['description']
-        if name == 'hotfolder.read_text' and allowed_read_paths is not None:
+        if name == 'examples.hotfolder/read_text' and allowed_read_paths is not None:
             schema['properties']['path']['enum'] = sorted(allowed_read_paths)
             description += ' Read only these exact relative paths: ' + ', '.join(sorted(allowed_read_paths)) + '.'
-        if name == 'hotfolder.write_text' and output_path is not None:
+        if name == 'examples.hotfolder/write_text' and output_path is not None:
             schema['properties']['path']['enum'] = [output_path]
             description += ' Write only this exact relative path: ' + output_path + '.'
-        result[name] = StructuredTool(name=name.replace('.', '_'),
+        result[name] = StructuredTool(name=name.replace('.', '_').replace('/', '_'),
             description=description, args_schema=schema, func=make_call(name), handle_tool_error=True)
     return result
 
@@ -98,11 +98,11 @@ def run(gateway, use_case, model=None):
         'permitted paths. Read the selected input, write the required report, then read it back.')
     answer = agent.invoke({'messages': [{'role': 'user', 'content':
         f'{task}\nList the HotFolder, read {source}, and write a concise Markdown report to {destination}. '
-        'Read the report back to verify it. Optionally inspect the latest device activity entry. '
+        'Read the report back to verify it. '
         'State that these inputs are fictional demonstration data.'}]}, {'recursion_limit': 24})
     if not writes:
         raise ValueError('The model did not write the required report; no successful completion is claimed')
-    readback = json.loads(tools['hotfolder.read_text'].invoke({'path': destination}))
+    readback = json.loads(tools['examples.hotfolder/read_text'].invoke({'path': destination}))
     if readback.get('text') != writes[-1]['text']:
         raise ValueError('The generated report did not match the device readback')
     print(answer['messages'][-1].content)
@@ -114,20 +114,17 @@ def smoke(gateway):
     """Real LangChain tool calls and device effects, without a model or API spend."""
     destination = 'langchain-smoke.txt'
     tools = tools_for(gateway, {'support-tickets.json', destination}, destination)
-    paths = json.loads(tools['hotfolder.list'].invoke({}))['paths']
+    paths = json.loads(tools['examples.hotfolder/list'].invoke({}))['paths']
     if 'support-tickets.json' not in paths:
         raise ValueError('The selected device has no example fixture; prepare it first')
-    source = json.loads(tools['hotfolder.read_text'].invoke({'path': 'support-tickets.json'}))['text']
+    source = json.loads(tools['examples.hotfolder/read_text'].invoke({'path': 'support-tickets.json'}))['text']
     if 'DEMO-101' not in source:
         raise ValueError('Unexpected support fixture')
     text = f'LangChain reached this real endpoint through ToolGate at {time.time_ns()}.\n'
-    tools['hotfolder.write_text'].invoke({'path': destination, 'text': text})
-    if json.loads(tools['hotfolder.read_text'].invoke({'path': destination}))['text'] != text:
+    tools['examples.hotfolder/write_text'].invoke({'path': destination, 'text': text})
+    if json.loads(tools['examples.hotfolder/read_text'].invoke({'path': destination}))['text'] != text:
         raise ValueError('The real endpoint readback did not match')
-    activity = json.loads(tools['client.read_log_entry'].invoke({}))
-    if activity.get('file') != 'packets.jsonl' or not isinstance(activity.get('entry'), dict):
-        raise ValueError('The endpoint did not return its real activity entry')
-    print('PASS: current discovery, LangChain tools, fixture read, native write/readback and activity log.')
+    print('PASS: signed package discovery, LangChain tools, fixture read and native write/readback.')
     print('No model was called. Device output: HotFolder/' + destination)
 
 

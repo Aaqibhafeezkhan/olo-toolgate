@@ -41,5 +41,7 @@ public @interface ClientTool {
     boolean cancelIfAbandoned() default false;
     ErrorDecl[] errors() default {};
     String[] toolsets() default {};
+    /** How an unknown outcome is settled; required when the tool has side effects (OLO M5.4). */
+    Reconciliation reconciliation() default Reconciliation.UNDECLARED;
     RuntimeTier[] tiers() default RuntimeTier.OCI_SANDBOX;
 }

@@ -16,12 +16,12 @@ final readonly class LocalToolRegistration implements \JsonSerializable {
         public \stdClass $outputSchema,
         public LocalRuntimeLimits $limits,
         public InstalledAuthorizationProfile $authorizationProfile,
-        public ?LocalToolSource $source = null
+        public ?LocalFileAccess $fileAccess = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['toolId', 'action', 'runtimeId', 'entryPoint', 'inputSchema', 'outputSchema', 'limits', 'source', 'authorizationProfile']) || array_diff(['toolId', 'action', 'runtimeId', 'entryPoint', 'inputSchema', 'outputSchema', 'limits', 'authorizationProfile'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['toolId', 'action', 'runtimeId', 'entryPoint', 'inputSchema', 'outputSchema', 'limits', 'authorizationProfile', 'fileAccess']) || array_diff(['toolId', 'action', 'runtimeId', 'entryPoint', 'inputSchema', 'outputSchema', 'limits', 'authorizationProfile'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -33,7 +33,7 @@ final readonly class LocalToolRegistration implements \JsonSerializable {
             (object) $data['outputSchema'],
             LocalRuntimeLimits::fromArray($data['limits']),
             InstalledAuthorizationProfile::fromArray($data['authorizationProfile']),
-            array_key_exists('source', $data) ? LocalToolSource::fromArray($data['source']) : null
+            array_key_exists('fileAccess', $data) ? LocalFileAccess::from($data['fileAccess']) : null
         );
     }
 

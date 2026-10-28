@@ -8,6 +8,10 @@ Double-click `start.bat` to test the working tree, build Control and Quickstart
 with the production Dockerfiles, smoke-test the new image, then start the console
 at http://127.0.0.1:18090/console/. `restart.bat` repeats the checks and build
 before replacing the container. `stop.bat` stops this stack and preserves data.
+For a focused startup use `start.bat -FocusedCheck` (or `restart.bat -FocusedCheck`).
+This checks debug management, builds the real production images and waits for
+the persistent stack to become healthy without running unrelated suites.
+`-FocusedCheck` and `-FullCheck` are mutually exclusive.
 Scripts work from any current directory and never commit or push.
 Start and restart synchronize version metadata and regenerate contract bindings
 before running the read-only preflight, dependency installation and build checks.
@@ -55,7 +59,16 @@ survive container restarts and removal while their named volumes are retained.
 
 Requires Docker Desktop running Linux containers, Git, Node.js/npm, Python 3.11+
 and internet access for dependencies and base images. A Python environment is
-created under `.dev/debug/venv`. The matching Playwright Chromium browser is
+created under `.dev/debug/venv`. Set `GITHUB_TOKEN` in the launching process's
+environment to authenticate the GitHub release lookup and use the token's higher
+API rate limit. The token is optional; without it the lookup uses public access.
+If the public lookup is unavailable, already cached release inputs can be reused
+only after canonical version/platform/checksum validation. An explicitly supplied
+invalid token still fails; it never falls back to unauthenticated access.
+After adding or changing a Windows environment variable, open a new terminal
+before running `start.bat` or `restart.bat` so the scripts inherit it. The token
+is sent only in the release API request header and is never printed or passed to
+asset download commands. The matching Playwright Chromium browser is
 installed automatically after npm dependencies. Native archives and one-click
 installers are fetched from the latest published GitHub release matching VERSION,
 verified by the canonical manifest tool, and included in the local image. The
@@ -107,81 +120,31 @@ Inspect failures with `docker compose -p toolgate-debug -f debug/compose.yaml lo
 No script deletes volumes; back up `/data` before testing migrations.
 
 Run `setup-agent-mimic.bat` or `agent-mimic.bat` to call an already configured,
-approved and connected client through `https://localhost:18450/mcp`. The setup
-filename is retained as an alias for the call-and-log command. Configure the
-device, agent credential and intended grants beforehand. The commands only
-call existing tools and record their responses. By default, the script repeats
-the same file-write call for eight seconds, then reads one log entry. It does not
-install tools, update the client, configure the device, or grant permissions.
-Denied or unavailable calls fail visibly.
+approved and connected client through `https://localhost:18450/mcp`. The commands
+only call existing tools and record their responses: `examples.hotfolder/write_text`
+creates `rahul-nigam.txt` containing exactly `My Name is Rahul Nigam` in the
+device's files area, then `examples.hotfolder/read_text` reads it back. By default the
+write repeats for eight seconds (`-DurationSeconds 0..60`; 0 sends one write).
+A denied or failed write stops the script before the read. They do not install
+tools, update the client, configure the device or grant permissions.
 
-Both commands save visible console output and errors in timestamped files under
-`.dev/debug/logs/`; each run prints its log path. The **Client tool requests** page
-fills the parent canvas and logs progress. Use **View response** for the completed
-JSON output. Both wrappers accept `-Gateway`, `-TokenFile`, `-CaFile`, `-File`
-and `-DurationSeconds` (0..60, default 8). Open the client tray's **Show Status**
-before running the script to observe the repeated real requests. Each existing
-tool may finish quickly; the script does not make a single device command run
-for eight seconds or fabricate client progress. Use
-`setup-agent-mimic.bat -DurationSeconds 0` for exactly one write and one log read.
-Calls run sequentially, with a short pause between repeated writes; each response
-is logged. `hotfolder.write_text` creates
-`rahul-nigam.txt` containing exactly `My Name is Rahul Nigam` in the installed
-client's protected HotFolder. `client.read_log_entry` reads exactly one latest
-entry from that client's real `packets.jsonl`. Both complete tool responses are
-printed in the console. Repeated writes use the same path and text. A denied or
-failed write immediately stops the script before further calls, including the
-log read. The duration bounds repetition; an already dispatched request keeps
-its normal gateway timeout.
+Both commands save console output under `.dev/debug/logs/` and accept `-Gateway`,
+`-TokenFile`, `-CaFile`, `-File` and `-DurationSeconds`. The **Client tool
+requests** page shows each request; use **View response** for the JSON output.
 
-The calls use an existing device-bound agent bearer token in
-`.dev/debug/client-agent-token`, readable only by the current Windows account
-and SYSTEM. The server stores its hash in `/data/client-runtime-credentials.json`;
-`TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS=true` enables those explicitly installed
-credentials for this debug stack. Credentials expire after 24 hours. The mimic
-commands use the existing agent credential; enrollment, approval, permissions
-and credential administration belong to the deployment's configuration.
-
-For this isolated Quickstart debug container, `configure-debug-agent.bat
---device-id <approved-device-id> --profiles <existing-installed-profiles.json>`
-separately provisions the debug agent through reviewed group mappings and renews
-its 24-hour credential. Supply profiles exported by the already installed client's
-`authorization-profiles` command; the helper registers only `hotfolder.write_text`
-and `client.read_log_entry`. It uses API password logins, independently reviewed
-standard group mappings, and the actual installed package digest. ReadAndWrite
-rights apply inside the configured HotFolder. It restarts the local debug gateway
-to load its credential and preserves other credentials and data. Initial provisioning
-changes server configuration only; the separate client helper enables the existing
-tools without replacing the client executable. The mimic itself only calls and logs.
-The setup wrapper can allocate the existing agent through the reviewed API.
-An expired token needs explicit renewal; a stopped or
-unconfigured client cannot execute a command through a script alone.
-
-An installed Windows client may be connected while `client.json` has no tool
-profiles. To register the **existing** write/log tools for this debug gateway,
-run `configure-client-tools.bat -DeviceId <approved-device-id>` after provisioning
-the debug agent. It checks the local enrolled identity, preserves enrollment,
-CA trust and IPC peers, installs the two existing definitions in the protected
-configuration, and restarts the service. It does not replace the executable or
-grant server permissions. Administrator approval is required for these protected
-configuration changes. A startup failure restores the previous configuration.
-
-For device `device-d5402222a1cf3d801e0529ddcde7e586`, run this explicit one-time
-setup from the repository root (PowerShell):
-
-```powershell
-& 'C:/Program Files/OLO/ToolGate/olo-toolgate-client.exe' authorization-profiles |
-    Set-Content .dev/debug/existing-client-profiles.json -Encoding UTF8
-debug/configure-debug-agent.bat --device-id device-d5402222a1cf3d801e0529ddcde7e586 --profiles .dev/debug/existing-client-profiles.json --local-fixture-reviewers
-debug/configure-client-tools.bat -DeviceId device-d5402222a1cf3d801e0529ddcde7e586
-debug/setup-agent-mimic.bat
-```
-
-Re-run credential provisioning when the 24-hour credential expires, followed by
-client configuration to refresh its protected local gateway credential. Routine
-mimic and AI calls never perform setup. If a client executable is independently
-upgraded, export its actual profiles again and repeat this explicit setup to
-refresh the pinned package definitions.
+The tools come from the `examples.hotfolder` Marketplace package, never from the
+client: install it, release it to the device and give the device an engine and a
+files area as the demos do (`deploy/docker`, [ADR 027](../docs/adr/027-one-tool-protocol-device-files.md)).
+Then, for this isolated debug Quickstart, run
+`configure-debug-agent.bat --device-id <approved-device-id>`. It refuses unless the
+package's `write_text` and `read_text` tools are installed, configures dedicated
+package groups with exact `invoke`/`CUSTOM` grants for the selected device and exports,
+allows exactly their recorded package digests,
+and issues the debug agent a 24-hour credential in `.dev/debug/client-agent-token`
+(readable only by the current account and SYSTEM; its hash is stored in
+`/data/client-runtime-credentials.json`, enabled by
+`TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS=true`). It never creates or changes a tool
+definition. Re-run it when the credential expires; the mimic itself only calls and logs.
 
 AI clients that support MCP stdio can use [ai-client.example.json](ai-client.example.json)
 to launch `agent-mcp-stdio.py`. Adjust the two absolute repository paths if needed.
@@ -198,9 +161,9 @@ gateway timeout and online authorization checks.
 The console URL is the management UI. The AI gateway is `https://localhost:18450/mcp`.
 Its configured credential binds the device and agent; requests cannot select
 another device or grant themselves access. With the supplied debug mappings,
-an AI can discover `hotfolder.write_text` and `client.read_log_entry`, write
-`rahul-nigam.txt` and read one packet log entry. ReadAndWrite presets permit other
-normalized paths inside the configured HotFolder; the client filesystem boundary still applies. Additional AI actors need their own configured credentials and reviewed
+an AI can discover `examples.hotfolder/write_text` and `examples.hotfolder/read_text`, write
+`rahul-nigam.txt` and read it back. Each call may name only paths it was given,
+inside the device's configured files area; the client's files boundary still applies. Additional AI actors need their own configured credentials and reviewed
 Agent Group memberships/grants. The example contains no credential; the bridge
 reads the protected existing token file and the installed CA configuration.
 
@@ -271,8 +234,8 @@ and uses independent fixture accounts for reviews. It also enables and assigns
 `test-readonly`, `test-readwrite`, and `test-admin` to their standard Teams.
 No password or bearer credential is logged. Ordinary MCP calls never provision access.
 
-The setup pins only the installed diagnostic tools to the ReadAndWrite execution
-binding and assigns the selected device/tools to the corresponding standard groups.
-It removes the previous bespoke debug groups/grants after moving their memberships.
+The setup pins the installed diagnostic tools and selected device to a dedicated
+package binding. Standard FILE read/write presets remain unchanged. ReadAndWrite
+and Admin agents receive the explicit package capability; ReadOnly agents do not.
 Use `--allocate-agent` for later group changes without rotating the workload token.
 The ReadOnly group intentionally fails writes; ReadAndWrite allows this diagnostic.

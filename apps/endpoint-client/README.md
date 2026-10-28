@@ -1,19 +1,16 @@
-# Endpoint Client and HotFolder
+# Endpoint Client
 
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding. Current clients retain their key during HTTP 423 suspension and recover an expired certificate only for their exact still-approved identity.
+The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Clients keep sending signed-key presence pings in every state and follow Control's enrollment, check-in or wait directive. Deleted live devices request fresh approval with their existing ID and key. Expired approvals remain listed as Approval required; protected access resumes only after reapproval.
 
 See [Device registry and tool-call controls](../../docs/control-plane/device-registry.md).
 
-Module 08 adds opt-in [managed local runtimes](../../docs/client/local-runtimes.md).
-Approved images contain Python and other dependencies and can be provisioned
-automatically on first use. A system-accessible Linux OCI engine is required;
-Batch/CMD and WASM currently report UNSUPPORTED. Host interpreters are never a fallback.
-
-The native protected service provides enrollment, check-in and eighteen fixed
-built-in tools and signed local tools within the confined managed engine.
-Gateway credentials are provisioned externally.
-See [HotFolder configuration and operations](../../docs/client/hotfolder.md) and
-[ADR 008](../../docs/adr/008-hotfolder-builtins.md).
+The native protected service provides enrollment, check-in and signed package tools,
+run in [managed local runtimes](../../docs/client/local-runtimes.md): Control-built
+Java SDK images on an approved JRE base, in a sandbox on a system-accessible Linux
+OCI engine. It has no built-in tools, and host interpreters are never a fallback.
+Tools speak the one tool protocol, v2 over stdio; a device brokers only its
+confined [files area](../../docs/client/hotfolder.md) to tools whose signed
+registration grants it ([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)).
 
 Download the Windows, macOS or Linux archive from the Control home page without
 signing in. Check its SHA-256 against the displayed manifest before extracting.
@@ -40,12 +37,31 @@ the public code and key fingerprint in the browser. The enroller's signed IdP
 token needs the `toolgate-enroller` role, `tenant_id`, and an enabled `user_id`.
 The browser never receives the device code or private key.
 
-The protected service discovers its configured HTTPS origin, verifies its signed
-discovery document, generates a P-256 key locally and submits a signed PKCS#10
-request. Control verifies possession, binds the key to the approved user/device,
+Installer setup verifies v2 discovery over authenticated HTTPS and persists `tenantId`
+with the canonical Control origin. Setup also accepts `--tenant-id <canonical-UUID>`
+as an optional assertion. Browser setup always carries its verified UUID into the elevated
+installer; a fresh HTTPS discovery fetch must still match before installation writes state.
+The protected service anchors this configuration
+and generates a P-256 key locally. Verified v2 discovery and its key ring are persisted before enrollment;
+the service then submits a signed PKCS#10 request. Control verifies possession, binds the key to the approved user/device,
 and signs a client-only certificate for at most 24 hours. Heartbeats renew it
 when less than 12 hours remain. The active device and owner are checked on every
-check-in. Administrative revocation is durable and prevents retries and renewal.
+check-in. Administrative revocation blocks protected access and renewal. Revoked
+clients ping at each local X:00:00 hour boundary, including after a failed ping,
+so an admin state change is discovered at the next scheduled ping without a push.
+The tray's **Repair gateway connection** and **Switch gateway → Configuration**
+actions check Control once immediately, including while revoked. They follow its
+current state without requesting approval or resetting enrollment. An unchanged
+revocation keeps the hourly schedule; a changed state updates the client and timer.
+Use `olo-toolgate-client request-approval` (or **Request device approval** in the
+Windows tray) to request a fresh admin review immediately. The admin console also
+offers **Request approval again**; both flows retain the device ID and key and
+require fresh approval before protected access resumes.
+
+`olo-toolgate-client power on|off|status` (tray **Power on / Power off**) is the
+owner's local switch. Off sends one final report, then stops every gateway
+connection and refuses tool requests until the owner switches it on; enrollment
+is kept. See [the owner power switch](../../docs/client/health-and-inventory.md#owner-power-switch).
 
 `health` and `check-in` are bounded IPC commands. Unix sockets use kernel peer
 UIDs; Windows pipes use OS impersonation SIDs and reject remote clients. The CLI
@@ -89,7 +105,11 @@ second polling limit. Existing Control readiness/metrics and HA remain in use.
 
 Uninstall stops/removes the OS service and retains identity by default.
 `uninstall --purge` explicitly deletes only the fixed protected identity/state files.
-HotFolder documents are preserved, including when they reside inside the state directory.
+Documents outside the fixed state directory are preserved. A complete installer
+purge removes local data and the device key inside that directory. A new organization
+gets a new key after explicit purge. The service journal uses format version 2 and
+binds one configured origin and one verified tenant UUID; unsupported pre-release
+state is rejected unchanged. Saved background profiles are never connected.
 Revoke the identity in Control before retiring a machine. A failed partial
 installation requires administrator recovery of the fixed service/config paths;
 partial installation repair may require administrator action. Current clients
@@ -104,8 +124,7 @@ on all three operating systems. Native CI tests the real service manager and
 builds x64 and ARM64 packages. A protected tagged-release job publishes verified
 packages and provenance; signing hooks require externally provisioned OS/KMS
 identities. Local development packages are unsigned and macOS notarization is
-not configured. Module 06's historical completion report remains unchanged;
-current verification and any open gates are recorded in the Module 07 report.
+not configured. See [installer limitations](../../docs/client/installers.md).
 
 Module 09 uses immutable signed descriptors and monotonic device generations.
 See the [fleet usage, upgrade and debug guide](../../docs/client/package-deployment.md) for external trust/store
@@ -118,3 +137,15 @@ engine. A successful test grants no ordinary tool invocation permission. See
 [the builder guide](../../docs/client/tool-builder.md).
 
 For interactive system installation see [unsigned installers](../../docs/client/installers.md).
+
+Windows tray and maintenance uninstall resolve the registered Inno uninstaller,
+including `unins001.exe` after reinstall. Cleanup starts after confirmation;
+cancelling preserves the tray and service. Removal waits for the service to stop
+and disappear from SCM before deleting the fixed runtime/config files. Retrying
+after partial cleanup tolerates already absent files/services. Installer uninstall
+purges tenant enrollment, local data and the device key.
+Failures appear in the installer/tray instead of silently doing nothing.
+
+The protected service and user-session tray have separate lifetimes. A connected
+device in the console reflects service check-ins. Closing the tray does not
+disconnect the service; the Run registration starts the tray at the next sign-in.

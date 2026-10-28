@@ -1,7 +1,7 @@
 <!-- GENERATED FILE: tools/contracts/version.py; do not edit -->
 # OLO ToolGate 0.10.0-dev release notes
 
-Contracts version: `1.0.0`.
+Contracts version: `0.10.0-dev`.
 
 License: Apache-2.0. See LICENSE and bundled third-party notices/SBOMs.
 
@@ -12,6 +12,153 @@ All notable project changes should be documented here.
 The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
+
+- Downstream memory/RAG authorization epoch reads reserve a writer transaction
+  because they persist the anti-rollback clock. This prevents a read-only SQLite
+  transaction from returning 503 before a service can verify its execution permit.
+
+- Java tools ship as one self-contained executable. `toolgatePackage` and the Maven `package`
+  goal stage `artifacts/tool.jar`, a deterministic fat jar of the tool jar and its whole runtime
+  class path with `Main-Class: io.ololabs.toolgate.runtime.Main`, in place of `app.jar` and
+  `libs.zip`; a device needs only a JRE, and `java -jar tool.jar` serves the tools over stdio.
+  Resources go to the first jar that has them, `META-INF/services` files are merged, signatures
+  and `module-info` are dropped, and two different copies of one class fail the build. The
+  packager, Control and the Tool Host refuse a Java tool that names anything but one jar, so the
+  permit's pinned artifact digest now covers everything the tool runs.
+
+- Server tools run on any Tool Host, local or remote, and move by switching the device (M0
+  part 15). A deployment may name its Tool Hosts (`hostIds` on `PackageDeploymentRequest` and
+  `PackageDeployment`; none means every host); Control's placement sends a call only to a host
+  the deployment names, so deploying the same version to another host moves its tools. An
+  enrolled Tool Host also fetches its calls from Control (pull mode) over its device
+  certificate: `POST /api/control/v1/tool-hosts/dispatches/next`, then `.../{id}/admission`
+  and `.../{id}/result`, so a laptop behind NAT runs tools without an inbound route. When the
+  Gateway has no route to the placed host it queues the signed `Dispatch` at
+  `POST /api/control/v1/access/dispatches` and reads `ToolHostDispatchStatus` from
+  `GET .../access/dispatches/{id}` until the result arrives; the permit is still verified and
+  consumed once, on the host. New contract models `ToolHostDispatchState` and
+  `ToolHostDispatchStatus`; Postgres migration V21 and SQLite V14 add the dispatch queue. The
+  console's deploy form takes the Tool Hosts and the versions table shows where each runs. The
+  quickstart image runs a second, pull-only Tool Host, and `tools/quickstart/check.py` calls the
+  starter tool on the first host, redeploys it to the second and calls it again there.
+
+- A community guide to building MCP tools with the Tool SDK, `TOOL-SDK-GUIDE.md` at the
+  repository root. It covers authoring, values, routes, errors, effects, testing, standalone use,
+  packaging and running under ToolGate. The same file ships in the `toolgate-sdk-api` jar as
+  `META-INF/toolgate/TOOL-SDK-GUIDE.md` and prints with `toolgate guide`.
+
+- Java server tools run end to end through `/mcp` (M0 part 14). Control takes a `.tgpkg` at
+  `POST /api/control/v1/packages/uploads` (Super Admin), applies the packager's archive rules,
+  CHECKSUMS and descriptor digests, and stores the exact bytes; `POST .../packages/deployments`
+  makes a version the one Tool Hosts run, with values for its globals and destination host
+  settings, writing the service profile, the globals document, a disabled directory entry per
+  new tool and its resource extractor. The Tool Host enrolls as a device (CSR, administrator
+  approval, renewal on check-in), registers, fetches its assignments and their content by
+  digest, and checks in with the tools it can run, so Control's placement sends it calls like
+  any device. The Gateway gains `toolHosts`: a call placed on one gets a permit from Control's
+  v2 reserve and is dispatched to the host; Control takes the host's v2 consume and result
+  report. The console gains a Server packages page, the quickstart image runs a Tool Host, and
+  `tools/quickstart/check.py` uploads and deploys the `toolgate init` starter and calls its
+  Java tool through the Gateway, then revokes its grants and checks it disappears. Deploying
+  adds new tools to the default Tool Group, a bare `runtimes.javaPath` is resolved on the host's
+  `PATH` at startup, and the quickstart proxy accepts configuration snapshots up to 2 MiB.
+
+- The Tool Host runs server tools from verified packages (M0 part 13). `apps/tool-host`
+  admits a Gateway dispatch only with an RS256 invocation permit Control signed for that host
+  (issuer, audience, admission window, single-use `jti`, arguments digest), finds the package,
+  service profile and globals in its content store by the digests the permit pins, claims the
+  permit at Control's `permits/consume`, and answers `ADMITTED` with the fencing token or a
+  definitive `REFUSED` reason. It then runs the tool's runtime with a clean environment over
+  tool protocol v2 and reports the outcome to `effects/report`; a crash or timeout is
+  `OUTCOME_UNKNOWN` for ledger tools. Route calls go through a per-invocation broker on a Unix
+  socket with a capability: only the permit's routes as the service profile approves them,
+  checked path variables, allowlisted query names and headers, connect-time address checks,
+  TLS by system roots, CA bundle or SPKI pin, and `API_KEY` or `BASIC` credentials added by
+  the broker from Control. The Java runtime gains governed mode (`TOOLGATE_PROTOCOL=2`), and
+  `apps/tool-host/e2e/run.sh` runs the `toolgate init` starter's package through the host.
+  Control's Tool Host endpoints and Gateway dispatch follow.
+
+- The `toolgate` CLI creates and drives tool projects (M0 part 12). `toolgate init <name>`
+  writes the Java starter for Gradle (the default) or Maven (`--build maven`): a tool reading a
+  global through its typed accessor, a tool calling a declared route with a recorded exchange,
+  examples, a `ToolHarness` test and a git-ignored `toolgate.dev.json`. In a project,
+  `toolgate dev` serves the tools over stdio (or `--http` on loopback), `toolgate dev
+  --digests` prints the descriptor digests, `toolgate check` (and `toolgate validate <dir>`)
+  runs the tests and examples, and `toolgate pack` builds and validates the `.tgpkg`. The CLI
+  drives each build through one adapter per language and build tool, and starters are layered
+  templates embedded in the binary, so a new language adds a starter and an adapter.
+  `./gradlew publishJavaSdkToMavenLocal` publishes the SDK where starters find it. The Java
+  end-to-end run now builds the starter instead of a separate sample.
+
+- The Java Tool SDK is complete for standalone use (M0 part 11). `context.tcp()` connects only
+  to the TCP destinations a tool lists, directly or through a socket factory. The processor
+  proves URL-style convenience calls at build time (literal arguments, exactly one route the
+  tool lists), refuses reflective access to the network API, checks literal `get*Value` names
+  and types, and generates `<Class>Vars` typed accessors; it now analyses after javac's own
+  attribution. `toolgate-sdk-testing` adds `ToolHarness`, which runs tools in test mode with
+  fixtures and recorded route exchanges in a shared format (`spec/authoring/testing.md`);
+  `@Example` gains `exchanges`, and examples travel in the package index. The Gradle plugin
+  `io.ololabs.toolgate.sdk` and `toolgate-maven-plugin` add `dev`, `check` and `package`
+  over the shared `toolgate-sdk-build`, which stages `app.jar` plus a deterministic
+  `libs.zip` and packs with the `toolgate` CLI. `./gradlew publishJavaSdkLocally` publishes
+  the SDK to `build/sdk-repo`, and `tool-sdk/java-sdk/e2e/run.sh` builds a sample with both
+  plugins end to end.
+
+- The Java standalone runtime can keep tasks in SQLite (M0 part 10). With
+  `TOOLGATE_TASK_STORE=sqlite` tasks and their results live in the state file at
+  `TOOLGATE_STATE_DB` and survive a restart; a task the stopped process had not finished ends
+  `failed` with `OUTCOME_UNKNOWN`. `memory` stays the default. A call whose task cannot be
+  stored gets the retryable `TASK_STORE_UNAVAILABLE` and nothing runs. The `TaskStore` port
+  lists `active()` tasks instead of `all()`.
+
+- The Java standalone runtime reserves business keys (M0 part 9). Tools that require a key, or
+  declare `businessKeyArgument`, run only after the key (from that argument or the
+  `Idempotency-Key` header) is reserved in a local SQLite store at `TOOLGATE_STATE_DB`. Repeats
+  return the first result or task; other arguments get `IDEMPOTENCY_CONFLICT`, another caller
+  of a `TENANT` key gets `IDEMPOTENCY_KEY_IN_USE`, a running repeat gets `IN_PROGRESS`, and a
+  key past `TOOLGATE_BUSINESS_KEY_RETENTION` gets `EXPIRED_KEY`. `@Idempotency` forwards the key
+  upstream per namespace (`a.<hash>.<key>`, `u.<hash>.<key>` or the raw `TENANT` key). Such
+  tools no longer refuse startup.
+
+- The Java standalone runtime has the routes HTTP client (M0 part 8). `context.http()` calls
+  only the routes a tool lists, with path variables matched against their patterns (never
+  `/`), allowlisted query names and headers, the route's size limits and a timeout a call
+  can only shorten. Destination hosts come from `TOOLGATE_DESTINATION_<HOSTSETTING>` or
+  `toolgate.dev.json`, SPKI pins are enforced, and `API_KEY`, `BASIC` and OAuth 2.0 client
+  credentials come from local secrets. Failures map to `UPSTREAM_4XX`, `UPSTREAM_5XX`,
+  `UPSTREAM_TIMEOUT` and `UPSTREAM_CONNECTION` with `effectUncertain`, and a ledger tool whose
+  request was sent without a complete answer ends `OUTCOME_UNKNOWN`. The processor now
+  refuses a route path variable without a pattern, and descriptor vector tool-03 declares
+  `/orders/{orderId:[0-9]{6,12}}/refunds`, so its digest changed.
+
+- The Java standalone runtime verifies bearer tokens (M0 part 7, adapter A4). With
+  `TOOLGATE_AUTH_*` it checks JWTs against a JWKS URL or pinned keys (exact issuer and
+  audience, an allowlist that never admits `none` or HMAC, `exp` and `nbf` within 60 s), or
+  calls RFC 7662 introspection. HTTP requests without a valid token get 401, claims come
+  from the token, and each caller owns its own tasks. Production may then bind a
+  non-loopback address, and identity tools no longer refuse startup. Shared token fixtures
+  for every SDK are under `tool-sdk/conformance/fixtures/identity`.
+
+- The Java standalone runtime serves MRTR (M0 part 6, adapter A3). In a sync call
+  `requestInput()` ends the round with an `InputRequiredResult` and a `requestState`, and the
+  handler runs again with the answers. `requestState` is an HS256 JWS with a per-process
+  256-bit key that binds the tool, the arguments and the caller, carries earlier answers,
+  lives 10 minutes and is accepted once. The official MCP conformance suite now passes every
+  required 2026-07-28 server scenario that applies to tools, and all ten `tasks-*` scenarios.
+  A task cancelled before its handler thread started is now interrupted when it starts.
+
+- The Java standalone runtime serves Streamable HTTP (M0 part 5). With
+  `TOOLGATE_HTTP_ADDRESS` it answers stateless `POST /mcp` requests on a loopback address,
+  with the 2026-07-28 header rules and HTTP statuses, DNS-rebinding protection and
+  progress notifications over SSE. `subscriptions/listen` delivers
+  `notifications/tools/list_changed` and, to listeners that declare Tasks,
+  `notifications/tasks`. A new fixture server runs the official MCP conformance suite
+  against the Java protocol layer: every required scenario that applies to tools passes
+  except MRTR (adapter A3), and 9 of 10 `tasks-*` scenarios pass. `tools/call` now ignores
+  unrecognised parameters, and `progress()` ignores fractions outside 0..1 instead of
+  clamping them. The Java runtime sources are committed for the first time: a
+  `.gitignore` rule for local `runtime/` state had kept the runtime package out of the
+  M0 part 3 and part 4 merges, so `main` could not build `:sdk-java-runtime-mcp`.
 
 - The Java standalone runtime serves the MCP Tasks extension (M0 part 4, adapter A2).
   Async tools run as tasks for requests that declare `io.modelcontextprotocol/tasks`:
@@ -47,7 +194,7 @@ The project follows semantic versioning once stable versioning begins.
   computes canonical descriptor bytes and the `toolDescriptorDigest`,
   `descriptorSetDigest` and `packageDigest`, compares descriptors under the equivalence
   rewrites, and packs, validates and verifies `.tgpkg` archives offline under the
-  archive rules of plan.md §7.6. It passes the descriptor vectors, all 20 package
+  archive rules of platform-requirements.md §7.6. It passes the descriptor vectors, all 20 package
   archive fixtures and the v2 schema fixtures. The archive fixtures' stub manifest now
   names the artifact digest `artifactDigest`, as `PackagedArtifact` v2 does.
 
@@ -72,7 +219,7 @@ The project follows semantic versioning once stable versioning begins.
   device. Mounted Gateway credentials drop `deviceId` and must carry
   `credentialKind: "STATIC_TOKEN"`; the Gateway fills in `expiresAtUnixMs`.
 
-- The console has a **Configuration** menu (plan.md §18): Server (gateway name), Device
+- The console has a **Configuration** menu (platform-requirements.md §18): Server (gateway name), Device
   (device approval and the read-only check-in values) and Backup/Restore (configuration
   import/export and the server settings file). Each page saves only its own group with
   `PATCH /api/control/v1/settings`; a stale revision reloads the current values. Audit >
@@ -81,7 +228,7 @@ The project follows semantic versioning once stable versioning begins.
   `clientCheckIn`); formatVersion 1 documents and files are no longer accepted, and
   saved v1 settings reset to the defaults.
 
-- Client check-in is configurable (plan.md §17.2): `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS`,
+- Client check-in is configurable (platform-requirements.md §17.2): `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS`,
   `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` and `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS`,
   set by Helm `control.clientCheckIn.*`. Quickstart keeps 500 ms; other deployments now
   default to 2 s with 20 % jitter. The burst guard and the offline threshold follow the

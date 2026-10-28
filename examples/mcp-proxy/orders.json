@@ -1,0 +1,37 @@
+{
+  "serverInfo": {"name": "orders-mcp", "version": "1.0.0"},
+  "protocolVersion": "2025-11-25",
+  "auth": {"header": "Authorization", "value": "Bearer example-token"},
+  "tools": [
+    {
+      "definition": {
+        "name": "get_order",
+        "title": "Get order",
+        "description": "Read one fictional order by id.",
+        "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]},
+        "annotations": {"readOnlyHint": true, "openWorldHint": false}
+      },
+      "result": {"content": [{"type": "text", "text": "Order 7: 2 fictional widgets, shipped."}]}
+    },
+    {
+      "definition": {
+        "name": "list_orders",
+        "title": "List orders",
+        "description": "List recent fictional orders.",
+        "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50}}},
+        "annotations": {"readOnlyHint": true, "openWorldHint": false}
+      },
+      "result": {"content": [{"type": "text", "text": "Orders 5, 6 and 7."}]}
+    },
+    {
+      "definition": {
+        "name": "cancel_order",
+        "title": "Cancel order",
+        "description": "Cancel one fictional order.",
+        "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]},
+        "annotations": {"destructiveHint": true}
+      },
+      "result": {"content": [{"type": "text", "text": "Cancelled."}]}
+    }
+  ]
+}

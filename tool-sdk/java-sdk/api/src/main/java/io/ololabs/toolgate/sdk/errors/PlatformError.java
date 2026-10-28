@@ -9,7 +9,7 @@ public final class PlatformError extends ToolError {
     /** The platform codes of errors.md §2. */
     public enum Code {
         CANCELLED, DEADLINE_EXCEEDED, ROUTE_REFUSED, AUDIT_UNAVAILABLE, CLAIMS_UNAVAILABLE,
-        CLIENT_TOOLS_UNAVAILABLE, UNSUPPORTED_TIER, CONCURRENCY_LIMIT
+        CLIENT_TOOLS_UNAVAILABLE, UNSUPPORTED_TIER, CONCURRENCY_LIMIT, FILES_REFUSED
     }
 
     private final Code platformCode;

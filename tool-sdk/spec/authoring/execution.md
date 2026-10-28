@@ -6,7 +6,7 @@ How a handler is invoked, cancelled and retried; how effects, business keys, rec
 
 ## 1. Invocation
 
-- **One handler call per invocation.** The SDK never re-invokes a handler. Retries are decided outside the tool (plan.md §11.4), and only for tools whose effect is `READ_ONLY` or `IDEMPOTENT`.
+- **One handler call per invocation.** The SDK never re-invokes a handler. Retries are decided outside the tool (platform-requirements.md §11.4), and only for tools whose effect is `READ_ONLY` or `IDEMPOTENT`.
 - **Input validation** against `inputSchema` happens before the handler runs; **output validation** against `outputSchema` happens after. A non-conforming output becomes `INTERNAL_TOOL_ERROR`.
 - **Size ceilings:** input 1 MiB and output 4 MiB on Tool Host and in standalone mode; on endpoint clients the existing v1 limits (64 KiB, 32 properties) apply until a client release raises them.
 - **No state across invocations.** Tools must not rely on process state between calls. Governed mode uses single-use sandboxes; standalone mode may reuse a process.
@@ -44,11 +44,12 @@ A handler marked `Reconcile` receives `{businessKey?, invocationId, arguments}` 
 
 - `async = true` tools always run as tasks. A client that doesn't declare the Tasks extension on the request doesn't see them in `tools/list` and gets `MissingRequiredClientCapability` (-32021) on a direct call, unless an admin enabled bounded sync mode.
 - `progress()` updates the task status message; `requestInput()` moves the task to `input_required` until answered through `tasks/update`.
+- In a sync call `requestInput()` is MRTR (SEP-2322): the round ends with an `InputRequiredResult` and `requestState` ([protocol-layer.md](../protocol-layer.md) A3), and the handler runs again from the start with the answers. Code before `requestInput()` must be safe to repeat.
 - `cancelIfAbandoned`: no poll within 3 × `pollIntervalMs` requests cancellation.
 
 ## 7. Examples and self-tests
 
-`Example(arguments, expectedOutput?, expectedError?)` entries (at most 8 per tool) run in `check`/`test` builds in standalone mode, and map onto the existing fleet self-test fields for client tools and onto Tool Host self-tests for server tools. An example must not need network access unless it declares a recorded mock exchange (`ToolHarness` recorder).
+`Example(arguments, expectedOutput?, expectedError?, exchanges?)` entries (at most 8 per tool) run in `check`/`test` builds in test mode, and map onto the existing fleet self-test fields for client tools and onto Tool Host self-tests for server tools. An example must not need network access: its route calls are answered only by the recorded exchanges its `exchanges` resource holds ([testing.md](testing.md)). Examples are not part of the descriptor; the build's package index carries them.
 
 ## 8. Logging
 
@@ -56,4 +57,4 @@ A handler marked `Reconcile` receives `{businessKey?, invocationId, arguments}` 
 
 ## Related Docs
 
-- [errors.md](errors.md), [http.md](http.md), [../runtime-modes.md](../runtime-modes.md)
+- [errors.md](errors.md), [http.md](http.md), [testing.md](testing.md), [../runtime-modes.md](../runtime-modes.md)

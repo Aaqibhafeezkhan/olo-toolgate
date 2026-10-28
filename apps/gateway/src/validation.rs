@@ -34,9 +34,15 @@ impl Contracts {
             ("EnterpriseReservationRequest", "v1/enterprise"),
             ("EnterpriseReservation", "v1/enterprise"),
             ("EnterpriseAuthorizationOutcome", "v1/enterprise"),
+            ("CancellationAccepted", "v1/enterprise"),
             ("LocalToolCatalog", "v1/endpoint"),
             ("RemoteToolSubmission", "v1/endpoint"),
             ("RemoteToolResponse", "v1/endpoint"),
+            ("PermitReservationRequest", "v2/permit"),
+            ("SignedInvocationPermit", "v2/permit"),
+            ("AdmissionResponse", "v2/protocol"),
+            ("ResultMessage", "v2/protocol"),
+            ("ToolHostDispatchStatus", "v2/protocol"),
         ] {
             let options = jsonschema::options().with_registry(&registry);
             let schema = json!({"$schema":"https://json-schema.org/draft/2020-12/schema", "$ref":format!("https://schemas.ololabs.io/toolgate/{file}.schema.json#/$defs/{name}")});

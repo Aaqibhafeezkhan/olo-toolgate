@@ -5,19 +5,20 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts;
 
-/** Management grants belong to group-assigned Management Roles only. */
+/** Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected. */
 final readonly class EnterpriseManagementRule implements \JsonSerializable {
     public function __construct(
         public array $actions,
         public EnterpriseGroupType $groupType,
         public GroupSelection $groups,
         public array $grantableScopes,
-        public EnterpriseConditions $conditions
+        public EnterpriseConditions $conditions,
+        public ?string $deviceScope = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['actions', 'groupType', 'groups', 'grantableScopes', 'conditions']) || array_diff(['actions', 'groupType', 'groups', 'grantableScopes', 'conditions'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['actions', 'groupType', 'groups', 'grantableScopes', 'conditions', 'deviceScope']) || array_diff(['actions', 'groupType', 'groups', 'grantableScopes', 'conditions'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +26,8 @@ final readonly class EnterpriseManagementRule implements \JsonSerializable {
             EnterpriseGroupType::from($data['groupType']),
             GroupSelection::fromArray($data['groups']),
             array_map(static fn ($item) => EnterpriseScope::fromArray($item), $data['grantableScopes']),
-            EnterpriseConditions::fromArray($data['conditions'])
+            EnterpriseConditions::fromArray($data['conditions']),
+            array_key_exists('deviceScope', $data) ? $data['deviceScope'] : null
         );
     }
 

@@ -11,12 +11,12 @@ Defines every declaration and runtime accessor a tool author can use, independen
 | Package id | `^[a-z][a-z0-9-]{1,30}(\.[a-z][a-z0-9-]{1,30}){1,3}$` | `acme.orders` |
 | Tool local name | `^[a-z][a-z0-9_-]{0,47}(\.[a-z][a-z0-9_-]{0,47}){0,2}$` | `orders.lookup` |
 | `toolId` | `<package id>/<tool local name>`, at most 128 characters, and matching the existing id rule `[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}` | `acme.orders/orders.lookup` |
-| `mcpName` (default) | `<package alias>.<tool local name>`, where the package alias is the last segment of the package id; 1–128 characters of `A–Z a–z 0–9 _ - .`; uniqueness enforced at enable (plan.md §10.4) | `orders.orders.lookup` |
+| `mcpName` (default) | `<package alias>.<tool local name>`, where the package alias is the last segment of the package id; 1–128 characters of `A–Z a–z 0–9 _ - .`; uniqueness enforced at enable (platform-requirements.md §10.4) | `orders.orders.lookup` |
 | Variable name (param, global, secret, claim) | `^[A-Za-z][A-Za-z0-9_]{0,63}$`, unique per tool across all kinds, case-insensitively | `OrderId`, `ApiKey` |
 | Route, destination, auth id | `^[a-z][a-z0-9_.-]{0,63}$`, unique per package | `orders.get` |
 | Error code | `^[A-Z][A-Z0-9_]{2,63}$` | `ORDER_NOT_FOUND` |
 
-`toolgate.*`, `hotfolder.*` and `builtin.*` prefixes are reserved and **must** be rejected by the packager.
+`toolgate.*` prefix is reserved and **must** be rejected by the packager.
 
 ## 2. Package declaration
 

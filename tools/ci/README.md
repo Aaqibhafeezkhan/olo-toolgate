@@ -39,6 +39,29 @@ activating it.
 
 ## Usage
 
+On Windows, the root-level [`testci.bat`](../../testci.bat) uses this same runner:
+
+```bat
+testci.bat
+testci.bat plan
+testci.bat audit
+testci.bat run --replayable
+testci.bat run --job foundation.rust --act "C:\Tools\act.exe"
+```
+
+Complete the setup above first. The batch file prefers `TOOLGATE_CI_PYTHON`,
+then `.venv\Scripts\python.exe`, then `py`, then `python`. The override must be
+an executable path, without surrounding quotes. It checks Python and PyYAML
+before starting, works from any current directory, and preserves the runner's
+exit code. All arguments are forwarded to `local.py`.
+
+With no arguments it runs the audit and every supported job body, and reports
+all remaining coverage gaps. It returns **2** if any requested job cannot be
+verified locally, even when the supported checks pass. `run --replayable`
+requests only supported bodies and can return **0** for that narrower scope.
+Neither result guarantees hosted CI success; native matrices, artifact consumers
+and publishing still require GitHub validation.
+
 ```sh
 # List actual GitHub triggers, job dependencies, matrices and local coverage.
 python tools/ci/local.py plan
@@ -50,7 +73,7 @@ python tools/ci/local.py audit
 python tools/ci/local.py run --job preflight.metadata
 
 # Select several jobs by repeating --job WORKFLOW.JOB.
-python tools/ci/local.py run --job foundation.check --job gateway.container-and-replicas
+python tools/ci/local.py run --job foundation.rust --job gateway.container-and-replicas
 
 # Replay all supported jobs and report every remaining coverage gap.
 python tools/ci/local.py run
@@ -66,17 +89,20 @@ Omitting the command runs `plan`. `plan` requires Python and PyYAML; it does not
 run tests. `audit` checks configuration and admission rules without replaying
 job bodies. `run` always starts with the audit.
 
-Supported job bodies are `preflight.metadata`, `foundation.check`,
-`gateway.container-and-replicas` and `policy.enterprise-access`. Use `plan` to
-see the current inventory before selecting jobs.
+Supported job bodies are `preflight.metadata`, the foundation gate groups
+`foundation.python`, `foundation.ui`, `foundation.rust`, `foundation.examples` and
+`foundation.scans`, plus `gateway.container-and-replicas` and
+`policy.enterprise-access`. Foundation jobs that consume same-run artifacts are
+`staged`. Use `plan` to see the current inventory before selecting jobs.
 
-On GitHub, the five CI workflows run automatically for pushes to `main` and
-PRs targeting `main`. Manual runs must select `main`. PR admission uses the
-`RC:` title plus `TOOLGATE_CI_ENABLED=true`; push admission uses the latest
-commit's `RC:` message, and manual admission uses the `RC:` comment input.
-The existing resume date also applies. Actions displays PR runs under their
-source branch even when the target is `main`. Local replay runs selected job
-bodies independently of these hosted trigger rules.
+On GitHub, the five CI workflows run automatically only for pushes to `main`.
+Pull requests and feature-branch pushes do not trigger CI. Manual runs must
+select `main`. Push, manual and development-release
+admission resolve the merged PR for the exact commit and check that same title.
+The title must start with `RC:` and `TOOLGATE_CI_ENABLED` must be `true`.
+Commit messages and manual comments do not override PR title admission.
+Local replay runs selected job bodies independently of these hosted
+trigger rules.
 
 The first replay builds [`local.Dockerfile`](local.Dockerfile), downloads toolchains
 and can use several GB. Replay runs in a privileged Linux container with its own
@@ -137,6 +163,6 @@ a local pass cannot guarantee every GitHub trigger will succeed.
 
 See the [full local CI guide](../../docs/development/local-ci.md) for trigger
 coverage, execution isolation and limitations, and
-[CI admission](../../docs/development/ci-admission.md) for RC message rules and
+[CI admission](../../docs/development/ci-admission.md) for PR title rules and
 the automatic CI pause. Local replay does not enable automatic CI or publish
 releases.

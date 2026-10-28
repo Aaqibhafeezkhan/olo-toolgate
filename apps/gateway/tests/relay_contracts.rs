@@ -11,7 +11,11 @@ fn real_control_catalog_and_response_models_are_registered_and_closed() {
         "../../../tests/fixtures/contracts/v1/valid.json"
     ))
     .unwrap();
-    for name in ["RemoteToolSubmission", "RemoteToolResponse"] {
+    for name in [
+        "RemoteToolSubmission",
+        "RemoteToolResponse",
+        "CancellationAccepted",
+    ] {
         assert!(contracts.valid(name, &fixtures[name]), "{name}");
         let mut malformed = fixtures[name].clone();
         malformed["untrusted"] = json!(true);

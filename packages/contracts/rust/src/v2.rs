@@ -82,6 +82,50 @@ pub struct BreakGlassRequest {
     pub reason: String,
     pub operator_signatures: Vec<String>,
 }
+/// Canonical BrokerOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BrokerOperation {
+    #[serde(rename = "ROUTE_CALL")]
+    RouteCall,
+    #[serde(rename = "SECRET_REDEEM")]
+    SecretRedeem,
+    #[serde(rename = "FILES_LIST")]
+    FilesList,
+    #[serde(rename = "FILES_READ")]
+    FilesRead,
+    #[serde(rename = "FILES_INFO")]
+    FilesInfo,
+    #[serde(rename = "FILES_WRITE")]
+    FilesWrite,
+    #[serde(rename = "FILES_APPEND")]
+    FilesAppend,
+    #[serde(rename = "FILES_MKDIR")]
+    FilesMkdir,
+    #[serde(rename = "FILES_RENAME")]
+    FilesRename,
+}
+/// Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrokerRequestFrame {
+    #[serde(deserialize_with = "const_broker_request_frame_kind")]
+    pub kind: String,
+    pub request_id: String,
+    pub operation: BrokerOperation,
+    pub request: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrokerResponseFrame {
+    #[serde(deserialize_with = "const_broker_response_frame_kind")]
+    pub kind: String,
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ToolErrorBody>,
+}
 /// reserveBusinessOperation input, carried on POST /access/invocations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -190,6 +234,38 @@ pub struct ClientCheckIn {
     pub offline_after_ms: u64,
     pub source: ValueSource,
 }
+/// A client release: the image index pinned by digest, the exact FleetPackageDocument bytes (manifestDigest) and, when Control holds the package-release key, the signed FleetPackageRelease it recorded.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientRelease {
+    pub package_id: String,
+    pub version: String,
+    pub package_digest: String,
+    pub image: String,
+    pub runtime_version: String,
+    pub manifest_digest: String,
+    pub signed: bool,
+    pub document: std::collections::BTreeMap<String, serde_json::Value>,
+    pub document_base64: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub tools: Vec<ClientReleaseTool>,
+}
+/// Builds the client-tool image for one verified upload and issues its fleet release (ADR 026).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientReleaseRequest {
+    pub package_digest: String,
+}
+/// One export and whether a client device can run it; an unsupported export is never weakened to fit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientReleaseTool {
+    pub tool_id: String,
+    pub supported: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
 /// Canonical CompatibilityProfile wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompatibilityProfile {
@@ -234,13 +310,53 @@ pub enum ConfigLayer {
     #[serde(rename = "PACKAGE_DEFAULT")]
     PackageDefault,
 }
-/// SaaS connection the package needs (plan.md §14.3).
+/// Configuration review settings. requiredReviews 0 applies changes immediately.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfigurationSettings {
+    pub required_reviews: u64,
+}
+/// SaaS connection the package needs (platform-requirements.md §14.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConnectionRequirement {
     pub id: String,
     pub provider: String,
     pub scopes: Vec<String>,
+}
+/// Canonical ConsoleClientOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConsoleClientOperation {
+    #[serde(rename = "HEALTH")]
+    Health,
+    #[serde(rename = "ENROLL")]
+    Enroll,
+}
+/// OS-authenticated native request scoped to a console origin and optional expected UUID. The service validates protected local tenant/origin binding before reading health or starting enrollment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleClientRequest {
+    #[serde(deserialize_with = "const_console_client_request_kind")]
+    pub kind: String,
+    pub request_id: String,
+    pub operation: ConsoleClientOperation,
+    pub console_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_tenant_id: Option<String>,
+}
+/// Requester-scoped device state and optional verified tenant UUID. Errors carry no installation or device metadata. The service enforces the error-only response invariant before serialization.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleClientResponse {
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health: Option<crate::ClientHealth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenge: Option<crate::EndpointEnrollmentPrompt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<crate::ErrorCode>,
 }
 /// Identifies the shared contract set.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -260,8 +376,9 @@ pub struct ControlServerSettings {
     pub gateway: GatewaySettings,
     pub device_approval: DeviceApproval,
     pub client_check_in: ClientCheckIn,
+    pub configuration: ConfigurationSettings,
 }
-/// application/merge-patch+json body. Env-owned clientCheckIn is not patchable.
+/// application/merge-patch+json body, and the settings of a configuration snapshot. Env-owned clientCheckIn is not patchable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ControlServerSettingsPatch {
@@ -269,6 +386,24 @@ pub struct ControlServerSettingsPatch {
     pub gateway: Option<GatewaySettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_approval: Option<DeviceApproval>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<ConfigurationSettings>,
+}
+/// Settings visible to the current actor. Unreadable feature groups are omitted.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlSettingsView {
+    #[serde(deserialize_with = "const_control_settings_view_format_version")]
+    pub format_version: u64,
+    pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gateway: Option<GatewaySettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_approval: Option<DeviceApproval>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_check_in: Option<ClientCheckIn>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<ConfigurationSettings>,
 }
 /// Canonical CredentialKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -307,6 +442,17 @@ pub struct DeploymentGrant {
     pub agent_group_id: String,
     pub tool_ids: Vec<String>,
 }
+/// Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeploymentProfile {
+    #[serde(deserialize_with = "const_deployment_profile_profile_version")]
+    pub profile_version: u64,
+    pub profile_id: String,
+    pub packages: Vec<ProfilePackage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readiness: Option<Vec<ProfileReadinessCase>>,
+}
 /// Where the package runs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -344,12 +490,65 @@ pub struct DeviceApproval {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_user_id: Option<String>,
 }
+/// Canonical DiscoveryAuthorityState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiscoveryAuthorityState {
+    #[serde(rename = "ACTIVE")]
+    Active,
+    #[serde(rename = "READ_ONLY")]
+    ReadOnly,
+}
+/// Tenant device CA. keyId is SHA-256 of certificate DER; its subject binds the same tenant UUID. It cannot reuse a discovery signing key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryDeviceAuthority {
+    pub key_id: String,
+    pub state: DiscoveryAuthorityState,
+    pub certificate_pem: String,
+}
+/// Protected JWS header. Algorithm, message purpose and key selection are authenticated; no unprotected or remote-key headers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryHeader {
+    #[serde(deserialize_with = "const_discovery_header_alg")]
+    pub alg: String,
+    #[serde(deserialize_with = "const_discovery_header_typ")]
+    pub typ: String,
+    pub kid: String,
+}
+/// Bounded tenant discovery JWK Set. Application validation requires unique key IDs and moduli.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryKeySet {
+    pub keys: Vec<DiscoveryPublicKey>,
+}
+/// Public-only RSA JWK, restricted to 3072/4096-bit RS256 keys with exponent 65537. No private parameters or key URLs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiscoveryPublicKey {
+    #[serde(deserialize_with = "const_discovery_public_key_kty")]
+    pub kty: String,
+    #[serde(deserialize_with = "const_discovery_public_key_use")]
+    pub r#use: String,
+    #[serde(deserialize_with = "const_discovery_public_key_alg")]
+    pub alg: String,
+    pub kid: String,
+    pub n: String,
+    #[serde(deserialize_with = "const_discovery_public_key_e")]
+    pub e: String,
+}
 /// Gateway to Tool Host.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Dispatch {
     pub permit: SignedInvocationPermit,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<ExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collect_spans: Option<bool>,
 }
 /// Reviewed effect class per tool.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -407,6 +606,25 @@ pub struct ErrorDeclaration {
     pub description: String,
     pub retryable: bool,
 }
+/// Correlation context of one execution attempt (ADR 031). executionId and attemptNumber are set by the executor from its permit; the other members are declared by the caller, are never trusted and never affect authorization, routing or policy.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExecutionContext {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt_number: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_invocation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tracestate: Option<String>,
+}
 /// Execution settings with defaults resolved.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -429,6 +647,10 @@ pub enum FrameKind {
     InputRequest,
     #[serde(rename = "LOG")]
     Log,
+    #[serde(rename = "BROKER_REQUEST")]
+    BrokerRequest,
+    #[serde(rename = "BROKER_RESPONSE")]
+    BrokerResponse,
 }
 /// Gateway settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -512,6 +734,410 @@ pub struct InputRequestFrame {
     pub request_id: String,
     pub request: std::collections::BTreeMap<String, serde_json::Value>,
 }
+/// Control's acknowledgement of one admission batch.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionAck {
+    pub sequence: u64,
+    pub duplicate: bool,
+}
+/// Gateway to Control: admission counts since the previous batch of this process epoch. Best-effort; Control ignores a repeated (gatewayId, epoch, sequence) and reports missing sequences as source gaps.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionBatch {
+    pub gateway_id: String,
+    pub epoch: String,
+    pub sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_batch: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_requests: Option<u64>,
+    pub counts: Vec<InsightsAdmissionCount>,
+}
+/// Canonical InsightsAdmissionCategory wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsAdmissionCategory {
+    #[serde(rename = "UNAUTHENTICATED")]
+    Unauthenticated,
+    #[serde(rename = "POLICY_DENIED")]
+    PolicyDenied,
+    #[serde(rename = "APPROVAL_REQUIRED")]
+    ApprovalRequired,
+    #[serde(rename = "RATE_LIMITED")]
+    RateLimited,
+    #[serde(rename = "KILL_SWITCH")]
+    KillSwitch,
+    #[serde(rename = "INVALID_REQUEST")]
+    InvalidRequest,
+}
+/// Requests of one category for one tool in one closed minute bucket.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionCount {
+    pub bucket_start_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
+    pub category: InsightsAdmissionCategory,
+    pub count: u64,
+}
+/// Admission decisions in one bucket.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAdmissionPoint {
+    pub bucket_start_unix_ms: u64,
+    pub category: InsightsAdmissionCategory,
+    pub count: u64,
+}
+/// One execution attempt: one consumed permit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsAttempt {
+    pub attempt_number: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<InsightsOutcome>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+}
+/// Canonical InsightsErrorCategory wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsErrorCategory {
+    #[serde(rename = "POLICY")]
+    Policy,
+    #[serde(rename = "TIMEOUT")]
+    Timeout,
+    #[serde(rename = "CANCELLED")]
+    Cancelled,
+    #[serde(rename = "TOOL_ERROR")]
+    ToolError,
+    #[serde(rename = "INFRASTRUCTURE")]
+    Infrastructure,
+    #[serde(rename = "INVALID_REQUEST")]
+    InvalidRequest,
+    #[serde(rename = "PARTIAL")]
+    Partial,
+    #[serde(rename = "UNKNOWN")]
+    Unknown,
+}
+/// Canonical InsightsGranularity wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsGranularity {
+    #[serde(rename = "MINUTE")]
+    Minute,
+    #[serde(rename = "HOUR")]
+    Hour,
+    #[serde(rename = "DAY")]
+    Day,
+}
+/// One invocation's summary, projected from its transition facts. Durations are absent when not measured.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsInvocation {
+    pub tenant_id: String,
+    pub invocation_id: String,
+    pub tool_id: String,
+    pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_invocation_id: Option<String>,
+    pub outcome: InsightsOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_category: Option<InsightsErrorCategory>,
+    pub attempts: u64,
+    pub accepted_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_requested_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_resolved_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queued_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_started_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_to_end_ms: Option<u64>,
+    pub partial_coverage: bool,
+}
+/// The detail window: summary, attempts and, while facts are retained, the transitions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsInvocationDetail {
+    pub invocation: InsightsInvocation,
+    pub attempts: Vec<InsightsAttempt>,
+    pub transitions: Vec<InsightsTransition>,
+    pub transitions_retained: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spans: Option<Vec<InsightsSpan>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span_state: Option<InsightsSpanState>,
+}
+/// Explorer results, newest first. next continues the search.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsInvocationPage {
+    pub items: Vec<InsightsInvocation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+}
+/// Canonical InsightsMode wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsMode {
+    #[serde(rename = "NONE")]
+    None,
+    #[serde(rename = "BASIC")]
+    Basic,
+    #[serde(rename = "DETAILED")]
+    Detailed,
+}
+/// Canonical InsightsOutcome wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsOutcome {
+    #[serde(rename = "PENDING_APPROVAL")]
+    PendingApproval,
+    #[serde(rename = "IN_PROGRESS")]
+    InProgress,
+    #[serde(rename = "SUCCEEDED")]
+    Succeeded,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "PARTIAL")]
+    Partial,
+    #[serde(rename = "CANCELLED")]
+    Cancelled,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+    #[serde(rename = "OUTCOME_UNKNOWN")]
+    OutcomeUnknown,
+}
+/// Recompute one tenant's aggregate cells for a range from its summaries. dryRun only compares.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsRebuildRequest {
+    pub tenant_id: String,
+    pub from_unix_ms: u64,
+    pub to_unix_ms: u64,
+    pub dry_run: bool,
+}
+/// How many cells the recomputation compared and how many differed from the live projection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsRebuildResult {
+    pub tenant_id: String,
+    pub from_unix_ms: u64,
+    pub to_unix_ms: u64,
+    pub cells_compared: u64,
+    pub cells_differing: u64,
+    pub applied: bool,
+}
+/// Aggregates for a range. Data before unavailableBeforeUnixMs has expired at this granularity and is absent, not zero.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSeries {
+    pub granularity: InsightsGranularity,
+    pub from_unix_ms: u64,
+    pub to_unix_ms: u64,
+    pub group_by: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable_before_unix_ms: Option<u64>,
+    pub histogram_bounds_ms: Vec<u64>,
+    pub points: Vec<InsightsSeriesPoint>,
+    pub admissions: Vec<InsightsAdmissionPoint>,
+}
+/// One bucket and outcome. histogram holds counts per InsightsSeries.histogramBoundsMs bucket (last is overflow).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSeriesPoint {
+    pub bucket_start_unix_ms: u64,
+    pub key: String,
+    pub outcome: InsightsOutcome,
+    pub count: u64,
+    pub duration_count: u64,
+    pub duration_sum_ms: u64,
+    pub histogram: Vec<u64>,
+}
+/// One caller-declared session in a range: its calls by acceptance time. Session IDs are declared by the caller and not verified.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSession {
+    pub tenant_id: String,
+    pub session_id: String,
+    pub first_accepted_at_unix_ms: u64,
+    pub last_activity_unix_ms: u64,
+    pub calls: u64,
+    pub succeeded: u64,
+    pub failed: u64,
+    pub unfinished: u64,
+    pub agent_runs: u64,
+    pub tools: u64,
+}
+/// A tenant's sessions with calls accepted in the range, most recent activity first. next continues the list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSessionPage {
+    pub items: Vec<InsightsSession>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+    pub calls_without_session: u64,
+}
+/// Every retained call of one session, oldest first, plus calls that declared one of them as parent (nested work), to a bounded depth.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSessionTimeline {
+    pub tenant_id: String,
+    pub session_id: String,
+    pub invocations: Vec<InsightsInvocation>,
+    pub truncated: bool,
+}
+/// Admission counts that may be missing: a skipped sequence, or an epoch that stopped without a final batch.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSourceGap {
+    pub tenant_id: String,
+    pub gateway_id: String,
+    pub epoch: String,
+    pub last_sequence: u64,
+    pub missing_sequences: u64,
+    pub last_seen_unix_ms: u64,
+    pub dropped_requests: u64,
+}
+/// One allowlisted span. Metadata only: never arguments, outputs, URLs, headers or secrets.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSpan {
+    pub trace_id: String,
+    pub span_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_span_id: Option<String>,
+    pub name: InsightsSpanName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<InsightsSpanSource>,
+    pub invocation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_id: Option<String>,
+    pub start_unix_ms: u64,
+    pub duration_ms: u64,
+    pub status: InsightsSpanStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_status: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+}
+/// How many spans Control buffered and how many it refused (unknown invocation, wrong executor, over a bound).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSpanAck {
+    pub accepted: u64,
+    pub refused: u64,
+}
+/// Spans from one producer. Best-effort: droppedSpans counts what the producer could not keep.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsSpanBatch {
+    pub spans: Vec<InsightsSpan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_spans: Option<u64>,
+}
+/// Canonical InsightsSpanName wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanName {
+    #[serde(rename = "GATEWAY_REQUEST")]
+    GatewayRequest,
+    #[serde(rename = "GATEWAY_AUTHORIZE")]
+    GatewayAuthorize,
+    #[serde(rename = "GATEWAY_DISPATCH")]
+    GatewayDispatch,
+    #[serde(rename = "HOST_ADMISSION")]
+    HostAdmission,
+    #[serde(rename = "HOST_EXECUTE")]
+    HostExecute,
+    #[serde(rename = "HOST_EGRESS")]
+    HostEgress,
+    #[serde(rename = "CLIENT_EXECUTE")]
+    ClientExecute,
+}
+/// Canonical InsightsSpanSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanSource {
+    #[serde(rename = "GATEWAY")]
+    Gateway,
+    #[serde(rename = "TOOL_HOST")]
+    ToolHost,
+    #[serde(rename = "CLIENT")]
+    Client,
+}
+/// Canonical InsightsSpanState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanState {
+    #[serde(rename = "NOT_COLLECTED")]
+    NotCollected,
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "RETAINED")]
+    Retained,
+    #[serde(rename = "SAMPLED_OUT")]
+    SampledOut,
+    #[serde(rename = "DROPPED")]
+    Dropped,
+}
+/// Canonical InsightsSpanStatus wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InsightsSpanStatus {
+    #[serde(rename = "OK")]
+    Ok,
+    #[serde(rename = "ERROR")]
+    Error,
+}
+/// Read first by the operator page: what is collected and how current it is.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsStatus {
+    pub mode: InsightsMode,
+    pub generated_at_unix_ms: u64,
+    pub tenants: u64,
+    pub unprojected_facts: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oldest_unprojected_unix_ms: Option<u64>,
+    pub summaries_suspended_tenants: u64,
+    pub failed_tenants: u64,
+    pub source_gaps: Vec<InsightsSourceGap>,
+}
+/// One retained transition fact, for the stage timeline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InsightsTransition {
+    pub fact_seq: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_state: Option<String>,
+    pub to_state: String,
+    pub occurred_at_unix_ms: u64,
+}
 /// Response to a v2 POST /access/invocations for NEW and EXISTING reservations. IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE and EXPIRED_KEY are 409 errors with that code and carry nothing else. requestState is present with an ASK outcome for an MRTR client.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -570,6 +1196,8 @@ pub struct InvocationPermitClaims {
     pub business_key_namespace: Option<KeyNamespace>,
     pub approval_ids: Vec<String>,
     pub deadline_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_verification: Option<McpPermitVerification>,
 }
 /// Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -601,7 +1229,7 @@ pub struct InvocationSubmission {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_state: Option<String>,
 }
-/// Task fields added to a Control invocation when a task record exists (plan.md §12.1).
+/// Task fields added to a Control invocation when a task record exists (platform-requirements.md §12.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InvocationTask {
@@ -777,6 +1405,342 @@ pub enum MappingKind {
     #[serde(rename = "DESTINATION")]
     Destination,
 }
+/// Imports one Marketplace version as an uploaded server package. Control fetches, verifies and stores it; nothing is deployed, enabled or granted.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MarketplaceImportRequest {
+    pub package_id: String,
+    pub version: String,
+}
+/// A Marketplace release signing key Control trusts, by id and SHA-256 fingerprint of its raw Ed25519 public key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MarketplaceKey {
+    pub key_id: String,
+    pub fingerprint: String,
+}
+/// Whether this ToolGate reads an OLO Orgs Marketplace. The id, origin and keys are environment-owned settings, absent when disabled.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MarketplaceStatus {
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub marketplace_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keys: Option<Vec<MarketplaceKey>>,
+}
+/// An accepted approval: one per approval sequence, with its generated package.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApproval {
+    pub sequence: u64,
+    pub snapshot_revision: u64,
+    pub tools: Vec<McpApprovedTool>,
+    pub spki_pins: Vec<String>,
+    pub package_id: String,
+    pub package_version: String,
+    pub package_digest: String,
+    pub approved_at_unix_ms: u64,
+}
+/// Approvals of one registration, newest first.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApprovalPage {
+    pub items: Vec<McpApproval>,
+}
+/// Approves tools of one snapshot; at most 64, the package and deployment limit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApprovalRequest {
+    pub snapshot_revision: u64,
+    pub tools: Vec<McpToolApproval>,
+}
+/// A tool of an approval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpApprovedTool {
+    pub tool_id: String,
+    pub upstream_name: String,
+    pub definition_digest: String,
+}
+/// Canonical McpAuthScheme wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpAuthScheme {
+    #[serde(rename = "BEARER")]
+    Bearer,
+    #[serde(rename = "HEADER")]
+    Header,
+}
+/// Canonical McpCheckFailure wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpCheckFailure {
+    #[serde(rename = "PIN_MISMATCH")]
+    PinMismatch,
+    #[serde(rename = "TLS_ERROR")]
+    TlsError,
+    #[serde(rename = "UPSTREAM_UNREACHABLE")]
+    UpstreamUnreachable,
+    #[serde(rename = "UPSTREAM_ERROR")]
+    UpstreamError,
+    #[serde(rename = "PROTOCOL_ERROR")]
+    ProtocolError,
+    #[serde(rename = "SCAN_LIMIT_EXCEEDED")]
+    ScanLimitExceeded,
+    #[serde(rename = "DEADLINE_EXCEEDED")]
+    DeadlineExceeded,
+    #[serde(rename = "DEFINITION_CHANGED")]
+    DefinitionChanged,
+    #[serde(rename = "TOOL_MISSING")]
+    ToolMissing,
+    #[serde(rename = "SERVER_CHANGED")]
+    ServerChanged,
+}
+/// Freshness evidence an invocation permit carries for an MCP_PROXY tool.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpPermitVerification {
+    pub status: McpVerificationStatus,
+    pub approval_sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at_unix_ms: Option<u64>,
+}
+/// mcp-proxy.json, the one artifact of an MCP_PROXY package (media type application/vnd.ololabs.toolgate.mcp-proxy+json).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpProxyDocument {
+    #[serde(deserialize_with = "const_mcp_proxy_document_format_version")]
+    pub format_version: u64,
+    pub server: McpProxyServer,
+    pub approval_sequence: u64,
+    pub strict: bool,
+    pub tools: Vec<McpApprovedTool>,
+}
+/// The upstream an MCP_PROXY package proxies: its URL and credential reference, bound by the package digest, and the identity and TLS pins it was approved with.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpProxyServer {
+    pub slug: String,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub server_info: McpServerInfo,
+    pub spki_pins: Vec<String>,
+}
+/// A recorded quarantine and the evidence that caused it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpQuarantine {
+    pub reason: McpQuarantineReason,
+    pub evidence_id: String,
+    pub tool_ids: Vec<String>,
+    pub server_wide: bool,
+    pub at_unix_ms: u64,
+    pub approval_sequence: u64,
+}
+/// Canonical McpQuarantineReason wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpQuarantineReason {
+    #[serde(rename = "OUTPUT_INVALID")]
+    OutputInvalid,
+    #[serde(rename = "DEFINITION_CHANGED")]
+    DefinitionChanged,
+    #[serde(rename = "TOOL_MISSING")]
+    ToolMissing,
+    #[serde(rename = "SERVER_CHANGED")]
+    ServerChanged,
+    #[serde(rename = "SERVER_VERSION_CHANGED")]
+    ServerVersionChanged,
+    #[serde(rename = "PIN_MISMATCH")]
+    PinMismatch,
+}
+/// Sent by the lease holder of exactly one invocation (a call) or one scan (a refresh); Control derives the targets from that evidence and applies it only to the current approval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpQuarantineReport {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invocation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_id: Option<String>,
+    pub fencing_token: String,
+    pub reason: McpQuarantineReason,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_server_info: Option<McpServerInfo>,
+}
+/// A Tool Host saw notifications/tools/list_changed during a call it holds and asks Control for an immediate refresh of that call's MCP server. Bound to the invocation and its fencing token, like a quarantine report.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpRefreshRequest {
+    pub invocation_id: String,
+    pub fencing_token: String,
+}
+/// Claims of a scan permit (typ toolgate-mcp-scan-permit+jws), signed in the effect-signing domain. exp - iat is at most 10 s (admission); deadlineUnixMs bounds the whole scan. spkiPins is required for REFRESH.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanClaims {
+    pub jti: String,
+    #[serde(deserialize_with = "const_mcp_scan_claims_iss")]
+    pub iss: String,
+    pub aud: String,
+    pub iat: u64,
+    pub exp: u64,
+    pub scan_id: String,
+    pub slug: String,
+    pub registration_revision: u64,
+    pub binding_id: String,
+    pub purpose: McpScanPurpose,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub spki_pins: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    pub fencing_token: String,
+    pub deadline_unix_ms: u64,
+}
+/// A scan a Tool Host fetched: the signed scan permit for its admission.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanDispatch {
+    pub scan_id: String,
+    pub permit: String,
+}
+/// A failed scan, reported by the lease holder before the deadline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanFailureReport {
+    pub scan_id: String,
+    pub fencing_token: String,
+    pub failure: McpCheckFailure,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_spki_pin: Option<String>,
+}
+/// A scan of one registration on one Tool Host of its binding Device Group.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanJob {
+    pub scan_id: String,
+    pub slug: String,
+    pub purpose: McpScanPurpose,
+    pub state: McpScanState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_id: Option<String>,
+    pub created_at_unix_ms: u64,
+    pub deadline_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_revision: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<McpCheckFailure>,
+}
+/// Canonical McpScanPurpose wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpScanPurpose {
+    #[serde(rename = "DISCOVER")]
+    Discover,
+    #[serde(rename = "REFRESH")]
+    Refresh,
+}
+/// What the scanning host observed, reported once by the lease holder before the deadline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpScanResult {
+    pub scan_id: String,
+    pub fencing_token: String,
+    pub server_info: McpServerInfo,
+    pub protocol_version: String,
+    pub spki_pin: String,
+    pub tools: Vec<McpUpstreamTool>,
+}
+/// Canonical McpScanState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpScanState {
+    #[serde(rename = "QUEUED")]
+    Queued,
+    #[serde(rename = "CLAIMED")]
+    Claimed,
+    #[serde(rename = "ADMITTED")]
+    Admitted,
+    #[serde(rename = "FINISHED")]
+    Finished,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+}
+/// The upstream serverInfo from initialize.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerInfo {
+    pub name: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+/// A registered upstream MCP server of the routed tenant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerRegistration {
+    pub slug: String,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub binding_id: String,
+    pub strict: bool,
+    pub state: McpServerState,
+    pub revision: u64,
+    pub created_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_snapshot_revision: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    pub verification: McpVerification,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quarantine: Option<McpQuarantine>,
+}
+/// Registrations of the routed tenant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerRegistrationPage {
+    pub items: Vec<McpServerRegistration>,
+}
+/// Registers an upstream MCP server in the routed tenant. The pool is the binding Device Group.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpServerRegistrationRequest {
+    pub slug: String,
+    pub url: String,
+    pub auth: McpUpstreamAuth,
+    pub binding_id: String,
+    pub strict: bool,
+}
+/// Canonical McpServerState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpServerState {
+    #[serde(rename = "REGISTERED")]
+    Registered,
+    #[serde(rename = "SCANNING")]
+    Scanning,
+    #[serde(rename = "SCANNED")]
+    Scanned,
+    #[serde(rename = "APPROVED")]
+    Approved,
+    #[serde(rename = "QUARANTINED")]
+    Quarantined,
+}
+/// An immutable scan result; Control recomputes every digest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpSnapshot {
+    pub revision: u64,
+    pub scan_id: String,
+    pub server_info: McpServerInfo,
+    pub protocol_version: String,
+    pub spki_pin: String,
+    pub scanned_at_unix_ms: u64,
+    pub tools: Vec<McpToolDefinition>,
+}
 /// Canonical McpTaskStatus wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum McpTaskStatus {
@@ -790,6 +1754,64 @@ pub enum McpTaskStatus {
     Failed,
     #[serde(rename = "cancelled")]
     Cancelled,
+}
+/// One approved upstream tool and the ToolGate local name it gets (mcp.{slug}/{name}).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpToolApproval {
+    pub upstream_name: String,
+    pub name: String,
+}
+/// A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpToolDefinition {
+    pub tool: McpUpstreamTool,
+    pub definition_digest: String,
+}
+/// Upstream credential for scans and calls. The secret is a tenant vault entry whose Tool Group and Device Group equal the registration binding.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpUpstreamAuth {
+    pub secret_name: String,
+    pub scheme: McpAuthScheme,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header: Option<String>,
+}
+/// One tool exactly as the upstream tools/list returned it, within the scan limits.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpUpstreamTool {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// The latest check of a registration against its approval; a failure replaces an earlier success.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpVerification {
+    pub status: McpVerificationStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<McpCheckFailure>,
+}
+/// Canonical McpVerificationStatus wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpVerificationStatus {
+    #[serde(rename = "CURRENT")]
+    Current,
+    #[serde(rename = "UNVERIFIED")]
+    Unverified,
 }
 /// Canonical MissingKeyPolicy wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -810,6 +1832,45 @@ pub struct PackageCompatibility {
     pub minimum_tool_host_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimum_client_version: Option<String>,
+}
+/// The package version Tool Hosts run for one package id, with the service profile and globals Control built for it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackageDeployment {
+    pub package_id: String,
+    pub version: String,
+    pub package_digest: String,
+    pub revision: u64,
+    pub service_profile_digest: String,
+    pub service_profile_revision: u64,
+    pub globals_digest: String,
+    pub tool_ids: Vec<String>,
+    pub deployed_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_group_ids: Option<Vec<String>>,
+}
+/// Current deployments, one per package id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackageDeploymentPage {
+    pub items: Vec<PackageDeployment>,
+}
+/// Deploys an uploaded server package to the Tool Hosts with values for its declared globals. A destination's host is the global its hostSetting names.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackageDeploymentRequest {
+    pub package_digest: String,
+    pub globals: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_group_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_ranges: Option<Vec<PrivateRangeApproval>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_tls: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Enable exactly the reviewed digest with this binding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -952,6 +2013,10 @@ pub enum Permission {
     TokenExchange,
     #[serde(rename = "CONNECTION")]
     Connection,
+    #[serde(rename = "DEVICE_FILES_READ")]
+    DeviceFilesRead,
+    #[serde(rename = "DEVICE_FILES_WRITE")]
+    DeviceFilesWrite,
 }
 /// Successful consumption.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -999,13 +2064,15 @@ pub struct PermitIdentity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
-/// v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4).
+/// v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4). For a Tool Host the body carries the call's arguments: Control checks them against the invocation and pins their RFC 8785 digest in the permit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PermitReservationRequest {
     pub invocation_id: String,
     pub audience: String,
     pub attempt: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Exact code and configuration the attempt may run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1032,6 +2099,77 @@ pub struct PrivateRangeApproval {
     pub cidr: String,
     pub ports: Vec<u64>,
 }
+/// One package difference from the previously applied profile, recorded for review.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileChange {
+    pub package_id: String,
+    pub change: ProfileChangeKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_package_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+}
+/// Canonical ProfileChangeKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProfileChangeKind {
+    #[serde(rename = "ADDED")]
+    Added,
+    #[serde(rename = "CHANGED")]
+    Changed,
+    #[serde(rename = "REMOVED")]
+    Removed,
+}
+/// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfilePackage {
+    pub package_id: String,
+    pub source: ProfilePackageSource,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_group_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub globals: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<ProfileToolActivation>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding_ids: Option<Vec<String>>,
+}
+/// Canonical ProfilePackageSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProfilePackageSource {
+    #[serde(rename = "PREBUILT_CORE")]
+    PrebuiltCore,
+    #[serde(rename = "MARKETPLACE")]
+    Marketplace,
+}
+/// A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileReadinessCase {
+    pub tool_id: String,
+    pub agent_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// One installed export to enable, in the reviewed Tool Group named here. The export must exist in the pinned package; nothing is created to satisfy a reference.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileToolActivation {
+    pub tool_id: String,
+    pub tool_group_id: String,
+}
 /// Progress frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1048,6 +2186,79 @@ pub struct ProgressFrame {
 pub struct ProtocolRange {
     pub min: u64,
     pub max: u64,
+}
+/// One pinned package: where provisioning stands and why it is not ready. hostIds and globalsDigest record the deployment it applied, so an unchanged repeat does not redeploy.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningPackageStatus {
+    pub package_id: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+    pub required: bool,
+    pub state: ProvisioningState,
+    pub step: ProvisioningStep,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_group_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub globals_digest: Option<String>,
+}
+/// Canonical ProvisioningState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProvisioningState {
+    #[serde(rename = "READY")]
+    Ready,
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "FAILED")]
+    Failed,
+}
+/// Persisted outcome of the latest profile application. state is READY only when every required package is READY.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningStatus {
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub generation: u64,
+    pub state: ProvisioningState,
+    pub packages: Vec<ProvisioningPackageStatus>,
+    pub applied_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_profile_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changes: Option<Vec<ProfileChange>>,
+}
+/// The latest ProvisioningStatus of every applied deployment profile, by profile id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProvisioningStatusPage {
+    pub items: Vec<ProvisioningStatus>,
+}
+/// Canonical ProvisioningStep wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProvisioningStep {
+    #[serde(rename = "VALIDATE")]
+    Validate,
+    #[serde(rename = "IMPORT")]
+    Import,
+    #[serde(rename = "DEPLOY")]
+    Deploy,
+    #[serde(rename = "RELEASE")]
+    Release,
+    #[serde(rename = "ROLLOUT")]
+    Rollout,
+    #[serde(rename = "ACTIVATE")]
+    Activate,
+    #[serde(rename = "DONE")]
+    Done,
 }
 /// Supersedes kills after two-person review. Issuer is always control.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1157,6 +2368,8 @@ pub struct ResultFrame {
     pub is_error: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<ToolErrorBody>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<ResultProvenance>,
 }
 /// Tool Host to Gateway.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1168,6 +2381,14 @@ pub struct ResultMessage {
     pub outcome: InvocationOutcome,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<ResultFrame>,
+}
+/// Canonical ResultProvenance wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResultProvenance {
+    #[serde(rename = "TOOL")]
+    Tool,
+    #[serde(rename = "UNTRUSTED_UPSTREAM")]
+    UntrustedUpstream,
 }
 /// Canonical ResultType wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1219,6 +2440,125 @@ pub struct RouteDeclaration {
     pub timeout_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<String>,
+}
+/// One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEvent {
+    pub cursor: u64,
+    pub source: RunEventSource,
+    pub kind: RunEventKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emitted_at_unix_ms: Option<u64>,
+    pub recorded_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<ResultFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<LogLevel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// Control acknowledgement: the highest contiguous sequence stored for the attempt, and how many frames were already present or refused by retention bounds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventAck {
+    pub invocation_id: String,
+    pub attempt: u64,
+    pub accepted_through: u64,
+    pub duplicates: u64,
+    pub refused: u64,
+}
+/// Executor to Control: frames of one admitted attempt, bound to the invocation and the fencing token its permit consumption returned. Redelivery of the same sequence is idempotent. droppedFrames counts frames the executor discarded under its own bounds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventBatch {
+    pub invocation_id: String,
+    pub fencing_token: String,
+    pub attempt: u64,
+    pub events: Vec<RunEventFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropped_frames: Option<u64>,
+}
+/// One redacted non-terminal SDK frame (LOG, PROGRESS or INPUT_REQUEST) as the executor forwards it. sequence is monotonic per invocation attempt; the executor never renumbers a frame it resends.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventFrame {
+    pub sequence: u64,
+    pub emitted_at_unix_ms: u64,
+    pub kind: RunEventKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<LogLevel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// Sequences of an attempt that never arrived; they are reported, never invented.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventGap {
+    pub attempt: u64,
+    pub from_sequence: u64,
+    pub to_sequence: u64,
+}
+/// Canonical RunEventKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunEventKind {
+    #[serde(rename = "LOG")]
+    Log,
+    #[serde(rename = "PROGRESS")]
+    Progress,
+    #[serde(rename = "INPUT_REQUEST")]
+    InputRequest,
+    #[serde(rename = "STATE")]
+    State,
+    #[serde(rename = "RESULT")]
+    Result,
+}
+/// Authorized replay page after a cursor. terminal is the authoritative ledger state; truncated, droppedFrames, gaps and expired say explicitly what is not shown.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RunEventPage {
+    pub invocation_id: String,
+    pub state: String,
+    pub terminal: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor_id: Option<String>,
+    pub events: Vec<RunEvent>,
+    pub next_cursor: u64,
+    pub more: bool,
+    pub truncated: bool,
+    pub dropped_frames: u64,
+    pub expired: bool,
+    pub gaps: Vec<RunEventGap>,
+}
+/// Canonical RunEventSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunEventSource {
+    #[serde(rename = "EXECUTOR")]
+    Executor,
+    #[serde(rename = "PLATFORM")]
+    Platform,
 }
 /// Language runtime a tool needs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1354,6 +2694,12 @@ pub type ServiceRoute = RouteDeclaration;
 pub struct SignedInvocationPermit {
     pub jws: String,
 }
+/// RFC 7515 compact RS256 JWS with a protected toolgate-discovery+jws header and TenantDiscovery v2 payload. No v1 or alternate-algorithm fallback.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SignedTenantDiscovery {
+    pub jws: String,
+}
 /// Canonical Streaming wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Streaming {
@@ -1452,6 +2798,28 @@ pub struct TcpDeclaration {
     pub host_setting: String,
     pub port: u64,
 }
+/// Signed tenant discovery v2. Exact HTTPS origins, configured/pinned UUID, lifetime, key continuity, CA purposes and active issuer are verified before enrollment or local identity access.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TenantDiscovery {
+    #[serde(deserialize_with = "const_tenant_discovery_protocol_version")]
+    pub protocol_version: u64,
+    pub tenant_id: String,
+    pub issuer: String,
+    pub audiences: Vec<String>,
+    pub server_id: String,
+    pub organization: String,
+    pub control_url: String,
+    pub gateway_url: String,
+    pub verification_uri: String,
+    pub minimum_client_version: String,
+    pub issued_at_unix_ms: u64,
+    pub expires_at_unix_ms: u64,
+    pub key_set_version: u64,
+    pub discovery_keys: DiscoveryKeySet,
+    pub device_issuer_key_id: String,
+    pub device_authorities: Vec<DiscoveryDeviceAuthority>,
+}
 /// Upstream TLS verification.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1459,6 +2827,13 @@ pub struct TlsSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ca_bundle: Option<String>,
     pub spki_pins: Vec<String>,
+}
+/// The tool's single permission and the resources it acts on (OLO M3.7). Absent: action invoke on tool://{toolId}.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolAuthorization {
+    pub action: String,
+    pub resources: Vec<String>,
 }
 /// Tool definition v2: the semantic descriptor plus packaging members outside the digest.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1505,6 +2880,10 @@ pub struct ToolDescriptor {
     pub variables: ToolVariables,
     pub permissions: Vec<Permission>,
     pub toolsets: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<ToolAuthorization>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconciliation: Option<ToolReconciliation>,
 }
 /// Effect settings with defaults resolved.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1523,6 +2902,54 @@ pub struct ToolErrorBody {
     pub retryable: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// One deployed tool a Tool Host runs. The host reports it in its check-in as a local tool, so Control places calls for it there.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolHostAssignment {
+    pub tool_id: String,
+    pub action: String,
+    pub description: String,
+    pub enabled: bool,
+    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    pub tool_digest: String,
+    pub package_digest: String,
+}
+/// What a registered Tool Host runs: its tools, and the deployments whose package, service profile and globals it fetches by digest.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolHostAssignments {
+    pub host_id: String,
+    pub tools: Vec<ToolHostAssignment>,
+    pub deployments: Vec<PackageDeployment>,
+}
+/// Canonical ToolHostDispatchState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolHostDispatchState {
+    #[serde(rename = "QUEUED")]
+    Queued,
+    #[serde(rename = "CLAIMED")]
+    Claimed,
+    #[serde(rename = "ADMITTED")]
+    Admitted,
+    #[serde(rename = "REFUSED")]
+    Refused,
+    #[serde(rename = "FINISHED")]
+    Finished,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+}
+/// A dispatch the Gateway handed to Control for a Tool Host that fetches its calls (pull mode), with the host's admission and result once it has sent them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolHostDispatchStatus {
+    pub invocation_id: String,
+    pub host_id: String,
+    pub state: ToolHostDispatchState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admission: Option<AdmissionResponse>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<ResultMessage>,
 }
 /// Tool Host registration with its workload identity (mTLS).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1558,6 +2985,8 @@ pub struct ToolInput {
     pub traceparent: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fencing_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<ExecutionContext>,
 }
 /// Canonical ToolKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1567,7 +2996,7 @@ pub enum ToolKind {
     #[serde(rename = "CLIENT")]
     Client,
 }
-/// Tool resource requests; each at most the platform ceiling (plan.md §13.5).
+/// Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ToolLimits {
@@ -1579,6 +3008,16 @@ pub struct ToolLimits {
     pub max_output_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_argument_properties: Option<u64>,
+}
+/// Canonical ToolReconciliation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolReconciliation {
+    #[serde(rename = "DOWNSTREAM_IDEMPOTENCY")]
+    DownstreamIdempotency,
+    #[serde(rename = "STATUS_LOOKUP")]
+    StatusLookup,
+    #[serde(rename = "MANUAL")]
+    Manual,
 }
 /// Declared configuration and identity inputs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1642,11 +3081,28 @@ pub enum ValueType {
     #[serde(rename = "BINARY")]
     Binary,
 }
+const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
+const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");
+const_field!(
+    const_console_client_request_kind,
+    String,
+    "console-tenant-state"
+);
 const_field!(const_contract_set_name, String, "olo-toolgate-contracts");
 const_field!(const_control_server_settings_format_version, u64, 2);
+const_field!(const_control_settings_view_format_version, u64, 2);
 const_field!(const_deployment_binding_binding_format_version, u64, 1);
+const_field!(const_deployment_profile_profile_version, u64, 1);
+const_field!(const_discovery_header_alg, String, "RS256");
+const_field!(const_discovery_header_typ, String, "toolgate-discovery+jws");
+const_field!(const_discovery_public_key_kty, String, "RSA");
+const_field!(const_discovery_public_key_use, String, "sig");
+const_field!(const_discovery_public_key_alg, String, "RS256");
+const_field!(const_discovery_public_key_e, String, "AQAB");
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
 const_field!(const_log_frame_kind, String, "LOG");
+const_field!(const_mcp_proxy_document_format_version, u64, 1);
+const_field!(const_mcp_scan_claims_iss, String, "control");
 const_field!(const_package_manifest_schema_version, u64, 2);
 const_field!(const_permit_header_alg, String, "RS256");
 const_field!(
@@ -1657,6 +3113,7 @@ const_field!(
 const_field!(const_progress_frame_kind, String, "PROGRESS");
 const_field!(const_recovery_event_issuer, String, "control");
 const_field!(const_result_frame_kind, String, "RESULT");
+const_field!(const_tenant_discovery_protocol_version, u64, 2);
 const_field!(const_tool_descriptor_descriptor_generation, u64, 1);
 const_field!(const_tool_input_protocol_version, u64, 2);
 /// Embedded canonical schemas for offline boundary validation.
@@ -1678,8 +3135,16 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/descriptor.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
+        include_str!("../schemas/v2/discovery.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",
         include_str!("../schemas/v2/identifiers.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/insights.schema.json",
+        include_str!("../schemas/v2/insights.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/invocation.schema.json",
@@ -1690,12 +3155,20 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/kill.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/mcp-proxy.schema.json",
+        include_str!("../schemas/v2/mcp-proxy.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
         include_str!("../schemas/v2/package.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/permit.schema.json",
         include_str!("../schemas/v2/permit.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/profile.schema.json",
+        include_str!("../schemas/v2/profile.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",

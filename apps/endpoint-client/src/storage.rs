@@ -124,6 +124,7 @@ impl ProtectedStore {
                 | "fleet-active.json"
                 | "local-tools.json"
                 | "local-tools-token"
+                | "power.json"
         ) {
             return Err(Failure::Validation);
         }
@@ -215,4 +216,20 @@ impl ProtectedStore {
 }
 pub struct ServiceLease {
     _file: fs::File,
+}
+
+/// A fresh owner-protected directory for unit tests, created through the store's own custody rules. The base matches
+/// the integration tests: macOS `/tmp` and `/var` are symlinks, so it uses `/private/tmp`; Windows uses `ProgramData`,
+/// whose ACLs the custody checks accept, instead of the per-user temp folder.
+#[cfg(test)]
+pub(crate) fn test_directory(prefix: &str) -> PathBuf {
+    #[cfg(windows)]
+    let base = PathBuf::from(std::env::var_os("ProgramData").unwrap());
+    #[cfg(target_os = "macos")]
+    let base = PathBuf::from("/private/tmp");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let base = std::env::temp_dir();
+    let path = base.join(format!("{prefix}-{}", crate::identity::nonce().unwrap()));
+    ProtectedStore::open(path.clone()).unwrap();
+    path
 }

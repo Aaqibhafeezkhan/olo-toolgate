@@ -1,13 +1,13 @@
 # How to debug ToolGate
 
-For HTTP 423, inspect device enablement, connection approval and its deadline. For server tools also inspect local-tools and the fixed executor. Retain protected identity and fix the blocking registry/filter; do not weaken TLS or custody.
+For HTTP 423, inspect device enablement, connection approval and its deadline. Retain protected identity and fix the blocking registry/filter; do not weaken TLS or custody.
 
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 
 For managed runtimes, start with `olo-toolgate-client runtimes status` and
 `runtimes prepare`. Check exact image/version, local engine access and resource/
 seccomp capability, plus the [runtime troubleshooting guide](../client/local-runtimes.md#limits-health-and-recovery).
-UNSUPPORTED Batch/CMD/WASM cannot be fixed by enabling host execution.
+A runtime kind other than `JAVA_SDK` cannot be fixed by enabling host execution.
 
 Start with the [execution and configuration guide](execution-guide.md). Collect
 the software version, UTC time, component, response status/error code and server
@@ -152,7 +152,7 @@ Do not assume an absent log file means no requests occurred.
 | Download cards unavailable | Image contains verified manifest; `control.clientDownloads.enabled` true; manifest API reachable; default image intentionally has no archives |
 | Download 404/503 | Allowlisted current filename, changed release URL, two-transfer capacity, startup hash/size verification; deploy a verified bundle rather than editing live assets |
 | Gateway won't start | Valid bounded JSON, required files, no unknown/duplicate fields, current credential/policy deadlines and extractor bindings |
-| Gateway EMPTY/EXPIRED | Bundle fetch JWT freshness, TLS/DNS/egress, key ID, signature/hash, sequence floor, tenant/issuer/audience and clocks; publish a fresh reviewed bundle |
+| Gateway authority unavailable | Check the configured Control origin, service credential, TLS/DNS/egress, readiness and current directory authority; cached bundles cannot restore execution |
 | ASK remains blocked | Current published ASK policy, enabled approver, deadline, exact operation binding, online Control/DB and unused permit; refresh authoritative state |
 | Client enrollment fails | Exact HTTPS origin, signed discovery, device CA and server trust, enroller role/code deadline, IPC authorized peer and fingerprint confirmation |
 | Client health unready | Check-in connectivity, revoked owner/device, certificate expiry and stale readiness; offline state grants no permission |

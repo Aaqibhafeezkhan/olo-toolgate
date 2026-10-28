@@ -4,7 +4,7 @@
   "area": "chaos",
   "title": "Multi-host chaos",
   "sources": [
-    "plan.md §21",
+    "platform-requirements.md §21",
     "docs/security/threat-models/tool-host.md"
   ],
   "cases": [
@@ -12,7 +12,7 @@
       "id": "chaos/gateway-partition",
       "title": "A Gateway partition loses no work and duplicates nothing",
       "requirements": [
-        "plan.md §21 chaos"
+        "platform-requirements.md §21 chaos"
       ],
       "level": "system",
       "targets": [
@@ -30,8 +30,8 @@
       "id": "chaos/tool-host-partition",
       "title": "A Tool Host partition is bounded by deadlines",
       "requirements": [
-        "plan.md §21 chaos",
-        "plan.md §15.5"
+        "platform-requirements.md §21 chaos",
+        "platform-requirements.md §15.5"
       ],
       "level": "system",
       "targets": [
@@ -48,8 +48,8 @@
       "id": "chaos/store-failover",
       "title": "Store failover keeps acknowledged commits",
       "requirements": [
-        "plan.md §21 chaos",
-        "plan.md §12.8"
+        "platform-requirements.md §21 chaos",
+        "platform-requirements.md §12.8"
       ],
       "level": "system",
       "targets": [
@@ -65,8 +65,8 @@
       "id": "chaos/kill-propagation",
       "title": "Kill propagation timing",
       "requirements": [
-        "plan.md §21 chaos",
-        "plan.md §15.2"
+        "platform-requirements.md §21 chaos",
+        "platform-requirements.md §15.2"
       ],
       "level": "system",
       "targets": [
@@ -84,7 +84,7 @@
       "id": "chaos/warm-pool-isolation",
       "title": "Warm pools never leak across tenants under load",
       "requirements": [
-        "plan.md §21 chaos",
+        "platform-requirements.md §21 chaos",
         "T-SB-2"
       ],
       "level": "system",

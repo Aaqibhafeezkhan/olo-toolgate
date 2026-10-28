@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Normative vectors for complete group witnesses; no legacy ACL fixture authorizes these tests. */
 class EnterpriseConformanceTest {
-    static final Ids.TenantId TENANT=new Ids.TenantId("enterprise");
+    static final Ids.TenantId TENANT=io.ololabs.toolgate.control.fixtures.Tenants.id("enterprise");
     static final long NOW=1791450000000L;
     /** Enrolls an online endpoint for a directory device, so Control can place calls on it. */
     static void online(PostgresStore store,Codec codec,String id){endpoint(store,codec,id,NOW);}
@@ -42,7 +42,7 @@ class EnterpriseConformanceTest {
         add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-a","Devices A",true,1L,List.of("device")));
         add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-b","Devices B",true,1L,List.of("device")));
         add(Kind.DEVICE_EVIDENCE,new ControlDeviceEvidence("evidence","Verified device evidence",true,1L,"device",List.of("managed"),"in","10.1.2.3",NOW-1000,NOW+1000000));
-        add(Kind.EXTRACTOR,new ControlResourceExtractor("extractor","Reviewed extractor",true,1L,EnterpriseExtractorKind.FIELDS,"1.0.0",List.of(new ExtractorField("/path",ResourceKind.FILE,false)),List.of(),32L,null,null));
+        add(Kind.EXTRACTOR,new ControlResourceExtractor("extractor","Reviewed extractor",true,1L,EnterpriseExtractorKind.FIELDS,"1.0.0",List.of(new ExtractorField("/path",ResourceKind.FILE,false)),List.of(),32L,null,null,null));
         var definition=codec.model("{\"id\":\"tool\",\"name\":\"Tool\",\"description\":\"Untrusted description\",\"actions\":[{\"name\":\"read\",\"resourceKinds\":[\"FILE\"]},{\"name\":\"write\",\"resourceKinds\":[\"FILE\"]}],\"inputSchema\":{\"type\":\"object\"},\"outputSchema\":{\"type\":\"object\"}}",ToolDefinition.class);
         add(Kind.TOOL,new ControlTool("tool","Tool",true,1L,definition,"extractor","1.0.0",DIGEST));
         add(Kind.TOOL_GROUP,new ControlToolGroup("tools-a","Tools A",true,1L,List.of("tool")));
@@ -61,7 +61,7 @@ class EnterpriseConformanceTest {
     EnterpriseConditions conditions() {return new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),true,false,null,null);}
     EnterpriseScope scope(String tool,String device) {return new EnterpriseScope(new GroupSelection(List.of(tool),false),new GroupSelection(List.of(device),false),List.of("read","write"),false,List.of(new EnterpriseResourceRule(ResourceKind.FILE,"data",EnterpriseResourceMatch.PREFIX)),conditions());}
     void grant(String id,String source,EnterpriseSourceType type,EnterpriseGrantPurpose purpose,EnterpriseScope scope) {add(Kind.GRANT,new ControlAccessGrant(id,id,true,1L,type,source,purpose,scope));}
-    void workload(String id,String agent,RequestMode mode,String user,String parent) {add(Kind.WORKLOAD_BINDING,new ControlWorkloadBinding(id,id,true,1L,agent,mode,"gateway","workload-subject","gateway",id.equals("workload")?PROOF:DirectoryService.digest(id),1L,NOW+100000,user,parent,user==null?null:1L));}
+    void workload(String id,String agent,RequestMode mode,String user,String parent) {add(Kind.WORKLOAD_BINDING,new ControlWorkloadBinding(id,id,true,1L,agent,mode,"gateway","workload-subject","gateway",id.equals("workload")?PROOF:DirectoryService.digest(id),1L,NOW+100000,user,parent,user==null?null:1L,null,null));}
     EnterpriseContext context(RequestMode mode,String binding) {return new EnterpriseContext("request",TENANT.value(),mode,mode==RequestMode.SERVICE?null:"alice",mode==RequestMode.HUMAN?null:"agent",mode==RequestMode.HUMAN?null:"workload",List.of(),mode==RequestMode.SERVICE?null:1L,mode==RequestMode.HUMAN?null:1L,binding,"device");}
     EnterpriseEvaluation input(EnterpriseContext context,List<ResourceDescriptor> resources) {var tool=codec.model(entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseEvaluation(context,"tool","read",DIGEST,resources,new EnterpriseEvaluator(codec).toolDigest(directory(),tool),DIGEST,NOW,7L,true,null,null);}
     EnterpriseDecision decide(EnterpriseContext context) {return new EnterpriseEvaluator(codec).evaluate(TENANT,directory(),input(context,List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt"))));}
@@ -69,6 +69,31 @@ class EnterpriseConformanceTest {
 
     @Test void completeDelegatedPathAllowsWithoutOwnerEquality() {var decision=decide(context(RequestMode.DELEGATED,"binding-a"));assertEquals(Decision.ALLOW,decision.decision());assertEquals("team-a",decision.witnesses().getFirst().teamId());assertEquals("group-a",decision.witnesses().getFirst().agentGroupId());}
     @Test void humanExecutionRequiresOnlyHumanGrantAndBinding() {remove(Kind.DELEGATION,"delegation");remove(Kind.GRANT,"capability");assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());}
+    /** M3.6: a person's own call is decided by their teams and HUMAN grants alone; no agent record is consulted. */
+    @Test void humanPermissionsResolveWithoutAnyAgentRecord() {
+        remove(Kind.DELEGATION,"delegation");remove(Kind.GRANT,"capability");remove(Kind.WORKLOAD_BINDING,"workload");
+        remove(Kind.AGENT_GROUP,"group-a");remove(Kind.AGENT_GROUP,"group-b");remove(Kind.AGENT,"agent");
+        assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());
+        add(Kind.POLICY,new ControlPolicy("agents-only","agents-only",true,1L,Decision.BLOCK,scope("tools-a","devices-a"),new GroupSelection(List.of(),true),new GroupSelection(List.of("group-a"),false),new GroupSelection(List.of(),true)));
+        assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());
+    }
+    /** M3.10: an on-behalf-of binding acts for the verified user, and still needs the user's grant and the agent's capability. */
+    @Test void onBehalfOfBindingNeedsTheUsersGrantTheAgentsCapabilityAndTheCurrentSession() {
+        remove(Kind.WORKLOAD_BINDING,"workload");workload("workload","agent",RequestMode.DELEGATED,null,null);
+        directory().validate(512,1048576);codec.validatePolicies(directory());
+        assertEquals(Decision.ALLOW,decide(context(RequestMode.DELEGATED,"binding-a")).decision());
+        var c=context(RequestMode.DELEGATED,"binding-a");
+        var stale=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),2L,c.credentialEpoch(),c.bindingId(),c.deviceId());
+        assertEquals(EnterpriseDecisionReason.IDENTITY_DISABLED,decide(stale).reason());
+        remove(Kind.GRANT,"capability");assertEquals(Decision.BLOCK,decide(c).decision());
+        grant("capability","group-a",EnterpriseSourceType.AGENT_GROUP,EnterpriseGrantPurpose.CAPABILITY,scope("tools-a","devices-a"));
+        remove(Kind.GRANT,"human");assertEquals(Decision.BLOCK,decide(c).decision(),"the agent may, the user may not: denied");
+    }
+    @Test void delegatedBindingNamesBothUserAndEpochOrNeither() {
+        remove(Kind.WORKLOAD_BINDING,"workload");
+        add(Kind.WORKLOAD_BINDING,new ControlWorkloadBinding("workload","workload",true,1L,"agent",RequestMode.DELEGATED,"gateway","workload-subject","gateway",PROOF,1L,NOW+100000,"alice",null,null,null,null));
+        assertThrows(IllegalArgumentException.class,()->codec.validatePolicies(directory()));
+    }
     @Test void defaultMembershipCreatesNoGrant() {remove(Kind.GRANT,"human");assertEquals(Decision.BLOCK,decide(context(RequestMode.DELEGATED,"binding-a")).decision());}
     @Test void unrelatedTeamsCannotShareGrantAndDelegation() {add(Kind.DELEGATION,new ControlDelegation("delegation","Delegation",true,2L,"team-b","group-a",scope("tools-a","devices-a")));assertEquals(EnterpriseDecisionReason.NO_GRANT,decide(context(RequestMode.DELEGATED,"binding-a")).reason());}
     @Test void unrelatedAgentGroupsCannotShareCapabilityAndDelegation() {add(Kind.DELEGATION,new ControlDelegation("delegation","Delegation",true,2L,"team-a","group-b",scope("tools-a","devices-a")));assertEquals(EnterpriseDecisionReason.NO_GRANT,decide(context(RequestMode.DELEGATED,"binding-a")).reason());}
@@ -95,19 +120,19 @@ class EnterpriseConformanceTest {
         assertEquals(EnterpriseDecisionReason.IDENTITY_DISABLED,decide(c).reason());
     }
     @Test void olderTokenWithoutEpochCannotSurviveUserReenablement() {
-        var store=new PostgresStore(SqliteState.open(temp.resolve("session.sqlite")),codec);
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("session.sqlite"))),codec);
         add(Kind.IDENTITY_BINDING,new ControlIdentityBinding("identity-alice","Alice identity",true,2L,"alice","https://identity.example","alice-subject",2L,NOW-1000,NOW,1L,"REVIEWED",NOW));
         store.transaction(TENANT,true,tx->{tx.save(tx.load(),directory());return null;});var intake=new IdentityIntake(store,codec);
         assertThrows(Failure.class,()->intake.observe(TENANT,"https://identity.example","alice-subject",null,null,NOW-1000,NOW+60000,NOW));
         assertTrue(intake.observe(TENANT,"https://identity.example","alice-subject",null,null,NOW,NOW+60000,NOW).enabled());
     }
-    @Test void crossTenantCannotUseSameIdentifiers() {var d=new EnterpriseEvaluator(codec).evaluate(new Ids.TenantId("other"),directory(),input(context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt"))));assertEquals(EnterpriseDecisionReason.INVALID_CONTEXT,d.reason());}
+    @Test void crossTenantCannotUseSameIdentifiers() {var d=new EnterpriseEvaluator(codec).evaluate(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),directory(),input(context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt"))));assertEquals(EnterpriseDecisionReason.INVALID_CONTEXT,d.reason());}
     @Test void everyAffectedResourceNeedsCompletePermission() {var r=input(context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/source.txt"),new ResourceDescriptor(ResourceKind.FILE,"private/destination.txt")));assertEquals(Decision.BLOCK,new EnterpriseEvaluator(codec).evaluate(TENANT,directory(),r).decision());}
     @Test void resourcePrefixRespectsSegmentBoundary() {assertFalse(EnterpriseEvaluator.resource(new EnterpriseResourceRule(ResourceKind.FILE,"data",EnterpriseResourceMatch.PREFIX),new ResourceDescriptor(ResourceKind.FILE,"database/private.txt")));}
     @Test void emptySelectorsDoNotMeanWildcard() {var s=scope("tools-a","devices-a");grant("human","team-a",EnterpriseSourceType.TEAM,EnterpriseGrantPurpose.HUMAN,new EnterpriseScope(new GroupSelection(List.of(),false),s.deviceGroups(),s.actions(),s.allActions(),s.resources(),s.conditions()));assertEquals(Decision.BLOCK,decide(context(RequestMode.HUMAN,"binding-a")).decision());}
     @Test void numericNetworkChecksNeverResolveHostNames() {assertTrue(NetworkRange.parse("10.0.0.0/8").contains("10.1.2.3"));assertFalse(NetworkRange.parse("10.0.0.0/8").contains("example.test"));assertThrows(IllegalArgumentException.class,()->NetworkRange.parse("example.test/8"));}
     @Test void sourceAndDestinationAndAllBatchMembersAreExtracted() {
-        var extractor=new ControlResourceExtractor("batch","Batch",true,1L,EnterpriseExtractorKind.FILESYSTEM,"1.0.0",List.of(new ExtractorField("/sources",ResourceKind.FILE,true),new ExtractorField("/destination",ResourceKind.FILE,false)),List.of(),32L,null,null);
+        var extractor=new ControlResourceExtractor("batch","Batch",true,1L,EnterpriseExtractorKind.FILESYSTEM,"1.0.0",List.of(new ExtractorField("/sources",ResourceKind.FILE,true),new ExtractorField("/destination",ResourceKind.FILE,false)),List.of(),32L,null,null,null);
         var request=codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"sources\":[\"data/a\",\"data/b\"],\"destination\":\"data/c\"}}",AuthorizationRequest.class);
         assertEquals(3,new ResourceExtraction(codec).extract(extractor,request).resources().size());
     }
@@ -125,8 +150,8 @@ class EnterpriseConformanceTest {
     @Test void deterministicDecisionDoesNotDependOnMapIterationOrder() {var expected=codec.json(decide(context(RequestMode.DELEGATED,"binding-a")));var reverse=new ArrayList<>(entries.entrySet());Collections.reverse(reverse);entries=new LinkedHashMap<>();for(var e:reverse)entries.put(e.getKey(),e.getValue());assertEquals(expected,codec.json(decide(context(RequestMode.DELEGATED,"binding-a"))));}
     @Test void legacyIndividualAssignmentsAreRejected() {assertThrows(Failure.class,()->codec.entry(Kind.USER,"{\"id\":\"user\",\"name\":\"User\",\"enabled\":true,\"revision\":1,\"access\":{\"role\":\"SUPER_ADMIN\"}}"));assertThrows(Failure.class,()->codec.entry(Kind.AGENT,"{\"id\":\"agent\",\"name\":\"Agent\",\"enabled\":true,\"revision\":1,\"ownerUserId\":\"alice\",\"allowedToolIds\":[]}"));}
     @Test void concurrentVerifiedIntakeCreatesOneDisabledIdentityWithMembership() throws Exception {
-        var source=SqliteState.open(temp.resolve("intake.sqlite"));var store=new PostgresStore(source,codec);var intake=new IdentityIntake(store,codec);var executor=Executors.newFixedThreadPool(4);
+        var source=SqliteState.open(temp.resolve("intake.sqlite"));var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);var intake=new IdentityIntake(store,codec);var executor=Executors.newFixedThreadPool(4);
         try {var futures=new ArrayList<Future<IdentityIntake.Identity>>();for(int i=0;i<4;i++)futures.add(executor.submit(()->intake.observe(TENANT,"https://identity.example","new-subject",null,null,NOW-1000,NOW+60000,NOW)));var ids=new HashSet<String>();for(var f:futures){var identity=f.get();assertFalse(identity.enabled());ids.add(identity.userId());}assertEquals(1,ids.size());store.transaction(TENANT,false,tx->{var d=tx.load();assertEquals(1,d.entries().values().stream().filter(e->e.id().kind()==Kind.USER).count());assertEquals(List.of("team-default"),GroupGraph.memberships(d,codec,Kind.USER,ids.iterator().next(),false));return null;});}finally{executor.shutdownNow();}
     }
-    @Test void invalidAuthenticationDoesNotCreateUsers() {var source=SqliteState.open(temp.resolve("invalid.sqlite"));var store=new PostgresStore(source,codec);assertThrows(Failure.class,()->new IdentityIntake(store,codec).observe(TENANT,"https://identity.example","subject",null,null,NOW-1000,NOW-1,NOW));int size=store.transaction(TENANT,false,tx->tx.load().entries().size());assertEquals(0,size);}
+    @Test void invalidAuthenticationDoesNotCreateUsers() {var source=SqliteState.open(temp.resolve("invalid.sqlite"));var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);assertThrows(Failure.class,()->new IdentityIntake(store,codec).observe(TENANT,"https://identity.example","subject",null,null,NOW-1000,NOW-1,NOW));int size=store.transaction(TENANT,false,tx->tx.load().entries().size());assertEquals(0,size);}
 }

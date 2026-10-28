@@ -4,7 +4,11 @@
 import type * as V2 from "./v2/index.js";
 /** Server-verified administrator portal session. */
 export interface AdminSession {
+  readonly permissions?: ReadonlyArray<string>;
   readonly role: UserRole;
+  readonly bootstrapAdminUserId?: string;
+  readonly tenantId?: string;
+  readonly tenantName?: string;
 }
 /** Immutable artifact identity; digest must be verified by consumers. */
 export interface ArtifactDescriptor {
@@ -17,130 +21,6 @@ export interface AuthorizationRequest {
   readonly toolId: string;
   readonly action: string;
   readonly arguments: Record<string, unknown>;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDefinition {
-  readonly packageId: string;
-  readonly version: string;
-  readonly name: string;
-  readonly description: string;
-  readonly useWhen: string;
-  readonly doNotUseWhen: string;
-  readonly runtime: ManagedRuntime;
-  readonly tool: LocalToolRegistration;
-  readonly platforms: ReadonlyArray<ClientPlatform>;
-  readonly architectures: ReadonlyArray<FleetArchitecture>;
-  readonly examples: ReadonlyArray<FleetSelfTest>;
-  readonly permissions: ReadonlyArray<BuilderPermission>;
-  readonly resource: ResourceDescriptor;
-  readonly credentialRequirements: ReadonlyArray<string>;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDraft {
-  readonly id: string;
-  readonly revision: number;
-  readonly definition: BuilderDefinition;
-  readonly definitionDigest: string;
-  readonly sealed: boolean;
-  readonly packageDocument: FleetPackageDocument;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDraftPage {
-  readonly items: ReadonlyArray<BuilderDraft>;
-  readonly nextCursor?: string;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderDraftRequest {
-  readonly id: string;
-  readonly expectedRevision: number;
-  readonly definition: BuilderDefinition;
-}
-export type BuilderPermission = "COMPUTE" | "FILE_READ" | "FILE_WRITE" | "NETWORK" | "CREDENTIALS";
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderRevisionRequest {
-  readonly expectedRevision: number;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestPage {
-  readonly items: ReadonlyArray<BuilderTestRecord>;
-  readonly nextCursor?: string;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestPoll {
-  readonly task?: FleetSignedDocument;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestRecord {
-  readonly id: string;
-  readonly draftId: string;
-  readonly definitionDigest: string;
-  readonly deviceId: string;
-  readonly state: BuilderTestState;
-  readonly revision: number;
-  readonly createdAtUnixMs: number;
-  readonly expiresAtUnixMs: number;
-  readonly attempt: number;
-  readonly leaseId: string;
-  readonly exampleIndex: number;
-  readonly error?: ErrorCode;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestRequest {
-  readonly id: string;
-  readonly draftId: string;
-  readonly expectedRevision: number;
-  readonly deviceId: string;
-  readonly exampleIndex: number;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestResult {
-  readonly jobId: string;
-  readonly leaseId: string;
-  readonly definitionDigest: string;
-  readonly success: boolean;
-  readonly error?: ErrorCode;
-}
-export type BuilderTestState = "QUEUED" | "RUNNING" | "PASSED" | "FAILED" | "EXPIRED";
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface BuilderTestTask {
-  readonly formatVersion: number;
-  readonly tenantId: string;
-  readonly serverId: string;
-  readonly deviceId: string;
-  readonly job: BuilderTestRecord;
-  readonly definition: BuilderDefinition;
-  readonly expiresAtUnixMs: number;
-}
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinInvocation {
-  readonly toolId: string;
-  readonly arguments: Record<string, unknown>;
-}
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinIpcRequest {
-  readonly protocolVersion: number;
-  readonly requestId: string;
-  readonly operation: BuiltinOperation;
-  readonly invocation?: BuiltinInvocation;
-  readonly agentId?: string;
-}
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinIpcResponse {
-  readonly requestId: string;
-  readonly tools?: ReadonlyArray<BuiltinToolInfo>;
-  readonly output?: Record<string, unknown>;
-  readonly error?: ErrorCode;
-}
-export type BuiltinOperation = "CATALOG" | "CALL";
-/** Fixed service tool boundary; validate schema before use. */
-export interface BuiltinToolInfo {
-  readonly toolId: string;
-  readonly action: string;
-  readonly description: string;
-  readonly enabled: boolean;
-  readonly inputSchema: Record<string, unknown>;
-  readonly toolDigest: string;
-  readonly packageDigest: string;
 }
 /** Strict JWS protected header; no remote or embedded keys and no algorithm negotiation. */
 export interface BundleHeader {
@@ -156,6 +36,10 @@ export interface BundlePublishRequest {
   readonly graceMs: number;
   readonly gracePolicyIds?: ReadonlyArray<string>;
   readonly rollbackOf?: number;
+}
+/** Durable caller-scoped cancellation acknowledgement. */
+export interface CancellationAccepted {
+  readonly cancelled: boolean;
 }
 /** Bounded redacted device activity for OS-authenticated local status inspection. */
 export interface ClientActivity {
@@ -194,7 +78,7 @@ export interface ClientDiscovery {
   readonly expiresAtUnixMs: number;
   readonly issuerCertificatePem: string;
 }
-/** Fixed service tool boundary; validate schema before use. */
+/** Local tool boundary for signed managed registrations; validate schema before use. */
 export interface ClientDownloadArtifact {
   readonly platform: ClientPlatform;
   readonly target: string;
@@ -202,7 +86,7 @@ export interface ClientDownloadArtifact {
   readonly sha256: string;
   readonly bytes: number;
 }
-/** Fixed service tool boundary; validate schema before use. */
+/** Local tool boundary for signed managed registrations; validate schema before use. */
 export interface ClientDownloadManifest {
   readonly version: string;
   readonly artifacts: ReadonlyArray<ClientDownloadArtifact>;
@@ -239,12 +123,12 @@ export interface ClientInstallerArtifact {
   readonly sha256: string;
   readonly bytes: number;
 }
-/** Fixed service tool boundary; validate schema before use. */
+/** Local tool boundary for signed managed registrations; validate schema before use. */
 export interface ClientInstallerManifest {
   readonly version: string;
   readonly artifacts: ReadonlyArray<ClientInstallerArtifact>;
 }
-export type ClientIpcOperation = "HEALTH" | "ENROLL" | "CHECK_IN" | "ACTIVITY";
+export type ClientIpcOperation = "HEALTH" | "ENROLL" | "CHECK_IN" | "ACTIVITY" | "POWER_ON" | "POWER_OFF";
 /** Endpoint identity foundation wire model. */
 export interface ClientIpcRequest {
   readonly protocolVersion: number;
@@ -259,6 +143,7 @@ export interface ClientIpcResponse {
   readonly error?: ErrorCode;
   readonly activity?: ClientActivity;
   readonly connections?: ReadonlyArray<ClientGatewayConnection>;
+  readonly power?: DevicePower;
 }
 export type ClientPlatform = "WINDOWS" | "LINUX" | "MACOS";
 /** Batched report of device inventory and applied desired revision. */
@@ -267,8 +152,9 @@ export interface ClientReport {
   readonly clientVersion: string;
   readonly appliedRevision: number;
   readonly packages: ReadonlyArray<ReportedPackage>;
+  readonly power?: DevicePower;
 }
-export type ClientSocketOperation = "CHECK_IN" | "AUTHORIZE" | "RESULT" | "BUILDER_POLL" | "BUILDER_RESULT";
+export type ClientSocketOperation = "CHECK_IN" | "AUTHORIZE" | "RESULT";
 /** Correlated status and response; body is validated again as the expected response contract. */
 export interface ClientSocketReply {
   readonly requestId: string;
@@ -280,6 +166,36 @@ export interface ClientSocketRequest {
   readonly requestId: string;
   readonly operation: ClientSocketOperation;
   readonly body?: Record<string, unknown>;
+}
+/** A short-lived server challenge bound to a verified console session and device key. */
+export interface ConsoleDeviceChallenge {
+  readonly nonce: string;
+  readonly deviceId: string;
+  readonly keyFingerprint: string;
+  readonly expiresAtUnixMs: number;
+}
+/** Exactly one enrollment code or existing device identifier for establishing console device context. */
+export interface ConsoleDeviceLookup {
+  readonly userCode?: string;
+  readonly deviceId?: string;
+}
+/** Device-key signature over the domain-separated console challenge nonce. */
+export interface ConsoleDeviceProof {
+  readonly nonce: string;
+  readonly deviceId: string;
+  readonly keyFingerprint: string;
+  readonly signature: string;
+}
+/** Bounded local native-client proof request for the selected console origin. */
+export interface ConsoleDeviceProofRequest {
+  readonly kind: string;
+  readonly consoleUrl: string;
+  readonly nonce: string;
+}
+/** Current-device context accepted for the authenticated console session. */
+export interface ConsoleDeviceVerified {
+  readonly deviceId: string;
+  readonly expiresAtUnixMs: number;
 }
 /** Identifies the shared contract set, independently of product versions. */
 export interface ContractSet {
@@ -358,6 +274,26 @@ export interface ControlAudit {
   readonly requestId: string;
   readonly occurredAt: string;
   readonly requestDigest: string;
+  readonly evidence?: ControlAuditEvidence;
+}
+/** Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials. */
+export interface ControlAuditEvidence {
+  readonly invocationId: string;
+  readonly mode: string;
+  readonly subjectUserId?: string;
+  readonly actorAgentId?: string;
+  readonly delegationChain?: ReadonlyArray<string>;
+  readonly workloadBindingId?: string;
+  readonly credentialKind?: string;
+  readonly toolId: string;
+  readonly operation: string;
+  readonly resources?: ReadonlyArray<string>;
+  readonly resourceCount: number;
+  readonly resourcesDigest: string;
+  readonly decision?: Decision;
+  readonly state: string;
+  readonly authorizationEpoch: number;
+  readonly policyRevision: number;
 }
 /** Cursor page of audit mutation metadata. */
 export interface ControlAuditPage {
@@ -430,7 +366,14 @@ export interface ControlDevicePage {
   readonly items: ReadonlyArray<ControlDevice>;
   readonly nextCursor?: string;
 }
-export type ControlEntityKind = "USER" | "TEAM" | "AGENT" | "TOOL" | "POLICY" | "DEVICE" | "ROLE" | "DEVICE_GROUP" | "AGENT_GROUP" | "TOOL_GROUP" | "GRANT" | "DELEGATION" | "AGENT_DELEGATION" | "BINDING" | "EXTRACTOR" | "WORKLOAD_BINDING" | "IDENTITY_BINDING" | "DEVICE_EVIDENCE";
+export type ControlEntityKind = "USER" | "TEAM" | "AGENT" | "TOOL" | "POLICY" | "DEVICE" | "ROLE" | "DEVICE_GROUP" | "AGENT_GROUP" | "TOOL_GROUP" | "GRANT" | "DELEGATION" | "AGENT_DELEGATION" | "BINDING" | "EXTRACTOR" | "WORKLOAD_BINDING" | "IDENTITY_BINDING" | "DEVICE_EVIDENCE" | "SETTINGS";
+/** Error that names what the caller must resolve; IDs only, never payloads. */
+export interface ControlErrorDetail {
+  readonly error: ControlErrorDetailCode;
+  readonly ids?: ReadonlyArray<string>;
+  readonly requestId?: string;
+}
+export type ControlErrorDetailCode = "UNRESOLVED_IDENTITIES" | "REPLACE_CONFLICTS" | "ONE_DEVICE_PER_ACCOUNT" | "REQUIRED_REVIEWS_CHANGE" | "RATE_LIMITED";
 /** Explicit Tool Group to Device Group binding; one binding is selected per invocation. */
 export interface ControlExecutionBinding {
   readonly id: string;
@@ -470,12 +413,21 @@ export interface ControlIdentityBindingPage {
   readonly items: ReadonlyArray<ControlIdentityBinding>;
   readonly nextCursor?: string;
 }
+/** How one required identity is resolved on import. MAP needs targetUserId; teamIds are added, never replaced. */
+export interface ControlIdentityResolution {
+  readonly action: ControlIdentityResolutionAction;
+  readonly targetUserId?: string;
+  readonly teamIds?: ReadonlyArray<string>;
+}
+export type ControlIdentityResolutionAction = "EXISTING" | "MAP" | "PLACEHOLDER";
 export type ControlImportMode = "MERGE" | "REPLACE";
 /** Validate and diff before applying a bounded configuration transaction. */
 export interface ControlImportRequest {
   readonly snapshot: ControlSnapshot;
   readonly mode: ControlImportMode;
   readonly dryRun: boolean;
+  readonly identityResolution?: Record<string, unknown>;
+  readonly removeUnlistedMemberships?: boolean;
 }
 /** Import validation/diff result with the current tenant revision. */
 export interface ControlImportResult {
@@ -500,6 +452,11 @@ export interface ControlPolicyPage {
   readonly items: ReadonlyArray<ControlPolicy>;
   readonly nextCursor?: string;
 }
+/** A user ID that exported records reference, with the exported teams it belonged to. IDs only. */
+export interface ControlRequiredIdentity {
+  readonly id: string;
+  readonly teamIds: ReadonlyArray<string>;
+}
 /** Reviewed immutable versioned extraction definition; changing it invalidates operation bindings. */
 export interface ControlResourceExtractor {
   readonly id: string;
@@ -513,11 +470,16 @@ export interface ControlResourceExtractor {
   readonly maxResources: number;
   readonly amountPointer?: string;
   readonly operationPointer?: string;
+  readonly locatorTemplates?: ReadonlyArray<string>;
 }
 /** Bounded canonical directory cursor page. */
 export interface ControlResourceExtractorPage {
   readonly items: ReadonlyArray<ControlResourceExtractor>;
   readonly nextCursor?: string;
+}
+/** Configuration review threshold in force for new changes. */
+export interface ControlReviewPolicy {
+  readonly requiredReviews: number;
 }
 /** Typed role assigned only to compatible groups. Management rules cannot confer runtime access. */
 export interface ControlRole {
@@ -557,6 +519,10 @@ export interface ControlSnapshot {
   readonly workloadBindings: ReadonlyArray<ControlWorkloadBinding>;
   readonly identityBindings: ReadonlyArray<ControlIdentityBinding>;
   readonly deviceEvidence: ReadonlyArray<ControlDeviceEvidence>;
+  readonly settings?: V2.ControlServerSettingsPatch;
+  readonly requiredIdentities?: ReadonlyArray<ControlRequiredIdentity>;
+  readonly visitorPool?: ControlVisitorPool;
+  readonly reservedRecords?: number;
 }
 /** Tenant-scoped teams configuration record. Not a runtime credential or policy grant. */
 export interface ControlTeam {
@@ -607,11 +573,23 @@ export interface ControlUser {
   readonly name: string;
   readonly enabled: boolean;
   readonly revision: number;
+  readonly email?: string;
+  readonly showOnLogin?: boolean;
+  readonly claims?: Record<string, unknown>;
 }
 /** Cursor page; nextCursor is absent after the last item. */
 export interface ControlUserPage {
   readonly items: ReadonlyArray<ControlUser>;
   readonly nextCursor?: string;
+}
+/** Quickstart demo account pool, read only at install. Never stored as directory records. */
+export interface ControlVisitorPool {
+  readonly prefix: string;
+  readonly teamId: string;
+  readonly agentGroupId: string;
+  readonly delegationId?: string;
+  readonly claims?: Record<string, unknown>;
+  readonly passClaims?: Record<string, unknown>;
 }
 /** Individual identity binding is authentication only; permissions derive from Agent Groups. */
 export interface ControlWorkloadBinding {
@@ -630,11 +608,24 @@ export interface ControlWorkloadBinding {
   readonly delegatedUserId?: string;
   readonly parentBindingId?: string;
   readonly delegatedSessionEpoch?: number;
+  readonly passClaims?: Record<string, unknown>;
+  readonly needsReauthorization?: boolean;
 }
 /** Bounded canonical directory cursor page. */
 export interface ControlWorkloadBindingPage {
   readonly items: ReadonlyArray<ControlWorkloadBinding>;
   readonly nextCursor?: string;
+}
+/** Updated binding and the Gateway request context to install with the token; bindingId is the execution binding the agent's grants select, when exactly one does. */
+export interface ControlWorkloadCredentialResult {
+  readonly binding: ControlWorkloadBinding;
+  readonly context: V2.RequestContext;
+}
+/** Installs a new static token hash; delegated bindings are rebound to their user's current session epoch. */
+export interface ControlWorkloadCredentialRotation {
+  readonly credentialSha256: string;
+  readonly enable: boolean;
+  readonly bindingId?: string;
 }
 export type Decision = "ALLOW" | "ASK" | "BLOCK";
 /** Organization assignment with independent Marketplace evidence; grants no runtime permission. */
@@ -652,6 +643,22 @@ export interface DesiredState {
   readonly revision: number;
   readonly assignments: ReadonlyArray<DeploymentAssignment>;
 }
+/** Operator-collected Docker deployment details for display only; never enrollment, permission or trusted network evidence. */
+export interface DeviceDeploymentMetadata {
+  readonly executionKind: DeviceExecutionKind;
+  readonly containerId: string;
+  readonly containerName: string;
+  readonly systemName: string;
+  readonly networkId: string;
+  readonly networkName: string;
+  readonly ipAddress: string;
+}
+/** Public deployment details attached only to an already visible enrolled device. */
+export interface DeviceDeploymentRecord {
+  readonly deviceId: string;
+  readonly deployment: DeviceDeploymentMetadata;
+}
+export type DeviceExecutionKind = "ENDPOINT_CLIENT" | "TOOL_HOST_DIRECT" | "TOOL_HOST_PULL";
 /** Endpoint identity foundation wire model. */
 export interface DeviceIdentity {
   readonly deviceId: string;
@@ -662,6 +669,7 @@ export interface DeviceIdentity {
   readonly issuerCertificatePem: string;
   readonly expiresAtUnixMs: number;
 }
+export type DevicePower = "ON" | "OFF";
 /** Authenticated device adoption metadata. No owner or per-agent permission cache; discovery and effects require current online authority. */
 export interface EndpointAdoption {
   readonly serverId: string;
@@ -682,26 +690,34 @@ export interface EndpointCheckIn {
   readonly sequence: number;
   readonly report: ClientReport;
   readonly adoptionDigest?: string;
-  readonly localTools?: ReadonlyArray<BuiltinToolInfo>;
+  readonly localTools?: ReadonlyArray<LocalToolInfo>;
 }
 /** Endpoint identity foundation wire model. */
 export interface EndpointCheckInAck {
   readonly deviceId: string;
   readonly sequence: number;
   readonly serverTimeUnixMs: number;
-  readonly nextIntervalSeconds: number;
-  readonly nextIntervalMs?: number;
+  readonly nextIntervalMs: number;
   readonly identity?: DeviceIdentity;
   readonly adoption?: EndpointAdoption;
   readonly task?: RemoteToolTask;
   readonly serverName?: string;
 }
-/** Endpoint identity foundation wire model. */
+export type EndpointConnectionAction = "ENROLL" | "CHECK_IN" | "WAIT";
+/** Server-authoritative response to a device presence ping; presence never grants tool access. */
+export interface EndpointConnectionDirective {
+  readonly deviceId: string;
+  readonly state: EndpointState;
+  readonly action: EndpointConnectionAction;
+  readonly reportSequence: number;
+  readonly nextIntervalMs: number;
+}
+/** Endpoint identity foundation wire model. keyFingerprint is returned only to callers who may approve through a group rule. */
 export interface EndpointDeviceRecord {
   readonly deviceId: string;
   readonly tenantId: string;
   readonly userId: string;
-  readonly keyFingerprint: string;
+  readonly keyFingerprint?: string;
   readonly state: EndpointState;
   readonly revision: number;
   readonly lastSeenUnixMs: number;
@@ -735,6 +751,18 @@ export interface EndpointEnrollmentDecision {
   readonly connectionExpiresAtUnixMs?: number;
   readonly unlimitedConnection?: boolean;
 }
+/** Look up one pending enrollment by the code its client shows. */
+export interface EndpointEnrollmentLookup {
+  readonly userCode: string;
+}
+/** The pending enrollment a valid code names, for comparison with the client before approval. */
+export interface EndpointEnrollmentLookupResult {
+  readonly enrollmentId: string;
+  readonly deviceId: string;
+  readonly platform: ClientPlatform;
+  readonly keyFingerprint: string;
+  readonly expiresAtUnixMs: number;
+}
 /** All unexpired pending requests in the authenticated tenant; enrollment quota is 32. */
 export interface EndpointEnrollmentPage {
   readonly items: ReadonlyArray<EndpointEnrollmentReview>;
@@ -759,13 +787,13 @@ export interface EndpointEnrollmentResult {
   readonly identity?: DeviceIdentity;
   readonly serverName?: string;
 }
-/** Endpoint identity foundation wire model. */
+/** Endpoint identity foundation wire model. userCode and keyFingerprint are returned only to callers who may approve through a group rule. */
 export interface EndpointEnrollmentReview {
   readonly enrollmentId: string;
-  readonly userCode: string;
+  readonly userCode?: string;
   readonly deviceId: string;
   readonly platform: ClientPlatform;
-  readonly keyFingerprint: string;
+  readonly keyFingerprint?: string;
   readonly state: EnrollmentState;
   readonly expiresAtUnixMs: number;
   readonly connectionExpiresAtUnixMs?: number;
@@ -779,22 +807,30 @@ export interface EndpointEnrollmentStart {
   readonly csrPem: string;
   readonly capabilities: ReadonlyArray<string>;
 }
-/** Directory identity, enrolled approval and pending request combined for administrative management. */
+/** Directory identity, enrolled approval and pending request with server-resolved target permissions. */
 export interface EndpointManagedDevice {
   readonly deviceId: string;
-  readonly systemExecutor: boolean;
   readonly directoryDevice?: ControlDevice;
   readonly endpointDevice?: EndpointDeviceRecord;
   readonly enrollment?: EndpointEnrollmentReview;
   readonly registeredUser?: ControlUser;
-  readonly systemExecutorKind?: SystemExecutorKind;
-  readonly systemAvailable?: boolean;
   readonly systemName?: string;
   readonly ipAddress?: string;
+  readonly permissions?: ReadonlyArray<string>;
+}
+/** Opt-in administrative deployment view. Default device responses retain their existing closed schema. */
+export interface EndpointManagedDeviceDeploymentPage {
+  readonly items: ReadonlyArray<EndpointManagedDevice>;
+  readonly deployments?: ReadonlyArray<DeviceDeploymentRecord>;
 }
 /** All directory devices plus pending requests within the existing directory and enrollment quotas. */
 export interface EndpointManagedDevicePage {
   readonly items: ReadonlyArray<EndpointManagedDevice>;
+}
+/** Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling. */
+export interface EndpointPresencePing {
+  readonly announcement: EndpointEnrollmentStart;
+  readonly utcOffset: string;
 }
 /** Endpoint identity foundation wire model. */
 export interface EndpointRevokeRequest {
@@ -1030,6 +1066,7 @@ export interface EnterpriseInvocation {
   readonly downstreamIdempotencyKey?: string;
   readonly resultDigest?: string;
   readonly diagnosticId: string;
+  readonly reconciliation?: ReconciliationMethod;
 }
 /** Scoped durable effect states. A cursor does not disclose hidden rows. */
 export interface EnterpriseInvocationPage {
@@ -1043,15 +1080,17 @@ export interface EnterpriseInvocationRequest {
   readonly toolDigest: string;
   readonly packageDigest: string;
   readonly downstreamIdempotencyKey?: string;
+  readonly executionContext?: V2.ExecutionContext;
 }
 export type EnterpriseInvocationState = "PENDING_APPROVAL" | "QUEUED" | "RESERVED" | "DISPATCHED" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "PARTIAL" | "OUTCOME_UNKNOWN";
-/** Management grants belong to group-assigned Management Roles only. */
+/** Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected. */
 export interface EnterpriseManagementRule {
   readonly actions: ReadonlyArray<string>;
   readonly groupType: EnterpriseGroupType;
   readonly groups: GroupSelection;
   readonly grantableScopes: ReadonlyArray<EnterpriseScope>;
   readonly conditions: EnterpriseConditions;
+  readonly deviceScope?: string;
 }
 export type EnterpriseMemberType = "USER" | "AGENT" | "TOOL" | "DEVICE";
 /** Scoped operational health and configured hard bounds. Snapshot lag never authorizes a cached effect. */
@@ -1249,7 +1288,7 @@ export interface EnterpriseWitness {
   readonly bindingId: string;
   readonly provenance: ReadonlyArray<string>;
 }
-export type ErrorCode = "VALIDATION" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "DEPENDENCY_UNAVAILABLE" | "TIMEOUT" | "INTERNAL" | "UNSUPPORTED";
+export type ErrorCode = "VALIDATION" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "DEPENDENCY_UNAVAILABLE" | "TIMEOUT" | "INTERNAL" | "UNSUPPORTED" | "TENANT_MISMATCH" | "TENANT_UNAVAILABLE" | "MISDIRECTED_REQUEST" | "INVALID_TENANT_ID";
 /** Machine-readable error without exception text or caller-controlled detail. */
 export interface ErrorEnvelope {
   readonly code: ErrorCode;
@@ -1420,6 +1459,7 @@ export interface InstalledAuthorizationProfile {
   readonly tool: ControlTool;
   readonly extractor: ControlResourceExtractor;
 }
+export type LocalFileAccess = "NONE" | "READ" | "WRITE";
 /** Bounded per-service execution counters and sandbox state. */
 export interface LocalRuntimeHealth {
   readonly ready: boolean;
@@ -1441,7 +1481,7 @@ export interface LocalRuntimeIpcResponse {
   readonly result?: LocalToolOutput;
   readonly error?: ErrorCode;
 }
-export type LocalRuntimeKind = "NATIVE" | "PYTHON" | "NODE" | "POWERSHELL" | "BATCH" | "SHELL" | "JAVA_JAR" | "DOTNET" | "WASM";
+export type LocalRuntimeKind = "JAVA_SDK" | "PYTHON_SDK";
 /** Bounded local sandbox budget; limits never grant host access. */
 export interface LocalRuntimeLimits {
   readonly timeoutMs: number;
@@ -1458,9 +1498,24 @@ export interface LocalRuntimeStatus {
   readonly state: LocalRuntimeState;
   readonly version: string;
 }
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolCall {
+  readonly toolId: string;
+  readonly arguments: Record<string, unknown>;
+}
 /** Only enabled local definitions applicable to this verified agent and device. */
 export interface LocalToolCatalog {
-  readonly tools: ReadonlyArray<BuiltinToolInfo>;
+  readonly tools: ReadonlyArray<LocalToolInfo>;
+}
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolInfo {
+  readonly toolId: string;
+  readonly action: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly inputSchema: Record<string, unknown>;
+  readonly toolDigest: string;
+  readonly packageDigest: string;
 }
 /** One JSON stdin document; arguments never become process command strings. */
 export interface LocalToolInput {
@@ -1469,6 +1524,22 @@ export interface LocalToolInput {
   readonly toolId: string;
   readonly arguments: Record<string, unknown>;
 }
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolIpcRequest {
+  readonly protocolVersion: number;
+  readonly requestId: string;
+  readonly operation: LocalToolOperation;
+  readonly invocation?: LocalToolCall;
+  readonly agentId?: string;
+}
+/** Local tool boundary for signed managed registrations; validate schema before use. */
+export interface LocalToolIpcResponse {
+  readonly requestId: string;
+  readonly tools?: ReadonlyArray<LocalToolInfo>;
+  readonly output?: Record<string, unknown>;
+  readonly error?: ErrorCode;
+}
+export type LocalToolOperation = "CATALOG" | "CALL";
 /** One bounded JSON stdout document; request binding and output schema are verified. */
 export interface LocalToolOutput {
   readonly protocolVersion: number;
@@ -1484,13 +1555,8 @@ export interface LocalToolRegistration {
   readonly inputSchema: Record<string, unknown>;
   readonly outputSchema: Record<string, unknown>;
   readonly limits: LocalRuntimeLimits;
-  readonly source?: LocalToolSource;
   readonly authorizationProfile: InstalledAuthorizationProfile;
-}
-/** Canonical bounded authoring protocol; declarations never grant execution privileges. */
-export interface LocalToolSource {
-  readonly code: string;
-  readonly sha256: string;
+  readonly fileAccess?: LocalFileAccess;
 }
 /** Administrator-selected immutable tool/runtime image; runtime provisioning is not execution authorization. */
 export interface ManagedRuntime {
@@ -1523,6 +1589,7 @@ export interface PackageManifest {
   readonly compatibility: PackageCompatibility;
 }
 export type PackageState = "ABSENT" | "STAGING" | "READY" | "FAILED" | "REVOKED";
+export type ReconciliationMethod = "DOWNSTREAM_IDEMPOTENCY" | "STATUS_LOOKUP" | "MANUAL";
 /** A leased client rechecks the exact pending operation online before execution. */
 export interface RemoteToolAuthorization {
   readonly requestId: string;
@@ -1575,6 +1642,8 @@ export interface RemoteToolSubmission {
   readonly expiresAtUnixMs: number;
   readonly context: V2.RequestContext;
   readonly invocationId: string;
+  readonly traceparent?: string;
+  readonly executionContext?: V2.ExecutionContext;
 }
 /** Bounded lease delivered only over device-authenticated polling; executable definitions are never accepted from an agent. */
 export interface RemoteToolTask {
@@ -1584,6 +1653,9 @@ export interface RemoteToolTask {
   readonly expiresAtUnixMs: number;
   readonly invocation: EnterpriseInvocation;
   readonly permit: EnterpriseSignedPermit;
+  readonly traceparent?: string;
+  readonly executionContext?: V2.ExecutionContext;
+  readonly collectSpans?: boolean;
 }
 /** Observed package state, distinct from assigned desired state. */
 export interface ReportedPackage {
@@ -1597,8 +1669,126 @@ export interface ResourceDescriptor {
   readonly locator: string;
 }
 export type ResourceKind = "FILE" | "URL" | "DATABASE" | "DEVICE" | "CUSTOM";
+/** Pinned package build and fenced worker lease; artifacts confer no runtime authority. */
+export interface SdkBuilderBuild {
+  readonly id: string;
+  readonly draftId: string;
+  readonly draftRevision: number;
+  readonly toolGroupId: string;
+  readonly source: string;
+  readonly sourceDigest: string;
+  readonly creatorUserId: string;
+  readonly state: SdkBuilderState;
+  readonly revision: number;
+  readonly createdAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly leaseId: string;
+  readonly artifactDigest?: string;
+  readonly sourceArchiveDigest?: string;
+  readonly packageDigest?: string;
+  readonly error?: SdkBuilderError;
+}
+/** Authorized immutable SDK package builds. */
+export interface SdkBuilderBuildPage {
+  readonly items: ReadonlyArray<SdkBuilderBuild>;
+  readonly nextCursor?: string;
+}
+/** Queue an immutable project revision for the shared SDK worker. */
+export interface SdkBuilderBuildRequest {
+  readonly id: string;
+  readonly draftId: string;
+  readonly expectedRevision: number;
+}
+/** Canonical JSON SDK source project at an optimistic revision; no executable registration. */
+export interface SdkBuilderDraft {
+  readonly id: string;
+  readonly revision: number;
+  readonly toolGroupId: string;
+  readonly source: string;
+  readonly sourceDigest: string;
+}
+/** Authorized SDK source projects. */
+export interface SdkBuilderDraftPage {
+  readonly items: ReadonlyArray<SdkBuilderDraft>;
+  readonly nextCursor?: string;
+}
+export type SdkBuilderError = "BUILD_FAILED" | "AUTHORITY_REVOKED" | "EXPIRED" | "VERSION_CONFLICT";
+/** Minimal authoring context filtered by current Builder permissions, without Tool Group membership data. */
+export interface SdkBuilderGroup {
+  readonly id: string;
+  readonly name: string;
+  readonly canBuild: boolean;
+}
+/** Save a canonical SDK source revision in an authorized Tool Group. */
+export interface SdkBuilderSave {
+  readonly id: string;
+  readonly expectedRevision: number;
+  readonly toolGroupId: string;
+  readonly source: string;
+}
+/** The canonical JSON SDK project read from an uploaded source ZIP; nothing is saved until the project is saved as a draft. */
+export interface SdkBuilderSource {
+  readonly source: string;
+  readonly sourceDigest: string;
+}
+export type SdkBuilderState = "QUEUED" | "RUNNING" | "READY" | "FAILED";
+/** Configured SDK and current authorized authoring contexts; availability grants no authority. */
+export interface SdkBuilderStatus {
+  readonly sdkVersion: string;
+  readonly configured: boolean;
+  readonly maxSourceCharacters: number;
+  readonly groups: ReadonlyArray<SdkBuilderGroup>;
+}
 export type SecretReference = string;
 export type SemanticVersion = string;
+export type ServiceAudience = "olo-memory" | "olo-rag";
+/** Coalesced tenant revocation feed snapshot. Services fail closed if polling becomes stale. */
+export interface ServiceAuthorizationEpoch {
+  readonly tenantId: string;
+  readonly authorizationEpoch: number;
+  readonly observedAtUnixMs: number;
+}
+/** Purpose-specific signed downstream authorization. */
+export interface ServicePermit {
+  readonly jws: string;
+}
+/** Control-issued exact-request authorization for a downstream service; times are Unix milliseconds. */
+export interface ServicePermitClaims {
+  readonly iss: string;
+  readonly aud: ServiceAudience;
+  readonly tenantId: string;
+  readonly sub: string;
+  readonly act?: string;
+  readonly mode: V2.RequestMode;
+  readonly operation: string;
+  readonly resources: ReadonlyArray<ResourceDescriptor>;
+  readonly requestFingerprint: string;
+  readonly executorKeySha256: string;
+  readonly invocationId: string;
+  readonly nonce: string;
+  readonly authorizationEpoch: number;
+  readonly iat: number;
+  readonly exp: number;
+  readonly executionNonce: string;
+}
+/** Single-use downstream write permit was consumed under current authority. */
+export interface ServicePermitConsumed {
+  readonly authorized: boolean;
+}
+/** Service compares these request facts before its write, then consumes the nonce online. */
+export interface ServicePermitConsumption {
+  readonly permit: ServicePermit;
+  readonly operation: string;
+  readonly resources: ReadonlyArray<ResourceDescriptor>;
+  readonly requestFingerprint: string;
+  readonly executorKeySha256: string;
+}
+/** Executor request for downstream authorization; scope comes exclusively from the admitted invocation. */
+export interface ServicePermitIssue {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly audience: ServiceAudience;
+}
 export type Sha256 = string;
 /** Endpoint identity foundation wire model. */
 export interface SignedClientDiscovery {
@@ -1609,7 +1799,6 @@ export interface SignedClientDiscovery {
 export interface SignedPolicyBundle {
   readonly jws: string;
 }
-export type SystemExecutorKind = "BUILTINS" | "HOTFOLDER" | "REST_FORWARDING";
 /** Named operation and declared resource kinds. */
 export interface ToolAction {
   readonly name: string;
@@ -1623,7 +1812,8 @@ export interface ToolDefinition {
   readonly actions: ReadonlyArray<ToolAction>;
   readonly inputSchema: Record<string, unknown>;
   readonly outputSchema: Record<string, unknown>;
+  readonly reconciliation?: ReconciliationMethod;
 }
 export type UserRole = "BASIC" | "ADMINISTRATOR" | "SUPER_ADMIN";
-export const CONTRACT_SET_VERSION = "1.0.0" as const;
+export const CONTRACT_SET_VERSION = "0.10.0-dev" as const;
 export const CONTRACT_SET_NAME = "olo-toolgate-contracts" as const;

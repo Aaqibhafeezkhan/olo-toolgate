@@ -38,25 +38,23 @@ class Gateway:
                 if name == self.omit_tool:
                     continue
                 properties = {}
-                if name in {'hotfolder.read_text', 'hotfolder.write_text'}:
+                if name in {'examples.hotfolder/read_text', 'examples.hotfolder/write_text'}:
                     properties['path'] = {'type': 'string'}
-                if name == 'hotfolder.write_text':
+                if name == 'examples.hotfolder/write_text':
                     properties['text'] = {'type': 'string'}
                 tools.append(dict(name=name, description='Example ' + name, inputSchema={
                     'type': 'object', 'properties': properties,
                     'required': list(properties), 'additionalProperties': False}))
             return {'tools': tools}
         name, arguments = params['name'], params['arguments']
-        if name == 'hotfolder.list':
+        if name == 'examples.hotfolder/list':
             result = {'paths': list(self.files)}
-        elif name == 'hotfolder.read_text':
+        elif name == 'examples.hotfolder/read_text':
             result = {'text': self.files[arguments['path']]}
-        elif name == 'hotfolder.write_text':
+        elif name == 'examples.hotfolder/write_text':
             if self.success:
                 self.files[arguments['path']] = 'wrong' if self.corrupt_write else arguments['text']
-            result = {'success': self.success}
-        elif name == 'client.read_log_entry':
-            result = {'file': 'packets.jsonl', 'entry': {'direction': 'OUT'}}
+            result = {'written': self.success}
         else:
             raise AssertionError('Unrelated tool must not execute')
         return {'structuredContent': result}
@@ -85,11 +83,11 @@ def tool_message(name, arguments):
 
 def model():
     return ScriptedModel(responses=[
-        tool_message('hotfolder_list', {}),
-        tool_message('hotfolder_read_text', {'path': 'support-tickets.json'}),
-        tool_message('hotfolder_write_text', {'path': 'support-triage.md',
+        tool_message('examples_hotfolder_list', {}),
+        tool_message('examples_hotfolder_read_text', {'path': 'support-tickets.json'}),
+        tool_message('examples_hotfolder_write_text', {'path': 'support-triage.md',
                                             'text': '# Fictional support triage\nDEMO-101: investigate.'}),
-        tool_message('hotfolder_read_text', {'path': 'support-triage.md'}),
+        tool_message('examples_hotfolder_read_text', {'path': 'support-triage.md'}),
         AIMessage(content='Report written and checked.'),
     ])
 
@@ -101,24 +99,24 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(agent.run(gateway, 'tickets', model()), 'support-triage.md')
         self.assertIn('Verified report', output.getvalue())
         self.assertEqual([params['name'] for method, params in gateway.calls if method == 'tools/call'],
-                         ['hotfolder.list', 'hotfolder.read_text', 'hotfolder.write_text',
-                          'hotfolder.read_text', 'hotfolder.read_text'])
+                         ['examples.hotfolder/list', 'examples.hotfolder/read_text', 'examples.hotfolder/write_text',
+                          'examples.hotfolder/read_text', 'examples.hotfolder/read_text'])
 
     def test_scope_rejects_unrelated_reads_and_writes_before_gateway(self):
         gateway = Gateway()
         tools = agent.tools_for(gateway, {'support-tickets.json'}, 'support-triage.md')
         self.assertEqual(set(tools), agent.TOOLS)
-        self.assertIn('Read only', tools['hotfolder.read_text'].invoke({'path': 'private.txt'}))
-        self.assertIn('Write only', tools['hotfolder.write_text'].invoke({'path': 'private.txt', 'text': 'overwrite'}))
-        self.assertEqual(tools['hotfolder.read_text'].args_schema['properties']['path']['enum'],
+        self.assertIn('Read only', tools['examples.hotfolder/read_text'].invoke({'path': 'private.txt'}))
+        self.assertIn('Write only', tools['examples.hotfolder/write_text'].invoke({'path': 'private.txt', 'text': 'overwrite'}))
+        self.assertEqual(tools['examples.hotfolder/read_text'].args_schema['properties']['path']['enum'],
                          ['support-tickets.json'])
-        self.assertEqual(tools['hotfolder.write_text'].args_schema['properties']['path']['enum'],
+        self.assertEqual(tools['examples.hotfolder/write_text'].args_schema['properties']['path']['enum'],
                          ['support-triage.md'])
         self.assertEqual(len(gateway.calls), 1)
 
     def test_missing_current_grant_stops_before_model_or_effects(self):
         gateway = Gateway()
-        gateway.omit_tool = 'hotfolder.write_text'
+        gateway.omit_tool = 'examples.hotfolder/write_text'
         with self.assertRaisesRegex(ValueError, 'target must expose'):
             agent.run(gateway, 'tickets', model())
         self.assertEqual(len(gateway.calls), 1)
@@ -126,7 +124,7 @@ class AgentTests(unittest.TestCase):
     def test_model_can_correct_a_rejected_path_without_unrelated_gateway_access(self):
         gateway = Gateway()
         selected = model()
-        selected.responses.insert(0, tool_message('hotfolder_read_text', {'path': 'private.txt'}))
+        selected.responses.insert(0, tool_message('examples_hotfolder_read_text', {'path': 'private.txt'}))
         with contextlib.redirect_stdout(io.StringIO()):
             agent.run(gateway, 'tickets', selected)
         self.assertTrue(all(params['arguments'].get('path') != 'private.txt'
@@ -152,7 +150,7 @@ class AgentTests(unittest.TestCase):
         writes = []
         tools = agent.tools_for(gateway, writes=writes)
         with self.assertRaisesRegex(ValueError, 'did not confirm'):
-            tools['hotfolder.write_text'].invoke({'path': 'report.md', 'text': 'data'})
+            tools['examples.hotfolder/write_text'].invoke({'path': 'report.md', 'text': 'data'})
         self.assertEqual(writes, [])
 
     def test_smoke_exercises_device_operations_without_model(self):
@@ -181,7 +179,7 @@ class OpenRouterTests(unittest.TestCase):
             self.assertEqual(body['model'], 'openrouter/free')
             self.assertTrue(body['provider']['require_parameters'])
             self.assertEqual({item['function']['name'] for item in body['tools']},
-                             {name.replace('.', '_') for name in agent.TOOLS})
+                             {name.replace('.', '_').replace('/', '_') for name in agent.TOOLS})
             message = responses[len(requests)]
             requests.append(body)
             calls = [{'id': call['id'], 'type': 'function', 'function': {

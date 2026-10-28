@@ -1,32 +1,19 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: quickstart
-on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, edited]
-  push:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      comment:
-        description: "Trigger comment must start with RC:"
-        type: string
-        required: true
-      publish:
-        description: Publish the tested image from the matching version tag
-        type: boolean
-        default: false
+'on':
+  workflow_call: null
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
   group: quickstart-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   admission:
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/admission.yml
     with:
-      comment: ${{ inputs.comment || '' }}
       main_only: true
   preflight:
     needs: admission
@@ -35,12 +22,12 @@ jobs:
   clients:
     needs: preflight
     uses: ./.github/workflows/client.yml
-    with:
-      comment: ${{ inputs.comment || '' }}
   image:
     needs: clients
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    env:
+      RUSTUP_HOME: /tmp/toolgate-quickstart-rustup
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -59,10 +46,10 @@ jobs:
           path: deploy/client-assets/release
       - name: Install isolated pinned Rust toolchain
         env:
-          RUSTUP_HOME: ${{ runner.temp }}/toolgate-quickstart-rustup
+          RUSTUP_HOME: /tmp/toolgate-quickstart-rustup
         run: |
           rustup show
-          printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+
       - name: Contracts, unit tests and SQLite upgrade
         run: |
           python -m pip install -r tools/requirements.txt
@@ -81,73 +68,64 @@ jobs:
           python tools/ui/package.py
           docker run --rm -e PYTHONPATH=/opt/quickstart --entrypoint /opt/quickstart-python/bin/python -v "$PWD:/work:ro" -w /work olo-toolgate-quickstart:module11 -m unittest discover -s tests/quickstart -v
           python tools/quickstart/check.py --image olo-toolgate-quickstart:module11 --postgresql --no-browser
+          python tools/tenancy/check.py --image olo-toolgate-quickstart:module11 --output build/quickstart/tenant-runtime-evidence.json
+          python tools/tenancy/check.py --postgresql --image olo-toolgate-quickstart:module11 --output build/quickstart/tenant-postgresql-runtime-evidence.json
+          python tools/tenancy/deployment_check.py --image olo-toolgate-quickstart:module11
+          TOOLGATE_TENANT_RUNTIME_EVIDENCE="$PWD/build/quickstart/tenant-runtime-evidence.json" cargo test --locked -p olo-toolgate-tenant-identity --test runtime_cutover -- --ignored
+          TOOLGATE_TENANT_RUNTIME_EVIDENCE="$PWD/build/quickstart/tenant-postgresql-runtime-evidence.json" cargo test --locked -p olo-toolgate-tenant-identity --test runtime_cutover -- --ignored
           python tools/check.py --scans
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-quickstart:module11
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/quickstart:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/quickstart-sbom.cdx.json olo-toolgate-quickstart:module11
           python tools/ui/merge_sbom.py --image-sbom build/quickstart/quickstart-sbom.cdx.json
           docker save olo-toolgate-quickstart:module11 -o build/quickstart/image.tar
           cp CHANGELOG.md docs/deployment/quickstart.md build/quickstart/
-          (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json > SHA256SUMS)
+          (cd build/quickstart && sha256sum image.tar quickstart-sbom.cdx.json tenant-runtime-evidence.json tenant-postgresql-runtime-evidence.json sqlite-recovery-evidence.json > SHA256SUMS)
+      - name: Build and verify the matching Linux device image
+        run: |
+          docker build -f apps/device/Dockerfile --build-arg QUICKSTART_IMAGE=olo-toolgate-quickstart:module11 --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$GITHUB_SHA" -t olo-toolgate-device:module11 .
+          python tools/device/check.py
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-device:module11
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/device-sbom.cdx.json olo-toolgate-device:module11
+          docker save olo-toolgate-device:module11 -o build/device/image.tar
+          cp docs/deployment/device.md build/device/
+          (cd build/device && sha256sum image.tar device-sbom.cdx.json > SHA256SUMS)
+      - name: Build and verify the Gateway-only secured Linux device
+        run: |
+          docker build -f apps/device/secured.Dockerfile --build-arg DEVICE_IMAGE=olo-toolgate-device:module11 -t olo-toolgate-linux-secured-device:module11 .
+          python tools/device/secured_check.py
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-linux-secured-device:module11
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/secured_device:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/secured-device-sbom.cdx.json olo-toolgate-linux-secured-device:module11
+          docker save olo-toolgate-linux-secured-device:module11 -o build/secured_device/image.tar
+          cp docs/deployment/secured-device.md build/secured_device/
+          (cd build/secured_device && sha256sum image.tar secured-device-sbom.cdx.json > SHA256SUMS)
+      - name: LangChain native smoke on the device image being published
+        env:
+          TOOLGATE_QUICKSTART_IMAGE: olo-toolgate-quickstart:module11
+          TOOLGATE_DEVICE_IMAGE: olo-toolgate-device:module11
+          TOOLGATE_HTTP_PORT: "18091"
+          TOOLGATE_TLS_PORT: "18451"
+        working-directory: examples/langchain
+        run: |
+          trap 'docker compose down -v' EXIT
+          LOCAL_UID="$(id -u)"
+          LOCAL_GID="$(id -g)"
+          export LOCAL_UID LOCAL_GID
+          docker compose build agent
+          docker compose up -d --wait --wait-timeout 180 quickstart linux-device
+          python manage.py setup --bootstrap-local --approve-linux-device --target linux
+          docker compose run --rm -T agent --target linux --smoke
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: quickstart-evidence
           path: build/quickstart/
           if-no-files-found: error
-  publish:
-    if: startsWith(github.ref, 'refs/tags/') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.publish)
-    needs: image
-    runs-on: ubuntu-24.04
-    environment: quickstart-release
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: quickstart-evidence
-          path: build/quickstart
-      - name: Publish the exact scanned image
-        id: push
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REGISTRY_ACTOR: ${{ github.actor }}
-          RELEASE_REF: ${{ github.ref }}
-        run: |
-          version="$(cat VERSION)"
-          test "$RELEASE_REF" = "refs/tags/v${version}"
-          (cd build/quickstart && sha256sum --check SHA256SUMS)
-          docker load -i build/quickstart/image.tar
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$REGISTRY_ACTOR" --password-stdin
-          image="ghcr.io/olo-labs/olo-toolgate-quickstart:${version}"
-          docker tag olo-toolgate-quickstart:module11 "$image"
-          docker push "$image"
-          digest="$(docker inspect "$image" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
-          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+          name: device-evidence
+          path: build/device/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          subject-name: ghcr.io/olo-labs/olo-toolgate-quickstart
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
-      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: build/quickstart/quickstart-sbom.cdx.json
-      - name: Publish immutable Quickstart release evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
-        run: |
-          version="$(cat VERSION)"
-          prefix="olo-toolgate-quickstart-${version}"
-          cp build/quickstart/quickstart-sbom.cdx.json "build/quickstart/${prefix}-sbom.cdx.json"
-          cp docs/deployment/quickstart.md "build/quickstart/${prefix}-operations.md"
-          printf '%s@%s\n' "ghcr.io/olo-labs/olo-toolgate-quickstart" "$IMAGE_DIGEST" > "build/quickstart/${prefix}-image.txt"
-          (cd build/quickstart && sha256sum "${prefix}-sbom.cdx.json" "${prefix}-operations.md" "${prefix}-image.txt" > "${prefix}-SHA256SUMS")
-          if ! gh release view "v${version}"; then
-            prerelease=""
-            case "$version" in *-*) prerelease="--prerelease" ;; esac
-            gh release create "v${version}" --verify-tag $prerelease --title "OLO ToolGate ${version}" --generate-notes --notes-file RELEASE-NOTES.md
-          fi
-          gh release upload "v${version}" "build/quickstart/${prefix}-sbom.cdx.json" "build/quickstart/${prefix}-operations.md" "build/quickstart/${prefix}-image.txt" "build/quickstart/${prefix}-SHA256SUMS"
+          name: secured-device-evidence
+          path: build/secured_device/
+          if-no-files-found: error

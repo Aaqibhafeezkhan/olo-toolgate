@@ -26,6 +26,15 @@
         "resourceKinds"
       ]
     },
+    "ReconciliationMethod": {
+      "type": "string",
+      "enum": [
+        "DOWNSTREAM_IDEMPOTENCY",
+        "STATUS_LOOKUP",
+        "MANUAL"
+      ],
+      "description": "How an unknown outcome of the tool is settled (OLO M5.4)."
+    },
     "ToolDefinition": {
       "type": "object",
       "description": "Capability definition. JSON schemas are data, never executable code.",
@@ -56,6 +65,10 @@
         },
         "outputSchema": {
           "type": "object"
+        }
+,
+        "reconciliation": {
+          "$ref": "tool.schema.json#/$defs/ReconciliationMethod"
         }
       },
       "required": [

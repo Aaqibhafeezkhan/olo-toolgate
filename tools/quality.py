@@ -13,11 +13,14 @@ SECRET_PATTERNS = [
     re.compile(r'\bAKIA[0-9A-Z]{16}\b'),
     re.compile(r'\bgh[pousr]_[A-Za-z0-9]{36,}\b'),
 ]
+# Paths whose files are rewritten whole by other tools, so a header would not survive. The Drupal config that needed
+# this moved to olo-marketplace.
+EXPORTED = ()
 
 
-def violations(path, text):
+def violations(path, text, exported=False):
     problems = []
-    if path.suffix in SOURCE_SUFFIXES or path.name in ('Makefile','gradlew','gradlew.bat','gradle.properties'):
+    if not exported and (path.suffix in SOURCE_SUFFIXES or path.name in ('Makefile','gradlew','gradlew.bat','gradle.properties')):
         header = text[:600]
         if 'GENERATED FILE' not in header and not ('Copyright 2026 OLO Labs' in header and 'SPDX-License-Identifier: Apache-2.0' in header):
             problems.append('missing copyright/SPDX header')
@@ -34,7 +37,7 @@ def main():
         if not path.is_file(): continue
         try: content = path.read_text(encoding='utf-8')
         except UnicodeDecodeError: continue
-        for problem in violations(path, content):
+        for problem in violations(path, content, name.startswith(EXPORTED)):
             problems.append(f'{name}: {problem}')
     lock = json.loads((ROOT/'package-lock.json').read_text())
     allowed = {'Apache-2.0','MIT','MIT-0','CC0-1.0','BlueOak-1.0.0','BSD-2-Clause','BSD-3-Clause','ISC','0BSD'}

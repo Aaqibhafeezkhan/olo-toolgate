@@ -379,6 +379,32 @@
       }
     }
   ],
+  "MarketplaceImportRequest": [
+    {
+      "case": "version is not semantic",
+      "value": {
+        "packageId": "examples.notify",
+        "version": "latest"
+      }
+    },
+    {
+      "case": "unknown field",
+      "value": {
+        "packageId": "examples.notify",
+        "version": "0.1.0",
+        "url": "https://elsewhere.example.com/x.tgpkg"
+      }
+    }
+  ],
+  "MarketplaceStatus": [
+    {
+      "case": "plain http origin",
+      "value": {
+        "enabled": true,
+        "baseUrl": "http://marketplace.example.com"
+      }
+    }
+  ],
   "PackageEnableRequest": [
     {
       "case": "digest must be prefixed",
@@ -1966,6 +1992,1215 @@
     {
       "case": "starts with digit",
       "value": "1Key"
+    }
+  ],
+  "RunEventFrame": [
+    {
+      "case": "zero sequence",
+      "value": {
+        "sequence": 0,
+        "emittedAtUnixMs": 1,
+        "kind": "LOG",
+        "level": "info",
+        "message": "x"
+      }
+    },
+    {
+      "case": "unknown frame field",
+      "value": {
+        "sequence": 1,
+        "emittedAtUnixMs": 1,
+        "kind": "LOG",
+        "level": "info",
+        "message": "x",
+        "stdout": "raw"
+      }
+    }
+  ],
+  "RunEventBatch": [
+    {
+      "case": "missing fencing token",
+      "value": {
+        "invocationId": "inv-5",
+        "attempt": 1,
+        "events": []
+      }
+    },
+    {
+      "case": "attempt above the permit bound",
+      "value": {
+        "invocationId": "inv-5",
+        "fencingToken": "nonce-77",
+        "attempt": 17,
+        "events": []
+      }
+    }
+  ],
+  "RunEventPage": [
+    {
+      "case": "silent truncation",
+      "value": {
+        "invocationId": "inv-5",
+        "state": "SUCCEEDED",
+        "terminal": true,
+        "events": [],
+        "nextCursor": 0,
+        "more": false,
+        "droppedFrames": 0,
+        "expired": false,
+        "gaps": []
+      }
+    }
+  ],
+  "ProfilePackage": [
+    {
+      "case": "floating version",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "latest",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true
+      }
+    },
+    {
+      "case": "required flag missing",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "MARKETPLACE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "case": "arbitrary file source",
+      "value": {
+        "packageId": "examples.loans",
+        "source": "FILE",
+        "version": "0.1.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "required": true
+      }
+    }
+  ],
+  "DeploymentProfile": [
+    {
+      "case": "unknown profile version",
+      "value": {
+        "profileVersion": 2,
+        "profileId": "demo3",
+        "packages": []
+      }
+    },
+    {
+      "case": "executable tool definition",
+      "value": {
+        "profileVersion": 1,
+        "profileId": "demo3",
+        "packages": [],
+        "tools": [
+          {
+            "id": "x",
+            "command": "sh"
+          }
+        ]
+      }
+    }
+  ],
+  "ClientRelease": [
+    {
+      "case": "image by tag",
+      "value": {
+        "packageId": "ololabs.hello-world",
+        "version": "1.0.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "image": "registry.example.com/toolgate/client-tools:latest",
+        "runtimeVersion": "21.0.12+1",
+        "manifestDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "signed": false,
+        "document": {
+          "formatVersion": 1
+        },
+        "documentBase64": "eyJmb3JtYXRWZXJzaW9uIjoxfQ",
+        "tools": [
+          {
+            "toolId": "ololabs.hello-world/client_greet",
+            "supported": true
+          },
+          {
+            "toolId": "acme.orders/items.get",
+            "supported": false,
+            "reason": "needs HTTP routes"
+          }
+        ]
+      }
+    }
+  ],
+  "BrokerRequestFrame": [
+    {
+      "case": "no request payload",
+      "value": {
+        "kind": "BROKER_REQUEST",
+        "requestId": "b-1",
+        "operation": "FILES_READ"
+      }
+    },
+    {
+      "case": "shell operation",
+      "value": {
+        "kind": "BROKER_REQUEST",
+        "requestId": "b-1",
+        "operation": "EXEC",
+        "request": {}
+      }
+    }
+  ],
+  "TenantUuid": [
+    {
+      "case": "discovery boundary 1",
+      "value": "quickstart"
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": "4A130F27-89BB-4EB9-BB12-3C28473D59E1"
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": null
+    }
+  ],
+  "DiscoveryKeyId": [
+    {
+      "case": "discovery boundary 1",
+      "value": "../key"
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": "https://key"
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": ""
+    }
+  ],
+  "DiscoveryHeader": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "alg": "none",
+        "typ": "toolgate-discovery+jws",
+        "kid": "discovery-a"
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "alg": "RS256",
+        "typ": "JWT",
+        "kid": "discovery-a"
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "alg": "RS256",
+        "typ": "toolgate-discovery+jws",
+        "kid": "discovery-a",
+        "jku": "https://untrusted.invalid"
+      }
+    }
+  ],
+  "DiscoveryPublicKey": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAB",
+        "d": "private"
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "kty": "oct",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAB"
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "kty": "RSA",
+        "use": "enc",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAB"
+      }
+    },
+    {
+      "case": "discovery boundary 4",
+      "value": {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+        "e": "AQAD"
+      }
+    },
+    {
+      "case": "discovery boundary 5",
+      "value": {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": "discovery-a",
+        "n": "weak",
+        "e": "AQAB"
+      }
+    }
+  ],
+  "DiscoveryKeySet": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "keys": []
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "keys": [
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          },
+          {
+            "kty": "RSA",
+            "use": "sig",
+            "alg": "RS256",
+            "kid": "discovery-a",
+            "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+            "e": "AQAB"
+          }
+        ]
+      }
+    }
+  ],
+  "DiscoveryAuthorityState": [
+    {
+      "case": "discovery boundary 1",
+      "value": "RETIRED"
+    }
+  ],
+  "DiscoveryDeviceAuthority": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "keyId": "short",
+        "state": "ACTIVE",
+        "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+      }
+    }
+  ],
+  "TenantDiscovery": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "protocolVersion": 1,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "default",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 0,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 4",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 9007199254740992,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 5",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "urn:toolgate:tenant:10000000-0000-4000-8000-000000000001",
+        "audiences": [],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    },
+    {
+      "case": "discovery boundary 6",
+      "value": {
+        "protocolVersion": 2,
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "issuer": "https://untrusted.invalid",
+        "audiences": [
+          "https://tenant.example.test"
+        ],
+        "serverId": "server",
+        "organization": "Example tenant",
+        "controlUrl": "https://tenant.example.test",
+        "gatewayUrl": "https://tenant.example.test",
+        "verificationUri": "https://tenant.example.test/console/#enroll",
+        "minimumClientVersion": "0.0.0",
+        "issuedAtUnixMs": 1700000000000,
+        "expiresAtUnixMs": 1700000300000,
+        "keySetVersion": 1,
+        "discoveryKeys": {
+          "keys": [
+            {
+              "kty": "RSA",
+              "use": "sig",
+              "alg": "RS256",
+              "kid": "discovery-a",
+              "n": "kznaO8XqDV31Uy6c3OSIhqBF90Wk5NQo8fEHKvvr3nRSIAaMrUqnZhenycJhKuK2i9VTF486wGpMgtnUiqka9DNHtiS1Fns1U590wJhKAPG21ReGlG25tyBKUcFawSY6f4BpTaFSfnmghq_arGBSVVo3G_CAoT2LjAC5gs_5BNDWiLbcJlep8mEFyfU4znjlvUy92DQRMSffnGt2ZCk27cAvExEUPdKwEQCL8YJtlhXdeIy9zIqmOwI5cM_9QCJB7pg2n6jlPFInJ6VLzjN_FjnlAxaHx3jHj8A4LI6PrLSaxc-y2KkfaWJbIaobm1xuz0dpuX4KsfxIWJC11mOAc9RBS7QdjEX08jazxavjW7338ay_NYRoMsMa_CeXnir_gL12XJqUy0VwUGSRRNcMLENi225EiWra0SFE7GFCnCG6XzdHkD5rwBfPpqDsIbt-77HnzuPQUjVaZUGzQOlxhpJb0ZpSi-IPSihIs4V6NfzVfSh0HjS7-Keh-2VnB8oD",
+              "e": "AQAB"
+            }
+          ]
+        },
+        "deviceIssuerKeyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+        "deviceAuthorities": [
+          {
+            "keyId": "0a41585ac8ab8c02d264bca47fcdb956a3b9263fda2bc88c45f37e8c9d14bf4a",
+            "state": "ACTIVE",
+            "certificatePem": "-----BEGIN CERTIFICATE-----\nMIIErDCCAxSgAwIBAgIUM7iJmHQocaUY6SOMm9OJiY92Od8wDQYJKoZIhvcNAQEL\nBQAwfDEgMB4GA1UECgwXVG9vbEdhdGUgZGlzY292ZXJ5IHRlc3QxLTArBgNVBAsM\nJDEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMTEpMCcGA1UEAwwg\nVGVuYW50IGRldmljZSBpZGVudGl0eSBhdXRob3JpdHkwHhcNMjMxMTE0MjIxMjIw\nWhcNMjMxMTE1MjIxMzIwWjB8MSAwHgYDVQQKDBdUb29sR2F0ZSBkaXNjb3Zlcnkg\ndGVzdDEtMCsGA1UECwwkMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAw\nMDAxMSkwJwYDVQQDDCBUZW5hbnQgZGV2aWNlIGlkZW50aXR5IGF1dGhvcml0eTCC\nAaIwDQYJKoZIhvcNAQEBBQADggGPADCCAYoCggGBAIIhx1l6rmk94msxuL0F37aa\najZ6QTs6wPImRhTI7HL0LD2H+WAPX2nrdVnLiFx9Dl6GQY0th9fiwR64b2oYT+f2\nIEXYNqY1BKwrOLpIuyWsqubGcG1NgT+TwQ1LhrReOkjNypMVGgOyScLoySn4ysro\nDR7qOHrxGpu1z1MOjZAf9Yv7OBcHwqpE9n96ZW69Q7p1BF+4FPwl/Ul4mpX8ZzSk\ngbwQIlq8Rt1/GC4N73Izl7T4KuW3Vmha7LrCkaMsAeXwBuVEGeIXip27rEVFoZ1T\nbfCJ697rRkbKyPAuxpFVhaoadGfUNRj03r/dLr/Vy8KEzoTWzrLY01S72AMHgzK4\nYrqbU1LHwdBDr4lF6dZK90EkYm/LIr8sP3tpkCavyvVw51C4IE1+aRmpl6PMNlMs\nb+NFZ++//Lkjg0vhcmzCO6qodxAoT7QFgu0o8tOLZRVEOV4mrgg7xLW6bqbJyv2z\nqGPTEZs9tuQ1dd2A5Ns8UnomFYRF0YNo9XZNAL3MbQIDAQABoyYwJDASBgNVHRMB\nAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQsFAAOCAYEA\neNIY1RKf+G8oz0BrwpCHv69UPaBIhiW6qnIg+2WDOBsSsidzAG8ib8Yy5kY/RqIr\nr5J8CR4KODs2BhLmCCaGQzI79XuHdVmA1D5PdL0sP1CNWIMwqaL6xIF7Myxve71s\nZn0Y3JmlJKNUzEeYCkf9xzvsakaJ7gLz5xyQ959gs2RqhXHgHt3+emvwKtgFyFUQ\nLaUI7WDXN5MMMu+0RqxEilg4TnDV797ZTEwLMI7N7ThEVoEhv/MZfY4jYWAoy4Cs\neJ/4ne07/LEpIaWlZDfurIRv8NVZGAQa5u6wPMXW2tNtCuiRFKe/9qiLMFULlrnq\n1Y7dw4v9orgBc5yiR5i0BMIBFcuJ/K89Jcg1Tt6PSx/HvW6+tyFatyxeTa2LMoVz\nUFZ8Hk59iAXXV2vY4RR2TAvWKQ/kV+jz/tcRvYHQ/83qk9fHGZ3IpLy7MywNDtjF\n0wgHxxKlQKbSd71sYCbT/+pCuwJjvEjN7k0h1zRSfmjWwFVJVODPmRYHCzZZD20u\n-----END CERTIFICATE-----\n"
+          }
+        ]
+      }
+    }
+  ],
+  "SignedTenantDiscovery": [
+    {
+      "case": "discovery boundary 1",
+      "value": {
+        "payload": "old",
+        "signature": "old"
+      }
+    },
+    {
+      "case": "discovery boundary 2",
+      "value": {
+        "jws": "a.b.c="
+      }
+    },
+    {
+      "case": "discovery boundary 3",
+      "value": {
+        "jws": "a.b.c",
+        "header": {}
+      }
+    }
+  ],
+  "ConsoleClientOperation": [
+    {
+      "case": "no execution operations",
+      "value": "INVOKE"
+    }
+  ],
+  "ConsoleClientRequest": [
+    {
+      "case": "closed tenant assertion",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "consoleUrl": "https://tenant.example.test/console/",
+        "expectedTenantId": "quickstart"
+      }
+    },
+    {
+      "case": "origin required",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "expectedTenantId": "10000000-0000-4000-8000-000000000001"
+      }
+    },
+    {
+      "case": "no credentials from local caller",
+      "value": {
+        "kind": "console-tenant-state",
+        "requestId": "console-health-1",
+        "operation": "HEALTH",
+        "consoleUrl": "https://tenant.example.test/console/",
+        "expectedTenantId": "10000000-0000-4000-8000-000000000001",
+        "credential": "unexpected"
+      }
+    }
+  ],
+  "ConsoleClientResponse": [
+    {
+      "case": "activity cannot be exported",
+      "value": {
+        "requestId": "console-response",
+        "activity": {}
+      }
+    },
+    {
+      "case": "UUID must be canonical",
+      "value": {
+        "requestId": "console-response",
+        "tenantId": "quickstart"
+      }
+    },
+    {
+      "case": "request correlation required",
+      "value": {
+        "error": "TENANT_MISMATCH"
+      }
+    },
+    {
+      "case": "unknown error rejected",
+      "value": {
+        "requestId": "console-response",
+        "error": "UNKNOWN"
+      }
+    }
+  ],
+  "McpServerSlug": [
+    {
+      "case": "one character",
+      "value": "a"
+    },
+    {
+      "case": "starts with a digit",
+      "value": "1server"
+    },
+    {
+      "case": "starts with a hyphen",
+      "value": "-server"
+    },
+    {
+      "case": "longer than one package id component",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "case": "uppercase",
+      "value": "Orders"
+    }
+  ],
+  "McpServerUrl": [
+    {
+      "case": "plain HTTP",
+      "value": "http://mcp.example.com/mcp"
+    },
+    {
+      "case": "user info",
+      "value": "https://user@mcp.example.com/mcp"
+    }
+  ],
+  "McpSpkiPin": [
+    {
+      "case": "hex instead of base64",
+      "value": "sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "McpServerRegistrationRequest": [
+    {
+      "case": "no binding",
+      "value": {
+        "slug": "orders",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "strict": false
+      }
+    },
+    {
+      "case": "tenant smuggled in the body",
+      "value": {
+        "slug": "orders",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "bindingId": "orders-binding",
+        "strict": true,
+        "tenantId": "other"
+      }
+    }
+  ],
+  "McpApprovalRequest": [
+    {
+      "case": "no tools",
+      "value": {
+        "snapshotRevision": 2,
+        "tools": []
+      }
+    },
+    {
+      "case": "more than 64 tools",
+      "value": {
+        "snapshotRevision": 2,
+        "tools": [
+          {
+            "upstreamName": "t0",
+            "name": "t0"
+          },
+          {
+            "upstreamName": "t1",
+            "name": "t1"
+          },
+          {
+            "upstreamName": "t2",
+            "name": "t2"
+          },
+          {
+            "upstreamName": "t3",
+            "name": "t3"
+          },
+          {
+            "upstreamName": "t4",
+            "name": "t4"
+          },
+          {
+            "upstreamName": "t5",
+            "name": "t5"
+          },
+          {
+            "upstreamName": "t6",
+            "name": "t6"
+          },
+          {
+            "upstreamName": "t7",
+            "name": "t7"
+          },
+          {
+            "upstreamName": "t8",
+            "name": "t8"
+          },
+          {
+            "upstreamName": "t9",
+            "name": "t9"
+          },
+          {
+            "upstreamName": "t10",
+            "name": "t10"
+          },
+          {
+            "upstreamName": "t11",
+            "name": "t11"
+          },
+          {
+            "upstreamName": "t12",
+            "name": "t12"
+          },
+          {
+            "upstreamName": "t13",
+            "name": "t13"
+          },
+          {
+            "upstreamName": "t14",
+            "name": "t14"
+          },
+          {
+            "upstreamName": "t15",
+            "name": "t15"
+          },
+          {
+            "upstreamName": "t16",
+            "name": "t16"
+          },
+          {
+            "upstreamName": "t17",
+            "name": "t17"
+          },
+          {
+            "upstreamName": "t18",
+            "name": "t18"
+          },
+          {
+            "upstreamName": "t19",
+            "name": "t19"
+          },
+          {
+            "upstreamName": "t20",
+            "name": "t20"
+          },
+          {
+            "upstreamName": "t21",
+            "name": "t21"
+          },
+          {
+            "upstreamName": "t22",
+            "name": "t22"
+          },
+          {
+            "upstreamName": "t23",
+            "name": "t23"
+          },
+          {
+            "upstreamName": "t24",
+            "name": "t24"
+          },
+          {
+            "upstreamName": "t25",
+            "name": "t25"
+          },
+          {
+            "upstreamName": "t26",
+            "name": "t26"
+          },
+          {
+            "upstreamName": "t27",
+            "name": "t27"
+          },
+          {
+            "upstreamName": "t28",
+            "name": "t28"
+          },
+          {
+            "upstreamName": "t29",
+            "name": "t29"
+          },
+          {
+            "upstreamName": "t30",
+            "name": "t30"
+          },
+          {
+            "upstreamName": "t31",
+            "name": "t31"
+          },
+          {
+            "upstreamName": "t32",
+            "name": "t32"
+          },
+          {
+            "upstreamName": "t33",
+            "name": "t33"
+          },
+          {
+            "upstreamName": "t34",
+            "name": "t34"
+          },
+          {
+            "upstreamName": "t35",
+            "name": "t35"
+          },
+          {
+            "upstreamName": "t36",
+            "name": "t36"
+          },
+          {
+            "upstreamName": "t37",
+            "name": "t37"
+          },
+          {
+            "upstreamName": "t38",
+            "name": "t38"
+          },
+          {
+            "upstreamName": "t39",
+            "name": "t39"
+          },
+          {
+            "upstreamName": "t40",
+            "name": "t40"
+          },
+          {
+            "upstreamName": "t41",
+            "name": "t41"
+          },
+          {
+            "upstreamName": "t42",
+            "name": "t42"
+          },
+          {
+            "upstreamName": "t43",
+            "name": "t43"
+          },
+          {
+            "upstreamName": "t44",
+            "name": "t44"
+          },
+          {
+            "upstreamName": "t45",
+            "name": "t45"
+          },
+          {
+            "upstreamName": "t46",
+            "name": "t46"
+          },
+          {
+            "upstreamName": "t47",
+            "name": "t47"
+          },
+          {
+            "upstreamName": "t48",
+            "name": "t48"
+          },
+          {
+            "upstreamName": "t49",
+            "name": "t49"
+          },
+          {
+            "upstreamName": "t50",
+            "name": "t50"
+          },
+          {
+            "upstreamName": "t51",
+            "name": "t51"
+          },
+          {
+            "upstreamName": "t52",
+            "name": "t52"
+          },
+          {
+            "upstreamName": "t53",
+            "name": "t53"
+          },
+          {
+            "upstreamName": "t54",
+            "name": "t54"
+          },
+          {
+            "upstreamName": "t55",
+            "name": "t55"
+          },
+          {
+            "upstreamName": "t56",
+            "name": "t56"
+          },
+          {
+            "upstreamName": "t57",
+            "name": "t57"
+          },
+          {
+            "upstreamName": "t58",
+            "name": "t58"
+          },
+          {
+            "upstreamName": "t59",
+            "name": "t59"
+          },
+          {
+            "upstreamName": "t60",
+            "name": "t60"
+          },
+          {
+            "upstreamName": "t61",
+            "name": "t61"
+          },
+          {
+            "upstreamName": "t62",
+            "name": "t62"
+          },
+          {
+            "upstreamName": "t63",
+            "name": "t63"
+          },
+          {
+            "upstreamName": "t64",
+            "name": "t64"
+          }
+        ]
+      }
+    }
+  ],
+  "McpScanClaims": [
+    {
+      "case": "no pins member",
+      "value": {
+        "jti": "scan-permit-1",
+        "iss": "control",
+        "aud": "tool-host-local",
+        "iat": 1792000000000,
+        "exp": 1792000010000,
+        "scanId": "scan-7",
+        "slug": "orders",
+        "registrationRevision": 3,
+        "bindingId": "orders-binding",
+        "purpose": "REFRESH",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "approvalSequence": 2,
+        "fencingToken": "fence-7",
+        "deadlineUnixMs": 1792000030000
+      }
+    },
+    {
+      "case": "no deadline",
+      "value": {
+        "jti": "scan-permit-1",
+        "iss": "control",
+        "aud": "tool-host-local",
+        "iat": 1792000000000,
+        "exp": 1792000010000,
+        "scanId": "scan-7",
+        "slug": "orders",
+        "registrationRevision": 3,
+        "bindingId": "orders-binding",
+        "purpose": "REFRESH",
+        "url": "https://mcp.example.com/mcp",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "spkiPins": [
+          "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        ],
+        "approvalSequence": 2,
+        "fencingToken": "fence-7"
+      }
+    }
+  ],
+  "McpProxyDocument": [
+    {
+      "case": "unknown format version",
+      "value": {
+        "formatVersion": 2,
+        "server": {
+          "slug": "orders",
+          "url": "https://mcp.example.com/mcp",
+          "auth": {
+            "secretName": "orders/mcp-token",
+            "scheme": "BEARER"
+          },
+          "serverInfo": {
+            "name": "orders-mcp",
+            "version": "1.4.0"
+          },
+          "spkiPins": [
+            "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          ]
+        },
+        "approvalSequence": 2,
+        "strict": false,
+        "tools": [
+          {
+            "toolId": "mcp.orders/get-order",
+            "upstreamName": "get_order",
+            "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    },
+    {
+      "case": "no pins",
+      "value": {
+        "formatVersion": 1,
+        "server": {
+          "slug": "orders",
+          "url": "https://mcp.example.com/mcp",
+          "auth": {
+            "secretName": "orders/mcp-token",
+            "scheme": "BEARER"
+          },
+          "serverInfo": {
+            "name": "orders-mcp",
+            "version": "1.4.0"
+          },
+          "spkiPins": []
+        },
+        "approvalSequence": 2,
+        "strict": false,
+        "tools": [
+          {
+            "toolId": "mcp.orders/get-order",
+            "upstreamName": "get_order",
+            "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    }
+  ],
+  "McpToolApproval": [
+    {
+      "case": "name is not a ToolGate local name",
+      "value": {
+        "upstreamName": "get_order",
+        "name": "Get Order"
+      }
+    }
+  ],
+  "ResultProvenance": [
+    {
+      "case": "unknown provenance",
+      "value": "UPSTREAM"
+    }
+  ],
+  "McpSecretName": [
+    {
+      "case": "a descriptor variable name, not a vault secret name",
+      "value": "ORDERS_MCP_TOKEN"
+    }
+  ],
+  "McpProxyServer": [
+    {
+      "case": "no URL",
+      "value": {
+        "slug": "orders",
+        "auth": {
+          "secretName": "orders/mcp-token",
+          "scheme": "BEARER"
+        },
+        "serverInfo": {
+          "name": "orders-mcp",
+          "version": "1.4.0"
+        },
+        "spkiPins": [
+          "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        ]
+      }
+    }
+  ],
+  "McpRefreshRequest": [
+    {
+      "case": "no evidence",
+      "value": {
+        "fencingToken": "fence-42"
+      }
+    }
+  ],
+  "ToolAuthorization": [
+    {
+      "case": "unverified literal tenant",
+      "value": {
+        "action": "memory.read",
+        "resources": [
+          "olo://tenant-a/conversation/{conversationId}"
+        ]
+      }
+    },
+    {
+      "case": "empty resource scope",
+      "value": {
+        "action": "memory.read",
+        "resources": []
+      }
+    },
+    {
+      "case": "identity override",
+      "value": {
+        "action": "memory.read",
+        "resources": [
+          "olo://{tenant}/conversation/{conversationId}"
+        ],
+        "subjectUserId": "other-user"
+      }
+    }
+  ],
+  "ToolReconciliation": [
+    {
+      "case": "unsupported retry policy",
+      "value": "RETRY_ALWAYS"
     }
   ]
 }

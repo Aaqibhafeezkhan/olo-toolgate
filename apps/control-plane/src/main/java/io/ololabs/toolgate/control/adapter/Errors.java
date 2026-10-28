@@ -28,7 +28,8 @@ public class Errors implements ExceptionMapper<Throwable> {
             .filter(frame -> frame.getClassName().startsWith("io.ololabs.toolgate.control.") && !frame.getClassName().endsWith(".Failure"))
             .findFirst().map(frame -> frame.getClassName() + "." + frame.getMethodName() + ":" + frame.getLineNumber()).orElse("framework");
         org.jboss.logging.Logger.getLogger(Errors.class).infof("control_failure code=%s request_id=%s origin=%s", code, correlation.id(), origin);
-        var response = Response.status(status).type("application/json").entity(new ErrorEnvelope(code, correlation.id(), status == 423 || status == 503));
+        if (error instanceof Failure failure && failure.detail() != null) return Response.status(status).type("application/json").entity(new io.ololabs.toolgate.contracts.ControlErrorDetail(failure.detail(), failure.ids().isEmpty() ? null : failure.ids(), correlation.id())).build();
+        var response = Response.status(status).type("application/json").header("Cache-Control","no-store").entity(new ErrorEnvelope(code, correlation.id(), status == 423 || status == 503));
         if (status == 401) response.header("WWW-Authenticate", "Bearer"); return response.build();
     }
 }

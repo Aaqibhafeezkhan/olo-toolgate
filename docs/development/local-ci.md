@@ -35,7 +35,7 @@ python tools/ci/local.py audit
 python tools/ci/local.py run --job preflight.metadata
 
 # Replay selected full job bodies.
-python tools/ci/local.py run --job foundation.check --job gateway.container-and-replicas
+python tools/ci/local.py run --job foundation.rust --job foundation.ui
 
 # Attempt all supported bodies and report every remaining gap.
 python tools/ci/local.py run
@@ -89,24 +89,21 @@ staging requirements and executable overrides.
 
 ## Triggers and limits
 
-`plan` reads declarations rather than assuming branch names. The five CI
-workflows (`foundation`, `endpoint-client`, `control`, `gateway`, `quickstart`)
-run automatically on `main` pushes and PRs targeting `main`. Their manual and
-reusable runs are also restricted to `main` or PRs targeting `main` by shared
-admission. They do not run on tag pushes or other branches/PR targets. GitHub
-still displays PR runs under their source branch. The separate
-`release-foundation` workflow retains `v*` tag pushes. Development publication
-follows a completed `control` run on `main`, with further success,
-source-repository and admission checks; both development-release workflows
-also support manual dispatch.
+`plan` reads declarations rather than assuming branch names. `ci.yml` is the
+only automatic entry point for main pushes and `v*` version tags, with optional
+manual dispatch. Its admission, preflight, shared validation, six-platform matrix,
+image checks and release all belong to one run. Component bodies remain reusable
+compatibility callers and have no independent push trigger. The separate foundation
+tag workflow and obsolete component publishers are retired. Explicit manual
+build-only development publication keeps its operator-only dispatch exception.
 
 Replay deliberately runs the **job body**, independently of admission and
 upstream dependencies, using a synthetic dispatch workflow. Real GitHub job
 conditions and event payload routing are recorded in the plan and are not
-represented as locally verified. Shared offline admission tests cover RC
-messages, PR titles, manual inputs, upstream conclusions, the pause
-variable and the IST resume boundary. Replay does not change
-`TOOLGATE_CI_ENABLED`, enable automatic CI, or bypass those rules on GitHub.
+represented as locally verified. Shared offline admission tests cover branch restrictions,
+merged PR lookup, upstream conclusions and the pause variable.
+Replay does not change `TOOLGATE_CI_ENABLED`, enable automatic CI, or bypass those
+rules on GitHub.
 
 The client matrix needs six genuine OS/architecture VMs. Service/installer
 checks require systemd, Windows services or launchd, which a Linux container
@@ -121,4 +118,17 @@ images, GitHub APIs, permissions, approvals, artifacts, registries and upstream
 dependencies can differ or fail. The report always sets
 `allGitHubTriggersVerified` to `false`. Use hosted CI on the final commit, with
 the actual native matrix and release environments, to close these gaps. See
-[RC admission](ci-admission.md) for the current automatic CI pause.
+[RC admission](ci-admission.md) for the automatic CI enablement and PR title rules.
+
+The unified main workflow delegates production UI/browser checks to foundation.
+A standalone preflight replay includes its browser check using the reviewed
+`shared_checks=false` default. Main reuses foundation UI/test evidence for its
+image stage. Foundation runs one job per gate group: `foundation.python`,
+`foundation.ui`, `foundation.rust`, `foundation.examples` and `foundation.scans`
+replay locally. `foundation.browser`, `foundation.java`, `foundation.core-mcp` and
+the `foundation.check` release gate consume the UI build or other stage artifacts
+from the same run, so they are reported as `staged` and unverified locally. The
+`images.*` stages require same-run hosted artifacts and are reported as unverified
+locally. Legacy component bodies are compatibility-only and are
+not selected for replay; [the ownership map](ci-check-ownership.md) lists their
+current main-stage owners.

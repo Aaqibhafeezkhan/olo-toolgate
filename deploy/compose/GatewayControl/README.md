@@ -1,5 +1,9 @@
 # Separate production Gateway and Control
 
+Optional external Redis/Valkey directory caching is configured through
+`env/.env.cache`; see [shared cache configuration](../../../docs/deployment/shared-cache.md).
+The default uses only the bounded process-local cache.
+
 This stack consumes externally provisioned PostgreSQL, identity, TLS, purpose-specific signing keys and group authority. It does not generate private credentials, bootstrap a Super Admin from an IdP role claim, or install a local ALLOW policy. For a self-contained local evaluation use QuickStart instead.
 
 1. Pin matching Control/Gateway images in `.env`, preferably by digest.

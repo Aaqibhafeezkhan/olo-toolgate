@@ -26,8 +26,6 @@ def fingerprint():
                                      '--exclude-standard', '-z'], cwd=ROOT).split(b'\0')
     digest = hashlib.sha256()
     for name in sorted(set(names) - {b''}):
-        if name == b'docs/enterprise-access-control/implementation-status.md':
-            continue  # Regenerated acceptance evidence, not an implementation input.
         path = ROOT / name.decode('utf-8')
         if path.is_file():
             digest.update(name + b'\0' + hashlib.sha256(path.read_bytes()).digest())
@@ -53,7 +51,7 @@ def gates():
         'publication': [[py, 'tools/check.py', '--publication-only']],
         'scans': [[py, 'tools/check.py', '--scans']],
         'images': [[py, 'tools/enterprise/images.py', QUICKSTART, GATEWAY, CONTROL]],
-        'acceptance': [[py, 'tools/enterprise/acceptance.py', '--write', '--require-complete']],
+        'acceptance': [[py, 'tools/enterprise/acceptance.py', '--require-complete']],
     }
 
 
@@ -97,7 +95,7 @@ def main():
                     finalSourceSha256=baseline, completeRun=False, passed=True,
                     gates=[report['gates'][-1]]), indent=2) + '\n', encoding='utf-8')
             print('Passed ' + name, flush=True)
-        # Acceptance writes the status document; record that final tree separately.
+        # Validation must leave tracked source unchanged.
         report['finalSourceSha256'] = fingerprint()
         if report['finalSourceSha256'] != baseline:
             raise SystemExit('Source changed during validation; rerun against the final source tree')

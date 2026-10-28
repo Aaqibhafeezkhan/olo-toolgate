@@ -3,29 +3,30 @@
 //! Protected endpoint identity, enrollment and batched health reporting.
 pub mod activity;
 pub mod browser;
-pub mod builder;
-pub mod builtins;
 pub mod config;
 pub mod connections;
 pub mod contracts;
 pub mod deployment;
 pub mod diagnostics;
+pub mod discovery;
 pub mod execution;
-pub mod hotfolder;
+pub mod files;
 pub mod identity;
 pub mod install;
 pub mod ipc;
 mod json;
-pub mod local_tools;
 
 pub mod authorization_profile;
 pub mod platform;
+pub mod power;
+mod rejection;
 mod remote;
 pub mod runtime;
 pub mod service;
 mod socket;
 pub mod storage;
 pub mod tool_gateway;
+pub mod trace;
 pub mod transport;
 
 /// Fixed, redacted failures; underlying TLS/key/OS error strings never cross IPC or logs.
@@ -33,9 +34,11 @@ pub mod transport;
 pub enum Failure {
     Validation,
     Unauthorized,
+    TenantMismatch,
     Conflict,
     Unavailable,
     Revoked,
+    EnrollmentRequired,
     Expired,
     Unsupported,
 }

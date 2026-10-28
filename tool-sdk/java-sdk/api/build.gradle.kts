@@ -12,3 +12,8 @@ tasks.withType<Jar>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
 }
+
+// The community guide ships in the API jar, which every tool depends on.
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.file("TOOL-SDK-GUIDE.md")) { into("META-INF/toolgate") }
+}

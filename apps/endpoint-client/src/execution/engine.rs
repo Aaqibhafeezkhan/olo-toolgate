@@ -14,6 +14,15 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
+// Docker info/inspect can include cold CLI plugin discovery on native runners.
+// Keep metadata bounded separately from the tool's execution and output limits.
+const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
+pub(super) const CONTAINER_CREATE_TIMEOUT: Duration = Duration::from_secs(10);
+// The first version probe can need a cold image snapshot on a shared runner.
+// Preparation grants no tool execution authority; invocations retain their
+// existing startup budget and authorization deadline reservation.
+const PROBE_CREATE_TIMEOUT: Duration = Duration::from_secs(30);
+
 #[derive(Clone)]
 pub struct DockerEngine {
     pub(crate) binary: PathBuf,
@@ -27,6 +36,13 @@ pub struct Captured {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
 }
+/// Answers one stdout line of tool protocol v2: the `BROKER_RESPONSE` line for a `BROKER_REQUEST`, or nothing.
+pub type Broker<'a> = &'a (dyn Fn(&[u8]) -> Option<Vec<u8>> + Send + Sync);
+/// No broker: every request goes unanswered, as for a version probe.
+pub fn no_broker(_line: &[u8]) -> Option<Vec<u8>> {
+    None
+}
+
 /// OS/engine boundary. Future Windows/VM/WASM implementations must enforce
 /// the same limits before claiming a supported capability.
 pub trait SandboxPort: Send + Sync {
@@ -35,15 +51,41 @@ pub trait SandboxPort: Send + Sync {
     fn present<'a>(&'a self, image: &'a str) -> crate::transport::Call<'a, bool>;
     fn pull<'a>(&'a self, image: &'a str, seconds: u64) -> crate::transport::Call<'a, ()>;
     fn dirty(&self) -> bool;
+    /// Runs the command over tool protocol v2: writes `input`, answers broker requests through `broker` while
+    /// stdout streams, and returns everything the process wrote.
     fn run<'a>(
         &'a self,
         image: &'a str,
         command: &'a [String],
         input: &'a [u8],
         limits: &'a LocalRuntimeLimits,
+        broker: Broker<'a>,
     ) -> crate::transport::Call<'a, Captured>;
+    fn probe_version<'a>(
+        &'a self,
+        image: &'a str,
+        command: &'a [String],
+        limits: &'a LocalRuntimeLimits,
+    ) -> crate::transport::Call<'a, Captured> {
+        self.run(image, command, b"", limits, &no_broker)
+    }
 }
 impl SandboxPort for DockerEngine {
+    fn probe_version<'a>(
+        &'a self,
+        image: &'a str,
+        command: &'a [String],
+        limits: &'a LocalRuntimeLimits,
+    ) -> crate::transport::Call<'a, Captured> {
+        Box::pin(self.run_with_create_timeout(
+            image,
+            command,
+            b"",
+            limits,
+            PROBE_CREATE_TIMEOUT,
+            &no_broker,
+        ))
+    }
     fn check(&self) -> crate::transport::Call<'_, ()> {
         Box::pin(DockerEngine::check(self))
     }
@@ -65,8 +107,11 @@ impl SandboxPort for DockerEngine {
         command: &'a [String],
         input: &'a [u8],
         limits: &'a LocalRuntimeLimits,
+        broker: Broker<'a>,
     ) -> crate::transport::Call<'a, Captured> {
-        Box::pin(DockerEngine::run(self, image, command, input, limits))
+        Box::pin(DockerEngine::run(
+            self, image, command, input, limits, broker,
+        ))
     }
 }
 
@@ -196,9 +241,81 @@ impl DockerEngine {
             Ok(Captured { stdout, stderr })
         })
         .await
-        .map_err(|_| Failure::Expired)?;
-        if result.is_err() {
+        .unwrap_or(Err(Failure::Expired));
+        if let Err(failure) = result {
             let _ = child.kill().await;
+            // The command's name and failure class are safe; arguments and arbitrary
+            // engine/tool output can contain private data and stay redacted.
+            tracing::warn!(event="runtime_engine_command",operation=args.first().map(String::as_str).unwrap_or("unknown"),error=?failure);
+        }
+        result
+    }
+    /// Like `capture`, but stdin stays open after `input`: each complete stdout line goes to `broker`, and its answer
+    /// is written back on stdin while the tool runs. Stdin closes when stdout ends.
+    async fn converse(
+        &self,
+        args: &[String],
+        input: &[u8],
+        deadline: Duration,
+        max: usize,
+        broker: Broker<'_>,
+    ) -> Result<Captured> {
+        let mut child = self
+            .command(args)
+            .spawn()
+            .map_err(|_| Failure::Unavailable)?;
+        let mut stdin = child.stdin.take().ok_or(Failure::Unavailable)?;
+        let mut stdout = child.stdout.take().ok_or(Failure::Unavailable)?;
+        let stderr = child.stderr.take().ok_or(Failure::Unavailable)?;
+        let result = tokio::time::timeout(deadline, async {
+            let talk = async {
+                stdin
+                    .write_all(input)
+                    .await
+                    .map_err(|_| Failure::Unavailable)?;
+                stdin.flush().await.map_err(|_| Failure::Unavailable)?;
+                let mut output = Vec::new();
+                let mut scanned = 0;
+                let mut buffer = [0; 4096];
+                loop {
+                    let size = stdout
+                        .read(&mut buffer)
+                        .await
+                        .map_err(|_| Failure::Unavailable)?;
+                    if size == 0 {
+                        break;
+                    }
+                    if output.len().saturating_add(size) > max {
+                        return Err(Failure::Validation);
+                    }
+                    output.extend_from_slice(&buffer[..size]);
+                    while let Some(end) = output[scanned..].iter().position(|b| *b == b'\n') {
+                        let line = output[scanned..scanned + end].to_vec();
+                        scanned += end + 1;
+                        if let Some(mut answer) = broker(&line) {
+                            answer.push(b'\n');
+                            // A tool that already exited cannot read its answer; its result decides.
+                            let _ = stdin.write_all(&answer).await;
+                            let _ = stdin.flush().await;
+                        }
+                    }
+                }
+                let _ = stdin.shutdown().await;
+                Ok(output)
+            };
+            let (stdout, stderr, status) = tokio::try_join!(talk, bounded(stderr, 8192), async {
+                child.wait().await.map_err(|_| Failure::Unavailable)
+            })?;
+            if !status.success() {
+                return Err(Failure::Unavailable);
+            }
+            Ok(Captured { stdout, stderr })
+        })
+        .await
+        .unwrap_or(Err(Failure::Expired));
+        if let Err(failure) = result {
+            let _ = child.kill().await;
+            tracing::warn!(event="runtime_engine_command",operation=args.first().map(String::as_str).unwrap_or("unknown"),error=?failure);
         }
         result
     }
@@ -208,7 +325,7 @@ impl DockerEngine {
             .capture(
                 &strings(&["info", "--format", "{{json .}}"]),
                 b"",
-                Duration::from_secs(3),
+                METADATA_TIMEOUT,
                 65536,
             )
             .await?;
@@ -232,7 +349,7 @@ impl DockerEngine {
             .capture(
                 &strings(&["image", "inspect", image, "--format", "{{json .}}"]),
                 b"",
-                Duration::from_secs(3),
+                METADATA_TIMEOUT,
                 65536,
             )
             .await
@@ -322,6 +439,26 @@ impl DockerEngine {
         command: &[String],
         input: &[u8],
         limits: &LocalRuntimeLimits,
+        broker: Broker<'_>,
+    ) -> Result<Captured> {
+        self.run_with_create_timeout(
+            image,
+            command,
+            input,
+            limits,
+            CONTAINER_CREATE_TIMEOUT,
+            broker,
+        )
+        .await
+    }
+    async fn run_with_create_timeout(
+        &self,
+        image: &str,
+        command: &[String],
+        input: &[u8],
+        limits: &LocalRuntimeLimits,
+        create_timeout: Duration,
+        broker: Broker<'_>,
     ) -> Result<Captured> {
         if self.dirty.load(Ordering::SeqCst) {
             return Err(Failure::Unavailable);
@@ -386,13 +523,13 @@ impl DockerEngine {
         ]);
         args.extend_from_slice(&command[1..]);
         let result = async {
-            self.capture(&args, b"", Duration::from_secs(3), 4096)
-                .await?;
-            self.capture(
+            self.capture(&args, b"", create_timeout, 4096).await?;
+            self.converse(
                 &strings(&["start", "--attach", "--interactive", &name]),
                 input,
                 Duration::from_millis(limits.timeout_ms),
                 limits.max_output_bytes as usize,
+                broker,
             )
             .await
         }

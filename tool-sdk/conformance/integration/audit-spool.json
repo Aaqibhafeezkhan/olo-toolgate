@@ -4,7 +4,7 @@
   "area": "audit-spool",
   "title": "Audit spool exhaustion and fencing",
   "sources": [
-    "plan.md §12.7 row 11",
+    "platform-requirements.md §12.7 row 11",
     "docs/security/threat-models/tool-host.md"
   ],
   "cases": [
@@ -12,7 +12,7 @@
       "id": "audit/spool-full",
       "title": "Normal space exhausted refuses new contacts",
       "requirements": [
-        "plan.md §12.7 row 11",
+        "platform-requirements.md §12.7 row 11",
         "T-AD-6"
       ],
       "level": "integration",
@@ -32,7 +32,7 @@
       "id": "audit/fenced",
       "title": "Headroom exhausted fences the host",
       "requirements": [
-        "plan.md §12.7 row 11",
+        "platform-requirements.md §12.7 row 11",
         "T-AD-6"
       ],
       "level": "integration",
@@ -51,7 +51,7 @@
       "id": "audit/fenced-recovery",
       "title": "A FENCED host recovers and replays",
       "requirements": [
-        "plan.md §21 integration"
+        "platform-requirements.md §21 integration"
       ],
       "level": "integration",
       "targets": [

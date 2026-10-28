@@ -1,0 +1,11 @@
+{
+  "mode": "development",
+  "destinations": {},
+  "globals": {
+    "DataDir": "C:\\exports"
+  },
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}

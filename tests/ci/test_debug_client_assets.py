@@ -3,7 +3,10 @@
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -13,6 +16,99 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/client'))
 import debug_assets
+
+ROOT = Path(__file__).resolve().parents[2]
+POWERSHELL = shutil.which('powershell.exe') or shutil.which('pwsh')
+
+
+@unittest.skipUnless(POWERSHELL, 'PowerShell is required for the debug release lookup')
+class DebugReleaseLookupTest(unittest.TestCase):
+    def lookup(self, token=None, rejected=False, cached=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'debug').mkdir()
+            shutil.copyfile(ROOT/'debug/client-assets.ps1', root/'debug/client-assets.ps1')
+            (root/'VERSION').write_text('fixture\n')
+            compiler = root/'.dev/debug/toolgate-inno-6.7.1/ISCC.exe'
+            compiler.parent.mkdir(parents=True)
+            compiler.touch()
+            if cached:
+                cache = root/'.dev/debug/client-assets'
+                cache.mkdir()
+                (cache/'olo-toolgate-client-fixture-x86_64-unknown-linux-gnu.run').touch()
+            harness = root/'harness.ps1'
+            harness.write_text('''
+$ErrorActionPreference = 'Stop'
+function Invoke-RestMethod {
+    param([string]$Uri, [hashtable]$Headers)
+    Add-Content -LiteralPath $env:TEST_ASSETS_CALLS -Value (ConvertTo-Json -InputObject @{kind='api'; uri=$Uri; headers=$Headers} -Depth 4 -Compress)
+    if ($env:TEST_ASSETS_REJECTED -eq '1') { throw 'GitHub returned 401 Unauthorized' }
+    return @(@{
+        draft = $false
+        tag_name = 'fixture-release'
+        assets = @(
+            @{name='installers.json'},
+            @{name='olo-toolgate-client-fixture-x86_64-pc-windows-msvc.setup.exe'},
+            @{name='olo-toolgate-client-fixture-x86_64-unknown-linux-gnu.run'; browser_download_url='https://github.com/olo-labs/olo-toolgate/releases/download/fixture/client.run'}
+        )
+    })
+}
+function curl.exe {
+    Add-Content -LiteralPath $env:TEST_ASSETS_CALLS -Value (ConvertTo-Json -InputObject @{kind='download'; arguments=@($args)} -Compress)
+    $global:LASTEXITCODE = 0
+}
+function fixture-python {
+    Add-Content -LiteralPath $env:TEST_ASSETS_CALLS -Value (ConvertTo-Json -InputObject @{kind='build'; arguments=@($args)} -Compress)
+    $global:LASTEXITCODE = 0
+}
+& "$PSScriptRoot/debug/client-assets.ps1" -Python fixture-python
+''', encoding='utf-8')
+            environment = dict(os.environ, TEST_ASSETS_CALLS=str(root/'calls.jsonl'),
+                               TEST_ASSETS_REJECTED='1' if rejected else '0')
+            environment.pop('GITHUB_TOKEN', None)
+            if token is not None:
+                environment['GITHUB_TOKEN'] = token
+            result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                                     '-File', str(harness)], env=environment,
+                                    capture_output=True, text=True, timeout=30)
+            calls = [json.loads(line) for line in
+                     (root/'calls.jsonl').read_text(encoding='utf-8-sig').splitlines()]
+            return result, calls
+
+    def test_token_authenticates_api_without_entering_download_commands_or_logs(self):
+        result, calls = self.lookup(' fixture-token ')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([call['kind'] for call in calls], ['api', 'download', 'build'])
+        self.assertEqual(calls[0]['uri'], 'https://api.github.com/repos/olo-labs/olo-toolgate/releases?per_page=30')
+        self.assertEqual(calls[0]['headers']['Authorization'], 'Bearer fixture-token')
+        self.assertNotIn('fixture-token', json.dumps(calls[1:]))
+        self.assertNotIn('fixture-token', result.stdout + result.stderr)
+
+    def test_missing_or_blank_token_uses_public_access(self):
+        for token in (None, '', ' '):
+            with self.subTest(token=token):
+                result, calls = self.lookup(token)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertNotIn('Authorization', calls[0]['headers'])
+                self.assertEqual([call['kind'] for call in calls], ['api', 'download', 'build'])
+
+    def test_rejected_token_stops_without_an_unauthenticated_retry(self):
+        result, calls = self.lookup('fixture-token', rejected=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual([call['kind'] for call in calls], ['api'])
+        self.assertIn('401 Unauthorized', result.stderr)
+        self.assertNotIn('fixture-token', result.stdout + result.stderr)
+
+    def test_unavailable_public_api_revalidates_cached_inputs(self):
+        result, calls = self.lookup(rejected=True, cached=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([call['kind'] for call in calls], ['api', 'build'])
+        self.assertIn('canonical checksum and platform validation remain required', result.stdout)
+
+    def test_cached_inputs_do_not_hide_an_invalid_supplied_token(self):
+        result, calls = self.lookup('fixture-token', rejected=True, cached=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual([call['kind'] for call in calls], ['api'])
 
 
 def binary(target):

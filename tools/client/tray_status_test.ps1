@@ -12,9 +12,9 @@ $form = New-ToolGateStatusWindow -LogoPath $logo
 $about = New-ToolGateAboutWindow -LogoPath $logo -Version '0.10.0-dev' -Build '42 (8f0822a)'
 try {
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    $running = [pscustomobject]@{ active = @([pscustomobject]@{ name = 'hotfolder.write_text'; startedAtUnixMs = $now - 4000 }); events = @(); logAvailable = $true }
+    $running = [pscustomobject]@{ active = @([pscustomobject]@{ name = 'examples.hotfolder/write_text'; startedAtUnixMs = $now - 4000 }); events = @(); logAvailable = $true }
     Update-ToolGateStatusWindow $form 'Service running - Connected' $running $true
-    if ($form.Tag.Progress.Style -ne 'Marquee' -or $form.Tag.Command.Text -ne 'Executing: hotfolder.write_text') { throw 'Running state is missing' }
+    if ($form.Tag.Progress.Style -ne 'Marquee' -or $form.Tag.Command.Text -ne 'Executing: examples.hotfolder/write_text') { throw 'Running state is missing' }
     $running.active[0] | Add-Member NoteProperty progressPercent 45
     Update-ToolGateStatusWindow $form 'Service running - Connected' $running $true
     if ($form.Tag.Progress.Style -ne 'Continuous' -or $form.Tag.Progress.Value -ne 45) { throw 'Measured progress is missing' }
@@ -29,6 +29,13 @@ try {
             throw 'OLO window icon missing'
         }
     }
+    $healthy = [pscustomobject]@{ state = 'ACTIVE'; ready = $true; successfulCheckIns = 3; failedCheckIns = 0 }
+    $off = Get-ToolGateHealthSummary $healthy 'off'
+    if ($off.Connected -or $off.Status -ne 'Powered off' -or -not (Get-ToolGateHealthSummary $healthy).Connected) { throw 'Power switch state is missing' }
+    $background = @([pscustomobject]@{ serverUrl = 'https://focus.example'; focused = $true; activity = $idle }, [pscustomobject]@{ serverUrl = 'https://other.example'; focused = $false; health = $healthy; activity = $idle })
+    Update-ToolGateStatusWindow -Form $form -Detail "Service running`r`nPower: Off" -Activity $idle -Available $true -Connections $background -Power 'off'
+    if ($form.Tag.Connections[1].Detail.Text -notmatch '^Powered off') { throw 'Background gateway shown as connected while powered off' }
+    Update-ToolGateStatusWindow -Form $form -Detail 'Connected' -Activity $idle -Available $true
     $running.active[0].PSObject.Properties.Remove('progressPercent')
     Update-ToolGateStatusWindow $form "Service running`r`nStatus: Connected`r`nProtected tools are ready." $running $true
     $form.StartPosition = 'Manual'
@@ -46,5 +53,5 @@ try {
         [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root "apps/endpoint-client/packaging/$path"), [ref]$tokens, [ref]$errors) | Out-Null
         if ($errors.Count) { throw "PowerShell parse failed: $path" }
     }
-    Write-Output 'WinForms branding, running/measured/idle/unavailable states, activity and About version passed.'
+    Write-Output 'WinForms branding, running/measured/idle/unavailable/powered-off states, activity and About version passed.'
 } finally { $form.Close(); $form.Dispose(); $about.Close(); $about.Dispose() }

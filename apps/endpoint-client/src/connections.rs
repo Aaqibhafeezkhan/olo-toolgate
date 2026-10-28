@@ -1,16 +1,9 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Concurrent gateway connections. The focused gateway is `client.json`; every gateway the
-//! device switched away from keeps checking in from its parked profile directory.
-use crate::{activity::Activity, config::Config, service::ClientService, Result};
+//! The single installed tenant connection, exposed as a bounded local status view.
+use crate::{activity::Activity, service::ClientService};
 use olo_toolgate_contracts::{ClientGatewayConnection, ClientHealth};
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-};
-
-/// Bounded so a status snapshot always fits one IPC frame.
-pub const MAX_BACKGROUND: usize = 8;
+use std::sync::{Arc, Mutex};
 
 struct Status {
     health: ClientHealth,
@@ -72,107 +65,8 @@ impl Connections {
     }
 }
 
-/// Parked gateway profiles that keep a background connection, in a stable order.
-/// Each runs with its own journal and activity log; local runtimes and package
-/// deployment stay with the focused gateway only.
-pub fn background(primary: &Config) -> Vec<Config> {
-    let mut profiles: Vec<PathBuf> = std::fs::read_dir(primary.state_directory.join("profiles"))
-        .map(|entries| {
-            entries
-                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-                .collect()
-        })
-        .unwrap_or_default();
-    profiles.sort();
-    profiles
-        .into_iter()
-        .filter_map(|profile| parked(primary, &profile).ok().flatten())
-        .take(MAX_BACKGROUND)
-        .collect()
-}
-fn parked(primary: &Config, profile: &Path) -> Result<Option<Config>> {
-    let snapshot = profile.join("client.json");
-    if !snapshot.is_file() {
-        return Ok(None);
-    }
-    let saved = Config::load(&snapshot)?;
-    if saved.server_url == primary.server_url
-        || saved.state_directory != primary.state_directory
-        || profile.file_name() != Some(std::ffi::OsStr::new(&profile_name(&saved.server_url)))
-    {
-        return Ok(None);
-    }
-    let config = Config {
-        deployment: None,
-        execution: None,
-        state_directory: profile.to_owned(),
-        ipc_endpoint: primary.ipc_endpoint.clone(),
-        authorized_peers: primary.authorized_peers.clone(),
-        ..saved
-    };
-    config.validate()?;
-    Ok(Some(config))
-}
-/// Same digest the installer uses for `profiles/<name>`.
-pub fn profile_name(server: &str) -> String {
-    use sha2::Digest;
-    let digest = sha2::Sha256::digest(server.as_bytes());
-    digest[..16].iter().map(|b| format!("{b:02x}")).collect()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    fn config(state: &Path, server: &str) -> Config {
-        Config {
-            deployment: None,
-            execution: None,
-            tools: None,
-            server_url: server.into(),
-            state_directory: state.to_owned(),
-            ipc_endpoint: state.join("client.sock").to_string_lossy().into_owned(),
-            authorized_peers: vec!["0".into()],
-            ca_certificate_path: None,
-            request_timeout_seconds: 10,
-            local_console_url: None,
-        }
-    }
-    #[test]
-    fn parked_profiles_become_background_connections() {
-        let state = std::env::temp_dir().join(format!(
-            "olo-connections-{}",
-            crate::identity::nonce().unwrap()
-        ));
-        let primary = config(&state, "https://primary.example");
-        for server in ["https://second.example", "https://primary.example"] {
-            let profile = state.join("profiles").join(profile_name(server));
-            std::fs::create_dir_all(&profile).unwrap();
-            std::fs::write(
-                profile.join("client.json"),
-                serde_json::to_vec(&config(&state, server)).unwrap(),
-            )
-            .unwrap();
-        }
-        // A snapshot under the wrong directory name is ignored.
-        let stray = state.join("profiles").join("stray");
-        std::fs::create_dir_all(&stray).unwrap();
-        std::fs::write(
-            stray.join("client.json"),
-            serde_json::to_vec(&config(&state, "https://third.example")).unwrap(),
-        )
-        .unwrap();
-        let found = background(&primary);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].server_url, "https://second.example");
-        assert_eq!(
-            found[0].state_directory,
-            state
-                .join("profiles")
-                .join(profile_name("https://second.example"))
-        );
-        assert_eq!(found[0].ipc_endpoint, primary.ipc_endpoint);
-        std::fs::remove_dir_all(state).unwrap();
-    }
     #[test]
     fn gateway_names_match_the_contract() {
         assert!(crate::service::valid_server_name("Lab Gateway (EU)"));

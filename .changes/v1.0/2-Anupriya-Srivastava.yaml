@@ -1,0 +1,16 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+schemaVersion: 1
+contributor:
+  name: Anupriya Srivastava
+  github: olo-orgs
+  roles: [core-contributor]
+changes:
+  - type: added
+    component: Tool SDK delivery
+    summary: Core contributor supporting Tool SDK delivery and integration, including merging the ToolGate CLI packager into the platform to support packaging and distributing authored tools.
+    pr: 55
+  - type: added
+    component: Java SDK runtime
+    summary: Integrated the Tasks extension for the Java standalone runtime, bringing the asynchronous task lifecycle work into the shared platform codebase.
+    pr: 59

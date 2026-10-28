@@ -1,36 +1,50 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.toolgate.control.application;
+import java.util.List;
 
+import io.ololabs.toolgate.control.domain.Directory;
 import io.ololabs.toolgate.control.domain.Ids;
+import io.ololabs.toolgate.contracts.ControlEntityKind;
+import io.ololabs.toolgate.contracts.EnterpriseConfigurationCommand;
+import io.ololabs.toolgate.contracts.EnterpriseConfigurationOperation;
+import io.ololabs.toolgate.contracts.v2.ConfigurationSettings;
 import io.ololabs.toolgate.contracts.v2.ControlServerSettings;
 import io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch;
 import io.ololabs.toolgate.contracts.v2.DeviceApproval;
 import io.ololabs.toolgate.contracts.v2.GatewaySettings;
 
-/** Tenant control-plane settings (formatVersion 2, plan.md §18). Auto-approval is off until an administrator or a
- *  startup import enables it. Client check-in is env-owned: always the running policy, never stored or imported. */
+/** Tenant control-plane settings (formatVersion 2, platform-requirements.md §18), controlled by feature permissions. Auto-approval is off until an administrator,
+ *  an imported snapshot or the startup environment enables it. Client check-in is env-owned: always the running policy, never stored or imported.
+ *  A change of configuration.requiredReviews needs the reviews of the threshold in force, with no Super Admin bypass. */
 public final class ServerSettingsService {
     public static final long DAY_MS=86400000L,DEFAULT_AUTO_APPROVE_MS=30*DAY_MS,MAX_AUTO_APPROVE_MS=3650*DAY_MS;
     private static final java.util.regex.Pattern GATEWAY_NAME=java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9 ._()-]{0,63}");
     /** Gateway name devices show until an administrator renames it; from TOOLGATE_GATEWAY_NAME. */
     public static final String DEFAULT_GATEWAY_NAME=gatewayName(System.getenv("TOOLGATE_GATEWAY_NAME"),"ToolGate");
+    /** Configuration reviews until settings are saved; from TOOLGATE_CONFIG_REQUIRED_REVIEWS (0, 1 or 2, default 2). */
+    public static final int DEFAULT_REQUIRED_REVIEWS=requiredReviews(System.getenv("TOOLGATE_CONFIG_REQUIRED_REVIEWS"),2);
+    public static final String ENTITY="settings";
     static String gatewayName(String value,String fallback){return value!=null&&GATEWAY_NAME.matcher(value.trim()).matches()?value.trim():fallback;}
+    static int requiredReviews(String value,int fallback){return value!=null&&value.trim().matches("[0-2]")?Integer.parseInt(value.trim()):fallback;}
     private static final String STARTUP_ACTOR=DirectoryService.digest("startup-configuration-import");
     private final Store store;
     private final Codec codec;
     private final ClientCheckInPolicy checkIn;
+    private ConfigurationChanges reviews;
     public ServerSettingsService(Store store,Codec codec,ClientCheckInPolicy checkIn){this.store=store;this.codec=codec;this.checkIn=java.util.Objects.requireNonNull(checkIn);}
+    /** Reviewed workflow used when a write changes the review threshold itself. */
+    public ServerSettingsService reviews(ConfigurationChanges value){reviews=java.util.Objects.requireNonNull(value);return this;}
     public static ControlServerSettings defaults(ClientCheckInPolicy checkIn){
-        return new ControlServerSettings(2L,1L,new GatewaySettings(DEFAULT_GATEWAY_NAME),new DeviceApproval(false,DEFAULT_AUTO_APPROVE_MS,null),checkIn.effective());
+        return new ControlServerSettings(2L,1L,new GatewaySettings(DEFAULT_GATEWAY_NAME),new DeviceApproval(false,DEFAULT_AUTO_APPROVE_MS,null),checkIn.effective(),new ConfigurationSettings((long)DEFAULT_REQUIRED_REVIEWS));
     }
     /** The saved record with the running check-in values. Revision 1 is the unsaved default. */
     public ControlServerSettings current(Store.Session tx){var document=tx.serverSettings();if(document==null)return defaults(checkIn);
-        // Nothing is in production, so a record from before formatVersion 2 is reset to the defaults, keeping its revision.
-        var node=(com.fasterxml.jackson.databind.JsonNode)codec.value(document);
-        if(node.path("formatVersion").asLong()!=2){var reset=defaults(checkIn);return new ControlServerSettings(2L,Math.max(1,node.path("revision").asLong()),reset.gateway(),reset.deviceApproval(),reset.clientCheckIn());}
+        // Installations are fresh: the stored record is the current format exactly, never reset or filled in.
         var saved=codec.model(document,ControlServerSettings.class);
-        return new ControlServerSettings(2L,saved.revision(),saved.gateway(),saved.deviceApproval(),checkIn.effective());}
+        return new ControlServerSettings(2L,saved.revision(),saved.gateway(),saved.deviceApproval(),checkIn.effective(),saved.configuration());}
+    /** Review threshold in force for new configuration changes. */
+    public static int requiredReviews(Store.Session tx,Codec codec){return new ServerSettingsService(null,codec,ClientCheckInPolicy.QUICKSTART).current(tx).configuration().requiredReviews().intValue();}
     /** The enabled user that owns devices approved without a human decision, or null when auto-approval is unavailable. */
     public static String autoApprovalOwner(Store.Session tx,ControlServerSettings settings){
         var approval=settings.deviceApproval();
@@ -39,45 +53,81 @@ public final class ServerSettingsService {
         return owner!=null&&owner.enabled()?approval.ownerUserId():null;
     }
     public static long autoApprovalMs(ControlServerSettings settings){var duration=settings.deviceApproval().durationMs();return duration==null?DEFAULT_AUTO_APPROVE_MS:duration;}
-    private Store.Reply reply(ControlServerSettings settings){return new Store.Reply(200,codec.json(settings),settings.revision());}
-    private static void admin(DirectoryService.Actor actor){actor.requireAdmin();}
-    public Store.Reply get(DirectoryService.Actor actor){admin(actor);return store.transaction(actor.tenant(),false,tx->reply(current(tx)));}
+    private Store.Reply reply(Store.Session tx,DirectoryService.Actor actor,ControlServerSettings settings){
+        var access=new ManagementAccess(codec);var directory=tx.load();long now=System.currentTimeMillis();
+        boolean server=access.globallyAllowed(directory,actor.userId(),"server_configuration.read",now),device=access.globallyAllowed(directory,actor.userId(),"device_configuration.read",now);
+        return new Store.Reply(200,codec.json(new io.ololabs.toolgate.contracts.v2.ControlSettingsView(settings.formatVersion(),settings.revision(),server?settings.gateway():null,device?settings.deviceApproval():null,device?settings.clientCheckIn():null,server?settings.configuration():null)),settings.revision());
+    }
+    private void settingsPermission(Store.Session tx,DirectoryService.Actor actor,boolean write){actor.requireAdmin();var access=new ManagementAccess(codec);for(var resource:List.of("server_configuration","device_configuration"))access.requireAll(tx.load(),actor.userId(),resource+(write?".update":".read"),System.currentTimeMillis());}
+    public static void requirePatch(Store.Session tx,Codec codec,DirectoryService.Actor actor,ControlServerSettingsPatch groups){
+        actor.requireAdmin();var access=new ManagementAccess(codec);long now=System.currentTimeMillis();
+        if(groups.gateway()!=null||groups.configuration()!=null)access.requireAll(tx.load(),actor.userId(),"server_configuration.update",now);
+        if(groups.deviceApproval()!=null)access.requireAll(tx.load(),actor.userId(),"device_configuration.update",now);
+        if(groups.gateway()==null&&groups.configuration()==null&&groups.deviceApproval()==null)throw Failure.validation();
+    }
+    public Store.Reply get(DirectoryService.Actor actor){return get(actor,null);}
+    public Store.Reply get(DirectoryService.Actor actor,String section){actor.requireAdmin();if(section!=null&&!List.of("server","device").contains(section))throw Failure.validation();return store.transaction(actor.tenant(),false,tx->{
+        if(section==null)settingsPermission(tx,actor,false);else new ManagementAccess(codec).requireAll(tx.load(),actor.userId(),section.equals("server")?"server_configuration.read":"device_configuration.read",System.currentTimeMillis());
+        return reply(tx,actor,current(tx));});}
+    /** Review threshold for every signed-in console user; reveals no other setting. */
+    public Store.Reply reviewPolicy(DirectoryService.Actor actor){if(actor.userId()==null)throw ManagementAccess.denied();return store.transaction(actor.tenant(),false,tx->new Store.Reply(200,codec.json(new io.ololabs.toolgate.contracts.ControlReviewPolicy((long)requiredReviews(tx,codec))),0));}
 
     /** Full-record replace, used to restore an exported document. clientCheckIn in the body is ignored. */
     public Store.Reply update(DirectoryService.Actor actor,String body,long expected,String key,String requestId){
-        admin(actor);Ids.valid(key);Ids.valid(requestId);var requested=codec.model(body,ControlServerSettings.class);
-        return write(actor,"settings\n"+expected+"\n"+body,expected,key,requestId,current->requested);
+        actor.requireAdmin();Ids.valid(key);Ids.valid(requestId);var requested=codec.model(body,ControlServerSettings.class);
+        return write(actor,"settings\n"+expected+"\n"+body,expected,key,requestId,current->requested,null);
     }
     /** Merge patch (RFC 7396) applied per group: each group in the body replaces that group, so a page can clear an
      *  optional field by leaving it out. Groups left out are unchanged; env-owned clientCheckIn cannot be patched. */
     public Store.Reply patch(DirectoryService.Actor actor,String body,long expected,String key,String requestId){
-        admin(actor);Ids.valid(key);Ids.valid(requestId);var groups=codec.model(body,ControlServerSettingsPatch.class);
-        return write(actor,"settings-patch\n"+expected+"\n"+body,expected,key,requestId,current->new ControlServerSettings(2L,current.revision(),
-            groups.gateway()!=null?groups.gateway():current.gateway(),groups.deviceApproval()!=null?groups.deviceApproval():current.deviceApproval(),current.clientCheckIn()));
+        actor.requireAdmin();Ids.valid(key);Ids.valid(requestId);var groups=codec.model(body,ControlServerSettingsPatch.class);
+        return write(actor,"settings-patch\n"+expected+"\n"+body,expected,key,requestId,current->merge(current,groups),groups);
     }
-    private Store.Reply write(DirectoryService.Actor actor,String request,long expected,String key,String requestId,java.util.function.UnaryOperator<ControlServerSettings> change){
+    static ControlServerSettings merge(ControlServerSettings current,ControlServerSettingsPatch groups){
+        return new ControlServerSettings(2L,current.revision(),groups.gateway()!=null?groups.gateway():current.gateway(),groups.deviceApproval()!=null?groups.deviceApproval():current.deviceApproval(),current.clientCheckIn(),groups.configuration()!=null?groups.configuration():current.configuration());
+    }
+    private record Write(Store.Reply reply,ControlServerSettings next){}
+    private Store.Reply write(DirectoryService.Actor actor,String request,long expected,String key,String requestId,java.util.function.UnaryOperator<ControlServerSettings> change,ControlServerSettingsPatch groups){
         var digest=DirectoryService.digest(request);
-        return store.transaction(actor.tenant(),true,tx->{var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return replay;
-            var current=current(tx);if(current.revision()!=expected)throw Failure.conflict();
-            var saved=save(tx,change.apply(current),current,true);tx.audit(actor.id(),"SERVER_SETTINGS_UPDATE","settings",saved.revision(),requestId,digest);
-            var result=reply(saved);tx.remember(actor.id(),key,digest,result);return result;});
+        var write=store.transaction(actor.tenant(),true,tx->{if(groups==null)settingsPermission(tx,actor,true);else requirePatch(tx,codec,actor,groups);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return new Write(replay,null);
+            var current=current(tx);if(current.revision()!=expected)throw Failure.conflict();var next=change.apply(current);
+            // The threshold itself changes only under the current threshold's reviews, never through the Super Admin path.
+            if(current.configuration().requiredReviews()>0&&!next.configuration().requiredReviews().equals(current.configuration().requiredReviews()))return new Write(null,next);
+            var saved=save(tx,next,current,tx.load());tx.audit(actor.id(),"SERVER_SETTINGS_UPDATE",ENTITY,saved.revision(),requestId,digest);
+            var result=reply(tx,actor,saved);tx.remember(actor.id(),key,digest,result);return new Write(result,null);});
+        if(write.reply()!=null)return write.reply();
+        if(reviews==null)throw Failure.unavailable();var next=write.next();
+        return reviews.create(actor,new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.UPDATE,ControlEntityKind.SETTINGS,ENTITY,codec.json(groups==null?new ControlServerSettingsPatch(next.gateway(),next.deviceApproval(),next.configuration()):groups),expected),key,requestId);
     }
-    /** Startup import seeds settings once; with overwrite it replaces whatever an administrator saved before the restart.
-     * Directory users may be imported after the control plane starts, so the owner is checked again at each enrollment. */
-    public boolean importAtStartup(Ids.TenantId tenant,ControlServerSettings requested,boolean overwrite,String requestId){
-        return store.transaction(tenant,true,tx->{if(tx.serverSettings()!=null&&!overwrite)return false;
-            var saved=save(tx,requested,current(tx),false);tx.audit(STARTUP_ACTOR,"SERVER_SETTINGS_IMPORT","settings",saved.revision(),requestId,DirectoryService.digest(codec.json(saved)));return true;});
+    /** Applies settings groups inside a reviewed change or an import; owners are checked against the directory being saved. */
+    public static ControlServerSettings apply(Store.Session tx,Codec codec,ControlServerSettingsPatch groups,Long expected,Directory directory){
+        var service=new ServerSettingsService(null,codec,ClientCheckInPolicy.QUICKSTART);var current=service.current(tx);
+        if(expected!=null&&current.revision()!=expected.longValue())throw Failure.conflict();
+        // An import that repeats the saved values leaves the settings revision unchanged.
+        return same(current,groups)?current:service.save(tx,merge(current,groups),current,directory);
     }
-    private ControlServerSettings save(Store.Session tx,ControlServerSettings requested,ControlServerSettings current,boolean requireOwner){
+    /** Whether applying the groups would change the saved settings. */
+    public static boolean changes(Store.Session tx,Codec codec,ControlServerSettingsPatch groups){return !same(new ServerSettingsService(null,codec,ClientCheckInPolicy.QUICKSTART).current(tx),groups);}
+    private static boolean same(ControlServerSettings current,ControlServerSettingsPatch groups){
+        var next=merge(current,groups);var approval=next.deviceApproval();
+        return next.gateway().equals(current.gateway())&&next.configuration().equals(current.configuration())&&new DeviceApproval(approval.autoApprove(),approval.durationMs()==null?DEFAULT_AUTO_APPROVE_MS:approval.durationMs(),approval.ownerUserId()).equals(current.deviceApproval());
+    }
+    /** Provisioning-only first write; the coordinator owns the transaction and activation marker. */
+    public boolean initialize(Store.Session tx,ControlServerSettings requested,String requestId){
+        if(tx.serverSettings()!=null)return false;
+        var saved=save(tx,requested,current(tx),tx.load());tx.audit(STARTUP_ACTOR,"SERVER_SETTINGS_IMPORT",ENTITY,saved.revision(),requestId,DirectoryService.digest(codec.json(saved)));return true;
+    }
+    private ControlServerSettings save(Store.Session tx,ControlServerSettings requested,ControlServerSettings current,Directory owners){
         var approval=requested.deviceApproval();long duration=approval.durationMs()==null?DEFAULT_AUTO_APPROVE_MS:approval.durationMs();
         if(duration<DAY_MS||duration>MAX_AUTO_APPROVE_MS)throw Failure.validation();
         var owner=approval.ownerUserId();
-        if(owner!=null){Ids.valid(owner);var entry=requireOwner?tx.load().entries().get(Ids.Kind.USER.id(owner)):null;if(requireOwner&&(entry==null||!entry.enabled()))throw Failure.validation();}
+        if(owner!=null){Ids.valid(owner);var entry=owners!=null?owners.entries().get(Ids.Kind.USER.id(owner)):null;if(owners!=null&&(entry==null||!entry.enabled()))throw Failure.validation();}
         // Auto-approved identities need an accountable owner, exactly like a human approval.
         if(approval.autoApprove()&&owner==null)throw Failure.validation();
         var name=requested.gateway().gatewayName();
         if(!name.equals(gatewayName(name,null)))throw Failure.validation();
-        var saved=new ControlServerSettings(2L,current.revision()+1,new GatewaySettings(name),new DeviceApproval(approval.autoApprove(),duration,owner),checkIn.effective());
+        var reviews=requested.configuration()==null?current.configuration():requested.configuration();
+        var saved=new ControlServerSettings(2L,current.revision()+1,new GatewaySettings(name),new DeviceApproval(approval.autoApprove(),duration,owner),checkIn.effective(),reviews);
         tx.saveServerSettings(saved.revision(),codec.json(saved));return saved;
     }
 }

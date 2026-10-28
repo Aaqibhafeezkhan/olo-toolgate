@@ -1,5 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {managementCatalog} from '../src/managementPermissions.generated';
+const allPermissions=managementCatalog.resources.flatMap(r=>r.actions.map(a=>`${r.id}.${a}`));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from '../src/App';
@@ -7,9 +9,40 @@ import axe from 'axe-core';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); window.location.hash = ''; localStorage.clear(); });
 function response(items: unknown[] = []) { return new Response(JSON.stringify({items})); }
-async function connect() { fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}}); fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'})); await screen.findByRole('navigation'); }
+async function connect() {
+  const transport=globalThis.fetch;vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input).endsWith('/admin-session')?Promise.resolve(new Response(JSON.stringify({role:'ADMINISTRATOR',permissions:allPermissions}))):transport(input,init)));
+  fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}}); fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'})); await screen.findByRole('navigation'); }
 
 describe('Management shell states', () => {
+  it('bounds overview directory requests while still loading every count', async () => {
+    let active=0, peak=0, count=0;
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(input:RequestInfo|URL)=>{
+      const url=new URL(String(input),'http://localhost');
+      if(url.searchParams.get('limit')==='50'){
+        count++;active++;peak=Math.max(peak,active);
+        await new Promise(resolve=>setTimeout(resolve,20));
+        active--;
+      }
+      return response();
+    }));
+    render(<App/>);await connect();
+    await waitFor(()=>expect(document.querySelectorAll('.stat').length).toBe(18));
+    expect(count).toBeGreaterThanOrEqual(18);
+    expect(peak).toBeGreaterThan(0);
+    // The shell also loads its current-user directory record independently.
+    expect(peak).toBeLessThanOrEqual(5);
+  });
+  it('shows the tenant display name and UUID separately', async () => {
+    const tenantId='10000000-0000-4000-8000-000000000001';
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(input:RequestInfo|URL)=>String(input).endsWith('/admin-session')
+      ? new Response(JSON.stringify({role:'ADMINISTRATOR',permissions:allPermissions,tenantId,tenantName:'Demo organization'}))
+      : response()));
+    render(<App/>);
+    fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}});
+    fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
+    expect(await screen.findByText('Tenant: Demo organization')).toBeTruthy();
+    expect(screen.getByText(`Tenant ID: ${tenantId}`)).toBeTruthy();
+  });
   it('shows the version and build number on the About page', async () => {
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
@@ -20,7 +53,7 @@ describe('Management shell states', () => {
 
   it('redirects old configuration links and keeps review links working', async () => {
     const settings={formatVersion:2,revision:1,gateway:{gatewayName:'ToolGate'},deviceApproval:{autoApprove:false,durationMs:2592000000},clientCheckIn:{checkInMs:2000,jitterPct:20,offlineAfterMs:120000,source:'DEFAULT'}};
-    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>url==='/api/control/v1/settings'?new Response(JSON.stringify(settings)):url.includes('/configuration-changes/')?new Response('{}',{status:404}):response()));
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>url.endsWith('/admin-session')?new Response(JSON.stringify({role:'SUPER_ADMIN',permissions:allPermissions})):url.startsWith('/api/control/v1/settings')?new Response(JSON.stringify(settings)):url.includes('/configuration-changes/')?new Response('{}',{status:404}):response()));
     window.location.hash='#configuration';render(<App/>);await connect();
     expect(window.location.hash).toBe('#config-server');
     expect(await screen.findByRole('heading',{name:'Server',level:1})).toBeTruthy();
@@ -44,6 +77,18 @@ describe('Management shell states', () => {
     fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));
     expect((await axe.run(document,rules)).violations).toEqual([]);
     localStorage.clear();
+  });
+
+  it('offers no way to create or edit tools and extractors, which come only from installed packages', async () => {
+    const tool={id:'examples.hotfolder/list',name:'examples.hotfolder/list',enabled:true,revision:1,extractorId:'extract-1',version:'0.1.0',packageDigest:'a'.repeat(64),
+      definition:{id:'examples.hotfolder/list',name:'examples.hotfolder/list',description:'Lists files',actions:[{name:'invoke',resourceKinds:['CUSTOM']}],inputSchema:{type:'object'},outputSchema:{type:'object'}}};
+    vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response([tool])));
+    for(const route of ['tools','extractors']){
+      window.location.hash='#'+route;render(<App/>);await connect();
+      await screen.findByRole('heading',{level:1});
+      expect(screen.queryByRole('button',{name:/^Add /})).toBeNull();
+      cleanup();
+    }
   });
 
   it('defaults to all groups collapsed and supports bounded keyboard resizing and collapse', async () => {
@@ -72,7 +117,7 @@ describe('Management shell states', () => {
     await connect();await screen.findByRole('heading',{name:'Your organization, at a glance'});
     expect(screen.queryByRole('heading',{name:'Install ToolGate on your computer'})).toBeNull();
     window.location.hash='#enroll';fireEvent(window,new HashChangeEvent('hashchange'));
-    await screen.findByRole('heading',{name:'Install ToolGate on your computer'});
+    await screen.findByRole('heading',{name:'Enroll this device'});
     window.location.hash='#users';fireEvent(window,new HashChangeEvent('hashchange'));
     await screen.findByRole('heading',{name:'Users'});
     expect(screen.queryByRole('heading',{name:'Install ToolGate on your computer'})).toBeNull();
@@ -108,7 +153,7 @@ describe('Management shell states', () => {
     let enrolled=false;
     const record={id:'new-device',name:'Newly enrolled computer',enabled:true,revision:1,ownerUserId:'owner',groupIds:[]};
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async(url:string)=>{
-      return response(enrolled&&url==='/api/control/v1/endpoint/devices'?[{deviceId:record.id,systemExecutor:false,directoryDevice:record,endpointDevice:{deviceId:record.id,userId:'owner',state:'ACTIVE',lastSeenUnixMs:Date.now(),reportSequence:1}}]:[]);
+      return response(enrolled&&url==='/api/control/v1/endpoint/devices?deployment=true'?[{deviceId:record.id,directoryDevice:record,endpointDevice:{deviceId:record.id,userId:'owner',state:'ACTIVE',lastSeenUnixMs:Date.now(),reportSequence:1}}]:[]);
     }));
     window.location.hash='#devices';render(<App/>);await connect();await screen.findByText('No devices or pending requests.');
     fireEvent.click(screen.getByRole('button',{name:'Add client'}));

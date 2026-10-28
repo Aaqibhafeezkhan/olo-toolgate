@@ -20,5 +20,9 @@ The v2 set is self-contained: no `$ref` points into `v1`. Since contract set `1.
 | `deployment-binding.schema.json` | `DeploymentBinding`, `EffectiveDeployment` | ADR 020 |
 | `protocol.schema.json` | Tool protocol v2 frames; `Dispatch`, `AdmissionResponse`, `ResultMessage` | ADR 014, ADR 013 (D2) |
 | `settings.schema.json` | `ControlServerSettings` format version 2, `ClientCheckIn` | ADR 021 |
+| `profile.schema.json` | `DeploymentProfile`, `ProvisioningStatus`: pinned deployment-time package provisioning | [Deployment profiles](../../../../docs/deployment/profiles.md) |
+| `discovery.schema.json` | `SignedTenantDiscovery`, `TenantDiscovery`, protected JWS header, public key ring, tenant device authorities and console-scoped native requests | [Tenant discovery](../../../../docs/control-plane/discovery-v2.md) |
+| `mcp-proxy.schema.json` | `McpServerRegistration`, `McpSnapshot`, `McpScanClaims`, `McpApproval`, `McpProxyDocument`, `McpQuarantineReport`: upstream MCP servers governed as generated `MCP_PROXY` packages | [ADR 030](../../../../docs/adr/030-mcp-proxy-packages.md) |
+| `insights.schema.json` | `InsightsAdmissionBatch` (Gateway to Control) and the operator query API: `InsightsStatus`, `InsightsSeries`, `InsightsInvocationPage`, `InsightsInvocationDetail`, `InsightsRebuildRequest` | ADR 031 |
 
 Definitions owned by a D2 ADR are written here because D1 freezes the wire shapes; D2 reviews their trust and persistence semantics and may amend them before D2 passes.

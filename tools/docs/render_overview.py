@@ -13,8 +13,8 @@ WIDTH, HEIGHT, FPS, SECONDS = 1280, 720, 15, 36
 BG, CARD, WHITE = "#0c1222", "#18243b", "#f5f7fc"
 MUTED, PURPLE, CYAN = "#bac7de", "#ab96ff", "#65e4df"
 SCENES = [
-    ("Control what AI can do.", "Open-source governance for AI tools", ["AI agents", "OLO ToolGate", "Your tools"],
-     "Build, distribute, authorize and govern tools across users, agents and devices."),
+    ("Zero Trust for Agentic AI.", "Secure Every Tool Boundary.", ["AI agents", "OLO ToolGate", "Your tools"],
+     "Govern every tool call with identity, policy enforcement, least-privilege access and end-to-end auditability."),
     ("One request. Clear boundaries.", "Example: an agent writes a file", ["Agent request", "Gateway checks", "Device executes"],
      "An agent calls hotfolder.write_text. The Gateway checks access before a protected effect."),
     ("Access starts with groups.", "Teams + Agent Groups + Tool Groups + Device Groups", ["People / agents", "Group grants", "Tools / devices"],

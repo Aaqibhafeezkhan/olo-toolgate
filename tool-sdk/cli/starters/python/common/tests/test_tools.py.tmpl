@@ -1,0 +1,14 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+import unittest
+import {{pythonPackage}} as tools
+from toolgate.testing import ToolHarness
+
+
+class ToolsTest(unittest.TestCase):
+    def test_hello(self):
+        with ToolHarness([tools]) as harness:
+            self.assertEqual({"message": "Hello World"}, harness.call("hello").output)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -29,6 +29,11 @@ class GatewayAssetsTests(unittest.TestCase):
         values['gateway']['credentialsSecret']='gateway-runtime'
         with self.assertRaises(ValidationError): Draft7Validator(schema).validate(values)
         values['gateway']['control']['tokenSecret']='gateway-authority'
+        with self.assertRaises(ValidationError): Draft7Validator(schema).validate(values)
+        values['gateway']['control']['tenantId']='10000000-0000-4000-8000-000000000001'
+        values['gateway']['config']['tenantHosts']=['gateway.example.com']
+        values['gateway']['publicOrigin']='https://gateway.example.com'
+        values['gateway']['control']['url']='https://control.example.com'
         values['gateway']['networkPolicy'].update(controlTo=[{'podSelector':{'matchLabels':{'app':'control'}}}],dnsTo=[{'namespaceSelector':{'matchLabels':{'kubernetes.io/metadata.name':'kube-system'}}}])
         Draft7Validator(schema).validate(values)
         values['gateway']['securityContext']['allowPrivilegeEscalation']=True
@@ -42,7 +47,11 @@ class GatewayAssetsTests(unittest.TestCase):
         self.assertEqual('read',workflow['permissions']['contents'])
         commands='\n'.join(s.get('run','') for s in workflow['jobs']['container-and-replicas']['steps'])
         for required in ['cargo test --workspace --locked','tools/gateway/container.py','tools/enterprise/helm.py','--severity HIGH,CRITICAL','--format cyclonedx','sha256sum']: self.assertIn(required,commands)
-        self.assertEqual('gateway-release',workflow['jobs']['publish']['environment'])
+        self.assertNotIn('publish',workflow['jobs'])
+        publisher=yaml.load((ROOT/'.github/workflows/release-images.yml').read_text(),Loader=yaml.BaseLoader)
+        self.assertEqual('development-release',publisher['jobs']['publish']['environment'])
+        attest=[step for step in publisher['jobs']['publish']['steps'] if step.get('name')=='Attest Gateway image']
+        self.assertEqual('true',attest[0]['with']['push-to-registry'])
         self.assertNotIn('secrets.MAVEN',json.dumps(workflow))
 
     def test_gateway_local_documentation_links(self):

@@ -12,9 +12,6 @@
 - [ ] Control Plane
 - [ ] Admin UI
 - [ ] Endpoint Client
-- [ ] Marketplace API
-- [ ] Marketplace Worker
-- [ ] Drupal
 - [ ] Schemas
 - [ ] Docs
 - [ ] Deployment/CI

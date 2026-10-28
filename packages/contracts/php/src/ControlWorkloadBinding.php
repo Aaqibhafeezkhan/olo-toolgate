@@ -22,12 +22,14 @@ final readonly class ControlWorkloadBinding implements \JsonSerializable {
         public int $expiresAtUnixMs,
         public ?string $delegatedUserId = null,
         public ?string $parentBindingId = null,
-        public ?int $delegatedSessionEpoch = null
+        public ?int $delegatedSessionEpoch = null,
+        public ?\stdClass $passClaims = null,
+        public ?bool $needsReauthorization = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'agentId', 'mode', 'issuer', 'subject', 'audience', 'credentialSha256', 'credentialEpoch', 'expiresAtUnixMs', 'delegatedUserId', 'parentBindingId', 'delegatedSessionEpoch']) || array_diff(['id', 'name', 'enabled', 'revision', 'agentId', 'mode', 'issuer', 'subject', 'audience', 'credentialSha256', 'credentialEpoch', 'expiresAtUnixMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'agentId', 'mode', 'issuer', 'subject', 'audience', 'credentialSha256', 'credentialEpoch', 'expiresAtUnixMs', 'delegatedUserId', 'parentBindingId', 'delegatedSessionEpoch', 'passClaims', 'needsReauthorization']) || array_diff(['id', 'name', 'enabled', 'revision', 'agentId', 'mode', 'issuer', 'subject', 'audience', 'credentialSha256', 'credentialEpoch', 'expiresAtUnixMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -45,7 +47,9 @@ final readonly class ControlWorkloadBinding implements \JsonSerializable {
             $data['expiresAtUnixMs'],
             array_key_exists('delegatedUserId', $data) ? $data['delegatedUserId'] : null,
             array_key_exists('parentBindingId', $data) ? $data['parentBindingId'] : null,
-            array_key_exists('delegatedSessionEpoch', $data) ? $data['delegatedSessionEpoch'] : null
+            array_key_exists('delegatedSessionEpoch', $data) ? $data['delegatedSessionEpoch'] : null,
+            array_key_exists('passClaims', $data) ? (object) $data['passClaims'] : null,
+            array_key_exists('needsReauthorization', $data) ? $data['needsReauthorization'] : null
         );
     }
 

@@ -3,6 +3,7 @@
 package acme.demo;
 
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.Global;
 import io.ololabs.toolgate.sdk.annotations.JwtClaim;
@@ -66,11 +67,14 @@ public class DemoTools {
                 return Map.of("length", s.length());
             }
             case "long" -> throw new ToolBusinessError("NOT_FOUND", "x".repeat(4000), Map.of("id", "y".repeat(20_000)));
+            // Names the build cannot see, so these reach the runtime's own checks.
             case "undeclared-global" -> {
-                return Map.of("v", context.global().getStringValue("Nope"));
+                String name = "No" + "pe";
+                return Map.of("v", context.global().getStringValue(name));
             }
             case "wrong-type" -> {
-                return Map.of("v", context.global().getStringValue("Limit"));
+                String name = "Lim" + "it";
+                return Map.of("v", context.global().getStringValue(name));
             }
             default -> {
                 return Map.of("kind", kind);
@@ -79,7 +83,7 @@ public class DemoTools {
     }
 
     @ServerTool(name = "demo.write", title = "Write", description = "Not idempotent.", effect = EffectSafety.NON_IDEMPOTENT,
-            errors = @ErrorDecl(code = "BUSY", description = "Try later", retryable = true))
+            errors = @ErrorDecl(code = "BUSY", description = "Try later", retryable = true), reconciliation = Reconciliation.MANUAL)
     public Map<String, Object> write() {
         throw new ToolRetryableError("BUSY", "Busy now");
     }
@@ -134,5 +138,17 @@ public class DemoTools {
     @JwtClaim(name = "UserName", claim = "preferred_username")
     public Map<String, Object> whoami(ToolContext context) {
         return Map.of("user", context.jwt().getStringValue("UserName"), "subject", context.jwt().getSubject());
+    }
+
+    @ServerTool(name = "demo.principal", title = "Principal", description = "Reports the verified principal of a user-scoped call.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> principal(ToolContext context) {
+        var invocation = context.invocation();
+        String user = invocation.requireUser();
+        return Map.of("user", user, "tenant", invocation.tenantId().orElseThrow(), "agent", invocation.agentId().orElse(""),
+                "operation", invocation.operation().orElse(""), "chain", invocation.delegationChain(),
+                "resources", invocation.resources().stream().map(r -> r.kind() + ":" + r.locator()).toList(),
+                "trace", Map.of("execution", invocation.executionId().orElse(""), "attempt", invocation.attempt(),
+                        "call", invocation.toolCallId().orElse(""), "session", invocation.sessionId().orElse(""),
+                        "run", invocation.agentRunId().orElse(""), "headers", invocation.traceHeaders()));
     }
 }

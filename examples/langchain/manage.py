@@ -9,21 +9,24 @@ import os
 from pathlib import Path
 import re
 import secrets
+import ssl
 import subprocess
 import sys
 import time
 import urllib.request
 
+import packages
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-STATE = HERE / '.state'
+STATE = Path(os.environ.get('TOOLGATE_LANGCHAIN_STATE', str(HERE / '.state'))).resolve()
 spec = importlib.util.spec_from_file_location('debug_configuration', ROOT / 'debug/configure-debug-agent.py')
 shared = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(shared)
-TOOLS = {'hotfolder.list', 'hotfolder.read_text', 'hotfolder.write_text', 'client.read_log_entry'}
+TOOLS = packages.TOOLS
 DEVICE_GROUP = 'ReadAndWriteDeviceGroup'
-COMPOSE = ['docker', 'compose', '-p', 'toolgate-langchain', '-f', str(HERE / 'compose.yaml')]
-LOCAL_CLIENT = Path(os.environ.get('ProgramFiles', r'C:\Program Files')) / 'OLO/ToolGate/olo-toolgate-client.exe'
+TOOL_GROUP = 'langchain-package-tools'
+COMPOSE = ['docker', 'compose', '-p', os.environ.get('TOOLGATE_LANGCHAIN_PROJECT', 'toolgate-langchain'), '-f', str(HERE / 'compose.yaml')]
 
 
 def load_environment():
@@ -35,11 +38,45 @@ def load_environment():
                 os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
+class DockerCommandError(ValueError):
+    def __init__(self, service, operation, reason, exit_code=None, retryable=False):
+        self.retryable = retryable
+        record = dict(service=service if service in ('quickstart', 'linux-device') else 'other',
+                      operation=operation, reason=reason, exitCode=exit_code)
+        # Only fixed classifications are retained. Command arguments, stdin,
+        # stdout and stderr can carry credentials and never enter this artifact.
+        try:
+            folder = ROOT/'build/langchain'
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder/'command-failures.jsonl'
+            if not path.exists() or path.stat().st_size < 65536:
+                with path.open('a', encoding='utf-8') as stream:
+                    stream.write(json.dumps(record)+'\n')
+        except OSError:
+            pass
+        super().__init__(f'{record["service"]} {operation} failed: {reason} (exit {exit_code}); '
+                         'see build/langchain/command-failures.jsonl and Compose logs')
+
+
 def docker(service, arguments, input=None):
-    result = subprocess.run(COMPOSE + ['exec', '-T', service] + arguments,
-                            input=input, capture_output=True, text=True, timeout=60, cwd=HERE)
+    status_read = service == 'linux-device' and arguments == ['cat', '/run/olo-toolgate/device-status.json']
+    operation = 'read-device-status' if status_read else 'container-command'
+    try:
+        result = subprocess.run(COMPOSE + ['exec', '-T', service] + arguments,
+                                input=input, capture_output=True, text=True, timeout=5 if status_read else 60, cwd=HERE)
+    except subprocess.TimeoutExpired:
+        raise DockerCommandError(service, operation, 'command-timeout') from None
     if result.returncode:
-        raise ValueError(f'{service} command failed; inspect docker compose logs (private output withheld)')
+        error = (result.stderr or '').lower()
+        reason = 'command-failed'
+        if status_read and '/run/olo-toolgate/device-status.json' in error and 'no such file' in error:
+            reason = 'status-not-published'
+        elif status_read and ('is restarting' in error or 'is not running' in error):
+            reason = 'container-not-ready'
+        elif 'permission denied' in error:
+            reason = 'permission-denied'
+        raise DockerCommandError(service, operation, reason, result.returncode,
+                                 retryable=reason in ('status-not-published', 'container-not-ready'))
     return result.stdout.strip()
 
 
@@ -93,6 +130,39 @@ def linux_status():
     return json.loads(docker('linux-device', ['cat', '/run/olo-toolgate/device-status.json']))
 
 
+def ready_linux_status(device=None, seen_after=0):
+    try:
+        status = linux_status()
+    except DockerCommandError as failure:
+        if failure.retryable:
+            return None
+        raise
+    if not isinstance(status, dict):
+        raise ValueError('Invalid local device status')
+    identity = status.get('deviceId')
+    if identity is not None and (not isinstance(identity, str) or not re.fullmatch(r'device-[0-9a-f]{32}', identity)):
+        raise ValueError('Invalid local device identity')
+    if device and identity and identity != device:
+        raise ValueError('The local device identity changed during restart')
+    if status.get('state') in ('REVOKED', 'DENIED'):
+        raise ValueError('The local device is not authorized')
+    updated = status.get('updatedAtUnixMs')
+    if identity and status.get('state') == 'ACTIVE' and type(updated) is int and updated > seen_after:
+        return status
+    return None
+
+
+def wait_linux_status(timeout=30):
+    deadline = time.monotonic()+timeout
+    while True:
+        status = ready_linux_status()
+        if status:
+            return status
+        if time.monotonic() >= deadline:
+            raise ValueError('The local device status did not become ready; inspect device startup logs')
+        time.sleep(2)
+
+
 def wait_device(config, device, seen_after=0, timeout=90):
     deadline = time.monotonic() + timeout
     while True:
@@ -110,20 +180,72 @@ def gateway_url():
     return 'https://localhost:' + os.environ.get('TOOLGATE_TLS_PORT', '18451')
 
 
-def example_profiles(profiles):
-    selected = [profile for profile in profiles if profile['tool']['id'] in TOOLS]
-    if {profile['tool']['id'] for profile in selected} != TOOLS or len(selected) != len(TOOLS):
-        raise ValueError('Export the four example profiles from the actual installed client')
-    if any(not profile['tool']['enabled'] or not profile['extractor']['enabled'] for profile in selected):
-        raise ValueError('The four example tool profiles must be enabled')
-    return selected
+def sync_deployment_metadata(local_status=None):
+    """Collect only public Docker facts; runtime device keys and peer addresses stay authoritative."""
+    result=subprocess.run(COMPOSE+['ps','-q','quickstart','linux-device','registry'],capture_output=True,text=True,check=True,timeout=30,cwd=HERE)
+    ids=result.stdout.split()
+    if len(ids)!=3 or any(not re.fullmatch('[a-f0-9]{64}',value) for value in ids):
+        raise ValueError('Quickstart, Linux device and registry must be running to inspect their deployment')
+    result=subprocess.run(['docker','inspect',*ids],capture_output=True,text=True,check=True,timeout=30,cwd=HERE)
+    containers={item['Config']['Labels']['com.docker.compose.service']:item for item in json.loads(result.stdout)}
+    quickstart,endpoint=containers['quickstart'],containers['linux-device']
+    quickstart['NetworkSettings']['Networks']=containers['registry']['NetworkSettings']['Networks']
+    networks=set(quickstart['NetworkSettings']['Networks'])&set(endpoint['NetworkSettings']['Networks'])
+    if not networks:raise ValueError('Example containers have no shared deployment network')
+    network='toolgate-langchain_default' if 'toolgate-langchain_default' in networks else sorted(networks)[0]
+    def details(container,kind):
+        address=container['NetworkSettings']['Networks'][network]
+        return dict(executionKind=kind,containerId=container['Id'],containerName=container['Name'].lstrip('/'),
+                    systemName=container['Config']['Hostname'],networkId=address['NetworkID'],networkName=network,
+                    ipAddress=address['IPAddress'] or address['GlobalIPv6Address'])
+    local=json.loads(docker('quickstart',['/opt/quickstart-python/bin/python','-c',
+        "import json;from pathlib import Path;p=Path('/data/run');r={};"
+        "r.update({k:json.loads((p/n).read_text())[f] for k,n,f in "
+        "[('TOOL_HOST_DIRECT','tool-host.json','hostId'),"
+        "('TOOL_HOST_PULL','tool-host-remote.json','hostId')] if (p/n).exists()});"
+        "print(json.dumps(r))"]))
+    records={device:details(quickstart,kind) for kind,device in local.items() if device}
+    # Reuse the identity verified by the recovery barrier. The supervisor can
+    # temporarily remove its status file while refreshing busy native health.
+    local_status = local_status if local_status is not None else wait_linux_status()
+    records[local_status['deviceId']]=details(endpoint,'ENDPOINT_CLIENT')
+    document=dict(gatewaySystemName=quickstart['Config']['Hostname'],devices=records)
+    docker('quickstart',['/opt/quickstart-python/bin/python','-c',
+        "import sys,json;sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
+        "s.atomic(s.DATA/'run/deployment-metadata.json',json.dumps(json.load(sys.stdin)))"],json.dumps(document))
+    print('Recorded deployment: '+network+' ('+details(quickstart,'TOOL_HOST_DIRECT')['networkId']+')')
+    return document
+
+
+def verify_deployment(target):
+    """Reject stale local setup without adopting new trust or changing credentials."""
+    remedy = 'Run deploy.bat' + (' -Win' if target == 'windows' else
+                               ' -Target linux' if target == 'linux' else '') + ' again.'
+    directory = STATE / 'agents'
+    if not all((directory / name).is_file() for name in (target + '.json', target + '.token', 'gateway-ca.crt')):
+        raise ValueError('The selected deployment is incomplete. ' + remedy)
+    descriptor = json.loads((directory / (target + '.json')).read_text(encoding='utf-8'))
+    if descriptor.get('gateway') != gateway_url():
+        raise ValueError('The selected deployment belongs to another Gateway URL. ' + remedy)
+    expires = descriptor.get('expiresAtUnixMs', 0)
+    if not isinstance(expires, int) or expires <= int(time.time() * 1000):
+        raise ValueError('The selected agent credential has expired. ' + remedy)
+    try:
+        saved = ssl.PEM_cert_to_DER_cert((directory / 'gateway-ca.crt').read_text(encoding='ascii').strip())
+        current = ssl.PEM_cert_to_DER_cert(docker('quickstart', ['cat', '/data/keys/device-ca.crt']).strip())
+    except (OSError, ValueError):
+        raise ValueError('Cannot verify the saved Gateway trust. ' + remedy) from None
+    if saved != current:
+        raise ValueError('Gateway trust changed after this deployment was configured. ' + remedy)
+    if descriptor.get('platform') == 'linux' and descriptor.get('deviceId') != linux_status().get('deviceId'):
+        raise ValueError('The selected Linux device changed after deployment. ' + remedy)
+    return descriptor
 
 
 def validate_registration(record):
-    if not re.fullmatch(r'device-[a-f0-9]{32}', record['deviceId']) \
-            or record['platform'] not in {'linux', 'windows'}:
+    if not re.fullmatch(r'device-[a-f0-9]{32}', record['deviceId']) or record['platform'] not in {'linux', 'windows'}:
         raise ValueError('Device registration requires an enrolled ID and linux/windows platform')
-    return {**record, 'profiles': example_profiles(record['profiles'])}
+    return {key: record[key] for key in ('deviceId', 'platform', 'gateway')}
 
 
 def device_available(row, now):
@@ -142,46 +264,16 @@ def select_device(config, registrations, target, device_id=None):
     members = set(group['deviceIds'])
     endpoints = {row['deviceId']: row for row in config.api('/api/control/v1/endpoint/devices')['items']}
     now = int(time.time() * 1000)
-    candidates = [record for record in registrations if record['deviceId'] in members
+    candidates = [record for record in registrations if record.get('gateway') == gateway_url() and record['deviceId'] in members
                   and (target == 'any' or record['platform'] == target)
                   and (not device_id or record['deviceId'] == device_id)
                   and device_available(endpoints.get(record['deviceId'], {}), now)]
     if not candidates:
         raise ValueError(f'No available prepared {target} device in {DEVICE_GROUP}. '
                          'Enroll/approve and enable the device on this Gateway; for Windows run '
-                         'prepare-windows.ps1 and copy its public .state/devices registration here.')
+                         'prepare-windows.ps1 and select its enrolled ID with --device-id.')
     # Pick once per run. A write is never retried against a different device.
     return secrets.choice(candidates)
-
-
-def refresh_local_registration(directory):
-    """Follow the installed Windows client's own profiles after an update, without elevation.
-
-    The client heals its built-in profiles for a new build at service start. Its public
-    export needs no administrator rights, so this machine's registration can follow it.
-    """
-    if os.name != 'nt' or not LOCAL_CLIENT.is_file():
-        return
-    host = os.environ.get('COMPUTERNAME', '').casefold()
-    windows = []
-    for path in sorted(directory.glob('device-*.json')):
-        record = json.loads(path.read_text(encoding='utf-8-sig'))
-        if record.get('platform') == 'windows' and record.get('gateway', '').rstrip('/') == gateway_url():
-            windows.append((path, record))
-    # Older registrations carry no host; a single one on this Gateway is this machine's.
-    mine = [item for item in windows if item[1].get('host', '').casefold() == host] or \
-        (windows if len(windows) == 1 and 'host' not in windows[0][1] else [])
-    if not mine:
-        return
-    result = subprocess.run([str(LOCAL_CLIENT), 'authorization-profiles'], capture_output=True, text=True, timeout=30)
-    if result.returncode:
-        print('Could not read the installed Windows client profiles; keeping its registration', flush=True)
-        return
-    profiles = example_profiles(json.loads(result.stdout))
-    for path, record in mine:
-        if record['profiles'] != profiles:
-            shared.private_file(path, json.dumps({**record, 'profiles': profiles}))
-            print('Refreshed ' + path.name + ' for the installed Windows client build', flush=True)
 
 
 def register_devices(config, args):
@@ -194,61 +286,29 @@ def register_devices(config, args):
         config.api('/api/control/v1/endpoint/enrollments/decision',
             dict(userCode=status['userCode'], keyFingerprint=status['keyFingerprint'], choice='APPROVE',
                  unlimitedConnection=False, connectionExpiresAtUnixMs=int(time.time()*1000)+86400000))
-    profiles = json.loads(docker('linux-device',
-        ['/usr/local/lib/olo-toolgate/olo-toolgate-client', 'authorization-profiles']))
-    directory = STATE / 'devices'
-    record = validate_registration(dict(deviceId=device, platform='linux', gateway=gateway_url(), profiles=profiles))
-    shared.private_file(directory / (device + '.json'), json.dumps(record))
-    if args.profiles:
-        imported = json.loads(args.profiles.read_text(encoding='utf-8-sig'))
-        if isinstance(imported, list):
-            if not args.device_id or args.target != 'windows':
-                raise ValueError('A raw Windows profile list requires --target windows --device-id. '
-                                 'Use the public .state/devices registration for automatic selection.')
-            imported = dict(deviceId=args.device_id, platform='windows', gateway=gateway_url(), profiles=imported)
-        imported = validate_registration(imported)
-        if imported['gateway'].rstrip('/') != gateway_url():
-            raise ValueError('Imported device registration belongs to another Gateway')
-        shared.private_file(directory / (imported['deviceId'] + '.json'), json.dumps(imported))
-    refresh_local_registration(directory)
-    registrations = []
-    endpoints = {row['deviceId']: row for row in config.api('/api/control/v1/endpoint/devices')['items']}
-    for path in sorted(directory.glob('device-*.json')):
-        record = validate_registration(json.loads(path.read_text(encoding='utf-8-sig')))
-        if record['gateway'].rstrip('/') != gateway_url():
-            continue
-        registrations.append(record)
-        row = endpoints.get(record['deviceId'], {})
-        endpoint = row.get('endpointDevice') or {}
-        if endpoint.get('connectionApproved') is True and (row.get('directoryDevice') or {}).get('enabled') is True:
-            # Preserve every existing membership; this example adds its shared group.
-            groups = config.api('/api/control/v1/devices/' + record['deviceId'] + '/groups')['groupIds']
-            config.memberships('devices', record['deviceId'], sorted(set(groups) | {DEVICE_GROUP}))
-    return registrations
+        wait_device(config, device)
+    records = [dict(deviceId=device, platform='linux', gateway=gateway_url())]
+    # Other devices are explicit operator selections; their package executor and
+    # public release trust must be configured through their administrator first.
+    if args.device_id and args.device_id != device:
+        if args.target != 'windows':
+            raise ValueError('An external device requires --target windows and an enrolled --device-id')
+        records.append(validate_registration(dict(deviceId=args.device_id, platform='windows', gateway=gateway_url())))
+    for record in records:
+        groups = config.api('/api/control/v1/devices/'+record['deviceId']+'/groups')['groupIds']
+        config.memberships('devices', record['deviceId'], sorted(set(groups) | {DEVICE_GROUP}))
+    return records
 
 
-def check_extractors(config, selection):
-    """Refuse a profile whose extractor would replace this Gateway's copy.
-
-    An installed client digests its own revision-1 extractor, and every Gateway edit
-    bumps the stored revision. One replacement therefore breaks discovery for every
-    client of these tool IDs, so stop before changing anything.
-    """
-    stored = {row['id']: row for row in config.all('extractors')}
-    for profile in selection['profiles']:
-        wanted, tool = profile['extractor'], profile['tool']['id']
-        current = stored.get(wanted['id'])
-        if current is None or current == wanted:
-            continue
-        if current.get('revision') != wanted.get('revision'):
-            raise ValueError(f'This Gateway\'s resource extractor for {tool} was edited (revision '
-                             f'{current.get("revision")}), so no installed client can match it. Reset this '
-                             'example with "docker compose down -v", run deploy again, then repair the Windows '
-                             'client connection and rerun prepare-windows.ps1.')
-        raise ValueError(f'The selected {selection["platform"]} client registers {tool} as version '
-                         f'{wanted.get("version")}, but this Gateway has version {current.get("version")}. '
-                         'Replacing it would stop every other client from matching. Install the client from this '
-                         'stack\'s console (Connect), rerun prepare-windows.ps1, then deploy again.')
+def configure_package_device():
+    # These are public verification keys, not signing keys or enrollment custody.
+    trust = dict(releaseKeys=json.loads(docker('quickstart', ['cat', '/data/keys/release-keys.json'])),
+                 organizationKeys=json.loads(docker('quickstart', ['cat', '/data/keys/organization-keys.json'])))
+    shared.private_file(STATE/'deployment-trust.json', json.dumps(trust))
+    docker('linux-device', ['python', '-c',
+        "import sys,json;from pathlib import Path;p=Path('/etc/olo-toolgate/client.json');"
+        "c=json.loads(p.read_text());c['deployment']=json.load(sys.stdin);p.write_text(json.dumps(c))"], json.dumps(trust))
+    subprocess.run(COMPOSE+['restart', 'linux-device'], check=True, capture_output=True, cwd=HERE)
 
 
 def load_mimic():
@@ -256,6 +316,40 @@ def load_mimic():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def wait_package_executor(config, release, device, seen_after, timeout=240, local_device=False):
+    """A fresh heartbeat can precede package recovery after a service restart."""
+    deadline = time.monotonic()+timeout
+    while True:
+        status = config.api('/api/control/v1/endpoint/devices/'+device)
+        reported = (status.get('report') or {}).get('packages', [])
+        if status.get('lastSeenUnixMs', 0) > seen_after and any(
+                package['packageId'] == release['packageId'] and package['version'] == release['version']
+                and package['state'] == 'READY' for package in reported):
+            if not local_device:
+                return None
+            local = ready_linux_status(device, seen_after)
+            if local:
+                return local
+        if time.monotonic() >= deadline:
+            raise ValueError('The signed package executor/local status did not recover after restart; inspect device activation logs')
+        time.sleep(2)
+
+
+def recover_device(config, selection, release):
+    local_device = selection['platform'] == 'linux'
+    if local_device:
+        result = subprocess.run(COMPOSE + ['restart', 'linux-device'], capture_output=True, text=True, cwd=HERE)
+        if result.returncode:
+            raise ValueError('Could not reconnect this example\'s Linux device')
+    # The old process can check in during shutdown. Capture the cutoff only
+    # after restart completes, so its heartbeat and READY report cannot qualify.
+    reconnect_after = int(time.time() * 1000)
+    print('Waiting for a post-restart device check-in and package recovery.', flush=True)
+    wait_device(config, selection['deviceId'], seen_after=reconnect_after, timeout=360)
+    return wait_package_executor(config, release, selection['deviceId'], reconnect_after,
+                                 local_device=local_device)
 
 
 def verify_discovery(selection, directory, target, timeout=30):
@@ -270,13 +364,36 @@ def verify_discovery(selection, directory, target, timeout=30):
             break
         time.sleep(3)
     device, platform = selection['deviceId'], selection['platform']
-    remedy = ('Install the current Windows client from this stack\'s console; it restores and refreshes its tool '
-              'profiles by itself. If the device never ran prepare-windows.ps1, run it once as Administrator.'
-              if platform == 'windows' else
-              'Rebuild the Linux device from the current image: run deploy.bat -Target linux without -SkipBuild.')
-    raise ValueError(f'The {platform} device {device} is connected, but the Gateway does not offer '
-                     f'{", ".join(missing)} for it. The installed client is not reporting the tool profiles '
-                     f'registered in .state/devices/{device}.json. {remedy}')
+    raise ValueError(f'The {platform} device {device} does not offer {", ".join(missing)}. '
+                     'Check the signed package rollout, current grants and device report; rerun deploy.bat.')
+
+
+def configure_execution(config, name, agent, device, profiles):
+    """Keep the shared selection group, then bind this run to its selected device and tools."""
+    base = dict(enabled=True, revision=1)
+    devices, agents, tools = name+'-devices', name+'-agents', TOOL_GROUP
+    config.upsert('device-groups', dict(**base, id=devices, name='LangChain selected device', deviceIds=[device]))
+    config.upsert('agent-groups', dict(**base, id=agents, name='LangChain selected agent', agentIds=[agent], roleIds=[]))
+    # SDK exports use invoke/CUSTOM, while standard presets use read/write/FILE.
+    # Keep package authorization explicit and restricted to these exact exports.
+    config.memberships('agents', agent, ['ReadAndWriteAgentGroup', agents])
+    scope = config.api('/api/control/v1/grants/standard-ReadAndWrite-capability')['scope']
+    scope = {**scope, 'toolGroups': dict(ids=[tools], all=False), 'deviceGroups': dict(ids=[devices], all=False),
+             'actions': sorted({action['name'] for profile in profiles for action in profile['tool']['definition']['actions']}),
+             'allActions': False,
+             'resources': [dict(kind='CUSTOM', locator='tool://'+tool, match='EXACT') for tool in sorted(TOOLS)]}
+    for purpose in ('CAPABILITY', 'SERVICE'):
+        config.upsert('grants', dict(**base, id=name+'-'+purpose.lower(), name='LangChain '+purpose.lower(),
+                                    sourceType='AGENT_GROUP', sourceId=agents, purpose=purpose, scope=scope))
+    config.upsert('policies', dict(**base, id=name+'-access', name='LangChain selected-device access', decision='ALLOW',
+        scope=scope, teams=dict(ids=[], all=False), agentGroups=dict(ids=[agents], all=False),
+        approverTeams=dict(ids=[], all=False)))
+    binding = name+'-binding'
+    config.upsert('bindings', dict(**base, id=binding, name='LangChain selected-device execution',
+        toolGroupId=tools, deviceGroupId=devices, actions=scope['actions'],
+        allowedPackageDigests=sorted({profile['tool']['packageDigest'] for profile in profiles}),
+        requireOnline=True, ownerDependency=False))
+    return binding, devices
 
 
 def provision(args):
@@ -288,25 +405,29 @@ def provision(args):
     registrations = register_devices(config, args)
     selection = select_device(config, registrations, args.target, args.device_id)
     device = selection['deviceId']
-    selected = selection['profiles']
+    configure_package_device()
+    wait_device(config, device)
+    release = packages.publish(config, STATE/'package/hotfolder.tgpkg')
+    selected = [{'tool': tool} for tool in config.all('tools') if tool['id'] in TOOLS]
+    if {profile['tool']['id'] for profile in selected} != TOOLS:
+        raise ValueError('The client release did not register the required HotFolder tools')
+    if not any(group['id'] == TOOL_GROUP for group in config.all('tool-groups')):
+        config.upsert('tool-groups', dict(id=TOOL_GROUP, name='LangChain HotFolder package tools', enabled=True,
+                                        revision=1, toolIds=[]))
+    for profile in selected:
+        tool = profile['tool']
+        if not tool['enabled']:
+            config.upsert('tools', {**tool, 'enabled': True})
+        config.memberships('tools', tool['id'], [TOOL_GROUP])
     print(f'Selected {selection["platform"]}: {device} from {DEVICE_GROUP}', flush=True)
     wait_device(config, device)
-    check_extractors(config, selection)
-    for profile in selected:
-        config.upsert('extractors', profile['extractor'])
-        config.upsert('tools', profile['tool'])
-        config.memberships('tools', profile['tool']['id'], ['ReadAndWriteToolGroup'])
+    packages.assign(config, release, device)
     name = 'langchain-' + args.target
     agent = name + '-agent'
     workload = name + '-workload'
     config.upsert('agents', dict(id=agent, name='LangChain ' + args.target + ' example', enabled=True,
                                 revision=1, ownerUserId=config.username))
-    config.memberships('agents', agent, ['ReadAndWriteAgentGroup'])
-    binding_id = 'standard-ReadAndWrite-ReadAndWrite'
-    binding = config.api('/api/control/v1/bindings/' + binding_id)
-    binding['allowedPackageDigests'] = sorted(set(binding['allowedPackageDigests']) |
-                                            {profile['tool']['packageDigest'] for profile in selected})
-    config.upsert('bindings', binding)
+    binding_id, execution_group = configure_execution(config, name, agent, device, selected)
     expires = int(time.time()*1000) + 86400000
     token = secrets.token_urlsafe(48)
     digest = hashlib.sha256(token.encode()).hexdigest()
@@ -315,19 +436,22 @@ def provision(args):
     config.upsert('workload-bindings', dict(id=workload, name='LangChain example credential', enabled=True,
         revision=1, agentId=agent, mode='SERVICE', issuer='gateway', subject=name, audience='gateway',
         credentialSha256=digest, credentialEpoch=epoch, expiresAtUnixMs=expires))
-    # The context names no device; Control places calls on a device of the binding's group.
+    # The context names no device; this binding's group contains only the selected member.
+    # Quickstart allocates a UUID tenant at first start; the container fills it in below.
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires, context=dict(requestId=name,
-        tenantId='quickstart', mode='SERVICE', credentialKind='STATIC_TOKEN', agentId=agent, workloadBindingId=workload,
+        tenantId=None, mode='SERVICE', credentialKind='STATIC_TOKEN', agentId=agent, workloadBindingId=workload,
         chain=[], credentialEpoch=epoch, expiresAtUnixMs=expires, credentialSha256=digest, bindingId=binding_id))
     # Install opaque bearer facts only. No private signing key or server-side verifier is read.
     docker('quickstart', ['/opt/quickstart-python/bin/python', '-c',
         "import sys,json,time,os;os.umask(0o077);sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
         "p=s.DATA/'client-runtime-credentials.json';v=s.strict(p.read_bytes()) if p.exists() else [];c=json.load(sys.stdin);"
+        "c['context']['tenantId']=s.strict((s.DATA/'state/tenant.json').read_bytes())['tenantId'];"
         "v=[x for x in v if x['expiresAtUnixMs']>int(time.time()*1000) and x['context'].get('workloadBindingId')!=c['context']['workloadBindingId']];"
         "assert len(v)<32;s.atomic(p,json.dumps(v+[c]))"], json.dumps(credential))
     directory = STATE / 'agents'
     shared.private_file(directory / (args.target + '.token'), token)
-    descriptor = dict(deviceId=device, platform=selection['platform'], deviceGroupId=DEVICE_GROUP,
+    descriptor = dict(deviceId=device, platform=selection['platform'], deviceGroupId=execution_group,
+                      selectionGroupId=DEVICE_GROUP,
                       agentId=agent, bindingId=binding_id, expiresAtUnixMs=expires, gateway=gateway_url())
     shared.private_file(directory / (args.target + '.json'), json.dumps(descriptor))
     shared.private_file(directory / 'gateway-ca.crt', docker('quickstart', ['cat', '/data/keys/device-ca.crt']))
@@ -335,18 +459,10 @@ def provision(args):
     if result.returncode:
         raise ValueError('Could not restart this example\'s Quickstart to load its credential')
     wait_ready()
-    # Shutdown grace still permits old-process check-ins. Only a heartbeat after
-    # the replacement Gateway is ready proves the device has reconnected.
-    reconnect_after = int(time.time() * 1000)
-    if selection['platform'] == 'linux':
-        # Clear retry backoff from the gateway restart; identity/files stay in volumes.
-        result = subprocess.run(COMPOSE + ['restart', 'linux-device'], capture_output=True, text=True, cwd=HERE)
-        if result.returncode:
-            raise ValueError('Could not reconnect this example\'s Linux device')
-    print('Waiting for a fresh device check-in after the Gateway restart (up to 6 minutes for client retry backoff).', flush=True)
-    wait_device(config, device, seen_after=reconnect_after, timeout=360)
+    local_status = recover_device(config, selection, release)
     verify_discovery(selection, directory, args.target)
-    print(f'Configured {selection["platform"]}: {device} in {DEVICE_GROUP}. Group changes were independently reviewed. Credentials expire in 24 hours.')
+    sync_deployment_metadata(local_status)
+    print(f'Configured {selection["platform"]}: {device} in {DEVICE_GROUP}. Configuration applied through the Control API. Credentials expire in 24 hours.')
     print('Private runner credentials: ' + str(directory))
 
 
@@ -360,12 +476,22 @@ def main():
     setup.add_argument('--bootstrap-local', action='store_true', help='Use/change the isolated stack\'s one-time installation passwords; retain independent reviewer identities')
     setup.add_argument('--approve-linux-device', action='store_true', help='Approve only the fingerprint-checked Compose Linux device for 24 hours')
     setup.add_argument('--device-id')
-    setup.add_argument('--profiles', type=Path)
+    sub.add_parser('prepare', help='Build the HotFolder package and prepare the local OCI registry')
     sub.add_parser('status')
+    verify = sub.add_parser('verify-deployment', help='Check saved trust and target before running the agent')
+    verify.add_argument('--target', choices=['any', 'linux', 'windows'], default='any')
+    sub.add_parser('sync-deployment', help='Refresh public container and network details from Docker')
     args = parser.parse_args()
     STATE.mkdir(mode=0o700, exist_ok=True)
-    if args.command == 'setup':
+    if args.command == 'prepare':
+        packages.prepare(COMPOSE, STATE, os.environ)
+    elif args.command == 'setup':
         provision(args)
+    elif args.command == 'verify-deployment':
+        verify_deployment(args.target)
+        print('Saved deployment matches the current Gateway trust and selected device.')
+    elif args.command == 'sync-deployment':
+        sync_deployment_metadata()
     else:
         print(json.dumps(linux_status(), indent=2))
 

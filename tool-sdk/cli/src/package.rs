@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! `.tgpkg` verification, validation and packing (plan.md §7.2 and §7.6).
+//! `.tgpkg` verification, validation and packing (platform-requirements.md §7.2 and §7.6).
 //!
 //! - [`verify`] applies the archive rules every hop runs: the zip rules, the exact file set
 //!   against a canonical `CHECKSUMS.sha256`, and manifest artifact digests.
@@ -19,7 +19,7 @@ use std::path::Path;
 pub const CHECKSUMS: &str = "CHECKSUMS.sha256";
 pub const MANIFEST: &str = "toolgate-package.json";
 const SIGNATURES: &str = "signatures/";
-/// Platform ceilings (plan.md §13.5): tools per package and canonical descriptor size.
+/// Platform ceilings (platform-requirements.md §13.5): tools per package and canonical descriptor size.
 pub const MAX_TOOLS: u64 = 64;
 pub const MAX_DESCRIPTOR_BYTES: u64 = 1024 * 1024;
 /// Optional files `pack` copies from the staging directory when present.
@@ -102,7 +102,7 @@ pub fn render_checksums(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
         .into_bytes()
 }
 
-/// The archive rules run at every hop (plan.md §7.6).
+/// The archive rules run at every hop (platform-requirements.md §7.6).
 pub fn verify(data: &[u8]) -> Result<Verified, Error> {
     let archive = archive::read(data)?;
     let checksums = archive
@@ -204,9 +204,14 @@ pub fn validate(data: &[u8]) -> Result<Report, Error> {
     let manifest = &verified.manifest;
     validate_manifest_schema(manifest)?;
     let package_id = str_at(manifest, "id")?;
-    let generation = manifest
-        .pointer("/sdk/descriptorGeneration")
-        .and_then(Value::as_u64);
+    // A generated MCP_PROXY package has no SDK block; its descriptors are generation 1.
+    let generation = if manifest.get("kind").and_then(Value::as_str) == Some("MCP_PROXY") {
+        Some(1)
+    } else {
+        manifest
+            .pointer("/sdk/descriptorGeneration")
+            .and_then(Value::as_u64)
+    };
     let limits = manifest.get("limits").cloned().unwrap_or(Value::Null);
     let max_tools = limits
         .get("maxTools")
@@ -225,10 +230,21 @@ pub fn validate(data: &[u8]) -> Result<Report, Error> {
         .flatten()
         .filter_map(|r| r.get("runtimeId").and_then(Value::as_str))
         .collect();
+    let java: BTreeSet<&str> = manifest["runtimes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|r| r.get("language").and_then(Value::as_str) == Some("java"))
+        .filter_map(|r| r.get("runtimeId").and_then(Value::as_str))
+        .collect();
+    let mut jars = BTreeSet::new();
     let mut artifact_ids = BTreeSet::new();
     let mut artifact_paths = BTreeSet::new();
     for artifact in manifest["artifacts"].as_array().into_iter().flatten() {
         let id = str_at(artifact, "artifactId")?;
+        if artifact.get("mediaType").and_then(Value::as_str) == Some("application/java-archive") {
+            jars.insert(id);
+        }
         let path = str_at(artifact, "path")?;
         if !artifact_ids.insert(id) || !artifact_paths.insert(path) {
             return Err(reject(format!("duplicate artifact {id:?}")));
@@ -300,6 +316,17 @@ pub fn validate(data: &[u8]) -> Result<Report, Error> {
         if let Some(runtime) = tool.get("runtimeId").and_then(Value::as_str) {
             if !runtimes.contains(runtime) {
                 return Err(reject(format!("{tool_id}: undeclared runtime {runtime:?}")));
+            }
+            // A Java tool is one self-contained jar, so a device needs only a JRE to run it.
+            if java.contains(runtime) {
+                match tool["artifactIds"].as_array().map(Vec::as_slice) {
+                    Some([only]) if only.as_str().is_some_and(|id| jars.contains(id)) => {}
+                    _ => {
+                        return Err(reject(format!(
+                            "{tool_id}: a Java tool must run from one self-contained jar"
+                        )))
+                    }
+                }
             }
         }
         digests.push((tool_id.to_owned(), digest));

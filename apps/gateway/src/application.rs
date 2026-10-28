@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Control is the online authority. Catalog entries are metadata, never effect grants.
 use crate::{relay::RelayPort, validation::Contracts};
-use olo_toolgate_contracts::v2::RequestContext;
+use olo_toolgate_contracts::v2::{ExecutionContext, RequestContext};
 use olo_toolgate_contracts::*;
 use std::sync::Arc;
 
@@ -15,6 +15,16 @@ impl Gateway {
         &self,
         request: AuthorizationRequest,
         context: RequestContext,
+    ) -> Result<EnterpriseAuthorizationOutcome, ErrorCode> {
+        self.authorize_with(request, context, None).await
+    }
+    /// As [`Self::authorize`], also forwarding the caller's declared correlation (ADR 031). Control records it for
+    /// Insights and keeps it out of the request's idempotency digest; it never affects the decision.
+    pub async fn authorize_with(
+        &self,
+        request: AuthorizationRequest,
+        context: RequestContext,
+        execution_context: Option<ExecutionContext>,
     ) -> Result<EnterpriseAuthorizationOutcome, ErrorCode> {
         if !self.contracts.valid(
             "AuthorizationRequest",
@@ -37,6 +47,7 @@ impl Gateway {
             tool_digest: tool.tool_digest.clone(),
             package_digest: tool.package_digest.clone(),
             downstream_idempotency_key: None,
+            execution_context,
         };
         let invocation = self.authority.invoke(&submission).await?;
         // A dependency cannot substitute another actor, binding or input. Control chooses the device.

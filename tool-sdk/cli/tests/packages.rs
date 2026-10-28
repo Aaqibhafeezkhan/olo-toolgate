@@ -157,3 +157,21 @@ fn validate_rejects_a_manifest_outside_the_schema() {
         Err(Error::Rejected(_))
     ));
 }
+
+#[test]
+fn a_java_tool_must_run_from_one_self_contained_jar() {
+    let mut split = source_manifest();
+    split["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({"artifactId":"libs","path":"artifacts/libs.zip","mediaType":"application/zip","runtimeId":"jvm"}));
+    split["tools"][0]["artifactIds"] = serde_json::json!(["app", "libs"]);
+    let staging = stage("split", &split, ARTIFACT);
+    std::fs::write(staging.join("artifacts/libs.zip"), b"PK libs").unwrap();
+    match package::pack(&staging) {
+        Err(Error::Rejected(message)) => {
+            assert!(message.contains("self-contained jar"), "{message}")
+        }
+        other => panic!("a split Java tool was not rejected: {other:?}"),
+    }
+}

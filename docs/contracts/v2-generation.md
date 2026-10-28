@@ -22,7 +22,7 @@ How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the froze
    | TypeScript | package root | subpath export `@olo-labs/toolgate-contracts/v2` |
    | PHP | `OloLabs\ToolGate\Contracts` | `OloLabs\ToolGate\Contracts\V2` |
 
-   Same package identities and one shared SemVer; no new artifacts.
+   Same package identities and one shared SemVer; no new artifacts. Closed records may reference an explicit definition in the other bundled version (`../v1/...` or `../v2/...`). Generation qualifies the target namespace, and offline validators register both canonical versions while exposing only their selected version's model names. References outside the bundled set remain invalid; composition keywords remain unsupported. The v2 scoped console response reuses frozen v1 endpoint health and enrollment prompts through this rule.
 
 2. **Same structural subset, two additions.** v2 schemas stay inside the v1 generator's subset (enforced now by `test_definitions_stay_in_the_generator_subset`). The generator gains exactly:
    - `type: number` → `f64` / `Double` / `number` / `float`;

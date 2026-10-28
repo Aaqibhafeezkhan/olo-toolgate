@@ -4,14 +4,19 @@ FROM rust:1.94.1-alpine@sha256:77237dd363a0b127bb5ef532c2d64c0deb380b738e43a9c4b
 WORKDIR /src
 ARG VERSION
 ARG TARGETARCH
-COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION ./
+COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
+COPY packages/tenant-identity/rust packages/tenant-identity/rust
 COPY apps/gateway/Cargo.toml apps/gateway/Cargo.toml
 COPY apps/gateway/src apps/gateway/src
 COPY apps/gateway/benches apps/gateway/benches
 COPY apps/endpoint-client/Cargo.toml apps/endpoint-client/Cargo.toml
 COPY apps/endpoint-client/src apps/endpoint-client/src
-COPY packages/contracts/tools packages/contracts/tools
+COPY apps/tool-host/Cargo.toml apps/tool-host/Cargo.toml
+COPY apps/tool-host/src apps/tool-host/src
+COPY tool-sdk/cli tool-sdk/cli
+# The CLI embeds the community guide for `toolgate guide`.
+COPY TOOL-SDK-GUIDE.md TOOL-SDK-GUIDE.md
 RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=toolgate-gateway-musl-${TARGETARCH},target=/src/target,sharing=locked \
     test "$VERSION" = "$(cat VERSION)" && cargo build --release --locked -p olo-toolgate-gateway --bin olo-toolgate-gateway && \

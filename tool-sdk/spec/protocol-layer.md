@@ -40,7 +40,9 @@ Rules that hold in every language:
 
 ### A1 Protocol core
 
-**Used where:** the official SDK lacks the 2026-07-28 server core (Java 2.0.1).
+**Used where:** the Java SDK uses the ToolGate core. Python follows that core's
+observable behavior under [ADR 028](../../docs/adr/028-python-sdk-java-parity.md).
+The historical official-SDK compatibility record is separate evidence.
 
 - Implements `server/discover`, `tools/list`, `tools/call` (with `resultType`), per-request `_meta` validation, errors -32020, -32021 and -32022, and `subscriptions/listen` for `toolsListChanged`.
 - Routes by version: a request carrying 2026-07-28 `_meta` goes to A1; `initialize` and other 2025-11-25 traffic goes to the official SDK's legacy path unchanged. Both versions are served on one URL and over stdio.
@@ -53,7 +55,7 @@ Rules that hold in every language:
 **Used in:** all four languages. The .NET Tasks package is not used, so semantics are identical.
 
 - Methods: `CreateTaskResult` from `tools/call`, `tasks/get`, `tasks/update`, `tasks/cancel`, and `notifications/tasks` (status push over `subscriptions/listen`).
-- State mapping, ownership and TTL as in plan.md §12.4 and §12.6. A task is visible only to the identity that created it; any other identity gets not-found, never forbidden.
+- State mapping, ownership and TTL as in platform-requirements.md §12.4 and §12.6. A task is visible only to the identity that created it; any other identity gets not-found, never forbidden.
 - Storage through the port `TaskStore { create, get, transition, submitInput, requestCancel, purgeExpired }`; memory and SQLite implementations in standalone mode; Control in governed mode.
 - **Acceptance:** ToolGate Tasks cases: capability per request, foreign identity not-found, TTL purge, state mapping, cancellation with and without `cancelIfAbandoned`, status push.
 
@@ -62,8 +64,9 @@ Rules that hold in every language:
 **Used in:** all four languages.
 
 - A compact JWS, HS256, with a per-process random key (at least 256 bits) in standalone mode. In governed mode the SDK never mints or verifies `requestState`: Control mints it with the ASK outcome and verifies it on the retry, and the Gateway holds no key (ADR 013, decision 9).
-- Payload `{toolId, argsHash, identity, scope, approvalId?, exp, nonce}`; `argsHash` is the `sha256:` digest of the JCS canonical arguments; `exp` at most 10 minutes after issue.
-- Verified before any re-dispatch: signature, `exp`, same `toolId`, same `argsHash`, same identity and scope. Each `nonce` is accepted once within its lifetime.
+- Payload `{toolId, argsHash, identity, scope, approvalId?, exp, nonce, responses}`; `argsHash` is the `sha256:` digest of the JCS canonical arguments; `exp` at most 10 minutes after issue; `responses` is the object of input responses from earlier rounds, so a retry sends only the new answers. The client supplied every response, so the payload is signed, not encrypted.
+- Verified before any re-dispatch: signature, `exp`, same `toolId`, same `argsHash`, same identity and scope. Each `nonce` is accepted once within its lifetime. Every refusal is the same `-32602` and reveals nothing about the original call.
+- The layer mints the state on every `InputRequiredResult`, and refuses with `-32021` an input request whose method needs a client capability the request did not declare (`elicitation`, `sampling` or `roots`). Input responses sent without a state are the client's own answers and are used as they are.
 - **Acceptance:** ToolGate MRTR cases: tampered payload, expired, other identity, other arguments, replay.
 
 ### A4 Identity
@@ -74,7 +77,7 @@ Rules that hold in every language:
 - JWT: JWKS fetched over HTTPS and cached, refreshed on an unknown `kid` at most once per 30 s; pinned keys as an alternative; issuer and audience exact match; algorithm allowlist (`none` and HMAC always rejected); `exp` and `nbf` required with at most 60 s skew.
 - Introspection: RFC 7662 with client credentials, `active` required, cache bounded by the token's `exp` and at most 5 minutes.
 - Runs before dispatch; behaviour by mode in [runtime-modes.md](runtime-modes.md) §4.
-- **Acceptance:** shared token fixtures, identical in every language: good, expired, not yet valid, wrong issuer, wrong audience, `alg: none`, HS256 with the public key as secret, unknown `kid` (then known after refresh), revoked by introspection.
+- **Acceptance:** shared token fixtures, identical in every language ([conformance/fixtures/identity](../conformance/fixtures/identity/README.md)): good, expired, not yet valid, wrong issuer, wrong audience, `alg: none`, HS256 with the public key as secret, unknown `kid` (then known after refresh), revoked by introspection.
 
 ### A5 Method routing
 

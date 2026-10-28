@@ -10,6 +10,7 @@ base { archivesName.set("toolgate-sdk-runtime-mcp") }
 dependencies {
     api(project(":sdk-java-api"))
     api(project(":sdk-java-protocol"))
+    implementation(libs.sqlite.jdbc)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)
     testImplementation(project(":sdk-java-processor"))

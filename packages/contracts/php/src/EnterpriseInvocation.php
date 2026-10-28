@@ -19,12 +19,13 @@ final readonly class EnterpriseInvocation implements \JsonSerializable {
         public string $diagnosticId,
         public ?string $reservedNonce = null,
         public ?string $downstreamIdempotencyKey = null,
-        public ?string $resultDigest = null
+        public ?string $resultDigest = null,
+        public ?ReconciliationMethod $reconciliation = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'requestDigest', 'evaluation', 'state', 'revision', 'authorizationEpoch', 'reservedNonce', 'expiresAtUnixMs', 'completedResources', 'downstreamIdempotencyKey', 'resultDigest', 'diagnosticId']) || array_diff(['id', 'requestDigest', 'evaluation', 'state', 'revision', 'authorizationEpoch', 'expiresAtUnixMs', 'completedResources', 'diagnosticId'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'requestDigest', 'evaluation', 'state', 'revision', 'authorizationEpoch', 'reservedNonce', 'expiresAtUnixMs', 'completedResources', 'downstreamIdempotencyKey', 'resultDigest', 'diagnosticId', 'reconciliation']) || array_diff(['id', 'requestDigest', 'evaluation', 'state', 'revision', 'authorizationEpoch', 'expiresAtUnixMs', 'completedResources', 'diagnosticId'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -39,7 +40,8 @@ final readonly class EnterpriseInvocation implements \JsonSerializable {
             $data['diagnosticId'],
             array_key_exists('reservedNonce', $data) ? $data['reservedNonce'] : null,
             array_key_exists('downstreamIdempotencyKey', $data) ? $data['downstreamIdempotencyKey'] : null,
-            array_key_exists('resultDigest', $data) ? $data['resultDigest'] : null
+            array_key_exists('resultDigest', $data) ? $data['resultDigest'] : null,
+            array_key_exists('reconciliation', $data) ? ReconciliationMethod::from($data['reconciliation']) : null
         );
     }
 

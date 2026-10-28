@@ -1,23 +1,21 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! Runtime boundary negatives plus explicit real-engine tests (run by runtime_check.py).
+//! Managed SDK runtime boundary: fixed launch vectors, exact versions, closed configuration, and tool protocol v2
+//! end to end through the engine with the device files broker. The real-engine test is run by runtime_check.py.
 use olo_toolgate_client::{
-    builtins::AuthorizationPort,
-    execution::{adapters, Manager, Settings},
+    execution::{adapters, AuthorizationPort, Manager, Settings},
     transport::Call,
     Failure, Result,
 };
 use olo_toolgate_contracts::*;
 use serde_json::json;
 use std::{
-    collections::BTreeMap,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
 struct Policy {
     result: Result<()>,
-    deadline: Option<u64>,
     calls: Mutex<Vec<AuthorizationRequest>>,
 }
 impl AuthorizationPort for Policy {
@@ -27,143 +25,109 @@ impl AuthorizationPort for Policy {
     }
     fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, Option<u64>> {
         self.calls.lock().unwrap().push(request);
-        Box::pin(async { self.result.map(|_| self.deadline) })
+        Box::pin(async {
+            self.result
+                .map(|_| Some(olo_toolgate_client::now() + 60000))
+        })
     }
 }
-fn tool(kind: LocalRuntimeKind) -> LocalToolRegistration {
-    let name = match kind {
-        LocalRuntimeKind::Native => "run",
-        LocalRuntimeKind::Python => "tool.py",
-        LocalRuntimeKind::Node => "tool.mjs",
-        LocalRuntimeKind::Powershell => "tool.ps1",
-        LocalRuntimeKind::Shell => "tool.sh",
-        LocalRuntimeKind::JavaJar => "tool.jar",
-        LocalRuntimeKind::Dotnet => "tool.dll",
-        _ => "unsupported",
-    };
-    let timeout = if kind == LocalRuntimeKind::Powershell {
-        10000
-    } else {
-        3000
-    };
-    let memory = if kind == LocalRuntimeKind::Powershell {
-        512
-    } else {
-        128
-    };
-    let mut value = json!({"toolId":"local.echo","action":"execute","runtimeId":"runtime-test","entryPoint":format!("/opt/tool/{name}"),
-        "inputSchema":{"type":"object","additionalProperties":false,"properties":{"text":{"type":"string","maxLength":256},"mode":{"type":"string"}},"required":["text","mode"]},
-        "outputSchema":{"type":"object","additionalProperties":false,"properties":{"text":{"type":"string"},"isolated":{"type":"boolean"},"threads":{"type":"boolean"}},"required":["text"]},
-        "limits":{"timeoutMs":timeout,"memoryMiB":memory,"maxInputBytes":4096,"maxOutputBytes":4096}});
-    value["authorizationProfile"] = json!({"tool":{"id":"local.echo","name":"Echo","enabled":true,"revision":1,"version":"1.0.0","packageDigest":"a".repeat(64),"extractorId":"extract-echo","definition":{"id":"local.echo","name":"Echo","description":"Fixture compute capability","actions":[{"name":"execute","resourceKinds":["CUSTOM"]}],"inputSchema":value["inputSchema"],"outputSchema":value["outputSchema"]}},"extractor":{"id":"extract-echo","name":"Resources","enabled":true,"revision":1,"extractorKind":"FIELDS","version":"1.0.0","fields":[],"fixedResources":[{"kind":"CUSTOM","locator":"runtime/local.echo"}],"maxResources":1}});
+/// A temporary directory protected storage accepts: on macOS the temporary directory is under the /var symbolic link,
+/// and protected storage refuses links among its parents.
+#[cfg(unix)]
+fn custody_base() -> PathBuf {
+    std::env::temp_dir().canonicalize().unwrap()
+}
+
+fn tool(access: Option<LocalFileAccess>) -> LocalToolRegistration {
+    let mut value = json!({"toolId":"acme.notes/notes.read","action":"invoke","runtimeId":"java-sdk","entryPoint":"/opt/tool/acme.notes/tool.jar",
+        "inputSchema":{"type":"object","additionalProperties":false,"properties":{"path":{"type":"string","maxLength":128}},"required":["path"]},
+        "outputSchema":{"type":"object","additionalProperties":false,"properties":{"first":{"type":"object"},"second":{"type":"object"}},"required":["first","second"]},
+        "limits":{"timeoutMs":3000,"memoryMiB":256,"maxInputBytes":4096,"maxOutputBytes":8192}});
+    if let Some(access) = access {
+        value["fileAccess"] = serde_json::to_value(access).unwrap();
+    }
+    value["authorizationProfile"] = json!({"tool":{"id":"acme.notes/notes.read","name":"Read","enabled":true,"revision":1,"version":"1.0.0","packageDigest":"a".repeat(64),"extractorId":"extract-notes","definition":{"id":"acme.notes/notes.read","name":"Read","description":"Reads a note","actions":[{"name":"invoke","resourceKinds":["CUSTOM"]}],"inputSchema":value["inputSchema"],"outputSchema":value["outputSchema"]}},"extractor":{"id":"extract-notes","name":"Resources","enabled":true,"revision":1,"extractorKind":"FIELDS","version":"1.0.0","fields":[],"fixedResources":[{"kind":"CUSTOM","locator":"tool://acme.notes/notes.read"}],"maxResources":1}});
     serde_json::from_value(value).unwrap()
 }
-fn settings() -> Settings {
+fn settings(engine: PathBuf, state: PathBuf, access: Option<LocalFileAccess>) -> Settings {
     let mut settings = Settings {
-        engine_path: PathBuf::from(if cfg!(windows) {
-            "C:/Program Files/Docker/Docker/resources/bin/docker.exe"
-        } else {
-            "/usr/bin/docker"
-        }),
+        engine_path: engine,
         engine_endpoint: "unix:///var/run/docker.sock".into(),
-        state_directory: PathBuf::from(if cfg!(windows) {
-            "C:/ProgramData/olo-toolgate/runtimes"
-        } else {
-            "/var/lib/olo-toolgate/runtimes"
-        }),
+        state_directory: state,
         allow_first_use_pull: false,
         pull_timeout_seconds: 30,
         runtimes: vec![ManagedRuntime {
-            id: "runtime-test".into(),
-            kind: LocalRuntimeKind::Python,
-            image: format!("sha256:{}", "a".repeat(64)),
-            version: "3.14.0".into(),
+            id: "java-sdk".into(),
+            kind: LocalRuntimeKind::JavaSdk,
+            image: format!("sha256:{}", "b".repeat(64)),
+            version: "21.0.12+1".into(),
         }],
-        tools: vec![tool(LocalRuntimeKind::Python)],
+        tools: vec![tool(access)],
+        files: None,
     };
-    repin(&mut settings);
+    for tool in &mut settings.tools {
+        tool.authorization_profile.tool.package_digest =
+            olo_toolgate_client::authorization_profile::managed_package_digest(
+                tool,
+                &settings.runtimes[0],
+            )
+            .unwrap();
+    }
     settings
 }
-fn repin(settings: &mut Settings) {
-    for tool in &mut settings.tools {
-        let runtime = settings
-            .runtimes
-            .iter()
-            .find(|r| r.id == tool.runtime_id)
-            .unwrap();
-        tool.authorization_profile.tool.package_digest =
-            olo_toolgate_client::authorization_profile::managed_package_digest(tool, runtime)
-                .unwrap();
-    }
-}
-fn input(text: &str, mode: &str) -> LocalToolInput {
-    LocalToolInput {
-        protocol_version: 1,
-        request_id: "runtime-request".into(),
-        tool_id: "local.echo".into(),
-        arguments: serde_json::from_value(json!({"text":text,"mode":mode})).unwrap(),
-    }
-}
+
 #[test]
-fn fixed_adapter_vectors_never_interpolate_input() {
-    for kind in [
-        LocalRuntimeKind::Native,
-        LocalRuntimeKind::Python,
-        LocalRuntimeKind::Node,
-        LocalRuntimeKind::Powershell,
-        LocalRuntimeKind::Shell,
-        LocalRuntimeKind::JavaJar,
-        LocalRuntimeKind::Dotnet,
+fn the_launch_vector_is_fixed_and_never_interpolates_input() {
+    let args = adapters::invocation_arguments(&LocalRuntimeKind::JavaSdk, &tool(None)).unwrap();
+    assert_eq!(&args[..2], ["/usr/bin/env", "-i"]);
+    assert!(args.contains(&"TOOLGATE_PROTOCOL=2".into()));
+    assert!(args.contains(&"TOOLGATE_EXECUTION_TARGET=CLIENT".into()));
+    assert_eq!(
+        &args[args.len() - 3..],
+        [
+            "-cp",
+            "/opt/tool/acme.notes/tool.jar",
+            "io.ololabs.toolgate.runtime.Main"
+        ]
+    );
+    for bad in [
+        "/opt/tool/../escape.jar",
+        "/opt/tool/a//b.jar",
+        "/opt/tool/.hidden.jar",
+        "/opt/tool/a.jar;id",
+        "/opt/tool/tool.py",
+        "C:\\tools\\file.jar",
+        "--eval",
     ] {
-        let args = adapters::invocation_arguments(&kind, &tool(kind.clone())).unwrap();
-        assert_eq!(args[0], "/usr/bin/env");
-        assert_eq!(args[1], "-i");
-        assert!(!args
-            .iter()
-            .any(|v| ["-c", "-Command", "/c"].contains(&v.as_str())));
-        for bad in [
-            "/opt/tool/../escape.py",
-            "/opt/tool/a//b.py",
-            "/opt/tool/.hidden.py",
-            "/opt/tool/a.py;id",
-            "C:\\tools\\file.py",
-            "--eval",
-            "/opt/tool/a.py\n",
-        ] {
-            let mut badtool = tool(kind.clone());
-            badtool.entry_point = bad.into();
-            assert_eq!(
-                adapters::invocation_arguments(&kind, &badtool).unwrap_err(),
-                Failure::Validation
-            );
-        }
+        let mut badtool = tool(None);
+        badtool.entry_point = bad.into();
+        assert_eq!(
+            adapters::invocation_arguments(&LocalRuntimeKind::JavaSdk, &badtool).unwrap_err(),
+            Failure::Validation,
+            "{bad}"
+        );
     }
-    assert_eq!(
-        adapters::executable(&LocalRuntimeKind::Batch),
-        Err(Failure::Unsupported)
-    );
-    assert_eq!(
-        adapters::executable(&LocalRuntimeKind::Wasm),
-        Err(Failure::Unsupported)
-    );
 }
+
 #[test]
 fn exact_versions_and_closed_configuration_fail_safely() {
-    adapters::verify_version(b"Python 3.14.0\n", "3.14.0").unwrap();
-    assert_eq!(
-        adapters::verify_version(b"Python 3.14.0\n", "3.1.0"),
-        Err(Failure::Unsupported)
-    );
-    assert_eq!(
-        adapters::verify_version(b"secret invalid\nPython 3.14.0", "3.14.0"),
-        Err(Failure::Unsupported)
-    );
-    adapters::verify_version(b"openjdk version \"21.0.12.1\"\n", "21.0.12+1").unwrap();
+    adapters::verify_version(b"Python 3.12.14\n", "3.12.14").unwrap();
+    assert!(adapters::verify_version(b"Python 3.12.14\n", "3.12.1").is_err());
+    adapters::verify_version(
+        b"openjdk version \"21.0.12.1\" 2026-08-18 LTS\n",
+        "21.0.12+1",
+    )
+    .unwrap();
     assert!(adapters::verify_version(b"openjdk version \"21.0.12.1\"\n", "21.0.12").is_err());
-    let original = settings();
+    assert!(
+        adapters::verify_version(b"secret\nopenjdk version \"21.0.12.1\"", "21.0.12+1").is_err()
+    );
+    // Absolute on every platform; validation never touches these paths.
+    let base = std::env::temp_dir();
+    let original = settings(base.join("docker"), base.join("runtimes"), None);
     original.validate().unwrap();
     let mut bad = original.clone();
-    bad.runtimes[0].image = "python:latest".into();
+    bad.runtimes[0].image = "eclipse-temurin:latest".into();
     assert!(bad.validate().is_err());
     let mut bad = original.clone();
     bad.tools[0]
@@ -171,258 +135,322 @@ fn exact_versions_and_closed_configuration_fail_safely() {
         .insert("$ref".into(), json!("https://metadata.invalid/schema"));
     assert!(bad.validate().is_err());
     let mut bad = original.clone();
-    bad.tools[0]
-        .output_schema
-        .insert("pattern".into(), json!("unbounded"));
-    assert!(bad.validate().is_err());
-    let mut bad = original.clone();
-    bad.tools[0].tool_id = "hotfolder.read_text".into();
-    assert!(bad.validate().is_err());
-    let mut bad = original.clone();
     bad.tools[0].limits.memory_mi_b = 4096;
     assert!(bad.validate().is_err());
     let mut bad = original.clone();
     bad.runtimes.push(bad.runtimes[0].clone());
     assert!(bad.validate().is_err());
-}
-#[test]
-fn protocol_binding_and_malformed_outputs_reject() {
-    let contracts = olo_toolgate_client::contracts::Contracts::new().unwrap();
-    for bad in [
-        br#"{"protocolVersion":1,"requestId":"r","requestId":"other","output":{}}"#.as_slice(),
-        br#"{"protocolVersion":1,"requestId":"r","output":{},"secret":"no"}"#,
-        br#"{} {}"#,
-        br#"not json"#,
-    ] {
-        assert!(contracts
-            .decode::<LocalToolOutput>("LocalToolOutput", bad)
-            .is_err());
-    }
-    let request = LocalRuntimeIpcRequest {
-        protocol_version: 3,
-        request_id: "r".into(),
-        operation: LocalRuntimeOperation::Status,
-        invocation: None,
-    };
-    let bytes = contracts
-        .encode("LocalRuntimeIpcRequest", &request)
-        .unwrap();
-    assert!(contracts
-        .decode::<BuiltinIpcRequest>("BuiltinIpcRequest", &bytes)
-        .is_err());
-    assert!(contracts
-        .decode::<ClientIpcRequest>("ClientIpcRequest", &bytes)
-        .is_err());
+    // A registration changed after signing no longer matches its pinned package digest.
+    let mut bad = original;
+    bad.tools[0].entry_point = "/opt/tool/acme.other/tool.jar".into();
+    assert!(bad.validate().is_err());
 }
 
-/// Explicitly invoked by the real-engine CI gate; not a silently skipped test.
+#[test]
+fn python_sdk_has_a_fixed_isolated_launch_vector_and_rejects_other_artifacts() {
+    let mut registration = tool(None);
+    registration.entry_point = "/opt/tool/acme.tools/tool.pyz".into();
+    let args = adapters::invocation_arguments(&LocalRuntimeKind::PythonSdk, &registration).unwrap();
+    assert_eq!(
+        &args[args.len() - 3..],
+        &[
+            "/usr/local/bin/python3",
+            "-I",
+            "/opt/tool/acme.tools/tool.pyz"
+        ]
+    );
+    assert_eq!(
+        adapters::version_arguments(&LocalRuntimeKind::PythonSdk).unwrap(),
+        vec!["/usr/local/bin/python3", "-I", "--version"]
+    );
+    registration.entry_point = "/opt/tool/acme.tools/tool.jar".into();
+    assert_eq!(
+        Failure::Validation,
+        adapters::invocation_arguments(&LocalRuntimeKind::PythonSdk, &registration).unwrap_err()
+    );
+}
+
+/// A fake engine CLI: `start` plays a tool speaking tool protocol v2, sending the broker requests listed in
+/// `requests` and returning the answers it read in its RESULT. Everything else answers as a healthy engine.
+#[cfg(unix)]
+fn fake_engine(dir: &std::path::Path) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let capabilities = r#"{"OSType":"linux","MemoryLimit":true,"SwapLimit":true,"PidsLimit":true,"CpuCfsQuota":true,"SecurityOptions":["name=seccomp,profile=builtin"]}"#;
+    let d = dir.display();
+    let script = format!(
+        r#"#!/bin/sh
+case "$5" in
+info) printf '%s\n' '{capabilities}' ;;
+image) printf '%s\n' "{{\"Id\":\"$7\",\"Os\":\"linux\",\"Config\":{{}}}}" ;;
+ps) exit 0 ;;
+rm) exit 0 ;;
+create) case "$*" in *-version*) printf probe > '{d}/'"$7" ;; *) printf tool > '{d}/'"$7" ;; esac ;;
+start)
+  if [ "$(cat '{d}/'"$8")" = probe ]; then printf 'openjdk version "21.0.12.1" 2026-08-18 LTS\n' >&2; exit 0; fi
+  read -r input
+  printf '%s' "$input" > '{d}/input'
+  exec 3< '{d}/requests'
+  read -r r1 <&3; read -r r2 <&3
+  printf '%s\n' "$r1"; read -r a
+  printf '%s\n' "$r2"; read -r b
+  printf '{{"kind":"RESULT","resultType":"complete","content":[],"structuredContent":{{"first":%s,"second":%s}},"isError":false}}\n' "$a" "$b"
+  ;;
+*) exit 1 ;;
+esac
+"#
+    );
+    let binary = dir.join("docker-fixture");
+    std::fs::write(&binary, script).unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+    binary
+}
+
+#[cfg(unix)]
 #[tokio::test]
-#[ignore = "requires tools/client/runtime_check.py real Docker fixture provisioning"]
-async fn real_managed_runtime_security_boundary() {
-    let images: BTreeMap<String, serde_json::Value> = serde_json::from_str(
-        &std::env::var("TOOLGATE_RUNTIME_TEST_IMAGES").expect("real image evidence required"),
+async fn tool_protocol_v2_brokers_only_the_signed_file_access_for_authorized_paths() {
+    use std::os::unix::fs::PermissionsExt;
+    struct Directory(PathBuf);
+    impl Drop for Directory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let dir = Directory(custody_base().join(format!(
+        "toolgate-protocol-{}",
+        olo_toolgate_client::identity::nonce().unwrap()
+    )));
+    let _custody = olo_toolgate_client::storage::ProtectedStore::open(dir.0.clone()).unwrap();
+    let engine = fake_engine(&dir.0);
+    let files = dir.0.join("files");
+    let _area = olo_toolgate_client::storage::ProtectedStore::open(files.clone()).unwrap();
+    std::fs::write(files.join("notes.txt"), "hello").unwrap();
+    std::fs::set_permissions(
+        files.join("notes.txt"),
+        std::fs::Permissions::from_mode(0o600),
     )
     .unwrap();
-    let base = PathBuf::from(std::env::var("TOOLGATE_RUNTIME_TEST_STATE").unwrap());
-    let docker = PathBuf::from(std::env::var("TOOLGATE_RUNTIME_TEST_ENGINE").unwrap());
-    let endpoint = std::env::var("TOOLGATE_RUNTIME_TEST_ENDPOINT").unwrap();
-    let _custody = olo_toolgate_client::storage::ProtectedStore::open(base.clone())
-        .expect("owned fixture state custody");
-    olo_toolgate_client::storage::check_parents(&docker).expect("engine executable parent custody");
-    olo_toolgate_client::storage::check_owned(&docker, false).expect("engine executable custody");
-    for (index, (kind, descriptor)) in images.iter().enumerate() {
-        let kind: LocalRuntimeKind = serde_json::from_value(json!(kind)).unwrap();
-        let mut settings = settings();
-        settings.engine_path = docker.clone();
-        settings.engine_endpoint = endpoint.clone();
-        settings.state_directory = base.join(format!("case-{index}"));
-        settings.runtimes[0].kind = kind.clone();
-        settings.runtimes[0].image = descriptor["image"].as_str().unwrap().into();
-        settings.runtimes[0].version = descriptor["version"].as_str().unwrap().into();
-        settings.tools[0] = tool(kind.clone());
-        repin(&mut settings);
-        let policy = Arc::new(Policy {
-            result: Ok(()),
-            deadline: None,
-            calls: Mutex::new(Vec::new()),
-        });
-        if matches!(
-            kind,
-            LocalRuntimeKind::Python
-                | LocalRuntimeKind::Node
-                | LocalRuntimeKind::Powershell
-                | LocalRuntimeKind::Shell
-        ) {
-            let code=match kind {
-                LocalRuntimeKind::Python=>"def tool(arguments):\n    return {'text':arguments['text']}\n",
-                LocalRuntimeKind::Node=>"function tool(arguments){return {text:arguments.text};}",
-                LocalRuntimeKind::Powershell=>"function tool($arguments) { return @{text=$arguments.text} }",
-                // Fixed self-test request/result using Bash builtins, without launching JSON helpers.
-                LocalRuntimeKind::Shell=>"tool() { printf '%s\\n' '{\"protocolVersion\":1,\"requestId\":\"request\",\"output\":{\"text\":\"inline-shell\"}}'; }",
-                _=>unreachable!(),
-            };
-            let mut inline = settings.clone();
-            inline.state_directory = base.join(format!("source-{index}"));
-            let hash = ring::digest::digest(&ring::digest::SHA256, code.as_bytes())
-                .as_ref()
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect();
-            inline.tools[0].source = Some(LocalToolSource {
-                code: code.into(),
-                sha256: hash,
+    let read = r#"{"kind":"BROKER_REQUEST","requestId":"b-1","operation":"FILES_READ","request":{"path":"notes.txt"}}"#;
+    let write_other = r#"{"kind":"BROKER_REQUEST","requestId":"b-2","operation":"FILES_WRITE","request":{"path":"other.txt","text":"x"}}"#;
+    let write_same = r#"{"kind":"BROKER_REQUEST","requestId":"b-2","operation":"FILES_APPEND","request":{"path":"notes.txt","text":" world"}}"#;
+    let route = r#"{"kind":"BROKER_REQUEST","requestId":"b-2","operation":"ROUTE_CALL","request":{"route":"x"}}"#;
+    let run = |access: Option<LocalFileAccess>, first: &str, second: &str| {
+        let engine = engine.clone();
+        let state = dir.0.join("runtimes");
+        let files = files.clone();
+        std::fs::write(dir.0.join("requests"), format!("{first}\n{second}\n")).unwrap();
+        async move {
+            let mut settings = settings(engine, state, access);
+            settings.files = Some(olo_toolgate_client::files::Settings {
+                root: files,
+                max_file_bytes: 65536,
+                max_entries: 64,
+                extensions: vec!["txt".into()],
             });
-            repin(&mut inline);
-            let mut runner = Manager::new(inline, policy.clone()).unwrap();
-            let mut invocation = input("inline-shell", "echo");
-            invocation.request_id = "request".into();
-            assert_eq!(
-                runner
-                    .invoke(invocation, olo_toolgate_client::now() + 60000)
-                    .await
-                    .unwrap()
-                    .output["text"],
-                json!("inline-shell"),
-                "inline {kind:?}"
-            );
-            runner.shutdown().await.unwrap();
-            let calls = policy.calls.lock().unwrap();
-            assert_eq!(
-                calls[0].arguments,
-                serde_json::from_value(json!({"text":"inline-shell","mode":"echo"})).unwrap()
-            );
-            assert!(!serde_json::to_string(&calls[0]).unwrap().contains(code));
-            drop(calls);
-            policy.calls.lock().unwrap().clear();
-        }
-        let mut manager = Manager::new(settings.clone(), policy.clone()).unwrap();
-        assert!(!manager.health().ready);
-        assert!(
-            manager.prepare().await.unwrap().ready,
-            "runtime {kind:?} version/sandbox self-test failed"
-        );
-        let payload = "'; $(touch /escape) & | > < --eval \"\\ unicode-π";
-        let output = manager
-            .invoke(input(payload, "echo"), olo_toolgate_client::now() + 60000)
-            .await
-            .unwrap();
-        assert_eq!(output.output["text"], json!(payload));
-        assert_eq!(
-            policy.calls.lock().unwrap()[0].arguments,
-            serde_json::from_value(json!({"text":payload,"mode":"echo"})).unwrap()
-        );
-        // A fresh online grant is required even after an image was prepared.
-        let mut denied = Manager::new(
-            settings.clone(),
-            Arc::new(Policy {
-                result: Err(Failure::Unavailable),
-                deadline: None,
-                calls: Mutex::new(Vec::new()),
-            }),
-        )
-        .unwrap();
-        assert_eq!(
-            denied
-                .invoke(input("private", "echo"), olo_toolgate_client::now() + 60000)
-                .await
-                .unwrap_err(),
-            Failure::Unavailable
-        );
-        let mut bad = input("private", "echo");
-        bad.tool_id = "unassigned.tool".into();
-        assert_eq!(
-            manager
-                .invoke(bad, olo_toolgate_client::now() + 60000)
-                .await
-                .unwrap_err(),
-            Failure::Unauthorized
-        );
-        if kind == LocalRuntimeKind::Python {
-            let mut expired_permit = Manager::new(
-                settings.clone(),
-                Arc::new(Policy {
-                    result: Ok(()),
-                    deadline: Some(olo_toolgate_client::now() + 1000),
-                    calls: Mutex::new(Vec::new()),
-                }),
-            )
-            .unwrap();
-            assert_eq!(
-                expired_permit
-                    .invoke(input("private", "echo"), olo_toolgate_client::now() + 60000)
-                    .await
-                    .unwrap_err(),
-                Failure::Expired
-            );
-            let mut pull = settings.clone();
-            pull.allow_first_use_pull = true;
-            pull.runtimes[0].version = std::env::var("TOOLGATE_RUNTIME_PULL_VERSION").unwrap();
-            pull.tools.clear();
-            pull.runtimes[0].image = std::env::var("TOOLGATE_RUNTIME_PULL_IMAGE")
-                .expect("initially absent real registry image required");
-            let mut pull = Manager::new(pull, policy.clone()).unwrap();
-            assert!(
-                pull.prepare().await.unwrap().ready,
-                "pinned managed Python could not be provisioned"
-            );
-            let proof = manager
+            let policy = Arc::new(Policy {
+                result: Ok(()),
+                calls: Mutex::new(vec![]),
+            });
+            let mut manager = Manager::new(settings, policy.clone()).unwrap();
+            let output = manager
                 .invoke(
-                    input("safe", "isolation"),
+                    LocalToolInput {
+                        protocol_version: 1,
+                        request_id: "inv-device-1".into(),
+                        tool_id: "acme.notes/notes.read".into(),
+                        arguments: serde_json::from_value(json!({"path": "notes.txt"})).unwrap(),
+                    },
                     olo_toolgate_client::now() + 60000,
                 )
                 .await
                 .unwrap();
-            assert_eq!(proof.output["isolated"], json!(true));
-            assert_eq!(proof.output["threads"], json!(true));
-            for mode in [
-                "overflow",
-                "malformed",
-                "duplicate",
-                "wrong-request",
-                "stderr",
-                "wrong-schema",
-            ] {
-                assert!(
-                    manager
-                        .invoke(input("private", mode), olo_toolgate_client::now() + 60000)
-                        .await
-                        .is_err(),
-                    "accepted {mode}"
-                );
-            }
             assert_eq!(
-                manager
-                    .invoke(
-                        input("private", "timeout"),
-                        olo_toolgate_client::now() + 60000
-                    )
-                    .await
-                    .unwrap_err(),
-                Failure::Expired
+                policy.calls.lock().unwrap().len(),
+                1,
+                "one authorization per invocation"
             );
-            assert!(manager
-                .invoke(
-                    input("private", "memory"),
-                    olo_toolgate_client::now() + 60000
-                )
-                .await
-                .is_err());
-            let mut wrong = settings.clone();
-            wrong.runtimes[0].version = "0.0.1".into();
-            let mut wrong = Manager::new(wrong, policy.clone()).unwrap();
-            assert!(!wrong.prepare().await.unwrap().ready);
-            let mut missing = settings.clone();
-            missing.runtimes[0].image = format!("sha256:{}", "f".repeat(64));
-            let mut missing = Manager::new(missing, policy.clone()).unwrap();
-            assert!(!missing.prepare().await.unwrap().ready);
-            assert_eq!(
-                manager
-                    .invoke(input("private", "echo"), olo_toolgate_client::now() + 1)
-                    .await
-                    .unwrap_err(),
-                Failure::Expired
-            );
+            serde_json::to_value(output.output).unwrap()
         }
-        println!("real {kind:?} runtime protocol, injection, version, online authorization and cleanup passed");
+    };
+
+    // READ: the authorized path is read; a write is refused whatever the path.
+    let out = run(Some(LocalFileAccess::Read), read, write_same).await;
+    assert_eq!(out["first"]["result"]["text"], "hello", "{out}");
+    assert!(
+        out["second"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("does not grant"),
+        "{out}"
+    );
+    let input: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.0.join("input")).unwrap()).unwrap();
+    assert_eq!(input["protocolVersion"], 2);
+    assert_eq!(input["invocationId"], "inv-device-1");
+    assert_eq!(input["arguments"], json!({"path": "notes.txt"}));
+    // WRITE: only paths the invocation was authorized with.
+    let out = run(Some(LocalFileAccess::Write), write_other, write_same).await;
+    assert!(
+        out["first"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not one this invocation was authorized with"),
+        "{out}"
+    );
+    assert!(out["second"].get("result").is_some(), "{out}");
+    assert!(!files.join("other.txt").exists());
+    assert_eq!(
+        std::fs::read_to_string(files.join("notes.txt")).unwrap(),
+        "hello world"
+    );
+    // No grant: no files at all. Route calls belong to Tool Hosts.
+    let out = run(None, read, route).await;
+    assert!(
+        out["first"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("does not grant"),
+        "{out}"
+    );
+    assert!(
+        out["second"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not available on a device"),
+        "{out}"
+    );
+}
+
+/// Without a local Gateway credential a device runs only what Control relays and authorizes; a local call is refused
+/// before the tool starts.
+#[cfg(unix)]
+#[tokio::test]
+async fn without_a_local_gateway_credential_local_calls_are_refused() {
+    struct Directory(PathBuf);
+    impl Drop for Directory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let dir = Directory(custody_base().join(format!(
+        "toolgate-relay-only-{}",
+        olo_toolgate_client::identity::nonce().unwrap()
+    )));
+    let _custody = olo_toolgate_client::storage::ProtectedStore::open(dir.0.clone()).unwrap();
+    let engine = fake_engine(&dir.0);
+    std::fs::write(
+        dir.0.join("requests"),
+        "
+
+",
+    )
+    .unwrap();
+    let mut manager = Manager::new(
+        settings(engine, dir.0.join("runtimes"), None),
+        Arc::new(olo_toolgate_client::execution::RelayOnly),
+    )
+    .unwrap();
+    let refused = manager
+        .invoke(
+            LocalToolInput {
+                protocol_version: 1,
+                request_id: "inv-local-1".into(),
+                tool_id: "acme.notes/notes.read".into(),
+                arguments: serde_json::from_value(json!({"path": "notes.txt"})).unwrap(),
+            },
+            olo_toolgate_client::now() + 60000,
+        )
+        .await;
+    assert_eq!(refused.err(), Some(Failure::Unauthorized));
+    assert!(!dir.0.join("input").exists(), "the tool never started");
+}
+
+/// The same real-engine gate for Java and Python Hello World on their pinned bases.
+#[tokio::test]
+#[ignore = "requires tools/client/runtime_check.py real Docker fixture provisioning"]
+async fn real_engine_runs_hello_world_over_tool_protocol_v2() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .with_test_writer()
+        .try_init();
+    let image = std::env::var("TOOLGATE_RUNTIME_TEST_IMAGE").expect("real image evidence required");
+    let state = PathBuf::from(std::env::var("TOOLGATE_RUNTIME_TEST_STATE").unwrap());
+    let engine = PathBuf::from(std::env::var("TOOLGATE_RUNTIME_TEST_ENGINE").unwrap());
+    let mut settings = settings(engine, state, None);
+    settings.engine_endpoint = std::env::var("TOOLGATE_RUNTIME_TEST_ENDPOINT").unwrap();
+    settings.runtimes[0].image = image;
+    let python = std::env::var("TOOLGATE_RUNTIME_TEST_SDK").as_deref() == Ok("python");
+    let package = if python {
+        "ololabs.hello-world-python"
+    } else {
+        "ololabs.hello-world"
+    };
+    if python {
+        settings.runtimes[0].id = "python-sdk".into();
+        settings.runtimes[0].kind = LocalRuntimeKind::PythonSdk;
+        settings.runtimes[0].version = std::env::var("TOOLGATE_RUNTIME_TEST_VERSION").unwrap();
+    }
+    let mut registration = settings.tools[0].clone();
+    registration.tool_id = format!("{package}/client_greet");
+    registration.runtime_id = settings.runtimes[0].id.clone();
+    // Match the greeting declaration's 10-second budget, rather than the notes fixture's 3 seconds.
+    registration.limits.timeout_ms = 10000;
+    registration.entry_point = format!(
+        "/opt/tool/{package}/tool.{}",
+        if python { "pyz" } else { "jar" }
+    );
+    registration.input_schema = serde_json::from_value(json!({"type":"object","additionalProperties":false,"properties":{"text":{"type":"string","default":"World","maxLength":128}},"required":[]})).unwrap();
+    registration.output_schema = serde_json::from_value(json!({"type":"object","additionalProperties":false,"properties":{"message":{"type":"string"}},"required":["message"]})).unwrap();
+    registration.authorization_profile.tool.id = registration.tool_id.clone();
+    registration.authorization_profile.tool.definition.id = registration.tool_id.clone();
+    registration
+        .authorization_profile
+        .tool
+        .definition
+        .input_schema = registration.input_schema.clone();
+    registration
+        .authorization_profile
+        .tool
+        .definition
+        .output_schema = registration.output_schema.clone();
+    registration.authorization_profile.tool.package_digest =
+        olo_toolgate_client::authorization_profile::managed_package_digest(
+            &registration,
+            &settings.runtimes[0],
+        )
+        .unwrap();
+    settings.tools = vec![registration];
+    let mut manager = Manager::new(
+        settings,
+        Arc::new(Policy {
+            result: Ok(()),
+            calls: Mutex::new(vec![]),
+        }),
+    )
+    .unwrap();
+    let health = manager.prepare().await.unwrap();
+    assert!(
+        health.ready,
+        "Managed runtime preparation rejected: {health:?}"
+    );
+    for (index, (arguments, expected)) in [
+        (json!({}), "Hello World"),
+        (json!({"text": "Anupriya"}), "Hello Anupriya"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let output = manager
+            .invoke(
+                LocalToolInput {
+                    protocol_version: 1,
+                    request_id: format!("inv-real-{index}"),
+                    tool_id: format!("{package}/client_greet"),
+                    arguments: serde_json::from_value(arguments).unwrap(),
+                },
+                olo_toolgate_client::now() + 60000,
+            )
+            .await
+            .unwrap();
+        assert_eq!(output.output["message"], expected);
     }
 }

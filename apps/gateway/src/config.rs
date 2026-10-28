@@ -41,6 +41,9 @@ impl Default for Limits {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
+    #[serde(default)]
+    pub public_discovery: Option<crate::discovery::Settings>,
+    pub tenant_hosts: Vec<String>,
     pub control: crate::relay::RelayConfig,
     pub listen: SocketAddr,
     pub management_listen: SocketAddr,
@@ -48,12 +51,64 @@ pub struct Config {
     pub allowed_origins: Vec<String>,
     #[serde(default)]
     pub limits: Limits,
+    /// Tool Hosts this Gateway dispatches to; any other device's calls go through the relay.
+    #[serde(default)]
+    pub tool_hosts: Vec<crate::toolhost::ToolHostRoute>,
+    /// OLO user credentials issued by Control (M3.4); without it, HUMAN bearers are refused.
+    #[serde(default)]
+    pub user_credentials: Option<crate::user_credential::Settings>,
+    /// Operator Insights admission counters (ADR 031); off unless the mode is BASIC or DETAILED.
+    #[serde(default)]
+    pub insights: crate::insights::Settings,
 }
 
 impl Config {
     /// Invalid or unbounded configuration prevents startup.
     pub fn validate(&self, _contracts: &Contracts, _now: u64) -> Result<(), &'static str> {
         self.control.validate()?;
+        self.insights.validate()?;
+        if let Some(users) = &self.user_credentials {
+            users.validate()?;
+        }
+        if self.tenant_hosts.is_empty() || self.tenant_hosts.len() > 16 {
+            return Err("explicit tenant authorities required");
+        }
+        let mut authorities = std::collections::BTreeSet::new();
+        for host in &self.tenant_hosts {
+            if !authorities
+                .insert(crate::tenancy::authority(host).map_err(|_| "invalid tenant authority")?)
+            {
+                return Err("duplicate tenant authority");
+            }
+        }
+        if let Some(discovery) = &self.public_discovery {
+            discovery.validate()?;
+            if !self.control.development_loopback_http
+                && (self.control.url.trim_end_matches('/') != discovery.control_origin
+                    || !authorities.contains(
+                        &crate::tenancy::authority(
+                            discovery.gateway_origin.trim_start_matches("https://"),
+                        )
+                        .map_err(|_| "invalid public Gateway authority")?,
+                    ))
+            {
+                return Err(
+                    "discovery must bind the configured Control origin and owned Gateway authority",
+                );
+            }
+        } else if !self.control.development_loopback_http {
+            return Err("public tenant discovery required");
+        }
+        if self.tool_hosts.len() > 64 {
+            return Err("at most 64 Tool Hosts");
+        }
+        let mut hosts = std::collections::BTreeSet::new();
+        for route in &self.tool_hosts {
+            route.validate()?;
+            if !hosts.insert(&route.host_id) {
+                return Err("each Tool Host id is listed once");
+            }
+        }
         if self.limits.request_timeout_ms < 10000 {
             return Err("online authority requires a ten-second request budget");
         }
@@ -102,6 +157,11 @@ impl Config {
 
 /// Bound startup file reads, including files whose metadata size is misleading.
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, &'static str> {
+    serde_json::from_slice(&read_bytes(path)?).map_err(|_| "invalid configuration JSON")
+}
+
+/// Bounded read of a mounted file; the credential reload uses the same bound as startup.
+pub fn read_bytes(path: &Path) -> Result<Vec<u8>, &'static str> {
     let file = std::fs::File::open(path).map_err(|_| "configuration file unavailable")?;
     let mut bytes = Vec::new();
     file.take(1_048_577)
@@ -110,5 +170,5 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, &'sta
     if bytes.len() > 1_048_576 {
         return Err("configuration file too large");
     }
-    serde_json::from_slice(&bytes).map_err(|_| "invalid configuration JSON")
+    Ok(bytes)
 }

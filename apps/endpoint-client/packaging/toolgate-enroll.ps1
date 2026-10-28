@@ -9,8 +9,8 @@ do {
     $ErrorActionPreference = 'Continue'
     # A reinstall that resumed its enrollment is already connected; nothing to approve.
     $enrollHealth = & $enrollClient health 2>$null | Out-String
-    if ($LASTEXITCODE -eq 0 -and $enrollHealth -match '"state":"(ACTIVE|OFFLINE|REVOKED)"') { exit 0 }
-    $enrollOutput = & $enrollClient enroll 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0 -and $enrollHealth -match '"state":"(ACTIVE|OFFLINE)"') { exit 0 }
+    $enrollOutput = & $enrollClient request-approval 2>&1 | Out-String
     $enrollExitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($enrollExitCode -eq 0) { break }

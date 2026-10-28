@@ -5,7 +5,7 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
-use olo_toolgate_contracts::v2::{RequestContext, RequestMode};
+use olo_toolgate_contracts::v2::{self, RequestContext, RequestMode};
 use olo_toolgate_contracts::*;
 use olo_toolgate_gateway::{
     application::Gateway,
@@ -31,7 +31,7 @@ fn fixtures() -> Value {
     .unwrap()
 }
 fn context() -> RequestContext {
-    serde_json::from_value(json!({"requestId":"operation","tenantId":"tenant-demo","mode":"DELEGATED","userId":"user-demo","agentId":"agent-demo","workloadBindingId":"workload","chain":[],"sessionEpoch":1,"credentialEpoch":1,"credentialKind":"STATIC_TOKEN","bindingId":"binding","credentialSha256":digest(TOKEN.as_bytes())})).unwrap()
+    serde_json::from_value(json!({"requestId":"operation","tenantId":"10000000-0000-4000-8000-000000000001","mode":"DELEGATED","userId":"user-demo","agentId":"agent-demo","workloadBindingId":"workload","chain":[],"sessionEpoch":1,"credentialEpoch":1,"credentialKind":"STATIC_TOKEN","bindingId":"binding","credentialSha256":digest(TOKEN.as_bytes())})).unwrap()
 }
 fn credential() -> Credential {
     Credential {
@@ -41,13 +41,147 @@ fn credential() -> Credential {
     }
 }
 fn config() -> Config {
-    serde_json::from_value(json!({"listen":"127.0.0.1:8081","managementListen":"127.0.0.1:9091","trustedTlsProxy":false,"allowedOrigins":[],"control":{"url":"http://127.0.0.1:8080/","tokenPath":"/run/control-token","developmentLoopbackHttp":true},"limits":{"maxBodyBytes":65536,"maxHeaderBytes":8192,"maxConcurrentRequests":4,"maxConnections":8,"requestsPerSecond":1000,"requestTimeoutMs":10000,"connectionTimeoutMs":12000,"shutdownTimeoutMs":15000,"auditQueueCapacity":256}})).unwrap()
+    serde_json::from_value(json!({"tenantHosts":["gate.example.test"],"listen":"127.0.0.1:8081","managementListen":"127.0.0.1:9091","trustedTlsProxy":false,"allowedOrigins":[],"control":{"tenantId":"10000000-0000-4000-8000-000000000001","url":"http://127.0.0.1:8080/","tokenPath":"/run/control-token","developmentLoopbackHttp":true},"limits":{"maxBodyBytes":65536,"maxHeaderBytes":8192,"maxConcurrentRequests":4,"maxConnections":8,"requestsPerSecond":1000,"requestTimeoutMs":10000,"connectionTimeoutMs":12000,"shutdownTimeoutMs":15000,"auditQueueCapacity":256}})).unwrap()
 }
 fn payload() -> Value {
     json!({"toolId":"files.read","action":"read","arguments":{"path":"data/report.txt"}})
 }
+#[test]
+fn tenant_bound_credentials_reject_foreign_mounts_and_keep_the_old_set_on_reload_failure() {
+    let contracts = Contracts::new().unwrap();
+    let now = unix_ms().unwrap();
+    let tenant = config().control.tenant_id;
+    let auth = Authenticator::new(vec![credential()], &contracts, now)
+        .unwrap()
+        .for_tenant(tenant.clone())
+        .unwrap();
+    let before = auth.loaded();
+    let mut foreign = credential();
+    foreign.context.tenant_id = "10000000-0000-4000-8000-000000000002".into();
+    assert!(Authenticator::new(vec![foreign.clone()], &contracts, now)
+        .unwrap()
+        .for_tenant(tenant)
+        .is_err());
+    assert!(auth
+        .reload(
+            &serde_json::to_vec(&vec![foreign]).unwrap(),
+            &contracts,
+            now
+        )
+        .is_err());
+    assert_eq!(auth.loaded(), before);
+    assert!(auth
+        .authenticate(TOKEN, "still-owned".into(), now)
+        .is_some());
+}
+#[tokio::test]
+async fn public_metadata_is_anonymous_but_keeps_host_and_uuid_fences_and_fixed_tls_source() {
+    let authority = Arc::new(Authority::default());
+    let mut settings = config();
+    settings.public_discovery = Some(olo_toolgate_gateway::discovery::Settings {
+        control_origin: "https://127.0.0.1:1".into(),
+        gateway_origin: "https://gate.example.test".into(),
+    });
+    let router = runtime_router(state_with(authority.clone(), settings));
+    for path in [
+        "/.well-known/olo-toolgate-client",
+        "/api/public/v1/clients/configuration",
+    ] {
+        let request = Request::builder()
+            .uri(path)
+            .header("host", "gate.example.test")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body["code"], "DEPENDENCY_UNAVAILABLE");
+        let request = Request::builder()
+            .uri(path)
+            .header("host", "foreign.example.test")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["code"], "TENANT_UNAVAILABLE");
+        let request = Request::builder()
+            .uri(path)
+            .header("host", "gate.example.test")
+            .header("Toolgate-Tenant-ID", "10000000-0000-4000-8000-000000000002")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["code"], "TENANT_MISMATCH");
+    }
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 0);
+}
+#[test]
+fn production_discovery_requires_canonical_owned_origins() {
+    let contracts = Contracts::new().unwrap();
+    let mut settings = config();
+    settings.control.url = "https://control.example.test".into();
+    settings.control.development_loopback_http = false;
+    assert!(settings.validate(&contracts, 1).is_err());
+    settings.public_discovery = Some(olo_toolgate_gateway::discovery::Settings {
+        control_origin: settings.control.url.clone(),
+        gateway_origin: "https://gate.example.test".into(),
+    });
+    assert!(settings.validate(&contracts, 1).is_ok());
+    settings.public_discovery.as_mut().unwrap().gateway_origin =
+        "https://foreign.example.test".into();
+    assert!(settings.validate(&contracts, 1).is_err());
+    settings.public_discovery.as_mut().unwrap().gateway_origin = "https://gate.example.test".into();
+    settings.public_discovery.as_mut().unwrap().control_origin =
+        "https://foreign.example.test".into();
+    assert!(settings.validate(&contracts, 1).is_err());
+}
+#[tokio::test]
+async fn host_and_expected_uuid_fences_run_before_authority_calls() {
+    let authority = Arc::new(Authority::default());
+    let router = runtime_router(state(authority.clone()));
+    let mut request = req("/access/invocations", payload());
+    request
+        .headers_mut()
+        .insert("host", "other.example.test".parse().unwrap());
+    request.headers_mut().insert(
+        "toolgate-tenant-id",
+        "10000000-0000-4000-8000-000000000002".parse().unwrap(),
+    );
+    let (status, body) = call(router.clone(), request).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "TENANT_UNAVAILABLE");
+    let mut request = req("/access/invocations", payload());
+    request.headers_mut().insert(
+        "toolgate-tenant-id",
+        "10000000-0000-4000-8000-000000000002".parse().unwrap(),
+    );
+    let (status, body) = call(router.clone(), request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body["code"], "TENANT_MISMATCH");
+    for value in [
+        "quickstart",
+        "10000000-0000-4000-8000-000000000001,10000000-0000-4000-8000-000000000002",
+    ] {
+        let mut request = req("/access/invocations", payload());
+        request
+            .headers_mut()
+            .insert("toolgate-tenant-id", value.parse().unwrap());
+        let (status, body) = call(router.clone(), request).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["code"], "INVALID_TENANT_ID");
+    }
+    let mut request = req("/access/invocations", payload());
+    *request.uri_mut() = "https://other.example.test/access/invocations"
+        .parse()
+        .unwrap();
+    let (status, body) = call(router, request).await;
+    assert_eq!(status, StatusCode::MISDIRECTED_REQUEST);
+    assert_eq!(body["code"], "MISDIRECTED_REQUEST");
+    assert_eq!(authority.reservations.load(Ordering::SeqCst), 0);
+}
 #[derive(Default)]
 struct Authority {
+    cancellations: Mutex<Vec<RequestContext>>,
     failure: bool,
     pending: bool,
     substitute: bool,
@@ -55,8 +189,33 @@ struct Authority {
     reservations: AtomicUsize,
     invocation: Mutex<Option<EnterpriseInvocation>>,
     submission: Mutex<Option<RemoteToolSubmission>>,
+    permit: Mutex<Option<v2::PermitReservationRequest>>,
+    /// Control placed the call on a Tool Host, so it signs a permit; otherwise the device is not
+    /// a Tool Host and the reservation is a conflict.
+    tool_host: bool,
+    /// Pull mode: the dispatch handed to Control, and how many status polls it took.
+    relayed: Mutex<Option<v2::Dispatch>>,
+    polls: AtomicUsize,
+    /// A repeated call: the invocation already succeeded and Control holds the Tool Host's result.
+    replayed: bool,
+    /// A repeated call whose invocation already ended in this state.
+    ended: Option<EnterpriseInvocationState>,
 }
 impl Authority {
+    /// The host claims the call on the second poll and finishes it on the third.
+    fn relay_status(&self) -> v2::ToolHostDispatchStatus {
+        let id = self.invocation.lock().unwrap().as_ref().unwrap().id.clone();
+        let polls = self.polls.fetch_add(1, Ordering::SeqCst);
+        let state = ["QUEUED", "ADMITTED", "FINISHED"][polls.min(2)];
+        let mut status = json!({"invocationId":id,"hostId":"placed-device","state":state});
+        if polls >= 1 {
+            status["admission"] = json!({"kind":"ADMITTED","invocationId":id,"fencingToken":"f"});
+        }
+        if polls >= 2 {
+            status["result"] = json!({"invocationId":id,"fencingToken":"f","outcome":"COMPLETED","result":{"kind":"RESULT","resultType":"complete","content":[{"type":"text","text":"hi"}],"structuredContent":{"greeting":"hi"},"isError":false}});
+        }
+        serde_json::from_value(status).unwrap()
+    }
     fn progress(&self, state: RemoteToolState) -> RemoteToolResponse {
         let guard = self.submission.lock().unwrap();
         let s = guard.as_ref().unwrap();
@@ -88,6 +247,54 @@ impl Authority {
     }
 }
 impl RelayPort for Authority {
+    fn cancel<'a>(
+        &'a self,
+        c: &'a RequestContext,
+    ) -> PortFuture<'a, Result<CancellationAccepted, ErrorCode>> {
+        Box::pin(async move {
+            self.cancellations.lock().unwrap().push(c.clone());
+            Ok(CancellationAccepted { cancelled: true })
+        })
+    }
+    fn permit<'a>(
+        &'a self,
+        r: &'a v2::PermitReservationRequest,
+    ) -> PortFuture<'a, Result<v2::SignedInvocationPermit, ErrorCode>> {
+        Box::pin(async move {
+            if !self.tool_host {
+                return Err(ErrorCode::Conflict);
+            }
+            *self.permit.lock().unwrap() = Some(r.clone());
+            Ok(v2::SignedInvocationPermit {
+                jws: "e30.e30.c2ln".into(),
+            })
+        })
+    }
+    fn relay_dispatch<'a>(
+        &'a self,
+        dispatch: &'a v2::Dispatch,
+    ) -> PortFuture<'a, Result<v2::ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(async move {
+            *self.relayed.lock().unwrap() = Some(dispatch.clone());
+            Ok(self.relay_status())
+        })
+    }
+    fn dispatch_status<'a>(
+        &'a self,
+        _: &'a str,
+    ) -> PortFuture<'a, Result<v2::ToolHostDispatchStatus, ErrorCode>> {
+        Box::pin(async move {
+            if self.replayed {
+                self.polls.store(2, Ordering::SeqCst);
+                return Ok(self.relay_status());
+            }
+            // Control holds a dispatch only for calls placed on a Tool Host.
+            if self.relayed.lock().unwrap().is_none() {
+                return Err(ErrorCode::NotFound);
+            }
+            Ok(self.relay_status())
+        })
+    }
     fn ready(&self, _: u64) -> bool {
         !self.failure
     }
@@ -103,7 +310,7 @@ impl RelayPort for Authority {
                 return Err(ErrorCode::DependencyUnavailable);
             }
             Ok(LocalToolCatalog {
-                tools: vec![BuiltinToolInfo {
+                tools: vec![LocalToolInfo {
                     tool_id: "files.read".into(),
                     action: "read".into(),
                     description: "Read".into(),
@@ -147,8 +354,15 @@ impl RelayPort for Authority {
             i.evaluation.tool_digest = r.tool_digest.clone();
             i.evaluation.package_digest = r.package_digest.clone();
             i.expires_at_unix_ms = unix_ms().unwrap() + 60000;
-            i.state = if self.ask {
+            if self.ended.is_some() {
+                i.reconciliation = Some(ReconciliationMethod::Manual);
+            }
+            i.state = if let Some(ended) = self.ended.clone() {
+                ended
+            } else if self.ask {
                 EnterpriseInvocationState::PendingApproval
+            } else if self.replayed {
+                EnterpriseInvocationState::Succeeded
             } else {
                 EnterpriseInvocationState::Queued
             };
@@ -192,21 +406,28 @@ impl RelayPort for Authority {
     }
 }
 fn state(a: Arc<Authority>) -> Arc<AppState> {
+    state_with(a, config())
+}
+fn state_with(a: Arc<Authority>, config: Config) -> Arc<AppState> {
     let contracts = Contracts::new().unwrap();
     let auth = Authenticator::new(vec![credential()], &contracts, unix_ms().unwrap()).unwrap();
-    Arc::new(AppState::new(
-        Gateway {
-            contracts,
-            authority: a,
-        },
-        auth,
-        config(),
-    ))
+    Arc::new(
+        AppState::new(
+            Gateway {
+                contracts,
+                authority: a,
+            },
+            auth,
+            config,
+        )
+        .unwrap(),
+    )
 }
 fn req(path: &str, body: Value) -> Request<Body> {
     Request::builder()
         .method("POST")
         .uri(path)
+        .header("host", "gate.example.test")
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {TOKEN}"))
         .header("idempotency-key", "logical-request")
@@ -417,6 +638,38 @@ async fn authoritative_timeout_is_bounded() {
     assert_eq!(code, StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(body["code"], "TIMEOUT");
 }
+/// OLO M5.4: a repeated key whose invocation ended reports the state, and nothing is dispatched again.
+#[tokio::test]
+async fn mcp_reports_an_ended_invocation_and_never_runs_it_again() {
+    for (ended, name) in [
+        (EnterpriseInvocationState::OutcomeUnknown, "OUTCOME_UNKNOWN"),
+        (EnterpriseInvocationState::Failed, "FAILED"),
+        (EnterpriseInvocationState::Cancelled, "CANCELLED"),
+        (EnterpriseInvocationState::Expired, "EXPIRED"),
+    ] {
+        let a = Arc::new(Authority {
+            ended: Some(ended),
+            ..Default::default()
+        });
+        let (code, body) = call(
+            runtime_router(state(a.clone())),
+            mcp("tools/call", Some("files.read")),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK, "{name}");
+        assert_eq!(body["result"]["structuredContent"]["state"], name);
+        assert_eq!(body["result"]["isError"], true);
+        assert_eq!(
+            body["result"]["structuredContent"]["reconciliation"],
+            "MANUAL"
+        );
+        assert!(
+            a.submission.lock().unwrap().is_none(),
+            "{name} was dispatched"
+        );
+        assert!(a.permit.lock().unwrap().is_none(), "{name} got a permit");
+    }
+}
 #[tokio::test]
 async fn mcp_uses_original_arguments_and_reports_approval_without_dispatch() {
     let a = Arc::new(Authority {
@@ -532,7 +785,7 @@ async fn tcp_service_and_graceful_shutdown_use_the_current_wire() {
     ));
     let body = payload().to_string();
     let mut connection = TcpStream::connect(address).await.unwrap();
-    connection.write_all(format!("POST /access/invocations HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {TOKEN}\r\nIdempotency-Key: logical-request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+    connection.write_all(format!("POST /access/invocations HTTP/1.1\r\nHost: gate.example.test\r\nAuthorization: Bearer {TOKEN}\r\nIdempotency-Key: logical-request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
     let mut bytes = vec![];
     connection.read_to_end(&mut bytes).await.unwrap();
     let text = String::from_utf8(bytes).unwrap();
@@ -604,6 +857,7 @@ async fn session_era_clients_are_refused_with_the_supported_version() {
             Request::builder()
                 .method("GET")
                 .uri("/mcp")
+                .header("host", "gate.example.test")
                 .header("authorization", format!("Bearer {TOKEN}"))
                 .header("accept", "text/event-stream")
                 .body(Body::empty())
@@ -612,4 +866,301 @@ async fn session_era_clients_are_refused_with_the_supported_version() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+}
+
+/// A call Control placed on a configured Tool Host goes there with a permit, never the relay.
+#[tokio::test]
+async fn tool_host_calls_dispatch_with_a_permit_and_return_the_host_result() {
+    let seen = Arc::new(Mutex::new(None::<Value>));
+    let host = axum::Router::new().route(
+        "/v1/dispatch",
+        axum::routing::post({
+            let seen = seen.clone();
+            move |body: axum::body::Bytes| async move {
+                *seen.lock().unwrap() = Some(serde_json::from_slice::<Value>(&body).unwrap());
+                String::new()
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    // The host answers for the invocation the Authority created, which the test learns after the call starts.
+    let invocations = a.clone();
+    let host = host.layer(axum::middleware::map_response(
+        move |_: axum::response::Response| {
+            let invocations = invocations.clone();
+            async move {
+                let id = invocations.invocation.lock().unwrap().as_ref().unwrap().id.clone();
+                let body = format!(
+                    "{}\n{}\n",
+                    json!({"kind":"ADMITTED","invocationId":id,"fencingToken":"f"}),
+                    json!({"invocationId":id,"fencingToken":"f","outcome":"COMPLETED","result":{"kind":"RESULT","resultType":"complete","content":[{"type":"text","text":"hi"}],"structuredContent":{"greeting":"hi"},"isError":false}})
+                );
+                axum::response::Response::new(axum::body::Body::from(body))
+            }
+        },
+    ));
+    tokio::spawn(async move { axum::serve(listener, host).await.unwrap() });
+    let mut config = config();
+    config.tool_hosts = serde_json::from_value(
+        json!([{"hostId":"placed-device","url":format!("http://127.0.0.1:{port}")}]),
+    )
+    .unwrap();
+    let (code, body) = call(
+        runtime_router(state_with(a.clone(), config)),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    assert_eq!(body["result"]["content"][0]["text"], "hi");
+    let permit = a.permit.lock().unwrap().clone().unwrap();
+    assert_eq!(permit.audience, "placed-device");
+    assert_eq!(
+        serde_json::to_value(&permit.arguments).unwrap(),
+        payload()["arguments"]
+    );
+    let dispatched = seen.lock().unwrap().clone().unwrap();
+    assert_eq!(dispatched["permit"]["jws"], "e30.e30.c2ln");
+    assert!(a.submission.lock().unwrap().is_none());
+}
+
+/// A Tool Host the Gateway has no route to fetches its calls from Control: the Gateway hands the
+/// permitted dispatch to Control and waits for the host's result there.
+#[tokio::test]
+async fn a_tool_host_without_a_route_gets_its_calls_through_control() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let (code, body) = call(
+        runtime_router(state(a.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    let relayed = a.relayed.lock().unwrap().clone().unwrap();
+    assert_eq!(relayed.permit.jws, "e30.e30.c2ln");
+    assert_eq!(
+        serde_json::to_value(&relayed.arguments).unwrap(),
+        payload()["arguments"]
+    );
+    assert_eq!(a.polls.load(Ordering::SeqCst), 3);
+    assert!(a.submission.lock().unwrap().is_none());
+}
+/// ADR 031 and conformance case `mcp-core/trace-propagation`: the caller's trace and declared correlation reach the
+/// dispatch, and the result names its invocation. None of it is an authorization input.
+#[tokio::test]
+async fn trace_context_and_declared_ids_reach_the_dispatch() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let mut r = mcp("tools/call", Some("files.read"));
+    let parent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    r.headers_mut()
+        .insert("traceparent", parent.parse().unwrap());
+    r.headers_mut()
+        .insert("tracestate", "vendor=opaque".parse().unwrap());
+    r.headers_mut()
+        .insert("toolgate-session-id", "sess-42".parse().unwrap());
+    r.headers_mut()
+        .insert("toolgate-agent-run-id", "bad id".parse().unwrap());
+    let mut body: Value = serde_json::from_slice(
+        &axum::body::to_bytes(std::mem::take(r.body_mut()), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    body["params"]["_meta"]["io.ololabs.toolgate/toolCallId"] = json!("toolu_01A9q");
+    *r.body_mut() = Body::from(body.to_string());
+    let (code, body) = call(runtime_router(state(a.clone())), r).await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let relayed = a.relayed.lock().unwrap().clone().unwrap();
+    let traceparent = relayed.traceparent.unwrap();
+    // Same trace and sampled flag; the Gateway's own span.
+    assert_eq!(&traceparent[..36], &parent[..36]);
+    assert_eq!(&traceparent[52..], &parent[52..]);
+    assert_ne!(&traceparent[36..52], &parent[36..52]);
+    let context = relayed.execution_context.unwrap();
+    assert_eq!(context.tool_call_id.as_deref(), Some("toolu_01A9q"));
+    assert_eq!(context.session_id.as_deref(), Some("sess-42"));
+    assert_eq!(
+        context.agent_run_id, None,
+        "an invalid declared ID is dropped"
+    );
+    assert_eq!(context.tracestate.as_deref(), Some("vendor=opaque"));
+    assert!(context.execution_id.is_none() && context.attempt_number.is_none());
+    let invocation = a.invocation.lock().unwrap().as_ref().unwrap().id.clone();
+    assert_eq!(
+        body["result"]["_meta"]["io.ololabs.toolgate/invocationId"],
+        json!(invocation)
+    );
+}
+
+/// MCP trace context in `_meta` is used when the request has no `traceparent` header.
+#[tokio::test]
+async fn trace_context_in_meta_is_continued_without_a_header() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let mut r = mcp("tools/call", Some("files.read"));
+    let parent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00";
+    let mut body: Value = serde_json::from_slice(
+        &axum::body::to_bytes(std::mem::take(r.body_mut()), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    body["params"]["_meta"]["traceparent"] = json!(parent);
+    body["params"]["_meta"]["tracestate"] = json!("congo=t61rcWkgMzE");
+    *r.body_mut() = Body::from(body.to_string());
+    let (code, body) = call(runtime_router(state(a.clone())), r).await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    let relayed = a.relayed.lock().unwrap().clone().unwrap();
+    let traceparent = relayed.traceparent.unwrap();
+    assert_eq!(&traceparent[..36], &parent[..36]);
+    assert_eq!(
+        &traceparent[53..],
+        "00",
+        "the caller's sampled flag is kept"
+    );
+    assert_eq!(
+        relayed.execution_context.unwrap().tracestate.as_deref(),
+        Some("congo=t61rcWkgMzE")
+    );
+}
+
+#[tokio::test]
+async fn a_repeated_tool_host_call_returns_the_result_control_kept_without_running_again() {
+    let a = Arc::new(Authority {
+        tool_host: true,
+        replayed: true,
+        ..Authority::default()
+    });
+    let (code, body) = call(
+        runtime_router(state(a.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(code, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    // No new permit, no new dispatch and no device relay: the stored result answers.
+    assert!(a.permit.lock().unwrap().is_none());
+    assert!(a.relayed.lock().unwrap().is_none());
+    assert!(a.submission.lock().unwrap().is_none());
+}
+#[tokio::test]
+async fn credential_reload_validates_the_whole_file_and_keeps_the_live_set_on_error() {
+    const NEXT: &str = "enterprise-next-credential-000000000000000000000000000000000";
+    let s = state(Arc::new(Authority::default()));
+    let directory = std::env::temp_dir().join(format!(
+        "toolgate-credentials-{}-{}",
+        std::process::id(),
+        unix_ms().unwrap()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("credentials.json");
+    let mut next = credential();
+    next.token_sha256 = digest(NEXT.as_bytes());
+    next.context.credential_sha256 = Some(next.token_sha256.clone());
+    next.context.workload_binding_id = Some("workload-next".into());
+    let digest_endpoint = |s: Arc<AppState>| async move {
+        let response = management_router(s)
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/credentials")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+        serde_json::from_slice::<Value>(&bytes).unwrap()
+    };
+    let before = digest_endpoint(s.clone()).await;
+    assert_eq!(before["count"], 1);
+    // A valid file replaces the whole set: the old token stops, the new one works at once.
+    let good = serde_json::to_vec(&vec![next.clone()]).unwrap();
+    std::fs::write(&path, &good).unwrap();
+    assert_eq!(s.reload_credentials(&path), Ok(1));
+    assert_eq!(
+        digest_endpoint(s.clone()).await,
+        json!({"sha256": digest(&good), "count": 1})
+    );
+    assert!(s.auth.authenticate(TOKEN, "r".into(), 2).is_none());
+    assert!(s.auth.authenticate(NEXT, "r".into(), 2).is_some());
+    // Malformed, oversized, duplicate, unknown-field and invalid files are rejected; the set stays.
+    let mut human = next.clone();
+    human.context.mode = RequestMode::Human;
+    let mut unknown = serde_json::to_value(vec![next.clone()]).unwrap();
+    unknown[0]["rawToken"] = json!("never");
+    for bad in [
+        b"[{\"tokenSha256\":".to_vec(),
+        b"[]".to_vec(),
+        serde_json::to_vec(&vec![next.clone(), next.clone()]).unwrap(),
+        serde_json::to_vec(&vec![credential(), human]).unwrap(),
+        serde_json::to_vec(&unknown).unwrap(),
+        vec![b' '; 1_048_577],
+    ] {
+        std::fs::write(&path, &bad).unwrap();
+        assert!(s.reload_credentials(&path).is_err());
+        assert_eq!(
+            digest_endpoint(s.clone()).await,
+            json!({"sha256": digest(&good), "count": 1})
+        );
+        assert!(s.auth.authenticate(NEXT, "r".into(), 2).is_some());
+        assert!(s.auth.authenticate(TOKEN, "r".into(), 2).is_none());
+    }
+    std::fs::remove_file(&path).unwrap();
+    assert!(s.reload_credentials(&path).is_err());
+    assert!(s.auth.authenticate(NEXT, "r".into(), 2).is_some());
+    std::fs::remove_dir_all(&directory).unwrap();
+    // The startup path digests the exact file bytes too.
+    let contracts = Contracts::new().unwrap();
+    let loaded = Authenticator::from_bytes(&good, &contracts, 1).unwrap();
+    assert_eq!(loaded.loaded(), (digest(&good), 1));
+}
+
+#[tokio::test]
+async fn cancellation_uses_authenticated_identity_and_the_original_operation_key_without_dispatch()
+{
+    let a = Arc::new(Authority::default());
+    let mut r = mcp("olo/invocations/cancel", None);
+    *r.body_mut()=Body::from(json!({"jsonrpc":"2.0","id":"cancel-1","method":"olo/invocations/cancel","params":{
+        "operationId":"olo-op-original","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}
+    }}).to_string());
+    let (code, body) = call(runtime_router(state(a.clone())), r).await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(body["result"]["cancelled"], true);
+    let cancelled = a.cancellations.lock().unwrap();
+    assert_eq!(cancelled.len(), 1);
+    assert_eq!(cancelled[0].user_id, context().user_id);
+    assert_eq!(cancelled[0].agent_id, context().agent_id);
+    assert!(cancelled[0].request_id.starts_with("inv-"));
+    assert!(a.invocation.lock().unwrap().is_none());
+    assert!(a.submission.lock().unwrap().is_none());
+    assert_eq!(a.reservations.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn identity_extension_reports_only_authenticated_binding_without_authorizing_a_tool() {
+    let a = Arc::new(Authority::default());
+    let (code, body) = call(runtime_router(state(a.clone())), mcp("olo/identity", None)).await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(body["result"]["tenantId"], context().tenant_id);
+    assert_eq!(body["result"]["agentId"], context().agent_id.unwrap());
+    assert_eq!(body["result"]["userId"], context().user_id.unwrap());
+    assert_eq!(body["result"]["mode"], "DELEGATED");
+    assert_eq!(body["result"]["ttlMs"], 0);
+    assert!(body["result"].get("credentialSha256").is_none());
+    assert!(a.submission.lock().unwrap().is_none());
+    assert_eq!(a.reservations.load(Ordering::SeqCst), 0);
 }

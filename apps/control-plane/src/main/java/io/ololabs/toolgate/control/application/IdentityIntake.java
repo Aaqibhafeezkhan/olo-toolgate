@@ -40,4 +40,23 @@ public final class IdentityIntake {
             return new Identity(userId,1,false);
         });
     }
+    /** Ends every session of a verified identity: bumps its session epoch and moves the session cutoff to now.
+     *  Saving the directory also advances the tenant authorization epoch, so outstanding permits are refused too.
+     *  An identity that was never seen has nothing to revoke. */
+    public boolean revokeSessions(Ids.TenantId tenant,String issuer,String subject,long now,String actor) {
+        if(issuer==null||issuer.isBlank()||subject==null||subject.isBlank())throw Failure.validation();
+        return store.transaction(tenant,true,tx->{
+            var before=tx.load();
+            var entry=before.entries().values().stream().filter(e->e.id().kind()==Kind.IDENTITY_BINDING)
+                .filter(e->{var b=codec.model(e.document(),ControlIdentityBinding.class);return b.issuer().equals(issuer)&&b.subject().equals(subject);}).findFirst().orElse(null);
+            if(entry==null)return false;
+            var b=codec.model(entry.document(),ControlIdentityBinding.class);
+            var revoked=new ControlIdentityBinding(b.id(),b.name(),b.enabled(),b.revision()+1,b.userId(),b.issuer(),b.subject(),
+                Math.min(9007199254740991L,b.sessionEpoch()+1),b.firstSeenUnixMs(),b.lastAttemptUnixMs(),b.attemptCount(),b.registrationReason(),Math.max(b.sessionsValidAfterUnixMs(),now));
+            var entries=new HashMap<>(before.entries());entries.put(entry.id(),codec.entry(Kind.IDENTITY_BINDING,codec.json(revoked)));
+            var after=new Directory(before.revision()+1,entries);after.validate(512,1048576);codec.validatePolicies(after);tx.save(before,after);
+            tx.audit(actor,"IDENTITY_SESSIONS_REVOKED","users:"+b.userId(),after.revision(),"identity-"+b.id(),DirectoryService.digest(Long.toString(revoked.sessionEpoch())));
+            return true;
+        });
+    }
 }

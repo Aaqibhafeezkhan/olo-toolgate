@@ -1,5 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
+import {managementCatalog} from '../src/managementPermissions.generated';
+const allPermissions=managementCatalog.resources.flatMap(r=>r.actions.map(a=>`${r.id}.${a}`));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from '../src/App';
@@ -17,10 +19,10 @@ describe('Quickstart',()=>{
     expect(Object.keys(localStorage).every(key=>key.startsWith('toolgate.navigation.'))).toBe(true);expect(JSON.stringify(localStorage)).not.toMatch(/session-secret|restored-session|bootstrap-secret|password-never-stored/);expect(sessionStorage.length).toBe(0);
     expect(document.body.textContent).not.toContain('local-auto-session');
   });
-  it('exchanges bootstrap and replacement passwords without persisting credentials',async()=>{
+  it('signs in with a password alone, without a first-login password change, and persists no credentials',async()=>{
     const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);
     const transport=vi.fn(async(input:string)=>input.endsWith('/session')?response({},401):input.endsWith('/login')?response({accessToken:'session-secret'}):input.includes('/api/public/')?response({},503):response({items:[]}));vi.stubGlobal('fetch',transport);
-    render(<App/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Connect to workspace'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.change(screen.getByLabelText('Password'),{target:{value:'bootstrap-secret'}});fireEvent.change(screen.getByLabelText('New password (required on first login)'),{target:{value:'a-different-strong-password'}});fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
+    render(<App/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Connect to workspace'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.change(screen.getByLabelText('Password'),{target:{value:'bootstrap-secret'}});expect(screen.queryByLabelText(/New password/)).toBeNull();expect(document.body.textContent).not.toContain('first login');fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'}));
     await screen.findByRole('heading',{name:'Your organization, at a glance'});expect(document.body.textContent).toContain('Quickstart · Non-HA');expect(Object.keys(localStorage).every(key=>key.startsWith('toolgate.navigation.'))).toBe(true);expect(JSON.stringify(localStorage)).not.toMatch(/session-secret|restored-session|bootstrap-secret|password-never-stored/);expect(sessionStorage.length).toBe(0);expect(document.body.textContent).not.toContain('session-secret');
     fireEvent.click(screen.getByRole('button',{name:'Disconnect'}));expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('');
   });
@@ -32,6 +34,7 @@ describe('Quickstart',()=>{
     const meta=document.createElement('meta');meta.name='toolgate-mode';meta.content='quickstart';document.head.append(meta);
     let saved=false;
     const transport=vi.fn(async(input:string)=>{
+      if(input.endsWith('/admin-session'))return response({role:'ADMINISTRATOR',permissions:allPermissions});
       if(input.endsWith('/session'))return saved?response({accessToken:'restored-session'}):response({},401);
       if(input.endsWith('/login')){saved=true;return response({accessToken:'restored-session'});}
       if(input.endsWith('/logout')){saved=false;return response({});}
@@ -65,16 +68,15 @@ describe('Quickstart',()=>{
     vi.stubGlobal('fetch',transport);render(<App/>);await screen.findByRole('alert');
     expect(screen.queryByRole('navigation')).toBeNull();expect(transport.mock.calls.some(([url])=>url.endsWith('/logout'))).toBe(true);
   });
-  it('routes protected invocation, ASK and vault writes through the authoritative API',async()=>{
-    const transport=vi.fn(async(input:string,init?:RequestInit)=>input.endsWith('/tools')?response({tools:[{toolId:'calculator.evaluate',enabled:true}]}):input.endsWith('/invoke')?response({invocation:{id:'ask-1',state:'PENDING_APPROVAL'}},202):init?.method==='POST'?response({stored:true},201):response({names:['provider/token']}));
+  it('offers only the encrypted vault and never the fixed built-in executor',async()=>{
+    const transport=vi.fn(async(_input:string,init?:RequestInit)=>init?.method==='POST'?response({stored:true},201):response({names:['provider/token']}));
     vi.stubGlobal('fetch',transport);render(<QuickstartTools client={new ControlClient('test-session',()=>{})}/>);
-    await waitFor(()=>expect((screen.getByRole('button',{name:'Run protected tool'}) as HTMLButtonElement).disabled).toBe(false));fireEvent.click(screen.getByRole('button',{name:'Run protected tool'}));await screen.findByRole('region',{name:'Tool result'});expect(document.body.textContent).toContain('ask-1');
+    await screen.findByText(/provider\/token/);expect(screen.queryByRole('button',{name:'Run protected tool'})).toBeNull();expect(screen.getByRole('link',{name:'Test a tool'}).getAttribute('href')).toBe('#test');
     fireEvent.change(screen.getByLabelText('Secret name'),{target:{value:'provider/token'}});fireEvent.change(screen.getByLabelText('Secret value'),{target:{value:'private-provider-value'}});fireEvent.click(screen.getByRole('button',{name:'Store encrypted secret'}));await waitFor(()=>expect((screen.getByLabelText('Secret value') as HTMLInputElement).value).toBe(''));expect(document.body.textContent).not.toContain('private-provider-value');
+    expect(transport.mock.calls.some(([url])=>url.endsWith('/tools')||url.endsWith('/invoke'))).toBe(false);
   });
-  it('rejects malformed JSON and shows dependency errors',async()=>{
-    vi.stubGlobal('fetch',vi.fn(async(input:string)=>input.endsWith('/tools')?response({tools:[{toolId:'calculator.evaluate',enabled:true}]}):input.endsWith('/vault')?response({names:[]}):response({},503)));
-    render(<QuickstartTools client={new ControlClient('test-session',()=>{})}/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Run protected tool'}) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.change(screen.getByLabelText('Arguments (JSON object)'),{target:{value:'broken'}});fireEvent.click(screen.getByRole('button',{name:'Run protected tool'}));await screen.findByRole('alert');
-    fireEvent.change(screen.getByLabelText('Arguments (JSON object)'),{target:{value:'{}'}});fireEvent.click(screen.getByRole('button',{name:'Run protected tool'}));await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('could not complete'));
+  it('shows vault dependency errors',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>response({},503)));
+    render(<QuickstartTools client={new ControlClient('test-session',()=>{})}/>);await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('could not complete'));
   });
 });

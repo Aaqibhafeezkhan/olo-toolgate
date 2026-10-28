@@ -4,11 +4,12 @@ name: RC admission
 on:
   workflow_call:
     inputs:
-      comment:
-        type: string
-        default: ''
+      branch_checks:
+        description: Allow non-main branch push/manual checks without RC publication admission
+        type: boolean
+        default: false
       main_only:
-        description: Require main for branch runs or the PR target
+        description: Require main and exclude version tags for compatibility callers
         type: boolean
         default: false
     outputs:
@@ -16,12 +17,14 @@ on:
         value: ${{ jobs.admit.outputs.allow }}
 permissions:
   contents: read
+  pull-requests: read
 jobs:
   admit:
     if: >-
-      (!inputs.main_only || github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main'))
+      ((inputs.branch_checks && !inputs.main_only && startsWith(github.ref, 'refs/heads/'))
+      || github.ref == 'refs/heads/main' || (!inputs.main_only && startsWith(github.ref, 'refs/tags/')))
+      && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main')
       && vars.TOOLGATE_CI_ENABLED == 'true'
-      && (startsWith(github.event.head_commit.message, 'RC:') || startsWith(github.event.pull_request.title, 'RC:') || startsWith(github.event.workflow_run.head_commit.message, 'RC:') || startsWith(inputs.comment, 'RC:'))
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     outputs:
@@ -31,7 +34,9 @@ jobs:
         with:
           persist-credentials: false
       - id: admission
-        name: Check pause window and exact RC prefix
+        name: Check CI enablement and PR title
         env:
           CI_ENABLED: ${{ vars.TOOLGATE_CI_ENABLED }}
+          BRANCH_CHECKS: ${{ inputs.branch_checks && !inputs.main_only }}
+          GH_TOKEN: ${{ github.token }}
         run: python tools/ci/admission.py

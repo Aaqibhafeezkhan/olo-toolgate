@@ -1,63 +1,39 @@
-# Core Data Flows
+# Core data flows
 
-Current execution flow: tool call → trusted device identity → owner/device enablement → installed-client approval/deadline → agent/device/tool/resource filters → fresh authorization/permit → selected executor → rechecked result and audit.
+## Tool execution
 
-See [Device registry and tool-call controls](../control-plane/device-registry.md).
+Caller -> Gateway authentication -> Control current-authority decision -> ASK
+review if required -> Control permit -> selected registered executor -> online
+permit consumption and effect checks -> result report -> authorized result access.
 
-## Marketplace Import
+Identity, enabled membership, complete grants, target binding, resource checks and
+freshness remain required throughout. A failed dependency cannot create ALLOW.
+Unknown external outcomes are fenced rather than blindly retried.
 
-```text
-Admin
- -> Control Plane
- -> Marketplace API
- -> verify release/signature
- -> download artifacts
- -> organization scan
- -> artifact mirror
- -> local package UNDER_REVIEW
- -> configure
- -> approve
- -> deploy
-```
+## Device enrollment
 
-## Client Deployment
+Client key/CSR -> pending request -> owner/fingerprint review -> connection approval
+-> bound certificate -> check-in. Enablement, approval and tool permission remain
+separate. See [device registry](../control-plane/device-registry.md).
 
-```text
-Control Plane desired state
- -> Endpoint Client
- -> download mirrored artifact
- -> verify
- -> stage
- -> prepare runtime
- -> self-test
- -> atomic activate
- -> report READY
-```
+## Managed package deployment
 
-## Tool Execution
+Reviewed release -> signed fleet generation -> assigned endpoint -> verify digest
+and signature -> stage isolated runtime -> health check -> activate -> report state.
+See [package deployment](../client/package-deployment.md).
 
-```text
-AI
- -> Endpoint Client or Gateway
- -> resource extraction
- -> policy
- -> ALLOW / ASK / BLOCK
- -> short-lived permit if needed
- -> execute
- -> audit
-```
+## Server Java tools
 
-## Publish Custom Tool
+SDK build -> CLI package -> Control upload/review/deployment -> host assignment and
+verified content -> Gateway direct dispatch or Control queue -> Tool Host admission
+and execution -> Control result report. See [Tool Host](../../apps/tool-host/README.md).
 
-```text
-Tool Author
- -> Custom Tool Builder
- -> test on managed test client
- -> sanitize
- -> public package draft
- -> Marketplace API
- -> worker scan/build
- -> review
- -> signing
- -> immutable publication
-```
+## Configuration changes
+
+Scoped administrator draft -> impact/validation -> independent review -> revision
+check and atomic apply -> audit/outbox. Super Admin's documented exception permits
+immediate audited management changes. Neither path manufactures runtime grants.
+See [configuration transfer](../control-plane/import-export.md).
+
+See [Marketplace integration](../control-plane/marketplace-integration.md) and
+[existing MCP servers](../gateway/mcp-proxy.md) for their supported flows and limits.

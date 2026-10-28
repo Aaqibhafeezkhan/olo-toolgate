@@ -11,45 +11,6 @@ info:
 security:
 - adminAccessToken: []
 paths:
-  /api/control/v1/packages/uploads:
-    post:
-      operationId: uploadPackage
-      description: Requires toolgate-admin. Uploads a .tgpkg. Control verifies zip rules, CHECKSUMS, size ceilings, secret
-        scan and signatures, stores the sealed version and drafts a review (plan.md §7.6, §8.1).
-      parameters:
-      - &id002
-        name: Idempotency-Key
-        in: header
-        required: true
-        description: Client retry key
-        schema:
-          type: string
-          minLength: 8
-          maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/vnd.ololabs.toolgate.package+zip:
-            schema:
-              type: string
-              contentMediaType: application/vnd.ololabs.toolgate.package+zip
-      responses:
-        '201':
-          description: Stored version
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/package.schema.json#/$defs/PackageVersion
-        '400': &id001
-          $ref: '#/components/responses/Error'
-        '401': *id001
-        '403': *id001
-        '404': *id001
-        '409': *id001
-        '413': *id001
-        '415': *id001
-        '500': *id001
-        '503': *id001
   /api/control/v1/packages/{packageId}/versions:
     get:
       operationId: listPackageVersions
@@ -68,7 +29,8 @@ paths:
             application/json:
               schema:
                 $ref: ../../schemas/v2/package.schema.json#/$defs/PackageVersionPage
-        '401': *id001
+        '401': &id001
+          $ref: '#/components/responses/Error'
         '403': *id001
         '404': *id001
         '500': *id001
@@ -76,7 +38,7 @@ paths:
   /api/control/v1/packages/{packageId}/versions/{version}/review:
     get:
       operationId: getPackageReview
-      description: Requires toolgate-admin. API-compatibility diff, security delta and the binding draft (plan.md §8.3).
+      description: Requires toolgate-admin. API-compatibility diff, security delta and the binding draft (platform-requirements.md §8.3).
       parameters:
       - name: packageId
         in: path
@@ -97,7 +59,7 @@ paths:
             application/json:
               schema:
                 $ref: ../../schemas/v2/package.schema.json#/$defs/PackageReview
-          headers: &id003
+          headers: &id002
             ETag:
               description: Quoted revision
               schema:
@@ -125,14 +87,22 @@ paths:
         description: SemVer
         schema:
           type: string
-      - &id004
+      - &id003
         name: If-Match
         in: header
         required: true
         description: Quoted current revision; a stale value returns 409 with the current record
         schema:
           type: string
-      - *id002
+      - &id004
+        name: Idempotency-Key
+        in: header
+        required: true
+        description: Client retry key
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
       requestBody:
         required: true
         content:
@@ -173,7 +143,7 @@ paths:
             application/json:
               schema:
                 $ref: ../../schemas/v2/deployment-binding.schema.json#/$defs/DeploymentBinding
-          headers: *id003
+          headers: *id002
         '401': *id001
         '403': *id001
         '404': *id001
@@ -182,7 +152,7 @@ paths:
     put:
       operationId: updateDeploymentBinding
       description: Requires toolgate-admin. Creates a new binding revision. Values above a higher layer are rejected naming
-        the limiting layer (plan.md §8.5).
+        the limiting layer (platform-requirements.md §8.5).
       parameters:
       - name: bindingId
         in: path
@@ -190,8 +160,8 @@ paths:
         description: Binding id
         schema:
           type: string
+      - *id003
       - *id004
-      - *id002
       requestBody:
         required: true
         content:
@@ -205,7 +175,7 @@ paths:
             application/json:
               schema:
                 $ref: ../../schemas/v2/deployment-binding.schema.json#/$defs/DeploymentBinding
-          headers: *id003
+          headers: *id002
         '400': *id001
         '401': *id001
         '403': *id001
@@ -236,31 +206,6 @@ paths:
         '401': *id001
         '403': *id001
         '404': *id001
-        '500': *id001
-        '503': *id001
-  /api/control/v1/tool-hosts/registrations:
-    post:
-      operationId: registerToolHost
-      security:
-      - workloadCertificate: []
-      description: Tool Host registers its pool, versions and tiers with its workload certificate.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../../schemas/v2/protocol.schema.json#/$defs/ToolHostRegistration
-      responses:
-        '200':
-          description: Registered
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/protocol.schema.json#/$defs/ToolHostRegistration
-        '400': *id001
-        '401': *id001
-        '403': *id001
-        '409': *id001
         '500': *id001
         '503': *id001
   /api/control/v1/access/invocations:
@@ -321,7 +266,7 @@ paths:
       security:
       - workloadCertificate: []
       description: Extends the existing endpoint to Tool Host identities and v2 permits. Moves the invocation RESERVED to
-        EXECUTING once and returns the fencing token (plan.md §11.3, §12.8). The served v1 body stays accepted.
+        EXECUTING once and returns the fencing token (platform-requirements.md §11.3, §12.8). The served v1 body stays accepted.
       requestBody:
         required: true
         content:
@@ -483,7 +428,7 @@ paths:
       description: Requires toolgate-admin; two-person review when the enterprise review workflow is on. Bumps the tenant
         authorization epoch.
       parameters:
-      - *id002
+      - *id004
       requestBody:
         required: true
         content:
@@ -512,7 +457,7 @@ paths:
       description: Requires toolgate-admin and always two-person review. Only Control issues recovery events; break-glass
         never can.
       parameters:
-      - *id002
+      - *id004
       requestBody:
         required: true
         content:
@@ -540,10 +485,10 @@ paths:
       operationId: createBreakGlassKill
       security:
       - operatorCertificate: []
-      description: 'Emergency path: 2-of-3 operator signatures, no maker/checker review, adds kills only, always audited (plan.md
+      description: 'Emergency path: 2-of-3 operator signatures, no maker/checker review, adds kills only, always audited (platform-requirements.md
         §15.4).'
       parameters:
-      - *id002
+      - *id004
       requestBody:
         required: true
         content:

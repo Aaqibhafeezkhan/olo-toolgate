@@ -10,7 +10,15 @@ pub mod v2;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdminSession {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Vec<String>>,
     pub role: UserRole,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bootstrap_admin_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_name: Option<String>,
 }
 /// Immutable artifact identity; digest must be verified by consumers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -27,203 +35,6 @@ pub struct AuthorizationRequest {
     pub tool_id: String,
     pub action: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderDefinition {
-    pub package_id: String,
-    pub version: String,
-    pub name: String,
-    pub description: String,
-    pub use_when: String,
-    pub do_not_use_when: String,
-    pub runtime: ManagedRuntime,
-    pub tool: LocalToolRegistration,
-    pub platforms: Vec<ClientPlatform>,
-    pub architectures: Vec<FleetArchitecture>,
-    pub examples: Vec<FleetSelfTest>,
-    pub permissions: Vec<BuilderPermission>,
-    pub resource: ResourceDescriptor,
-    pub credential_requirements: Vec<String>,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderDraft {
-    pub id: String,
-    pub revision: u64,
-    pub definition: BuilderDefinition,
-    pub definition_digest: String,
-    pub sealed: bool,
-    pub package_document: FleetPackageDocument,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderDraftPage {
-    pub items: Vec<BuilderDraft>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub next_cursor: Option<String>,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderDraftRequest {
-    pub id: String,
-    pub expected_revision: u64,
-    pub definition: BuilderDefinition,
-}
-/// Canonical BuilderPermission wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BuilderPermission {
-    #[serde(rename = "COMPUTE")]
-    Compute,
-    #[serde(rename = "FILE_READ")]
-    FileRead,
-    #[serde(rename = "FILE_WRITE")]
-    FileWrite,
-    #[serde(rename = "NETWORK")]
-    Network,
-    #[serde(rename = "CREDENTIALS")]
-    Credentials,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderRevisionRequest {
-    pub expected_revision: u64,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderTestPage {
-    pub items: Vec<BuilderTestRecord>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub next_cursor: Option<String>,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderTestPoll {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub task: Option<FleetSignedDocument>,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderTestRecord {
-    pub id: String,
-    pub draft_id: String,
-    pub definition_digest: String,
-    pub device_id: String,
-    pub state: BuilderTestState,
-    pub revision: u64,
-    pub created_at_unix_ms: u64,
-    pub expires_at_unix_ms: u64,
-    pub attempt: u64,
-    pub lease_id: String,
-    pub example_index: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<ErrorCode>,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderTestRequest {
-    pub id: String,
-    pub draft_id: String,
-    pub expected_revision: u64,
-    pub device_id: String,
-    pub example_index: u64,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderTestResult {
-    pub job_id: String,
-    pub lease_id: String,
-    pub definition_digest: String,
-    pub success: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<ErrorCode>,
-}
-/// Canonical BuilderTestState wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BuilderTestState {
-    #[serde(rename = "QUEUED")]
-    Queued,
-    #[serde(rename = "RUNNING")]
-    Running,
-    #[serde(rename = "PASSED")]
-    Passed,
-    #[serde(rename = "FAILED")]
-    Failed,
-    #[serde(rename = "EXPIRED")]
-    Expired,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuilderTestTask {
-    pub format_version: u64,
-    pub tenant_id: String,
-    pub server_id: String,
-    pub device_id: String,
-    pub job: BuilderTestRecord,
-    pub definition: BuilderDefinition,
-    pub expires_at_unix_ms: u64,
-}
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinInvocation {
-    pub tool_id: String,
-    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
-}
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinIpcRequest {
-    pub protocol_version: u64,
-    pub request_id: String,
-    pub operation: BuiltinOperation,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub invocation: Option<BuiltinInvocation>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-}
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinIpcResponse {
-    pub request_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<BuiltinToolInfo>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub output: Option<std::collections::BTreeMap<String, serde_json::Value>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<ErrorCode>,
-}
-/// Canonical BuiltinOperation wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BuiltinOperation {
-    #[serde(rename = "CATALOG")]
-    Catalog,
-    #[serde(rename = "CALL")]
-    Call,
-}
-/// Fixed service tool boundary; validate schema before use.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct BuiltinToolInfo {
-    pub tool_id: String,
-    pub action: String,
-    pub description: String,
-    pub enabled: bool,
-    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
-    pub tool_digest: String,
-    pub package_digest: String,
 }
 /// Strict JWS protected header; no remote or embedded keys and no algorithm negotiation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -245,6 +56,12 @@ pub struct BundlePublishRequest {
     pub grace_policy_ids: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rollback_of: Option<u64>,
+}
+/// Durable caller-scoped cancellation acknowledgement.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CancellationAccepted {
+    pub cancelled: bool,
 }
 /// Bounded redacted device activity for OS-authenticated local status inspection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -305,7 +122,7 @@ pub struct ClientDiscovery {
     pub expires_at_unix_ms: u64,
     pub issuer_certificate_pem: String,
 }
-/// Fixed service tool boundary; validate schema before use.
+/// Local tool boundary for signed managed registrations; validate schema before use.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientDownloadArtifact {
@@ -315,7 +132,7 @@ pub struct ClientDownloadArtifact {
     pub sha256: String,
     pub bytes: u64,
 }
-/// Fixed service tool boundary; validate schema before use.
+/// Local tool boundary for signed managed registrations; validate schema before use.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientDownloadManifest {
@@ -365,7 +182,7 @@ pub struct ClientInstallerArtifact {
     pub sha256: String,
     pub bytes: u64,
 }
-/// Fixed service tool boundary; validate schema before use.
+/// Local tool boundary for signed managed registrations; validate schema before use.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientInstallerManifest {
@@ -383,6 +200,10 @@ pub enum ClientIpcOperation {
     CheckIn,
     #[serde(rename = "ACTIVITY")]
     Activity,
+    #[serde(rename = "POWER_ON")]
+    PowerOn,
+    #[serde(rename = "POWER_OFF")]
+    PowerOff,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -407,6 +228,8 @@ pub struct ClientIpcResponse {
     pub activity: Option<ClientActivity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connections: Option<Vec<ClientGatewayConnection>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<DevicePower>,
 }
 /// Canonical ClientPlatform wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -426,6 +249,8 @@ pub struct ClientReport {
     pub client_version: String,
     pub applied_revision: u64,
     pub packages: Vec<ReportedPackage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<DevicePower>,
 }
 /// Canonical ClientSocketOperation wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -436,10 +261,6 @@ pub enum ClientSocketOperation {
     Authorize,
     #[serde(rename = "RESULT")]
     Result,
-    #[serde(rename = "BUILDER_POLL")]
-    BuilderPoll,
-    #[serde(rename = "BUILDER_RESULT")]
-    BuilderResult,
 }
 /// Correlated status and response; body is validated again as the expected response contract.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -457,6 +278,48 @@ pub struct ClientSocketRequest {
     pub operation: ClientSocketOperation,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+}
+/// A short-lived server challenge bound to a verified console session and device key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceChallenge {
+    pub nonce: String,
+    pub device_id: String,
+    pub key_fingerprint: String,
+    pub expires_at_unix_ms: u64,
+}
+/// Exactly one enrollment code or existing device identifier for establishing console device context.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceLookup {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
+}
+/// Device-key signature over the domain-separated console challenge nonce.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceProof {
+    pub nonce: String,
+    pub device_id: String,
+    pub key_fingerprint: String,
+    pub signature: String,
+}
+/// Bounded local native-client proof request for the selected console origin.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceProofRequest {
+    pub kind: String,
+    pub console_url: String,
+    pub nonce: String,
+}
+/// Current-device context accepted for the authenticated console session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConsoleDeviceVerified {
+    pub device_id: String,
+    pub expires_at_unix_ms: u64,
 }
 /// Identifies the shared contract set, independently of product versions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -561,6 +424,36 @@ pub struct ControlAudit {
     pub request_id: String,
     pub occurred_at: String,
     pub request_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<ControlAuditEvidence>,
+}
+/// Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlAuditEvidence {
+    pub invocation_id: String,
+    pub mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation_chain: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workload_binding_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_kind: Option<String>,
+    pub tool_id: String,
+    pub operation: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resources: Option<Vec<String>>,
+    pub resource_count: u64,
+    pub resources_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision: Option<Decision>,
+    pub state: String,
+    pub authorization_epoch: u64,
+    pub policy_revision: u64,
 }
 /// Cursor page of audit mutation metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -706,6 +599,32 @@ pub enum ControlEntityKind {
     IdentityBinding,
     #[serde(rename = "DEVICE_EVIDENCE")]
     DeviceEvidence,
+    #[serde(rename = "SETTINGS")]
+    Settings,
+}
+/// Error that names what the caller must resolve; IDs only, never payloads.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlErrorDetail {
+    pub error: ControlErrorDetailCode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+}
+/// Canonical ControlErrorDetailCode wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlErrorDetailCode {
+    #[serde(rename = "UNRESOLVED_IDENTITIES")]
+    UnresolvedIdentities,
+    #[serde(rename = "REPLACE_CONFLICTS")]
+    ReplaceConflicts,
+    #[serde(rename = "ONE_DEVICE_PER_ACCOUNT")]
+    OneDevicePerAccount,
+    #[serde(rename = "REQUIRED_REVIEWS_CHANGE")]
+    RequiredReviewsChange,
+    #[serde(rename = "RATE_LIMITED")]
+    RateLimited,
 }
 /// Explicit Tool Group to Device Group binding; one binding is selected per invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -756,6 +675,26 @@ pub struct ControlIdentityBindingPage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
 }
+/// How one required identity is resolved on import. MAP needs targetUserId; teamIds are added, never replaced.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlIdentityResolution {
+    pub action: ControlIdentityResolutionAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_ids: Option<Vec<String>>,
+}
+/// Canonical ControlIdentityResolutionAction wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlIdentityResolutionAction {
+    #[serde(rename = "EXISTING")]
+    Existing,
+    #[serde(rename = "MAP")]
+    Map,
+    #[serde(rename = "PLACEHOLDER")]
+    Placeholder,
+}
 /// Canonical ControlImportMode wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ControlImportMode {
@@ -771,6 +710,10 @@ pub struct ControlImportRequest {
     pub snapshot: ControlSnapshot,
     pub mode: ControlImportMode,
     pub dry_run: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_resolution: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remove_unlisted_memberships: Option<bool>,
 }
 /// Import validation/diff result with the current tenant revision.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -802,6 +745,13 @@ pub struct ControlPolicyPage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
 }
+/// A user ID that exported records reference, with the exported teams it belonged to. IDs only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlRequiredIdentity {
+    pub id: String,
+    pub team_ids: Vec<String>,
+}
 /// Reviewed immutable versioned extraction definition; changing it invalidates operation bindings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -819,6 +769,8 @@ pub struct ControlResourceExtractor {
     pub amount_pointer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation_pointer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locator_templates: Option<Vec<String>>,
 }
 /// Bounded canonical directory cursor page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -827,6 +779,12 @@ pub struct ControlResourceExtractorPage {
     pub items: Vec<ControlResourceExtractor>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+}
+/// Configuration review threshold in force for new changes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlReviewPolicy {
+    pub required_reviews: u64,
 }
 /// Typed role assigned only to compatible groups. Management rules cannot confer runtime access.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -873,6 +831,14 @@ pub struct ControlSnapshot {
     pub workload_bindings: Vec<ControlWorkloadBinding>,
     pub identity_bindings: Vec<ControlIdentityBinding>,
     pub device_evidence: Vec<ControlDeviceEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<v2::ControlServerSettingsPatch>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_identities: Option<Vec<ControlRequiredIdentity>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visitor_pool: Option<ControlVisitorPool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reserved_records: Option<u64>,
 }
 /// Tenant-scoped teams configuration record. Not a runtime credential or policy grant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -940,6 +906,12 @@ pub struct ControlUser {
     pub name: String,
     pub enabled: bool,
     pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_on_login: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Cursor page; nextCursor is absent after the last item.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -948,6 +920,20 @@ pub struct ControlUserPage {
     pub items: Vec<ControlUser>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+}
+/// Quickstart demo account pool, read only at install. Never stored as directory records.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlVisitorPool {
+    pub prefix: String,
+    pub team_id: String,
+    pub agent_group_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass_claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Individual identity binding is authentication only; permissions derive from Agent Groups.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -971,6 +957,10 @@ pub struct ControlWorkloadBinding {
     pub parent_binding_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegated_session_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass_claims: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub needs_reauthorization: Option<bool>,
 }
 /// Bounded canonical directory cursor page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -979,6 +969,22 @@ pub struct ControlWorkloadBindingPage {
     pub items: Vec<ControlWorkloadBinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+}
+/// Updated binding and the Gateway request context to install with the token; bindingId is the execution binding the agent's grants select, when exactly one does.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlWorkloadCredentialResult {
+    pub binding: ControlWorkloadBinding,
+    pub context: v2::RequestContext,
+}
+/// Installs a new static token hash; delegated bindings are rebound to their user's current session epoch.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlWorkloadCredentialRotation {
+    pub credential_sha256: String,
+    pub enable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding_id: Option<String>,
 }
 /// Canonical Decision wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1009,6 +1015,35 @@ pub struct DesiredState {
     pub revision: u64,
     pub assignments: Vec<DeploymentAssignment>,
 }
+/// Operator-collected Docker deployment details for display only; never enrollment, permission or trusted network evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeviceDeploymentMetadata {
+    pub execution_kind: DeviceExecutionKind,
+    pub container_id: String,
+    pub container_name: String,
+    pub system_name: String,
+    pub network_id: String,
+    pub network_name: String,
+    pub ip_address: String,
+}
+/// Public deployment details attached only to an already visible enrolled device.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeviceDeploymentRecord {
+    pub device_id: String,
+    pub deployment: DeviceDeploymentMetadata,
+}
+/// Canonical DeviceExecutionKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeviceExecutionKind {
+    #[serde(rename = "ENDPOINT_CLIENT")]
+    EndpointClient,
+    #[serde(rename = "TOOL_HOST_DIRECT")]
+    ToolHostDirect,
+    #[serde(rename = "TOOL_HOST_PULL")]
+    ToolHostPull,
+}
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1020,6 +1055,14 @@ pub struct DeviceIdentity {
     pub certificate_pem: String,
     pub issuer_certificate_pem: String,
     pub expires_at_unix_ms: u64,
+}
+/// Canonical DevicePower wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DevicePower {
+    #[serde(rename = "ON")]
+    On,
+    #[serde(rename = "OFF")]
+    Off,
 }
 /// Authenticated device adoption metadata. No owner or per-agent permission cache; discovery and effects require current online authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1051,7 +1094,7 @@ pub struct EndpointCheckIn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adoption_digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub local_tools: Option<Vec<BuiltinToolInfo>>,
+    pub local_tools: Option<Vec<LocalToolInfo>>,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1060,9 +1103,7 @@ pub struct EndpointCheckInAck {
     pub device_id: String,
     pub sequence: u64,
     pub server_time_unix_ms: u64,
-    pub next_interval_seconds: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub next_interval_ms: Option<u64>,
+    pub next_interval_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity: Option<DeviceIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1072,14 +1113,35 @@ pub struct EndpointCheckInAck {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
 }
-/// Endpoint identity foundation wire model.
+/// Canonical EndpointConnectionAction wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EndpointConnectionAction {
+    #[serde(rename = "ENROLL")]
+    Enroll,
+    #[serde(rename = "CHECK_IN")]
+    CheckIn,
+    #[serde(rename = "WAIT")]
+    Wait,
+}
+/// Server-authoritative response to a device presence ping; presence never grants tool access.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointConnectionDirective {
+    pub device_id: String,
+    pub state: EndpointState,
+    pub action: EndpointConnectionAction,
+    pub report_sequence: u64,
+    pub next_interval_ms: u64,
+}
+/// Endpoint identity foundation wire model. keyFingerprint is returned only to callers who may approve through a group rule.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointDeviceRecord {
     pub device_id: String,
     pub tenant_id: String,
     pub user_id: String,
-    pub key_fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_fingerprint: Option<String>,
     pub state: EndpointState,
     pub revision: u64,
     pub last_seen_unix_ms: u64,
@@ -1127,6 +1189,22 @@ pub struct EndpointEnrollmentDecision {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unlimited_connection: Option<bool>,
 }
+/// Look up one pending enrollment by the code its client shows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointEnrollmentLookup {
+    pub user_code: String,
+}
+/// The pending enrollment a valid code names, for comparison with the client before approval.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointEnrollmentLookupResult {
+    pub enrollment_id: String,
+    pub device_id: String,
+    pub platform: ClientPlatform,
+    pub key_fingerprint: String,
+    pub expires_at_unix_ms: u64,
+}
 /// All unexpired pending requests in the authenticated tenant; enrollment quota is 32.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1161,15 +1239,17 @@ pub struct EndpointEnrollmentResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
 }
-/// Endpoint identity foundation wire model.
+/// Endpoint identity foundation wire model. userCode and keyFingerprint are returned only to callers who may approve through a group rule.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointEnrollmentReview {
     pub enrollment_id: String,
-    pub user_code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_code: Option<String>,
     pub device_id: String,
     pub platform: ClientPlatform,
-    pub key_fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_fingerprint: Option<String>,
     pub state: EnrollmentState,
     pub expires_at_unix_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1187,12 +1267,11 @@ pub struct EndpointEnrollmentStart {
     pub csr_pem: String,
     pub capabilities: Vec<String>,
 }
-/// Directory identity, enrolled approval and pending request combined for administrative management.
+/// Directory identity, enrolled approval and pending request with server-resolved target permissions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointManagedDevice {
     pub device_id: String,
-    pub system_executor: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory_device: Option<ControlDevice>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1202,19 +1281,32 @@ pub struct EndpointManagedDevice {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registered_user: Option<ControlUser>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system_executor_kind: Option<SystemExecutorKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system_available: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip_address: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Vec<String>>,
+}
+/// Opt-in administrative deployment view. Default device responses retain their existing closed schema.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointManagedDeviceDeploymentPage {
+    pub items: Vec<EndpointManagedDevice>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deployments: Option<Vec<DeviceDeploymentRecord>>,
 }
 /// All directory devices plus pending requests within the existing directory and enrollment quotas.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EndpointManagedDevicePage {
     pub items: Vec<EndpointManagedDevice>,
+}
+/// Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EndpointPresencePing {
+    pub announcement: EndpointEnrollmentStart,
+    pub utc_offset: String,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1704,6 +1796,8 @@ pub struct EnterpriseInvocation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result_digest: Option<String>,
     pub diagnostic_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconciliation: Option<ReconciliationMethod>,
 }
 /// Scoped durable effect states. A cursor does not disclose hidden rows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1723,6 +1817,8 @@ pub struct EnterpriseInvocationRequest {
     pub package_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downstream_idempotency_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<v2::ExecutionContext>,
 }
 /// Canonical EnterpriseInvocationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1750,7 +1846,7 @@ pub enum EnterpriseInvocationState {
     #[serde(rename = "OUTCOME_UNKNOWN")]
     OutcomeUnknown,
 }
-/// Management grants belong to group-assigned Management Roles only.
+/// Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseManagementRule {
@@ -1759,6 +1855,8 @@ pub struct EnterpriseManagementRule {
     pub groups: GroupSelection,
     pub grantable_scopes: Vec<EnterpriseScope>,
     pub conditions: EnterpriseConditions,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_scope: Option<String>,
 }
 /// Canonical EnterpriseMemberType wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2101,6 +2199,14 @@ pub enum ErrorCode {
     Internal,
     #[serde(rename = "UNSUPPORTED")]
     Unsupported,
+    #[serde(rename = "TENANT_MISMATCH")]
+    TenantMismatch,
+    #[serde(rename = "TENANT_UNAVAILABLE")]
+    TenantUnavailable,
+    #[serde(rename = "MISDIRECTED_REQUEST")]
+    MisdirectedRequest,
+    #[serde(rename = "INVALID_TENANT_ID")]
+    InvalidTenantId,
 }
 /// Machine-readable error without exception text or caller-controlled detail.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2328,6 +2434,16 @@ pub struct InstalledAuthorizationProfile {
     pub tool: ControlTool,
     pub extractor: ControlResourceExtractor,
 }
+/// Canonical LocalFileAccess wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocalFileAccess {
+    #[serde(rename = "NONE")]
+    None,
+    #[serde(rename = "READ")]
+    Read,
+    #[serde(rename = "WRITE")]
+    Write,
+}
 /// Bounded per-service execution counters and sandbox state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2362,24 +2478,10 @@ pub struct LocalRuntimeIpcResponse {
 /// Canonical LocalRuntimeKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LocalRuntimeKind {
-    #[serde(rename = "NATIVE")]
-    Native,
-    #[serde(rename = "PYTHON")]
-    Python,
-    #[serde(rename = "NODE")]
-    Node,
-    #[serde(rename = "POWERSHELL")]
-    Powershell,
-    #[serde(rename = "BATCH")]
-    Batch,
-    #[serde(rename = "SHELL")]
-    Shell,
-    #[serde(rename = "JAVA_JAR")]
-    JavaJar,
-    #[serde(rename = "DOTNET")]
-    Dotnet,
-    #[serde(rename = "WASM")]
-    Wasm,
+    #[serde(rename = "JAVA_SDK")]
+    JavaSdk,
+    #[serde(rename = "PYTHON_SDK")]
+    PythonSdk,
 }
 /// Bounded local sandbox budget; limits never grant host access.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2421,11 +2523,30 @@ pub struct LocalRuntimeStatus {
     pub state: LocalRuntimeState,
     pub version: String,
 }
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolCall {
+    pub tool_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+}
 /// Only enabled local definitions applicable to this verified agent and device.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LocalToolCatalog {
-    pub tools: Vec<BuiltinToolInfo>,
+    pub tools: Vec<LocalToolInfo>,
+}
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolInfo {
+    pub tool_id: String,
+    pub action: String,
+    pub description: String,
+    pub enabled: bool,
+    pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    pub tool_digest: String,
+    pub package_digest: String,
 }
 /// One JSON stdin document; arguments never become process command strings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2435,6 +2556,38 @@ pub struct LocalToolInput {
     pub request_id: String,
     pub tool_id: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolIpcRequest {
+    pub protocol_version: u64,
+    pub request_id: String,
+    pub operation: LocalToolOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invocation: Option<LocalToolCall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+}
+/// Local tool boundary for signed managed registrations; validate schema before use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalToolIpcResponse {
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<LocalToolInfo>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ErrorCode>,
+}
+/// Canonical LocalToolOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocalToolOperation {
+    #[serde(rename = "CATALOG")]
+    Catalog,
+    #[serde(rename = "CALL")]
+    Call,
 }
 /// One bounded JSON stdout document; request binding and output schema are verified.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2455,16 +2608,9 @@ pub struct LocalToolRegistration {
     pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub limits: LocalRuntimeLimits,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<LocalToolSource>,
     pub authorization_profile: InstalledAuthorizationProfile,
-}
-/// Canonical bounded authoring protocol; declarations never grant execution privileges.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LocalToolSource {
-    pub code: String,
-    pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_access: Option<LocalFileAccess>,
 }
 /// Administrator-selected immutable tool/runtime image; runtime provisioning is not execution authorization.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2517,6 +2663,16 @@ pub enum PackageState {
     Failed,
     #[serde(rename = "REVOKED")]
     Revoked,
+}
+/// Canonical ReconciliationMethod wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReconciliationMethod {
+    #[serde(rename = "DOWNSTREAM_IDEMPOTENCY")]
+    DownstreamIdempotency,
+    #[serde(rename = "STATUS_LOOKUP")]
+    StatusLookup,
+    #[serde(rename = "MANUAL")]
+    Manual,
 }
 /// A leased client rechecks the exact pending operation online before execution.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2612,6 +2768,10 @@ pub struct RemoteToolSubmission {
     pub expires_at_unix_ms: u64,
     pub context: v2::RequestContext,
     pub invocation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<v2::ExecutionContext>,
 }
 /// Bounded lease delivered only over device-authenticated polling; executable definitions are never accepted from an agent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2623,6 +2783,12 @@ pub struct RemoteToolTask {
     pub expires_at_unix_ms: u64,
     pub invocation: EnterpriseInvocation,
     pub permit: EnterpriseSignedPermit,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_context: Option<v2::ExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collect_spans: Option<bool>,
 }
 /// Observed package state, distinct from assigned desired state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2653,6 +2819,190 @@ pub enum ResourceKind {
     #[serde(rename = "CUSTOM")]
     Custom,
 }
+/// Pinned package build and fenced worker lease; artifacts confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderBuild {
+    pub id: String,
+    pub draft_id: String,
+    pub draft_revision: u64,
+    pub tool_group_id: String,
+    pub source: String,
+    pub source_digest: String,
+    pub creator_user_id: String,
+    pub state: SdkBuilderState,
+    pub revision: u64,
+    pub created_at_unix_ms: u64,
+    pub expires_at_unix_ms: u64,
+    pub lease_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_archive_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<SdkBuilderError>,
+}
+/// Authorized immutable SDK package builds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderBuildPage {
+    pub items: Vec<SdkBuilderBuild>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+}
+/// Queue an immutable project revision for the shared SDK worker.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderBuildRequest {
+    pub id: String,
+    pub draft_id: String,
+    pub expected_revision: u64,
+}
+/// Canonical JSON SDK source project at an optimistic revision; no executable registration.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderDraft {
+    pub id: String,
+    pub revision: u64,
+    pub tool_group_id: String,
+    pub source: String,
+    pub source_digest: String,
+}
+/// Authorized SDK source projects.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderDraftPage {
+    pub items: Vec<SdkBuilderDraft>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+}
+/// Canonical SdkBuilderError wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SdkBuilderError {
+    #[serde(rename = "BUILD_FAILED")]
+    BuildFailed,
+    #[serde(rename = "AUTHORITY_REVOKED")]
+    AuthorityRevoked,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+    #[serde(rename = "VERSION_CONFLICT")]
+    VersionConflict,
+}
+/// Minimal authoring context filtered by current Builder permissions, without Tool Group membership data.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderGroup {
+    pub id: String,
+    pub name: String,
+    pub can_build: bool,
+}
+/// Save a canonical SDK source revision in an authorized Tool Group.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderSave {
+    pub id: String,
+    pub expected_revision: u64,
+    pub tool_group_id: String,
+    pub source: String,
+}
+/// The canonical JSON SDK project read from an uploaded source ZIP; nothing is saved until the project is saved as a draft.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderSource {
+    pub source: String,
+    pub source_digest: String,
+}
+/// Canonical SdkBuilderState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SdkBuilderState {
+    #[serde(rename = "QUEUED")]
+    Queued,
+    #[serde(rename = "RUNNING")]
+    Running,
+    #[serde(rename = "READY")]
+    Ready,
+    #[serde(rename = "FAILED")]
+    Failed,
+}
+/// Configured SDK and current authorized authoring contexts; availability grants no authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SdkBuilderStatus {
+    pub sdk_version: String,
+    pub configured: bool,
+    pub max_source_characters: u64,
+    pub groups: Vec<SdkBuilderGroup>,
+}
+/// Canonical ServiceAudience wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServiceAudience {
+    #[serde(rename = "olo-memory")]
+    OloMemory,
+    #[serde(rename = "olo-rag")]
+    OloRag,
+}
+/// Coalesced tenant revocation feed snapshot. Services fail closed if polling becomes stale.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServiceAuthorizationEpoch {
+    pub tenant_id: String,
+    pub authorization_epoch: u64,
+    pub observed_at_unix_ms: u64,
+}
+/// Purpose-specific signed downstream authorization.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermit {
+    pub jws: String,
+}
+/// Control-issued exact-request authorization for a downstream service; times are Unix milliseconds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaims {
+    pub iss: String,
+    pub aud: ServiceAudience,
+    pub tenant_id: String,
+    pub sub: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub act: Option<String>,
+    pub mode: v2::RequestMode,
+    pub operation: String,
+    pub resources: Vec<ResourceDescriptor>,
+    pub request_fingerprint: String,
+    pub executor_key_sha256: String,
+    pub invocation_id: String,
+    pub nonce: String,
+    pub authorization_epoch: u64,
+    pub iat: u64,
+    pub exp: u64,
+    pub execution_nonce: String,
+}
+/// Single-use downstream write permit was consumed under current authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitConsumed {
+    pub authorized: bool,
+}
+/// Service compares these request facts before its write, then consumes the nonce online.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitConsumption {
+    pub permit: ServicePermit,
+    pub operation: String,
+    pub resources: Vec<ResourceDescriptor>,
+    pub request_fingerprint: String,
+    pub executor_key_sha256: String,
+}
+/// Executor request for downstream authorization; scope comes exclusively from the admitted invocation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitIssue {
+    pub invocation_id: String,
+    pub fencing_token: String,
+    pub audience: ServiceAudience,
+}
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2665,16 +3015,6 @@ pub struct SignedClientDiscovery {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SignedPolicyBundle {
     pub jws: String,
-}
-/// Canonical SystemExecutorKind wire values.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SystemExecutorKind {
-    #[serde(rename = "BUILTINS")]
-    Builtins,
-    #[serde(rename = "HOTFOLDER")]
-    Hotfolder,
-    #[serde(rename = "REST_FORWARDING")]
-    RestForwarding,
 }
 /// Named operation and declared resource kinds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2693,6 +3033,8 @@ pub struct ToolDefinition {
     pub actions: Vec<ToolAction>,
     pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconciliation: Option<ReconciliationMethod>,
 }
 /// Canonical UserRole wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2709,20 +3051,12 @@ impl ContractSet {
     pub fn current() -> Self {
         Self {
             name: "olo-toolgate-contracts".into(),
-            version: "1.0.0".into(),
+            version: "0.10.0-dev".into(),
         }
     }
 }
 /// Embedded canonical schemas for offline boundary validation.
 pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
-    (
-        "https://schemas.ololabs.io/toolgate/v1/builder.schema.json",
-        include_str!("../schemas/v1/builder.schema.json"),
-    ),
-    (
-        "https://schemas.ololabs.io/toolgate/v1/builtins.schema.json",
-        include_str!("../schemas/v1/builtins.schema.json"),
-    ),
     (
         "https://schemas.ololabs.io/toolgate/v1/bundle.schema.json",
         include_str!("../schemas/v1/bundle.schema.json"),
@@ -2768,6 +3102,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v1/identifiers.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v1/local-tools.schema.json",
+        include_str!("../schemas/v1/local-tools.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v1/package.schema.json",
         include_str!("../schemas/v1/package.schema.json"),
     ),
@@ -2782,6 +3120,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v1/runtime.schema.json",
         include_str!("../schemas/v1/runtime.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v1/sdk-builder.schema.json",
+        include_str!("../schemas/v1/sdk-builder.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v1/tool.schema.json",
@@ -2804,8 +3146,16 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/descriptor.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
+        include_str!("../schemas/v2/discovery.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",
         include_str!("../schemas/v2/identifiers.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/insights.schema.json",
+        include_str!("../schemas/v2/insights.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/invocation.schema.json",
@@ -2816,12 +3166,20 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/kill.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/mcp-proxy.schema.json",
+        include_str!("../schemas/v2/mcp-proxy.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
         include_str!("../schemas/v2/package.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/permit.schema.json",
         include_str!("../schemas/v2/permit.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/profile.schema.json",
+        include_str!("../schemas/v2/profile.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/protocol.schema.json",

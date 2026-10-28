@@ -4,7 +4,7 @@
   "area": "mcp-core",
   "title": "MCP 2026-07-28 core",
   "sources": [
-    "plan.md §10.1",
+    "platform-requirements.md §10.1",
     "ADR 018"
   ],
   "cases": [
@@ -12,7 +12,7 @@
       "id": "mcp-core/discover",
       "title": "server/discover advertises versions and extensions",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "component",
       "targets": [
@@ -33,7 +33,7 @@
       "id": "mcp-core/per-request-meta",
       "title": "Every request carries version and capabilities in _meta",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "component",
       "targets": [
@@ -117,7 +117,7 @@
       "id": "mcp-core/result-type",
       "title": "Every result carries resultType",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "component",
       "targets": [
@@ -138,7 +138,7 @@
       "id": "mcp-core/no-session",
       "title": "Each request is authenticated on its own",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "component",
       "targets": [
@@ -154,7 +154,7 @@
       "id": "mcp-core/listen",
       "title": "subscriptions/listen delivers toolsListChanged",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "component",
       "targets": [
@@ -175,7 +175,7 @@
       "id": "mcp-core/log-level",
       "title": "Logging is per request",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "component",
       "targets": [
@@ -191,7 +191,7 @@
       "id": "mcp-core/no-ping",
       "title": "ping is not on the modern path",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "component",
       "targets": [
@@ -208,24 +208,26 @@
       "id": "mcp-core/trace-propagation",
       "title": "Trace context in _meta is propagated",
       "requirements": [
-        "plan.md §10.1"
+        "platform-requirements.md §10.1"
       ],
       "level": "integration",
       "targets": [
         "gateway",
         "tool-host"
       ],
-      "when": "A request carries traceparent, tracestate and baggage",
+      "when": "A request carries traceparent, tracestate and baggage, as headers or in _meta",
       "then": [
-        "The tool input carries the same traceparent"
+        "The tool input carries a traceparent in the same trace, with the sampled flag kept and the executor's own span ID (ADR 031)",
+        "tracestate reaches the tool input in executionContext; baggage is not propagated"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "apps/gateway/tests/core.rs trace_context_and_declared_ids_reach_the_dispatch, trace_context_in_meta_is_continued_without_a_header; apps/tool-host/tests/dispatch.rs the_tool_input_continues_the_trace_and_carries_the_execution_context"
     },
     {
       "id": "mcp-core/catalog-cache",
       "title": "tools/list is deterministic and privately cacheable",
       "requirements": [
-        "plan.md §10.3"
+        "platform-requirements.md §10.3"
       ],
       "level": "component",
       "targets": [

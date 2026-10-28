@@ -14,7 +14,7 @@ events/    event/webhook envelopes
 
 ```text
 rust/        crate: olo-toolgate-contracts
-java/        Maven: io.ololabs.toolgate:toolgate-contracts
+java/        Maven: io.github.olo-labs:toolgate-contracts
 typescript/  npm: @olo-labs/toolgate-contracts
 php/         Composer: olo-labs/toolgate-contracts
 ```
@@ -42,4 +42,4 @@ Application source must import the same public package identity it would use aft
 
 All language artifacts for one contract set share the same SemVer.
 
-Read [`../../CONTRACTS.md`](../../CONTRACTS.md).
+Read [[shared-contracts](../../docs/architecture/shared-contracts.md)](../../docs/architecture/shared-contracts.md).

@@ -60,12 +60,6 @@ enablement nor approval alone grants tool access. Connection status reflects fre
 authenticated reports, not just approval. Temporary suspension preserves the key;
 permanent key revocation remains a separate API operation.
 
-Quickstart separately lists `local-builtins`, `local-hotfolder` and
-`local-rest-forwarding` under **Local tool requester**. These server-managed
-devices need no client approval and appear green while ready and enabled.
-Their disable controls gate real execution paths; existing tool/resource filters
-and target-client approval still apply.
-
 User create/edit/delete uses server validation and optimistic revisions. Conflict
 preserves inputs and offers Reload current record before resubmission. No policy
 or reference rules duplicate the backend. An exact retry retains its idempotency
@@ -102,7 +96,7 @@ Runtime MIT copyright/license notices are included. Rebuild UI and backend
 together from the lockfile. Product version is injected into the console; shared
 wire contracts remain v1. The normal version tool synchronizes console release
 metadata. Deploy matching UI, Control and generated contracts; PostgreSQL migration
-V11 supports reversible device-control and identity-recovery audit events.
+V1 supports reversible device-control and identity-recovery audit events.
 
 During rolling upgrades, old HTML may reference assets absent on a new replica.
 Refresh the console after rollout. Retain previous asset sets at the proxy if

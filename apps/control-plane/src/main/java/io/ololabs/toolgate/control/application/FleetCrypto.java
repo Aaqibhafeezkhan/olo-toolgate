@@ -14,5 +14,4 @@ public interface FleetCrypto {
     FleetArtifactGrantClaims grant(FleetSignedDocument signed);
     FleetSignedDocument desired(FleetDesiredDocument document);
     FleetSignedDocument grant(FleetArtifactGrantClaims document);
-    FleetSignedDocument builder(BuilderTestTask document);
 }

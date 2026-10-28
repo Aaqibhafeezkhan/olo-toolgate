@@ -12,12 +12,13 @@ final readonly class ControlServerSettings implements \JsonSerializable {
         public int $revision,
         public GatewaySettings $gateway,
         public DeviceApproval $deviceApproval,
-        public ClientCheckIn $clientCheckIn
+        public ClientCheckIn $clientCheckIn,
+        public ConfigurationSettings $configuration
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['formatVersion', 'revision', 'gateway', 'deviceApproval', 'clientCheckIn']) || array_diff(['formatVersion', 'revision', 'gateway', 'deviceApproval', 'clientCheckIn'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['formatVersion', 'revision', 'gateway', 'deviceApproval', 'clientCheckIn', 'configuration']) || array_diff(['formatVersion', 'revision', 'gateway', 'deviceApproval', 'clientCheckIn', 'configuration'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         if ($data['formatVersion'] !== 2) {
@@ -28,7 +29,8 @@ final readonly class ControlServerSettings implements \JsonSerializable {
             $data['revision'],
             GatewaySettings::fromArray($data['gateway']),
             DeviceApproval::fromArray($data['deviceApproval']),
-            ClientCheckIn::fromArray($data['clientCheckIn'])
+            ClientCheckIn::fromArray($data['clientCheckIn']),
+            ConfigurationSettings::fromArray($data['configuration'])
         );
     }
 

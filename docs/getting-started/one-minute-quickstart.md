@@ -1,73 +1,51 @@
-# One-Minute Quickstart
+# Run Quickstart locally
 
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding.
+Quickstart combines Control, Gateway, the console and local execution in one
+container, with SQLite by default. It is a single-node evaluation deployment.
+Docker is required; a source build also needs the [development prerequisites](../development/README.md).
 
-See [Device registry and tool-call controls](../control-plane/device-registry.md).
+## Start the deployment
 
-The real Gateway, SQLite-backed Control, Admin UI and Rust fixed tools run in one
-non-root container. **Single-node, non-HA; local evaluation only.** No external
-PostgreSQL, Redis, Vault or Kubernetes is needed. Custom author code still runs
-only on separately configured designated clients.
+Use the [Quickstart Compose directory](../../deploy/compose/QuickStart/README.md).
+Set `QUICKSTART_IMAGE` and the desired ports in its `.env` using the checked-in
+examples. Choose an image from your release or build and verify a local image with
+`python tools/quickstart/check.py --build`.
 
-The GHCR image is published by protected tagged CI. Until a release is published,
-[build locally](../deployment/quickstart.md) and substitute
-`olo-toolgate-quickstart:module11` below. Docker 24+ and approximately 1 GiB available
-memory are required. Image pull time is additional to first-boot key generation.
+From `deploy/compose/QuickStart`, run:
 
-```bash
-docker run -d --name olo-toolgate --restart unless-stopped \
-  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8443:8443 \
-  -v olo-toolgate-data:/data \
-  ghcr.io/olo-labs/olo-toolgate-quickstart:<released-version>
+```powershell
+.\manage.ps1 deploy
 ```
 
-Open [http://localhost:8080](http://localhost:8080). Keep HTTP bound to host loopback.
-Retrieve the generated bootstrap password from its private file:
+On Linux/macOS:
 
-```bash
-docker exec olo-toolgate cat /data/bootstrap-password
+```sh
+sh manage.sh deploy
 ```
 
-Enter it in **Password**, and a different 16–128-character password with eight
-or more distinct printable ASCII characters in **New password**. First login
-requires the change and deletes the bootstrap file. Subsequent logins need only
-Password. Credentials never appear in service logs; the signed 15-minute browser
-session survives page refresh through a scoped HttpOnly cookie, until its
-15-minute expiry. API tokens stay in memory; disconnect clears the session cookie.
+The helper retains the data volume. Use its configured console URL and retrieve
+the generated administrator credential from the container's private
+`/data/bootstrap-password` or `/data/credentials.json` file. Do not copy credentials
+into issues or logs. See [first login](first-login.md).
 
-1. Open **Built-in tools and vault**. Run the calculator; the default result is 14.
-2. Select `hotfolder.read_text` and enter `{"path":"welcome.txt"}`.
-3. Select `hotfolder.write_text`, enter
-   `{"path":"welcome.txt","text":"My approved note"}`, and run. ASK changes no
-   file. Open **Approvals**, approve once, then rerun the exact call.
-4. Store a named vault credential. Only names are listed; no plaintext read/export
-   API exists. Custom credential binding remains unavailable and fails closed.
-5. Download a Windows, macOS or Linux client from the anonymous home page.
+## Establish access
 
-Defaults grant compute and exact demo reads. File writes require ASK; unselected
-paths, unknown tools and deletion remain blocked. `web.search` stays disabled
-without a configured provider. Gateway failure prevents protected execution.
-The immediately useful HotFolder belongs to this container, not a host directory.
+Fresh installation creates protected default groups and local management
+identities. Tools and the local Agent begin disabled with zero runtime rights.
+An explicit initialization file can install reviewed demo configuration; those
+demo grants are not universal defaults.
 
-## Client enrollment
+Review a native device's enrollment and fingerprint, approve its connection, and
+separately configure the required group grants and execution binding. Enable only
+the intended identities/tools. Follow [your first tool](first-tool.md) for the
+authorization path. Device approval never creates an Agent credential.
 
-The independent device CA is public and can be exported:
+## Preserve state
 
-```bash
-docker cp olo-toolgate:/data/keys/device-ca.crt ./toolgate-quickstart-ca.crt
-```
+Keep `/data` through container replacement. It holds configuration, identity,
+audit, credentials and local data. Use the helper's `undeploy` action to stop while
+retaining state. Do not delete the volume to troubleshoot an approval failure.
 
-Trust it on the evaluation machine; never disable TLS checks. Follow the
-[client guide](../client/hotfolder.md) with `https://localhost:8443` and this CA.
-Browser review opens the password-enabled TLS console. Review the fingerprint,
-approve, and the client receives its bound mTLS identity for check-in. Client
-execution separately needs its Gateway credential/policy and system engine
-configuration. Native logout/boot/ARM certification remains open in client reports.
-
-## Persistence
-
-Retain `/data` across replacement containers: directory, audit, approvals, device
-identity, encrypted vault, private custody and HotFolder persist. One instance
-owns the volume. Container removal preserves a named volume; volume removal loses
-state. See [build/configuration, upgrades, backup/restore and debugging](../deployment/quickstart.md).
-Production uses separate stateless services and external state/custody.
+Read [configuration, TLS enrollment and reviewed recovery](../deployment/quickstart.md)
+before changing custody or restoring a backup. Use
+[production preparation](../deployment/production.md) for separate services.

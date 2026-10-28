@@ -1,6 +1,16 @@
 {
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "reviews": {
+    "aopalliance:aopalliance:1.0:build-test": {
+      "expression": "LicenseRef-AOP-Alliance-Public-Domain",
+      "scope": "build-test",
+      "reason": "Unmodified AOP Alliance API used transitively by the Maven plugin's compile/test Maven Core dependency; absent from product runtimeClasspath. The upstream project explicitly declares all its source public domain. Preserve that declaration rather than relabeling it CC0; this review covers only version 1.0 and build/test scope.",
+      "sourceArtifact": "https://repo.maven.apache.org/maven2/aopalliance/aopalliance/1.0/aopalliance-1.0-sources.jar",
+      "licenseUrls": [
+        "https://aopalliance.sourceforge.net/",
+        "https://repo.maven.apache.org/maven2/aopalliance/aopalliance/1.0/aopalliance-1.0.pom"
+      ]
+    },
     "io.smallrye.classfile:jdk-classfile-backport:26": {
       "expression": "GPL-2.0-only WITH Classpath-exception-2.0",
       "scope": "build-test",

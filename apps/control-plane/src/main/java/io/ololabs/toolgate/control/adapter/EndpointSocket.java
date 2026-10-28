@@ -16,20 +16,22 @@ import java.util.concurrent.atomic.*;
 /** Direct mTLS job channel. Every message crosses the same durable authorization and replay rules as HTTP. */
 @ApplicationScoped
 public class EndpointSocket {
-    @Inject EndpointService endpoints;
-    @Inject BuilderService builder;
+    @Inject EndpointBootstrap factory;
     @Inject ContractCodec codec;
     private static final String PATH="/api/control/v1/endpoint/socket";
     private static final org.jboss.logging.Logger LOG=org.jboss.logging.Logger.getLogger(EndpointSocket.class);
     private final AtomicInteger connections=new AtomicInteger();
-    // A faster socket can arrive within the 250 ms floor after the previous HTTP
+    // A faster socket can arrive within the configured burst guard after the previous HTTP
     // poll. Check-in is idempotent; retry only its conflict, never an effect or
     // authorization denial. Sequence/digest validation still runs on the retry.
     static Store.Reply checkInWithJitter(java.util.function.Supplier<Store.Reply> request){
+        return checkInWithJitter(request,ClientCheckInPolicy.QUICKSTART.burstGuardMs());
+    }
+    static Store.Reply checkInWithJitter(java.util.function.Supplier<Store.Reply> request,long burstGuardMs){
         try{return request.get();}
         catch(Failure failure){
             if(failure.code()!=ErrorCode.CONFLICT)throw failure;
-            try{Thread.sleep(250);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw Failure.unavailable();}
+            try{Thread.sleep(burstGuardMs);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw Failure.unavailable();}
             return request.get();
         }
     }
@@ -41,11 +43,11 @@ public class EndpointSocket {
                 peer=(X509Certificate)context.request().sslSession().getPeerCertificates()[0];
             }catch(Exception invalid){context.response().setStatusCode(401).end();return;}
             if(connections.incrementAndGet()>128){connections.decrementAndGet();context.response().setStatusCode(503).end();return;}
-            context.vertx().executeBlocking(()->{endpoints.verifySocketPeer(peer);return true;}).onComplete(auth->{
+            context.vertx().executeBlocking(()->{var endpoints=factory.forTenant(TenantRequest.require(context).tenant());endpoints.verifySocketPeer(peer);return endpoints;}).onComplete(auth->{
                 if(auth.failed()){connections.decrementAndGet();context.response().setStatusCode(auth.cause() instanceof Failure failure?failure.status():503).end();return;}
                 context.request().toWebSocket().onComplete(upgrade->{
                     if(upgrade.failed()){connections.decrementAndGet();return;}
-                    channel(context.vertx(),upgrade.result(),peer,context.request().getHeader("X-ToolGate-System-Name"),context.request().remoteAddress().hostAddress().split("%",2)[0]);
+                    channel(context.vertx(),upgrade.result(),peer,auth.result(),context.request().getHeader("X-ToolGate-System-Name"),EndpointService.taskContext(context.request().getHeader("Toolgate-Client-Features")),context.request().remoteAddress().hostAddress().split("%",2)[0]);
                 });
             });
         });
@@ -55,7 +57,7 @@ public class EndpointSocket {
         var node=new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(body);
         LOG.info(codec.json(java.util.Map.of("service","control","event","protocol_packet","transport","WEBSOCKET","direction",direction,"path",PATH,"requestId",id,"operation",operation,"status",status==null?0L:status,"message",PacketTelemetry.summary(node,0))));
     }
-    private void channel(io.vertx.core.Vertx vertx,ServerWebSocket socket,X509Certificate peer,String systemName,String ipAddress){
+    private void channel(io.vertx.core.Vertx vertx,ServerWebSocket socket,X509Certificate peer,EndpointService endpoints,String systemName,boolean taskContext,String ipAddress){
         event("CONNECTED");
         var closed=new AtomicBoolean();var busy=new AtomicBoolean();var checking=new AtomicBoolean();
         var pong=new AtomicLong(System.nanoTime());var lastJob=new AtomicLong(System.nanoTime());
@@ -84,17 +86,13 @@ public class EndpointSocket {
                     endpoints.verifySocketPeer(peer);
                     String body=codec.json(request.body());
                     reply=switch(request.operation()){
-                        case CHECK_IN -> checkInWithJitter(()->endpoints.checkIn(peer,body,request.requestId(),true,systemName,ipAddress));
+                        case CHECK_IN -> checkInWithJitter(()->endpoints.checkIn(peer,body,request.requestId(),systemName,ipAddress,taskContext),endpoints.checkInPolicy().burstGuardMs());
                         case AUTHORIZE -> endpoints.relay().authorize(peer,body);
                         case RESULT -> endpoints.relay().result(peer,body,request.requestId());
-                        case BUILDER_POLL -> {if(request.body()!=null)throw Failure.validation();yield builder.poll(peer,request.requestId());}
-                        case BUILDER_RESULT -> builder.result(peer,body,request.requestId());
                     };
                     if(request.operation()==ClientSocketOperation.AUTHORIZE){var result=codec.model(reply.body(),RemoteToolAuthorizationAck.class);jobs.put(request.body().get("requestId").asText(),result.expiresAtUnixMs());lastJob.set(System.nanoTime());}
                     if(request.operation()==ClientSocketOperation.RESULT){jobs.remove(request.body().get("requestId").asText());lastJob.set(System.nanoTime());}
                     if(request.operation()==ClientSocketOperation.CHECK_IN){var ack=codec.model(reply.body(),EndpointCheckInAck.class);if(ack.task()!=null){jobs.put(ack.task().requestId(),ack.task().expiresAtUnixMs());lastJob.set(System.nanoTime());}}
-                    if(request.operation()==ClientSocketOperation.BUILDER_POLL && codec.model(reply.body(),BuilderTestPoll.class).task()!=null){jobs.put("builder",System.currentTimeMillis()+120000);lastJob.set(System.nanoTime());}
-                    if(request.operation()==ClientSocketOperation.BUILDER_RESULT){jobs.remove("builder");lastJob.set(System.nanoTime());}
                 }catch(Failure failure){reply=new Store.Reply(failure.status(),codec.json(java.util.Map.of("code",failure.code())),0);}
                 var json=new com.fasterxml.jackson.databind.ObjectMapper();
                 java.util.Map<String,com.fasterxml.jackson.databind.JsonNode> body=json.convertValue(json.readTree(reply.body()),new com.fasterxml.jackson.core.type.TypeReference<>(){});

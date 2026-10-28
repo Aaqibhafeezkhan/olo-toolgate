@@ -25,3 +25,44 @@ it('opens a different review from its link while the review screen remains mount
   expect((screen.getByLabelText('I reviewed the affected groups, inherited access, complete configuration and digests.') as HTMLInputElement).checked).toBe(false);
   expect(screen.queryByText('APPLIED',{selector:'strong'})).toBeNull();
 });
+
+it('refreshes the linked review independently when the queue is unavailable',async()=>{
+  let current={...change(),state:'PENDING' as EnterpriseConfigurationChange['state']};
+  window.location.hash='#config-reviews?id='+current.id;
+  const fetcher=vi.fn<typeof fetch>().mockImplementation(async url=>String(url).split('?')[0].endsWith('configuration-changes')
+    ?new Response(JSON.stringify({code:'DEPENDENCY_UNAVAILABLE'}),{status:503})
+    :new Response(JSON.stringify(current)));
+  render(<ConfigurationRequests client={new ControlClient('secret',vi.fn(),fetcher)}/>);
+  await screen.findByRole('button',{name:'Approve exact configuration'});
+  expect(screen.getByRole('alert')).toBeTruthy();
+  fireEvent.click(screen.getByLabelText('I reviewed the affected groups, inherited access, complete configuration and digests.'));
+  current={...current,state:'APPROVED',revision:3};
+  fireEvent.click(screen.getByRole('button',{name:'Refresh changes'}));
+  await screen.findByRole('button',{name:'Apply reviewed change'});
+  expect((screen.getByLabelText('I reviewed the affected groups, inherited access, complete configuration and digests.') as HTMLInputElement).checked).toBe(false);
+});
+
+it('refreshes the exact review opened from the queue',async()=>{
+  let current={...change(),state:'PENDING' as EnterpriseConfigurationChange['state']};
+  const fetcher=vi.fn<typeof fetch>().mockImplementation(async url=>new Response(JSON.stringify(String(url).split('?')[0].endsWith('configuration-changes')?{items:[current]}:current)));
+  render(<ConfigurationRequests client={new ControlClient('secret',vi.fn(),fetcher)}/>);
+  await open();
+  current={...current,state:'APPROVED',revision:3};
+  fireEvent.click(screen.getByRole('button',{name:'Refresh changes'}));
+  await screen.findByRole('button',{name:'Apply reviewed change'});
+  expect(window.location.hash).toBe('#config-reviews?id='+current.id);
+});
+
+it('removes stale review actions when refreshing the detail fails',async()=>{
+  let fail=false;
+  window.location.hash='#config-reviews?id='+change().id;
+  const current={...change(),state:'APPROVED'};
+  const fetcher=vi.fn<typeof fetch>().mockImplementation(async url=>String(url).split('?')[0].endsWith('configuration-changes')
+    ?new Response(JSON.stringify({items:[current]}))
+    :fail?new Response(JSON.stringify({code:'DEPENDENCY_UNAVAILABLE'}),{status:503}):new Response(JSON.stringify(current)));
+  render(<ConfigurationRequests client={new ControlClient('secret',vi.fn(),fetcher)}/>);
+  await screen.findByRole('button',{name:'Apply reviewed change'});
+  fail=true;fireEvent.click(screen.getByRole('button',{name:'Refresh changes'}));
+  await screen.findByRole('alert');
+  expect(screen.queryByRole('button',{name:'Apply reviewed change'})).toBeNull();
+});

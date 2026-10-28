@@ -17,6 +17,11 @@ class ComposeManagementTests(unittest.TestCase):
             work = Path(directory)
             for name in ('manage.ps1', 'manage.sh', 'compose.yaml', '.env.example'):
                 shutil.copyfile(ROOT/'deploy/compose'/folder/name, work/name)
+            if os.name != 'nt':
+                # A Linux verification container can mount a Windows checkout.
+                # Exercise the shell commands with the repository's specified LF format.
+                script = work/'manage.sh'
+                script.write_text(script.read_text(encoding='utf-8'),encoding='utf-8',newline='\n')
             log = work/'calls.log'
             if os.name == 'nt':
                 docker = work/'docker.cmd'
@@ -38,6 +43,7 @@ class ComposeManagementTests(unittest.TestCase):
                        TEST_DOCKER_LOG=str(log), TEST_IMAGE=image,
                        TEST_IMAGE_MISSING='0' if exists else '1')
             result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=30)
+            self.assertTrue(log.exists(),result.stdout+result.stderr)
             return result, log.read_text()
 
     def test_existing_local_images_deploy_without_registry_pull(self):

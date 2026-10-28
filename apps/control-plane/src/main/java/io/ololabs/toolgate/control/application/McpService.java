@@ -34,6 +34,7 @@ public final class McpService {
         var e=i.evaluation();if(local(tx,d).tools().stream().noneMatch(t->t.enabled()&&t.toolId().equals(request.toolId())&&t.action().equals(request.action())&&t.toolDigest().equals(e.toolDigest())&&t.packageDigest().equals(e.packageDigest())))throw forbidden();
     }
     private void scope(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,String action){
+        action=action.equals("read")?"remote_tool.read":ManagementAccess.permission(Ids.Kind.BINDING,action);
         actor.requireAdmin();if(!actor.tenant().equals(tenant)||actor.userId()==null)throw forbidden();
         var b=codec.model(tx.load().entries().get(Ids.Kind.BINDING.id(i.evaluation().context().bindingId())).document(),ControlExecutionBinding.class);var access=new ManagementAccess(codec);
         access.require(tx.load(),actor.userId(),action,Ids.Kind.TOOL_GROUP,b.toolGroupId(),now(tx));access.require(tx.load(),actor.userId(),action,Ids.Kind.DEVICE_GROUP,b.deviceGroupId(),now(tx));
@@ -42,12 +43,17 @@ public final class McpService {
     /** chosen is the device a person picked in the console; Gateway callers are placed by Control. */
     Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body,String chosen){gateway(actor,gateway);var c=codec.model(body,RequestContext.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);if(!tenant.value().equals(c.tenantId()))throw forbidden();
-            if(chosen!=null&&!placement().member(tx,c.bindingId(),chosen))throw forbidden();var placed=chosen!=null?chosen:placement().place(tx,c,now);
-            if(placed==null||tx.endpoint(placed)==null)return reply(new LocalToolCatalog(List.of()));
-            var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now))return reply(new LocalToolCatalog(List.of()));var usage=new HashMap<String,Long>();var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));var tools=new ArrayList<BuiltinToolInfo>();
-            for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
-                var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
-                if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest()))tools.add(t);
+            if(chosen!=null&&!placement().member(tx,c.bindingId(),chosen))throw forbidden();
+            // A Gateway caller sees the tools of every device a call could be placed on: a group may mix client devices and
+            // Tool Hosts, and placement sends each call to a member that reports the tool.
+            var devices=chosen!=null?List.of(chosen):placement().candidates(tx,c,now);var usage=new HashMap<String,Long>();var tools=new ArrayList<LocalToolInfo>();var listed=new HashSet<String>();
+            for(var placed:devices){
+                if(tx.endpoint(placed)==null)continue;
+                var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))continue;var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));
+                for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
+                    var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
+                    if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest())&&listed.add(t.toolId()+"\n"+t.action()))tools.add(t);
+                }
             }return reply(new LocalToolCatalog(tools));});}
     public Store.Reply submit(DirectoryService.Actor actor,boolean gateway,String body,String requestId){gateway(actor,gateway);var submission=codec.model(body,RemoteToolSubmission.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);var i=invocation(tx,submission.invocationId());if(!i.id().equals(submission.context().requestId()))throw forbidden();
@@ -56,10 +62,11 @@ public final class McpService {
             operations.requireFresh(tenant,tx,i);installed(tx,i,submission.request());var previous=tx.mcp().get(i.id());
             if(previous!=null){if(!task(previous).request().equals(submission.request()))throw Failure.conflict();return reply(new RemoteToolResponse(record(previous),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record(previous).state())&&previous.result()!=null?codec.model(previous.result(),RemoteToolResult.class):null));}
             if(i.state()!=EnterpriseInvocationState.QUEUED||submission.expiresAtUnixMs()<=now||submission.expiresAtUnixMs()>now+30000)throw Failure.conflict();
-            var d=device(tx,submission.context(),e.context().deviceId());if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now))throw Failure.unavailable();
+            var d=device(tx,submission.context(),e.context().deviceId());if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))throw Failure.unavailable();
             long expires=Math.min(i.expiresAtUnixMs(),submission.expiresAtUnixMs());if(d.connectionExpiresAtUnixMs()!=null)expires=Math.min(expires,d.connectionExpiresAtUnixMs());
             var reserved=operations.reserveInSession(tenant,tx,new EnterpriseReservationRequest(i.id(),i.revision()),actor.id());
-            var task=new RemoteToolTask(i.id(),UUID.randomUUID().toString(),submission.request(),expires,reserved.invocation(),reserved.permit());
+            var task=new RemoteToolTask(i.id(),UUID.randomUUID().toString(),submission.request(),expires,reserved.invocation(),reserved.permit(),submission.traceparent(),submission.executionContext(),
+                store.insightsMode()==io.ololabs.toolgate.contracts.v2.InsightsMode.DETAILED?Boolean.TRUE:null);
             if(codec.json(task).getBytes(java.nio.charset.StandardCharsets.UTF_8).length>32768)throw Failure.validation();
             tx.mcp().prune(Math.max(0,now-86400000));if(tx.mcp().count()>=1000||tx.mcp().pending(d.deviceId(),17).size()>=16)throw Failure.conflict();
             var record=new RemoteToolRecord(i.id(),d.deviceId(),e.context().agentId(),e.toolId(),RemoteToolState.WAITING_FOR_POLL,now,expires,null,null,null,null);
@@ -78,7 +85,7 @@ public final class McpService {
             catch(Failure revoked){if(revoked.status()!=403)throw revoked;transition(tx,row,RemoteToolState.FAILED,now,ErrorCode.FORBIDDEN,null,requestId);continue;}
             var nonce=tx.enterprise().nonce(i.reservedNonce());if(nonce==null||nonce.consumedAt()!=null)throw forbidden();
             if(nonce.expiresAt()<=now){var refreshed=operations.reserveInSession(tenant,tx,new EnterpriseReservationRequest(i.id(),i.revision()),"mcp-relay");
-                task=new RemoteToolTask(task.requestId(),task.leaseId(),task.request(),task.expiresAtUnixMs(),refreshed.invocation(),refreshed.permit());
+                task=new RemoteToolTask(task.requestId(),task.leaseId(),task.request(),task.expiresAtUnixMs(),refreshed.invocation(),refreshed.permit(),task.traceparent(),task.executionContext(),task.collectSpans());
                 tx.mcp().save(new McpStore.Row(row.id(),row.deviceId(),row.state(),row.expiresAt(),row.record(),codec.json(task),row.result()));row=tx.mcp().get(row.id());}
             if(record(row).state()==RemoteToolState.WAITING_FOR_POLL)transition(tx,row,RemoteToolState.SUBMITTED,now,null,null,requestId);return task;
         }return null;

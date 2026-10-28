@@ -1,0 +1,11 @@
+{
+  "mode": "development",
+  "destinations": {
+    "ServiceHost": "http://127.0.0.1:8080"
+  },
+  "globals": {},
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}

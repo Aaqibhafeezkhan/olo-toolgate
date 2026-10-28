@@ -26,7 +26,7 @@ Rust:
   olo-toolgate-contracts
 
 Java:
-  io.ololabs.toolgate:toolgate-contracts
+  io.github.olo-labs:toolgate-contracts
 
 TypeScript:
   @olo-labs/toolgate-contracts

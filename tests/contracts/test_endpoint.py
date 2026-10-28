@@ -11,6 +11,18 @@ from test_foundation import schemas_at, validators
 ROOT = Path(__file__).resolve().parents[2]
 
 class EndpointContractsTests(unittest.TestCase):
+    def test_deployment_view_is_explicit_and_does_not_extend_default_closed_device_page(self):
+        models=validators(schemas_at(ROOT/'packages/contracts/schemas/v1'))
+        fixtures=json.loads((ROOT/'tests/fixtures/contracts/v1/valid.json').read_text())
+        original=dict(items=[fixtures['EndpointManagedDevice']])
+        models['EndpointManagedDevicePage'].validate(original)
+        models['EndpointManagedDeviceDeploymentPage'].validate(original)
+        enriched={**original,'deployments':[fixtures['DeviceDeploymentRecord']]}
+        models['EndpointManagedDeviceDeploymentPage'].validate(enriched)
+        with self.assertRaises(ValidationError):models['EndpointManagedDevicePage'].validate(enriched)
+        for field,value in [('containerId','short-id'),('networkId','b'*65),('executionKind','ADMINISTRATOR'),('ipAddress','not-an-ip')]:
+            sample=copy.deepcopy(fixtures['DeviceDeploymentMetadata']);sample[field]=value
+            with self.subTest(field=field),self.assertRaises(ValidationError):models['DeviceDeploymentMetadata'].validate(sample)
     def test_response_inspection_excludes_private_lease_and_metadata_is_bounded(self):
         models=validators(schemas_at(ROOT/'packages/contracts/schemas/v1'))
         fixtures=json.loads((ROOT/'tests/fixtures/contracts/v1/valid.json').read_text())
@@ -28,7 +40,7 @@ class EndpointContractsTests(unittest.TestCase):
         models['EndpointManagedDevicePage'].validate(page)
         page['items'].append(fixtures['EndpointManagedDevice'])
         with self.assertRaises(ValidationError): models['EndpointManagedDevicePage'].validate(page)
-        for name, field, invalid in [('EndpointApprovalRequest','expectedApprovalRevision',0),('EndpointEnabledRequest','expectedRevision',-1),('EndpointEnrollmentDecision','unlimitedConnection','true'),('EndpointManagedDevice','systemAvailable','true')]:
+        for name, field, invalid in [('EndpointApprovalRequest','expectedApprovalRevision',0),('EndpointEnabledRequest','expectedRevision',-1),('EndpointEnrollmentDecision','unlimitedConnection','true'),('EndpointManagedDevice','systemName','bad name')]:
             sample=copy.deepcopy(fixtures[name]); sample[field]=invalid
             with self.assertRaises(ValidationError): models[name].validate(sample)
         models['EndpointEnabledRequest'].validate({'expectedRevision':0,'enabled':False})
@@ -82,7 +94,8 @@ class EndpointContractsTests(unittest.TestCase):
         values['control']['endpoint']['enabled'] = True
         with self.assertRaises(ValidationError): Draft7Validator(schema).validate(values)
         settings = values['control']['endpoint']
-        settings.update(tenantId='tenant',serverId='server',organization='Organization',deviceCaSecret='device-ca',
+        settings.update(serverId='server',organization='Organization',identityCustodySecret='tenant-identity',
+                        identityKeyFiles=[dict(key='discovery-key',path='10000000-0000-4000-8000-000000000001/DISCOVERY/key1.pk8.pem'),dict(key='device-ca',path='10000000-0000-4000-8000-000000000001/DEVICE_CA/key2.pk8.pem')],
                         tlsSecret='server-tls',trustStoreSecret='device-trust',controlUrl='https://control.example.test',gatewayUrl='https://gateway.example.test')
         Draft7Validator(schema).validate(values)
         settings['controlUrl'] = 'http://control.example.test'

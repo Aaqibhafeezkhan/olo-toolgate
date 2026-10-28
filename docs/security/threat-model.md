@@ -10,6 +10,8 @@ Threats include malicious internet users, compromised AI agents, malicious MCP s
 
 Server-tool execution (Tool Host, broker, egress proxy, transports, workload identity and secret delivery) has its own model: [threat-models/tool-host.md](threat-models/tool-host.md).
 
+The OLO platform integration (user-bound credentials, service permits for OLO memory and RAG services, and delegated agent tools) has a proposed model: [threat-models/olo-integration.md](threat-models/olo-integration.md).
+
 ## Enterprise authorization boundaries
 
 Control is the sole authority for current group grants and durable invocation
@@ -52,4 +54,4 @@ providers. A compromised privileged endpoint or malicious downstream provider
 cannot be repaired by group ACL evaluation alone. Production transport, external
 trust provisioning, retention and capacity testing require installation-specific
 configuration. See [enterprise operations](../enterprise-access-control/operations.md)
-and [executable acceptance evidence](../enterprise-access-control/implementation-status.md).
+and [verification procedures](../testing/README.md).

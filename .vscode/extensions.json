@@ -1,5 +1,6 @@
 {
   "recommendations": [
+    "SonarSource.sonarlint-vscode",
     "rust-lang.rust-analyzer",
     "redhat.java",
     "vscjava.vscode-java-pack",

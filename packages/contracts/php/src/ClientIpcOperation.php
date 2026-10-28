@@ -11,4 +11,6 @@ enum ClientIpcOperation: string {
     case ENROLL = 'ENROLL';
     case CHECK_IN = 'CHECK_IN';
     case ACTIVITY = 'ACTIVITY';
+    case POWER_ON = 'POWER_ON';
+    case POWER_OFF = 'POWER_OFF';
 }

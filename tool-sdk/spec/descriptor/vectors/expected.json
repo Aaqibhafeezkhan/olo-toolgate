@@ -2,10 +2,10 @@
   "digests": {
     "tool-01-checksum.json": "sha256:4e5d05fc3b388572b71165aece6e57908d6694705255279333dce0c3e13e5874",
     "tool-02-orders-lookup.json": "sha256:60a99eb328989f5fbb2fddbe9f2b357be9b6fb199f8f9262ea243082092e6fd6",
-    "tool-03-refund.json": "sha256:16d855c656c944a7cdfbb34653cd8db47272b164b4ca9dae826262a047baf6d2"
+    "tool-03-refund.json": "sha256:6a90abf0522336fc54151e3cab13e2b24d03c563e2ddb3bee1cbb81db5fdb3fb"
   },
   "sets": {
-    "set-01-orders.json": "sha256:397abb55c4e05c4d84a7c949a5e3a5a36323eb859e5107a8dd03875f51ad0f9b"
+    "set-01-orders.json": "sha256:ab07d5b6eaa988dda1b85f81431c6c6d82a09007486af54b4abe721e4914bb8b"
   },
   "equivalence": {
     "equiv-01-rewrites.json": true,

@@ -29,14 +29,23 @@ private/
 # Local ToolGate state
 # -----------------------------------------------------------------------------
 .dev/
+.toolgate/
+toolgate.dev.json
 .data/
 data/
 runtime/
+# source packages named runtime are code, not local state
+!**/src/**/runtime/
 artifacts/
 quarantine/
 hotfolder/
 HotFolder/
+# The HotFolder example package is code, not a local files area.
+!examples/java-tools/hotfolder/
+!**/src/**/hotfolder/
 logs/
+# Java source packages named logs are code, not local log output.
+!**/src/**/logs/
 tmp/
 temp/
 coverage/
@@ -122,6 +131,9 @@ env/
 deploy/compose/QuickStart/env/*
 !deploy/compose/QuickStart/env/.env.db.example
 !deploy/compose/QuickStart/env/.env.cache.example
+!deploy/compose/GatewayControl/env/
+deploy/compose/GatewayControl/env/*
+!deploy/compose/GatewayControl/env/.env.cache.example
 pip-wheel-metadata/
 .pytest_cache/
 .mypy_cache/
@@ -224,3 +236,6 @@ deploy/client-assets/release/
 
 # Externally provisioned Compose custody must never enter Git.
 deploy/compose/GatewayControl/custody/
+
+*.tgpkg
+.seed

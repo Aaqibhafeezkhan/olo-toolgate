@@ -28,27 +28,63 @@ IMAGE = 'olo-toolgate-local-ci:runner'
 
 # Coverage policy, NOT a second list of commands. New jobs require a decision.
 POLICY = {
+    'quality-summary.reports': 'hosted-report',
+    'create-release-branch.prepare': 'publication',
+    'build-release.select': 'publication',
+    'build-release.collect': 'artifacts',
+    'build-release.publish': 'publication',
     'admission.admit': 'admission',
+    # A read-only PR gate requires hosted base/head event SHAs; its policy is
+    # covered offline by test_pr_policy, not replayed as a build/publication job.
+    'pr-policy.contribution-policy': 'admission',
     'preflight.metadata': 'replay',
-    'foundation.check': 'replay',
-    'gateway.container-and-replicas': 'replay',
-    'policy.enterprise-access': 'replay',
+    'foundation.python': 'replay',
+    'foundation.ui': 'replay',
+    'foundation.rust': 'replay',
+    'foundation.examples': 'replay',
+    'foundation.scans': 'replay',
+    'foundation.browser': 'staged',
+    'foundation.java': 'staged',
+    'foundation.core-mcp': 'staged',
+    'foundation.check': 'staged',
+    'foundation.python-sdk': 'python-matrix',
+    'images.quickstart': 'artifacts',
+    'images.control': 'artifacts',
+    'images.gateway': 'artifacts',
+    'images.device': 'artifacts',
+    'images.secured-device': 'artifacts',
+    'images.langchain': 'artifacts',
+    'images.build': 'artifacts',
+    'images.verify': 'artifacts',
+    'gateway.container-and-replicas': 'legacy',
+    'policy.enterprise-access': 'legacy',
     'client.native': 'native',
     'client.public-bundle': 'artifacts',
+    'tenant-qualification.evidence': 'artifacts',
     'control.container-and-replicas': 'artifacts',
     'quickstart.image': 'artifacts',
-    'gateway.publish': 'publication',
-    'control.publish': 'publication',
-    'quickstart.publish': 'publication',
-    'release-foundation.release': 'publication',
+    'release-images.publish': 'publication',
+    'release-maven.publish': 'publication',
+    'release-typescript.publish': 'publication',
+    'development-release.prepare': 'publication',
     'development-release.publish': 'publication',
+    'development-release.publish-marketplace': 'publication',
     'manual-development-release.native': 'native',
+    'manual-development-release.select': 'publication',
+    'manual-development-release.prepare': 'artifacts',
+    'manual-development-release.build': 'publication',
     'manual-development-release.publish': 'publication',
+    'manual-development-release.publish-typescript': 'publication',
+    'manual-development-release.publish-marketplace': 'publication',
 }
 REASONS = {
+    'hosted-report': 'Reporting-only coverage collection and Sonar upload use hosted repository variables, optional secrets and Actions summaries; collector helpers can run independently locally.',
+    'python-matrix': 'Requires the hosted Python 3.10–3.14 and Linux, Windows and macOS matrix; foundation also runs the SDK tests locally on Python 3.12.',
+    'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',
     'admission': 'Shared admission logic is tested offline by tests/ci; GitHub event routing and repository variables require hosted validation.',
     'native': 'Requires all six native VMs and system service/installer support.',
     'artifacts': 'Requires genuine artifacts from the complete six-platform native matrix.',
+    'staged': 'Consumes artifacts uploaded by an earlier job of the same run; replay the producing jobs locally and rely on hosted CI for the hand-off.',
     'publication': 'Requires protected environments, credentials or GitHub release/registry writes.',
 }
 ALLOWED_ACTIONS = {'actions/checkout', 'actions/setup-python', 'actions/setup-java',
@@ -56,6 +92,19 @@ ALLOWED_ACTIONS = {'actions/checkout', 'actions/setup-python', 'actions/setup-ja
 DOCKER_SETUP = {
     'name': 'Prepare isolated local Docker engine',
     'run': """mkdir -p /var/run/local-ci
+# Delegate controllers inside this runner's private cgroup namespace before nesting Docker.
+# A populated cgroup v2 root otherwise produces invalid domain groups for PostgreSQL.
+if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  mkdir -p /sys/fs/cgroup/init
+  for attempt in $(seq 1 10); do
+    for process in $(cat /sys/fs/cgroup/cgroup.procs); do
+      echo "$process" > /sys/fs/cgroup/init/cgroup.procs 2>/dev/null || true
+    done
+    controllers=$(sed 's/[^ ]*/+&/g' /sys/fs/cgroup/cgroup.controllers)
+    if echo "$controllers" > /sys/fs/cgroup/cgroup.subtree_control; then break; fi
+    if [ "$attempt" = 10 ]; then exit 1; fi
+  done
+fi
 dockerd --host=unix:///var/run/docker.sock > /var/run/local-ci/docker.log 2>&1 &
 for attempt in $(seq 1 60); do
   if docker info >/dev/null 2>&1; then exit 0; fi
@@ -63,6 +112,24 @@ for attempt in $(seq 1 60); do
 done
 cat /var/run/local-ci/docker.log
 exit 1
+""",
+}
+WORKSPACE_SETUP = {
+    'name': 'Materialize the reviewed Git checkout for Linux',
+    'run': """python3 - <<'PY'
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+# act copies Windows files rather than performing a Linux checkout. The snapshot
+# index contains every reviewed change and its canonical line endings and modes.
+with tempfile.TemporaryDirectory(prefix='toolgate-local-checkout-') as temporary:
+    exported = Path(temporary) / 'tree'
+    exported.mkdir()
+    subprocess.run(['git', 'checkout-index', '--all', '--prefix=' + str(exported) + '/'], check=True)
+    shutil.copytree(exported, Path.cwd(), dirs_exist_ok=True, symlinks=True)
+PY
 """,
 }
 
@@ -141,14 +208,38 @@ def inventory(workflows):
     return rows
 
 
+def replay_body(key, document, job):
+    body = copy.deepcopy(job)
+    if key.startswith('foundation.'):
+        if body.get('env', {}).get('TOOLGATE_BUILD') == "${{ inputs.build_number || 'local' }}":
+            body['env']['TOOLGATE_BUILD'] = 'local'
+        # A local foundation replay always validates the current checkout.
+        for step in body.get('steps', []):
+            if step.get('uses', '').startswith('actions/checkout@'):
+                if step.get('with', {}).get('ref') == '${{ inputs.source_sha || github.sha }}':
+                    del step['with']['ref']
+    # A standalone preflight replay includes the browser gate. Main delegates
+    # it to foundation; resolve only this reviewed boolean with its safe default.
+    for step in body.get('steps', []):
+        if (key == 'preflight.metadata' and step.get('if') == '${{ !inputs.shared_checks }}'
+                and document['on']['workflow_call']['inputs']['shared_checks'].get('default') is False):
+            del step['if']
+    return body
+
+
 def validate_replay(key, document, job):
+    job = replay_body(key, document, job)
     if job.get('runs-on') != 'ubuntu-24.04' or 'strategy' in job:
         raise ValueError(f'{key}: local replay supports Ubuntu 24.04 amd64 job bodies only')
     allowed = {'name', 'needs', 'runs-on', 'steps', 'timeout-minutes', 'env', 'defaults'}
     if set(job) - allowed or set(document) & {'env', 'defaults', 'services'}:
         raise ValueError(f'{key}: new workflow/job context needs local coverage review')
     for step in job.get('steps', []):
-        if 'if' in step:
+        # Status-only artifact capture preserves failed scan evidence without
+        # changing which validation commands run. Keep the condition in replay.
+        capture_always=(step.get('if')=='always()'
+                        and step.get('uses','').split('@')[0]=='actions/upload-artifact')
+        if 'if' in step and not capture_always:
             raise ValueError(f'{key}: conditional steps need explicit local coverage review')
         if 'uses' in step and step['uses'].split('@')[0] not in ALLOWED_ACTIONS:
             raise ValueError(f'{key}: action needs local coverage review: {step["uses"]}')
@@ -166,9 +257,14 @@ def replay_document(key, workflows):
     document = workflows[workflow]
     job = document['jobs'][name]
     validate_replay(key, document, job)
-    body = copy.deepcopy(job)
+    body = replay_body(key, document, job)
     body.pop('needs', None)
-    body['steps'].insert(0, copy.deepcopy(DOCKER_SETUP))
+    steps = [copy.deepcopy(DOCKER_SETUP)]
+    for step in body['steps']:
+        steps.append(step)
+        if step.get('uses', '').split('@')[0] == 'actions/checkout':
+            steps.append(copy.deepcopy(WORKSPACE_SETUP))
+    body['steps'] = steps
     return {'name': 'Local ' + key, 'on': {'workflow_dispatch': {}},
             'permissions': {'contents': 'read'}, 'jobs': {'replay': body}}
 
@@ -279,7 +375,7 @@ def act_command(executable, workflow, workspace, root=ROOT, image=IMAGE, network
             '--workflows', str(workflow), '--job', 'replay',
             '--platform', 'ubuntu-24.04=' + image,
             '--container-architecture', 'linux/amd64', '--pull=false', '--rm',
-            '--container-options', '--privileged --volume /var/lib/docker',
+            '--container-options', '--privileged --cgroupns=private --volume /var/lib/docker',
             '--network', network, '--container-daemon-socket', '-',
             '--artifact-server-path', str(workspace / 'artifacts'),
             '--secret-file', str(empty), '--var-file', str(empty),

@@ -19,6 +19,7 @@ public class VerifiedActors {
     @Inject PostgresStore store;
     @Inject ContractCodec codec;
     @Inject DirectoryService directory;
+    @Inject TenantRequest request;
     @Inject io.quarkus.security.identity.SecurityIdentity security;
     private DirectoryService.Actor human; private long sessionEpoch;
 
@@ -28,6 +29,7 @@ public class VerifiedActors {
         if(!(tenant instanceof String value)||jwt.getIssuer()==null||jwt.getSubject()==null||jwt.getSubject().isBlank()
             ||jwt.getIssuedAtTime()>now||jwt.getIssuedAtTime()<now-900||jwt.getExpirationTime()<=now
             ||jwt.getExpirationTime()<=jwt.getIssuedAtTime()||jwt.getExpirationTime()-jwt.getIssuedAtTime()>900)throw unauthorized();
+        TenantRequestResolver.principal(request.context(),value);
         try {return new DirectoryService.Actor(new Ids.TenantId(value),DirectoryService.digest(jwt.getIssuer()+"\n"+jwt.getSubject()),false);}
         catch(IllegalArgumentException invalid) {throw unauthorized();}
     }
@@ -40,7 +42,9 @@ public class VerifiedActors {
             user instanceof String id?id:null,epoch instanceof Number n?n.longValue():null,
             jwt.getIssuedAtTime()*1000,jwt.getExpirationTime()*1000,System.currentTimeMillis());
         if(!identity.enabled())throw new Failure(ErrorCode.FORBIDDEN,403,"User awaits administrator enablement");
-        sessionEpoch=identity.sessionEpoch();human=directory.portalActor(principal.tenant(),principal.id(),identity.userId());return human;
+        sessionEpoch=identity.sessionEpoch();var session=DirectoryService.digest(jwt.getRawToken());
+        var current=store.transaction(principal.tenant(),false,tx->ConsoleDeviceSessions.current(tx,codec,session,identity.userId(),System.currentTimeMillis()));
+        human=directory.portalActor(principal.tenant(),principal.id(),identity.userId()).consoleSession(session,jwt.getExpirationTime()*1000,current);return human;
     }
     public long humanEpoch(){human();return sessionEpoch;}
     public DirectoryService.Actor management() {

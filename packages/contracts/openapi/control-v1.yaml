@@ -32,7 +32,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builtins.schema.json#/$defs/ClientInstallerManifest
+                $ref: ../schemas/v1/local-tools.schema.json#/$defs/ClientInstallerManifest
         '503':
           description: Installers unavailable
   /api/public/v1/clients:
@@ -45,7 +45,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builtins.schema.json#/$defs/ClientDownloadManifest
+                $ref: ../schemas/v1/local-tools.schema.json#/$defs/ClientDownloadManifest
         '503':
           description: No published release bundle
   /api/public/v1/clients/{filename}:
@@ -179,6 +179,30 @@ paths:
         '503':
           description: Dependency unavailable
       security: []
+  /api/control/v1/endpoint/ping:
+    post:
+      operationId: pingEndpoint
+      description: Device presence continues before enrollment, during suspension and
+        after deletion or revocation. A signed CSR proves the announced key. Control
+        returns its current state and the next action; presence grants no access.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointPresencePing
+      responses:
+        '200':
+          description: Authoritative device state and next action; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointConnectionDirective
+        '403':
+          description: Device ID does not match the proved key
+        '503':
+          description: Dependency unavailable
   /api/control/v1/endpoint/enrollments:
     get:
       operationId: listEndpointEnrollments
@@ -227,6 +251,32 @@ paths:
             schema:
               $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentStart
       security: []
+  /api/control/v1/endpoint/enrollments/request-approval:
+    post:
+      operationId: requestEndpointEnrollmentApproval
+      description: Explicit signed-key request to reopen a revoked device for a fresh
+        administrator review. Old enrollment codes are invalidated. This request
+        never approves access and bypasses initial-enrollment automatic approval.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentStart
+      responses:
+        '200':
+          description: Fresh pending enrollment challenge; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentChallenge
+        '403':
+          description: Device ID does not match the proved key
+        '409':
+          description: Device is not revoked or awaiting reenrollment
+        '503':
+          description: Dependency unavailable
   /api/control/v1/endpoint/enrollments/poll:
     post:
       operationId: pollEndpointEnrollment
@@ -307,7 +357,14 @@ paths:
         '403':
           description: Wrong tenant/user, inactive or revoked device
         '409':
-          description: State, replay or polling conflict
+          description: State, replay or polling conflict; ONE_DEVICE_PER_ACCOUNT when an
+            ownDevices approver already owns a device in the rule's group
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlErrorDetail
+        '429':
+          description: Too many failed lookups or approvals (RATE_LIMITED)
         '503':
           description: Dependency unavailable
       requestBody:
@@ -324,6 +381,88 @@ paths:
           type: string
           minLength: 1
           maxLength: 128
+  /api/control/v1/endpoint/enrollments/lookup:
+    post:
+      operationId: lookupEndpointEnrollment
+      description: Returns the pending enrollment a client's code names, for comparison
+        before approval, when the signed-in user may approve it through a group rule or
+        an ownDevices rule. An unknown, expired, decided or unapprovable code is 404 without
+        detail. Five failed lookups or approvals per user in ten minutes return 429.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentLookupResult
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS/identity required
+        '404':
+          description: No enrollment this user may approve
+        '429':
+          description: Too many failed lookups or approvals (RATE_LIMITED)
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlErrorDetail
+        '503':
+          description: Dependency unavailable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointEnrollmentLookup
+  /api/control/v1/endpoint/console-device/challenge:
+    post:
+      operationId: challengeConsoleDevice
+      description: Issues a single-use two-minute challenge bound to the verified console session and owned device key. Does not approve device access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceLookup
+      responses:
+        '200':
+          description: Bounded challenge; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceChallenge
+        '400':
+          description: Exactly one code or device identifier is required
+        '403':
+          description: Device context is not allowed for this session
+        '404':
+          description: No eligible device or enrollment
+        '429':
+          description: Too many failed attempts
+  /api/control/v1/endpoint/console-device/verify:
+    post:
+      operationId: verifyConsoleDevice
+      description: Verifies a device-key signature and records current-device context for this console token session. Never issues a certificate or approves access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceProof
+      responses:
+        '200':
+          description: Current-device context; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/ConsoleDeviceVerified
+        '403':
+          description: Invalid device proof or revoked authority
+        '409':
+          description: Expired, replayed or mismatched challenge
+        '429':
+          description: Too many failed attempts
   /api/control/v1/endpoint/socket:
     get:
       operationId: endpointJobSocket
@@ -353,14 +492,6 @@ paths:
         renew before expiry.
       parameters:
       - in: header
-        name: X-ToolGate-Poll-Interval-Unit
-        required: false
-        description: Opt in to nextIntervalMs; legacy clients continue receiving nextIntervalSeconds.
-        schema:
-          type: string
-          enum:
-          - milliseconds
-      - in: header
         name: X-ToolGate-System-Name
         required: false
         description: Informational OS hostname from the authenticated protected client;
@@ -384,6 +515,8 @@ paths:
           description: Direct TLS/identity required
         '403': &id015
           description: Wrong tenant/user, inactive or revoked device
+        '410':
+          description: Device deleted; request a fresh enrollment and approval
         '423':
           description: Device is disabled, deapproved or its connection deadline expired;
             retryable suspension
@@ -402,14 +535,26 @@ paths:
     get:
       operationId: listEndpointDevices
       description: Administrator lists all directory devices and unexpired pending
-        requests in their tenant, including internal Quickstart executors.
+        requests in their tenant, including internal Quickstart executors. Quickstart
+        supports an explicit deployment=true view using EndpointManagedDeviceDeploymentPage,
+        which adds optional public deployment records without changing the default response.
+      parameters:
+      - name: deployment
+        in: query
+        required: false
+        description: Opt in to public Docker display metadata on Quickstart. Standalone Control returns its normal device page.
+        schema:
+          type: boolean
+          default: false
       responses:
         '200':
           description: Success; no-store
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointManagedDevicePage
+                anyOf:
+                - $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointManagedDevicePage
+                - $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointManagedDeviceDeploymentPage
         '401':
           description: Direct TLS/identity required
         '403':
@@ -458,6 +603,46 @@ paths:
           description: Administrator role and enabled user required
         '409':
           description: Approval revision changed or key permanently revoked
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/endpoint/devices/{id}/request-approval:
+    post:
+      operationId: requestEndpointDeviceApproval
+      description: Administrator reopens a revoked device for a fresh enrollment request.
+        Approval and access remain blocked until the live client submits its CSR
+        and an administrator approves it. Does not change directory enablement.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointRevokeRequest
+      responses:
+        '200':
+          description: Awaiting fresh client enrollment; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/endpoint.schema.json#/$defs/EndpointDeviceRecord
+        '403':
+          description: Administrator role and enabled user required
+        '409':
+          description: Device revision changed or device is not revoked
         '503':
           description: Dependency unavailable
   /api/control/v1/endpoint/devices/{id}/enabled:
@@ -2405,7 +2590,10 @@ paths:
   /api/control/v1/config/export:
     get:
       operationId: exportConfig
-      description: Requires toolgate-admin or toolgate-reader.
+      description: Requires export on every group. Users, team userIds, identity bindings
+        and device evidence are left out; requiredIdentities lists, by ID, every user an
+        exported record references with the teams it belonged to. settings are included
+        for a Super Admin only.
       responses:
         '200':
           description: Success
@@ -2437,7 +2625,15 @@ paths:
   /api/control/v1/config/import:
     post:
       operationId: importConfig
-      description: Requires toolgate-admin.
+      description: Requires import on every group; a snapshot with settings requires Super
+        Admin. Every requiredIdentities ID must exist or be resolved in identityResolution
+        (EXISTING, MAP, PLACEHOLDER), otherwise 409 UNRESOLVED_IDENTITIES lists them, dry
+        runs included. Resolved users are added to their teamIds; other memberships stay
+        unless removeUnlistedMemberships. Replace deletes only exported kinds absent from
+        the file and refuses with 409 REPLACE_CONFLICTS when a preserved record would point
+        at a deleted one. A settings.configuration.requiredReviews change is refused with
+        409 REQUIRED_REVIEWS_CHANGE while reviews are required. With requiredReviews 0 the
+        import applies at once.
       responses:
         '200':
           description: Success
@@ -2485,10 +2681,20 @@ paths:
   /api/control/v1/settings:
     get:
       operationId: getServerSettings
-      description: Requires toolgate-admin. Returns the tenant's control-plane settings
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
+        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
+        current number of reviews, with no Super Admin bypass. Returns the tenant's control-plane settings
         (formatVersion 2), grouped by Configuration page. clientCheckIn is read-only and
         always shows the running deployment's values. The document is also the export
         format.
+      parameters:
+      - in: query
+        name: section
+        required: false
+        schema:
+          type: string
+          enum: [server, device]
+        description: Read one feature. Unreadable groups are omitted from the response.
       responses:
         '200':
           description: Success; no-store
@@ -2504,7 +2710,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2516,7 +2722,9 @@ paths:
         '503': *id010
     put:
       operationId: updateServerSettings
-      description: Requires toolgate-admin. Replaces the editable settings with a full
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
+        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
+        current number of reviews, with no Super Admin bypass. Replaces the editable settings with a full
         formatVersion 2 record; used to restore an exported settings document. The
         revision and clientCheckIn in the body are ignored; If-Match carries the current
         revision.
@@ -2544,7 +2752,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2556,7 +2764,9 @@ paths:
         '503': *id010
     patch:
       operationId: patchServerSettings
-      description: Requires toolgate-admin. Merge patch (RFC 7396) of the editable settings
+      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
+        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
+        current number of reviews, with no Super Admin bypass. Merge patch (RFC 7396) of the editable settings
         groups; each Configuration page sends only its own fields. clientCheckIn is
         env-owned and cannot be patched. A stale If-Match returns 409.
       parameters:
@@ -2583,7 +2793,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlServerSettings
+                $ref: ../schemas/v2/settings.schema.json#/$defs/ControlSettingsView
         '400': *id002
         '401': *id003
         '403': *id004
@@ -2593,6 +2803,129 @@ paths:
         '415': *id008
         '500': *id009
         '503': *id010
+  /api/control/v1/review-policy:
+    get:
+      operationId: getReviewPolicy
+      description: Any signed-in console user. The configuration review threshold in force
+        for new changes; 0 means changes apply immediately.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlReviewPolicy
+        '401':
+          description: Signed-in user required
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/workload-bindings/{id}/credential:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+    post:
+      operationId: rotateWorkloadCredential
+      description: Super Admin only. Installs a new static token hash, increments credentialEpoch,
+        rebinds a delegated binding to its user's current session epoch, clears needsReauthorization
+        and sets enabled. Returns the binding and the Gateway request context to install;
+        context.bindingId is the request's bindingId or the single execution binding the
+        agent groups' grants select.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ControlWorkloadCredentialRotation
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ControlWorkloadCredentialResult
+        '400':
+          description: Invalid bounded input
+        '403':
+          description: Super Admin required
+        '404':
+          description: Workload binding not found
+        '409':
+          description: Hash already used, or no identity binding for the delegated user
+  /api/control/v1/users/{id}/enable:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+    post:
+      operationId: enableControlUser
+      description: Super Admin only. Enables the user; its sessions and delegated workload
+        tokens end, so delegated bindings need a credential rotation afterwards.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      responses:
+        '200':
+          description: The updated user
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlUser
+        '403':
+          description: Super Admin required
+        '404':
+          description: User not found
+        '409':
+          description: Revision conflict
+  /api/control/v1/users/{id}/disable:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+    post:
+      operationId: disableControlUser
+      description: Super Admin only. Disables the user and ends its sessions and delegated
+        workload tokens.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      responses:
+        '200':
+          description: The updated user
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/control.schema.json#/$defs/ControlUser
+        '403':
+          description: Super Admin required
+        '404':
+          description: User not found
+        '409':
+          description: Revision conflict or setup administrator
   /api/control/v1/audit:
     get:
       operationId: listAudit
@@ -2887,6 +3220,31 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetSignedDocument
+  /api/control/v1/builder/status:
+    get:
+      operationId: getSdkBuilderStatus
+      summary: getSdkBuilderStatus
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Authorized SDK build result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderStatus
+        '400':
+          description: Invalid SDK project or request
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Current role does not authorize this Tool Group
+        '404':
+          description: Project or build unavailable
+        '409':
+          description: Revision, immutable version or replay conflict
+        '503':
+          description: SDK build worker or artifact unavailable
   /api/control/v1/builder/drafts:
     get:
       operationId: listBuilderDrafts
@@ -2895,23 +3253,23 @@ paths:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraftPage
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderDraftPage
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: cursor
         in: query
@@ -2926,23 +3284,23 @@ paths:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraft
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderDraft
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: Idempotency-Key
         in: header
@@ -2955,32 +3313,60 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraftRequest
-  /api/control/v1/builder/tests:
-    get:
-      operationId: listBuilderTests
-      summary: listBuilderTests
+              $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderSave
+  /api/control/v1/builder/sources:
+    post:
+      operationId: importBuilderSource
+      summary: importBuilderSource
+      description: Reads the JSON SDK project from a source ZIP, as Download source exports it or rezipped after editing, and
+        returns it canonical and validated. Nothing is stored; save it as a draft to keep it. Requires tool_builder.build.
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: The project in the ZIP
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestPage
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderSource
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Not a source ZIP of one valid JSON SDK project
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize building
+      requestBody:
+        required: true
+        content:
+          application/zip:
+            schema:
+              type: string
+              format: binary
+  /api/control/v1/builder/builds:
+    get:
+      operationId: listBuilderBuilds
+      summary: listBuilderBuilds
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Authorized SDK build result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderBuildPage
+        '400':
+          description: Invalid SDK project or request
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: cursor
         in: query
@@ -2989,29 +3375,29 @@ paths:
           type: string
           maxLength: 128
     post:
-      operationId: createBuilderTest
-      summary: createBuilderTest
+      operationId: createBuilderBuild
+      summary: createBuilderBuild
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestRecord
+                $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderBuild
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: Idempotency-Key
         in: header
@@ -3024,88 +3410,33 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestRequest
-  /api/control/v1/builder/tests/poll:
+              $ref: ../schemas/v1/sdk-builder.schema.json#/$defs/SdkBuilderBuildRequest
+  /api/control/v1/builder/builds/{id}/package:
     get:
-      operationId: pollBuilderTest
-      summary: pollBuilderTest
-      security:
-      - deviceCertificate: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestPoll
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-  /api/control/v1/builder/tests/results:
-    post:
-      operationId: completeBuilderTest
-      summary: completeBuilderTest
-      security:
-      - deviceCertificate: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestRecord
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderTestResult
-  /api/control/v1/builder/drafts/{id}/seal:
-    post:
-      operationId: sealBuilderDraft
-      summary: sealBuilderDraft
+      operationId: downloadBuilderPackage
+      summary: downloadBuilderPackage
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
-            application/json:
+            application/vnd.ololabs.toolgate.package+zip:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDraft
+                type: string
+                format: binary
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: id
         in: path
@@ -3113,43 +3444,32 @@ paths:
         schema:
           type: string
           maxLength: 128
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderRevisionRequest
-  /api/control/v1/builder/drafts/{id}/publication:
-    post:
-      operationId: prepareBuilderPublication
-      summary: prepareBuilderPublication
+  /api/control/v1/builder/builds/{id}/source:
+    get:
+      operationId: downloadBuilderSource
+      summary: downloadBuilderSource
       security:
       - adminAccessToken: []
       responses:
         '200':
-          description: Authoritative bounded authoring result
+          description: Authorized SDK build result
           content:
-            application/json:
+            application/zip:
               schema:
-                $ref: ../schemas/v1/builder.schema.json#/$defs/BuilderDefinition
+                type: string
+                format: binary
         '400':
-          description: Invalid schema, source, secret or unsupported capability
+          description: Invalid SDK project or request
         '401':
-          description: Verified direct TLS identity required
+          description: Verified TLS login required
         '403':
-          description: Wrong role, tenant, client or lease
+          description: Current role does not authorize this Tool Group
         '404':
-          description: Draft unavailable
+          description: Project or build unavailable
         '409':
-          description: Revision, immutable version, test or replay conflict
+          description: Revision, immutable version or replay conflict
         '503':
-          description: Dependency unavailable
+          description: SDK build worker or artifact unavailable
       parameters:
       - name: id
         in: path
@@ -3157,94 +3477,6 @@ paths:
         schema:
           type: string
           maxLength: 128
-  /api/control/v1/builder/drafts/{id}/release:
-    post:
-      operationId: publishBuilderRelease
-      summary: publishBuilderRelease
-      security:
-      - adminAccessToken: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetPackageRelease
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetPackageRelease
-  /api/control/v1/builder/drafts/{id}/deploy:
-    post:
-      operationId: deployBuilderDraft
-      summary: deployBuilderDraft
-      security:
-      - adminAccessToken: []
-      responses:
-        '200':
-          description: Authoritative bounded authoring result
-          content:
-            application/json:
-              schema:
-                $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetRolloutRecord
-        '400':
-          description: Invalid schema, source, secret or unsupported capability
-        '401':
-          description: Verified direct TLS identity required
-        '403':
-          description: Wrong role, tenant, client or lease
-        '404':
-          description: Draft unavailable
-        '409':
-          description: Revision, immutable version, test or replay conflict
-        '503':
-          description: Dependency unavailable
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          maxLength: 128
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/v1/fleet.schema.json#/$defs/FleetRolloutRequest
   /api/control/v1/mcp/catalog:
     post:
       operationId: queryLocalMcpCatalog
@@ -7031,6 +7263,52 @@ paths:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseDecision
         '403':
           description: Simulation privilege required
+  /api/control/v1/access/insights/spans:
+    post:
+      operationId: submitInsightsSpans
+      description: DETAILED Operator Insights spans from the Gateway for its tenant's invocations (ADR 031). Best-effort; spans of unknown invocations or with names outside the Gateway's set are refused.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Spans buffered or refused
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanAck
+        '400':
+          description: Invalid batch
+        '403':
+          description: Access denied
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanBatch
+  /api/control/v1/access/insights/admissions:
+    post:
+      operationId: submitInsightsAdmissions
+      description: Gateway admission counters for Operator Insights (ADR 031). Best-effort; a repeated (gatewayId, epoch, sequence) is acknowledged as a duplicate and counted once.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Batch acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsAdmissionAck
+        '400':
+          description: Invalid batch
+        '403':
+          description: Access denied
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsAdmissionBatch
   /api/control/v1/access/invocations:
     get:
       operationId: listEnterpriseInvocations
@@ -7172,6 +7450,56 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterprisePermitConsumption
+  /api/control/v1/access/dispatches:
+    post:
+      operationId: relayToolHostDispatch
+      description: Relay Gateway only. Queues a signed Dispatch for a Tool Host that fetches its calls from Control, for
+        example one on a laptop the Gateway cannot reach. The permit's audience must be the invocation's target Tool Host.
+        Relaying the same dispatch again answers its current status.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/Dispatch
+      responses:
+        '200':
+          description: Queued, or the current status of the same dispatch
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '400':
+          description: Invalid bounded input
+        '403':
+          description: Access denied
+        '409':
+          description: Another dispatch for this invocation, or the target is not a Tool Host
+  /api/control/v1/access/dispatches/{id}:
+    get:
+      operationId: getToolHostDispatchStatus
+      description: Relay Gateway only. Where a relayed dispatch stands, with the host's admission and result once posted.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
   /api/control/v1/access/invocations/{id}/device-outcome:
     get:
       operationId: getDeviceEnterpriseOutcome
@@ -7359,6 +7687,97 @@ paths:
                 $ref: ../schemas/v1/endpoint.schema.json#/$defs/RemoteToolResponse
         '403':
           description: Current group grant or target trust denied
+  /api/control/v1/access/invocations/{id}/insights/spans:
+    post:
+      operationId: submitInvocationInsightsSpans
+      description: DETAILED Operator Insights spans from the executor the invocation was placed on, authenticated by its device certificate (ADR 031).
+      responses:
+        '200':
+          description: Spans buffered or refused
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanAck
+        '400':
+          description: Invalid batch
+        '401':
+          description: Direct device certificate required
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/insights.schema.json#/$defs/InsightsSpanBatch
+  /api/control/v1/access/invocations/{id}/events:
+    get:
+      operationId: invocationRunEvents
+      summary: Authorized cursor replay of an invocation's retained run-response events
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Retained events after the cursor, with explicit gaps, truncation and expiry
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventPage
+        '403':
+          description: The invocation's owner no longer holds current access, or the reader lacks operation.read
+        '404':
+          description: Invocation not found
+    post:
+      operationId: submitInvocationRunEvents
+      summary: Executor frames of the admitted attempt, bound by device certificate and fencing token
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventBatch
+      responses:
+        '200':
+          description: Highest contiguous sequence retained, duplicates and refusals
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventAck
+        '400':
+          description: Invalid frame or invocation binding
+        '401':
+          description: Direct device certificate required
+        '403':
+          description: Not the admitting executor or a stale fencing token
   /api/control/v1/vault:
     get:
       operationId: listVaultReferences
@@ -7573,6 +7992,16 @@ paths:
   /api/control/v1/access/secrets/deliver:
     post:
       operationId: deliverRuntimeSecret
+      description: Delivers a declared secret only to the current executing device and consumed permit nonce.
+      parameters:
+      - name: Toolgate-Fencing-Token
+        in: header
+        required: true
+        description: The consumed permit nonce for the current invocation attempt. Missing or stale tokens are denied.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
       responses:
         '200':
           description: Current scoped enterprise authority
@@ -7602,6 +8031,1208 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseOperationalStatus
+  /api/control/v1/packages/uploads:
+    post:
+      operationId: uploadServerPackage
+      description: Super Admin only. Uploads a .tgpkg built by `toolgate pack`. Control applies the packager's archive
+        rules, CHECKSUMS, artifact and descriptor digests, stores the exact bytes and answers the verified version.
+        Uploading the same bytes again answers 200 with the stored version.
+      requestBody:
+        required: true
+        content:
+          application/vnd.ololabs.toolgate.package+zip:
+            schema:
+              type: string
+              contentMediaType: application/vnd.ololabs.toolgate.package+zip
+      responses:
+        '201':
+          description: Stored and verified
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '200':
+          description: Already stored
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '413':
+          description: Package too large
+        '415':
+          description: Not a package
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages:
+    get:
+      operationId: listServerPackageVersions
+      description: Administrators with read access to every tool. The newest uploaded package versions.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersionPage
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages/deployments:
+    get:
+      operationId: listServerPackageDeployments
+      description: Administrators with read access to every tool. The version each package id runs on Tool Hosts.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageDeploymentPage
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+    post:
+      operationId: deployServerPackage
+      description: Super Admin only. Makes a stored version the one Tool Hosts run for its package id, with the values of
+        its declared globals and destination host settings. Control writes the service profile, the globals document, a
+        disabled directory entry per new tool in the default Tool Group (an existing tool keeps its state and group) and the
+        tool's resource extractor. hostIds names the Tool Hosts that run it (none means every Tool Host); deploying the
+        same version with other hostIds moves its tools. Each tool still needs a reviewed enable, a binding that allows the package digest and a
+        grant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/package.schema.json#/$defs/PackageDeploymentRequest
+      responses:
+        '200':
+          description: Deployed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageDeployment
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or not deployed
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages/provisioning:
+    get:
+      operationId: listProvisioningStatuses
+      description: Administrators with package.read. The latest recorded ProvisioningStatus of every applied deployment
+        profile, by profile id, with the package changes from the profile applied before it.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/ProvisioningStatusPage
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/packages/provisioning/{profileId}:
+    get:
+      operationId: getProvisioningStatus
+      description: Administrators with package.read. The latest recorded ProvisioningStatus of one deployment profile.
+      parameters:
+      - name: profileId
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/ProvisioningStatus
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted
+        '404':
+          description: Profile not applied
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/marketplace:
+    get:
+      operationId: getMarketplaceStatus
+      description: Administrators with read access to every tool. Whether this ToolGate reads an OLO Orgs Marketplace, its
+        id and origin, and the fingerprints of the pinned release signing keys. All are environment-owned settings.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/MarketplaceStatus
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/marketplace/catalog:
+    get:
+      operationId: listMarketplaceCatalog
+      description: Administrators with read access to every tool. One page of the Marketplace catalog, as the Marketplace
+        answers it, with each item's latest version marked compatible or not with this ToolGate in `control`.
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 10000
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: category
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: tag
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: publisher
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace catalog page, as the Marketplace API defines it, each item annotated with
+                  control.compatible and control.reasons.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: The Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/packages/{packageId}:
+    get:
+      operationId: listMarketplacePackageVersions
+      description: Administrators with read access to every tool. The versions of one Marketplace package, each marked
+        compatible or not, and installVersion, the newest listed version this ToolGate can run.
+      parameters:
+      - name: packageId
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/PackageId
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace version list, as the Marketplace API defines it, with control annotations and installVersion.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/packages/{packageId}/{version}:
+    get:
+      operationId: getMarketplacePackageVersion
+      description: Administrators with read access to every tool. One Marketplace version's detail record, marked
+        compatible or not with this ToolGate.
+      parameters:
+      - name: packageId
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/PackageId
+      - name: version
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/identifiers.schema.json#/$defs/SemanticVersion
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace detail record, as the Marketplace API defines it, with control annotations.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/publishers/{slug}:
+    get:
+      operationId: getMarketplacePublisher
+      description: Administrators with read access to every tool. A Marketplace publisher's public profile.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,30}$
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                description: The Marketplace publisher record, as the Marketplace API defines it.
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/imports:
+    post:
+      operationId: importMarketplacePackage
+      description: Super Admin only. Fetches one Marketplace version from the configured origin and stores it as an
+        uploaded server package after the checks of the Marketplace design §8.3 (not delisted, a known release schema, a
+        signature by a pinned key, this Marketplace id, the same ids and publisher, the archive SHA-256 and the package
+        rules) and this ToolGate's compatibility rules. Redirects are never followed. The audit log records the
+        Marketplace, version, publisher and key. Nothing is deployed, enabled or granted; the package then follows the
+        same review, deploy, enable and grant steps as an upload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/package.schema.json#/$defs/MarketplaceImportRequest
+      responses:
+        '201':
+          description: Imported, verified and stored
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '200':
+          description: Already stored
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/PackageVersion
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '413':
+          description: Package or record too large
+        '422':
+          description: Refused by an import check or not compatible with this ToolGate
+        '503':
+          description: Marketplace unavailable or answered something Control does not accept
+  /api/control/v1/marketplace/media/{mediaId}:
+    get:
+      operationId: getMarketplaceMedia
+      security: []
+      description: A Marketplace screenshot or logo from the configured origin, so the console keeps img-src 'self'. Public
+        Marketplace content; only PNG and JPEG up to 1 MiB are passed through.
+      parameters:
+      - name: mediaId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^m_[0-9a-f]{32}$
+      responses:
+        '200':
+          description: The image; private, max-age=300
+          content:
+            image/png:
+              schema:
+                type: string
+                contentMediaType: image/png
+            image/jpeg:
+              schema:
+                type: string
+                contentMediaType: image/jpeg
+        '404':
+          description: Not found, or the Marketplace is not enabled
+        '413':
+          description: Image too large
+        '503':
+          description: Marketplace unavailable or not an image Control accepts
+  /api/control/v1/tool-hosts/registrations:
+    post:
+      operationId: registerToolHost
+      security:
+      - deviceCertificate: []
+      description: An enrolled device registers as a Tool Host; hostId must equal its device id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostRegistration
+      responses:
+        '200':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/assignments:
+    get:
+      operationId: getToolHostAssignments
+      security:
+      - deviceCertificate: []
+      description: The tools a registered Tool Host runs and the deployments whose content it fetches by digest.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/package.schema.json#/$defs/ToolHostAssignments
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/packages/{digest}:
+    get:
+      operationId: getToolHostPackage
+      security:
+      - deviceCertificate: []
+      description: The exact bytes of a deployed package, for a registered Tool Host.
+      parameters:
+      - name: digest
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+      responses:
+        '200':
+          description: Package bytes
+          content:
+            application/vnd.ololabs.toolgate.package+zip:
+              schema:
+                type: string
+                contentMediaType: application/vnd.ololabs.toolgate.package+zip
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or not deployed
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/documents/{digest}:
+    get:
+      operationId: getToolHostDocument
+      security:
+      - deviceCertificate: []
+      description: A service profile or globals document a deployment pins, whose canonical digest is the path digest.
+      parameters:
+      - name: digest
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found, or not deployed
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/dispatches/next:
+    post:
+      operationId: nextToolHostDispatch
+      security:
+      - deviceCertificate: []
+      description: The oldest queued call relayed for this Tool Host, which Control marks claimed. 204 when none is queued.
+      responses:
+        '200':
+          description: The claimed dispatch
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/Dispatch
+        '204':
+          description: Nothing queued
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/dispatches/{id}/admission:
+    post:
+      operationId: postToolHostAdmission
+      security:
+      - deviceCertificate: []
+      description: The Tool Host admits or refuses a dispatch it claimed.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/AdmissionResponse
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found
+        '409':
+          description: Not claimed by this host
+  /api/control/v1/tool-hosts/dispatches/{id}/result:
+    post:
+      operationId: postToolHostResult
+      security:
+      - deviceCertificate: []
+      description: The Tool Host's result for a dispatch it admitted.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/protocol.schema.json#/$defs/ResultMessage
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/protocol.schema.json#/$defs/ToolHostDispatchStatus
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not permitted, or not a registered Tool Host
+        '404':
+          description: Not found
+        '409':
+          description: Not admitted by this host
+  /api/control/v1/mcp-servers:
+    get:
+      operationId: listMcpServers
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. The upstream MCP servers registered in the routed tenant.
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistrationPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+    post:
+      operationId: registerMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register plus scoped authority over the binding's Tool Group and Device Group. Registers an upstream
+        MCP server in the routed tenant; the secret must belong to exactly the binding's groups. Contacts nothing.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistrationRequest
+      responses:
+        '200':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}:
+    get:
+      operationId: getMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. One registration with its state, verification and quarantine.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+    delete:
+      operationId: deleteMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register with scoped authority. Undeploys the generated package and disables its tools; history is kept.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '204':
+          description: Unregistered
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}/scans:
+    post:
+      operationId: scanMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register with scoped authority. Queues a DISCOVER scan on a Tool Host of the binding Device Group;
+        the host contacts the upstream, never Control.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}/snapshots/{revision}:
+    get:
+      operationId: getMcpSnapshot
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. One immutable snapshot with recomputed definition digests.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: revision
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpSnapshot
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/mcp-servers/{slug}/approvals:
+    get:
+      operationId: listMcpApprovals
+      security:
+      - adminAccessToken: []
+      description: mcp_server.read. Approvals of one registration, newest first.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpApprovalPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+    post:
+      operationId: approveMcpServer
+      security:
+      - adminAccessToken: []
+      description: mcp_server.register with scoped authority. Approves at most 64 tools of one snapshot as the next approval sequence,
+        generates and deploys the tenant's MCP_PROXY package, and retires omitted tools. A retry with the same key and request
+        returns the original approval.
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerSlug
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpApprovalRequest
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpApproval
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Verified TLS login required
+        '403':
+          description: Not permitted for this tenant, binding, secret or Device Group
+        '404':
+          description: Not found in this tenant
+        '409':
+          description: Revision, state, approval or capacity conflict
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/next:
+    post:
+      operationId: nextMcpScan
+      security:
+      - deviceCertificate: []
+      description: The oldest queued scan for this Tool Host, which must be an administered member of the registration's binding
+        Device Group. Control marks it claimed and returns its scan permit. 204 when none is queued.
+      responses:
+        '200':
+          description: The claimed scan
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanDispatch
+        '204':
+          description: Nothing queued
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/consume:
+    post:
+      operationId: consumeMcpScan
+      security:
+      - deviceCertificate: []
+      description: The lease holder consumes the scan permit before the signed deadline; only then may it redeem the secret.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanClaims
+      responses:
+        '200':
+          description: Admitted
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/secret:
+    post:
+      operationId: deliverMcpScanSecret
+      security:
+      - deviceCertificate: []
+      description: The registration's upstream secret, for the admitted lease holder of a current scan with its fencing token,
+        before the signed deadline, and only a secret of exactly the binding's Tool Group and Device Group.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: Toolgate-Fencing-Token
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: The secret; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseSecretDelivery
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the admitted lease holder, past the deadline, or the secret is not the binding's
+        '404':
+          description: No such scan in this tenant
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/result:
+    post:
+      operationId: postMcpScanResult
+      security:
+      - deviceCertificate: []
+      description: The lease holder reports what it observed, once and before the deadline. Control recomputes every digest.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanResult
+      responses:
+        '200':
+          description: Finished
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-scans/{id}/failure:
+    post:
+      operationId: postMcpScanFailure
+      security:
+      - deviceCertificate: []
+      description: The lease holder reports a failed scan, once and before the deadline. A failed refresh makes verification UNVERIFIED.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanFailureReport
+      responses:
+        '200':
+          description: Failed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpScanJob
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-refreshes:
+    post:
+      operationId: requestMcpRefresh
+      security:
+      - deviceCertificate: []
+      description: The holder of one MCP_PROXY invocation saw notifications/tools/list_changed and asks for an immediate refresh
+        of that call's server. Control queues one unless a scan of it is already open.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpRefreshRequest
+      responses:
+        '202':
+          description: Accepted; a refresh is queued or already open
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the invocation's lease holder, or not an MCP_PROXY call
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/tool-hosts/mcp-quarantines:
+    post:
+      operationId: reportMcpQuarantine
+      security:
+      - deviceCertificate: []
+      description: The lease holder of one invocation or scan reports a quarantine. Control derives the targets from that evidence
+        and applies it only to the current approval; a stale report is audited and changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpQuarantineReport
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/mcp-proxy.schema.json#/$defs/McpServerRegistration
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Authentication or direct TLS required
+        '403':
+          description: Not the lease holder, not a member host, or not a registered Tool Host
+        '409':
+          description: Expired, already reported or stale
+        '503':
+          description: Dependency unavailable
+  /api/control/v1/access/invocations/cancel:
+    post:
+      operationId: cancelCallerOperation
+      description: Gateway role only. Persists cancellation even before first submission.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/CancellationAccepted
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
+  /api/control/v1/access/service-permits/issue:
+    post:
+      operationId: issueServicePermit
+      description: Direct admitted executor device certificate and fencing token required.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermit
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitIssue
+  /api/control/v1/access/service-permits/{audience}/consume:
+    post:
+      operationId: consumeServicePermit
+      description: Dedicated toolgate-service-{audience} role; exact request facts and current authority checked.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitConsumed
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitConsumption
+  /api/control/v1/access/service-permits/{audience}/epoch:
+    get:
+      operationId: serviceAuthorizationEpoch
+      description: Dedicated service role; coalesced tenant revocation feed snapshot.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServiceAuthorizationEpoch
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+  /api/control/v1/access/service-permits/{audience}/jwks:
+    get:
+      operationId: servicePermitKeys
+      description: Dedicated service role; current purpose-separated Control effect verification key.
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Authenticated key-discovery result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [kty, alg, use, kid, n, e]
+        '403':
+          description: Dedicated service role for this audience and tenant required
 components:
   securitySchemes:
     adminAccessToken:

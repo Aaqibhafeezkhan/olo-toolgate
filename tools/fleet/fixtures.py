@@ -22,10 +22,10 @@ def main():
         header=b64(json.dumps({'alg':'RS256','typ':typ,'kid':name},separators=(',',':')).encode())
         message=header+'.'+b64(raw)
         return {'jws':message+'.'+b64(keys[name].sign(message.encode(),padding.PKCS1v15(),hashes.SHA256()))}
-    document=fixture['document'];document['tools']=[copy.deepcopy(current['LocalToolRegistration'])]
+    document=fixture['document'];document['runtimes']=[copy.deepcopy(current['ManagedRuntime'])];document['tools']=[copy.deepcopy(current['LocalToolRegistration'])]
     raw=json.dumps(document,separators=(',',':')).encode()
     release={'packageId':document['packageId'],'version':document['version'],'manifestDigest':hashlib.sha256(raw).hexdigest(),'sizeBytes':len(raw),'release':sign(raw,'release','toolgate-package-release+jws')}
     desired=fixture['desired'];desired['assignments'][0]['release']=release
     fixture.update(releaseKeys=[public('release')],organizationKeys=[public('organization')],release=release,signedDesired=sign(json.dumps(desired,separators=(',',':')).encode(),'organization','toolgate-fleet-desired+jws'))
-    path.write_text(json.dumps(fixture,indent=2)+'\n',encoding='utf-8')
+    path.write_text(json.dumps(fixture,indent=2)+'\n',encoding='utf-8',newline='\n')
 if __name__=='__main__':main()

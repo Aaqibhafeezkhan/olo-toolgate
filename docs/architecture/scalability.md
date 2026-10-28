@@ -1,25 +1,16 @@
 # Scalability
 
-## Gateway
+Gateway and Control support stateless service replicas, with durable authorization,
+invocations and audit owned by Control's external PostgreSQL database. Gateway
+does not query the database directly, but protected requests require online Control
+round trips. Size and measure the complete path, including database contention.
 
-- Stateless replicas.
-- No DB request in normal authorization path.
-- In-memory verified policy bundle.
-- Scale behind load balancer.
+Use [production deployment](../deployment/production.md) for external custody,
+networking and Helm. Bound queues, request sizes, deadlines and concurrency; fail
+closed when current authority is unavailable. Client presence and delivery use
+server-directed polling as described in [ADR 023](../adr/023-server-directed-device-presence.md).
 
-## Control Plane
-
-- Stateless replicas.
-- External PostgreSQL.
-- External artifact store/vault/optional cache.
-
-## Marketplace
-
-- Drupal xN.
-- Marketplace API xN.
-- Marketplace Worker xN.
-- external DB/object store/queue/search/signing.
-
-## Client Fleet
-
-Use desired/reported state and batched heartbeats rather than keeping permanent server-side sessions for every endpoint.
+The [verification tools](../testing/README.md) produce results for their tested
+revision and environment, not general throughput guarantees. Report
+workload, hardware, topology, concurrency and p50/p95/p99 together. Multi-host
+capacity, soak and multi-region qualification require deployment-specific measurement.

@@ -1,0 +1,48 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: toolgate-secured-device
+services:
+  device:
+    image: ${TOOLGATE_SECURED_DEVICE_IMAGE:-ololab/olo-toolgate-linux-secured-device:dev}
+    platform: ${TOOLGATE_DEVICE_PLATFORM:-linux/amd64}
+    pull_policy: ${TOOLGATE_DEVICE_PULL_POLICY:-always}
+    hostname: ${TOOLGATE_DEVICE_NAME:-toolgate-secured-device}
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+    read_only: true
+    cap_drop: [ALL]
+    # Removed from the native client and all its children before enrollment starts.
+    cap_add: [NET_ADMIN, SETPCAP]
+    security_opt: [no-new-privileges:true]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 128
+    stop_grace_period: 30s
+    environment:
+      TOOLGATE_GATEWAY_URLS: ${TOOLGATE_GATEWAY_URLS:?Set one HTTPS Gateway origin}
+      TOOLGATE_SECURED_GATEWAY_IPV4: ${TOOLGATE_SECURED_GATEWAY_IPV4:?Set the pinned Gateway IPv4}
+      TOOLGATE_SECURED_GATEWAY_PORT: ${TOOLGATE_SECURED_GATEWAY_PORT:-8443}
+      TOOLGATE_GATEWAY_CA_FILE: /run/olo-toolgate-ca/gateway.crt
+    tmpfs:
+      - /run:rw,nosuid,noexec,size=8m,mode=755
+      - /tmp:rw,nosuid,noexec,size=8m,mode=1777
+      - /usr/local/lib/olo-toolgate:rw,exec,nosuid,size=32m,mode=755
+    volumes:
+      - device-config:/etc/olo-toolgate
+      - device-state:/var/lib/olo-toolgate
+      - type: bind
+        source: ${TOOLGATE_GATEWAY_CA_SOURCE:?Set the public Gateway CA file}
+        target: /run/olo-toolgate-ca/gateway.crt
+        read_only: true
+    networks: [gateway-network]
+networks:
+  gateway-network:
+    external: true
+    name: ${TOOLGATE_DEVICE_NETWORK:?Set the existing Gateway Docker network}
+volumes:
+  device-config:
+  device-state:

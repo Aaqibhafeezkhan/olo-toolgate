@@ -8,12 +8,15 @@ use std::path::PathBuf;
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
+    /// Administrator-pinned expected UUID; never supplied by an untrusted console as authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
     #[serde(default)]
     pub deployment: Option<crate::deployment::Settings>,
     #[serde(default)]
     pub execution: Option<crate::execution::Settings>,
     #[serde(default)]
-    pub tools: Option<crate::builtins::Settings>,
+    pub gateway: Option<crate::tool_gateway::Settings>,
     pub server_url: String,
     pub state_directory: PathBuf,
     pub ipc_endpoint: String,
@@ -26,22 +29,23 @@ pub struct Config {
 }
 impl Config {
     pub fn validate(&self) -> Result<()> {
+        if let Some(tenant) = &self.tenant_id {
+            crate::contracts::Contracts::shared()?.encode("TenantUuid", tenant)?;
+        }
         if let Some(deployment) = &self.deployment {
             deployment.validate()?;
-            if self.execution.is_none() || self.tools.is_none() {
+            if self.execution.is_none() {
                 return Err(Failure::Validation);
             }
         }
         if let Some(execution) = &self.execution {
             execution.validate()?;
-            if self.tools.is_none()
-                || execution.state_directory != self.state_directory.join("runtimes")
-            {
+            if execution.state_directory != self.state_directory.join("runtimes") {
                 return Err(Failure::Validation);
             }
         }
-        if let Some(tools) = &self.tools {
-            tools.validate()?;
+        if let Some(gateway) = &self.gateway {
+            gateway.validate()?;
         }
         origin(&self.server_url)?;
         if let Some(console) = &self.local_console_url {

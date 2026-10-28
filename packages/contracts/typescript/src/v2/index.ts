@@ -1,6 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
+import type * as V1 from "../index.js";
 /** Verified delegation chain entry; never caller-asserted. */
 export interface ActorHop {
   readonly agentId: string;
@@ -22,6 +23,21 @@ export interface BreakGlassRequest {
   readonly mode: KillMode;
   readonly reason: string;
   readonly operatorSignatures: ReadonlyArray<string>;
+}
+export type BrokerOperation = "ROUTE_CALL" | "SECRET_REDEEM" | "FILES_LIST" | "FILES_READ" | "FILES_INFO" | "FILES_WRITE" | "FILES_APPEND" | "FILES_MKDIR" | "FILES_RENAME";
+/** Tool to executor on stdout: one brokered operation. request is the operation payload: the recorded-exchange route call shape for ROUTE_CALL, {handle} for SECRET_REDEEM, {path, destination, text} for FILES_*. One request is outstanding at a time. */
+export interface BrokerRequestFrame {
+  readonly kind: "BROKER_REQUEST";
+  readonly requestId: string;
+  readonly operation: BrokerOperation;
+  readonly request: Record<string, unknown>;
+}
+/** Executor to tool on stdin: the result of the outstanding brokered operation, or a canonical error. Nothing else is written to the tool after its ToolInput. */
+export interface BrokerResponseFrame {
+  readonly kind: "BROKER_RESPONSE";
+  readonly requestId: string;
+  readonly result?: Record<string, unknown>;
+  readonly error?: ToolErrorBody;
 }
 /** reserveBusinessOperation input, carried on POST /access/invocations. */
 export interface BusinessKeyReservationRequest {
@@ -85,6 +101,30 @@ export interface ClientCheckIn {
   readonly offlineAfterMs: number;
   readonly source: ValueSource;
 }
+/** A client release: the image index pinned by digest, the exact FleetPackageDocument bytes (manifestDigest) and, when Control holds the package-release key, the signed FleetPackageRelease it recorded. */
+export interface ClientRelease {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest: string;
+  readonly image: string;
+  readonly runtimeVersion: string;
+  readonly manifestDigest: string;
+  readonly signed: boolean;
+  readonly document: Record<string, unknown>;
+  readonly documentBase64: string;
+  readonly release?: Record<string, unknown>;
+  readonly tools: ReadonlyArray<ClientReleaseTool>;
+}
+/** Builds the client-tool image for one verified upload and issues its fleet release (ADR 026). */
+export interface ClientReleaseRequest {
+  readonly packageDigest: string;
+}
+/** One export and whether a client device can run it; an unsupported export is never weakened to fit. */
+export interface ClientReleaseTool {
+  readonly toolId: string;
+  readonly supported: boolean;
+  readonly reason?: string;
+}
 export type CompactJws = string;
 export type CompatibilityProfile = "NONE" | "LLM_STRICT";
 /** One applied library mapping. */
@@ -104,11 +144,32 @@ export interface CompositionRecord {
   readonly narrowed: ReadonlyArray<string>;
 }
 export type ConfigLayer = "PLATFORM_CEILING" | "ENVIRONMENT" | "TENANT_POLICY" | "POOL_OR_DEVICE_GROUP" | "DEPLOYMENT_BINDING" | "PACKAGE_DEFAULT";
-/** SaaS connection the package needs (plan.md §14.3). */
+/** Configuration review settings. requiredReviews 0 applies changes immediately. */
+export interface ConfigurationSettings {
+  readonly requiredReviews: number;
+}
+/** SaaS connection the package needs (platform-requirements.md §14.3). */
 export interface ConnectionRequirement {
   readonly id: string;
   readonly provider: string;
   readonly scopes: ReadonlyArray<string>;
+}
+export type ConsoleClientOperation = "HEALTH" | "ENROLL";
+/** OS-authenticated native request scoped to a console origin and optional expected UUID. The service validates protected local tenant/origin binding before reading health or starting enrollment. */
+export interface ConsoleClientRequest {
+  readonly kind: "console-tenant-state";
+  readonly requestId: string;
+  readonly operation: ConsoleClientOperation;
+  readonly consoleUrl: string;
+  readonly expectedTenantId?: string;
+}
+/** Requester-scoped device state and optional verified tenant UUID. Errors carry no installation or device metadata. The service enforces the error-only response invariant before serialization. */
+export interface ConsoleClientResponse {
+  readonly requestId: string;
+  readonly tenantId?: string;
+  readonly health?: V1.ClientHealth;
+  readonly challenge?: V1.EndpointEnrollmentPrompt;
+  readonly error?: V1.ErrorCode;
 }
 /** Identifies the shared contract set. */
 export interface ContractSet {
@@ -122,14 +183,26 @@ export interface ControlServerSettings {
   readonly gateway: GatewaySettings;
   readonly deviceApproval: DeviceApproval;
   readonly clientCheckIn: ClientCheckIn;
+  readonly configuration: ConfigurationSettings;
 }
-/** application/merge-patch+json body. Env-owned clientCheckIn is not patchable. */
+/** application/merge-patch+json body, and the settings of a configuration snapshot. Env-owned clientCheckIn is not patchable. */
 export interface ControlServerSettingsPatch {
   readonly gateway?: GatewaySettings;
   readonly deviceApproval?: DeviceApproval;
+  readonly configuration?: ConfigurationSettings;
+}
+/** Settings visible to the current actor. Unreadable feature groups are omitted. */
+export interface ControlSettingsView {
+  readonly formatVersion: 2;
+  readonly revision: number;
+  readonly gateway?: GatewaySettings;
+  readonly deviceApproval?: DeviceApproval;
+  readonly clientCheckIn?: ClientCheckIn;
+  readonly configuration?: ConfigurationSettings;
 }
 export type CredentialKind = "STATIC_TOKEN" | "JWT" | "INTROSPECTION";
 export type DeclarationId = string;
+export type DeclaredId = string;
 /** Deployment binding. */
 export interface DeploymentBinding {
   readonly bindingFormatVersion: 1;
@@ -151,6 +224,13 @@ export interface DeploymentBinding {
 export interface DeploymentGrant {
   readonly agentGroupId: string;
   readonly toolIds: ReadonlyArray<string>;
+}
+/** Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package. */
+export interface DeploymentProfile {
+  readonly profileVersion: 1;
+  readonly profileId: string;
+  readonly packages: ReadonlyArray<ProfilePackage>;
+  readonly readiness?: ReadonlyArray<ProfileReadinessCase>;
 }
 /** Where the package runs. */
 export interface DeploymentTarget {
@@ -174,10 +254,40 @@ export interface DeviceApproval {
   readonly ownerUserId?: string;
 }
 export type Digest = string;
+export type DiscoveryAuthorityState = "ACTIVE" | "READ_ONLY";
+/** Tenant device CA. keyId is SHA-256 of certificate DER; its subject binds the same tenant UUID. It cannot reuse a discovery signing key. */
+export interface DiscoveryDeviceAuthority {
+  readonly keyId: string;
+  readonly state: DiscoveryAuthorityState;
+  readonly certificatePem: string;
+}
+/** Protected JWS header. Algorithm, message purpose and key selection are authenticated; no unprotected or remote-key headers. */
+export interface DiscoveryHeader {
+  readonly alg: "RS256";
+  readonly typ: "toolgate-discovery+jws";
+  readonly kid: string;
+}
+export type DiscoveryKeyId = string;
+/** Bounded tenant discovery JWK Set. Application validation requires unique key IDs and moduli. */
+export interface DiscoveryKeySet {
+  readonly keys: ReadonlyArray<DiscoveryPublicKey>;
+}
+/** Public-only RSA JWK, restricted to 3072/4096-bit RS256 keys with exponent 65537. No private parameters or key URLs. */
+export interface DiscoveryPublicKey {
+  readonly kty: "RSA";
+  readonly use: "sig";
+  readonly alg: "RS256";
+  readonly kid: string;
+  readonly n: string;
+  readonly e: "AQAB";
+}
 /** Gateway to Tool Host. */
 export interface Dispatch {
   readonly permit: SignedInvocationPermit;
   readonly arguments: Record<string, unknown>;
+  readonly traceparent?: string;
+  readonly executionContext?: ExecutionContext;
+  readonly collectSpans?: boolean;
 }
 /** Reviewed effect class per tool. */
 export interface EffectApproval {
@@ -210,6 +320,16 @@ export interface ErrorDeclaration {
   readonly retryable: boolean;
 }
 export type EventId = string;
+/** Correlation context of one execution attempt (ADR 031). executionId and attemptNumber are set by the executor from its permit; the other members are declared by the caller, are never trusted and never affect authorization, routing or policy. */
+export interface ExecutionContext {
+  readonly executionId?: string;
+  readonly attemptNumber?: number;
+  readonly toolCallId?: string;
+  readonly sessionId?: string;
+  readonly agentRunId?: string;
+  readonly parentInvocationId?: string;
+  readonly tracestate?: string;
+}
 /** Execution settings with defaults resolved. */
 export interface ExecutionSettings {
   readonly async: boolean;
@@ -218,7 +338,7 @@ export interface ExecutionSettings {
   readonly maxConcurrency?: number;
   readonly cancelIfAbandoned: boolean;
 }
-export type FrameKind = "RESULT" | "PROGRESS" | "INPUT_REQUEST" | "LOG";
+export type FrameKind = "RESULT" | "PROGRESS" | "INPUT_REQUEST" | "LOG" | "BROKER_REQUEST" | "BROKER_RESPONSE";
 /** Gateway settings. */
 export interface GatewaySettings {
   readonly gatewayName: string;
@@ -258,6 +378,211 @@ export interface InputRequestFrame {
   readonly requestId: string;
   readonly request: Record<string, unknown>;
 }
+/** Control's acknowledgement of one admission batch. */
+export interface InsightsAdmissionAck {
+  readonly sequence: number;
+  readonly duplicate: boolean;
+}
+/** Gateway to Control: admission counts since the previous batch of this process epoch. Best-effort; Control ignores a repeated (gatewayId, epoch, sequence) and reports missing sequences as source gaps. */
+export interface InsightsAdmissionBatch {
+  readonly gatewayId: string;
+  readonly epoch: string;
+  readonly sequence: number;
+  readonly lastBatch?: boolean;
+  readonly droppedRequests?: number;
+  readonly counts: ReadonlyArray<InsightsAdmissionCount>;
+}
+export type InsightsAdmissionCategory = "UNAUTHENTICATED" | "POLICY_DENIED" | "APPROVAL_REQUIRED" | "RATE_LIMITED" | "KILL_SWITCH" | "INVALID_REQUEST";
+/** Requests of one category for one tool in one closed minute bucket. */
+export interface InsightsAdmissionCount {
+  readonly bucketStartUnixMs: number;
+  readonly toolId?: string;
+  readonly category: InsightsAdmissionCategory;
+  readonly count: number;
+}
+/** Admission decisions in one bucket. */
+export interface InsightsAdmissionPoint {
+  readonly bucketStartUnixMs: number;
+  readonly category: InsightsAdmissionCategory;
+  readonly count: number;
+}
+/** One execution attempt: one consumed permit. */
+export interface InsightsAttempt {
+  readonly attemptNumber: number;
+  readonly executionId?: string;
+  readonly executorId?: string;
+  readonly startedAtUnixMs?: number;
+  readonly endedAtUnixMs?: number;
+  readonly outcome?: InsightsOutcome;
+  readonly durationMs?: number;
+}
+export type InsightsErrorCategory = "POLICY" | "TIMEOUT" | "CANCELLED" | "TOOL_ERROR" | "INFRASTRUCTURE" | "INVALID_REQUEST" | "PARTIAL" | "UNKNOWN";
+export type InsightsGranularity = "MINUTE" | "HOUR" | "DAY";
+/** One invocation's summary, projected from its transition facts. Durations are absent when not measured. */
+export interface InsightsInvocation {
+  readonly tenantId: string;
+  readonly invocationId: string;
+  readonly toolId: string;
+  readonly action: string;
+  readonly clientId?: string;
+  readonly userId?: string;
+  readonly agentId?: string;
+  readonly toolCallId?: string;
+  readonly sessionId?: string;
+  readonly agentRunId?: string;
+  readonly parentInvocationId?: string;
+  readonly outcome: InsightsOutcome;
+  readonly errorCategory?: InsightsErrorCategory;
+  readonly attempts: number;
+  readonly acceptedAtUnixMs: number;
+  readonly approvalRequestedAtUnixMs?: number;
+  readonly approvalResolvedAtUnixMs?: number;
+  readonly queuedAtUnixMs?: number;
+  readonly firstStartedAtUnixMs?: number;
+  readonly terminalAtUnixMs?: number;
+  readonly approvalMs?: number;
+  readonly queueMs?: number;
+  readonly executionMs?: number;
+  readonly endToEndMs?: number;
+  readonly partialCoverage: boolean;
+}
+/** The detail window: summary, attempts and, while facts are retained, the transitions. */
+export interface InsightsInvocationDetail {
+  readonly invocation: InsightsInvocation;
+  readonly attempts: ReadonlyArray<InsightsAttempt>;
+  readonly transitions: ReadonlyArray<InsightsTransition>;
+  readonly transitionsRetained: boolean;
+  readonly spans?: ReadonlyArray<InsightsSpan>;
+  readonly spanState?: InsightsSpanState;
+}
+/** Explorer results, newest first. next continues the search. */
+export interface InsightsInvocationPage {
+  readonly items: ReadonlyArray<InsightsInvocation>;
+  readonly next?: string;
+}
+export type InsightsMode = "NONE" | "BASIC" | "DETAILED";
+export type InsightsOutcome = "PENDING_APPROVAL" | "IN_PROGRESS" | "SUCCEEDED" | "FAILED" | "PARTIAL" | "CANCELLED" | "EXPIRED" | "OUTCOME_UNKNOWN";
+/** Recompute one tenant's aggregate cells for a range from its summaries. dryRun only compares. */
+export interface InsightsRebuildRequest {
+  readonly tenantId: string;
+  readonly fromUnixMs: number;
+  readonly toUnixMs: number;
+  readonly dryRun: boolean;
+}
+/** How many cells the recomputation compared and how many differed from the live projection. */
+export interface InsightsRebuildResult {
+  readonly tenantId: string;
+  readonly fromUnixMs: number;
+  readonly toUnixMs: number;
+  readonly cellsCompared: number;
+  readonly cellsDiffering: number;
+  readonly applied: boolean;
+}
+/** Aggregates for a range. Data before unavailableBeforeUnixMs has expired at this granularity and is absent, not zero. */
+export interface InsightsSeries {
+  readonly granularity: InsightsGranularity;
+  readonly fromUnixMs: number;
+  readonly toUnixMs: number;
+  readonly groupBy: string;
+  readonly unavailableBeforeUnixMs?: number;
+  readonly histogramBoundsMs: ReadonlyArray<number>;
+  readonly points: ReadonlyArray<InsightsSeriesPoint>;
+  readonly admissions: ReadonlyArray<InsightsAdmissionPoint>;
+}
+/** One bucket and outcome. histogram holds counts per InsightsSeries.histogramBoundsMs bucket (last is overflow). */
+export interface InsightsSeriesPoint {
+  readonly bucketStartUnixMs: number;
+  readonly key: string;
+  readonly outcome: InsightsOutcome;
+  readonly count: number;
+  readonly durationCount: number;
+  readonly durationSumMs: number;
+  readonly histogram: ReadonlyArray<number>;
+}
+/** One caller-declared session in a range: its calls by acceptance time. Session IDs are declared by the caller and not verified. */
+export interface InsightsSession {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly firstAcceptedAtUnixMs: number;
+  readonly lastActivityUnixMs: number;
+  readonly calls: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly unfinished: number;
+  readonly agentRuns: number;
+  readonly tools: number;
+}
+/** A tenant's sessions with calls accepted in the range, most recent activity first. next continues the list. */
+export interface InsightsSessionPage {
+  readonly items: ReadonlyArray<InsightsSession>;
+  readonly next?: string;
+  readonly callsWithoutSession: number;
+}
+/** Every retained call of one session, oldest first, plus calls that declared one of them as parent (nested work), to a bounded depth. */
+export interface InsightsSessionTimeline {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly invocations: ReadonlyArray<InsightsInvocation>;
+  readonly truncated: boolean;
+}
+/** Admission counts that may be missing: a skipped sequence, or an epoch that stopped without a final batch. */
+export interface InsightsSourceGap {
+  readonly tenantId: string;
+  readonly gatewayId: string;
+  readonly epoch: string;
+  readonly lastSequence: number;
+  readonly missingSequences: number;
+  readonly lastSeenUnixMs: number;
+  readonly droppedRequests: number;
+}
+/** One allowlisted span. Metadata only: never arguments, outputs, URLs, headers or secrets. */
+export interface InsightsSpan {
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly parentSpanId?: string;
+  readonly name: InsightsSpanName;
+  readonly source?: InsightsSpanSource;
+  readonly invocationId: string;
+  readonly executionId?: string;
+  readonly startUnixMs: number;
+  readonly durationMs: number;
+  readonly status: InsightsSpanStatus;
+  readonly routeId?: string;
+  readonly httpStatus?: number;
+  readonly errorCode?: string;
+}
+/** How many spans Control buffered and how many it refused (unknown invocation, wrong executor, over a bound). */
+export interface InsightsSpanAck {
+  readonly accepted: number;
+  readonly refused: number;
+}
+/** Spans from one producer. Best-effort: droppedSpans counts what the producer could not keep. */
+export interface InsightsSpanBatch {
+  readonly spans: ReadonlyArray<InsightsSpan>;
+  readonly droppedSpans?: number;
+}
+export type InsightsSpanName = "GATEWAY_REQUEST" | "GATEWAY_AUTHORIZE" | "GATEWAY_DISPATCH" | "HOST_ADMISSION" | "HOST_EXECUTE" | "HOST_EGRESS" | "CLIENT_EXECUTE";
+export type InsightsSpanSource = "GATEWAY" | "TOOL_HOST" | "CLIENT";
+export type InsightsSpanState = "NOT_COLLECTED" | "PENDING" | "RETAINED" | "SAMPLED_OUT" | "DROPPED";
+export type InsightsSpanStatus = "OK" | "ERROR";
+/** Read first by the operator page: what is collected and how current it is. */
+export interface InsightsStatus {
+  readonly mode: InsightsMode;
+  readonly generatedAtUnixMs: number;
+  readonly tenants: number;
+  readonly unprojectedFacts: number;
+  readonly oldestUnprojectedUnixMs?: number;
+  readonly summariesSuspendedTenants: number;
+  readonly failedTenants: number;
+  readonly sourceGaps: ReadonlyArray<InsightsSourceGap>;
+}
+/** One retained transition fact, for the stage timeline. */
+export interface InsightsTransition {
+  readonly factSeq: number;
+  readonly fromState?: string;
+  readonly toState: string;
+  readonly occurredAtUnixMs: number;
+}
 /** Response to a v2 POST /access/invocations for NEW and EXISTING reservations. IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE and EXPIRED_KEY are 409 errors with that code and carry nothing else. requestState is present with an ASK outcome for an MRTR client. */
 export interface InvocationAdmission {
   readonly invocationId: string;
@@ -293,6 +618,7 @@ export interface InvocationPermitClaims {
   readonly businessKeyNamespace?: KeyNamespace;
   readonly approvalIds: ReadonlyArray<string>;
   readonly deadlineUnixMs: number;
+  readonly mcpVerification?: McpPermitVerification;
 }
 /** Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10). */
 export interface InvocationResultReport {
@@ -316,7 +642,7 @@ export interface InvocationSubmission {
   readonly tasks: TaskCapability;
   readonly requestState?: string;
 }
-/** Task fields added to a Control invocation when a task record exists (plan.md §12.1). */
+/** Task fields added to a Control invocation when a task record exists (platform-requirements.md §12.1). */
 export interface InvocationTask {
   readonly taskId: string;
   readonly state: TaskState;
@@ -399,8 +725,235 @@ export interface LogFrame {
 }
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type MappingKind = "SECRET" | "GLOBAL" | "CLAIM" | "DESTINATION";
+/** Imports one Marketplace version as an uploaded server package. Control fetches, verifies and stores it; nothing is deployed, enabled or granted. */
+export interface MarketplaceImportRequest {
+  readonly packageId: string;
+  readonly version: string;
+}
+/** A Marketplace release signing key Control trusts, by id and SHA-256 fingerprint of its raw Ed25519 public key. */
+export interface MarketplaceKey {
+  readonly keyId: string;
+  readonly fingerprint: string;
+}
+/** Whether this ToolGate reads an OLO Orgs Marketplace. The id, origin and keys are environment-owned settings, absent when disabled. */
+export interface MarketplaceStatus {
+  readonly enabled: boolean;
+  readonly marketplaceId?: string;
+  readonly baseUrl?: string;
+  readonly keys?: ReadonlyArray<MarketplaceKey>;
+}
+/** An accepted approval: one per approval sequence, with its generated package. */
+export interface McpApproval {
+  readonly sequence: number;
+  readonly snapshotRevision: number;
+  readonly tools: ReadonlyArray<McpApprovedTool>;
+  readonly spkiPins: ReadonlyArray<string>;
+  readonly packageId: string;
+  readonly packageVersion: string;
+  readonly packageDigest: string;
+  readonly approvedAtUnixMs: number;
+}
+/** Approvals of one registration, newest first. */
+export interface McpApprovalPage {
+  readonly items: ReadonlyArray<McpApproval>;
+}
+/** Approves tools of one snapshot; at most 64, the package and deployment limit. */
+export interface McpApprovalRequest {
+  readonly snapshotRevision: number;
+  readonly tools: ReadonlyArray<McpToolApproval>;
+}
+/** A tool of an approval. */
+export interface McpApprovedTool {
+  readonly toolId: string;
+  readonly upstreamName: string;
+  readonly definitionDigest: string;
+}
+export type McpAuthScheme = "BEARER" | "HEADER";
+export type McpCheckFailure = "PIN_MISMATCH" | "TLS_ERROR" | "UPSTREAM_UNREACHABLE" | "UPSTREAM_ERROR" | "PROTOCOL_ERROR" | "SCAN_LIMIT_EXCEEDED" | "DEADLINE_EXCEEDED" | "DEFINITION_CHANGED" | "TOOL_MISSING" | "SERVER_CHANGED";
 export type McpName = string;
+/** Freshness evidence an invocation permit carries for an MCP_PROXY tool. */
+export interface McpPermitVerification {
+  readonly status: McpVerificationStatus;
+  readonly approvalSequence: number;
+  readonly checkedAtUnixMs?: number;
+}
+/** mcp-proxy.json, the one artifact of an MCP_PROXY package (media type application/vnd.ololabs.toolgate.mcp-proxy+json). */
+export interface McpProxyDocument {
+  readonly formatVersion: 1;
+  readonly server: McpProxyServer;
+  readonly approvalSequence: number;
+  readonly strict: boolean;
+  readonly tools: ReadonlyArray<McpApprovedTool>;
+}
+/** The upstream an MCP_PROXY package proxies: its URL and credential reference, bound by the package digest, and the identity and TLS pins it was approved with. */
+export interface McpProxyServer {
+  readonly slug: string;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly serverInfo: McpServerInfo;
+  readonly spkiPins: ReadonlyArray<string>;
+}
+/** A recorded quarantine and the evidence that caused it. */
+export interface McpQuarantine {
+  readonly reason: McpQuarantineReason;
+  readonly evidenceId: string;
+  readonly toolIds: ReadonlyArray<string>;
+  readonly serverWide: boolean;
+  readonly atUnixMs: number;
+  readonly approvalSequence: number;
+}
+export type McpQuarantineReason = "OUTPUT_INVALID" | "DEFINITION_CHANGED" | "TOOL_MISSING" | "SERVER_CHANGED" | "SERVER_VERSION_CHANGED" | "PIN_MISMATCH";
+/** Sent by the lease holder of exactly one invocation (a call) or one scan (a refresh); Control derives the targets from that evidence and applies it only to the current approval. */
+export interface McpQuarantineReport {
+  readonly invocationId?: string;
+  readonly scanId?: string;
+  readonly fencingToken: string;
+  readonly reason: McpQuarantineReason;
+  readonly observedDigest?: string;
+  readonly observedServerInfo?: McpServerInfo;
+}
+/** A Tool Host saw notifications/tools/list_changed during a call it holds and asks Control for an immediate refresh of that call's MCP server. Bound to the invocation and its fencing token, like a quarantine report. */
+export interface McpRefreshRequest {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+}
+/** Claims of a scan permit (typ toolgate-mcp-scan-permit+jws), signed in the effect-signing domain. exp - iat is at most 10 s (admission); deadlineUnixMs bounds the whole scan. spkiPins is required for REFRESH. */
+export interface McpScanClaims {
+  readonly jti: string;
+  readonly iss: "control";
+  readonly aud: string;
+  readonly iat: number;
+  readonly exp: number;
+  readonly scanId: string;
+  readonly slug: string;
+  readonly registrationRevision: number;
+  readonly bindingId: string;
+  readonly purpose: McpScanPurpose;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly spkiPins: ReadonlyArray<string>;
+  readonly approvalSequence?: number;
+  readonly fencingToken: string;
+  readonly deadlineUnixMs: number;
+}
+/** A scan a Tool Host fetched: the signed scan permit for its admission. */
+export interface McpScanDispatch {
+  readonly scanId: string;
+  readonly permit: string;
+}
+/** A failed scan, reported by the lease holder before the deadline. */
+export interface McpScanFailureReport {
+  readonly scanId: string;
+  readonly fencingToken: string;
+  readonly failure: McpCheckFailure;
+  readonly observedSpkiPin?: string;
+}
+/** A scan of one registration on one Tool Host of its binding Device Group. */
+export interface McpScanJob {
+  readonly scanId: string;
+  readonly slug: string;
+  readonly purpose: McpScanPurpose;
+  readonly state: McpScanState;
+  readonly hostId?: string;
+  readonly createdAtUnixMs: number;
+  readonly deadlineUnixMs: number;
+  readonly approvalSequence?: number;
+  readonly snapshotRevision?: number;
+  readonly failure?: McpCheckFailure;
+}
+export type McpScanPurpose = "DISCOVER" | "REFRESH";
+/** What the scanning host observed, reported once by the lease holder before the deadline. */
+export interface McpScanResult {
+  readonly scanId: string;
+  readonly fencingToken: string;
+  readonly serverInfo: McpServerInfo;
+  readonly protocolVersion: string;
+  readonly spkiPin: string;
+  readonly tools: ReadonlyArray<McpUpstreamTool>;
+}
+export type McpScanState = "QUEUED" | "CLAIMED" | "ADMITTED" | "FINISHED" | "FAILED" | "EXPIRED";
+export type McpSecretName = string;
+/** The upstream serverInfo from initialize. */
+export interface McpServerInfo {
+  readonly name: string;
+  readonly version: string;
+  readonly title?: string;
+}
+/** A registered upstream MCP server of the routed tenant. */
+export interface McpServerRegistration {
+  readonly slug: string;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly bindingId: string;
+  readonly strict: boolean;
+  readonly state: McpServerState;
+  readonly revision: number;
+  readonly createdAtUnixMs: number;
+  readonly latestSnapshotRevision?: number;
+  readonly approvalSequence?: number;
+  readonly verification: McpVerification;
+  readonly quarantine?: McpQuarantine;
+}
+/** Registrations of the routed tenant. */
+export interface McpServerRegistrationPage {
+  readonly items: ReadonlyArray<McpServerRegistration>;
+}
+/** Registers an upstream MCP server in the routed tenant. The pool is the binding Device Group. */
+export interface McpServerRegistrationRequest {
+  readonly slug: string;
+  readonly url: string;
+  readonly auth: McpUpstreamAuth;
+  readonly bindingId: string;
+  readonly strict: boolean;
+}
+export type McpServerSlug = string;
+export type McpServerState = "REGISTERED" | "SCANNING" | "SCANNED" | "APPROVED" | "QUARANTINED";
+export type McpServerUrl = string;
+/** An immutable scan result; Control recomputes every digest. */
+export interface McpSnapshot {
+  readonly revision: number;
+  readonly scanId: string;
+  readonly serverInfo: McpServerInfo;
+  readonly protocolVersion: string;
+  readonly spkiPin: string;
+  readonly scannedAtUnixMs: number;
+  readonly tools: ReadonlyArray<McpToolDefinition>;
+}
+export type McpSpkiPin = string;
 export type McpTaskStatus = "working" | "input_required" | "completed" | "failed" | "cancelled";
+/** One approved upstream tool and the ToolGate local name it gets (mcp.{slug}/{name}). */
+export interface McpToolApproval {
+  readonly upstreamName: string;
+  readonly name: string;
+}
+/** A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy). */
+export interface McpToolDefinition {
+  readonly tool: McpUpstreamTool;
+  readonly definitionDigest: string;
+}
+/** Upstream credential for scans and calls. The secret is a tenant vault entry whose Tool Group and Device Group equal the registration binding. */
+export interface McpUpstreamAuth {
+  readonly secretName: string;
+  readonly scheme: McpAuthScheme;
+  readonly header?: string;
+}
+/** One tool exactly as the upstream tools/list returned it, within the scan limits. */
+export interface McpUpstreamTool {
+  readonly name: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly inputSchema: Record<string, unknown>;
+  readonly outputSchema?: Record<string, unknown>;
+  readonly annotations?: Record<string, unknown>;
+}
+/** The latest check of a registration against its approval; a failure replaces an earlier success. */
+export interface McpVerification {
+  readonly status: McpVerificationStatus;
+  readonly approvalSequence?: number;
+  readonly checkedAtUnixMs?: number;
+  readonly failure?: McpCheckFailure;
+}
+export type McpVerificationStatus = "CURRENT" | "UNVERIFIED";
 export type MissingKeyPolicy = "REJECT" | "ASK" | "ALLOW_WITH_DEDUPE";
 export type NamespacePrefix = string;
 /** Version requirements checked at enable. */
@@ -408,6 +961,33 @@ export interface PackageCompatibility {
   readonly contractsVersion: string;
   readonly minimumToolHostVersion?: string;
   readonly minimumClientVersion?: string;
+}
+/** The package version Tool Hosts run for one package id, with the service profile and globals Control built for it. */
+export interface PackageDeployment {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest: string;
+  readonly revision: number;
+  readonly serviceProfileDigest: string;
+  readonly serviceProfileRevision: number;
+  readonly globalsDigest: string;
+  readonly toolIds: ReadonlyArray<string>;
+  readonly deployedAtUnixMs: number;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
+}
+/** Current deployments, one per package id. */
+export interface PackageDeploymentPage {
+  readonly items: ReadonlyArray<PackageDeployment>;
+}
+/** Deploys an uploaded server package to the Tool Hosts with values for its declared globals. A destination's host is the global its hostSetting names. */
+export interface PackageDeploymentRequest {
+  readonly packageDigest: string;
+  readonly globals: Record<string, unknown>;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
+  readonly privateRanges?: ReadonlyArray<PrivateRangeApproval>;
+  readonly destinationTls?: Record<string, unknown>;
 }
 /** Enable exactly the reviewed digest with this binding. */
 export interface PackageEnableRequest {
@@ -476,7 +1056,7 @@ export interface PackagedArtifact {
   readonly mediaType: string;
   readonly runtimeId?: string;
 }
-export type Permission = "HTTP_ROUTE" | "TCP" | "CREDENTIALS_IN_SANDBOX" | "USER_SECRET" | "TOKEN_EXCHANGE" | "CONNECTION";
+export type Permission = "HTTP_ROUTE" | "TCP" | "CREDENTIALS_IN_SANDBOX" | "USER_SECRET" | "TOKEN_EXCHANGE" | "CONNECTION" | "DEVICE_FILES_READ" | "DEVICE_FILES_WRITE";
 /** Successful consumption. */
 export interface PermitConsumed {
   readonly invocationId: string;
@@ -509,11 +1089,12 @@ export interface PermitIdentity {
   readonly authorizationEpoch: number;
   readonly claims?: Record<string, unknown>;
 }
-/** v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4). */
+/** v2 body of POST /access/invocations/reserve: one permit for one attempt, addressed to one Tool Host or device (invocation-state-v2.md T4). For a Tool Host the body carries the call's arguments: Control checks them against the invocation and pins their RFC 8785 digest in the permit. */
 export interface PermitReservationRequest {
   readonly invocationId: string;
   readonly audience: string;
   readonly attempt: number;
+  readonly arguments?: Record<string, unknown>;
 }
 /** Exact code and configuration the attempt may run. */
 export interface PermitTarget {
@@ -536,6 +1117,42 @@ export interface PrivateRangeApproval {
   readonly cidr: string;
   readonly ports: ReadonlyArray<number>;
 }
+/** One package difference from the previously applied profile, recorded for review. */
+export interface ProfileChange {
+  readonly packageId: string;
+  readonly change: ProfileChangeKind;
+  readonly previousVersion?: string;
+  readonly previousPackageDigest?: string;
+  readonly version?: string;
+  readonly packageDigest?: string;
+}
+export type ProfileChangeKind = "ADDED" | "CHANGED" | "REMOVED";
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. */
+export interface ProfilePackage {
+  readonly packageId: string;
+  readonly source: ProfilePackageSource;
+  readonly version: string;
+  readonly packageDigest?: string;
+  readonly required: boolean;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
+  readonly globals?: Record<string, unknown>;
+  readonly tools?: ReadonlyArray<ProfileToolActivation>;
+  readonly bindingIds?: ReadonlyArray<string>;
+}
+export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE";
+/** A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values. */
+export interface ProfileReadinessCase {
+  readonly toolId: string;
+  readonly agentId: string;
+  readonly arguments: Record<string, unknown>;
+  readonly expected?: Record<string, unknown>;
+}
+/** One installed export to enable, in the reviewed Tool Group named here. The export must exist in the pinned package; nothing is created to satisfy a reference. */
+export interface ProfileToolActivation {
+  readonly toolId: string;
+  readonly toolGroupId: string;
+}
 /** Progress frame. */
 export interface ProgressFrame {
   readonly kind: "PROGRESS";
@@ -547,6 +1164,38 @@ export interface ProtocolRange {
   readonly min: number;
   readonly max: number;
 }
+/** One pinned package: where provisioning stands and why it is not ready. hostIds and globalsDigest record the deployment it applied, so an unchanged repeat does not redeploy. */
+export interface ProvisioningPackageStatus {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest?: string;
+  readonly required: boolean;
+  readonly state: ProvisioningState;
+  readonly step: ProvisioningStep;
+  readonly reason?: string;
+  readonly toolIds?: ReadonlyArray<string>;
+  readonly hostIds?: ReadonlyArray<string>;
+  readonly deviceGroupIds?: ReadonlyArray<string>;
+  readonly deviceIds?: ReadonlyArray<string>;
+  readonly globalsDigest?: string;
+}
+export type ProvisioningState = "READY" | "PENDING" | "FAILED";
+/** Persisted outcome of the latest profile application. state is READY only when every required package is READY. */
+export interface ProvisioningStatus {
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly generation: number;
+  readonly state: ProvisioningState;
+  readonly packages: ReadonlyArray<ProvisioningPackageStatus>;
+  readonly appliedAtUnixMs: number;
+  readonly previousProfileDigest?: string;
+  readonly changes?: ReadonlyArray<ProfileChange>;
+}
+/** The latest ProvisioningStatus of every applied deployment profile, by profile id. */
+export interface ProvisioningStatusPage {
+  readonly items: ReadonlyArray<ProvisioningStatus>;
+}
+export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "RELEASE" | "ROLLOUT" | "ACTIVATE" | "DONE";
 /** Supersedes kills after two-person review. Issuer is always control. */
 export interface RecoveryEvent {
   readonly eventId: string;
@@ -590,6 +1239,7 @@ export interface ResultFrame {
   readonly structuredContent?: Record<string, unknown>;
   readonly isError: boolean;
   readonly error?: ToolErrorBody;
+  readonly provenance?: ResultProvenance;
 }
 /** Tool Host to Gateway. */
 export interface ResultMessage {
@@ -598,6 +1248,7 @@ export interface ResultMessage {
   readonly outcome: InvocationOutcome;
   readonly result?: ResultFrame;
 }
+export type ResultProvenance = "TOOL" | "UNTRUSTED_UPSTREAM";
 export type ResultType = "complete" | "input_required" | "task";
 export type Revision = number;
 /** Rollout plan attached at enable. */
@@ -627,6 +1278,74 @@ export interface RouteDeclaration {
   readonly timeoutMs: number;
   readonly auth?: string;
 }
+/** One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only. */
+export interface RunEvent {
+  readonly cursor: number;
+  readonly source: RunEventSource;
+  readonly kind: RunEventKind;
+  readonly attempt?: number;
+  readonly sequence?: number;
+  readonly executorId?: string;
+  readonly emittedAtUnixMs?: number;
+  readonly recordedAtUnixMs: number;
+  readonly state?: string;
+  readonly result?: ResultFrame;
+  readonly level?: LogLevel;
+  readonly message?: string;
+  readonly fraction?: number;
+  readonly requestId?: string;
+  readonly request?: Record<string, unknown>;
+}
+/** Control acknowledgement: the highest contiguous sequence stored for the attempt, and how many frames were already present or refused by retention bounds. */
+export interface RunEventAck {
+  readonly invocationId: string;
+  readonly attempt: number;
+  readonly acceptedThrough: number;
+  readonly duplicates: number;
+  readonly refused: number;
+}
+/** Executor to Control: frames of one admitted attempt, bound to the invocation and the fencing token its permit consumption returned. Redelivery of the same sequence is idempotent. droppedFrames counts frames the executor discarded under its own bounds. */
+export interface RunEventBatch {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly attempt: number;
+  readonly events: ReadonlyArray<RunEventFrame>;
+  readonly droppedFrames?: number;
+}
+/** One redacted non-terminal SDK frame (LOG, PROGRESS or INPUT_REQUEST) as the executor forwards it. sequence is monotonic per invocation attempt; the executor never renumbers a frame it resends. */
+export interface RunEventFrame {
+  readonly sequence: number;
+  readonly emittedAtUnixMs: number;
+  readonly kind: RunEventKind;
+  readonly level?: LogLevel;
+  readonly message?: string;
+  readonly fraction?: number;
+  readonly requestId?: string;
+  readonly request?: Record<string, unknown>;
+}
+/** Sequences of an attempt that never arrived; they are reported, never invented. */
+export interface RunEventGap {
+  readonly attempt: number;
+  readonly fromSequence: number;
+  readonly toSequence: number;
+}
+export type RunEventKind = "LOG" | "PROGRESS" | "INPUT_REQUEST" | "STATE" | "RESULT";
+/** Authorized replay page after a cursor. terminal is the authoritative ledger state; truncated, droppedFrames, gaps and expired say explicitly what is not shown. */
+export interface RunEventPage {
+  readonly invocationId: string;
+  readonly state: string;
+  readonly terminal: boolean;
+  readonly toolId?: string;
+  readonly executorId?: string;
+  readonly events: ReadonlyArray<RunEvent>;
+  readonly nextCursor: number;
+  readonly more: boolean;
+  readonly truncated: boolean;
+  readonly droppedFrames: number;
+  readonly expired: boolean;
+  readonly gaps: ReadonlyArray<RunEventGap>;
+}
+export type RunEventSource = "EXECUTOR" | "PLATFORM";
 /** Language runtime a tool needs. */
 export interface RuntimeDeclaration {
   readonly runtimeId: string;
@@ -689,6 +1408,10 @@ export type Sha256 = string;
 export interface SignedInvocationPermit {
   readonly jws: string;
 }
+/** RFC 7515 compact RS256 JWS with a protected toolgate-discovery+jws header and TenantDiscovery v2 payload. No v1 or alternate-algorithm fallback. */
+export interface SignedTenantDiscovery {
+  readonly jws: string;
+}
 export type Slug = string;
 export type Streaming = "NONE" | "RESPONSE" | "BIDIRECTIONAL";
 export type TargetKind = "TOOL_HOST_POOL" | "DEVICE_GROUP";
@@ -728,10 +1451,35 @@ export interface TcpDeclaration {
   readonly hostSetting: string;
   readonly port: number;
 }
+/** Signed tenant discovery v2. Exact HTTPS origins, configured/pinned UUID, lifetime, key continuity, CA purposes and active issuer are verified before enrollment or local identity access. */
+export interface TenantDiscovery {
+  readonly protocolVersion: 2;
+  readonly tenantId: string;
+  readonly issuer: string;
+  readonly audiences: ReadonlyArray<string>;
+  readonly serverId: string;
+  readonly organization: string;
+  readonly controlUrl: string;
+  readonly gatewayUrl: string;
+  readonly verificationUri: string;
+  readonly minimumClientVersion: string;
+  readonly issuedAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly keySetVersion: number;
+  readonly discoveryKeys: DiscoveryKeySet;
+  readonly deviceIssuerKeyId: string;
+  readonly deviceAuthorities: ReadonlyArray<DiscoveryDeviceAuthority>;
+}
+export type TenantUuid = string;
 /** Upstream TLS verification. */
 export interface TlsSettings {
   readonly caBundle?: string;
   readonly spkiPins: ReadonlyArray<string>;
+}
+/** The tool's single permission and the resources it acts on (OLO M3.7). Absent: action invoke on tool://{toolId}. */
+export interface ToolAuthorization {
+  readonly action: string;
+  readonly resources: ReadonlyArray<string>;
 }
 /** Tool definition v2: the semantic descriptor plus packaging members outside the digest. */
 export interface ToolDefinition {
@@ -766,6 +1514,8 @@ export interface ToolDescriptor {
   readonly variables: ToolVariables;
   readonly permissions: ReadonlyArray<Permission>;
   readonly toolsets: ReadonlyArray<string>;
+  readonly authorization?: ToolAuthorization;
+  readonly reconciliation?: ToolReconciliation;
 }
 /** Effect settings with defaults resolved. */
 export interface ToolEffect {
@@ -779,6 +1529,31 @@ export interface ToolErrorBody {
   readonly message: string;
   readonly retryable: boolean;
   readonly data?: Record<string, unknown>;
+}
+/** One deployed tool a Tool Host runs. The host reports it in its check-in as a local tool, so Control places calls for it there. */
+export interface ToolHostAssignment {
+  readonly toolId: string;
+  readonly action: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly inputSchema: Record<string, unknown>;
+  readonly toolDigest: string;
+  readonly packageDigest: string;
+}
+/** What a registered Tool Host runs: its tools, and the deployments whose package, service profile and globals it fetches by digest. */
+export interface ToolHostAssignments {
+  readonly hostId: string;
+  readonly tools: ReadonlyArray<ToolHostAssignment>;
+  readonly deployments: ReadonlyArray<PackageDeployment>;
+}
+export type ToolHostDispatchState = "QUEUED" | "CLAIMED" | "ADMITTED" | "REFUSED" | "FINISHED" | "EXPIRED";
+/** A dispatch the Gateway handed to Control for a Tool Host that fetches its calls (pull mode), with the host's admission and result once it has sent them. */
+export interface ToolHostDispatchStatus {
+  readonly invocationId: string;
+  readonly hostId: string;
+  readonly state: ToolHostDispatchState;
+  readonly admission?: AdmissionResponse;
+  readonly result?: ResultMessage;
 }
 /** Tool Host registration with its workload identity (mTLS). */
 export interface ToolHostRegistration {
@@ -806,9 +1581,10 @@ export interface ToolInput {
   readonly catalogRevision: string;
   readonly traceparent?: string;
   readonly fencingToken?: string;
+  readonly executionContext?: ExecutionContext;
 }
 export type ToolKind = "SERVER" | "CLIENT";
-/** Tool resource requests; each at most the platform ceiling (plan.md §13.5). */
+/** Tool resource requests; each at most the platform ceiling (platform-requirements.md §13.5). */
 export interface ToolLimits {
   readonly memoryBytes?: number;
   readonly maxInputBytes?: number;
@@ -816,6 +1592,7 @@ export interface ToolLimits {
   readonly maxArgumentProperties?: number;
 }
 export type ToolLocalName = string;
+export type ToolReconciliation = "DOWNSTREAM_IDEMPOTENCY" | "STATUS_LOOKUP" | "MANUAL";
 /** Declared configuration and identity inputs. */
 export interface ToolVariables {
   readonly globals: ReadonlyArray<GlobalDeclaration>;

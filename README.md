@@ -1,480 +1,250 @@
 # OLO ToolGate
 
-> **Control what AI can do.**
-
-OLO ToolGate is an open-source control plane for **building, distributing,
-authorizing, and governing AI tools** across users, agents, devices, and resources.
-
-[![Watch the 36-second OLO ToolGate overview: agent requests, group access, Allow/Ask/Block, and device activity](docs/media/toolgate-overview.gif)](https://github.com/olo-labs/olo-toolgate/raw/refs/heads/main/docs/media/toolgate-overview.mp4)
-
-**[Watch the video (36 seconds, MP4)](https://github.com/olo-labs/olo-toolgate/raw/refs/heads/main/docs/media/toolgate-overview.mp4)**
-· [Read the transcript](docs/media/README.md)
-· [Try Quickstart](docs/getting-started/one-minute-quickstart.md)
-· [Find a good first issue](https://github.com/olo-labs/olo-toolgate/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22)
-
-The captioned overview explains an agent's request, group-based access, policy
-decisions, and device status. It plays without sound; the animation above is a preview.
-
-## Console snapshots
-
-Captured from the running local **0.10.0-dev** console on October 10, 2026.
-The enabled/disabled states shown are the local demo's current configuration.
-
-<details>
-<summary>Tool directory — registered capabilities and their current status</summary>
-
-![Real ToolGate console showing registered tools, identifiers, status and revision](docs/media/console-tools.jpg)
-
-</details>
-
-<details>
-<summary>Tool Groups — ReadOnly, ReadAndWrite, Admin and the default group</summary>
-
-![Real ToolGate console showing the four standard Tool Groups and their access-level explanation](docs/media/console-tool-groups.jpg)
-
-</details>
-
-<details>
-<summary>Configuration > Backup/Restore — complete export, import modes and preview</summary>
-
-![Real ToolGate console showing complete configuration export, JSON file selection, Replace and Merge import modes, and independent review guidance](docs/media/console-configuration.jpg)
-
-**Merge** keeps existing records that are absent from the import file and updates records that appear in both. For example, if the live configuration has tools A, B, C and the import file contains only B (modified) and D (new), Merge produces A, B (updated), C, D.
-
-**Replace** removes every existing record not present in the import file. With the same starting set A, B, C and import file B (modified), D, Replace produces B (updated), D — tools A and C are deleted.
-
-> Passwords, private keys and live audit/job state are never included in the exported file. Each import mode supports [independent reviews and revision-conflict guidance](docs/enterprise-access-control/operations.md) before changes take effect.
-
-</details>
-
-The enterprise intermediary version uses group-only grants and current Control
-checks for discovery, protected effects and saved results. Unknown verified Users
-start disabled in the default Team; default groups grant no access. Agents have a
-separate menu and inherit capabilities through Agent Groups. Independent reviewers
-approve configuration and operation requests. See [implementation evidence and
-remaining acceptance work](docs/enterprise-access-control/implementation-status.md)
-and [migration/recovery operations](docs/enterprise-access-control/operations.md).
-
-Run `python tools/enterprise/finish.py` for sequential completion checks, or
-`--only NAME` to rerun a failing gate. The runner preserves logs, distinguishes
-partial runs and generates the 96-case acceptance evidence; it uses isolated
-fixtures and preserves existing debug data.
-
-
-The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding.
-
-See [Device registry and tool-call controls](docs/control-plane/device-registry.md).
-
-The [one-container Quickstart](docs/getting-started/one-minute-quickstart.md)
-now combines Gateway, Control and the console with persistent SQLite, a local
-encrypted vault, password bootstrap, safe built-ins and human approval. It is
-explicitly single-node and non-HA. See the
-[production/debug operations guide](docs/deployment/quickstart.md) for building,
-configuration, upgrades and backup/restore.
-
-The client supports opt-in [contained local tool runtimes](docs/client/local-runtimes.md)
-with digest-pinned interpreter/tool images and automatic first-use preparation.
-See the guide for engine prerequisites and platform limitations.
-
-For current execution commands, configuration and troubleshooting, read
-[how to run and use ToolGate](docs/operations/execution-guide.md) and
-[how to debug ToolGate](docs/operations/debugging.md).
-
-MCP is part of the story — not the limit.
-
-The endpoint client now includes protected HotFolder and safe built-in tools.
-It installs as a system service and continues while users are logged out or the
-screen is locked. A Control image containing verified native packages exposes
-Windows, macOS and Linux downloads on its anonymous home page. See the
-[client guide](docs/client/hotfolder.md) for installation, enrollment and policy
-configuration, and the [Module 07 report](docs/codex/modules/07-completion.md)
-for verification status.
-
-ToolGate is designed to govern:
-
-```text
-MCP servers
-REST / OpenAPI tools
-Python / JavaScript
-PowerShell / Batch / Shell
-Java / .NET
-Native binaries
-Local device tools
-Privileged remote operations
-```
-
-all through one security model:
-
-```text
-WHO + AGENT + DEVICE + TOOL + ACTION + RESOURCE
-                        |
-                        v
-                ALLOW / ASK / BLOCK
-```
-
-## Why ToolGate?
-
-AI can already call tools.
-
-The missing layer is:
-
-> **Who allowed this agent to do this action, on this device, against this resource — and can we stop, approve, audit, update, or revoke it?**
-
-ToolGate aims to make that answer simple.
-
-### What we are building
-
-```text
-                    COMMUNITY
-                  Tool Marketplace
-                        |
-                        v
-               Organization Admin
-                        |
-              review / configure
-                        |
-                        v
-                 ToolGate Control
-                        |
-              deploy / authorize
-                        |
-         +--------------+--------------+
-         |              |              |
-       Windows         Linux          macOS
-         |              |              |
-      Python         Binary         PowerShell
-      Node.js        Java           Shell
-         |              |              |
-         +--------------+--------------+
-                        |
-                        v
-               EVERY TOOL CALL
-                        |
-                        v
-                ToolGate Gateway
-                        |
-                ALLOW / ASK / BLOCK
-```
-
-## The 30-second version
-
-ToolGate is trying to become:
-
-- **Cloudflare Access for AI tools**
-- **an App Store for governed AI capabilities**
-- **a fleet manager for local AI tools**
-- **a policy gateway for every protected action**
-
-without forcing teams to understand MCP internals, policy languages, or complex infrastructure.
-
-## One-container Quickstart
-
-After [building the image](docs/deployment/quickstart.md), start the local
-single-node/non-HA experience:
-
-```bash
-docker run -d \
-  --name olo-toolgate \
-  -p 127.0.0.1:8080:8080 -p 127.0.0.1:8443:8443 \
-  -v olo-toolgate-data:/data \
-  olo-toolgate-quickstart:module11
-```
-
-Then open:
-
-```text
-http://localhost:8080
-```
-
-and immediately get:
-
-- a single-user admin workspace
-- safe built-in tools
-- an encrypted local credential vault
-- a downloadable endpoint client
-- a managed `HotFolder`
-- `ALLOW / ASK / BLOCK`
-- audit history
-- JSON/YAML import/export
-
-Retrieve the private bootstrap password with
-`docker exec olo-toolgate cat /data/bootstrap-password`; the console requires a
-different strong password at first login. The [walkthrough](docs/getting-started/one-minute-quickstart.md)
-covers protected tools, ASK, vault and enrollment. Tagged CI publishes
-`ghcr.io/olo-labs/olo-toolgate-quickstart:<released-version>`; no remote image is
-claimed published by the local build. The project remains pre-alpha.
-
-## Built-in safe tools planned for first start
-
-Examples:
-
-```text
-hotfolder.list
-hotfolder.read_text
-hotfolder.write_text
-hotfolder.append_text
-hotfolder.mkdir
-hotfolder.search_text
-hotfolder.watch_events
-hotfolder.hash
-hotfolder.move
-hotfolder.copy
-
-calculator.evaluate
-text.transform
-json.validate
-hash.sha256
-system.info
-web.search        # after user configures a provider
-```
-
-## A different kind of Marketplace
-
-Community members can publish:
-
-```text
-schemas
-API -> MCP integrations
-Python tools
-JavaScript tools
-PowerShell tools
-Java tools
-native binaries
-existing CLI definitions
-policy templates
-```
-
-But the community does **not** decide what runs in your company.
-
-The flow is:
-
-```text
-Community publishes capability
-        |
-        v
-Admin reviews it
-        |
-        v
-Organization configures credentials + permissions
-        |
-        v
-ToolGate deploys it to selected clients
-        |
-        v
-Gateway authorizes each protected execution
-```
-
-## Security model
-
-A Marketplace signature is not enough to run software.
-
-A managed client requires:
-
-```text
-Marketplace release trust
-        +
-Organization deployment trust
-        +
-Runtime Gateway authorization
-```
-
-for protected execution.
-
-Credentials stay in the organization's configured Vault and are referenced as:
-
-```text
-secret://github/team-token
-```
-
-not embedded into packages or prompts.
-
-## Architecture
-
-Customer runtime:
-
-```text
-AI Clients
-    |
-    v
-ToolGate Gateway  x N
-    |
-    +---- Remote MCP / API
-    |
-    +---- short-lived permit ----> Endpoint Clients
-                                    |
-                                    v
-                                Local Tools
-
-ToolGate Control  x N
-    |
-    +---- PostgreSQL
-    +---- Vault
-    +---- Artifact Store
-```
-
-Community Marketplace:
-
-```text
-Drupal
-   |
-Marketplace API
-   |
-PostgreSQL / Object Storage / Queue
-   |
-Marketplace Worker
-   |
-Isolated Sandbox
-   |
-Signing Service / KMS
-```
-
-Read the architecture: [`docs/architecture/overview.md`](docs/architecture/overview.md)
-
-## Monorepo
-
-```text
-apps/
-├── gateway/               # Rust
-├── control-plane/         # Java
-├── admin-ui/              # React / TypeScript
-├── endpoint-client/       # Rust
-├── marketplace-api/       # Java
-├── marketplace-worker/    # Java
-└── marketplace-drupal/    # Drupal / PHP
-```
-
-
-## Java build
-
-Java modules use **Gradle Kotlin DSL + Java 21**.
-
-```bash
-./gradlew projects
-./gradlew javaCheck
-```
-
-The shared Java contracts are consumed as a workspace project today and are publishable as:
-
-```text
-io.ololabs.toolgate:toolgate-contracts
-```
-
-so Java services can later move into separate repositories without changing imports.
-
-## Want to contribute?
-
-Your first PR can be a small documentation improvement. We have
-[20 starter issues](docs/contributors/good-first-contributions.md), each with file
-pointers, references, and an acceptance checklist. A few places to start:
-
-| Starter issue | Small PR scope |
-| --- | --- |
-| [Explain groups and actors in a glossary #4](https://github.com/olo-labs/olo-toolgate/issues/4) | One short page and a navigation link |
-| [Add three calculator examples #5](https://github.com/olo-labs/olo-toolgate/issues/5) | Examples in the first-tool guide |
-| [Explain Windows tray status and activity #6](https://github.com/olo-labs/olo-toolgate/issues/6) | One walkthrough and a navigation link |
-| [Explain development release artifacts #7](https://github.com/olo-labs/olo-toolgate/issues/7) | A table in the release guide |
-
-Comment on an issue to check availability, fork the repository, and open a focused
-PR that links the issue. Draft PRs and questions are welcome. For documentation
-changes, preview the Markdown and check your links; follow the issue's validation
-steps and the [contribution guide](CONTRIBUTING.md) before requesting review.
-Browse [all open good first issues](https://github.com/olo-labs/olo-toolgate/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22)
-for the current list.
-
-For code contributions, start the development environment:
+> **Zero Trust for Agentic AI.**
+> **Secure Every Tool Boundary.**
+
+OLO ToolGate is an open-source, self-hosted security gateway for AI agents, MCP
+servers and tool execution.
+
+Enforce identity, least-privilege access, runtime authorization, human approvals and
+auditable execution at every governed tool boundary.
+
+**Status:** development release (`0.10.0-dev`). See [current limits](#production-and-security-status).
+
+[Quickstart](#quickstart) · [Documentation](docs/README.md) ·
+[Security model](docs/security/README.md) ·
+[Enterprise evaluation](docs/enterprise-access-control/README.md) ·
+[Build a tool](TOOL-SDK-GUIDE.md) · [Contribute](CONTRIBUTING.md)
+
+## Why ToolGate
+
+AI agents act through tools: they write files, call APIs and change systems. Each
+tool call crosses a trust boundary. ToolGate sits on that boundary and decides, at
+the moment of the call, whether it may proceed. The executor cannot act without
+that decision.
+
+- **Verified identities.** Each call is checked against the identities that apply
+  to it: the calling agent or workload, the human it acts for when there is one, and
+  the executor (an enrolled device or a Tool Host). New users and agents start
+  disabled; device approval alone never grants access.
+- **Policy at every call.** ALLOW, ASK or BLOCK is evaluated against current
+  authority before any protected effect. ASK routes the call to independent human
+  approval.
+- **Least privilege by default.** Fresh installations grant nothing. Access comes
+  only from explicit group grants, delegated scopes and execution bindings.
+- **Enforced at the executor.** Executors run a call only under a single-use permit
+  from Control, consumed online. If Control is unavailable, nothing runs; cached
+  metadata never authorizes offline execution.
+- **End-to-end auditability.** Requests, approvals, decisions and outcomes are
+  recorded per tenant and correlated to the identities involved.
+
+## Quickstart
+
+Quickstart is a local, single-node evaluation. It runs Control, Gateway, the console
+and local execution in one container with SQLite.
+
+**Prerequisites:** Docker with Compose, and Git.
 
 ```bash
 git clone https://github.com/olo-labs/olo-toolgate.git
-cd olo-toolgate
-make dev
+cd olo-toolgate/deploy/compose/QuickStart
+sh manage.sh deploy        # Windows: .\manage.ps1 deploy
 ```
 
-The target `make dev` experience starts the local stack, mock MCP/API services, seed data, and a development endpoint client.
+The helper creates `.env` from `.env.example` on first run and keeps the data volume
+across restarts. The default image, `ololab/olo-toolgate-quickstart:dev`, is a mutable
+development tag, so it may not match the version shown in this README; check the
+version and build on the console's **About** page after deployment. For a
+reproducible evaluation, copy `.env.example` to `.env` first and set `QUICKSTART_IMAGE`
+to a versioned tag or an image digest (`ololab/olo-toolgate-quickstart@sha256:…`); see
+[development releases](docs/development/development-releases.md).
 
-Start here:
+**What you get:** the console at `http://localhost:8080/console/`, with separate
+`admin`, `reviewer-1` and `reviewer-2` accounts. Their generated passwords are in the
+container's private `/data/credentials.json`; see [first login](docs/getting-started/first-login.md).
 
-- [Contributing](CONTRIBUTING.md)
-- [Development](DEVELOPMENT.md)
-- [Architecture](ARCHITECTURE.md)
-- [Codex implementation playbook](CODEX_IMPLEMENTATION.md)
-- [Shared contracts](CONTRACTS.md)
-- [Roadmap](ROADMAP.md)
-- [Good first contribution ideas](docs/contributors/good-first-contributions.md)
+**What you still do:** a fresh installation runs nothing. Tools and the local agent
+start disabled with zero runtime rights, by design. Follow
+[your first tool](docs/getting-started/first-tool.md) to enroll a device, grant
+access and make a governed call. The full walkthrough is in the
+[Quickstart guide](docs/getting-started/one-minute-quickstart.md).
 
-## Where help is most useful
+## Architecture
 
-We especially welcome contributors interested in:
+The call and the authorization travel separate paths. Gateway dispatches the call;
+Control decides and issues the permit; the executor will not act until it redeems
+that permit with Control.
 
-- Rust networking/runtime security
-- Java control-plane/backend systems
-- React/TypeScript UX
-- Windows/Linux/macOS endpoint management
-- MCP / OAuth / OIDC
-- sandboxing
-- package supply-chain security
-- Drupal
-- developer tooling
-- documentation
-- security review
+```mermaid
+block-beta
+  columns 5
+  space:2 A["<b>AI Agent / MCP Client</b>"] space:2
+  space:5
+  space:2 G["<b>ToolGate Gateway</b><br/>Authenticated request routing"] space:2
+  space:5
+  X["<b>Tool Host / Endpoint</b><br/>Permit-enforced execution"] space:3 C["<b>Control Plane</b><br/>Policy / permits"]
+  space:5
+  R["Target Resource"] space:4
 
-You do **not** need to understand the entire platform before contributing.
+  A --> G
+  G -- "Dispatch" --> X
+  G -- "Authorize" --> C
+  C -- "permit authority" --> X
+  X --> R
 
-## The vision
+  classDef gateway fill:#2563eb22,stroke:#3b82f6,stroke-width:1.5px
+  classDef control fill:#d49b3622,stroke:#d49b36,stroke-width:1.5px
+  classDef executor fill:#13856622,stroke:#138566,stroke-width:1.5px
+  classDef resource fill:#8881,stroke:#8889,stroke-width:1px
+  class A,G gateway
+  class C control
+  class X executor
+  class R resource
+```
 
-We want organizations to be able to say:
+Control never forwards calls, and Gateway never signs permits or authorizes from a
+cached policy. See [architecture](ARCHITECTURE.md),
+[core data flows](docs/architecture/data-flows.md) and
+[trust boundaries](docs/architecture/trust-boundaries.md).
 
-> "These are the capabilities our AI agents can use. These users can use them. These devices may run them. These resources are allowed. Sensitive actions require approval. Everything is visible and reversible."
+## Capabilities
 
-And make setting that up feel simple.
+| Capability | What it does | Status |
+|---|---|---|
+| [MCP governance](docs/gateway/mcp-proxy.md) | Put existing MCP servers behind ToolGate policy, approval and audit without changing them | Available |
+| [Runtime policy](docs/security/README.md) | ALLOW / ASK / BLOCK on every tool invocation, against current authority | Available |
+| [Delegated authority](docs/security/enterprise-access-control.md) | Constrain what an agent may do on behalf of a person or another agent | Available |
+| [Zero-trust execution](docs/control-plane/approvals.md) | Single-use, Control-signed permits checked at the execution boundary | Available; Tool Host container/network isolation unfinished |
+| [Human approval](docs/control-plane/approvals.md) | Independent review of sensitive calls before they run | Available |
+| [Tool distribution](docs/client/package-deployment.md) | Package, version and deliver signed tools to devices and Tool Hosts | Available; Java and Python authoring, TypeScript and .NET are specifications |
+| [Audit and analytics](docs/control-plane/insights.md) | Correlate identities, decisions and outcomes; tenant Analytics and Operator Insights | Available |
 
-## If this direction is useful to you
+### Governing an MCP server in five steps
 
-⭐ **Star the repository** so you can follow the build.
+1. **Register** the server's HTTPS URL, credential and Tool Host pool. Control contacts nothing.
+2. **Scan.** A Tool Host lists the server's tools; Control stores an immutable snapshot with a digest per tool.
+3. **Approve** the tools to expose. ToolGate packages them, and each starts disabled.
+4. **Grant** them to agent groups like any other tool, under ALLOW / ASK / BLOCK policies.
+5. **Execute and audit.** Agents call through the Gateway. The Tool Host runs each call under its
+   permit, validates the arguments and connects with the approved key pins; every call is recorded.
 
-💬 **Start a Discussion** and tell us the first tool or workflow you would want ToolGate to control.
+Details: [MCP proxy guide](docs/gateway/mcp-proxy.md).
 
-🧩 **Pick an issue** if you want to help build it.
+## See it work
 
-🔐 **Security researchers:** please read [`SECURITY.md`](SECURITY.md) before reporting vulnerabilities.
+<p align="center">
+  <img src="docs/media/audit-flow.gif" width="100%" alt="Audit flow: requests, independent approval, outcomes, Analytics tool calls and Operator Insights">
+</p>
 
----
+**Audit, approvals and tool calls.** A live remediation call waits on an `ASK`
+policy, an independent reviewer checks the exact invocation, and the approved call
+resumes through ToolGate into its outcome, audit trail and Analytics. The example
+uses Qwen2.5 7B through Ollama; scripted acceptance traffic is labelled.
 
-**Repository:** https://github.com/olo-labs/olo-toolgate  
-**Organization:** https://github.com/olo-labs
+> 💡 **Tip:** For individual, high-resolution step frames or manual navigation, browse the
+> [Step-by-Step Tour Guide](docs/media/TOURS.md). Every snapshot is in the repository:
+> console and operator screens in [`docs/media/screenshots`](docs/media/screenshots) and
+> device/client captures in [`docs/media`](docs/media).
 
-## Implemented foundation
+<details>
+<summary><strong>💻 Devices and device client</strong>: enroll, verify and approve a device</summary>
+<br>
 
-Module 00 supplies canonical v1 schemas, generated bindings, workspace and local
-Maven artifact build modes, mandatory checks and protected release plumbing.
-Run `make check`; see [foundation workflow](docs/development/foundation.md).
-Module 01 adds the stateless [Gateway core](apps/gateway/README.md), static runtime
-authorization and an opt-in Helm gateway workload. Module 02 adds the
-[Control Plane backend](apps/control-plane/README.md), tenant-scoped records,
-PostgreSQL/Flyway, signed administrative JWTs, atomic audit/replay and JSON/YAML
-import/export. Marketplace services remain build scaffolds. Tool execution runs
-in the protected endpoint service's confined runtime.
-Module 03 adds the [embedded Admin UI](apps/admin-ui/README.md): signed-token
-session shell, bounded dashboard, directory navigation and user management.
+<p align="center">
+  <img src="docs/media/device-flow.gif" width="100%" alt="Device flow: native client, enrollment, fingerprint review, approval, connection, activity log and device administration">
+</p>
 
-Module 04 adds [signed policy bundles](docs/control-plane/policy-bundles.md):
-deterministic Control compilation and immutable publication, Gateway signature/hash
-verification and atomic last-known-good snapshots, explicit read-only grace,
-forward rollback and external key rotation. Run `make policy-e2e` for the real
-PostgreSQL/Control/Gateway flow and `make benchmark` for signed evaluation evidence.
-Publication requires a reviewed directory and dedicated external signing key.
+**What to look for in the loop:**
 
-Module 06 is in progress: [endpoint client documentation](apps/endpoint-client/README.md)
-describes native enrollment, key custody, IPC and check-in. Its remaining verification
-gates are recorded in [the Module 06 report](docs/codex/modules/06-completion.md).
+- 💻 The device client opening from the tray and reporting its status.
+- 🔑 Enrollment pausing until an administrator compares the key fingerprint.
+- ✅ The approved device connecting, with its details and activity log.
+- 🗂️ Devices, device groups, device evidence and packages in the console.
 
-Module 05 adds [ASK approvals](docs/control-plane/approvals.md): a dedicated human
-approval queue, one-time/temporary/deny decisions, durable expiry and race safety,
-Gateway-signed exact-operation permits and atomic single-use consumption. Control
-outages block ASK. Run `make approval-e2e`; no new mandatory infrastructure is added.
+Earlier enrollment/client captures are labelled in the tour guide.
 
-Module 09 signed fleet lifecycle: [production usage, configuration and debugging](docs/client/package-deployment.md).
+</details>
 
-Module 10 adds the [custom local tool builder](docs/client/tool-builder.md):
-code/schema/AI metadata authoring, designated-client sandbox tests, immutable
-organization packages, independently verified release/deployment and publication
-preparation. Native platform verification limits remain in its completion report.
+<details>
+<summary><strong>🧰 Tools and delegated access</strong>: least privilege from tool to execution binding</summary>
+<br>
+
+<p align="center">
+  <img src="docs/media/console-tools-tour.gif" width="100%" alt="Tools and access flow: authoring, packages, groups, agents, delegation, grants, policies, execution bindings and access simulation">
+</p>
+
+**What to look for in the loop:**
+
+- 🧰 Tools built, packaged and grouped, with resource extractors.
+- 🤖 Agents, agent groups and workload identities.
+- 🤝 Human and agent delegations constraining what an agent may act on.
+- 📜 Grants, ALLOW / ASK / BLOCK policies and execution bindings.
+- 🔍 Access simulation showing the final decision before anything runs.
+
+</details>
+
+<details>
+<summary><strong>⚙️ Workspace administration</strong>: people, identities and server settings</summary>
+<br>
+
+<p align="center">
+  <img src="docs/media/console-administration.gif" width="100%" alt="Workspace administration flow: sign-in, overview, themes, people, identities, MCP servers, settings, backup, vault and version">
+</p>
+
+**What to look for in the loop:**
+
+- 🔐 Tenant sign-in and the workspace overview, in dark and light themes.
+- 👥 Users, teams, typed roles and human identities.
+- 🔌 MCP servers and server settings.
+- 💾 Backup/restore, the local vault and the About page.
+
+</details>
+
+Screens were captured from a local `0.10.0-dev` installation on October 27, 2026.
+Enabled tools and grants are fictional demo configuration, not installation defaults.
+
+## Production and security status
+
+ToolGate is a development release. The authorization path described above is
+enforced today; the following are **not yet** in place:
+
+- **Tool Host isolation:** process launch and broker checks exist, but container
+  and network isolation are unfinished.
+- **Durable result retry:** the Tool Host result outbox is not implemented.
+- **Offline protected effects** and **nested or dynamic groups** are unsupported.
+- **Quickstart** is single-node evaluation software with no HA guarantee.
+- **Authoring:** Java and Python implementations are available; TypeScript and .NET
+  authoring APIs remain specifications.
+
+Recorded acceptance and performance results apply to the tested revision and
+environment; they do not establish your deployment's readiness, capacity or
+compliance. [Standards alignment](docs/enterprise-access-control/standards-alignment.md)
+describes design relationships, not a certification.
+
+Before production, read the [enterprise evaluation guide](docs/enterprise-access-control/README.md),
+[threat model](docs/security/threat-model.md) and
+[production deployment](docs/deployment/production.md). For multiple tenants, see
+[multitenant deployment](docs/deployment/multitenant.md).
+
+The OLO Marketplace is developed in a separate private repository and hosted at
+[olo-labs.org](https://olo-labs.org). Control can import from it through the
+[Marketplace integration](docs/control-plane/marketplace-integration.md).
+
+## Developers and contributors
+
+| You want to | Start here |
+|---|---|
+| Build and package a tool | [Tool SDK guide](TOOL-SDK-GUIDE.md) · [Java SDK](tool-sdk/java-sdk/README.md) · [examples](examples/README.md) |
+| Govern an existing MCP server | [MCP proxy guide](docs/gateway/mcp-proxy.md) · [example](examples/mcp-proxy/README.md) |
+| Run server-side tools | [Tool Host](apps/tool-host/README.md) |
+| Build from source | [Development guide](docs/development/README.md) |
+| Contribute | [CONTRIBUTING.md](CONTRIBUTING.md) · [architecture map](docs/architecture/component-map.md) |
+
+Small fixes, tests, documentation and examples are welcome. Discuss larger work in
+GitHub issues.
+
+## Project resources
+
+[Support](SUPPORT.md) · [Report a vulnerability](SECURITY.md) ·
+[Governance](GOVERNANCE.md) · [Code of conduct](CODE_OF_CONDUCT.md) ·
+[Changelog](CHANGELOG.md) · [Apache-2.0 license](LICENSE)

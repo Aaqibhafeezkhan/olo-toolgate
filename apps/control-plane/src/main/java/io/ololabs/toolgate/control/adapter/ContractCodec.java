@@ -31,6 +31,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 /** Offline validation against canonical schemas embedded in the shared Maven artifact. */
 @ApplicationScoped
 public class ContractCodec implements Codec {
+    public com.fasterxml.jackson.databind.JsonNode configuration(String document, boolean yaml) { return parse(document, yaml); }
     private static final int MAX_BODY = 2 * 1024 * 1024;
     private final ObjectMapper mapper;
     private final ObjectNode canonicalDefinitions;
@@ -70,10 +71,17 @@ public class ContractCodec implements Codec {
     /** v2 schema files Control already serves, validated by their v2 binding names. v1 definitions that reference v2
      *  (`../v2/...`, such as the request context) pull in those definitions too. Every adopted name must be new or
      *  identical to its v1 definition apart from descriptions, since both share one flat namespace. */
-    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json");
+    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json");
+    /** Single v2 definitions Control serves from files whose other names collide with v1 (package, protocol). */
+    static final java.util.List<java.util.Map.Entry<String, String>> V2_NAMES = java.util.List.of(
+        java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
+        java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"), java.util.Map.entry("protocol.schema.json", "RunEventBatch"),
+        java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"), java.util.Map.entry("package.schema.json", "ClientReleaseRequest"), java.util.Map.entry("package.schema.json", "ClientRelease"),
+        java.util.Map.entry("protocol.schema.json", "Dispatch"), java.util.Map.entry("protocol.schema.json", "AdmissionResponse"), java.util.Map.entry("protocol.schema.json", "ResultMessage"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
-        for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json")) {
+        for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",
+                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));
@@ -81,8 +89,10 @@ public class ContractCodec implements Codec {
         }
         var pending = new java.util.ArrayDeque<java.util.Map.Entry<String, String>>();
         for (var file : V2_FILES) v2.get(file).fieldNames().forEachRemaining(name -> pending.add(java.util.Map.entry(file, name)));
+        pending.addAll(V2_NAMES);
         for (var ref : crossVersion) { int split = ref.indexOf("#/$defs/"); pending.add(java.util.Map.entry(ref.substring("../v2/".length(), split), ref.substring(split + 8))); }
-        var adopted = new java.util.HashSet<String>();
+        var requested = new java.util.HashSet<String>(); pending.forEach(entry -> requested.add(entry.getValue()));
+        var adopted = new java.util.HashSet<String>(); var added = new java.util.ArrayList<String>(); var renamed = new java.util.HashSet<String>();
         while (!pending.isEmpty()) {
             var next = pending.poll(); var name = next.getValue();
             if (!adopted.add(name)) continue;
@@ -90,12 +100,29 @@ public class ContractCodec implements Codec {
             if (definition.isMissingNode()) throw new IllegalStateException("Unsupported canonical schema reference");
             definition.findValuesAsText("$ref").forEach(ref -> {
                 int split = ref.indexOf("#/$defs/");
-                pending.add(java.util.Map.entry(split <= 0 ? next.getKey() : ref.substring(0, split), ref.substring(split + 8)));
+                if (split < 0) throw new IllegalStateException("Unsupported canonical schema reference");
+                var target = ref.substring(split + 8);
+                if (ref.startsWith("../v1/")) {
+                    // These closed v1 definitions were loaded from the same bundled canonical artifact.
+                    if (!definitions.has(target)) throw new IllegalStateException("Unsupported canonical v1 reference");
+                    return;
+                }
+                pending.add(java.util.Map.entry(split == 0 ? next.getKey() : ref.substring(0, split), target));
             });
             var local = localReferences(definition.deepCopy());
-            if (definitions.has(name) && !withoutDescriptions(definitions.get(name)).equals(withoutDescriptions(local))) throw new IllegalStateException("v2 definition " + name + " conflicts with v1");
+            if (definitions.has(name) && !withoutDescriptions(definitions.get(name)).equals(withoutDescriptions(local))) {
+                // A dependency that differs from its v1 namesake (v2 SemanticVersion allows build metadata) is kept apart.
+                if (requested.contains(name)) throw new IllegalStateException("v2 definition " + name + " conflicts with v1");
+                renamed.add(name); definitions.set("V2" + name, local); added.add("V2" + name); continue;
+            }
+            if (!definitions.has(name)) added.add(name);
             definitions.set(name, local);
         }
+        for (var name : added) renamedReferences(definitions.get(name), renamed);
+    }
+    private static void renamedReferences(JsonNode node, java.util.Set<String> renamed) {
+        if (node.isObject() && node.has("$ref")) { var name = node.get("$ref").asText().substring("#/$defs/".length()); if (renamed.contains(name)) ((ObjectNode) node).put("$ref", "#/$defs/V2" + name); }
+        node.elements().forEachRemaining(child -> renamedReferences(child, renamed));
     }
     private static JsonNode withoutDescriptions(JsonNode node) {
         var copy = node.deepCopy();
@@ -206,14 +233,33 @@ public class ContractCodec implements Codec {
             var entry = entry(kind, json(node));
             if (entries.put(entry.id(), entry) != null) throw Failure.validation();
         }
-        return new Import(new Directory(snapshot.get("revision").asLong(), entries), input.get("mode").asText().equals("REPLACE"), input.get("dryRun").asBoolean());
+        try {
+            var settings = snapshot.has("settings") ? mapper.treeToValue(snapshot.get("settings"), io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch.class) : null;
+            var required = new java.util.ArrayList<io.ololabs.toolgate.contracts.ControlRequiredIdentity>();
+            for (var node : snapshot.path("requiredIdentities")) required.add(mapper.treeToValue(node, io.ololabs.toolgate.contracts.ControlRequiredIdentity.class));
+            var resolution = new java.util.TreeMap<String, io.ololabs.toolgate.contracts.ControlIdentityResolution>();
+            for (var e : input.path("identityResolution").properties()) resolution.put(Ids.valid(e.getKey()), mapper.treeToValue(e.getValue(), io.ololabs.toolgate.contracts.ControlIdentityResolution.class));
+            return new Import(new Directory(snapshot.get("revision").asLong(), entries), input.get("mode").asText().equals("REPLACE"), input.get("dryRun").asBoolean(),
+                settings, java.util.List.copyOf(required), java.util.Map.copyOf(resolution), input.path("removeUnlistedMemberships").asBoolean(false));
+        } catch (java.io.IOException | IllegalArgumentException e) { throw Failure.validation(); }
     }
-    public String snapshot(TenantId tenant, Directory directory, boolean yaml) {
+    public String document(TenantId tenant, Import input) {
+        var fields = new java.util.HashMap<String, Object>();
+        if (input.settings() != null) fields.put("settings", input.settings());
+        if (!input.requiredIdentities().isEmpty()) fields.put("requiredIdentities", input.requiredIdentities());
+        var request = new java.util.HashMap<String, Object>(java.util.Map.of("snapshot", parse(snapshot(tenant, input.directory(), false, fields), false), "mode", input.replace() ? "REPLACE" : "MERGE", "dryRun", input.dryRun()));
+        if (!input.identityResolution().isEmpty()) request.put("identityResolution", input.identityResolution());
+        if (input.removeUnlistedMemberships()) request.put("removeUnlistedMemberships", true);
+        return json(request);
+    }
+    public String snapshot(TenantId tenant, Directory directory, boolean yaml) { return snapshot(tenant, directory, yaml, java.util.Map.of()); }
+    public String snapshot(TenantId tenant, Directory directory, boolean yaml, java.util.Map<String, Object> fileFields) {
         var node = mapper.createObjectNode(); node.put("formatVersion", 2); node.put("tenantId", tenant.value()); node.put("revision", directory.revision());
         for (var kind : Kind.values()) {
             var values = node.putArray(kind.snapshotKey()); directory.entries().values().stream().filter(e -> e.id().kind() == kind)
                 .sorted(java.util.Comparator.comparing(e -> e.id().value())).forEach(e -> values.add(parse(e.document(), false)));
         }
+        fileFields.forEach((key, value) -> node.set(key, mapper.valueToTree(value)));
         try { return yaml ? new YAMLMapper().writeValueAsString(sorted(node)) : json(node); }
         catch (java.io.IOException e) { throw new IllegalStateException(e); }
     }
@@ -227,6 +273,18 @@ public class ContractCodec implements Codec {
         try { return mapper.treeToValue(node, type); }
         catch (java.io.IOException | IllegalArgumentException e) { throw Failure.validation(); }
     }
+    private volatile io.ololabs.toolgate.control.application.OloProtections protections = io.ololabs.toolgate.control.application.OloProtections.NONE;
+    /** Loads {@code toolgate.control.olo.reserved-agents} and {@code toolgate.control.olo.protected-tool-groups} (M3.5, M3.8). */
+    void configure(@jakarta.enterprise.event.Observes io.quarkus.runtime.StartupEvent event, org.eclipse.microprofile.config.Config config) {
+        protections(new io.ololabs.toolgate.control.application.OloProtections(names(config, "toolgate.control.olo.reserved-agents"), names(config, "toolgate.control.olo.protected-tool-groups")));
+    }
+    private static java.util.Set<String> names(org.eclipse.microprofile.config.Config config, String key) {
+        var out = new java.util.HashSet<String>();
+        for (var name : config.getOptionalValue(key, String.class).orElse("").split(",")) if (!name.isBlank()) out.add(name.strip());
+        return out;
+    }
+    public ContractCodec protections(io.ololabs.toolgate.control.application.OloProtections protections) { this.protections = java.util.Objects.requireNonNull(protections); return this; }
+    @Override public io.ololabs.toolgate.control.application.OloProtections protections() { return protections; }
     public void validatePolicies(Directory directory) {
         io.ololabs.toolgate.control.application.GroupGraph.validate(directory,this);
     }

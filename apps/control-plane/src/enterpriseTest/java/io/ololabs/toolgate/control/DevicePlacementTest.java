@@ -22,7 +22,7 @@ class DevicePlacementTest {
     void pool(Map<String,String> owners){
         owners.forEach((id,owner)->graph.add(Kind.DEVICE,new ControlDevice(id,id,true,1L,owner)));
         graph.add(Kind.DEVICE_GROUP,new ControlDeviceGroup("devices-a","Devices A",true,2L,List.copyOf(new TreeSet<>(owners.keySet()))));
-        store=new PostgresStore(SqliteState.open(temp.resolve("placement.sqlite")),graph.codec);
+        store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("placement.sqlite"))),graph.codec);
         store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});
     }
     RequestContext context(String request,String user){return new RequestContext(request,EnterpriseConformanceTest.TENANT.value(),user==null?RequestMode.SERVICE:RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,user,"agent","workload",List.of(),user==null?null:1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);}

@@ -20,7 +20,7 @@ Defines the two runtimes behind the one authoring contract, the invariant that b
 | Input and output schemas | Identical | Identical |
 | Authoring API | Identical | Identical |
 | Route definitions | Same descriptor; the SDK HTTP client refuses undeclared routes (developer feedback, not a security boundary) | Same descriptor; enforced by the broker |
-| Destination hosts | Local setting `TOOLGATE_DESTINATION_<HOSTSETTING>` or `toolgate.dev.json`, validated against the declared destination (port, TLS, pins) | Reviewed service-profile setting |
+| Destination hosts | Local setting `TOOLGATE_DESTINATION_<HOSTSETTING>` or `toolgate.dev.json` (`host` or `host:port`), validated against the declared destination (port, TLS, pins). Only in development may a loopback host use another port or plain `http://`, for a local mock | Reviewed service-profile setting |
 | Globals | Env or `toolgate.dev.json`, validated against the same declarations | Approved configuration revision |
 | Secrets | Env, OS keychain or `toolgate.dev.json` | Vault and the credential broker; brokered secrets never enter the sandbox |
 | JWT claims | Verified identity, or a development fixture (§4) | Gateway-verified identity |
@@ -53,7 +53,7 @@ Defines the two runtimes behind the one authoring contract, the invariant that b
 
 Claims never come from tool arguments, headers other than `Authorization`, or environment variables, in any mode.
 
-Verifier configuration (standalone): `TOOLGATE_AUTH_ISSUER`, `TOOLGATE_AUTH_AUDIENCE`, `TOOLGATE_AUTH_JWKS_URL` or `TOOLGATE_AUTH_KEYS_FILE`, `TOOLGATE_AUTH_ALGORITHMS` (default `RS256,ES256`; `none` and HMAC algorithms are always rejected), or `TOOLGATE_AUTH_INTROSPECTION_URL` with client credentials as secrets.
+Verifier configuration (standalone): `TOOLGATE_AUTH_ISSUER`, `TOOLGATE_AUTH_AUDIENCE`, `TOOLGATE_AUTH_JWKS_URL` or `TOOLGATE_AUTH_KEYS_FILE`, `TOOLGATE_AUTH_ALGORITHMS` (default `RS256,ES256`; `none` and HMAC algorithms are always rejected), or `TOOLGATE_AUTH_INTROSPECTION_URL` with client credentials as secrets (`TOOLGATE_AUTH_CLIENT_ID`, `TOOLGATE_AUTH_CLIENT_SECRET`). Exactly one key source or introspection URL is set. With a verifier, production may bind HTTP to a non-loopback address; without one it binds only loopback, as development always does.
 
 ## 5. `toolgate.dev.json`
 
@@ -70,6 +70,30 @@ Verifier configuration (standalone): `TOOLGATE_AUTH_ISSUER`, `TOOLGATE_AUTH_AUDI
 - The file is read only in standalone mode and **must** be git-ignored; `toolgate check` fails if it is tracked.
 - `claims` is read only when `TOOLGATE_MODE=development`; otherwise its presence is a startup warning and it is ignored.
 - Values are validated against the declarations exactly as governed configuration is.
+
+## Governed response frames
+
+Governed Java tools receive the supervisor's invocation ID and a deadline no
+later than the supervisor's deadline. Missing invocation bindings and expired
+inputs are rejected before tool code starts. `context.invocation().mode()` is
+`GOVERNED`; these diagnostics never grant runtime authority.
+
+Tool-emitted log and progress responses use the existing v2 `LOG` and `PROGRESS`
+frames on stdout, followed by the terminal `RESULT`. Messages pass through the
+invocation's sensitive-value redactor before they leave the process. Progress
+remains monotonic and contains only fractions the tool actually emitted.
+The pending response-stream integration in the package-first plan must retain
+and deliver these frames through the supervisor and Control before the Test UI
+can show them; SDK emission alone does not provide durable replay.
+
+Everything else a governed tool needs from its executor travels the same stdio:
+a `BROKER_REQUEST` frame on stdout (`ROUTE_CALL` and `SECRET_REDEEM` on a Tool
+Host, the `FILES_*` operations on a device) answered by one `BROKER_RESPONSE` line
+on stdin. This is the only protocol and the only channel; an executor refuses an
+operation it does not provide with `BROKER_REFUSED`
+([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)). Standalone mode
+has no broker: routes go to the network through the SDK client, and device files
+are an in-memory area that starts empty.
 
 ## Related Docs
 

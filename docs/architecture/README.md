@@ -1,6 +1,10 @@
 # Architecture
 
-Start with `overview.md`, then `component-map.md`, then `trust-boundaries.md`.
+- [Overview](overview.md): current authorization and execution model.
+- [Component map](component-map.md): ownership and boundaries.
+- [Trust boundaries](trust-boundaries.md) and [data flows](data-flows.md).
+- [Package model](package-model.md) and [desired/reported state](desired-vs-reported-state.md).
+- [Shared contracts](shared-contracts.md), [compatibility](compatibility.md) and [scalability](scalability.md).
+- [Repository layout](monorepo-layout.md) and [decision records](../adr/README.md).
 
-Custom local tool authoring and designated-client test/release boundaries are
-specified in [ADR 011](../adr/011-designated-client-tool-authoring.md).
+Component guides describe current support and limitations.

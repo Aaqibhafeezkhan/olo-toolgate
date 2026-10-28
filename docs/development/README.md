@@ -1,27 +1,43 @@
-# Development
+# Develop ToolGate
 
-Use the [current execution guide](../operations/execution-guide.md) and
-[debugging guide](../operations/debugging.md) for implemented commands.
-`make dev` remains a scaffold; the contributor contract below is the target experience.
+Run commands from the repository root. The repository contains working services,
+but `make dev`, `make stop` and `make client` are still scaffolds. Use the commands
+below and the component guides for the implemented workflows.
 
-## Contributor Contract
+## Prerequisites
 
-A contributor should be able to:
+Use Java 21, Python 3.12+, Node 22, Docker and the Rust toolchain pinned in
+`rust-toolchain.toml`. The Gradle wrapper downloads its pinned distribution.
+PHP, Helm and other check-specific tools are described in the
+[foundation workflow](foundation.md) and [local CI guide](local-ci.md).
 
-```bash
-git clone https://github.com/olo-labs/olo-toolgate.git
-cd olo-toolgate
-make dev
-```
+Install Python requirements from `tools/requirements.txt` in a virtual environment.
+Run `npm ci` to install workspace packages and the repository's commit hooks.
+Browser checks need Playwright Chromium; follow the foundation guide for setup.
 
-and get a useful development environment without manually assembling six stacks.
+## Run and verify
 
-Read:
+| Task | Command or guide |
+|---|---|
+| Build and verify Quickstart with disposable fixtures | `python tools/quickstart/check.py --build` |
+| Persistent Windows debug installation | `debug/start.bat`; [debug guide](../../debug/README.md) |
+| Run an evaluation image and retain its state | [Quickstart Compose](../../deploy/compose/QuickStart/README.md) |
+| Full repository checks | `python tools/check.py` (or `make check`) |
+| Contract checks | `python tools/check.py --contracts-only` |
+| Java checks | `./gradlew javaCheck` or `gradlew.bat javaCheck` |
+| UI checks | `npm run ui:check` |
+| Documentation structure | `make docs` |
+| Inspect CI coverage | `python tools/ci/local.py plan` |
+| Replay supported CI jobs | [Local CI](local-ci.md) |
 
-- [Run CI locally from the workflow definitions](local-ci.md)
-- `local-development.md`
-- `coding-standards.md`
-- `schema-workflow.md`
-- [Directory membership and default policies](directory-membership.md)
-- [User roles and privilege templates](../security/user-roles.md)
-- [Managed roles and permission scopes](managed-roles.md)
+Docker-backed integration checks need their documented dependencies and may build
+images. Missing tooling is a failure, not a silently skipped check.
+
+## Find the right guide
+
+- [Repository layout](../architecture/monorepo-layout.md) and [component ownership](../architecture/component-map.md)
+- [Gradle build](gradle.md), [schema workflow](schema-workflow.md) and [release guide](how-to-release.md)
+- [Testing](../testing/README.md) and [debugging](../operations/debugging.md)
+- [How to release: two manual jobs](how-to-release.md), [release process](release-process.md) and [development releases](development-releases.md)
+- [CI ownership](ci-check-ownership.md) and [CI admission](ci-admission.md)
+- [Directory membership](../security/enterprise-access-control.md) and [managed roles](../security/user-roles.md)

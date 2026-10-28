@@ -7,15 +7,31 @@ import os
 import platform
 import subprocess
 import time
+import uuid
 from pathlib import Path
+from qualification import record
+from discovery_fixture import installation
 
-def run(arguments):return subprocess.run(arguments,check=True,capture_output=True,text=True)
+def run(arguments):
+    result=subprocess.run(arguments,capture_output=True,text=True)
+    if result.returncode:
+        # The failing command's own output, so a red run names its cause.
+        shown=arguments[2:] if arguments[:2]==['sudo','-n'] else arguments
+        print(f'{shown} exited {result.returncode}\n{result.stdout}{result.stderr}',flush=True)
+        raise subprocess.CalledProcessError(result.returncode,arguments,result.stdout,result.stderr)
+    return result
 def check(binary):
     if os.environ.get('GITHUB_ACTIONS')!='true':raise RuntimeError('Service installation smoke is restricted to disposable native CI runners')
+    with installation() as site:check_server(binary,site)
+    record('service',binary)
+
+def check_server(binary,site):
     system=platform.system();elevate=[] if system=='Windows' else ['sudo','-n']
     command=[*elevate,str(binary.resolve())];installed=False
     try:
-        run([*command,'install','--server','https://control.example.invalid']);installed=True
+        refused=subprocess.run([*command,'install','--server',site.console,'--tenant-id',str(uuid.uuid4())],capture_output=True,text=True)
+        assert refused.returncode!=0 and 'TenantMismatch' in refused.stdout+refused.stderr
+        run([*command,'install','--server',site.console,'--tenant-id',site.tenant]);installed=True
         deadline=time.monotonic()+45
         while True:
             try:

@@ -4,8 +4,9 @@ The required external inputs are PostgreSQL and an identity provider issuing RS2
 access tokens. There is no built-in password database, default account or generated
 production credential. Directory users describe the organization; they do not create
 identity-provider users or change their token roles. Disable/revoke IdP accounts in
-the IdP. Directory changes require explicit signed bundle publication to reach
-Gateway. See [publication, trust configuration and operations](policy-bundles.md).
+the IdP. Control evaluates current directory authority on every protected operation.
+Signed publication/adoption is metadata, not an offline authorization path.
+See [publication and adoption](policy-bundles.md).
 
 | Environment variable | Meaning |
 |---|---|
@@ -22,14 +23,15 @@ Gateway. See [publication, trust configuration and operations](policy-bundles.md
 | `TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED` | Default false; enable sanitized outbound traces at runtime |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Explicit trusted collector URL; use HTTPS in production |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | `grpc` (default) or `http/protobuf` |
+| `TOOLGATE_CONTROL_MARKETPLACE_*` | Optional OLO Orgs Marketplace import; see [Marketplace integration](marketplace-integration.md) |
 
-Tokens require signed `sub`, `tenant_id`, `groups`, `iat` and `exp` claims. A token's
-maximum lifetime and age are 900 seconds, with no expiry skew or future issue time.
-Groups `toolgate-reader` and `toolgate-admin` may read directory/export/OpenAPI data;
-only `toolgate-admin` may mutate, import or read audit entries. Tenant identity never
-comes from a request body or header. Invalid identity claims fail closed.
-Rotate verification keys through an explicitly coordinated IdP/key mount rollout.
-There is no discovery/JWKS fetch, key cache or interactive login flow in Module 02.
+Human tokens require verified issuer, subject, tenant and bounded issue/expiry
+claims. Human identity intake resolves an enabled directory User; portal and
+review permissions come from current Team/Management Role membership. IdP group
+names alone cannot grant directory administration. Dedicated machine endpoints
+retain their explicit service-role authentication and cannot become human admins.
+Use [roles](../security/user-roles.md) and the canonical OpenAPI for each endpoint.
+Rotate verification keys through a coordinated IdP/key-mount rollout.
 
 Only 8082 belongs behind a trusted HTTPS ingress/proxy. Keep 9092 private to probes
 and authorized monitoring. Proxy header forwarding and CORS are disabled. Do not
@@ -68,20 +70,23 @@ readiness. For a 401, check issuer/audience/key, token claims and clock synchron
 For a 409, refresh revisions and validate references, retired IDs and tenant quotas.
 Do not bypass these checks to make a deployment ready.
 
-Module 05 approval behavior defaults disabled. Enable bundle signing and set the
-four `TOOLGATE_CONTROL_APPROVAL_*` fields in [approval configuration](approvals.md).
-The dedicated approver role and signed `user_id` cannot be replaced by admin role.
+See [current ASK approval behavior](approvals.md) and the [security model](../security/enterprise-access-control.md) before configuring reviewer authority.
+
+## Optional shared cache
+
+For optional external Redis/Valkey directory caching, including environment variables,
+Docker mounts, Helm Secret references and network policy, see
+[shared cache configuration](../deployment/shared-cache.md). It defaults to local
+caching and always checks the database before reusing entries.
 
 ## Client check-in
 
-Source: [Tool SDK plan §17.1 and §17.2](../sdk-plan/plan.md). Phase A ships with
+Source: [Platform requirements §17.1 and §17.2](../contracts/platform-requirements.md). Phase A ships with
 milestone M1; Phase B below is still a specification.
 
-Control returns the check-in interval in each check-in reply. Clients that send
-`X-ToolGate-Poll-Interval-Unit: milliseconds` receive `nextIntervalMs`, which takes
-precedence; older clients receive `nextIntervalSeconds`, the same interval rounded up
-to whole seconds (at least 2). The endpoint client accepts any value from 500 ms to
-1 hour and rejects anything else (`apps/endpoint-client/src/service.rs:859-865`). The
+Control returns the next check-in interval as `nextIntervalMs` in every check-in reply;
+there is no other unit or negotiation. The endpoint client and Tool Host accept any
+value from 500 ms to 1 hour and reject anything else. The
 client opens its WebSocket only after a poll delivers a job.
 
 ### Five settings, not one
@@ -106,7 +111,7 @@ Phase A makes the interval configurable and works with clients already deployed.
 
 | Environment variable | Meaning | Quickstart | Enterprise default |
 |---|---|---|---|
-| `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS` | Value sent as `nextIntervalMs`; must be 500 to 3600000 | 500 | 2000 |
+| `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS` | Value sent as `nextIntervalMs`; must be 500 to 3600000 | 2000 | 2000 |
 | `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` | Random spread added to each interval, in percent | 0 | 20 |
 | `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS` | Time without a check-in before a device counts as offline | 120000 | max(120000, 6 × check-in) |
 
@@ -115,7 +120,7 @@ value is the job pickup latency.
 
 Each reply picks an interval at random within check-in ± jitter. A check-in that
 arrives sooner than half the shortest such interval is rejected with 409 as a request
-burst (250 ms at the Quickstart default, 800 ms at the enterprise default). A device
+burst (1000 ms at the Quickstart default, 800 ms at the enterprise default). A device
 with no check-in for the offline threshold gets no local tools in discovery and no
 new client tool jobs.
 

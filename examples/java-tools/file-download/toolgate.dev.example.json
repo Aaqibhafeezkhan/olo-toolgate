@@ -1,0 +1,14 @@
+{
+  "mode": "development",
+  "destinations": {
+    "DownloadHost": "http://127.0.0.1:8080"
+  },
+  "globals": {
+    "DownloadDir": "/tmp/downloads",
+    "PublicBaseUrl": "none"
+  },
+  "secrets": {},
+  "claims": {
+    "sub": "dev-1"
+  }
+}

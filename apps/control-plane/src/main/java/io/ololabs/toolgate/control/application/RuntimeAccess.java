@@ -24,7 +24,7 @@ public final class RuntimeAccess {
         }
         var toolEntry=directory.entries().get(Kind.TOOL.id(request.toolId()));if(toolEntry==null||!toolEntry.enabled())throw ManagementAccess.denied();var tool=codec.model(toolEntry.document(),ControlTool.class);
         var entry=directory.entries().get(Kind.EXTRACTOR.id(tool.extractorId()));if(entry==null||!entry.enabled())throw ManagementAccess.denied();
-        var extracted=new ResourceExtraction(codec).extract(codec.model(entry.document(),ControlResourceExtractor.class),request);
+        var extracted=new ResourceExtraction(codec).extract(codec.model(entry.document(),ControlResourceExtractor.class),request,tenant.value());
         var context=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),c.bindingId(),device);
         return new EnterpriseEvaluation(context,request.toolId(),request.action(),extracted.argumentsDigest(),extracted.resources(),toolDigest,packageDigest,now,directory.revision(),true,extracted.amount(),extracted.operation());
     }

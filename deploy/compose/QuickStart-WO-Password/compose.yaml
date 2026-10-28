@@ -6,6 +6,9 @@ services:
     image: ${QUICKSTART_IMAGE:-ololab/olo-toolgate-quickstart:dev}
     platform: linux/amd64
     restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -13,12 +16,34 @@ services:
     cpus: 2
     stop_grace_period: 35s
     environment:
+      # Optional external Redis/Valkey cache; mount protected files under /external.
+      TOOLGATE_CONTROL_CACHE_MODE: ${TOOLGATE_CONTROL_CACHE_MODE:-local}
+      TOOLGATE_CONTROL_CACHE_HOST: ${TOOLGATE_CONTROL_CACHE_HOST:-}
+      TOOLGATE_CONTROL_CACHE_PORT: ${TOOLGATE_CONTROL_CACHE_PORT:-6379}
+      TOOLGATE_CONTROL_CACHE_TLS: ${TOOLGATE_CONTROL_CACHE_TLS:-true}
+      TOOLGATE_CONTROL_CACHE_USERNAME: ${TOOLGATE_CONTROL_CACHE_USERNAME:-default}
+      TOOLGATE_CONTROL_CACHE_NAMESPACE: ${TOOLGATE_CONTROL_CACHE_NAMESPACE:-}
+      TOOLGATE_CONTROL_CACHE_PASSWORD_PATH: ${TOOLGATE_CONTROL_CACHE_PASSWORD_PATH:-}
+      TOOLGATE_CONTROL_CACHE_ENCRYPTION_KEY_PATH: ${TOOLGATE_CONTROL_CACHE_ENCRYPTION_KEY_PATH:-}
+      TOOLGATE_CONTROL_CACHE_CA_PATH: ${TOOLGATE_CONTROL_CACHE_CA_PATH:-}
+      TOOLGATE_CONTROL_CACHE_TIMEOUT_MS: ${TOOLGATE_CONTROL_CACHE_TIMEOUT_MS:-500}
+      TOOLGATE_CONTROL_CACHE_TTL_SECONDS: ${TOOLGATE_CONTROL_CACHE_TTL_SECONDS:-3600}
+      TOOLGATE_CONTROL_BUILDER_ENABLED: ${TOOLGATE_CONTROL_BUILDER_ENABLED:-false}
+      # Used only when the setup administrator is first created.
+      TOOLGATE_ADMIN_EMAIL: ${TOOLGATE_ADMIN_EMAIL:-admin@admin.com}
       TOOLGATE_DISABLE_ADMIN_PASSWORD: ${TOOLGATE_DISABLE_ADMIN_PASSWORD:-false}
       TOOLGATE_QUICKSTART_DATABASE_MODE: ${TOOLGATE_QUICKSTART_DATABASE_MODE:-sqlite}
-      # Client check-in (env-owned; shown read-only in the console). 500 ms is the job pickup latency.
-      TOOLGATE_CONTROL_CLIENT_CHECKIN_MS: ${TOOLGATE_CONTROL_CLIENT_CHECKIN_MS:-500}
+      # Client check-in (env-owned; shown read-only in the console). 2000 ms is the job pickup interval.
+      TOOLGATE_CONTROL_CLIENT_CHECKIN_MS: ${TOOLGATE_CONTROL_CLIENT_CHECKIN_MS:-2000}
       TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT: ${TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT:-0}
       TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS: ${TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS:-120000}
+      # OLO Orgs Marketplace (env-owned; off unless enabled). KEYS lists keyId:base64PublicKey pairs; CA_PATH optionally
+      # names a PEM under /external that Control trusts for the Marketplace origin. See docs/api.md Â§4 in the olo-marketplace repository.
+      TOOLGATE_CONTROL_MARKETPLACE_ENABLED: ${TOOLGATE_CONTROL_MARKETPLACE_ENABLED:-false}
+      TOOLGATE_CONTROL_MARKETPLACE_ID: ${TOOLGATE_CONTROL_MARKETPLACE_ID:-}
+      TOOLGATE_CONTROL_MARKETPLACE_BASE_URL: ${TOOLGATE_CONTROL_MARKETPLACE_BASE_URL:-}
+      TOOLGATE_CONTROL_MARKETPLACE_KEYS: ${TOOLGATE_CONTROL_MARKETPLACE_KEYS:-}
+      TOOLGATE_CONTROL_MARKETPLACE_CA_PATH: ${TOOLGATE_CONTROL_MARKETPLACE_CA_PATH:-}
     env_file:
       - path: ./env/.env.db
         required: false

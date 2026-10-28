@@ -23,44 +23,158 @@ import java.util.function.Function;
 public class PostgresStore implements Store {
     private final javax.sql.DataSource dataSource;
     private final ContractCodec codec;
+    private final DirectoryCache directoryCache;
+    private final java.util.concurrent.locks.ReentrantLock localWriter = new java.util.concurrent.locks.ReentrantLock(true);
+    private volatile boolean adapterKnown, localDatabase;
+    private boolean ownsDataSource;
+    private TenantAdmission admission=new TenantAdmission(0,8);
+    /** ADR 031: whether ledger transitions write Insights facts. Deployment-wide; NONE writes nothing. */
+    private volatile io.ololabs.toolgate.contracts.v2.InsightsMode insights=io.ololabs.toolgate.contracts.v2.InsightsMode.NONE;
+    public io.ololabs.toolgate.contracts.v2.InsightsMode insightsMode(){return insights;}
+    public void insightsMode(io.ololabs.toolgate.contracts.v2.InsightsMode mode){insights=java.util.Objects.requireNonNull(mode);}
     @Inject
     public PostgresStore(jakarta.enterprise.inject.Instance<AgroalDataSource> dataSource, ContractCodec codec, org.eclipse.microprofile.config.Config config) {
         this(config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
             && !config.getOptionalValue("toolgate.quickstart.storage", String.class).orElse("sqlite").equals("postgresql")
-            ? SqliteState.open(java.nio.file.Path.of(config.getValue("toolgate.quickstart.database", String.class))) : (javax.sql.DataSource) dataSource.get(), codec);
+            ? SqliteState.openPooled(java.nio.file.Path.of(config.getValue("toolgate.quickstart.database", String.class))) : (javax.sql.DataSource) dataSource.get(), codec,
+            DirectoryCacheConfig.create(config, codec));
+        int pool=config.getOptionalValue("quarkus.datasource.jdbc.max-size",Integer.class).orElse(16);
+        int cap=config.getOptionalValue("toolgate.capacity.database-concurrency",Integer.class).orElse(Math.max(1,Math.min(8,pool/2)));
+        if(pool<2||cap<1||cap>=pool)throw new IllegalStateException("Tenant database concurrency must reserve connections for other tenants");
+        admission=new TenantAdmission(0,cap);
+        insights=io.ololabs.toolgate.control.application.Insights.mode(config.getOptionalValue("toolgate.control.insights.mode",String.class).orElse("NONE"));
+        ownsDataSource = config.getOptionalValue("toolgate.quickstart.enabled", Boolean.class).orElse(false)
+            && !config.getOptionalValue("toolgate.quickstart.storage", String.class).orElse("sqlite").equals("postgresql");
     }
-    public PostgresStore(javax.sql.DataSource dataSource, ContractCodec codec) { this.dataSource = dataSource; this.codec = codec; }
-    public java.util.List<TenantId> tenants(){try(var connection=dataSource.getConnection();var s=connection.prepareStatement("SELECT tenant_id FROM control_tenants ORDER BY tenant_id LIMIT 10000");var rows=s.executeQuery()){var ids=new java.util.ArrayList<TenantId>();while(rows.next())ids.add(new TenantId(rows.getString(1)));return java.util.List.copyOf(ids);}catch(SQLException failure){throw Failure.unavailable();}}
+    public PostgresStore(javax.sql.DataSource dataSource, ContractCodec codec) { this(dataSource, codec, new DirectoryCache()); }
+    PostgresStore(javax.sql.DataSource dataSource, ContractCodec codec, DirectoryCache cache) {
+        this.dataSource = dataSource; this.codec = codec; this.directoryCache = cache;
+    }
+    private boolean localDatabase() {
+        if (!adapterKnown) synchronized (localWriter) {
+            if (!adapterKnown) try (var connection = dataSource.getConnection()) {
+                localDatabase = SqliteState.local(connection); adapterKnown = true;
+            } catch (SQLException failure) { throw Failure.unavailable(); }
+        }
+        return localDatabase;
+    }
+    private record WriterLease(java.util.concurrent.locks.ReentrantLock lock) implements AutoCloseable {
+        public void close() { lock.unlock(); }
+    }
+    private WriterLease writerLease(boolean write) {
+        if (!write || !localDatabase()) return null;
+        // Waiting SQLite writers must not borrow connections needed by WAL readers.
+        // Keep admission bounded and retain the database's three-second busy limit.
+        try {
+            if (!localWriter.tryLock(3, java.util.concurrent.TimeUnit.SECONDS)) throw Failure.unavailable();
+            return new WriterLease(localWriter);
+        } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw Failure.unavailable(); }
+    }
+    @jakarta.annotation.PreDestroy
+    void close() { if (ownsDataSource && dataSource instanceof AgroalDataSource pool) pool.close(); }
     public <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work) {
-        try (var connection = dataSource.getConnection()) {
-            connection.setAutoCommit(false);
+        return transaction(tenant, write, false, (connection, session) -> work.apply(session));
+    }
+    /** Separate platform credential boundary, inaccessible through the tenant Store port. */
+    <T> T platformTransaction(TenantId tenant, java.util.function.BiFunction<Connection, Session, T> work) {
+        return transaction(tenant, true, true, work);
+    }
+    @SuppressWarnings("try") // The admission lease releases its slot on every transaction exit.
+    private <T> T transaction(TenantId tenant, boolean write, boolean platform, java.util.function.BiFunction<Connection, Session, T> work) {
+        try (var lease=platform?null:admission.enter(tenant);var writer=writerLease(write);var connection = dataSource.getConnection()) {
             boolean local = SqliteState.local(connection);
+            if (local) {
+                // WAL readers use a stable snapshot without reserving the single writer.
+                connection.unwrap(org.sqlite.SQLiteConnection.class).getConnectionConfig()
+                    .setTransactionMode(write ? org.sqlite.SQLiteConfig.TransactionMode.IMMEDIATE : org.sqlite.SQLiteConfig.TransactionMode.DEFERRED);
+                try (var statement = connection.createStatement()) { statement.execute("PRAGMA query_only = " + (write ? "OFF" : "ON")); }
+            }
+            connection.setAutoCommit(false);
             if (!local) {
                 connection.setTransactionIsolation(write ? Connection.TRANSACTION_READ_COMMITTED : Connection.TRANSACTION_REPEATABLE_READ);
                 connection.setReadOnly(!write);
             }
             try {
+                // Transaction-local context is set before any tenant SQL on this connection.
+                // PostgreSQL clears it on commit/rollback, including pooled connection reuse.
+                if (!local) try (var statement = connection.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+                    statement.setString(1, tenant.value()); statement.execute();
+                }
                 if (!local) try (var statement = connection.createStatement()) {
                     statement.execute("SET LOCAL statement_timeout = '5s'"); statement.execute("SET LOCAL lock_timeout = '3s'");
                 }
                 if (write && !local) try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
                     statement.setString(1, tenant.value()); statement.execute();
                 }
-                var result = work.apply(new JdbcSession(connection, tenant.value())); connection.commit(); return result;
+                if (!platform) {
+                    try (var statement = connection.prepareStatement(local
+                            ? "SELECT status='ACTIVE' FROM control_tenants WHERE tenant_id=?"
+                            : "SELECT public.control_tenant_admit(?, ?)")) {
+                        statement.setString(1, tenant.value()); if (!local) statement.setBoolean(2, write);
+                        try (var rows = statement.executeQuery()) { if (!rows.next() || !rows.getBoolean(1)) throw Failure.tenantUnavailable(); }
+                    }
+                    try (var statement = connection.prepareStatement("SELECT 1 FROM control_tenant_authority WHERE tenant_id=?")) {
+                        statement.setString(1, tenant.value());
+                        try (var rows = statement.executeQuery()) { if (!rows.next()) throw Failure.unavailable(); }
+                    }
+                }
+                var session = new JdbcSession(connection, tenant.value());
+                var result = work.apply(connection, session);
+                // SQLite commit() starts another transaction immediately; closing this
+                // connection needs no second writer reservation after a successful commit.
+                if (local) connection.setAutoCommit(true); else connection.commit();
+                // Never publish uncommitted data, including changes later rolled back by the caller.
+                if (session.directoryDirty) directoryCache.invalidate(tenant.value());
+                else if (session.directoryEntry != null) directoryCache.put(tenant.value(), session.directoryEntry);
+                return result;
             } catch (RuntimeException | SQLException e) {
                 connection.rollback();
                 if (e instanceof RuntimeException failure) throw failure;
                 throw Failure.unavailable();
+            } finally {
+                if (local) {
+                    // SQLite-only state is invisible to the pool's JDBC state tracker.
+                    if (!connection.getAutoCommit()) { connection.rollback(); connection.setAutoCommit(true); }
+                    try (var s = connection.createStatement()) { s.execute("PRAGMA query_only = OFF"); }
+                    connection.unwrap(org.sqlite.SQLiteConnection.class).getConnectionConfig()
+                        .setTransactionMode(org.sqlite.SQLiteConfig.TransactionMode.IMMEDIATE);
+                }
             }
         } catch (SQLException e) { throw Failure.unavailable(); }
     }
+    @FunctionalInterface private interface RowMapper<T> { T map(java.sql.ResultSet row) throws SQLException; }
     private final class JdbcSession implements Session {
         private final Connection connection;
         private final String tenant;
+        private DirectoryCache.Entry directoryEntry;
+        private boolean directoryDirty;
+        private void invalidateDirectory() {
+            directoryDirty = true; directoryEntry = null; directoryCache.invalidate(tenant);
+        }
         JdbcSession(Connection connection, String tenant) { this.connection = connection; this.tenant = tenant; }
-        public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec);}
+        public java.util.List<IdentityKey> identityKeys(){
+            try(var s=statement("SELECT purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation FROM control_tenant_identity_keys WHERE tenant_id=? ORDER BY purpose,key_id LIMIT 4097");var r=s.executeQuery()){
+                var keys=new java.util.ArrayList<IdentityKey>();while(r.next())keys.add(new IdentityKey(r.getString(1),r.getString(2),r.getString(3),r.getString(4),r.getString(5),r.getString(6),r.getLong(7)));return java.util.List.copyOf(keys);
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void initializeIdentityKey(IdentityKey key){
+            try(var s=statement("INSERT INTO control_tenant_identity_keys(tenant_id,purpose,key_id,state,provider_reference,public_material,key_fingerprint,generation) VALUES(?,?,?,?,?,?,?,?)",key.purpose(),key.keyId(),key.state(),key.providerReference(),key.publicMaterial(),key.fingerprint(),key.generation())){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public RuntimeProfile runtimeProfile(){
+            try(var s=statement("SELECT server_id,organization,control_url,gateway_url FROM control_tenant_runtime_profiles WHERE tenant_id=?");var r=s.executeQuery()){
+                return r.next()?new RuntimeProfile(r.getString(1),r.getString(2),r.getString(3),r.getString(4)):null;
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void initializeRuntimeProfile(RuntimeProfile profile){
+            try(var s=statement("INSERT INTO control_tenant_runtime_profiles(tenant_id,server_id,organization,control_url,gateway_url) VALUES(?,?,?,?,?)",profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl())){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec,insights);}
+        public io.ololabs.toolgate.control.application.InsightsStore insights() {return new JdbcInsightsStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.BuilderStore builder() { return new PostgresBuilderStore(connection, tenant); }
+        public io.ololabs.toolgate.control.application.RunEventStore runEvents() { return new JdbcRunEventStore(connection, tenant); }
         private EnrollmentRecord enrollmentRows(java.sql.PreparedStatement statement) throws SQLException {
             try (statement; var rows=statement.executeQuery()) {
                 return rows.next() ? new EnrollmentRecord(rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),
@@ -95,6 +209,10 @@ public class PostgresStore implements Store {
             try (var s=statement("DELETE FROM control_enrollments WHERE tenant_id=? AND expires_at<=?",now)) {s.executeUpdate();}
             catch (SQLException e) { throw Failure.unavailable(); }
         }
+        public void deleteEnrollments(String deviceId) {
+            try(var s=statement("DELETE FROM control_enrollments WHERE tenant_id=? AND document::jsonb->>'deviceId'=?",deviceId)){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
         private EndpointRecord endpointRows(java.sql.PreparedStatement statement) throws SQLException {
             try (statement;var rows=statement.executeQuery()) {return rows.next()?new EndpointRecord(rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5),rows.getString(6)):null;}
         }
@@ -127,9 +245,103 @@ public class PostgresStore implements Store {
             catch(SQLException failure){throw Failure.unavailable();}
         }
         public void saveServerSettings(long revision,String document) {
+            invalidateDirectory();
             try(var s=statement("INSERT INTO control_server_settings (tenant_id,revision,document) VALUES (?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET revision=excluded.revision,document=excluded.document WHERE control_server_settings.revision=excluded.revision-1",revision,document)) {
                 if(s.executeUpdate()!=1)throw Failure.conflict();
             } catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public io.ololabs.toolgate.control.application.PackageStore packages() {
+            return new io.ololabs.toolgate.control.application.PackageStore() {
+                private String text(String sql,Object... parameters){try(var s=statement(sql,parameters);var rows=s.executeQuery()){return rows.next()?rows.getString(1):null;}catch(SQLException failure){throw Failure.unavailable();}}
+                private java.util.List<String> texts(String sql,Object... parameters){try(var s=statement(sql,parameters);var rows=s.executeQuery()){var values=new java.util.ArrayList<String>();while(rows.next())values.add(rows.getString(1));return java.util.List.copyOf(values);}catch(SQLException failure){throw Failure.unavailable();}}
+                private void write(String sql,Object... parameters){try(var s=statement(sql,parameters)){if(s.executeUpdate()!=1)throw Failure.conflict();}catch(SQLException failure){throw Failure.unavailable();}}
+                private java.util.List<Version> query(String suffix,Object... parameters){
+                    try(var s=statement("SELECT package_digest,package_id,version,uploaded_at,document FROM control_server_packages WHERE tenant_id=? "+suffix,parameters);var rows=s.executeQuery()){
+                        var values=new java.util.ArrayList<Version>();while(rows.next())values.add(new Version(rows.getString(1),rows.getString(2),rows.getString(3),rows.getLong(4),rows.getString(5)));return java.util.List.copyOf(values);
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public Version version(String digest){var rows=query("AND package_digest=?",digest);return rows.isEmpty()?null:rows.getFirst();}
+                public java.util.List<Version> versions(int limit){return query("ORDER BY uploaded_at DESC,package_digest LIMIT ?",limit);}
+                public byte[] content(String digest){try(var s=statement("SELECT content FROM control_server_packages WHERE tenant_id=? AND package_digest=?",digest);var rows=s.executeQuery()){return rows.next()?rows.getBytes(1):null;}catch(SQLException failure){throw Failure.unavailable();}}
+                public void saveVersion(Version v,byte[] content){write("INSERT INTO control_server_packages (tenant_id,package_digest,package_id,version,uploaded_at,document,content) VALUES (?,?,?,?,?,?,?)",v.digest(),v.packageId(),v.version(),v.uploadedAt(),v.document(),content);}
+                public String document(String digest){return text("SELECT document FROM control_server_documents WHERE tenant_id=? AND digest=?",digest);}
+                public void saveDocument(String digest,String document){if(document(digest)==null)write("INSERT INTO control_server_documents (tenant_id,digest,document) VALUES (?,?,?)",digest,document);}
+                public String deployment(String packageId){return text("SELECT document FROM control_server_deployments WHERE tenant_id=? AND package_id=?",packageId);}
+                public java.util.List<String> deployments(){return texts("SELECT document FROM control_server_deployments WHERE tenant_id=? ORDER BY package_id LIMIT 256");}
+                public void saveDeployment(String packageId,String document){write("INSERT INTO control_server_deployments (tenant_id,package_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,package_id) DO UPDATE SET document=excluded.document",packageId,document);}
+                public void deleteDeployment(String packageId){write("DELETE FROM control_server_deployments WHERE tenant_id=? AND package_id=?",packageId);}
+                public String toolHost(String deviceId){return text("SELECT document FROM control_tool_hosts WHERE tenant_id=? AND device_id=?",deviceId);}
+                public void saveToolHost(String deviceId,String document){write("INSERT INTO control_tool_hosts (tenant_id,device_id,document) VALUES (?,?,?) ON CONFLICT (tenant_id,device_id) DO UPDATE SET document=excluded.document",deviceId,document);}
+                private Relayed relayedRow(String suffix,Object... parameters){
+                    try(var s=statement("SELECT invocation_id,host_id,state,expires_at,document FROM control_tool_host_dispatches WHERE tenant_id=? "+suffix,parameters);var rows=s.executeQuery()){
+                        return rows.next()?new Relayed(rows.getString(1),rows.getString(2),rows.getString(3),rows.getLong(4),rows.getString(5)):null;
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public Relayed relayed(String invocationId){return relayedRow("AND invocation_id=?",invocationId);}
+                public Relayed nextRelayed(String hostId,long now){return relayedRow("AND host_id=? AND state='QUEUED' AND expires_at>? ORDER BY created_at,invocation_id LIMIT 1",hostId,now);}
+                public Provisioning provisioning(String profileId){
+                    try(var s=statement("SELECT generation,profile_digest,document FROM control_package_provisioning WHERE tenant_id=? AND profile_id=?",profileId);var rows=s.executeQuery()){
+                        return rows.next()?new Provisioning(profileId,rows.getLong(1),rows.getString(2),rows.getString(3)):null;
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public java.util.List<Provisioning> provisionings(){
+                    try(var s=statement("SELECT profile_id,generation,profile_digest,document FROM control_package_provisioning WHERE tenant_id=? ORDER BY profile_id LIMIT 64");var rows=s.executeQuery()){
+                        var all=new java.util.ArrayList<Provisioning>();
+                        while(rows.next())all.add(new Provisioning(rows.getString(1),rows.getLong(2),rows.getString(3),rows.getString(4)));
+                        return all;
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public void saveProvisioning(Provisioning p){
+                    if(p.generation()==1)write("INSERT INTO control_package_provisioning (tenant_id,profile_id,generation,profile_digest,document) VALUES (?,?,?,?,?)",p.profileId(),p.generation(),p.profileDigest(),p.document());
+                    else try(var s=connection.prepareStatement("UPDATE control_package_provisioning SET generation=?,profile_digest=?,document=? WHERE tenant_id=? AND profile_id=? AND generation=?")){
+                        s.setLong(1,p.generation());s.setString(2,p.profileDigest());s.setString(3,p.document());s.setString(4,tenant);s.setString(5,p.profileId());s.setLong(6,p.generation()-1);
+                        if(s.executeUpdate()!=1)throw Failure.conflict();
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public void saveRelayed(Relayed r){
+                    // Finished dispatches are kept for an hour after their deadline, for the Gateway's last poll.
+                    try(var s=statement("DELETE FROM control_tool_host_dispatches WHERE tenant_id=? AND expires_at<?",System.currentTimeMillis()-3600000L)){s.executeUpdate();}catch(SQLException failure){throw Failure.unavailable();}
+                    write("INSERT INTO control_tool_host_dispatches (tenant_id,invocation_id,host_id,state,expires_at,created_at,document) VALUES (?,?,?,?,?,?,?) ON CONFLICT (tenant_id,invocation_id) DO UPDATE SET state=excluded.state,document=excluded.document",
+                        r.invocationId(),r.hostId(),r.state(),r.expiresAt(),System.currentTimeMillis(),r.document());
+                }
+            };
+        }
+        public io.ololabs.toolgate.control.application.McpServerStore mcpServers() {
+            return new io.ololabs.toolgate.control.application.McpServerStore() {
+                private <T> java.util.List<T> rows(String sql,RowMapper<T> mapper,Object... parameters){
+                    try(var s=statement(sql,parameters);var rows=s.executeQuery()){var values=new java.util.ArrayList<T>();while(rows.next())values.add(mapper.map(rows));return java.util.List.copyOf(values);}catch(SQLException failure){throw Failure.unavailable();}
+                }
+                private void write(String sql,Object... parameters){try(var s=statement(sql,parameters)){if(s.executeUpdate()!=1)throw Failure.conflict();}catch(SQLException failure){throw Failure.unavailable();}}
+                private <T> T first(java.util.List<T> rows){return rows.isEmpty()?null:rows.getFirst();}
+                private Server server(java.sql.ResultSet r)throws SQLException{return new Server(r.getString(1),r.getLong(2),r.getString(3));}
+                private Scan scan(java.sql.ResultSet r)throws SQLException{return new Scan(r.getString(1),r.getString(2),r.getString(3),r.getString(4),r.getLong(5),r.getLong(6),r.getString(7));}
+                private static final String SCANS="SELECT scan_id,slug,host_id,state,deadline,created_at,document FROM control_mcp_scans WHERE tenant_id=? ";
+                public Server server(String slug){return first(rows("SELECT slug,revision,document FROM control_mcp_servers WHERE tenant_id=? AND slug=?",this::server,slug));}
+                public java.util.List<Server> servers(int limit){return rows("SELECT slug,revision,document FROM control_mcp_servers WHERE tenant_id=? ORDER BY slug LIMIT ?",this::server,limit);}
+                public long count(){return rows("SELECT count(*) FROM control_mcp_servers WHERE tenant_id=?",r->r.getLong(1)).getFirst();}
+                public void saveServer(Server s){
+                    if(s.revision()==1)write("INSERT INTO control_mcp_servers (tenant_id,slug,revision,document) VALUES (?,?,?,?)",s.slug(),s.revision(),s.document());
+                    else try(var u=connection.prepareStatement("UPDATE control_mcp_servers SET revision=?,document=? WHERE tenant_id=? AND slug=? AND revision=?")){
+                        u.setLong(1,s.revision());u.setString(2,s.document());u.setString(3,tenant);u.setString(4,s.slug());u.setLong(5,s.revision()-1);
+                        if(u.executeUpdate()!=1)throw Failure.conflict();
+                    }catch(SQLException failure){throw Failure.unavailable();}
+                }
+                public void deleteServer(String slug){write("DELETE FROM control_mcp_servers WHERE tenant_id=? AND slug=?",slug);}
+                public Snapshot snapshot(String slug,long revision){return first(rows("SELECT slug,revision,document FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? AND revision=?",r->new Snapshot(r.getString(1),r.getLong(2),r.getString(3)),slug,revision));}
+                public java.util.List<Long> snapshotRevisions(String slug){return rows("SELECT revision FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? ORDER BY revision DESC LIMIT 64",r->r.getLong(1),slug);}
+                public void saveSnapshot(Snapshot s){write("INSERT INTO control_mcp_snapshots (tenant_id,slug,revision,document) VALUES (?,?,?,?)",s.slug(),s.revision(),s.document());}
+                public void deleteSnapshot(String slug,long revision){write("DELETE FROM control_mcp_snapshots WHERE tenant_id=? AND slug=? AND revision=?",slug,revision);}
+                public Approval approval(String slug,long sequence){return first(rows("SELECT slug,sequence,document FROM control_mcp_approvals WHERE tenant_id=? AND slug=? AND sequence=?",r->new Approval(r.getString(1),r.getLong(2),r.getString(3)),slug,sequence));}
+                public java.util.List<Approval> approvals(String slug,int limit){return rows("SELECT slug,sequence,document FROM control_mcp_approvals WHERE tenant_id=? AND slug=? ORDER BY sequence DESC LIMIT ?",r->new Approval(r.getString(1),r.getLong(2),r.getString(3)),slug,limit);}
+                public void saveApproval(Approval a){write("INSERT INTO control_mcp_approvals (tenant_id,slug,sequence,document) VALUES (?,?,?,?)",a.slug(),a.sequence(),a.document());}
+                public Scan scan(String scanId){return first(rows(SCANS+"AND scan_id=?",this::scan,scanId));}
+                public Scan nextScan(String hostId,long now){return first(rows(SCANS+"AND host_id=? AND state='QUEUED' AND deadline>? ORDER BY created_at,scan_id LIMIT 1",this::scan,hostId,now));}
+                public java.util.List<Scan> scans(String slug,java.util.Set<String> states){return rows(SCANS+"AND slug=? ORDER BY created_at DESC,scan_id LIMIT 64",this::scan,slug).stream().filter(s->states.contains(s.state())).toList();}
+                public java.util.List<Scan> open(int limit){return rows(SCANS+"AND state IN ('QUEUED','CLAIMED','ADMITTED') ORDER BY created_at,scan_id LIMIT ?",this::scan,limit);}
+                public void saveScan(Scan s){write("INSERT INTO control_mcp_scans (tenant_id,scan_id,slug,host_id,state,deadline,created_at,document) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (tenant_id,scan_id) DO UPDATE SET state=excluded.state,deadline=excluded.deadline,document=excluded.document",
+                    s.scanId(),s.slug(),s.hostId(),s.state(),s.deadline(),s.createdAt(),s.document());}
+                public void prune(long before){try(var s=statement("DELETE FROM control_mcp_scans WHERE tenant_id=? AND state IN ('FINISHED','FAILED','EXPIRED') AND deadline<?",before)){s.executeUpdate();}catch(SQLException failure){throw Failure.unavailable();}}
+            };
         }
         public McpStore mcp() {
             return new McpStore() {
@@ -175,34 +387,68 @@ public class PostgresStore implements Store {
         }
         public Directory load() {
             try {
-                long revision = 0;
-                try (var statement = statement("SELECT revision FROM control_tenants WHERE tenant_id=?"); var rows = statement.executeQuery()) {
-                    if (rows.next()) revision = rows.getLong(1);
-                }
-                var entries = new HashMap<RecordId, Directory.Entry>();
-                try (var statement = statement("SELECT kind,document::text FROM control_records WHERE tenant_id=?"); var rows = statement.executeQuery()) {
-                    while (rows.next()) {
-                        var entry = codec.entry(Kind.valueOf(rows.getString(1)), rows.getString(2)); entries.put(entry.id(), entry);
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    var version = directoryVersion();
+                    if (directoryEntry != null && directoryCache.fresh(directoryEntry) && directoryEntry.version.equals(version)) return directoryEntry.directory;
+                    var cached = directoryDirty ? null : directoryCache.get(tenant, version);
+                    if (cached != null) { directoryEntry = cached; return cached.directory; }
+                    var entries = new HashMap<RecordId, Directory.Entry>();
+                    try (var statement = statement("SELECT kind,document::text FROM control_records WHERE tenant_id=?"); var rows = statement.executeQuery()) {
+                        while (rows.next()) {
+                            var entry = codec.entry(Kind.valueOf(rows.getString(1)), rows.getString(2)); entries.put(entry.id(), entry);
+                        }
                     }
+                    // READ COMMITTED may see a concurrent commit between the version and record queries.
+                    if (!version.equals(directoryVersion())) continue;
+                    directoryEntry = directoryCache.entry(version, new Directory(version.revision(), entries));
+                    return directoryEntry.directory;
                 }
-                return new Directory(revision, entries);
+                throw Failure.unavailable();
             } catch (SQLException e) { throw Failure.unavailable(); }
+        }
+        private DirectoryCache.Version directoryVersion() throws SQLException {
+            try (var s = statement("SELECT revision,directory_cache_generation FROM control_tenant_authority WHERE tenant_id=?"); var rows = s.executeQuery()) {
+                if (!rows.next()) throw Failure.unavailable();
+                return new DirectoryCache.Version(rows.getLong(1), rows.getLong(2));
+            }
+        }
+        public String adoptionDigest(TenantId requestedTenant, io.ololabs.toolgate.control.application.Codec requestedCodec) {
+            if (!tenant.equals(requestedTenant.value())) throw Failure.validation();
+            var directory = load();
+            return directoryEntry.digest(() -> io.ololabs.toolgate.control.application.EndpointAdoptions.digest(codec, requestedTenant, directory));
         }
         public void observeIdentity(io.ololabs.toolgate.contracts.ControlIdentityBinding next){
             var entry=load().entries().get(Kind.IDENTITY_BINDING.id(next.id()));if(entry==null)throw Failure.conflict();var old=codec.model(entry.document(),io.ololabs.toolgate.contracts.ControlIdentityBinding.class);
             var normalized=new io.ololabs.toolgate.contracts.ControlIdentityBinding(next.id(),next.name(),next.enabled(),old.revision(),next.userId(),next.issuer(),next.subject(),next.sessionEpoch(),next.firstSeenUnixMs(),old.lastAttemptUnixMs(),old.attemptCount(),next.registrationReason(),next.sessionsValidAfterUnixMs());
             if(!old.equals(normalized)||next.revision()!=old.revision()+1||next.lastAttemptUnixMs()<old.lastAttemptUnixMs()||next.attemptCount()<old.attemptCount())throw Failure.conflict();
+            invalidateDirectory();
             try(var s=connection.prepareStatement(SqliteState.sql(connection,"UPDATE control_records SET revision=?,document=?::jsonb WHERE tenant_id=? AND kind='IDENTITY_BINDING' AND record_id=? AND revision=?"))){s.setLong(1,next.revision());s.setString(2,codec.json(next));s.setString(3,tenant);s.setString(4,next.id());s.setLong(5,old.revision());if(s.executeUpdate()!=1)throw Failure.conflict();}catch(SQLException failure){throw Failure.unavailable();}
         }
         public void save(Directory before, Directory after) {
             try {
+                io.ololabs.toolgate.control.application.BootstrapAdministrator.validate(this,before,after,codec);
                 if(after.equals(before))return;
                 if(after.revision()<before.revision() || !after.entries().equals(before.entries())&&after.revision()<=before.revision())throw Failure.conflict();
-                try (var statement = statement("INSERT INTO control_tenants (tenant_id,revision,authorization_epoch,cutover_revision) VALUES (?,?,?,?) ON CONFLICT (tenant_id) DO UPDATE SET revision=excluded.revision,authorization_epoch=GREATEST(control_tenants.authorization_epoch+1,excluded.authorization_epoch)", after.revision(),after.revision(),after.revision())) {
-                    statement.executeUpdate();
+                invalidateDirectory();
+                try (var statement = connection.prepareStatement(SqliteState.sql(connection,"UPDATE control_tenant_authority SET revision=?,authorization_epoch=GREATEST(authorization_epoch+1,?) WHERE tenant_id=? AND revision=?"))) {
+                    statement.setLong(1,after.revision()); statement.setLong(2,after.revision()); statement.setString(3,tenant); statement.setLong(4,before.revision());
+                    if (statement.executeUpdate()!=1) throw Failure.conflict();
                 }
-                if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenants WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}
+                if(after.revision()!=before.revision())try(var statement=statement("WITH current_auth AS (SELECT tenant_id,revision,authorization_epoch FROM control_tenant_authority WHERE tenant_id=?) INSERT INTO control_authorization_outbox(tenant_id,revision,authorization_epoch,occurred_at) SELECT tenant_id,revision,authorization_epoch,? FROM current_auth",System.currentTimeMillis())) {statement.executeUpdate();}
                 for (var id : before.entries().keySet()) if (!after.entries().containsKey(id)) {
+                    if(id.kind()==Kind.DEVICE){
+                        var row=endpoint(id.value());
+                        if(row!=null){
+                            var device=codec.model(row.document(),io.ololabs.toolgate.contracts.EndpointDeviceRecord.class);
+                            // Deletion removes approval, but only explicit revocation retires the key.
+                            if(device.state()!=io.ololabs.toolgate.contracts.EndpointState.REVOKED){
+                                var reset=new io.ololabs.toolgate.contracts.EndpointDeviceRecord(device.deviceId(),device.tenantId(),device.userId(),device.keyFingerprint(),io.ololabs.toolgate.contracts.EndpointState.UNENROLLED,device.revision()+1,0L,device.reportSequence(),null,null,false,(device.approvalRevision()==null?1:device.approvalRevision())+1,null,null);
+                                saveEndpoint(new EndpointRecord(row.id(),row.fingerprint(),codec.json(reset),row.csr(),row.reportDigest(),row.acknowledgment()));
+                            }
+                            // Outstanding enrollment codes cannot restore the deleted approval.
+                            deleteEnrollments(id.value());
+                        }
+                    }
                     try (var statement = statement("DELETE FROM control_records WHERE tenant_id=? AND kind=? AND record_id=?", id.kind().name(), id.value())) { statement.executeUpdate(); }
                 }
                 for (var entry : after.entries().values()) if (!entry.equals(before.entries().get(entry.id()))) {
@@ -217,6 +463,27 @@ public class PostgresStore implements Store {
             try (var statement = statement("SELECT 1 FROM control_record_ids WHERE tenant_id=? AND kind=? AND record_id=?", id.kind().name(), id.value()); var rows = statement.executeQuery()) {
                 return rows.next();
             } catch (SQLException e) { throw Failure.unavailable(); }
+        }
+        public String bootstrapAdminUserId() {
+            try(var s=statement("SELECT user_id FROM control_bootstrap_admins WHERE tenant_id=?");var rows=s.executeQuery()){return rows.next()?rows.getString(1):null;}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public ConsoleDeviceRecord consoleDevice(String sessionId){
+            try(var s=statement("SELECT session_id,user_id,device_id,nonce_digest,code_digest,csr,fingerprint,expires_at,verified_at FROM control_console_devices WHERE tenant_id=? AND session_id=?",sessionId);var rows=s.executeQuery()){
+                return rows.next()?new ConsoleDeviceRecord(rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5),rows.getString(6),rows.getString(7),rows.getLong(8),rows.getLong(9)):null;
+            }catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void saveConsoleDevice(ConsoleDeviceRecord record){
+            try(var cleanup=statement("DELETE FROM control_console_devices WHERE tenant_id=? AND expires_at<?",record.verifiedAt()>0?record.verifiedAt():record.expiresAt()-120000L)){cleanup.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+            try(var s=statement("INSERT INTO control_console_devices(tenant_id,session_id,user_id,device_id,nonce_digest,code_digest,csr,fingerprint,expires_at,verified_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,session_id) DO UPDATE SET user_id=excluded.user_id,device_id=excluded.device_id,nonce_digest=excluded.nonce_digest,code_digest=excluded.code_digest,csr=excluded.csr,fingerprint=excluded.fingerprint,expires_at=excluded.expires_at,verified_at=excluded.verified_at",record.sessionId(),record.userId(),record.deviceId(),record.nonceDigest(),record.codeDigest(),record.csr(),record.fingerprint(),record.expiresAt(),record.verifiedAt())){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+        }
+        public void protectBootstrapAdmin(String userId) {
+            io.ololabs.toolgate.control.domain.Ids.valid(userId);
+            try(var s=statement("INSERT INTO control_bootstrap_admins(tenant_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",userId)){s.executeUpdate();}
+            catch(SQLException failure){throw Failure.unavailable();}
+            if(!userId.equals(bootstrapAdminUserId()))throw Failure.conflict();
         }
         public Reply replay(String actor, String key, String digest) {
             try {
@@ -237,21 +504,24 @@ public class PostgresStore implements Store {
                     actor, key, digest, reply.status(), reply.body(), reply.revision())) { statement.executeUpdate(); }
             } catch (SQLException e) { throw Failure.unavailable(); }
         }
-        public void audit(String actor, String operation, String target, long revision, String requestId, String digest) {
-            try (var statement = statement("INSERT INTO control_audit (tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES (?,?,?,?,?,?,?)",
-                actor, operation, target, revision, requestId, digest)) { statement.executeUpdate(); }
+        public void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence) {
+            try (var statement = statement("INSERT INTO control_audit (tenant_id,actor_id,operation,target,revision,request_id,request_digest,evidence) VALUES (?,?,?,?,?,?,?,?)",
+                actor, operation, target, revision, requestId, digest, evidence)) { statement.executeUpdate(); }
             catch (SQLException e) { throw Failure.unavailable(); }
         }
         public String auditPage(long after, int limit) {
-            try (var statement = statement("SELECT sequence,actor_id,operation,target,revision,request_id,request_digest,occurred_at FROM control_audit WHERE tenant_id=? AND sequence>? ORDER BY sequence LIMIT ?", after, limit + 1);
+            try (var statement = statement("SELECT sequence,actor_id,operation,target,revision,request_id,request_digest,occurred_at,evidence FROM control_audit WHERE tenant_id=? AND sequence>? ORDER BY sequence LIMIT ?", after, limit + 1);
                  var rows = statement.executeQuery()) {
                 var items = new java.util.ArrayList<Object>(); long sequence = after; boolean more = false;
                 while (rows.next()) {
                     if (items.size() == limit) { more = true; break; }
                     sequence = rows.getLong(1);
-                    items.add(Map.of("sequence", sequence, "tenantId", tenant, "actorId", rows.getString(2), "operation", rows.getString(3),
+                    var item = new java.util.LinkedHashMap<String, Object>(Map.of("sequence", sequence, "tenantId", tenant, "actorId", rows.getString(2), "operation", rows.getString(3),
                         "target", rows.getString(4), "revision", rows.getLong(5), "requestId", rows.getString(6), "requestDigest", rows.getString(7),
                         "occurredAt", SqliteState.local(connection) ? rows.getString(8) : rows.getObject(8, java.time.OffsetDateTime.class).toInstant().toString()));
+                    String evidence = rows.getString(9);
+                    if (evidence != null) item.put("evidence", codec.value(evidence));
+                    items.add(item);
                 }
                 return codec.json(more ? Map.of("items", items, "nextCursor", Long.toString(sequence)) : Map.of("items", items));
             } catch (SQLException e) { throw Failure.unavailable(); }

@@ -25,7 +25,7 @@ public final class BundleService {
     public Store.Reply get(DirectoryService.Actor actor, long sequence) {
         if (sequence < 0 || sequence > 9007199254740991L) throw Failure.validation();
         return store.transaction(actor.tenant(), false, tx -> {
-            if(actor.userId()!=null)new ManagementAccess(codec).requireAll(tx.load(),actor.userId(),"read",clock.millis());
+            if(actor.userId()!=null)new ManagementAccess(codec).requireAll(tx.load(),actor.userId(),"access_snapshot.read",clock.millis());
             var record = tx.bundle(sequence == 0 ? tx.bundleSequence() : sequence);
             if (record == null) throw new Failure(ErrorCode.NOT_FOUND, 404, "Bundle not found");
             return new Store.Reply(200, record.document(), record.sequence());
@@ -37,7 +37,7 @@ public final class BundleService {
         var digest = DirectoryService.digest("BUNDLE\n" + codec.json(request));
         return store.transaction(actor.tenant(), true, tx -> {
             var directory = tx.load();
-            new ManagementAccess(codec).requireAll(directory,actor.userId(),"publish",clock.millis());
+            new ManagementAccess(codec).requireAll(directory,actor.userId(),request.rollbackOf()==null?"access_snapshot.publish":"access_snapshot.rollback",clock.millis());
             var replay = tx.replay(actor.id(), key, digest);
             if (replay != null) return replay;
             if(request.graceMs()!=0 || request.gracePolicyIds()!=null&&!request.gracePolicyIds().isEmpty())throw Failure.validation();

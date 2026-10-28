@@ -4,15 +4,15 @@
   "area": "load",
   "title": "Polling and socket scale",
   "sources": [
-    "plan.md §17.2",
-    "plan.md §17.3"
+    "platform-requirements.md §17.2",
+    "platform-requirements.md §17.3"
   ],
   "cases": [
     {
       "id": "load/polling-500ms",
       "title": "10,000 devices at 500 ms",
       "requirements": [
-        "plan.md §17.3"
+        "platform-requirements.md §17.3"
       ],
       "level": "system",
       "targets": [
@@ -28,7 +28,7 @@
       "id": "load/polling-2s",
       "title": "10,000 devices at 2 s",
       "requirements": [
-        "plan.md §17.3"
+        "platform-requirements.md §17.3"
       ],
       "level": "system",
       "targets": [
@@ -44,7 +44,7 @@
       "id": "load/heartbeat-phase-b",
       "title": "Phase B heartbeats at 30 s",
       "requirements": [
-        "plan.md §17.3"
+        "platform-requirements.md §17.3"
       ],
       "level": "system",
       "targets": [
@@ -61,7 +61,7 @@
       "id": "load/control-round-trips",
       "title": "Control handles 2 to 3 round trips per server-tool call",
       "requirements": [
-        "plan.md §12.8"
+        "platform-requirements.md §12.8"
       ],
       "level": "system",
       "targets": [

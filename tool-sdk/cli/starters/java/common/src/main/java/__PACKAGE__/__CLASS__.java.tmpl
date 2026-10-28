@@ -1,0 +1,40 @@
+package {{javaPackage}};
+
+import io.ololabs.toolgate.sdk.annotations.Destination;
+import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Example;
+import io.ololabs.toolgate.sdk.annotations.Global;
+import io.ololabs.toolgate.sdk.annotations.HttpMethod;
+import io.ololabs.toolgate.sdk.annotations.HttpRoute;
+import io.ololabs.toolgate.sdk.annotations.Param;
+import io.ololabs.toolgate.sdk.annotations.ServerTool;
+import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.context.ToolContext;
+
+/**
+ * The {{name}} tools. {@code greet} reads a global; {@code items.get} calls a declared HTTP route. The build generates
+ * {@code {{className}}Vars} with a typed accessor for each declared value, and checks every route call at compile time.
+ */
+@ToolPackage(id = "{{packageId}}", name = "{{title}}", publisher = "{{publisher}}")
+@Destination(id = "items-api", hostSetting = "ItemsApiHost")
+@HttpRoute(id = "items.get", destination = "items-api", method = HttpMethod.GET, path = "/items/{id:[0-9]+}")
+@Global(name = "Greeting", type = ValueType.STRING, defaultValue = "Hello")
+public class {{className}} {
+    public record Greeting(String text) {}
+
+    public record Item(String id, String name) {}
+
+    @ServerTool(name = "greet", title = "Greet", description = "Greets someone by name.", effect = EffectSafety.READ_ONLY)
+    @Example(arguments = "{\"name\":\"Ada\"}", expectedOutput = "{\"text\":\"Hello, Ada\"}")
+    public Greeting greet(@Param(description = "Who to greet") String name, ToolContext context) {
+        return new Greeting({{className}}Vars.global(context).greeting() + ", " + name);
+    }
+
+    @ServerTool(name = "items.get", title = "Get item", description = "Reads one item from the items API.",
+            effect = EffectSafety.READ_ONLY, routes = "items.get")
+    @Example(arguments = "{\"id\":\"1\"}", expectedOutput = "{\"id\":\"1\",\"name\":\"First item\"}", exchanges = "exchanges/item-1.json")
+    public Item getItem(@Param(description = "Item id") String id, ToolContext context) {
+        return context.http().get("items-api", "/items/{id}").pathVar("id", id).send(Item.class);
+    }
+}

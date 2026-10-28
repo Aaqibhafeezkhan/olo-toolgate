@@ -40,8 +40,8 @@ public class ControlResource {
     }
     @Inject io.ololabs.toolgate.control.application.ServerSettingsService settings;
     @GET @Path("settings")
-    public Response settings() {
-        return Response.fromResponse(response(settings.get(actor()), "READ", "settings")).header("Cache-Control", "no-store").build();
+    public Response settings(@QueryParam("section") String section) {
+        return Response.fromResponse(response(settings.get(actor(),section), "READ", "settings")).header("Cache-Control", "no-store").build();
     }
     @PUT @Path("settings") @Consumes("application/json")
     public Response updateSettings(@HeaderParam("Idempotency-Key") String key, @HeaderParam("If-Match") String revision, String document) {
@@ -53,10 +53,23 @@ public class ControlResource {
         if (document == null || document.length() > 16384) throw Failure.validation();
         return Response.fromResponse(response(settings.patch(actor(), document, expected(revision), key, correlation.id()), "UPDATE", "settings")).header("Cache-Control", "no-store").build();
     }
+    @GET @Path("review-policy")
+    public Response reviewPolicy() {
+        return Response.fromResponse(response(settings.reviewPolicy(actors.human()), "READ", "review-policy")).header("Cache-Control", "no-store").build();
+    }
+    @POST @Path("workload-bindings/{id}/credential") @Consumes("application/json")
+    public Response rotateCredential(@PathParam("id") String id, @HeaderParam("Idempotency-Key") String key, String document) {
+        if (document == null || document.length() > 16384) throw Failure.validation();
+        return Response.fromResponse(response(service.rotateCredential(actor(), id, document, key, correlation.id()), "ROTATE", "workload-bindings")).header("Cache-Control", "no-store").build();
+    }
+    @POST @Path("users/{id}/{change:enable|disable}")
+    public Response userEnabled(@PathParam("id") String id, @PathParam("change") String change, @HeaderParam("Idempotency-Key") String key) {
+        return response(service.userEnabled(actor(), id, change.equals("enable"), key, correlation.id()), "UPDATE", "users");
+    }
     @GET @Path("admin-session") @io.quarkus.security.Authenticated
     public String adminSession() {
         var identity=actor();
-        return codec.json(java.util.Map.of("role",identity.superAdmin()?"SUPER_ADMIN":"ADMINISTRATOR"));
+        return codec.json(store.transaction(identity.tenant(),false,tx->{var access=new io.ololabs.toolgate.control.application.ManagementAccess(codec);var directory=tx.load();var profile=tx.runtimeProfile();return new io.ololabs.toolgate.contracts.AdminSession(access.capabilities(directory,identity.userId(),System.currentTimeMillis(),io.ololabs.toolgate.control.application.ConsoleDeviceSessions.current(tx,codec,identity.sessionId(),identity.userId(),System.currentTimeMillis())).stream().sorted().toList(),access.access(directory,identity.userId()).portalRole(),tx.bootstrapAdminUserId(),identity.tenant().value(),profile==null?null:profile.organization());}));
     }
     @GET @Path("bundles/current") @io.quarkus.security.Authenticated
     public Response currentBundle() {
@@ -91,11 +104,11 @@ public class ControlResource {
         var entry = codec.entry(Kind.path(kind), document);
         return response(changes.mutate(actor(),command(Kind.path(kind),entry.id().value(),"CREATE",document,0),key,correlation.id()), "CREATE", kind);
     }
-    @GET @Path("{entity:users|agents|tools|devices}/{id}/groups")
+    @GET @Path("{entity:users|agents|tools|devices}/{id:.+}/groups")
     public Response memberships(@PathParam("entity") String entity,@PathParam("id") String id) { return response(service.memberships(actor(),Kind.path(entity),id),"READ","memberships"); }
-    @GET @Path("{entity:users|agents|tools|devices}/{id}/effective-access")
+    @GET @Path("{entity:users|agents|tools|devices}/{id:.+}/effective-access")
     public Response effectiveAccess(@PathParam("entity")String entity,@PathParam("id")String id){return response(new io.ololabs.toolgate.control.application.EffectiveAccess(store,codec).get(actor(),Kind.path(entity),id),"READ","effective-access");}
-    @PUT @Path("{entity:users|agents|tools|devices}/{id}/groups") @Consumes("application/json") @io.quarkus.security.Authenticated
+    @PUT @Path("{entity:users|agents|tools|devices}/{id:.+}/groups") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response memberships(@PathParam("entity") String entity,@PathParam("id") String id,@HeaderParam("If-Match") String etag,@HeaderParam("Idempotency-Key") String key,String document) {
         return response(changes.mutate(actor(),command(Kind.path(entity),id,"MEMBERSHIPS",document,expected(etag)),key,correlation.id()),"UPDATE","memberships");
     }
@@ -121,7 +134,7 @@ public class ControlResource {
     public Response importConfig(@HeaderParam("Content-Type") String type, @HeaderParam("If-Match") String etag,
                                  @HeaderParam("Idempotency-Key") String key, String document) {
         var identity=actor();boolean yaml=type!=null&&type.split(";",2)[0].trim().equals("application/yaml");var input=codec.input(document,yaml,identity.tenant());if(input.dryRun())return response(service.importConfig(identity,document,yaml,expected(etag),key,correlation.id()),"PREVIEW","config");
-        var json=codec.json(java.util.Map.of("snapshot",codec.value(codec.snapshot(identity.tenant(),input.directory(),false)),"mode",input.replace()?"REPLACE":"MERGE","dryRun",false));return response(changes.mutate(identity,command(Kind.USER,"configuration-import","IMPORT",json,expected(etag)),key,correlation.id()),"PROPOSE","config");
+        var json=codec.document(identity.tenant(),new io.ololabs.toolgate.control.application.Codec.Import(input.directory(),input.replace(),false,input.settings(),input.requiredIdentities(),input.identityResolution(),input.removeUnlistedMemberships()));return response(changes.mutate(identity,command(Kind.USER,"configuration-import","IMPORT",json,expected(etag)),key,correlation.id()),"PROPOSE","config");
     }
     private io.ololabs.toolgate.contracts.EnterpriseConfigurationCommand command(Kind kind,String id,String op,String document,long revision){return new io.ololabs.toolgate.contracts.EnterpriseConfigurationCommand(io.ololabs.toolgate.contracts.EnterpriseConfigurationOperation.valueOf(op),io.ololabs.toolgate.contracts.ControlEntityKind.valueOf(kind.name()),id,document,revision);}
     @GET @Path("configuration-changes") public Response configurationChanges(@QueryParam("after")String after){return response(changes.page(actor(),after),"READ","configuration-change");}

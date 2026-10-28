@@ -8,15 +8,7 @@ settings save behind them.
 
 > **Status: implemented in milestone M1; renamed in RC.** See [ADR 022](../adr/022-super-administrator-review-exception.md) for the current administration exception and
 > [ADR 021](../adr/021-client-checkin-configuration-menu.md). Source:
-> [Tool SDK plan §18](../sdk-plan/plan.md).
-
-## Before M1
-
-- The `configuration` route ("Configuration reviews") sat in the **Audit** group and
-  rendered, above the review queue, the server settings form and the configuration
-  import/export.
-- The settings form saved the whole formatVersion 1 record with
-  `PUT /api/control/v1/settings`.
+> [Platform requirements §18](../contracts/platform-requirements.md).
 
 ## Layout
 
@@ -124,4 +116,4 @@ Later additions to this menu, not part of M1:
 - [Admin UI](admin-ui.md)
 - [Control Plane configuration](configuration.md)
 - [Import and export](import-export.md)
-- [Tool SDK plan](../sdk-plan/plan.md)
+- [Platform requirements](../contracts/platform-requirements.md)

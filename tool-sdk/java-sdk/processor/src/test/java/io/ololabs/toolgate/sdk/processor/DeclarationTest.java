@@ -28,6 +28,34 @@ class DeclarationTest {
         for (String f : fragments) assertTrue(r.errors().contains(f), () -> "missing \"" + f + "\" in:\n" + r.errors());
     }
 
+    /** OLO M3.7: @Authorization becomes the descriptor's permission and locator templates. */
+    @Test
+    void authorizationDeclaresThePermissionAndResourceTemplates() {
+        var r = ok(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.read", resources = "olo://{tenant}/item/{id}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION));
+        String descriptor = r.descriptor("items.read");
+        assertTrue(descriptor.contains("\"authorization\":{\"action\":\"items.read\",\"resources\":[\"olo://{tenant}/item/{id}\"]}"), descriptor);
+        assertFalse(ok(tools("", TOOL.formatted("items.list"), GENERATION)).descriptor("items.list").contains("authorization"));
+        fails(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.*", resources = "olo://{tenant}/item/{id}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION), "without wildcards");
+        fails(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.read", resources = "olo://{tenant}/item/{other}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION), "not a required argument");
+        fails(tools("", """
+                @ServerTool(name = "items.read", title = "T", description = "D")
+                @Authorization(action = "items.read", resources = "olo://acme/item/{id}")
+                public Out run(@Param(description = "Id") String id) { return null; }
+            """, GENERATION), "olo://{tenant}/kind/{argument}");
+    }
+
     @Test
     void generationIsRequiredAndHasNoDefault() {
         fails(tools("", TOOL.formatted("items.list")), "toolgate.descriptorGeneration");
@@ -58,6 +86,22 @@ class DeclarationTest {
         fails(tools("", TOOL.formatted(seg + "." + seg + "." + "c".repeat(41)), GENERATION), "longer than 128");
     }
 
+    @Test
+    void deviceFileAccessIsAClientToolDeclarationThatDerivesItsPermissions() {
+        var r = ok(tools("", """
+                @ClientTool(name = "notes.read", title = "T", description = "D")
+                @DeviceFileAccess
+                public Out read(@Param(description = "Path") String path) { return null; }
+                @ClientTool(name = "notes.save", title = "T", description = "D")
+                @DeviceFileAccess(write = true)
+                public Out save(@Param(description = "Path") String path) { return null; }
+                """, GENERATION));
+        assertTrue(r.descriptor("notes.read").contains("DEVICE_FILES_READ"), r.descriptor("notes.read"));
+        assertFalse(r.descriptor("notes.read").contains("DEVICE_FILES_WRITE"), r.descriptor("notes.read"));
+        assertTrue(r.descriptor("notes.save").contains("DEVICE_FILES_WRITE"), r.descriptor("notes.save"));
+        fails(tools("", TOOL.formatted("items.list").replace("@ServerTool", "@DeviceFileAccess @ServerTool"), GENERATION), "@DeviceFileAccess is only for a @ClientTool");
+    }
+
     private static Compilation.Result compileWithPackageId(String id) {
         return Compilation.compile(Map.of("acme/demo/Tools.java", """
                 package acme.demo;
@@ -74,8 +118,6 @@ class DeclarationTest {
     @Test
     void reservedPrefixesAreRejected() {
         fails(compileWithPackageId("toolgate.demo"), "reserved prefix toolgate.");
-        fails(compileWithPackageId("hotfolder.demo"), "reserved prefix hotfolder.");
-        fails(tools("", TOOL.formatted("builtin.items"), GENERATION), "reserved prefix builtin.");
     }
 
     @Test
@@ -118,17 +160,60 @@ class DeclarationTest {
     @Test
     void nonIdempotentDestructiveToolsRequireABusinessKey() {
         Compilation.Result r = ok(tools("", """
-                @ServerTool(name = "items.delete", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true)
+                @ServerTool(name = "items.delete", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true,
+                        reconciliation = Reconciliation.MANUAL)
                 public Out delete() { return null; }
-                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT)
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.MANUAL)
                 public Out create() { return null; }
                 @ServerTool(name = "items.purge", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT, destructive = true,
-                        requiresBusinessKey = BusinessKey.NOT_REQUIRED)
+                        requiresBusinessKey = BusinessKey.NOT_REQUIRED, reconciliation = Reconciliation.MANUAL)
                 public Out purge() { return null; }
             """, GENERATION));
         assertTrue(r.descriptor("items.delete").contains("\"businessKey\":{\"namespace\":\"AGENT\",\"required\":true}"));
         assertTrue(r.descriptor("items.create").contains("\"businessKey\":{\"namespace\":\"AGENT\",\"required\":false}"));
         assertTrue(r.descriptor("items.purge").contains("\"businessKey\":{\"namespace\":\"AGENT\",\"required\":false}"));
+    }
+
+    /** OLO M5.4: a tool with side effects declares how an unknown outcome is settled, consistently with its other declarations. */
+    @Test
+    void sideEffectingToolsDeclareTheirReconciliationMethod() {
+        fails(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT)
+                public Out create() { return null; }
+            """, GENERATION), "has side effects", "declare reconciliation");
+        fails(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.STATUS_LOOKUP)
+                public Out create() { return null; }
+            """, GENERATION), "needs a @Reconcile tool");
+        fails(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
+                public Out create() { return null; }
+            """, GENERATION), "needs @Idempotency");
+        fails(tools("", """
+                @ServerTool(name = "items.get", title = "T", description = "D", effect = EffectSafety.READ_ONLY,
+                        reconciliation = Reconciliation.MANUAL)
+                public Out get() { return null; }
+            """, GENERATION), "no effect to reconcile");
+        var r = ok(tools("", """
+                @ServerTool(name = "items.create", title = "T", description = "D", effect = EffectSafety.NON_IDEMPOTENT,
+                        reconciliation = Reconciliation.STATUS_LOOKUP)
+                public Out create() { return null; }
+                @ServerTool(name = "items.status", title = "T", description = "D", effect = EffectSafety.READ_ONLY)
+                @Reconcile(tool = "items.create")
+                public Out status() { return null; }
+                @ServerTool(name = "items.put", title = "T", description = "D", effect = EffectSafety.IDEMPOTENT,
+                        reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
+                public Out put() { return null; }
+                @ServerTool(name = "items.touch", title = "T", description = "D")
+                public Out touch() { return null; }
+            """, GENERATION));
+        assertTrue(r.descriptor("items.create").contains("\"reconciliation\":\"STATUS_LOOKUP\""));
+        assertTrue(r.descriptor("items.put").contains("\"reconciliation\":\"DOWNSTREAM_IDEMPOTENCY\""));
+        assertFalse(r.descriptor("items.status").contains("reconciliation"));
+        assertFalse(r.descriptor("items.touch").contains("reconciliation"), "an UNKNOWN effect is settled manually by ToolGate");
     }
 
     @Test
@@ -242,6 +327,12 @@ class DeclarationTest {
     void routesAreChecked() {
         fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{rest:.*}\")",
                 TOOL.formatted("items.list"), GENERATION), "may not use .*");
+        fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{rest:.+}\")",
+                TOOL.formatted("items.list"), GENERATION), "may not use .+");
+        fails(tools("@HttpRoute(id = \"items.one\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{id}\")",
+                TOOL.formatted("items.list"), GENERATION), "path variable id needs a pattern");
+        assertTrue(tools("@HttpRoute(id = \"items.one\", destination = \"api\", method = HttpMethod.GET, path = \"/items/{id:[0-9]+}\")",
+                TOOL.formatted("items.list"), GENERATION).success());
         fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items\", headers = \"Cookie\")",
                 TOOL.formatted("items.list"), GENERATION), "may not allow header Cookie");
         fails(tools("@HttpRoute(id = \"items.all\", destination = \"api\", method = HttpMethod.GET, path = \"/items\", headers = \"X-Forwarded-For\")",

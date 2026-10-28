@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This is the reviewed specification of the emergency kill switch (plan.md §15) behind design gate D2. It covers storage, the authorization-epoch bump, signing, the push protocol, break-glass with 2-of-3 operator keys, recovery and retention.
+This is the reviewed specification of the emergency kill switch (platform-requirements.md §15) behind design gate D2. It covers storage, the authorization-epoch bump, signing, the push protocol, break-glass with 2-of-3 operator keys, recovery and retention.
 
-It is normative. A change after D2 passes needs an amendment to ADR 017. The event shapes are in `packages/contracts/schemas/v2/kill.schema.json`, the proposed endpoints are in `packages/contracts/openapi/proposed/control-v1.proposed.yaml`, and the storage is [V19__kill_switch.sql](migrations-v2/flyway/V19__kill_switch.sql) and [V12.sql](migrations-v2/quickstart/V12.sql).
+It is normative. A change after D2 passes needs an amendment to ADR 017. The event shapes are in `packages/contracts/schemas/v2/kill.schema.json`, the proposed endpoints are in `packages/contracts/openapi/proposed/control-v1.proposed.yaml`, and the storage is [V2__kill_switch.sql](migrations-v2/flyway/V2__kill_switch.sql) and [V2.sql](migrations-v2/quickstart/V2.sql).
 
 ## 1. Model
 
@@ -23,9 +23,8 @@ It is normative. A change after D2 passes needs an amendment to ADR 017. The eve
 | `TOOL` | its `toolId` equals `value` | `ToolId` |
 | `POOL` | it runs, or would run, in that execution pool | pool id |
 | `RUNTIME_IMAGE` | its runtime digest equals `value` | `sha256:` digest |
-| `TENANT` | it is any non-built-in tool | absent |
+| `TENANT` | it is any tool | absent |
 
-Built-in tools are never killed: they are how operators inspect and recover.
 
 ## 2. Storage
 
@@ -47,14 +46,14 @@ A kill (`POST kill-events`), a break-glass kill (`POST break-glass/kills`) and a
 3. Sign it (§4).
 4. Insert the event, plus supersession rows for a recovery.
 5. **Bump the epoch.** Increment the tenant revision through the existing directory save. That raises `control_tenants.authorization_epoch` and writes a `control_authorization_outbox` row, exactly as a grant change does today (`PostgresStore.java`, directory save). The new epoch is stored on the event row.
-6. **Apply to stored work** (plan.md §15.5), for invocations the kill matches (§1.1):
+6. **Apply to stored work** (platform-requirements.md §15.5), for invocations the kill matches (§1.1):
    - `PENDING_APPROVAL`, `QUEUED`, and `INPUT_REQUIRED` tasks → `CANCELLED`;
    - `TERMINATE` only: `RESERVED`, `DISPATCHED` and `EXECUTING` → `CANCEL_REQUESTED`, and their fencing tokens become invalid ([invocation-state-v2.md](invocation-state-v2.md) §5).
 
    The `control_invocation_active_package` and `control_invocation_active_tool` indexes serve this step.
 7. Write audit and the idempotent response.
 
-**Why this is enough for new work.** Every reserve, permit consumption, secret delivery, heartbeat and effect report already checks the tenant's current epoch, and re-evaluates against the kill set when it moved. So a committed kill stops all new work at once, and there is no Gateway kill list that could go stale (plan.md §15.3). Running work is reached by §5.
+**Why this is enough for new work.** Every reserve, permit consumption, secret delivery, heartbeat and effect report already checks the tenant's current epoch, and re-evaluates against the kill set when it moved. So a committed kill stops all new work at once, and there is no Gateway kill list that could go stale (platform-requirements.md §15.3). Running work is reached by §5.
 
 ## 4. Signing
 
@@ -67,14 +66,14 @@ A kill (`POST kill-events`), a break-glass kill (`POST break-glass/kills`) and a
 
 **Tool Hosts.** Control sends `KillPush {tenantId, authorizationEpoch, kills[], recoveries[], signature}` over the host's mTLS control stream, at high priority, whenever the epoch moves because of an event.
 - `kills` holds every effective kill. `recoveries` holds the recoveries not yet archived (§8).
-- The host verifies the push, merges it (§1), acts on it (plan.md §15.5), and replies `KILL_ACK {authorizationEpoch}`. Control upserts `control_kill_acks` with `delivery_path = PUSH`.
+- The host verifies the push, merges it (§1), acts on it (platform-requirements.md §15.5), and replies `KILL_ACK {authorizationEpoch}`. Control upserts `control_kill_acks` with `delivery_path = PUSH`.
 - A host that connects, or sees an epoch it hasn't acknowledged on any Control response, fetches the full state with `GET kill-events` (`KillEventPage`) before admitting work, and acknowledges with `delivery_path = POLL`.
 
-**Endpoint clients.** Release-1 clients have no push parser (plan.md §17.2, Phase A). They are covered by Control's own checks: a client can't consume a permit, redeem a secret or report an effect once the epoch moved past a kill that covers it, so running client work stops at its next contact with Control. Phase B clients receive `KillPush` on the socket or with the next check-in, and acknowledge with `delivery_path = CHECK_IN`.
+**Endpoint clients.** Release-1 clients have no push parser (platform-requirements.md §17.2, Phase A). They are covered by Control's own checks: a client can't consume a permit, redeem a secret or report an effect once the epoch moved past a kill that covers it, so running client work stops at its next contact with Control. Phase B clients receive `KillPush` on the socket or with the next check-in, and acknowledge with `delivery_path = CHECK_IN`.
 
 **Gateways** need no push. They read the effective kills with each catalog revision, to hide killed tools, and every new call is refused by Control in any case. The ack row with `component_kind = GATEWAY` records the revision they serve, for operators.
 
-**Components that can't be reached** can't start new work, because every start needs Control. Work already running there continues until its own deadline, bounded by the 15-minute task ceiling. Pools that need stricter behaviour set `selfTerminateOnControlLoss`: a host that hasn't heard from Control within the window terminates its non-built-in sandboxes (plan.md §15.5).
+**Components that can't be reached** can't start new work, because every start needs Control. Work already running there continues until its own deadline, bounded by the 15-minute task ceiling. Pools that need stricter behaviour set `selfTerminateOnControlLoss`: a host that hasn't heard from Control within the window terminates its non-built-in sandboxes (platform-requirements.md §15.5).
 
 ## 6. Break-glass
 
@@ -92,7 +91,7 @@ Break-glass adds kills without the maker/checker review normal changes need. It 
 ## 7. Recovery
 
 - **Request:** `RecoveryRequest {supersedes[], reason}`, through the existing enterprise review workflow. It needs two distinct reviewers, and the requester can't be one of them. Their ids become `RecoveryEvent.reviewers`.
-- **Quickstart** has one local administrator. There, the second reviewer is the local operator confirming at the host console, recorded as reviewer `local-operator`.
+- **Quickstart** provisions separate local management identities. Kill recovery must use explicitly configured reviewer authority; a fabricated `local-operator` identity is not evidence of a second reviewer.
 - **Checks:** every superseded id is an effective kill of this tenant. A break-glass kill is lifted the same way as any other.
 - **Effect:** the recovery event and one supersession row per kill, committed as in §3. The epoch bump makes every component re-evaluate. Cancelled work stays cancelled; recovery only allows new work.
 
@@ -106,4 +105,4 @@ A component that missed an archived recovery still holds the kill, which fails c
 
 ## 9. Audit
 
-Every event, push, acknowledgement, break-glass attempt (accepted or refused, with the reason) and recovery is audited. Audit also records which path delivered each event to each component and when (plan.md §15.6), from `control_kill_acks` and the push log.
+Every event, push, acknowledgement, break-glass attempt (accepted or refused, with the reason) and recovery is audited. Audit also records which path delivered each event to each component and when (platform-requirements.md §15.6), from `control_kill_acks` and the push log.

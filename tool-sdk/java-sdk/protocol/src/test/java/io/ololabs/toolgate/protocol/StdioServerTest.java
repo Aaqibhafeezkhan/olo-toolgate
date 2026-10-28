@@ -114,7 +114,9 @@ class StdioServerTest {
         assertEquals(-32022, wrong.path("error").path("code").asInt());
         JsonNode extra = core.handle(JSON.readTree("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"echo\","
                 + "\"cursor\":\"x\"," + META + "}}"), connection);
-        assertEquals(-32602, extra.path("error").path("code").asInt());
+        assertTrue(extra.has("result"), "unrecognised tools/call members are ignored");
+        JsonNode noName = core.handle(JSON.readTree("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{" + META + "}}"), connection);
+        assertEquals(-32602, noName.path("error").path("code").asInt());
         JsonNode unknown = core.handle(JSON.readTree("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"resources/list\",\"params\":{" + META + "}}"), connection);
         assertEquals(-32601, unknown.path("error").path("code").asInt());
     }

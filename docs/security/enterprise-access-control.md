@@ -603,7 +603,7 @@ Agents have their own top-level menu, separate from Users and Devices.
 | Left menu | Target child screens |
 |---|---|
 | Audit | Audit log, operation approvals, authorization history |
-| Tools | Tools, Tool Groups, Policies, Tool builder, built-in tools/vault, client tool requests |
+| Tools | Tools, Tool Groups, Policies, Tool builder, local vault, client tool requests |
 | Devices | Clients/Devices, Device Groups, enrollment, packages |
 | Users | Users, Teams, Human/Management Roles, human access review |
 | Agents | Agents, Agent Groups, Actor/Service Roles, group access mappings, delegation, credential lifecycle, agent access review |
@@ -738,6 +738,19 @@ Proposed additions, subject to canonical API design:
 /api/control/v1/users/{id}/activation
 ```
 
+Current implementation status of these proposals (see the
+[API reference](../api/api-reference.md#7-control-directory-collections)):
+
+| Proposal | Served today as |
+|---|---|
+| `tool-groups`, `agent-groups`, `device-groups` (and `/{id}`) | Implemented at these paths |
+| `agents/{id}/groups`, `devices/{id}/groups` | Implemented, plus `users/{id}/groups` and `tools/{id}/groups` |
+| `access-grants`, `agent-groups/{id}/capabilities` | `/api/control/v1/grants` (`purpose` `CAPABILITY` for Agent Group capabilities) |
+| `agent-groups/{id}/delegations` | `/api/control/v1/delegations` and `/api/control/v1/agent-delegations` |
+| `effective-access/evaluate` | `GET /{users,agents,tools,devices}/{id}/effective-access` and `POST /access/simulate` |
+| `users/{id}/activation` | `POST /api/control/v1/users/{id}/enable` and `/disable` |
+| `access-reviews` | Not implemented; configuration review uses `/api/control/v1/configuration-changes` |
+
 List and explain endpoints require inventory/inspection permission and bounded
 pagination. Mutations require management permission, revision guards and exact
 retry keys. An effective-access simulator must use the same decision logic as
@@ -838,7 +851,7 @@ stage is implemented. At minimum, verify:
 ## Related documentation and design references
 
 - [Device registry and tool-call controls](../control-plane/device-registry.md)
-- [Managed Roles](../development/managed-roles.md)
+- [Managed Roles](user-roles.md)
 - [User roles and fixed templates](user-roles.md)
 - [Signed policy bundles](../control-plane/policy-bundles.md)
 - [ASK approvals](../adr/006-ask-approvals.md)

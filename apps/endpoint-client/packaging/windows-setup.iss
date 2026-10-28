@@ -4,6 +4,14 @@
 AppId=OLO.ToolGate.Client
 AppName=OLO ToolGate Client
 AppVersion={#ProductVersion}
+#ifdef NumericVersion
+; Windows version resources take four numbers; the SemVer product version (with any
+; pre-release or build suffix) goes in the text fields.
+VersionInfoVersion={#NumericVersion}
+VersionInfoProductVersion={#NumericVersion}
+VersionInfoTextVersion={#ProductVersion}
+VersionInfoProductTextVersion={#ProductVersion}
+#endif
 AppPublisher=OLO Labs
 LicenseFile={#PayloadDirectory}\LICENSE
 DefaultDirName={autopf}\OLO\ToolGateSetup
@@ -35,6 +43,11 @@ Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File ""{app}\packaging\toolgate-tray.ps1"""; Flags: nowait runasoriginaluser
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File ""{app}\packaging\toolgate-enroll.ps1"""; Flags: nowait runasoriginaluser skipifsilent
 
+[UninstallDelete]
+; These manifests are generated after installation and have no [Files] entry.
+Type: files; Name: "{app}\browser-host.json"
+Type: files; Name: "{app}\browser-host.uninstalling.json"
+
 [Code]
 #include "windows-context.iss"
 var MaintenancePage: TInputOptionWizardPage;
@@ -47,6 +60,17 @@ end;
 function ServerUrl(Param: String): String;
 begin
   Result := ConfiguredServer;
+end;
+function RegisteredUninstaller: String;
+var Command: String;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKLM64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\OLO.ToolGate.Client_is1', 'UninstallString', Command) then
+    if not RegQueryStringValue(HKLM32, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\OLO.ToolGate.Client_is1', 'UninstallString', Command) then Exit;
+  Command := RemoveQuotes(Trim(Command));
+  if (CompareText(ExtractFileDir(Command), ExpandConstant('{app}')) = 0) and
+    (Pos('unins', Lowercase(ExtractFileName(Command))) = 1) and
+    (CompareText(ExtractFileExt(Command), '.exe') = 0) and FileExists(Command) then Result := Command;
 end;
 procedure InitializeWizard;
 begin
@@ -76,7 +100,7 @@ begin
     ((PageID = GatewayPage.ID) and NamedServer);
 end;
 function NextButtonClick(CurPageID: Integer): Boolean;
-var ExitCode: Integer;
+var ExitCode: Integer; Uninstaller: String;
 begin
   Result := True;
   if CurPageID = GatewayPage.ID then begin
@@ -87,7 +111,8 @@ begin
   end;
   if ExistingClient and (CurPageID = MaintenancePage.ID) and (MaintenancePage.SelectedValueIndex = 1) then begin
     Result := False;
-    if Exec(ExpandConstant('{app}\unins000.exe'), '/SILENT /SUPPRESSMSGBOXES /NORESTART', '',
+    Uninstaller := RegisteredUninstaller;
+    if (Uninstaller <> '') and Exec(Uninstaller, '/SILENT /SUPPRESSMSGBOXES /NORESTART', '',
       SW_HIDE, ewWaitUntilTerminated, ExitCode) and (ExitCode = 0) then begin
       MaintenanceComplete := True;
       WizardForm.Close;
@@ -185,12 +210,23 @@ begin
       '-NoProfile -STA -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File "' + ExpandConstant('{app}\packaging\toolgate-tray.ps1') + '"', '', SW_HIDE, ewNoWait, ExitCode);
   end;
 end;
-function InitializeUninstall: Boolean;
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var ExitCode: Integer;
 begin
-  Result := True;
-  if FileExists(ExpandConstant('{commonappdata}\OLO\ToolGate\client.json')) then
+  if CurUninstallStep = usUninstall then begin
+    // This runs after confirmation. Cancellation leaves the service and tray intact.
+    if FileExists(ExpandConstant('{app}\browser-host.json')) and
+      not RenameFile(ExpandConstant('{app}\browser-host.json'), ExpandConstant('{app}\browser-host.uninstalling.json')) then
+      RaiseException('Could not pause the Chrome bridge. Close ToolGate browser connections and retry uninstall.');
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoProfile -ExecutionPolicy RemoteSigned -File "' + ExpandConstant('{app}\packaging\toolgate-upgrade.ps1') + '" -InstalledDirectory "' + ExpandConstant('{app}') + '"', '',
+      SW_HIDE, ewWaitUntilTerminated, ExitCode) or (ExitCode <> 0) then
+      RaiseException('Could not close the ToolGate tray and browser bridge. Retry uninstall.');
     // Uninstall is complete: enrollments and remembered gateways go too; the device key stays.
-    Result := Exec(ExpandConstant('{app}\olo-toolgate-client.exe'), 'uninstall --purge', '',
-      SW_HIDE, ewWaitUntilTerminated, ExitCode) and (ExitCode = 0);
+    if not Exec(ExpandConstant('{app}\olo-toolgate-client.exe'), 'uninstall --purge', '',
+      SW_HIDE, ewWaitUntilTerminated, ExitCode) or (ExitCode <> 0) then
+      RaiseException('Could not remove the ToolGate service or local data. Retry uninstall; check the Windows service logs if it fails again.');
+  end;
+  if CurUninstallStep = usPostUninstall then
+    DeleteFile(ExpandConstant('{app}\browser-host.uninstalling.json'));
 end;

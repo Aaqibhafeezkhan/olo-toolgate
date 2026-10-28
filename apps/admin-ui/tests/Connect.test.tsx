@@ -9,6 +9,14 @@ const release={protocol:1,version:'0.10.0-dev',chromeVersion:'0.10.0.23',extensi
 const setup={version:release.version,artifacts:[{platform:'WINDOWS',target:'x86_64-pc-windows-msvc',filename:'olo-toolgate-client-0.10.0-dev-x86_64-pc-windows-msvc.setup.exe',sha256:'b'.repeat(64),bytes:123}]};
 function chrome(){vi.spyOn(navigator,'userAgent','get').mockReturnValue('Windows Chrome/140.0');vi.stubGlobal('fetch',vi.fn().mockImplementation((url:string)=>Promise.resolve(new Response(JSON.stringify(url.endsWith('/installers')?setup:release)))));}
 function bridge(status:Record<string,unknown>){vi.spyOn(window,'postMessage').mockImplementation((message)=>{queueMicrotask(()=>window.dispatchEvent(new MessageEvent('message',{source:window,origin:location.origin,data:{channel:'toolgate-connect-response',id:message.id,...status}})));});}
+it('tenant mismatch stops polling and never offers repair or publishes an enrollment code',async()=>{
+  chrome();bridge({protocol:1,chromeVersion:release.chromeVersion,version:release.version,phase:'tenant-mismatch',error:'TENANT_MISMATCH',userCode:'ABCDEF0123456789'});
+  const code=vi.fn();render(<Connect onCode={code}/>);fireEvent.click(screen.getByRole('button',{name:'Connect'}));
+  await screen.findByText(/This computer is bound to another organization/);
+  expect(code).not.toHaveBeenCalled();expect(screen.queryByRole('link',{name:'Install Chrome extension and client'})).toBeNull();
+  expect(vi.mocked(window.postMessage).mock.calls.map(([message])=>message.operation)).toEqual(['hello']);
+  expect(screen.getByRole('button',{name:'Connect'}).getAttribute('disabled')).toBeNull();
+});
 it('rejects other browsers without starting a download',async()=>{
   vi.spyOn(navigator,'userAgent','get').mockReturnValue('Windows Edg/140 Chrome/140');const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
   render(<Connect onCode={vi.fn()}/>);fireEvent.click(screen.getByRole('button',{name:'Connect'}));
@@ -24,7 +32,7 @@ it('guides an incompatible extension upgrade and cancels polling',async()=>{
 it('detects a client but requires separately verified enrollment',async()=>{
   chrome();bridge({protocol:1,chromeVersion:release.chromeVersion,version:release.version,phase:'approved',client:{health:{ready:true}},userCode:'ABCDEF0123456789'});
   const code=vi.fn();render(<Connect onCode={code}/>);fireEvent.click(screen.getByRole('button',{name:'Connect'}));
-  await screen.findByText(/Client detected/);expect(code).toHaveBeenCalledWith('ABCDEF0123456789');expect(screen.queryByText(/^Connected:/)).toBeNull();
+  await screen.findByText(/Client detected/);expect(code).not.toHaveBeenCalled();expect(screen.queryByText(/^Connected:/)).toBeNull();
 });
 it('does not claim an offline client has checked in or connected',async()=>{
   chrome();bridge({protocol:1,chromeVersion:release.chromeVersion,version:release.version,phase:'ready',serverUrl:'https://localhost:18450',client:{health:{ready:false,state:'OFFLINE'}}});

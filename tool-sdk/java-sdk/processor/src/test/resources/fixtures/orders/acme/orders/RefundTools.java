@@ -3,6 +3,7 @@
 package acme.orders;
 
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
+import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.ErrorDecl;
 import io.ololabs.toolgate.sdk.annotations.Idempotency;
 import io.ololabs.toolgate.sdk.annotations.KeyNamespace;
@@ -32,7 +33,7 @@ public class RefundTools {
                 @ErrorDecl(code = "PSP_BUSY", description = "The payment provider asked us to retry", retryable = true),
                 @ErrorDecl(code = "ALREADY_REFUNDED", description = "The order was already refunded")
             },
-            toolsets = "payments")
+            toolsets = "payments", reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @Idempotency(header = "Idempotency-Key")
     public CompletionStage<Refund> refund(@Param(description = "Order number", pattern = "^[0-9]{6,12}$") String orderId,
             @Param(description = "Reason shown to the customer") Reason reason,

@@ -65,13 +65,33 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             );
             Ok(())
         }
-        "authorization-profiles" if arguments.len() == 1 => {
+        // The owner's power switch; `status` never waits behind a check-in.
+        "power"
+            if arguments.len() == 2 && ["on", "off", "status"].contains(&arguments[1].as_str()) =>
+        {
+            let request = match arguments[1].as_str() {
+                "on" => ClientIpcOperation::PowerOn,
+                "off" => ClientIpcOperation::PowerOff,
+                _ => ClientIpcOperation::Activity,
+            };
+            let response = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                olo_toolgate_client::ipc::call(
+                    &olo_toolgate_client::install::ipc_endpoint(),
+                    request,
+                ),
+            )
+            .await
+            .map_err(|_| Failure::Unavailable)??;
+            if response.error.is_some() {
+                return Err(Failure::Unavailable);
+            }
             println!(
                 "{}",
-                serde_json::to_string_pretty(
-                    &olo_toolgate_client::authorization_profile::builtin_profiles()?
-                )
-                .map_err(|_| Failure::Validation)?
+                match response.power.ok_or(Failure::Unavailable)? {
+                    olo_toolgate_contracts::DevicePower::On => "on",
+                    olo_toolgate_contracts::DevicePower::Off => "off",
+                }
             );
             Ok(())
         }
@@ -136,7 +156,7 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             let agent =
                 (arguments.len() == 3 && arguments[1] == "--agent").then(|| arguments[2].clone());
             let invocation = if arguments.len() == 3 && agent.is_none() {
-                Some(olo_toolgate_contracts::BuiltinInvocation {
+                Some(olo_toolgate_contracts::LocalToolCall {
                     tool_id: arguments[1].clone(),
                     arguments: serde_json::from_str(&arguments[2])
                         .map_err(|_| Failure::Validation)?,
@@ -187,24 +207,38 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             );
             Ok(())
         }
-        "install" | "reinstall" | "configure" | "reenroll"
-            if (arguments.len() == 3 || arguments.len() == 5)
-                && arguments[1] == "--server"
-                && (arguments.len() == 3 || arguments[3] == "--peer") =>
-        {
-            let peer = arguments.get(4).map(String::as_str);
-            let installation = olo_toolgate_client::browser::installation(&arguments[2]).await?;
+        "install" | "reinstall" | "configure" => {
+            let (peer, expected_tenant) = installation_options(&arguments)?;
+            let installation =
+                olo_toolgate_client::browser::installation_expected(&arguments[2], expected_tenant)
+                    .await?;
             let server = &installation.server_url;
             let ca = installation.ca_certificate_pem.as_deref();
             let console = installation.console_url.as_deref();
             if operation == "configure" {
-                olo_toolgate_client::install::configure_with_ca(server, peer, ca, console)
-            } else if operation == "reenroll" {
-                olo_toolgate_client::install::reenroll_with_ca(server, peer, ca, console)
+                olo_toolgate_client::install::configure_with_ca(
+                    server,
+                    peer,
+                    ca,
+                    console,
+                    Some(&installation.tenant_id),
+                )
             } else if operation == "reinstall" {
-                olo_toolgate_client::install::reinstall_with_ca(server, peer, ca, console)
+                olo_toolgate_client::install::reinstall_with_ca(
+                    server,
+                    peer,
+                    ca,
+                    console,
+                    Some(&installation.tenant_id),
+                )
             } else {
-                olo_toolgate_client::install::install_for_peer_with_ca(server, peer, ca, console)
+                olo_toolgate_client::install::install_for_peer_with_ca(
+                    server,
+                    peer,
+                    ca,
+                    console,
+                    Some(&installation.tenant_id),
+                )
             }
         }
         "uninstall" if arguments.len() == 1 || arguments == ["uninstall", "--purge"] => {
@@ -235,10 +269,10 @@ async fn command(arguments: Vec<String>) -> Result<()> {
             });
             olo_toolgate_client::runtime::run(config, rx).await
         }
-        "health" | "enroll" | "check-in" if arguments.len() == 1 => {
+        "health" | "enroll" | "request-approval" | "check-in" if arguments.len() == 1 => {
             let request = match operation {
                 "health" => ClientIpcOperation::Health,
-                "enroll" => ClientIpcOperation::Enroll,
+                "enroll" | "request-approval" => ClientIpcOperation::Enroll,
                 _ => ClientIpcOperation::CheckIn,
             };
             let response = tokio::time::timeout(
@@ -305,8 +339,67 @@ async fn command(arguments: Vec<String>) -> Result<()> {
 }
 /// CI run number and short commit captured at compile time; "local" otherwise.
 fn build_label() -> String {
+    if let Some(build) = option_env!("TOOLGATE_RELEASE_BUILD").filter(|value| !value.is_empty()) {
+        return build.into();
+    }
     match (option_env!("GITHUB_RUN_NUMBER"), option_env!("GITHUB_SHA")) {
         (Some(run), Some(sha)) => format!("{run} ({})", &sha[..sha.len().min(7)]),
         _ => "local".into(),
+    }
+}
+
+/// Closed setup options; the browser's UUID survives the privilege boundary and fresh HTTPS fetch.
+fn installation_options(arguments: &[String]) -> Result<(Option<&str>, Option<&str>)> {
+    if ![3, 5, 7].contains(&arguments.len()) || arguments[1] != "--server" {
+        return Err(Failure::Validation);
+    }
+    let (mut peer, mut tenant) = (None, None);
+    for pair in arguments[3..].chunks_exact(2) {
+        match pair[0].as_str() {
+            "--peer" if peer.is_none() => peer = Some(pair[1].as_str()),
+            "--tenant-id" if tenant.is_none() => {
+                olo_toolgate_client::contracts::Contracts::shared()?
+                    .encode("TenantUuid", &pair[1])?;
+                tenant = Some(pair[1].as_str());
+            }
+            _ => return Err(Failure::Validation),
+        }
+    }
+    Ok((peer, tenant))
+}
+#[cfg(test)]
+mod setup_tests {
+    use super::*;
+    #[test]
+    fn setup_preserves_the_expected_uuid_and_rejects_duplicate_or_unknown_options() {
+        let tenant = "10000000-0000-4000-8000-000000000001";
+        let parse = |options: &[&str]| {
+            let mut args = vec![
+                "install".to_owned(),
+                "--server".into(),
+                "https://gate.example".into(),
+            ];
+            args.extend(options.iter().map(|value| (*value).to_owned()));
+            installation_options(&args)
+                .map(|(peer, id)| (peer.map(str::to_owned), id.map(str::to_owned)))
+        };
+        assert_eq!(parse(&[]).unwrap(), (None, None));
+        assert_eq!(
+            parse(&["--tenant-id", tenant]).unwrap(),
+            (None, Some(tenant.into()))
+        );
+        assert_eq!(
+            parse(&["--peer", "user", "--tenant-id", tenant]).unwrap(),
+            (Some("user".into()), Some(tenant.into()))
+        );
+        for options in [
+            vec!["--tenant-id", "quickstart"],
+            vec!["--tenant-id", tenant, "--tenant-id", tenant],
+            vec!["--peer", "user", "--peer", "other"],
+            vec!["--unknown", tenant],
+            vec!["--tenant-id"],
+        ] {
+            assert_eq!(parse(&options), Err(Failure::Validation));
+        }
     }
 }

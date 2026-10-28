@@ -1,0 +1,111 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: Coverage and Sonar summary
+on:
+  workflow_call:
+    inputs:
+      required_checks:
+        type: boolean
+        default: false
+        description: Fail releases on coverage or configured Sonar gate failures
+    secrets:
+      SONAR_TOKEN:
+        required: false
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: quality-summary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  reports:
+    runs-on: ubuntu-24.04
+    continue-on-error: ${{ !inputs.required_checks }}
+    env:
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+      SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+      SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r tools/requirements.txt coverage==7.16.2
+      - run: npm ci
+      - name: Java tests and JaCoCo reports
+        id: coverage
+        continue-on-error: ${{ !inputs.required_checks }}
+        run: python tools/ci/java_coverage.py
+      - name: TypeScript UI coverage
+        id: typescript
+        if: ${{ !cancelled() }}
+        continue-on-error: ${{ !inputs.required_checks }}
+        run: npm --workspace @olo-labs/toolgate-admin-ui exec -- vitest run --coverage --config vitest.coverage.config.ts
+      - name: JavaScript and contracts coverage
+        id: javascript
+        if: ${{ !cancelled() }}
+        continue-on-error: ${{ !inputs.required_checks }}
+        run: |
+          npm run contracts:build
+          npx --yes c8@10.1.3 --all --include='apps/browser-extension/**/*.mjs' --include='tools/**/*.mjs' --include='packages/contracts/typescript/dist/**/*.js' --exclude='**/tests/**' --reporter=lcov --reporter=html --reports-dir=build/coverage/javascript node --test apps/browser-extension/tests/*.mjs packages/contracts/typescript/test/*.mjs
+      - name: Python coverage
+        id: python
+        if: ${{ !cancelled() }}
+        continue-on-error: ${{ !inputs.required_checks }}
+        run: python tools/ci/python_coverage.py
+      - name: Rust workspace coverage
+        id: rust
+        if: ${{ !cancelled() }}
+        continue-on-error: ${{ !inputs.required_checks }}
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked --version 0.6.21
+          mkdir -p build/coverage
+          cargo llvm-cov --workspace --all-targets --locked --lcov --output-path build/coverage/rust.lcov
+      - name: Normalize coverage paths for Sonar
+        if: ${{ !cancelled() }}
+        run: python tools/ci/normalize_coverage.py
+      - name: Sonar analysis and configured quality gate
+        id: sonar
+        if: ${{ !cancelled() && env.SONAR_HOST_URL != '' && env.SONAR_PROJECT_KEY != '' }}
+        continue-on-error: ${{ !inputs.required_checks }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo 'Sonar skipped: SONAR_TOKEN unavailable' >> "$GITHUB_STEP_SUMMARY"
+            if [ '${{ inputs.required_checks }}' = 'true' ]; then exit 1; fi
+            exit 0
+          fi
+          ./gradlew --no-daemon --no-configuration-cache sonar -Dsonar.qualitygate.wait=${{ inputs.required_checks }}
+      - name: Build summary
+        if: always()
+        env:
+          COVERAGE_OUTCOME: ${{ steps.coverage.outcome }}
+          JAVASCRIPT_OUTCOME: ${{ steps.javascript.outcome }}
+          TYPESCRIPT_OUTCOME: ${{ steps.typescript.outcome }}
+          PYTHON_OUTCOME: ${{ steps.python.outcome }}
+          RUST_OUTCOME: ${{ steps.rust.outcome }}
+          SONAR_OUTCOME: ${{ steps.sonar.outcome }}
+        run: python tools/ci/quality_summary.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: java-coverage-and-sonar
+          path: |
+            **/build/reports/jacoco/test/
+            **/build/reports/tests/
+            build/sonar/report-task.txt
+            build/coverage/
+            build/reports/jacoco/jacocoRootReport/
+          if-no-files-found: warn

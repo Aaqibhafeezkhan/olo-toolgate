@@ -11,6 +11,7 @@ package io.ololabs.toolgate.contracts;
  * @param error canonical error value
  * @param activity canonical activity value
  * @param connections canonical connections value
+ * @param power canonical power value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ClientIpcResponse(
@@ -19,7 +20,8 @@ public record ClientIpcResponse(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "challenge", required = false) EndpointEnrollmentPrompt challenge,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "error", required = false) ErrorCode error,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "activity", required = false) ClientActivity activity,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "connections", required = false) java.util.List<ClientGatewayConnection> connections
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "connections", required = false) java.util.List<ClientGatewayConnection> connections,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "power", required = false) DevicePower power
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +31,7 @@ public record ClientIpcResponse(
      * @param error canonical error value
      * @param activity canonical activity value
      * @param connections canonical connections value
+     * @param power canonical power value
      */
     public ClientIpcResponse {
         java.util.Objects.requireNonNull(requestId, "requestId");

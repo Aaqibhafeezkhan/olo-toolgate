@@ -12,5 +12,6 @@ public interface DeviceIssuer {
     DeviceIdentity issue(String csr,String device,String tenant,String user,String server,long now,long connectionExpiresAt);
     SignedClientDiscovery discovery(String payload);
     String issuerCertificate();
-    String peerFingerprint(java.security.cert.X509Certificate peer,long now);
+    record Peer(String fingerprint,String deviceId,io.ololabs.toolgate.control.domain.Ids.TenantId tenant,String serverId,String identityUri) {}
+    Peer verifyPeer(java.security.cert.X509Certificate peer,long now);
 }

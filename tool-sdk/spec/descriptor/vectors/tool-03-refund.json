@@ -31,13 +31,14 @@
     { "code": "ALREADY_REFUNDED", "description": "The order was already refunded", "retryable": false },
     { "code": "PSP_BUSY", "description": "The payment provider asked us to retry", "retryable": true }
   ],
+  "reconciliation": "DOWNSTREAM_IDEMPOTENCY",
   "effect": { "safety": "NON_IDEMPOTENT", "destructive": true, "openWorld": true },
   "businessKey": { "required": true, "namespace": "TENANT", "argument": "refundKey", "idempotencyHeader": "Idempotency-Key", "idempotencyScope": "BUSINESS_KEY" },
   "execution": { "async": true, "maxDurationMs": 900000, "stateless": true, "maxConcurrency": 4, "cancelIfAbandoned": false },
   "reconcileTool": "orders.refund-status",
   "routes": [
     {
-      "id": "orders.refund", "destination": "acme-api", "method": "POST", "path": "/orders/{orderId}/refunds",
+      "id": "orders.refund", "destination": "acme-api", "method": "POST", "path": "/orders/{orderId:[0-9]{6,12}}/refunds",
       "query": [], "headers": ["Idempotency-Key"], "requestContentTypes": ["application/json"],
       "maxRequestBytes": 65536, "maxResponseBytes": 65536, "streaming": "NONE", "timeoutMs": 15000, "auth": "acme-oauth"
     }

@@ -6,9 +6,11 @@ import ast
 import http.client
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 from unittest.mock import Mock
@@ -54,10 +56,10 @@ class QuickstartBootstrapTests(unittest.TestCase):
 
     def prepare(self):
         return bootstrap.prepare(self.data, 'quickstart', 'https://quickstart.local',
-                                 lambda name: self.key, self.atomic, [])
+                                 lambda name: self.key, self.atomic)
 
     def test_signed_installation_contains_no_workload_bindings_or_runtime_authority(self):
-        _, path, _ = self.prepare()
+        path, _ = self.prepare()
         packet = json.loads(path.read_text(encoding='utf-8'))
         authorization = packet['authorization']
         snapshot = authorization['snapshot']
@@ -77,6 +79,64 @@ class QuickstartBootstrapTests(unittest.TestCase):
             self.assertEqual(self.prepare(), first)
         self.assertEqual([path.read_bytes() for path in first[1:]], originals)
 
+    def test_tenant_display_name_is_separate_from_uuid_and_persisted(self):
+        tenant = '10000000-0000-4000-8000-000000000001'
+        initialize = self.data/'initialize.json'
+        initialize.write_text(json.dumps(dict(formatVersion=2, tenantName='Demo organization')), encoding='utf-8')
+        with patch.dict(os.environ, {'TOOLGATE_INITIALIZE_FILE': str(initialize)}, clear=True):
+            packet, _ = bootstrap.prepare(self.data, tenant, 'https://quickstart.local', lambda _: self.key, self.atomic)
+            self.assertEqual(tenant, json.loads(packet.read_text())['authorization']['tenantId'])
+            self.assertEqual('Demo organization', json.loads((self.data/'state/installation.json').read_text())['tenantName'])
+            initialize.write_text(json.dumps(dict(formatVersion=2, tenantName='Different name')), encoding='utf-8')
+            bootstrap.prepare(self.data, tenant, 'https://quickstart.local', lambda _: self.key, self.atomic)
+            self.assertEqual('Demo organization', json.loads((self.data/'state/installation.json').read_text())['tenantName'])
+
+    def test_invalid_tenant_names_and_mismatched_ids_are_refused(self):
+        initialize = self.data/'initialize.json'
+        for name in ('', '   ', 12, None, 'x'*257, '\U0001f600'*129):
+            with self.subTest(name=name), patch.dict(os.environ, {'TOOLGATE_INITIALIZE_FILE': str(initialize)}, clear=True):
+                initialize.write_text(json.dumps(dict(formatVersion=2, tenantName=name)), encoding='utf-8')
+                with self.assertRaisesRegex(bootstrap.Refused, 'display name'):
+                    self.prepare()
+        initialize.write_text(json.dumps(dict(formatVersion=2, tenantId='wrong')), encoding='utf-8')
+        with patch.dict(os.environ, {'TOOLGATE_INITIALIZE_FILE': str(initialize)}, clear=True):
+            with self.assertRaisesRegex(bootstrap.Refused, 'installation UUID'):
+                self.prepare()
+
+    def test_tenant_name_environment_override_and_default(self):
+        for environment, expected in (({}, 'Quickstart'), ({'TOOLGATE_TENANT_NAME': 'My organization'}, 'My organization')):
+            with self.subTest(environment=environment), patch.dict(os.environ, environment, clear=True):
+                snapshot = {name: [] for name in bootstrap.COLLECTIONS}
+                installed = bootstrap.initialize(snapshot, 'uuid', 'issuer', 0)
+                self.assertEqual(expected, installed['tenantName'])
+
+    def test_first_admin_has_default_email_and_super_admin_role(self):
+        with patch.dict(os.environ, {}, clear=True):
+            path, _ = self.prepare()
+        snapshot = json.loads(path.read_text(encoding='utf-8'))['authorization']['snapshot']
+        self.assertEqual('admin@admin.com', snapshot['users'][0]['email'])
+        admin = snapshot['users'][0]['id']
+        roles = {role['id']: role for role in snapshot['roles']}
+        self.assertTrue(any(admin in team['userIds'] and any(roles[r]['portalRole'] == 'SUPER_ADMIN' for r in team['roleIds']) for team in snapshot['teams']))
+        self.assertTrue(all('email' not in user for user in snapshot['users'][1:]))
+
+    def test_email_override_is_applied_only_on_first_creation(self):
+        with patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': 'owner@example.com'}):
+            first = self.prepare()
+        original = first[0].read_bytes()
+        self.assertEqual('owner@example.com', json.loads(original)['authorization']['snapshot']['users'][0]['email'])
+        (self.data/'state/control.sqlite').touch()
+        with patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': 'invalid-on-restart'}):
+            self.assertEqual(first, self.prepare())
+        self.assertEqual(original, first[0].read_bytes())
+
+    def test_invalid_email_is_rejected_before_signing_the_installation(self):
+        for value in ('', 'admin', 'admin@localhost', 'admin @example.com', 'a'*250+'@example.com'):
+            with self.subTest(value=value), patch.dict(os.environ, {'TOOLGATE_ADMIN_EMAIL': value}):
+                with self.assertRaisesRegex(ValueError, 'TOOLGATE_ADMIN_EMAIL'):
+                    self.prepare()
+        self.assertFalse((self.data/'installation-review.json').exists())
+
     def test_existing_database_without_installation_review_is_not_reseeded(self):
         (self.data/'state/control.sqlite').touch()
         with self.assertRaisesRegex(ValueError, 'externally reviewed recovery'):
@@ -85,6 +145,28 @@ class QuickstartBootstrapTests(unittest.TestCase):
 
 
 class QuickstartRestartTests(unittest.TestCase):
+    def test_external_gateway_refreshes_its_allowed_authority_after_port_reassignment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data=Path(temporary);(data/'run').mkdir()
+            original=dict(tenantHosts=['127.0.0.1:8081'],control={'tenantId':'fixture-tenant'},
+                          toolHosts=[{'hostId':'tool-host-local','url':'http://127.0.0.1:8095'}])
+            (data/'run/gateway.json').write_text(json.dumps(original),encoding='utf-8')
+            supervisor=Mock(DATA=data,atomic=lambda path,content:path.write_text(content,encoding='utf-8'))
+            def execute(*args):
+                with patch.dict(sys.modules,{'supervisor':supervisor}),patch.object(sys,'path',sys.path.copy()):
+                    exec(args[-1],{})
+            for port in ('54500','54600'):
+                quickstart_check.configure_external_gateway(execute,port)
+                configured=json.loads((data/'run/external-gateway.json').read_text())
+                self.assertEqual(configured['tenantHosts'],['127.0.0.1:8084','127.0.0.1:'+port])
+                self.assertEqual(configured['control'],original['control'])
+                self.assertEqual(configured['toolHosts'],original['toolHosts'])
+                self.assertEqual(configured['listen'],'0.0.0.0:8084')
+                self.assertEqual(configured['managementListen'],'0.0.0.0:9094')
+                self.assertTrue(configured['trustedTlsProxy'])
+            self.assertNotIn('127.0.0.1:54500',configured['tenantHosts'])
+            self.assertEqual(json.loads((data/'run/gateway.json').read_text()),original)
+
     def test_restart_waits_on_the_newly_assigned_host_port(self):
         ports = {'8080/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '54600'}],
                  '8443/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '54601'}]}

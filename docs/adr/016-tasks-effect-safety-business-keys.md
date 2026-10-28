@@ -5,7 +5,7 @@
 
 ## Context
 
-v2 adds long-running tools, MCP Tasks, at-most-once execution for non-idempotent tools, and business idempotency keys (plan.md §11.3, §11.7, §12). All of it needs durable state, and it must keep Control's guarantees: one writer, a per-tenant lock, Java invariant checks, and no database access for the Gateway or Tool Host (ADR [003](003-control-plane-transactions.md), ADR [006](006-ask-approvals.md)).
+v2 adds long-running tools, MCP Tasks, at-most-once execution for non-idempotent tools, and business idempotency keys (platform-requirements.md §11.3, §11.7, §12). All of it needs durable state, and it must keep Control's guarantees: one writer, a per-tenant lock, Java invariant checks, and no database access for the Gateway or Tool Host (ADR [003](003-control-plane-transactions.md), ADR [006](006-ask-approvals.md)).
 
 Control already stores every governed invocation in `control_enterprise_invocations`, with states `PENDING_APPROVAL` to `OUTCOME_UNKNOWN`, single-use nonces and reconciliation. The question is how v2 state fits into that.
 
@@ -13,15 +13,15 @@ Two open inconsistencies in the plan are also settled here: the synchronous dead
 
 ## Decision
 
-1. **Control's invocation row is the task store.** v2 adds nullable columns to `control_enterprise_invocations`, plus two tables: `control_business_keys` and `control_invocation_results`. There is no separate task database and no Gateway or Tool Host database role. The exact contents are the migration specifications in `docs/control-plane/migrations-v2/` (Flyway V18, Quickstart V11). The normative behaviour is [invocation-state-v2.md](../control-plane/invocation-state-v2.md).
+1. **Control's invocation row is the task store.** The initial schema includes task columns on `control_enterprise_invocations`, plus two tables: `control_business_keys` and `control_invocation_results`. There is no separate task database and no Gateway or Tool Host database role. The exact contents are the V1 initial schemas in `apps/control-plane/src/main/resources/db/` (PostgreSQL and SQLite). The normative behaviour is [invocation-state-v2.md](../control-plane/invocation-state-v2.md).
 2. **The v1 state stays authoritative.** `task_state` is a projection of the existing `state` plus the sub-states `INPUT_REQUIRED`, `CANCEL_REQUESTED` and `REJECTED`. A constraint enforces the allowed pairs, so the two can't disagree, and no v1 enum value changes.
-3. **Every governed invocation has a row**, as today. Plan.md §12.1 decides only whether that row gets task columns, a business-key row and a result row. "No task record" means none of those three. This settles §12.1 against §11.3, which requires a nonce, and therefore a row, for every non-built-in tool.
+3. **Every governed invocation has a row**, as today. platform-requirements.md §12.1 decides only whether that row gets task columns, a business-key row and a result row. "No task record" means none of those three. This settles §12.1 against §11.3, which requires a nonce, and therefore a row, for every non-built-in tool.
 4. **Effect safety resolves once.**
    - `requires_execution_ledger = effect_safety IN (NON_IDEMPOTENT, UNKNOWN)` is stored on the row and carried in the permit. A constraint keeps the two in step.
    - The ledger is the existing `RESERVED → EXECUTING` nonce consumption, and the consumed nonce is the fencing token.
    - Ledger invocations are never reclaimed, and a lost lease ends `OUTCOME_UNKNOWN`. Non-ledger invocations with a task may be re-queued, up to 3 attempts.
 5. **Business keys live in their own table**, keyed `(tenant, tool, namespace, namespace identity, key hash)`.
-   - **Why a table:** a tombstone outlives the invocation's result. This replaces plan.md §12.8's unique index on the invocation table.
+   - **Why a table:** a tombstone outlives the invocation's result. This replaces platform-requirements.md §12.8's unique index on the invocation table.
    - **One transaction:** the reservation is inserted in the same tenant transaction as the invocation.
    - **Outcomes:** `NEW`, `EXISTING`, `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_KEY_IN_USE` (which reveals nothing) and `EXPIRED_KEY`.
    - **Rebinding:** a key may be bound to a new invocation only when Control has proof that the previous one never executed: it expired before consumption, or the host reported `notStarted`. A denied invocation is not rebound.
@@ -33,15 +33,15 @@ Two open inconsistencies in the plan are also settled here: the synchronous dead
    - `PermitReservationRequest`: the v2 body of `POST access/invocations/reserve`;
    - `TaskView`, `TaskInputSubmission`, `GET access/tasks/{taskId}` and `POST access/tasks/{taskId}/input`: the Gateway needs these to serve `tasks/get` and `tasks/update`;
    - `LeaseRenewal`, and `progress` and `inputRequest` on `LeaseHeartbeat`: the heartbeat response and input relay;
-   - `notStarted` on `InvocationResultReport`: plan.md §12.7 row 6's `ABANDONED_BEFORE_START`.
+   - `notStarted` on `InvocationResultReport`: platform-requirements.md §12.7 row 6's `ABANDONED_BEFORE_START`.
 
    All of them are additive optional members or new definitions. No existing definition loses or tightens a field.
-9. **The synchronous deadline** is `min(platform ceiling 60 s, the Gateway's configured request timeout)`. Release 1's Gateway keeps its 10–30 s request timeout (default 20 s, `apps/gateway/src/config.rs`). So release 1's effective synchronous deadline is at most 30 s, which is the value ADR 021's check-in validation and `tool-sdk/spec/authoring/execution.md` use. The 60 s ceiling applies once the Gateway transport supports longer requests, a later milestone with its own ADR. The two numbers are a ceiling and the current effective maximum, not a contradiction. Plan.md §13.5 and §17.2 now say so.
+9. **The synchronous deadline** is `min(platform ceiling 60 s, the Gateway's configured request timeout)`. Release 1's Gateway keeps its 10–30 s request timeout (default 20 s, `apps/gateway/src/config.rs`). So release 1's effective synchronous deadline is at most 30 s, which is the value ADR 021's check-in validation and `tool-sdk/spec/authoring/execution.md` use. The 60 s ceiling applies once the Gateway transport supports longer requests, a later milestone with its own ADR. The two numbers are a ceiling and the current effective maximum, not a contradiction. platform-requirements.md §13.5 and §17.2 now say so.
 10. **Quickstart** gets the same state on SQLite, through a runner whose version cap is raised with each migration. Cross-column checks are triggers there, because SQLite can't add table constraints.
 
 ## Alternatives Considered
 
-- **A separate task store (database or service).** Rejected (plan.md §12.8): it splits approval and task transitions across stores and loses the single tenant transaction.
+- **A separate task store (database or service).** Rejected (platform-requirements.md §12.8): it splits approval and task transitions across stores and loses the single tenant transaction.
 - **A new v2 state enum replacing `state`.** Rejected: it would change a v1 contract and every reader. A constrained projection gives the v2 states without that.
 - **A unique index for business keys on the invocation table.** Rejected: tombstones must outlive invocation results, and dedupe windows replace rows.
 - **Storing only large results out of line.** Rejected: one read path for all task results is simpler, and size is still bounded.
@@ -57,11 +57,11 @@ Two open inconsistencies in the plan are also settled here: the synchronous dead
 
 ## Operational Impact
 
-Two migrations per tree (V18 and V19; V11 and V12) ship with their milestones, and the Quickstart runner cap moves with them. New jobs: lease expiry, input-deadline expiry, retention purge. Control's database grows by result payloads up to their retention. Operators size it like the relay queue, with a 4 MiB per-result bound.
+Invocation storage ships in the version 1 schema for each database; the future kill-switch extension starts at version 2. New jobs: lease expiry, input-deadline expiry, retention purge. Control's database grows by result payloads up to their retention. Operators size it like the relay queue, with a 4 MiB per-result bound.
 
 ## Compatibility Impact
 
-Additive. v1 rows, endpoints and readers are unchanged. An older image refuses a newer Quickstart database through the runner cap, and Flyway validation does the same for PostgreSQL. The D1 amendments add optional members and new definitions only. One behaviour change: a denied approval now ends the invocation (`CANCELLED`, task `REJECTED`) at once, instead of waiting for it to expire.
+The first-release schema includes the current invocation model directly. Pre-release database histories are unsupported. The D1 amendments add optional members and new definitions only. One behaviour change: a denied approval now ends the invocation (`CANCELLED`, task `REJECTED`) at once, instead of waiting for it to expire.
 
 ## Consequences
 

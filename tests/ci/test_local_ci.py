@@ -4,6 +4,7 @@
 import copy
 import json
 import io
+import os
 from pathlib import Path
 import tempfile
 import subprocess
@@ -21,6 +22,13 @@ class LocalCiTests(unittest.TestCase):
         rows = local.inventory(self.workflows)
         expected = {f'{name}.{job}' for name, document in self.workflows.items() for job in document['jobs']}
         self.assertEqual({row['id'] for row in rows}, expected)
+
+    def test_python_matrix_remains_explicitly_outside_local_replay(self):
+        rows = local.inventory(self.workflows)
+        matrix = next(row for row in rows if row['id'] == 'foundation.python-sdk')
+        self.assertEqual(matrix['kind'], 'python-matrix')
+        self.assertIn('3.10', matrix['reason'])
+        self.assertNotIn(matrix['id'], local.replayable_jobs(rows))
 
     def test_replayable_selection_follows_inventory_without_a_second_job_list(self):
         rows = local.inventory(self.workflows)
@@ -49,19 +57,64 @@ class LocalCiTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 2)
 
     def test_yaml_changes_flow_into_replay_without_mutating_source(self):
-        source = self.workflows['foundation']['jobs']['check']
+        source = self.workflows['foundation']['jobs']['scans']
+        source['needs'] = 'preflight-fixture'
         source['steps'][1]['with']['java-version'] = '25'
         source['steps'].append({'name': 'New gate', 'run': 'python tools/new_gate.py'})
-        body = local.replay_document('foundation.check', self.workflows)['jobs']['replay']
-        self.assertEqual(body['steps'][1:], source['steps'])
+        body = local.replay_document('foundation.scans', self.workflows)['jobs']['replay']
+        expected=copy.deepcopy(source['steps'])
+        del expected[0]['with']['ref']
+        expected.insert(1, copy.deepcopy(local.WORKSPACE_SETUP))
+        self.assertEqual(body['steps'][1:], expected)
+        self.assertEqual(source['steps'][0]['with']['ref'],'${{ inputs.source_sha || github.sha }}')
         self.assertNotIn('needs', body)
         self.assertIn('needs', source)
         body['steps'].clear()
         self.assertTrue(source['steps'])
 
+    def test_jobs_consuming_same_run_artifacts_are_staged_not_replayed(self):
+        rows = {row['id']: row for row in local.inventory(self.workflows)}
+        for key in ('foundation.browser', 'foundation.java', 'foundation.core-mcp', 'foundation.check'):
+            with self.subTest(job=key):
+                self.assertEqual(rows[key]['kind'], 'staged')
+                self.assertIn('same run', rows[key]['reason'])
+                self.assertNotIn(key, local.replayable_jobs(list(rows.values())))
+        for key in ('foundation.python', 'foundation.ui', 'foundation.rust', 'foundation.examples', 'foundation.scans'):
+            with self.subTest(job=key):
+                self.assertEqual(rows[key]['kind'], 'replay')
+
     def test_unknown_job_requires_coverage_policy(self):
         self.workflows['foundation']['jobs']['new-job'] = {'runs-on': 'ubuntu-24.04', 'steps': []}
         with self.assertRaisesRegex(ValueError, 'no local coverage policy'):
+            local.inventory(self.workflows)
+
+    @unittest.skipIf(os.name == 'nt', 'Linux checkout modes need a POSIX filesystem')
+    def test_checkout_bootstrap_restores_line_endings_and_executable_modes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(['git', 'init', '--quiet', '--template='], cwd=root, check=True)
+            (root / '.gitattributes').write_text('* text eol=lf\n')
+            wrapper = root / 'gradlew'
+            canonical = b'#!/bin/sh\nexit 0\n'
+            wrapper.write_bytes(canonical)
+            subprocess.run(['git', 'add', '.'], cwd=root, check=True)
+            subprocess.run(['git', 'update-index', '--chmod=+x', 'gradlew'], cwd=root, check=True)
+            wrapper.write_bytes(canonical.replace(b'\n', b'\r\n'))
+            wrapper.chmod(0o644)
+            subprocess.run(['sh', '-eu', '-c', local.WORKSPACE_SETUP['run']], cwd=root, check=True)
+            self.assertEqual(wrapper.read_bytes(), canonical)
+            self.assertTrue(wrapper.stat().st_mode & 0o111)
+            subprocess.run([str(wrapper)], cwd=root, check=True)
+
+    def test_preflight_replay_includes_delegated_browser_gate_and_rejects_other_conditions(self):
+        source = self.workflows['preflight']['jobs']['metadata']
+        body = local.replay_document('preflight.metadata', self.workflows)['jobs']['replay']
+        browser = [s for s in body['steps'] if 'browser-downloads.mjs' in s.get('run','')]
+        self.assertEqual(len(browser), 1)
+        self.assertNotIn('if', browser[0])
+        self.assertTrue(any('if' in s for s in source['steps']))
+        source['steps'][0]['if'] = 'github.event_name == "push"'
+        with self.assertRaisesRegex(ValueError, 'conditional steps'):
             local.inventory(self.workflows)
 
     def test_unknown_dependency_is_rejected(self):
@@ -69,13 +122,24 @@ class LocalCiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unknown dependency'):
             local.inventory(self.workflows)
 
+    def test_scan_report_capture_preserves_always_without_allowing_conditional_gates(self):
+        body=local.replay_document('foundation.scans',self.workflows)['jobs']['replay']
+        capture=next(s for s in body['steps'] if s.get('with',{}).get('name')=='source-scan-findings')
+        self.assertEqual(capture['if'],'always()')
+        for step in ({'run':'python tools/check.py --scans','if':'always()'},
+                     {**capture,'if':'failure()'}):
+            workflows=copy.deepcopy(self.workflows)
+            workflows['foundation']['jobs']['scans']['steps'].append(step)
+            with self.subTest(step=step),self.assertRaisesRegex(ValueError,'conditional steps'):
+                local.inventory(workflows)
+
     def test_dependency_cycle_is_rejected(self):
-        self.workflows['foundation']['jobs']['admission']['needs'] = 'check'
+        self.workflows['ci']['jobs']['admission']['needs'] = 'foundation'
         with self.assertRaisesRegex(ValueError, 'cycle'):
             local.inventory(self.workflows)
 
     def test_missing_reusable_workflow_is_rejected(self):
-        self.workflows['foundation']['jobs']['preflight']['uses'] = './.github/workflows/missing.yml'
+        self.workflows['ci']['jobs']['preflight']['uses'] = './.github/workflows/missing.yml'
         with self.assertRaisesRegex(ValueError, 'unsupported reusable workflow'):
             local.inventory(self.workflows)
 
@@ -92,10 +156,11 @@ class LocalCiTests(unittest.TestCase):
     def test_real_triggers_including_release_and_development_are_loaded(self):
         for name in ('foundation', 'client', 'control', 'gateway', 'quickstart'):
             with self.subTest(workflow=name):
-                self.assertEqual(self.workflows[name]['on']['push'], {'branches': ['main']})
-                self.assertEqual(self.workflows[name]['on']['pull_request']['branches'], ['main'])
-        self.assertEqual(self.workflows['release-foundation']['on']['push']['tags'], ['v*'])
-        self.assertEqual(self.workflows['development-release']['on']['workflow_run']['workflows'], ['control'])
+                self.assertEqual(set(self.workflows[name]['on']), {'workflow_call'})
+                self.assertNotIn('pull_request', self.workflows[name]['on'])
+        self.assertNotIn('release-foundation', self.workflows)
+        self.assertEqual(self.workflows['ci']['on']['push'], {'branches': ['**']})
+        self.assertEqual(set(self.workflows['development-release']['on']), {'workflow_call'})
         self.assertEqual(set(self.workflows['manual-development-release']['on']), {'workflow_dispatch'})
 
     def test_loader_accepts_yaml_extension_and_all_on_forms(self):
@@ -143,10 +208,10 @@ class LocalCiTests(unittest.TestCase):
         for field, value in [('if', 'false'), ('services', {}), ('environment', 'release'),
                              ('runs-on', 'windows-2025'), ('env', {'VALUE': '${{ needs.preflight.outputs.value }}'})]:
             workflows = copy.deepcopy(self.workflows)
-            workflows['foundation']['jobs']['check'][field] = value
+            workflows['foundation']['jobs']['scans'][field] = value
             with self.subTest(field=field), self.assertRaises(ValueError):
                 local.inventory(workflows)
-        self.workflows['foundation']['jobs']['check']['steps'][0]['if'] = 'false'
+        self.workflows['foundation']['jobs']['scans']['steps'][0]['if'] = 'false'
         with self.assertRaisesRegex(ValueError, 'conditional steps'):
             local.inventory(self.workflows)
 
@@ -155,7 +220,7 @@ class LocalCiTests(unittest.TestCase):
                      {'run': 'npm publish'}, {'run': 'git push origin main'},
                      {'run': 'echo test', 'env': {'TOKEN': '${{ secrets.GH_TOKEN }}'}}]:
             workflows = copy.deepcopy(self.workflows)
-            workflows['foundation']['jobs']['check']['steps'].append(step)
+            workflows['foundation']['jobs']['scans']['steps'].append(step)
             with self.subTest(step=step), self.assertRaises(ValueError):
                 local.inventory(workflows)
 
@@ -167,6 +232,7 @@ class LocalCiTests(unittest.TestCase):
             self.assertNotIn('--bind', command)
             self.assertIn('--rm', command)
             self.assertIn('--volume /var/lib/docker', command[command.index('--container-options') + 1])
+            self.assertIn('--cgroupns=private', command[command.index('--container-options') + 1])
             self.assertEqual(command[command.index('--container-daemon-socket') + 1], '-')
             self.assertEqual(command[command.index('--network') + 1], 'toolgate-local-ci')
             for option in ('--secret-file', '--var-file', '--input-file', '--env-file'):
@@ -202,7 +268,7 @@ class LocalCiTests(unittest.TestCase):
             description = 'composition.md \u00a72; \u03bb'
             (schemas / 'fixture.json').write_text(json.dumps({'$defs': {
                 'Fixture': {'type': 'object', 'description': description}}}, ensure_ascii=False), encoding='utf-8')
-            with patch.object(generate, 'CONTRACTS', contracts), patch('pathlib.io.open', windows_open):
+            with patch.object(generate, 'CONTRACTS', contracts), patch('io.open', windows_open):
                 self.assertEqual(generate.definitions('v2')['Fixture']['description'], description)
 
     def run_mocked(self, selected=None, failure=False, fingerprints=None):
@@ -240,7 +306,7 @@ class LocalCiTests(unittest.TestCase):
         self.assertTrue(any(row['status'] == 'not-selected' for row in report['jobs']))
 
     def test_selecting_publication_never_executes_it(self):
-        code, report, calls = self.run_mocked(['development-release.publish'])
+        code, report, calls = self.run_mocked(['release-images.publish'])
         self.assertEqual(code, 2)
         self.assertEqual(calls, [])
         self.assertFalse(report['passed'])

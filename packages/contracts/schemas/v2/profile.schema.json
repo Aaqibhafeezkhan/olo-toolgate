@@ -1,0 +1,347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/profile.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Deployment profiles",
+  "description": "Configuration-driven package provisioning applied at deployment (docs/contracts/platform-requirements.md).",
+  "$ref": "#/$defs/DeploymentProfile",
+  "$defs": {
+    "ProfilePackageSource": {
+      "type": "string",
+      "enum": [
+        "PREBUILT_CORE",
+        "MARKETPLACE"
+      ],
+      "description": "PREBUILT_CORE resolves only to the sealed core artifact in the image lock; MARKETPLACE downloads the exact signed release from the configured Marketplace."
+    },
+    "ProfileToolActivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One installed export to enable, in the reviewed Tool Group named here. The export must exist in the pinned package; nothing is created to satisfy a reference.",
+      "properties": {
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "toolGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "toolId",
+        "toolGroupId"
+      ]
+    },
+    "ProfilePackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them.",
+      "properties": {
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "source": {
+          "$ref": "profile.schema.json#/$defs/ProfilePackageSource"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "hostIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 32
+        },
+        "deviceGroupIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16
+        },
+        "globals": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProfileToolActivation"
+          },
+          "maxItems": 64
+        },
+        "bindingIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "packageId",
+        "source",
+        "version",
+        "required"
+      ]
+    },
+    "ProfileReadinessCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values.",
+      "properties": {
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "arguments": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        },
+        "expected": {
+          "type": "object",
+          "description": "JSON object; contents validated by the named schema at the boundary."
+        }
+      },
+      "required": [
+        "toolId",
+        "agentId",
+        "arguments"
+      ]
+    },
+    "DeploymentProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package.",
+      "properties": {
+        "profileVersion": {
+          "type": "integer",
+          "const": 1
+        },
+        "profileId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProfilePackage"
+          },
+          "maxItems": 64
+        },
+        "readiness": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProfileReadinessCase"
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "profileVersion",
+        "profileId",
+        "packages"
+      ]
+    },
+    "ProvisioningState": {
+      "type": "string",
+      "enum": [
+        "READY",
+        "PENDING",
+        "FAILED"
+      ],
+      "description": "READY: imported, deployed and activated as declared, and released to every active device of its device groups. PENDING: waiting for a declared Tool Host to register or for an active device in a declared group. FAILED: a pin, verifier, compatibility, release or reference check refused it; never replaced by another version or a built-in."
+    },
+    "ProvisioningStep": {
+      "type": "string",
+      "enum": [
+        "VALIDATE",
+        "IMPORT",
+        "DEPLOY",
+        "RELEASE",
+        "ROLLOUT",
+        "ACTIVATE",
+        "DONE"
+      ],
+      "description": "The step a package reached; DONE once imported, deployed or released to devices, rolled out and activated."
+    },
+    "ProvisioningPackageStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "profile.schema.json#/$defs/ProvisioningState"
+        },
+        "step": {
+          "$ref": "profile.schema.json#/$defs/ProvisioningStep"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "toolIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/ToolId"
+          },
+          "maxItems": 64
+        },
+        "hostIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 32
+        },
+        "deviceGroupIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 16
+        },
+        "deviceIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 256,
+          "description": "Active devices of deviceGroupIds that hold the release."
+        },
+        "globalsDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "packageId",
+        "version",
+        "required",
+        "state",
+        "step"
+      ],
+      "description": "One pinned package: where provisioning stands and why it is not ready. hostIds and globalsDigest record the deployment it applied, so an unchanged repeat does not redeploy."
+    },
+    "ProvisioningStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Persisted outcome of the latest profile application. state is READY only when every required package is READY.",
+      "properties": {
+        "profileId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "generation": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "state": {
+          "$ref": "profile.schema.json#/$defs/ProvisioningState"
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProvisioningPackageStatus"
+          },
+          "maxItems": 64
+        },
+        "appliedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "previousProfileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProfileChange"
+          },
+          "maxItems": 128,
+          "description": "Package differences from the profile that previousProfileDigest names; absent for the first profile and for a repeat."
+        }
+      },
+      "required": [
+        "profileId",
+        "profileDigest",
+        "generation",
+        "state",
+        "packages",
+        "appliedAtUnixMs"
+      ]
+    },
+    "ProfileChangeKind": {
+      "type": "string",
+      "enum": [
+        "ADDED",
+        "CHANGED",
+        "REMOVED"
+      ],
+      "description": "How a package differs from the previously applied profile. REMOVED packages stay installed: removing an entry never uninstalls."
+    },
+    "ProfileChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One package difference from the previously applied profile, recorded for review.",
+      "properties": {
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "change": {
+          "$ref": "profile.schema.json#/$defs/ProfileChangeKind"
+        },
+        "previousVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "previousPackageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "packageId",
+        "change"
+      ]
+    },
+    "ProvisioningStatusPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The latest ProvisioningStatus of every applied deployment profile, by profile id.",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProvisioningStatus"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "items"
+      ]
+    }
+  }
+}

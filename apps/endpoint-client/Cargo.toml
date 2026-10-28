@@ -9,6 +9,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+olo-toolgate-tenant-identity.workspace = true
 axum.workspace = true
 subtle.workspace = true
 olo-toolgate-contracts.workspace = true
@@ -35,5 +36,5 @@ futures-util.workspace = true
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys.workspace = true
+windows-sys = { workspace = true, features = ["Win32_System_Time", "Win32_System_SystemServices"] }
 windows-service.workspace = true

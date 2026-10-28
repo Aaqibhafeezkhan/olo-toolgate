@@ -10,6 +10,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param gateway canonical gateway value
  * @param deviceApproval canonical deviceApproval value
  * @param clientCheckIn canonical clientCheckIn value
+ * @param configuration canonical configuration value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ControlServerSettings(
@@ -17,7 +18,8 @@ public record ControlServerSettings(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "revision", required = true) Long revision,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "gateway", required = true) GatewaySettings gateway,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceApproval", required = true) DeviceApproval deviceApproval,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "clientCheckIn", required = true) ClientCheckIn clientCheckIn
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "clientCheckIn", required = true) ClientCheckIn clientCheckIn,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "configuration", required = true) ConfigurationSettings configuration
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -26,6 +28,7 @@ public record ControlServerSettings(
      * @param gateway canonical gateway value
      * @param deviceApproval canonical deviceApproval value
      * @param clientCheckIn canonical clientCheckIn value
+     * @param configuration canonical configuration value
      */
     public ControlServerSettings {
         java.util.Objects.requireNonNull(formatVersion, "formatVersion");
@@ -34,5 +37,6 @@ public record ControlServerSettings(
         java.util.Objects.requireNonNull(gateway, "gateway");
         java.util.Objects.requireNonNull(deviceApproval, "deviceApproval");
         java.util.Objects.requireNonNull(clientCheckIn, "clientCheckIn");
+        java.util.Objects.requireNonNull(configuration, "configuration");
     }
 }

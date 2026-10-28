@@ -19,6 +19,13 @@ import org.junit.jupiter.api.Test;
 class ConformanceTest {
     static final Map<String, String> RUNS = Map.ofEntries(
             Map.entry("descriptors/canonical-bytes", "DescriptorVectorTest#clientToolMatchesTool01,serverToolMatchesTool02,taskToolWithNonAsciiNamesMatchesTool03"),
+            Map.entry("route-analysis/path-variable-regex", "DeclarationTest#routesAreChecked"),
+            Map.entry("route-analysis/literal-single-route", "AnalysisTest#aLiteralCallMatchingOneListedRoutePackages"),
+            Map.entry("route-analysis/concatenation", "AnalysisTest#aConcatenatedTemplateFailsAtTheCallSite"),
+            Map.entry("route-analysis/global-template", "AnalysisTest#aTemplateOrDestinationFromAGlobalFails"),
+            Map.entry("route-analysis/ambiguous", "AnalysisTest#aTemplateMatchingTwoRoutesFailsNamingBoth"),
+            Map.entry("route-analysis/unlisted", "AnalysisTest#aRouteTheToolDoesNotListFails"),
+            Map.entry("route-analysis/reflection", "AnalysisTest#reflectiveAccessToTheNetworkApiFails"),
             Map.entry("descriptors/set-digest", "DescriptorVectorTest#setDigestMatchesSet01"),
             Map.entry("descriptors/excludes-deployment", "DescriptorVectorTest#deploymentValuesAndExamplesDoNotChangeTheDigest"),
             Map.entry("descriptors/generation-required", "DeclarationTest#generationIsRequiredAndHasNoDefault"),
@@ -39,7 +46,8 @@ class ConformanceTest {
     void everyMappedCaseExistsAndTargetsJava() throws IOException {
         Path root = Path.of(System.getProperty("toolgate.conformance"));
         String cases = Files.readString(root.resolve("sdk-unit/declarations.json"), StandardCharsets.UTF_8)
-                + Files.readString(root.resolve("contract-descriptor/descriptors.json"), StandardCharsets.UTF_8);
+                + Files.readString(root.resolve("contract-descriptor/descriptors.json"), StandardCharsets.UTF_8)
+                + Files.readString(root.resolve("contract-descriptor/route-analysis.json"), StandardCharsets.UTF_8);
         for (Map.Entry<String, String> run : RUNS.entrySet()) {
             int at = cases.indexOf("\"id\": \"" + run.getKey() + "\"");
             assertTrue(at >= 0, run.getKey());

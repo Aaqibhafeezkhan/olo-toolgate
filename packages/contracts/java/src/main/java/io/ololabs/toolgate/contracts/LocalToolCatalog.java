@@ -9,7 +9,7 @@ package io.ololabs.toolgate.contracts;
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record LocalToolCatalog(
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "tools", required = true) java.util.List<BuiltinToolInfo> tools
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "tools", required = true) java.util.List<LocalToolInfo> tools
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *

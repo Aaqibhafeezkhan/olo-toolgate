@@ -7,61 +7,113 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Adapter A1: the MCP 2026-07-28 server core (tool-sdk/spec/protocol-layer.md §3). Stateless per request; the only
- * connection state is the stdio era lock.
+ * connection state is the stdio era lock and the connection's {@code subscriptions/listen} streams.
  */
 public final class ProtocolCore {
     public static final String VERSION = "2026-07-28";
     static final String META_VERSION = "io.modelcontextprotocol/protocolVersion";
     static final String META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
     static final String META_SERVER_INFO = "io.modelcontextprotocol/serverInfo";
+    static final String META_SUBSCRIPTION = "io.modelcontextprotocol/subscriptionId";
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private static final Set<String> TOP_LEVEL = Set.of("jsonrpc", "id", "method", "params");
-    // "task" is the pre-SEP-2663 task hint; it is tolerated and ignored, since task creation is server-directed.
-    private static final Set<String> CALL_PARAMS = Set.of("name", "arguments", "_meta", "task");
+
+    /** The client capability each MRTR input request method needs (SEP-2322). */
+    private static final Map<String, String> INPUT_CAPABILITY = Map.of(
+            "elicitation/create", "elicitation", "sampling/createMessage", "sampling", "roots/list", "roots");
 
     private final ToolCatalog catalog;
+    private final RequestStates requestStates;
+    private final Map<String, Subscription> subscriptions = new ConcurrentHashMap<>();
 
     public ProtocolCore(ToolCatalog catalog) {
-        this.catalog = catalog;
+        this(catalog, new RequestStates());
     }
 
-    /** One connection's protocol era. A stdio connection is locked to the era of its first accepted message. */
+    /** A core with its own {@code requestState} signer (adapter A3). */
+    public ProtocolCore(ToolCatalog catalog, RequestStates requestStates) {
+        this.catalog = catalog;
+        this.requestStates = requestStates;
+        Tasks tasks = catalog.tasks();
+        if (tasks != null) tasks.onChange(this::taskChanged);
+    }
+
+    /** One connection. A stdio connection is locked to the era of its first accepted message; HTTP requests are stateless. */
     public static final class Connection {
         private final String transport;
-        private final String owner = "connection:" + java.util.UUID.randomUUID();
+        private final String owner;
+        private final VerifiedIdentity identity;
         private String era;
 
+        /** A stdio connection: its own owner and era lock. */
         public Connection(String transport) {
-            this.transport = transport;
+            this(transport, "connection:" + java.util.UUID.randomUUID());
         }
+
+        /** A connection whose requests share {@code owner}, such as every unauthenticated request to one HTTP endpoint. */
+        public Connection(String transport, String owner) {
+            this.transport = transport;
+            this.owner = owner;
+            this.identity = null;
+        }
+
+        /** The requests of one verified caller (adapter A4): it owns their tasks, request states and listen streams. */
+        public Connection(String transport, VerifiedIdentity identity) {
+            this.transport = transport;
+            this.owner = identity.owner();
+            this.identity = identity;
+        }
+
+        public String transport() { return transport; }
 
         synchronized void lock(String version) {
+            if (!transport.equals("stdio")) return;
             if (era == null) era = version;
             else if (!era.equals(version)) {
-                throw new ProtocolError(ProtocolError.UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version",
-                        unsupported(version));
+                throw new ProtocolError(ProtocolError.UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version", unsupported(version));
             }
-        }
-
-        synchronized String era() {
-            return era;
         }
     }
 
-    /** Handles one parsed message; returns the response, or null for notifications and client responses. */
+    /** A live {@code subscriptions/listen} stream. */
+    private record Subscription(Connection connection, JsonNode id, Consumer<ObjectNode> sink, boolean tools, boolean tasks, String owner) {}
+
+    /** Handles one parsed stdio message: no headers, notifications go to {@code notify}. */
     public JsonNode handle(JsonNode message, Connection connection) {
+        return handle(message, connection, null, n -> {});
+    }
+
+    /**
+     * Handles one parsed message; returns the response, or null for notifications, client responses and an accepted
+     * {@code subscriptions/listen}, whose frames go to {@code notify} until {@link #unsubscribe} or a failed write.
+     *
+     * @param headers HTTP request header lookup (case-insensitive), or null over stdio
+     */
+    public JsonNode handle(JsonNode message, Connection connection, Function<String, String> headers, Consumer<ObjectNode> notify) {
         if (message == null || !message.isObject()) return error(null, new ProtocolError(ProtocolError.INVALID_REQUEST, "Invalid request"));
         if (!message.has("method")) return null; // a response from the client; the core sends no requests
-        if (!message.has("id")) return null; // notifications have no reply; the core defines none
+        if (!message.has("id")) {
+            if ("notifications/cancelled".equals(message.path("method").asText())) {
+                unsubscribe(connection, message.path("params").path("requestId"));
+            }
+            return null;
+        }
         JsonNode id = message.get("id");
         try {
             validate(message);
             String method = message.get("method").asText();
             JsonNode params = message.get("params");
+            if (headers != null && headers.apply("MCP-Protocol-Version") == null) {
+                throw new ProtocolError(ProtocolError.HEADER_MISMATCH, "Missing MCP-Protocol-Version header");
+            }
             JsonNode meta = params.path("_meta");
             JsonNode version = meta.get(META_VERSION);
             if (version == null) {
@@ -73,23 +125,33 @@ public final class ProtocolCore {
                 }
                 throw new ProtocolError(ProtocolError.INVALID_PARAMS, "_meta " + META_VERSION + " is required");
             }
-            if (!version.isTextual() || !version.asText().equals(VERSION)) {
-                throw new ProtocolError(ProtocolError.UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version",
-                        unsupported(version.isTextual() ? version.asText() : version.toString()));
-            }
             JsonNode capabilities = meta.get(META_CAPABILITIES);
             if (capabilities == null || !capabilities.isObject()) {
                 throw new ProtocolError(ProtocolError.INVALID_PARAMS, "_meta " + META_CAPABILITIES + " is required");
             }
+            String requested = version.isTextual() ? version.asText() : version.toString();
+            if (headers != null && !requested.equals(headers.apply("MCP-Protocol-Version").trim())) {
+                throw new ProtocolError(ProtocolError.HEADER_MISMATCH, "MCP-Protocol-Version does not match _meta");
+            }
+            if (!requested.equals(VERSION)) {
+                throw new ProtocolError(ProtocolError.UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version", unsupported(requested));
+            }
+            if (headers != null) checkRoutingHeaders(method, params, headers);
             connection.lock(VERSION);
-            RequestMeta request = new RequestMeta(VERSION, capabilities, extensions(capabilities), connection.transport, connection.owner);
+            RequestMeta request = new RequestMeta(VERSION, capabilities, extensions(capabilities), connection.transport, connection.owner,
+                    connection.identity, meta.get("progressToken"), notify, JSON.objectNode(), headers == null ? null : headers.apply("Idempotency-Key"));
             ObjectNode result = switch (method) {
                 case "server/discover" -> discover();
                 case "tools/list" -> list(request);
                 case "tools/call" -> call(params, request);
                 case "tasks/get", "tasks/update", "tasks/cancel" -> task(method, params, request);
+                case "subscriptions/listen" -> {
+                    listen(id, params, request, connection, notify);
+                    yield null;
+                }
                 default -> throw new ProtocolError(ProtocolError.METHOD_NOT_FOUND, "Method not found");
             };
+            if (result == null) return null;
             if (!result.has("resultType")) result.put("resultType", "complete");
             ObjectNode resultMeta = result.has("_meta") ? (ObjectNode) result.get("_meta") : result.putObject("_meta");
             resultMeta.set(META_SERVER_INFO, catalog.serverInfo());
@@ -103,6 +165,93 @@ public final class ProtocolCore {
         } catch (RuntimeException e) {
             return error(validId(id) ? id : null, new ProtocolError(ProtocolError.INTERNAL_ERROR, "Internal error"));
         }
+    }
+
+    /** The HTTP status for a JSON-RPC error code (Streamable HTTP, 2026-07-28). */
+    public static int httpStatus(int code) {
+        return switch (code) {
+            case ProtocolError.METHOD_NOT_FOUND -> 404;
+            case ProtocolError.INTERNAL_ERROR -> 500;
+            default -> 400;
+        };
+    }
+
+    /** Sends {@code notifications/tools/list_changed} to every stream that asked for it. */
+    public void toolsListChanged() {
+        for (Subscription s : subscriptions.values()) {
+            if (s.tools) send(s, "notifications/tools/list_changed", JSON.objectNode());
+        }
+    }
+
+    /** Ends a listen stream (client abort, write failure or {@code notifications/cancelled}). */
+    public void unsubscribe(Connection connection, JsonNode id) {
+        if (id != null && !id.isMissingNode()) subscriptions.remove(key(connection, id));
+    }
+
+    /** Whether a listen stream is still open. */
+    public boolean subscribed(Connection connection, JsonNode id) {
+        return subscriptions.containsKey(key(connection, id));
+    }
+
+    private static void checkRoutingHeaders(String method, JsonNode params, Function<String, String> headers) {
+        String header = headers.apply("Mcp-Method");
+        if (header == null || !header.trim().equals(method)) throw new ProtocolError(ProtocolError.HEADER_MISMATCH, "Mcp-Method does not match the request");
+        String nameKey = switch (method) {
+            case "tools/call", "prompts/get" -> "name";
+            case "resources/read" -> "uri";
+            case "tasks/get", "tasks/update", "tasks/cancel" -> "taskId";
+            default -> null;
+        };
+        if (nameKey == null) return;
+        String name = headers.apply("Mcp-Name");
+        if (name == null || !name.trim().equals(params.path(nameKey).asText())) {
+            throw new ProtocolError(ProtocolError.HEADER_MISMATCH, "Mcp-Name does not match the request");
+        }
+    }
+
+    private void listen(JsonNode id, JsonNode params, RequestMeta request, Connection connection, Consumer<ObjectNode> sink) {
+        JsonNode filter = params.path("notifications");
+        if (!filter.isMissingNode() && !filter.isObject()) throw new ProtocolError(ProtocolError.INVALID_PARAMS, "notifications must be an object");
+        boolean tools = filter.path("toolsListChanged").asBoolean(false);
+        boolean tasks = catalog.tasks() != null && request.declares(RequestMeta.TASKS);
+        Subscription s = new Subscription(connection, id, sink, tools, tasks, request.owner());
+        if (subscriptions.putIfAbsent(key(connection, id), s) != null) {
+            throw new ProtocolError(ProtocolError.INVALID_PARAMS, "A listen stream with this id is already open");
+        }
+        ObjectNode honoured = JSON.objectNode();
+        if (tools) honoured.put("toolsListChanged", true);
+        ObjectNode ack = JSON.objectNode();
+        ack.set("notifications", honoured);
+        send(s, "notifications/subscriptions/acknowledged", ack);
+    }
+
+    private void taskChanged(TaskRecord t) {
+        for (Subscription s : subscriptions.values()) {
+            if (!s.tasks || !s.owner.equals(t.owner)) continue;
+            ObjectNode params = JSON.objectNode();
+            params.put("taskId", t.taskId);
+            params.put("status", t.status.wire());
+            if (t.statusMessage != null) params.put("statusMessage", t.statusMessage);
+            send(s, "notifications/tasks", params);
+        }
+    }
+
+    private void send(Subscription s, String method, ObjectNode params) {
+        params.putObject("_meta").set(META_SUBSCRIPTION, s.id);
+        ObjectNode frame = JSON.objectNode();
+        frame.put("jsonrpc", "2.0");
+        frame.put("method", method);
+        frame.set("params", params);
+        try {
+            s.sink.accept(frame);
+        } catch (RuntimeException e) {
+            subscriptions.remove(key(s.connection, s.id), s);
+        }
+    }
+
+    private static String key(Connection connection, JsonNode id) {
+        // By owner, not by object: each HTTP request has its own Connection, and a later POST may cancel the stream.
+        return connection.transport + ":" + connection.owner + ":" + id;
     }
 
     private static void validate(JsonNode message) {
@@ -139,7 +288,7 @@ public final class ProtocolCore {
         ObjectNode result = JSON.objectNode();
         result.putArray("supportedVersions").add(VERSION);
         ObjectNode capabilities = result.putObject("capabilities");
-        capabilities.putObject("tools");
+        capabilities.putObject("tools").put("listChanged", true);
         if (catalog.tasks() != null) capabilities.putObject("extensions").putObject(RequestMeta.TASKS);
         result.put("ttlMs", 0);
         result.put("cacheScope", "private");
@@ -156,16 +305,42 @@ public final class ProtocolCore {
     }
 
     private ObjectNode call(JsonNode params, RequestMeta request) {
-        Iterator<String> names = params.fieldNames();
-        while (names.hasNext()) {
-            if (!CALL_PARAMS.contains(names.next())) throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Invalid parameters");
-        }
+        // Unrecognised members, such as the pre-SEP-2663 "task" hint, are ignored (SEP-2322); task creation is server-directed.
         JsonNode name = params.get("name");
         JsonNode arguments = params.get("arguments");
-        if (name == null || !name.isTextual() || (arguments != null && !arguments.isObject())) {
+        JsonNode responses = params.get("inputResponses");
+        JsonNode state = params.get("requestState");
+        if (name == null || !name.isTextual() || (arguments != null && !arguments.isObject())
+                || (responses != null && !validResponses(responses)) || (state != null && !state.isTextual())) {
             throw new ProtocolError(ProtocolError.INVALID_PARAMS, "Invalid parameters");
         }
-        return catalog.call(name.asText(), arguments == null ? JSON.objectNode() : arguments, request);
+        JsonNode args = arguments == null ? JSON.objectNode() : arguments;
+        // A3: the state is verified before anything runs. Answers sent without one are only the client's own answers.
+        ObjectNode answers = JSON.objectNode();
+        if (state != null) answers.setAll(requestStates.verify(state.asText(), name.asText(), args, request));
+        if (responses != null) answers.setAll((ObjectNode) responses);
+        RequestMeta round = request.withInputResponses(answers);
+        ObjectNode result = catalog.call(name.asText(), args, round);
+        if ("input_required".equals(result.path("resultType").asText())) {
+            JsonNode inputs = result.path("inputRequests");
+            if (!inputs.isObject() || inputs.isEmpty()) throw new IllegalStateException("an InputRequiredResult needs inputRequests");
+            for (JsonNode input : inputs) {
+                String capability = INPUT_CAPABILITY.get(input.path("method").asText());
+                if (capability == null) throw new IllegalStateException("not an MRTR input request: " + input.path("method").asText());
+                if (!round.declaresCapability(capability)) throw ProtocolError.missingCapability(capability);
+            }
+            result.put("requestState", requestStates.mint(name.asText(), args, round, answers));
+        }
+        return result;
+    }
+
+    /** {@code inputResponses} is an object of response objects (SEP-2322); anything else is a protocol error. */
+    private static boolean validResponses(JsonNode responses) {
+        if (!responses.isObject()) return false;
+        for (JsonNode r : responses) {
+            if (!r.isObject()) return false;
+        }
+        return true;
     }
 
     private ObjectNode task(String method, JsonNode params, RequestMeta request) {

@@ -297,15 +297,17 @@
     },
     "EnterpriseManagementRule": {
       "type": "object",
-      "description": "Management grants belong to group-assigned Management Roles only.",
+      "description": "Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected.",
       "additionalProperties": false,
       "properties": {
         "actions": {
           "type": "array",
           "items": {
-            "$ref": "identifiers.schema.json#/$defs/Identifier"
+            "type": "string",
+            "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$",
+            "maxLength": 128
           },
-          "maxItems": 64,
+          "maxItems": 256,
           "uniqueItems": true
         },
         "groupType": {
@@ -324,6 +326,11 @@
         },
         "conditions": {
           "$ref": "enterprise.schema.json#/$defs/EnterpriseConditions"
+        },
+        "deviceScope": {
+          "type": "string",
+          "pattern": "^(OWNED|CURRENT)$",
+          "description": "OWNED limits device grants to the authenticated owner's devices; CURRENT additionally requires server-verified current-device context. DEVICE_GROUP only, with one enrollment placement group."
         }
       },
       "required": [
@@ -707,6 +714,18 @@
           "type": "string",
           "minLength": 0,
           "maxLength": 256
+        },
+        "locatorTemplates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 512,
+            "pattern": "^[a-z][a-z0-9+.-]{0,31}://[{]tenant[}](/([A-Za-z0-9._-]{1,64}|[{][A-Za-z][A-Za-z0-9_]{0,63}[}]))+$",
+            "description": "Locator template: {tenant} is the verified tenant, {name} a required string argument holding an opaque id."
+          },
+          "maxItems": 8,
+          "uniqueItems": true
         }
       },
       "required": [
@@ -787,6 +806,30 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
+        },
+        "passClaims": {
+          "type": "object",
+          "description": "Claim name to the tool id or MCP name globs it is passed to; * is allowed only as the last character.",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:/-]*\\*?$"
+            },
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true
+          }
+        },
+        "needsReauthorization": {
+          "type": "boolean",
+          "description": "Imported for a mapped or placeholder user; stays disabled until an administrator rotates its credential. Absent means false."
         }
       },
       "required": [
@@ -1269,6 +1312,9 @@
         },
         "diagnosticId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "reconciliation": {
+          "$ref": "tool.schema.json#/$defs/ReconciliationMethod"
         }
       },
       "required": [
@@ -1856,6 +1902,9 @@
         },
         "downstreamIdempotencyKey": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "executionContext": {
+          "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
         }
       },
       "required": [
@@ -2988,6 +3037,266 @@
         "authorityCacheGraceMs",
         "readyProbeFreshnessMs"
       ]
+    },
+    "ControlWorkloadCredentialRotation": {
+      "type": "object",
+      "description": "Installs a new static token hash; delegated bindings are rebound to their user's current session epoch.",
+      "additionalProperties": false,
+      "properties": {
+        "credentialSha256": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "enable": {
+          "type": "boolean"
+        },
+        "bindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier",
+          "description": "Execution binding for the Gateway context; defaults to the single one the agent groups' grants select."
+        }
+      },
+      "required": [
+        "credentialSha256",
+        "enable"
+      ]
+    },
+    "ControlWorkloadCredentialResult": {
+      "type": "object",
+      "description": "Updated binding and the Gateway request context to install with the token; bindingId is the execution binding the agent's grants select, when exactly one does.",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "enterprise.schema.json#/$defs/ControlWorkloadBinding"
+        },
+        "context": {
+          "$ref": "../v2/common.schema.json#/$defs/RequestContext"
+        }
+      },
+      "required": [
+        "binding",
+        "context"
+      ]
+    },
+    "CancellationAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cancelled"
+      ],
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "description": "Durable caller-scoped cancellation acknowledgement."
+    },
+    "ServicePermitClaims": {
+      "type": "object",
+      "description": "Control-issued exact-request authorization for a downstream service; times are Unix milliseconds.",
+      "additionalProperties": false,
+      "required": [
+        "iss",
+        "aud",
+        "tenantId",
+        "sub",
+        "mode",
+        "operation",
+        "resources",
+        "requestFingerprint",
+        "executorKeySha256",
+        "invocationId",
+        "nonce",
+        "authorizationEpoch",
+        "iat",
+        "exp",
+        "executionNonce"
+      ],
+      "properties": {
+        "iss": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "aud": {
+          "$ref": "#/$defs/ServiceAudience"
+        },
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sub": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "act": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "mode": {
+          "$ref": "../v2/common.schema.json#/$defs/RequestMode"
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "resource.schema.json#/$defs/ResourceDescriptor"
+          }
+        },
+        "requestFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "executorKeySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "nonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "iat": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exp": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "executionNonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      }
+    },
+    "ServicePermitIssue": {
+      "type": "object",
+      "description": "Executor request for downstream authorization; scope comes exclusively from the admitted invocation.",
+      "additionalProperties": false,
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "audience"
+      ],
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "audience": {
+          "$ref": "#/$defs/ServiceAudience"
+        }
+      }
+    },
+    "ServicePermit": {
+      "type": "object",
+      "description": "Purpose-specific signed downstream authorization.",
+      "additionalProperties": false,
+      "required": [
+        "jws"
+      ],
+      "properties": {
+        "jws": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        }
+      }
+    },
+    "ServicePermitConsumption": {
+      "type": "object",
+      "description": "Service compares these request facts before its write, then consumes the nonce online.",
+      "additionalProperties": false,
+      "required": [
+        "permit",
+        "operation",
+        "resources",
+        "requestFingerprint",
+        "executorKeySha256"
+      ],
+      "properties": {
+        "permit": {
+          "$ref": "#/$defs/ServicePermit"
+        },
+        "operation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "resource.schema.json#/$defs/ResourceDescriptor"
+          }
+        },
+        "requestFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "executorKeySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServiceAuthorizationEpoch": {
+      "type": "object",
+      "description": "Coalesced tenant revocation feed snapshot. Services fail closed if polling becomes stale.",
+      "additionalProperties": false,
+      "required": [
+        "tenantId",
+        "authorizationEpoch",
+        "observedAtUnixMs"
+      ],
+      "properties": {
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "observedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "ServiceAudience": {
+      "type": "string",
+      "description": "Audience of an OLO downstream service.",
+      "enum": [
+        "olo-memory",
+        "olo-rag"
+      ]
+    },
+    "ServicePermitConsumed": {
+      "type": "object",
+      "description": "Single-use downstream write permit was consumed under current authority.",
+      "additionalProperties": false,
+      "required": [
+        "authorized"
+      ],
+      "properties": {
+        "authorized": {
+          "type": "boolean"
+        }
+      }
     }
   }
 }

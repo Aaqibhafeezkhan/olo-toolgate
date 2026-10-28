@@ -16,7 +16,11 @@
         "DEPENDENCY_UNAVAILABLE",
         "TIMEOUT",
         "INTERNAL",
-        "UNSUPPORTED"
+        "UNSUPPORTED",
+        "TENANT_MISMATCH",
+        "TENANT_UNAVAILABLE",
+        "MISDIRECTED_REQUEST",
+        "INVALID_TENANT_ID"
       ]
     },
     "ErrorEnvelope": {

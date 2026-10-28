@@ -1,21 +1,19 @@
-# Component Map
+# Component map
 
-Control owns the device registry and approvals. Gateway applies filters and routes calls; the selected registered executor owns effects. Quickstart has distinct fixed-executor, HotFolder and REST-forwarding records; installed clients retain certificate-bound identity.
-
-See [Device registry and tool-call controls](../control-plane/device-registry.md).
-
-| Component | Language | Owns | Must Not Own |
+| Component | Stack | Owns | Boundary |
 |---|---|---|---|
-| Gateway | Rust | Runtime auth, routing, permits, runtime audit | Admin UI, package execution |
-| Control Plane | Java | Org config, policies, fleet, approvals, imports | Arbitrary custom-code execution |
-| Admin UI | React/TS | Human management experience | Security decisions |
-| Endpoint Client | Rust | Package install, local runtime, HotFolder, protected execution | Org policy authoring |
-| Quickstart | Combined release | Single-user all-in-one experience | HA guarantees |
-| Drupal | PHP/Drupal | Public/community web UX | Package authority, signing |
-| Marketplace API | Java | Package/publisher/version/submission domain | Untrusted code execution |
-| Marketplace Worker | Java + sandbox | Scan/build/package/publish workflow | Public CRUD API |
-| Signing Service/KMS | External | Marketplace signing key operations | Package business logic |
+| Gateway | Rust | Caller authentication, MCP routing, current-authority requests and runtime observations | No database, local policy authority, effect signer or arbitrary tool execution |
+| Control Plane | Java | Tenant graph, authorization, review, permit signing, device registry, deployment and durable state | Arbitrary tool code executes elsewhere |
+| Admin UI | React/TypeScript | Human administration and impact/review presentation | Backend owns validation and security decisions |
+| Endpoint Client | Rust | Device identity, signed package tools in a sandbox, the brokered files area | Current Control authorization and runtime confinement remain required |
+| Tool Host | Rust | Server Java tool admission, verified content, broker and execution | Container/network isolation and result outbox remain unfinished |
+| Quickstart | Combined services | Single-node evaluation with local state/custody | No HA guarantee |
 
-## Contributor Rule
+Control already supports importing from a configured external OLO Orgs registry;
+see [Marketplace integration](../control-plane/marketplace-integration.md).
+The Marketplace itself lives in a separate private repository and is hosted at
+[olo-labs.org](https://olo-labs.org).
 
-If a change moves responsibility from one row to another, create an ADR before coding.
+Read [trust boundaries](trust-boundaries.md) and
+[device controls](../control-plane/device-registry.md). Create an
+[ADR](../adr/README.md) before moving responsibility between components.

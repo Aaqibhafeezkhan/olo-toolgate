@@ -2,10 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fixed-path bounded HTTPS transport; identity/private material never enters error strings.
 use crate::{config::Config, contracts::Contracts, identity::DeviceKey, Failure, Result};
+use olo_toolgate_contracts::v2::SignedTenantDiscovery;
 use olo_toolgate_contracts::*;
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 pub type Call<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
+/// Discovery can run before a device transport exists (including fresh installers).
+pub(crate) fn tls_client_builder() -> reqwest::ClientBuilder {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::builder()
+}
 pub trait ControlPort: Send + Sync {
+    /// Assertion only: it cannot change the configured destination or authenticate a request.
+    fn bind_tenant(&self, _tenant: &str) -> Result<()> {
+        Ok(())
+    }
+    fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective>;
     fn effect_outcome(
         &self,
         _identity: DeviceIdentity,
@@ -17,6 +28,7 @@ pub trait ControlPort: Send + Sync {
         &self,
         _identity: DeviceIdentity,
         _request: EnterpriseSecretDeliveryRequest,
+        _fencing_token: String,
     ) -> Call<'_, EnterpriseSecretDelivery> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
@@ -41,21 +53,28 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, RemoteToolAuthorizationAck> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
+    /// Run-response frames of an attempt this device admitted, bound to its fencing token.
+    fn run_events(
+        &self,
+        _identity: DeviceIdentity,
+        _batch: olo_toolgate_contracts::v2::RunEventBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::RunEventAck> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    /// DETAILED Insights spans of a call Control relayed to this device (ADR 031 §9).
+    fn insights_spans(
+        &self,
+        _identity: DeviceIdentity,
+        _invocation_id: String,
+        _batch: olo_toolgate_contracts::v2::InsightsSpanBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::InsightsSpanAck> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn remote_result(
         &self,
         _identity: DeviceIdentity,
         _result: RemoteToolResult,
     ) -> Call<'_, RemoteToolRecord> {
-        Box::pin(async { Err(Failure::Unsupported) })
-    }
-    fn builder_poll(&self, _identity: DeviceIdentity) -> Call<'_, BuilderTestPoll> {
-        Box::pin(async { Err(Failure::Unsupported) })
-    }
-    fn builder_result(
-        &self,
-        _identity: DeviceIdentity,
-        _result: BuilderTestResult,
-    ) -> Call<'_, BuilderTestRecord> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
     fn desired(&self, _identity: DeviceIdentity) -> Call<'_, FleetSignedDocument> {
@@ -75,8 +94,14 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, Vec<u8>> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery>;
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery>;
     fn start(&self, request: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge>;
+    fn request_approval(
+        &self,
+        _request: EndpointEnrollmentStart,
+    ) -> Call<'_, EndpointEnrollmentChallenge> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn poll(&self, request: EndpointEnrollmentPoll) -> Call<'_, EndpointEnrollmentResult>;
     fn check_in(
         &self,
@@ -85,6 +110,7 @@ pub trait ControlPort: Send + Sync {
     ) -> Call<'_, EndpointCheckInAck>;
 }
 pub struct HttpsControl {
+    tenant: std::sync::Mutex<Option<String>>,
     origin: String,
     client: reqwest::Client,
     config: Config,
@@ -93,13 +119,53 @@ pub struct HttpsControl {
     packets: crate::diagnostics::PacketLog,
     socket: crate::socket::Channel,
 }
+/// Task members this client accepts beyond the original relay shape. Control sends a relayed task's trace context,
+/// execution context and span request only to clients that name the feature (ADR 031 §2).
+pub const CLIENT_FEATURES: &str = "remote-task-context.v1";
+fn client_features() -> reqwest::header::HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        "toolgate-client-features",
+        reqwest::header::HeaderValue::from_static(CLIENT_FEATURES),
+    );
+    headers
+}
 impl HttpsControl {
+    async fn refusal(&self, mut response: reqwest::Response) -> Failure {
+        let status = response.status().as_u16();
+        if response
+            .content_length()
+            .is_some_and(|size| size > crate::rejection::MAX_ERROR as u64)
+            || response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .is_none_or(|value| value.split(';').next() != Some("application/json"))
+        {
+            return Failure::Unavailable;
+        }
+        let mut bytes = Vec::new();
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => {
+                    if bytes.len() + chunk.len() > crate::rejection::MAX_ERROR {
+                        return Failure::Unavailable;
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                Ok(None) => break,
+                Err(_) => return Failure::Unavailable,
+            }
+        }
+        crate::rejection::http(status, &bytes, &self.contracts)
+    }
     pub fn new(config: Config, key: Arc<DeviceKey>, contracts: Arc<Contracts>) -> Result<Self> {
         config.validate()?;
         let client = Self::builder(&config)?
             .build()
             .map_err(|_| Failure::Unavailable)?;
         Ok(Self {
+            tenant: std::sync::Mutex::new(None),
             socket: crate::socket::Channel::default(),
             packets: crate::diagnostics::PacketLog::open(config.state_directory.clone())?,
             origin: crate::config::origin(&config.server_url)?,
@@ -110,8 +176,7 @@ impl HttpsControl {
         })
     }
     fn builder(config: &Config) -> Result<reqwest::ClientBuilder> {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        let mut builder = reqwest::Client::builder()
+        let mut builder = tls_client_builder()
             .https_only(true)
             .http1_only()
             .redirect(reqwest::redirect::Policy::none())
@@ -122,13 +187,21 @@ impl HttpsControl {
             .timeout(Duration::from_secs(config.request_timeout_seconds))
             .connect_timeout(Duration::from_secs(5))
             .pool_max_idle_per_host(1)
-            .user_agent(concat!("olo-toolgate-client/", env!("CARGO_PKG_VERSION")));
+            .user_agent(concat!("olo-toolgate-client/", env!("CARGO_PKG_VERSION")))
+            .default_headers(client_features());
         if let Some(path) = &config.ca_certificate_path {
             let bytes = crate::storage::read_owned(path, 16384, false)?;
             let root = reqwest::Certificate::from_pem(&bytes).map_err(|_| Failure::Validation)?;
             builder = builder.tls_certs_only([root]);
         }
         Ok(builder)
+    }
+    fn tenant_request(&self, request: reqwest::RequestBuilder) -> Result<reqwest::RequestBuilder> {
+        let tenant = self.tenant.lock().map_err(|_| Failure::Unavailable)?;
+        Ok(match tenant.as_deref() {
+            Some(tenant) => request.header("Toolgate-Tenant-ID", tenant),
+            None => request,
+        })
     }
     async fn request<T: serde::de::DeserializeOwned>(
         &self,
@@ -157,11 +230,11 @@ impl HttpsControl {
         } else {
             client.get(url)
         };
-        request = request
+        request = self
+            .tenant_request(request)?
             .header("Accept", "application/json")
             .header("X-Request-ID", &correlation);
         if path == "/api/control/v1/endpoint/check-in" {
-            request = request.header("X-ToolGate-Poll-Interval-Unit", "milliseconds");
             if let Some(name) = crate::platform::system_name() {
                 request = request.header("X-ToolGate-System-Name", name);
             }
@@ -203,11 +276,8 @@ impl HttpsControl {
                 serde_json::json!({"code":"HTTP_REJECTED"}),
             );
         }
-        match response.status().as_u16() {
-            200 => {}
-            401 | 403 => return Err(Failure::Revoked),
-            409 => return Err(Failure::Conflict),
-            _ => return Err(Failure::Unavailable),
+        if status != 200 {
+            return Err(self.refusal(response).await);
         }
         if response.content_length().is_some_and(|n| n > 131072)
             || response
@@ -245,6 +315,42 @@ impl HttpsControl {
     }
 }
 impl ControlPort for HttpsControl {
+    fn bind_tenant(&self, tenant: &str) -> Result<()> {
+        self.contracts.encode("TenantUuid", &tenant)?;
+        let mut owner = self.tenant.lock().map_err(|_| Failure::Unavailable)?;
+        if owner.as_ref().is_some_and(|current| current != tenant) {
+            return Err(Failure::TenantMismatch);
+        }
+        if owner.is_none() {
+            *owner = Some(tenant.into());
+        }
+        Ok(())
+    }
+    fn request_approval(
+        &self,
+        request: EndpointEnrollmentStart,
+    ) -> Call<'_, EndpointEnrollmentChallenge> {
+        Box::pin(async move {
+            self.request(
+                &self.client,
+                "/api/control/v1/endpoint/enrollments/request-approval",
+                Some(self.contracts.encode("EndpointEnrollmentStart", &request)?),
+                "EndpointEnrollmentChallenge",
+            )
+            .await
+        })
+    }
+    fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
+        Box::pin(async move {
+            self.request(
+                &self.client,
+                "/api/control/v1/endpoint/ping",
+                Some(self.contracts.encode("EndpointPresencePing", &request)?),
+                "EndpointConnectionDirective",
+            )
+            .await
+        })
+    }
     fn effect_outcome(
         &self,
         identity: DeviceIdentity,
@@ -268,9 +374,19 @@ impl ControlPort for HttpsControl {
         &self,
         identity: DeviceIdentity,
         request: EnterpriseSecretDeliveryRequest,
+        fencing_token: String,
     ) -> Call<'_, EnterpriseSecretDelivery> {
         Box::pin(async move {
+            if fencing_token.is_empty() || fencing_token.len() > 128 {
+                return Err(Failure::Validation);
+            }
+            let mut fence = reqwest::header::HeaderValue::from_str(&fencing_token)
+                .map_err(|_| Failure::Validation)?;
+            fence.set_sensitive(true);
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("toolgate-fencing-token", fence);
             let client = Self::builder(&self.config)?
+                .default_headers(headers)
                 .identity(self.key.tls_identity(&identity)?)
                 .build()
                 .map_err(|_| Failure::Unavailable)?;
@@ -304,6 +420,50 @@ impl ControlPort for HttpsControl {
                         .encode("EnterprisePermitConsumption", &request)?,
                 ),
                 "EnterpriseInvocation",
+            )
+            .await
+        })
+    }
+    fn insights_spans(
+        &self,
+        identity: DeviceIdentity,
+        invocation_id: String,
+        batch: olo_toolgate_contracts::v2::InsightsSpanBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::InsightsSpanAck> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            let path = format!("/api/control/v1/access/invocations/{invocation_id}/insights/spans");
+            self.request(
+                &client,
+                &path,
+                Some(self.contracts.encode("InsightsSpanBatch", &batch)?),
+                "InsightsSpanAck",
+            )
+            .await
+        })
+    }
+    fn run_events(
+        &self,
+        identity: DeviceIdentity,
+        batch: olo_toolgate_contracts::v2::RunEventBatch,
+    ) -> Call<'_, olo_toolgate_contracts::v2::RunEventAck> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            let path = format!(
+                "/api/control/v1/access/invocations/{}/events",
+                batch.invocation_id
+            );
+            self.request(
+                &client,
+                &path,
+                Some(self.contracts.encode("RunEventBatch", &batch)?),
+                "RunEventAck",
             )
             .await
         })
@@ -418,85 +578,6 @@ impl ControlPort for HttpsControl {
             response
         })
     }
-    fn builder_poll(&self, identity: DeviceIdentity) -> Call<'_, BuilderTestPoll> {
-        Box::pin(async move {
-            let client = Self::builder(&self.config)?
-                .identity(self.key.tls_identity(&identity)?)
-                .build()
-                .map_err(|_| Failure::Unavailable)?;
-            let response: BuilderTestPoll = if let Some(response) = self
-                .socket
-                .call(
-                    ClientSocketOperation::BuilderPoll,
-                    None,
-                    "BuilderTestPoll",
-                    &self.contracts,
-                    &self.packets,
-                )
-                .await
-            {
-                response?
-            } else {
-                self.request(
-                    &client,
-                    "/api/control/v1/builder/tests/poll",
-                    None,
-                    "BuilderTestPoll",
-                )
-                .await?
-            };
-            if response.task.is_some() {
-                self.socket
-                    .ensure(
-                        &client,
-                        &self.origin,
-                        identity.expires_at_unix_ms,
-                        Some(("builder".into(), crate::now() + 120000)),
-                        &self.packets,
-                    )
-                    .await;
-            }
-            Ok(response)
-        })
-    }
-    fn builder_result(
-        &self,
-        identity: DeviceIdentity,
-        result: BuilderTestResult,
-    ) -> Call<'_, BuilderTestRecord> {
-        Box::pin(async move {
-            let client = Self::builder(&self.config)?
-                .identity(self.key.tls_identity(&identity)?)
-                .build()
-                .map_err(|_| Failure::Unavailable)?;
-            let body = self.contracts.encode("BuilderTestResult", &result)?;
-            let response = if let Some(response) = self
-                .socket
-                .call(
-                    ClientSocketOperation::BuilderResult,
-                    Some(&body),
-                    "BuilderTestRecord",
-                    &self.contracts,
-                    &self.packets,
-                )
-                .await
-            {
-                response
-            } else {
-                self.request(
-                    &client,
-                    "/api/control/v1/builder/tests/results",
-                    Some(self.contracts.encode("BuilderTestResult", &result)?),
-                    "BuilderTestRecord",
-                )
-                .await
-            };
-            if response.is_ok() {
-                self.socket.finished("builder").await;
-            }
-            response
-        })
-    }
     fn desired(&self, identity: DeviceIdentity) -> Call<'_, FleetSignedDocument> {
         Box::pin(async move {
             let client = Self::builder(&self.config)?
@@ -540,11 +621,11 @@ impl ControlPort for HttpsControl {
                 .identity(self.key.tls_identity(&identity)?)
                 .build()
                 .map_err(|_| Failure::Unavailable)?;
-            let mut response = client
-                .post(format!(
+            let mut response = self
+                .tenant_request(client.post(format!(
                     "{}/api/control/v1/fleet/artifacts/download",
                     self.origin
-                ))
+                )))?
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .header("X-Request-ID", crate::identity::nonce()?)
@@ -552,11 +633,8 @@ impl ControlPort for HttpsControl {
                 .send()
                 .await
                 .map_err(|_| Failure::Unavailable)?;
-            match response.status().as_u16() {
-                200 => {}
-                401 | 403 => return Err(Failure::Revoked),
-                409 => return Err(Failure::Conflict),
-                _ => return Err(Failure::Unavailable),
+            if response.status().as_u16() != 200 {
+                return Err(self.refusal(response).await);
             }
             if response.content_length().is_some_and(|n| n > 32768)
                 || response
@@ -577,12 +655,12 @@ impl ControlPort for HttpsControl {
             Ok(bytes)
         })
     }
-    fn discovery(&self) -> Call<'_, SignedClientDiscovery> {
+    fn discovery(&self) -> Call<'_, SignedTenantDiscovery> {
         Box::pin(self.request(
             &self.client,
             "/.well-known/olo-toolgate-client",
             None,
-            "SignedClientDiscovery",
+            "SignedTenantDiscovery",
         ))
     }
     fn start(&self, request: EndpointEnrollmentStart) -> Call<'_, EndpointEnrollmentChallenge> {
@@ -661,5 +739,76 @@ impl ControlPort for HttpsControl {
             }
             Ok(response)
         })
+    }
+}
+
+#[cfg(test)]
+mod tenant_tests {
+    use super::*;
+    #[test]
+    fn every_request_names_the_task_members_this_client_accepts() {
+        // Control (EndpointService.TASK_CONTEXT) sends a relayed task's trace and execution context only to
+        // clients that name this feature; released clients reject unknown task members.
+        assert_eq!(
+            client_features()
+                .get("toolgate-client-features")
+                .and_then(|v| v.to_str().ok()),
+            Some("remote-task-context.v1")
+        );
+    }
+    #[test]
+    fn transport_assertion_is_optional_then_immutable_and_canonical() {
+        let directory = crate::storage::test_directory("tenant-http");
+        let store = crate::storage::ProtectedStore::open(directory.clone()).unwrap();
+        let key = Arc::new(DeviceKey::load_or_create(&store).unwrap());
+        let config = Config {
+            tenant_id: None,
+            deployment: None,
+            execution: None,
+            gateway: None,
+            server_url: "https://control.example.test".into(),
+            state_directory: directory.clone(),
+            ipc_endpoint: crate::install::ipc_endpoint(),
+            authorized_peers: vec![{
+                #[cfg(unix)]
+                {
+                    unsafe { libc::geteuid() }.to_string()
+                }
+                #[cfg(windows)]
+                {
+                    crate::platform::windows::current_sid().unwrap()
+                }
+            }],
+            ca_certificate_path: None,
+            request_timeout_seconds: 5,
+            local_console_url: None,
+        };
+        let transport =
+            HttpsControl::new(config, key, Arc::new(Contracts::new().unwrap())).unwrap();
+        let headers = || {
+            transport
+                .tenant_request(transport.client.get("https://control.example.test/ping"))
+                .unwrap()
+                .build()
+                .unwrap()
+                .headers()
+                .clone()
+        };
+        assert!(!headers().contains_key("Toolgate-Tenant-ID"));
+        assert_eq!(
+            transport.bind_tenant("quickstart"),
+            Err(Failure::Validation)
+        );
+        let owner = "10000000-0000-4000-8000-000000000001";
+        transport.bind_tenant(owner).unwrap();
+        transport.bind_tenant(owner).unwrap();
+        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
+        assert_eq!(
+            transport.bind_tenant("10000000-0000-4000-8000-000000000002"),
+            Err(Failure::TenantMismatch)
+        );
+        assert_eq!(headers()["Toolgate-Tenant-ID"], owner);
+        drop(transport);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

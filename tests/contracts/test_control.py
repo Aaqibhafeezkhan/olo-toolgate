@@ -34,8 +34,8 @@ class ControlAssetsTests(unittest.TestCase):
             output=Path(folder);version=(ROOT/'VERSION').read_text().strip()
             metadata=json.loads((output/'compatibility.json').read_text())
             self.assertEqual(version,metadata['runtimeComponents']['control'])
-            self.assertEqual(13,metadata['controlDatabase']['flywaySchema'])
-            self.assertEqual(6,metadata['controlDatabase']['sqliteSchema'])
+            self.assertEqual(1,metadata['controlDatabase']['flywaySchema'])
+            self.assertEqual(1,metadata['controlDatabase']['sqliteSchema'])
             self.assertEqual([3],metadata['policyBundle']['supportedFormatVersions'])
             self.assertEqual('ghcr.io/olo-labs/olo-toolgate-control:'+version,metadata['controlImage'])
             contracts=(ROOT/'packages/contracts/VERSION').read_text().strip()
@@ -54,9 +54,14 @@ class ControlAssetsTests(unittest.TestCase):
         with self.assertRaises(ValidationError):Draft7Validator(schema).validate(values)
     def test_container_workflow_tests_scans_and_publishes_exact_image(self):
         workflow=yaml.safe_load((ROOT/'.github/workflows/control.yml').read_text());text=(ROOT/'.github/workflows/control.yml').read_text()
-        for command in ('tools/control/check.py','tools/control/helm.py','tools/control/container.py','tools/enterprise/helm.py','--severity HIGH,CRITICAL','--format cyclonedx','docker save','docker load'):
+        for command in ('tools/control/check.py','tools/control/helm.py','tools/control/container.py','tools/enterprise/helm.py','--severity HIGH,CRITICAL','--format cyclonedx','docker save'):
             self.assertIn(command,text)
-        self.assertEqual('control-release',workflow['jobs']['publish']['environment'])
+        self.assertNotIn('publish',workflow['jobs'])
+        publisher=yaml.safe_load((ROOT/'.github/workflows/release-images.yml').read_text())
+        self.assertEqual('development-release',publisher['jobs']['publish']['environment'])
+        shared=(ROOT/'tools/release/tagged.py').read_text()
+        self.assertIn("shared.run('docker','load','-i'",shared)
+        self.assertIn("shared.run('docker','push',target)",shared)
         dockerfile=(ROOT/'apps/control-plane/Dockerfile').read_text()
         self.assertIn('USER 65532:65532',dockerfile);self.assertEqual(2,dockerfile.count('FROM eclipse-temurin:'))
         self.assertNotIn('PRIVATE KEY',dockerfile)

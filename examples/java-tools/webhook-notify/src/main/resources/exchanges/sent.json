@@ -1,0 +1,6 @@
+[
+  {
+    "request": { "route": "hook.post", "variables": { "channel": "ops-alerts" } },
+    "response": { "status": 202, "body": { "id": "msg-1" } }
+  }
+]

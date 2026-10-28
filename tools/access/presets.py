@@ -9,6 +9,9 @@ CONFIGURATIONS = ROOT/'config/initial'
 READ = ['read', 'list', 'info', 'search', 'events', 'hash', 'evaluate', 'transform', 'validate',
         'get', 'query', 'inspect', 'describe', 'status']
 WRITE = READ + ['write', 'append', 'mkdir', 'copy', 'move', 'create', 'update', 'delete', 'remove', 'put', 'patch']
+PERMISSION_CATALOG=json.loads((ROOT/'packages/contracts/management-permissions.json').read_text(encoding='utf-8'))
+MANAGEMENT_PERMISSIONS=sorted(f"{resource['id']}.{action}" for resource in PERMISSION_CATALOG['resources'] for action in resource['actions'])
+# Existing runtime tool verbs are distinct from namespaced console permissions.
 MANAGE = ['read', 'create', 'update', 'delete', 'enable', 'disable', 'manage-role', 'grant', 'import',
           'export', 'audit', 'simulate', 'publish', 'policy', 'attest', 'rotate-credential',
           'approve-configuration', 'approve-operation', 'cancel-operation', 'approve-device',
@@ -35,8 +38,8 @@ def catalog():
                      allActions=tier == 'Admin', resources=resources, conditions=conditions)
         for id, role_type in ((human, 'HUMAN'), (actor, 'ACTOR_SERVICE')):
             records['roles'].append(dict(**base(id), portalRole='BASIC', roleType=role_type, managementRules=[]))
-        management_actions = ['read', 'audit', 'simulate', 'export'] if tier == 'ReadOnly' else (
-            ['read', 'audit', 'simulate', 'export', 'create', 'update', 'publish', 'attest', 'build'] if tier == 'ReadAndWrite' else MANAGE)
+        management_actions = [permission for permission in MANAGEMENT_PERMISSIONS if permission.endswith('.read') or permission=='simulation.run'] if tier == 'ReadOnly' else (
+            [permission for permission in MANAGEMENT_PERMISSIONS if permission.rsplit('.',1)[1] in ('read','create','update','build','attest') or permission=='simulation.run'] if tier == 'ReadAndWrite' else MANAGEMENT_PERMISSIONS)
         rules = [dict(actions=management_actions, groupType=kind, groups=dict(ids=[], all=True),
                       grantableScopes=[scope] if tier == 'Admin' else [], conditions=conditions)
                  for kind in ('TEAM', 'AGENT_GROUP', 'TOOL_GROUP', 'DEVICE_GROUP')]

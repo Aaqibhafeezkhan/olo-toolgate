@@ -11,19 +11,21 @@ final readonly class ClientReport implements \JsonSerializable {
         public string $deviceId,
         public string $clientVersion,
         public int $appliedRevision,
-        public array $packages
+        public array $packages,
+        public ?DevicePower $power = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['deviceId', 'clientVersion', 'appliedRevision', 'packages']) || array_diff(['deviceId', 'clientVersion', 'appliedRevision', 'packages'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['deviceId', 'clientVersion', 'appliedRevision', 'packages', 'power']) || array_diff(['deviceId', 'clientVersion', 'appliedRevision', 'packages'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['deviceId'],
             $data['clientVersion'],
             $data['appliedRevision'],
-            array_map(static fn ($item) => ReportedPackage::fromArray($item), $data['packages'])
+            array_map(static fn ($item) => ReportedPackage::fromArray($item), $data['packages']),
+            array_key_exists('power', $data) ? DevicePower::from($data['power']) : null
         );
     }
 

@@ -4,16 +4,16 @@
   "area": "effect-class",
   "title": "Resolved effect class",
   "sources": [
-    "plan.md §11.7",
+    "platform-requirements.md §11.7",
     "tool-sdk/spec/authoring/execution.md §4",
-    "plan.md §8.3"
+    "platform-requirements.md §8.3"
   ],
   "cases": [
     {
       "id": "effect-class/unknown-uses-ledger",
       "title": "UNKNOWN is treated as NON_IDEMPOTENT everywhere",
       "requirements": [
-        "plan.md §11.7",
+        "platform-requirements.md §11.7",
         "§21 security"
       ],
       "level": "integration",
@@ -36,9 +36,9 @@
       "id": "effect-class/default-unknown",
       "title": "Every source without a declaration resolves to UNKNOWN",
       "requirements": [
-        "plan.md §11.7 default",
-        "plan.md §14.1",
-        "plan.md §14.2"
+        "platform-requirements.md §11.7 default",
+        "platform-requirements.md §14.1",
+        "platform-requirements.md §14.2"
       ],
       "level": "component",
       "targets": [
@@ -56,7 +56,7 @@
       "id": "effect-class/hints-derived",
       "title": "MCP hints are derived from the effect class",
       "requirements": [
-        "plan.md §11.7"
+        "platform-requirements.md §11.7"
       ],
       "level": "unit",
       "targets": [
@@ -73,8 +73,8 @@
       "id": "effect-class/weakening-is-delta",
       "title": "Weakening the effect class is a security delta",
       "requirements": [
-        "plan.md §8.3",
-        "plan.md §11.7"
+        "platform-requirements.md §8.3",
+        "platform-requirements.md §11.7"
       ],
       "level": "component",
       "targets": [
@@ -91,7 +91,7 @@
       "id": "effect-class/retry-matrix",
       "title": "Retries follow the class",
       "requirements": [
-        "plan.md §11.7 table",
+        "platform-requirements.md §11.7 table",
         "execution.md §4"
       ],
       "level": "integration",

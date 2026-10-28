@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/invocation.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Invocation tasks and business keys",
-  "description": "Task fields on Control invocations, transitions, and atomic business-key reservation (plan.md §11.7, §12).",
+  "description": "Task fields on Control invocations, transitions, and atomic business-key reservation (platform-requirements.md §11.7, §12).",
   "$ref": "#/$defs/InvocationTask",
   "$defs": {
     "TaskState": {
@@ -23,7 +23,7 @@
         "CANCELLED",
         "OUTCOME_UNKNOWN"
       ],
-      "description": "ToolGate task state (plan.md §12.2)."
+      "description": "ToolGate task state (platform-requirements.md §12.2)."
     },
     "McpTaskStatus": {
       "type": "string",
@@ -34,7 +34,7 @@
         "failed",
         "cancelled"
       ],
-      "description": "MCP Tasks status a state maps to (plan.md §12.4)."
+      "description": "MCP Tasks status a state maps to (platform-requirements.md §12.4)."
     },
     "TransitionActor": {
       "type": "string",
@@ -103,7 +103,7 @@
     },
     "InvocationTask": {
       "type": "object",
-      "description": "Task fields added to a Control invocation when a task record exists (plan.md §12.1).",
+      "description": "Task fields added to a Control invocation when a task record exists (platform-requirements.md §12.1).",
       "additionalProperties": false,
       "properties": {
         "taskId": {
@@ -281,7 +281,7 @@
         "IDEMPOTENCY_KEY_IN_USE",
         "EXPIRED_KEY"
       ],
-      "description": "Reservation result (plan.md §11.7)."
+      "description": "Reservation result (platform-requirements.md §11.7)."
     },
     "BusinessKeyReservationResult": {
       "type": "object",

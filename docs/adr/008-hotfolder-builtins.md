@@ -1,6 +1,10 @@
 # 008: Capability-scoped built-ins and anonymous client distribution
 
-Status: accepted, 2026-10-03. Scope: Module 07.
+Status: superseded by [ADR 027](027-one-tool-protocol-device-files.md), 2026-10-17. The client built-ins, their
+IPC catalog and the Quickstart executor described below were removed; HotFolder is the `examples.hotfolder`
+package on the generic device files area. The client-distribution part (last paragraph) still applies.
+
+Originally accepted 2026-10-03. Scope: Module 07.
 
 The existing native OS service owns a configurable protected HotFolder and its
 keys, independently of login sessions. Filesystem access uses directory

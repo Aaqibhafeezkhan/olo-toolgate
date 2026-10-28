@@ -14,6 +14,7 @@ test(`anonymous ${platform} downloads have matching checksums and accessible sta
   await expect(page.getByRole('heading',{name:'Install ToolGate on your computer'})).toBeVisible();
   await expect(page.getByLabel('Access token')).toBeVisible();
   const response = await request.get('/api/public/v1/clients'); expect(response.status()).toBe(200);
+  expect(response.headers()['cache-control']).toBe('no-store');
   const manifest = await response.json() as ClientDownloadManifest;
   const labels = {WINDOWS:'Windows',MACOS:'macOS',LINUX:'Linux'};
   const native=manifest.artifacts.filter(artifact=>artifact.platform===platform);
@@ -28,7 +29,9 @@ test(`anonymous ${platform} downloads have matching checksums and accessible sta
     expect(data.length).toBe(artifact.bytes);
   }
   const installerResponse = await request.get('/api/public/v1/installers'); expect(installerResponse.status()).toBe(200);
+  expect(installerResponse.headers()['cache-control']).toBe('no-store');
   const installers = await installerResponse.json() as ClientInstallerManifest;
+  expect(installers.version).toBe(manifest.version);
   const setups=installers.artifacts.filter(installer=>installer.platform===platform);
   expect(setups.length).toBe(native.length);
   for (const installer of setups) {
@@ -52,8 +55,9 @@ test(`anonymous ${platform} downloads have matching checksums and accessible sta
     expect(data.length).toBe(installer.bytes);
     const versioned=await request.get(`/api/public/v1/clients/${installer.filename}`);
     expect(versioned.status()).toBe(200);
-    expect(versioned.headers()['cache-control']).toContain('immutable');
-    expect(await versioned.body()).toEqual(data);
+    if (manifest.version.includes('-')) expect(versioned.headers()['cache-control']).toBe('no-store');
+    else expect(versioned.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
+    expect((await versioned.body()).equals(data)).toBe(true);
   }
   expect((await request.get('/api/public/v1/clients/olo-toolgate-client-unknown.setup.exe')).status()).toBe(404);
   await expect(page.getByText(/These development installers are unsigned/)).toBeVisible();

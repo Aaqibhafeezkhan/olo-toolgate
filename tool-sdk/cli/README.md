@@ -3,22 +3,37 @@
 
 ## Purpose
 
-`toolgate` is the single packager behind every Tool SDK (plan.md §4). Language SDKs turn annotations and types into semantic descriptors; this crate turns descriptors into canonical bytes and digests, and builds and checks `.tgpkg` packages. It works offline: the canonical schemas come from the contracts crate.
+`toolgate` is the single packager behind every Tool SDK (platform-requirements.md §4), and the one command line a tool author needs in any language. Language SDKs turn annotations and types into semantic descriptors; this crate turns descriptors into canonical bytes and digests, builds and checks `.tgpkg` packages, creates tool projects from starters and drives their builds. It works offline: the canonical schemas come from the contracts crate and the starters are embedded.
 
-This is milestone M0 part 1. `init`, `dev`, `sign`, `upload`, `publish`, `import-openapi` and `add-mcp` arrive in later parts.
+`sign`, `upload`, `publish`, `import-openapi` and `add-mcp` arrive in later parts.
 
-## Commands
+## Project commands
 
 | Command | Does |
 |---|---|
-| `toolgate pack <staging-dir> [-o file.tgpkg]` | Builds a package and prints its digests (below) |
+| `toolgate init <name> [--lang java] [--build gradle\|maven]` | Writes a new tool project from a [starter](starters/README.md) into `./<name>` (or `--dir`). `--id` sets the package id (default `example.<name>`), `--publisher` the publisher, `--sdk-version` the SDK version (default this CLI's), and `--sdk-repo` a repository URL or directory holding the SDK (default the local Maven repository) |
+| `toolgate dev [dir]` | Builds the tools and serves them as an MCP server over stdio in development mode, with `toolgate.dev.json`. `--http host:port` serves Streamable HTTP on a loopback address instead |
+| `toolgate dev --digests` | Starts the server, asks `server/discover`, and prints each `toolDescriptorDigest` and the `descriptorSetDigest` (runtime-modes.md §3) |
+| `toolgate check [dir]` | Compiles, runs the unit tests and every `@Example` in test mode, and fails if `toolgate.dev.json` is tracked by git |
+| `toolgate pack [dir] [-o file.tgpkg]` | Builds the package with the project's build, then validates it and prints its digests |
+| `toolgate guide` | Prints the [community guide](../../TOOL-SDK-GUIDE.md) to building tools with the SDK |
+
+`dir` defaults to the current directory. The CLI never compiles code: an adapter per language and build tool ([src/project.rs](src/project.rs)) finds the project by its marker file (`settings.gradle(.kts)`/`build.gradle(.kts)`, `pom.xml`) and runs that build's own tasks (`toolgateDev`, `check`, `toolgatePackage`; `toolgate:dev`, `test`, `package`), using `./gradlew` or `./mvnw` when the project has one. `--build gradle|maven` chooses when a directory has both, and anything after `--` goes to the build tool. The build calls back into this binary to pack (`TOOLGATE_CLI`).
+
+## Package commands
+
+| Command | Does |
+|---|---|
+| `toolgate pack <staging-dir> [-o file.tgpkg]` | Builds a package from a directory holding `toolgate-package.json`, and prints its digests (below) |
 | `toolgate validate <file.tgpkg>` | The archive rules, then the manifest against `PackageManifest` v2, every `toolDescriptorDigest`, `descriptorSetDigest`, the `tools/` files, artifact and runtime references, and the ceilings |
-| `toolgate verify <file.tgpkg>` | The archive rules only, as every hop runs them (plan.md §7.6); prints `packageDigest` |
+| `toolgate verify <file.tgpkg>` | The archive rules only, as every hop runs them (platform-requirements.md §7.6); prints `packageDigest` |
 | `toolgate digest <descriptor.json>...` | `toolDescriptorDigest` of each descriptor, and their `descriptorSetDigest` |
 | `toolgate canonical <descriptor.json>` | The canonical bytes (NFC, then RFC 8785) |
 | `toolgate equivalent <a.json> <b.json>` | Compares two descriptors under rewrite list 1; exits 1 when they differ |
 
-Exit codes: 0 success, 1 rejected or invalid input, 2 usage.
+`toolgate validate <dir>` on a project directory runs `check`.
+
+Exit codes: 0 success, 1 rejected or invalid input (or a failed build), 2 usage.
 
 ## Packing
 
@@ -46,6 +61,10 @@ The same inputs give the same bytes in any directory or machine.
 
 `packageDigest` is `sha256:` plus the SHA-256 of the exact `CHECKSUMS.sha256` bytes, so adding signatures never changes it.
 
+## Starters and adding a language
+
+[starters/README.md](starters/README.md) describes the starter format. A new language adds a starter, its template variables and one adapter; everything else (digests, packing, validation, test mode's exchange format) is already shared.
+
 ## Conformance
 
-`cargo test -p toolgate-cli` runs the packager's cases from [contract-descriptor](../conformance/contract-descriptor/): every package archive fixture, the descriptor vectors, the equivalence vectors, the package-digest, artifact-digest, reproducibility, excludes-deployment and includes-semantics cases, and the v2 schema fixtures. [tests/conformance.rs](tests/conformance.rs) lists which test runs which case. A case that also targets an SDK or a platform component stays `authored` until those runners pass it too.
+`cargo test -p toolgate-cli` runs the packager's cases from [contract-descriptor](../conformance/contract-descriptor/): every package archive fixture, the descriptor vectors, the equivalence vectors, the package-digest, artifact-digest, reproducibility, excludes-deployment and includes-semantics cases, and the v2 schema fixtures. [tests/conformance.rs](tests/conformance.rs) lists which test runs which case. [tests/project.rs](tests/project.rs) covers `init` and the adapters; the Java end-to-end run ([java-sdk/e2e/run.sh](../java-sdk/e2e/run.sh)) builds what `init` writes with Gradle and Maven. A case that also targets an SDK or a platform component stays `authored` until those runners pass it too.

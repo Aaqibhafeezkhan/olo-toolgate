@@ -5,7 +5,7 @@ Managed tool execution uses a trusted registered device, current owner/device en
 
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 
-An enrolled client checks in with Control at the configured check-in interval while connected (500 ms on Quickstart, 2 s with jitter by default elsewhere; see [client check-in](../control-plane/configuration.md#client-check-in)). Each
+An enrolled client checks in with Control at the configured check-in interval while connected (2 s on Quickstart, 2 s with jitter by default elsewhere; see [client check-in](../control-plane/configuration.md#client-check-in)). Each
 poll reports the tools actually installed and ready on that device. Control caches
 the device's effective permissions and their digest. A change sends a complete
 replacement on the next poll; Control repeats it until the client acknowledges the
@@ -13,14 +13,16 @@ digest. Disabled users, devices, teams, policies and tools narrow this configura
 Clients keep it in their protected application state directory as `permissions.json`.
 A discovery snapshot grants no execution permission.
 
-Enable the optional Gateway relay with this administrator configuration:
+The Gateway reaches Control through the required `control` block of its
+[configuration](../gateway/configuration.md); there is no separate relay switch:
 
 ```json
 {
-  "localMcp": {
+  "control": {
     "url": "https://control.example.test",
     "tokenPath": "/etc/toolgate/relay-auth/access-token",
-    "developmentLoopbackHttp": false
+    "developmentLoopbackHttp": false,
+    "tenantId": "10000000-0000-4000-8000-000000000001"
   }
 }
 ```
@@ -35,12 +37,13 @@ client, and Windows setup asks for no credentials.
 Set Gateway request/connection/shutdown timeouts to 30000/35000/35000 milliseconds
 to leave time for client polls and execution. Relay mode requires a request timeout
 of at least ten seconds. Requests expire within thirty seconds and before their
-runtime credential expires. Quickstart enables the relay automatically; an agent's
-runtime credential must name an enrolled device to see client tools. Unenrolled
-device bindings return an empty catalog.
+runtime credential expires. Quickstart configures this automatically. An agent's
+runtime credential names no device: Control places each call on one online device
+of the execution binding's device group (the caller's own device first). An agent
+without an applicable binding and enrolled device sees an empty catalog.
 
-Helm supports `gateway.localMcp.enabled`, `url`, `tokenSecret`, `tokenKey` and
-`controlPort`. Enable signed bundle mode, provide explicit Control/DNS egress peers
+Helm supports `gateway.control.tenantId`, `url`, `caSecret`, `tokenSecret`,
+`tokenKey` and `controlPort`. Provide explicit Control/DNS egress peers
 and adjust the Gateway timeouts and termination grace. The token Secret is mounted
 read-only and contains no runtime agent credentials. Control endpoint enrollment
 and direct client mutual TLS must also be configured using the endpoint guide.
@@ -50,14 +53,14 @@ agent, user and device. Managed runtime definitions come from approved packages 
 the client. Discovery without call arguments conservatively hides tools with an
 applicable BLOCK. The client IPC catalog also accepts an optional `agentId`; an
 unscoped query cannot expose permissions restricted to a particular agent.
-Use `olo-toolgate-client tools --agent <agent-id>` for scoped local discovery.
 
 An ALLOW tools/call is audited by the Gateway and queued durably in Control. The
 next client poll delivers its exact request and lease. The client rechecks current
 authorization with its device certificate immediately before a protected effect,
-executes the existing bounded builtin or approved runtime, and posts the result.
+runs the signed package tool in its managed sandbox, and posts the result.
 Control checks the agent scope and current permission again before returning the
-result. ASK remains blocked on MCP; approvals use the existing permit flow.
+result. ASK runs nothing: MCP returns an `isError` result naming the
+`PENDING_APPROVAL` invocation, and approvals use the existing permit flow.
 
 The Admin dashboard and **Client tool requests** page refresh every two seconds:
 
@@ -92,23 +95,16 @@ messages with request correlation, poll/configuration metadata and job state.
 Control emits matching messages for enrollment, check-ins and MCP relay APIs.
 Credentials, certificates, enrollment/lease codes, tool arguments and outputs
 are redacted. The client retains a bounded `packets.jsonl` in its protected state
-directory (100 entries, at most 64 KiB). `client.read_log_entry` returns exactly
-one latest entry after fresh device authorization; its default resource is
-`CUSTOM:hotfolder`, and the normal agent/user/device permission rules apply.
-It cannot read arbitrary files. The Windows tray offers a live packet viewer.
+directory (100 entries, at most 64 KiB), readable by device administrators; no
+tool exposes it. The Windows tray offers a live packet viewer.
 
 Quickstart exposes the same stateless `/mcp` ingress on its direct HTTPS
 listener, forwarding MCP protocol headers and allowing time for the next client
 poll. Only its fixed runtime proxy routes delegate opaque bearer validation to
 Gateway; Control administrator JWT and client mTLS routes retain their existing
-authentication. See `debug/agent-mimic.bat` for a sequential write/log
-example and `debug/README.md` for existing-configuration usage. The compatibility
-entry point `debug/setup-agent-mimic.bat` runs the same two tool calls;
-it performs no installation, enrollment, approval, policy or credential setup.
-Both commands print responses and keep timestamped console logs under
-`.dev/debug/logs/`.
+authentication.
 
-Current clients request millisecond intervals with `X-ToolGate-Poll-Interval-Unit: milliseconds`. Control replies with `nextIntervalMs` set to the configured check-in; that value takes precedence over the legacy `nextIntervalSeconds`. Older clients receive the interval in whole seconds (at least two), and current clients fall back to seconds against an older server.
+Control replies to every check-in with `nextIntervalMs`, the configured check-in interval spread by its jitter.
 
 When a remote tool or builder job is delivered, the client opens a direct mTLS
 WebSocket at `/api/control/v1/endpoint/socket`. Check-ins, permission replacements,

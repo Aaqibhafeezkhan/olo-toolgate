@@ -27,6 +27,8 @@ package io.ololabs.toolgate.contracts.v2;
  * @param variables canonical variables value
  * @param permissions canonical permissions value
  * @param toolsets canonical toolsets value
+ * @param authorization canonical authorization value
+ * @param reconciliation canonical reconciliation value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ToolDescriptor(
@@ -51,7 +53,9 @@ public record ToolDescriptor(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "tcp", required = true) java.util.List<TcpDeclaration> tcp,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "variables", required = true) ToolVariables variables,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "permissions", required = true) java.util.List<Permission> permissions,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "toolsets", required = true) java.util.List<String> toolsets
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "toolsets", required = true) java.util.List<String> toolsets,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "authorization", required = false) ToolAuthorization authorization,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "reconciliation", required = false) ToolReconciliation reconciliation
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -77,6 +81,8 @@ public record ToolDescriptor(
      * @param variables canonical variables value
      * @param permissions canonical permissions value
      * @param toolsets canonical toolsets value
+     * @param authorization canonical authorization value
+     * @param reconciliation canonical reconciliation value
      */
     public ToolDescriptor {
         java.util.Objects.requireNonNull(descriptorGeneration, "descriptorGeneration");

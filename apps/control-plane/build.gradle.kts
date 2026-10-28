@@ -14,6 +14,7 @@ check(initialConfiguration.matches(Regex("[A-Za-z0-9-]+"))) { "Invalid initial c
 val initialConfigurationDirectory = rootProject.file("config/initial/$initialConfiguration")
 val contractsVersion = providers.gradleProperty("contractsVersion").getOrElse(rootProject.file("packages/contracts/VERSION").readText().trim())
 dependencies {
+    testImplementation(project(":service-authorization"))
     implementation(enforcedPlatform(libs.quarkus.bom))
     listOf("rest-jackson", "jdbc-postgresql", "flyway", "smallrye-jwt", "smallrye-health",
         "micrometer-registry-prometheus", "opentelemetry", "logging-json", "smallrye-openapi")
@@ -23,8 +24,11 @@ dependencies {
     implementation(libs.jackson.yaml)
     implementation(libs.json.schema)
     implementation(libs.bouncycastle.pkix)
+    implementation(project(":package-archive"))
+    implementation(project(":sdk-java-api"))
+    implementation(project(":sdk-json"))
     if (usePublishedContracts.get()) {
-        implementation("io.ololabs.toolgate:toolgate-contracts:$contractsVersion")
+        implementation("io.github.olo-labs:toolgate-contracts:$contractsVersion")
     } else {
         implementation(project(":contracts-java"))
     }
@@ -35,7 +39,24 @@ dependencies {
 tasks.test {
     systemProperty("toolgate.published", usePublishedContracts.get())
     systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
+    systemProperty("toolgate.productVersion", rootProject.file("VERSION").readText().trim())
     // A fresh PostgreSQL boundary is supplied for each verification invocation.
+    outputs.upToDateWhen { false }
+}
+
+// Worker proof has separate reports so the full regression evidence remains intact.
+tasks.register<Test>("sdkWorkerTest") {
+    description = "Builds real JSON SDK packages through the isolated worker and checks byte equality and cleanup"
+    dependsOn("testClasses", ":sdk-json:installDist")
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter { includeTestsMatching("io.ololabs.toolgate.control.JsonSdkWorkerTest") }
+    val cli = providers.environmentVariable("TOOLGATE_CLI").getOrElse("")
+    doFirst { require(cli.isNotBlank()) { "sdkWorkerTest requires TOOLGATE_CLI pointing to the verified native package CLI" } }
+    systemProperty("toolgate.cli", cli)
+    systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
+    systemProperty("toolgate.sdkLibraries", rootProject.file("tool-sdk/json-sdk/build/install/toolgate-json-sdk/lib").absolutePath)
+    systemProperty("toolgate.workerWorkRoot", rootProject.file("build/sdk-worker-e2e").absolutePath)
     outputs.upToDateWhen { false }
 }
 
@@ -44,6 +65,19 @@ tasks.test {
 val enterpriseTests = sourceSets.create("enterpriseTest") {
     compileClasspath += sourceSets.main.get().output
     runtimeClasspath += sourceSets.main.get().output
+}
+sourceSets.test { java.srcDir("src/sharedTest/java") }
+sourceSets.test { resources.srcDir("src/enterpriseTest/resources") }
+enterpriseTests.java.srcDir("src/sharedTest/java")
+// The enforced Quarkus 3.40 BOM pins Guava 33.6.0; 33.7.2 fixes CVE-2026-102554.
+val guava = libs.guava.get()
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == guava.group && requested.name == guava.name) {
+            useVersion(guava.version!!)
+            because("CVE-2026-102554")
+        }
+    }
 }
 configurations[enterpriseTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
 configurations[enterpriseTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
@@ -88,6 +122,10 @@ val verifyAdminUi = tasks.register<VerifyConsoleArtifact>("verifyAdminUi") {
 
 tasks.processResources {
     dependsOn(verifyAdminUi)
+    from(rootProject.file("VERSION")) {
+        into("META-INF")
+        rename { "toolgate-product.version" }
+    }
     from(consoleDirectory) { into("META-INF/resources/console"); exclude(".vite/**") }
     from(initialConfigurationDirectory) { into("initial-configuration"); include("*.json") }
     from(rootProject.file("packages/contracts/openapi/control-v1.yaml")) {

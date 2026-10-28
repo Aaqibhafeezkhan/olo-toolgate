@@ -7,13 +7,6 @@ namespace OloLabs\ToolGate\Contracts;
 
 /** Canonical LocalRuntimeKind wire values. */
 enum LocalRuntimeKind: string {
-    case NATIVE = 'NATIVE';
-    case PYTHON = 'PYTHON';
-    case NODE = 'NODE';
-    case POWERSHELL = 'POWERSHELL';
-    case BATCH = 'BATCH';
-    case SHELL = 'SHELL';
-    case JAVA_JAR = 'JAVA_JAR';
-    case DOTNET = 'DOTNET';
-    case WASM = 'WASM';
+    case JAVA_SDK = 'JAVA_SDK';
+    case PYTHON_SDK = 'PYTHON_SDK';
 }

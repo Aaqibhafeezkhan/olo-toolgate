@@ -8,6 +8,7 @@ quarkus = "3.40.1"
 json-schema = "1.5.9"
 bouncycastle = "1.86"
 sqlite = "3.53.4.0"
+guava = "33.7.2-jre"
 
 [libraries]
 jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version = "2.21" }
@@ -20,6 +21,7 @@ json-schema = { module = "com.networknt:json-schema-validator", version.ref = "j
 bouncycastle-pkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
 
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }

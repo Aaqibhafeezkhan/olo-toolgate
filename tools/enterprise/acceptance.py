@@ -9,11 +9,9 @@ Optional nesting/offline execution are deliberately unsupported and fail closed.
 import argparse
 import json
 from pathlib import Path
-import re
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-STATUS = ROOT / 'docs/enterprise-access-control/implementation-status.md'
 
 # Each method name identifies an actual test, not a substring or whole-suite claim.
 # Multiple entries are conjunctive: all referenced tests must pass without skips.
@@ -142,7 +140,6 @@ def runtime_gate(file, gate):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--write', action='store_true')
     parser.add_argument('--require-complete', action='store_true')
     args = parser.parse_args()
     expected = {f'UC{i:02}' for i in range(1, 81)} | {f'AC{i:02}' for i in range(1, 17)}
@@ -170,18 +167,6 @@ def main():
     output = ROOT / 'build/enterprise/acceptance.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    if args.write:
-        text = STATUS.read_text(encoding='utf-8')
-        def replace(match):
-            cells = match.group(0).split('|')
-            case = cells[1].strip()
-            cells[4] = ' Verified automated ' if rows[case]['passed'] else ' Pending evidence '
-            cells[5] = ' ' + '; '.join('`' + name + '`' for name in CASES[case]) + ' '
-            if rows[case]['missing']:
-                cells[5] += 'Open: ' + ', '.join(rows[case]['missing']) + ' '
-            return '|'.join(cells)
-        text = re.sub(r'^\| (?:UC\d{2}|AC\d{2}) \|[^\n]+', replace, text, flags=re.MULTILINE)
-        STATUS.write_text(text, encoding='utf-8')
     print(f'Acceptance: {len(rows)}/96 mapped; {count}/96 verified automated ({count / 96:.1%})')
     if args.require_complete and count != 96:
         raise SystemExit('Acceptance evidence remains incomplete; see ' + str(output))

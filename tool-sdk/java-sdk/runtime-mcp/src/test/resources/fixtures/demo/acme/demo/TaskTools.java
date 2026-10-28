@@ -15,6 +15,14 @@ import java.util.Map;
 public class TaskTools {
     public record Answer(String name) {}
 
+    @ServerTool(name = "demo.events", title = "Events", description = "Reports redacted execution responses.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> events(@Param(description = "Sensitive input", sensitive = true) String token, ToolContext context) {
+        context.log().info("received " + token);
+        context.progress(0.5, "processing " + token);
+        context.progress(1.0, "done");
+        return Map.of("done", true, "invocation", context.invocation().invocationId(), "mode", context.invocation().mode().name(), "deadline", context.invocation().deadline().toEpochMilli());
+    }
+
     @ServerTool(name = "demo.report", title = "Report", description = "Works for a while.", effect = EffectSafety.READ_ONLY, async = true)
     public Map<String, Object> report(@Param(description = "Milliseconds") long ms,
             @Param(description = "Keep going when cancelled", defaultValue = "false") boolean stubborn, ToolContext context) {
@@ -58,8 +66,35 @@ public class TaskTools {
         return Map.of("watched", true);
     }
 
-    @ServerTool(name = "demo.inline", title = "Inline", description = "Asks for input in a sync call.", effect = EffectSafety.READ_ONLY)
-    public Map<String, Object> inline(ToolContext context) {
-        return Map.of("v", context.requestInput(InputRequest.of("?", Map.of("type", "string"), String.class)));
+    @ServerTool(name = "demo.tick", title = "Tick", description = "Reports progress in a sync call.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> tick(ToolContext context) {
+        context.progress(0.25, "a quarter");
+        context.progress(0.1, "backwards, ignored");
+        context.progress(1.2, "out of range, ignored");
+        context.progress(1.0, "done");
+        return Map.of("ticked", true);
+    }
+
+    public record Colour(String colour) {}
+
+    @ServerTool(name = "demo.inline", title = "Inline", description = "Asks for two answers in a sync call.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> inline(@Param(description = "Greeting", defaultValue = "Hello") String greeting, ToolContext context) {
+        Answer name = context.requestInput(InputRequest.of("What is your name?",
+                Map.of("type", "object", "properties", Map.of("name", Map.of("type", "string")), "required", java.util.List.of("name")),
+                Answer.class));
+        Colour colour = context.requestInput(InputRequest.of("What is your favourite colour?",
+                Map.of("type", "object", "properties", Map.of("colour", Map.of("type", "string")), "required", java.util.List.of("colour")),
+                Colour.class));
+        return Map.of("greeting", greeting + ", " + name.name() + "! " + colour.colour() + " it is.");
+    }
+
+    @ServerTool(name = "demo.swallow", title = "Swallow", description = "Catches everything requestInput throws.", effect = EffectSafety.READ_ONLY)
+    public Map<String, Object> swallow(ToolContext context) {
+        try {
+            return Map.of("name", context.requestInput(InputRequest.of("Name?",
+                    Map.of("type", "object", "properties", Map.of("name", Map.of("type", "string"))), Answer.class)).name());
+        } catch (RuntimeException e) {
+            return Map.of("name", "nobody");
+        }
     }
 }

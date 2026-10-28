@@ -1,52 +1,39 @@
-# Trust Boundaries
+# Trust boundaries
 
-Managed tool execution uses a trusted registered device, current owner/device enablement, installed-client connection approval, and the existing agent/tool/action/resource filters before every protected effect. Registration, green availability or deployment never grants execution. Device identity comes from a verified TLS peer or composition-owned credential, never an asserted header or tool argument.
+## Current authority
 
-See [Device registry and tool-call controls](../control-plane/device-registry.md).
+Control evaluates current group grants, policy obligations, identities and resource
+constraints. It issues short-lived permits; Gateway holds no effect-signing key
+and cannot fall back to offline ALLOW. A permit requires online single-use
+consumption and the applicable current checks at the executor.
 
-## Marketplace Trust
+## Device and package trust
 
-Marketplace signature means:
+Device identity comes from a verified TLS peer or composition-owned credential,
+never a caller-supplied header or tool argument. Owner/device enablement and
+installed-client connection approval remain required independently of tool grants.
 
-> This exact package/version is an immutable Marketplace release.
+A signed organization assignment identifies an approved package and target.
+It does not authorize every tool invocation. Uploaded code stays outside Control;
+builder tests execute only on an explicitly designated enrolled endpoint with
+a bounded signed lease. See [tool authoring](../client/tool-builder.md).
 
-It does **not** mean:
+## Execution isolation
 
-> This organization should deploy it.
+Managed endpoint OCI runtimes enforce the limits described in
+[local runtimes](../client/local-runtimes.md). Tool Host Java execution currently
+has a clean environment, permit checks and a broker, but container/network
+isolation is unfinished. Do not infer confinement from a route declaration alone.
+See [Tool Host limitations](../../apps/tool-host/README.md#not-yet).
 
-## Organization Trust
+## Administrative authority
 
-Organization deployment signature means:
+Scoped management uses independent review. Super Admin has an audited
+[review exception](../adr/022-super-administrator-review-exception.md), but still
+needs runtime grants and cannot override effect authorization or retired identity.
 
-> This package/version is assigned to this managed client.
+## Planned distribution boundary
 
-It does **not** mean:
-
-> Every runtime action is allowed.
-
-## Runtime Trust
-
-Gateway permit means:
-
-> This exact user/agent/device/tool/resource/request is authorized now.
-
-## Boundary Chain
-
-```text
-Marketplace release trust
-        +
-Organization deployment trust
-        +
-Runtime Gateway authorization
-        =
-Managed execution
-```
-
-Uploaded code is always untrusted until isolated and validated.
-
-Module 10 authoring never executes uploaded code in Control. Only an explicitly
-designated enrolled endpoint receives an organization-signed, expiring mTLS test
-lease. Tests are confined compute probes and cannot assign a tool or grant a
-runtime permit. Sealed package releases still require an independent release
-authority and signed fleet assignment. Inline invocation approval scopes include
-the full runtime/tool registration digest, so a source update changes the scope.
+Marketplace signing is planned provenance for immutable community releases.
+It will remain separate from organization deployment signing and runtime
+authorization. See [Marketplace scope](../marketplace/README.md).

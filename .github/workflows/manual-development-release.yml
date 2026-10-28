@@ -1,125 +1,134 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 name: Manual development release (build and publish only)
-on:
-  workflow_dispatch:
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
-  group: development-release
+  group: manual-development-${{ inputs.source_branch }}
   cancel-in-progress: false
 jobs:
-  native:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu, binary: olo-toolgate-client}
-          - {runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binary: olo-toolgate-client}
-          - {runner: windows-2025, target: x86_64-pc-windows-msvc, binary: olo-toolgate-client.exe}
-          - {runner: windows-11-arm, target: aarch64-pc-windows-msvc, binary: olo-toolgate-client.exe}
-          - {runner: macos-15-intel, target: x86_64-apple-darwin, binary: olo-toolgate-client}
-          - {runner: macos-15, target: aarch64-apple-darwin, binary: olo-toolgate-client}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.12'
-      - name: Build native client and browser host
-        run: cargo build -p olo-toolgate-client --release --locked --bins
-      - name: Package native client
-        shell: bash
-        env:
-          NATIVE_TARGET: ${{ matrix.target }}
-          NATIVE_BINARY: ${{ matrix.binary }}
-        run: python tools/client/package.py --target "$NATIVE_TARGET" --binary "target/release/$NATIVE_BINARY"
-      - name: Install Windows installer compiler
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: ./tools/client/installer-compiler.ps1
-      - name: Package unsigned installer
-        shell: bash
-        env:
-          NATIVE_TARGET: ${{ matrix.target }}
-          TOOLGATE_CHROME_STORE_URL: ${{ vars.TOOLGATE_CHROME_STORE_URL }}
-        run: python tools/client/installer.py --target "$NATIVE_TARGET"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: manual-native-${{ matrix.target }}
-          path: build/client/release/
-          if-no-files-found: error
-  publish:
-    needs: native
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+  select:
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    environment: development-release
+    outputs:
+      source_sha: ${{ steps.source.outputs.sourceCommit }}
+      build_number: ${{ steps.source.outputs.build }}
+      selection_artifact_id: ${{ steps.selection.outputs.artifact-id }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: Pin development source and version
+      id: source
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SOURCE_BRANCH: ${{ inputs.source_branch }}
+        SOURCE_COMMIT: latest
+      run: python tools/release/development_source.py select
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      id: selection
+      with:
+        name: manual-development-selection
+        path: build/manual-development/selection/
+        if-no-files-found: error
+  prepare:
+    needs: select
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ needs.select.outputs.source_sha }}
+        path: source
+        persist-credentials: false
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: manual-development-selection
+        path: build/manual-development/selection
+    - name: Stamp development packages without publication credentials
+      env:
+        # Selected source scripts must not access the controller's Actions cache.
+        ACTIONS_CACHE_URL: ''
+        ACTIONS_RESULTS_URL: ''
+        ACTIONS_RUNTIME_TOKEN: ''
+      run: |
+        docker build --file tools/release/source-prepare.Dockerfile --tag toolgate-source-prepare .
+        mkdir -p build/manual-development/overlay
+        docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+          --user "$(id -u):$(id -g)" --env HOME=/tmp \
+          --volume "$PWD:/controller:ro" \
+          --volume "$PWD/source:/controller/source:rw" \
+          --volume "$PWD/build/manual-development/overlay:/controller/build/manual-development/overlay:rw" \
+          --workdir /controller toolgate-source-prepare \
+          python tools/release/development_source.py prepare --source source
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: manual-development-source
+        path: build/manual-development/overlay/
+        if-no-files-found: error
+  native:
+    needs: [select, prepare]
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
+    uses: ./.github/workflows/client.yml
+    with:
+      source_sha: ${{ needs.select.outputs.source_sha }}
+      build_number: ${{ needs.select.outputs.build_number }}
+      development_source: true
+      run_tests: false
+      shared_checks: true
+  build:
+    name: Build publication artifacts
+    needs: [select, native]
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
+    uses: ./.github/workflows/images.yml
+    secrets: inherit
+    with:
+      source_sha: ${{ needs.select.outputs.source_sha }}
+      development_source: true
+      run_tests: false
+  publish:
+    name: Publish images, Helm and GitHub release
+    needs: [select, build]
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
+    uses: ./.github/workflows/release-images.yml
+    secrets: inherit
+    with:
+      manual: true
+      selection_artifact_id: ${{ needs.select.outputs.selection_artifact_id }}
     permissions:
+      actions: read
       contents: write
       packages: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-          registry-url: https://npm.pkg.github.com
-          scope: '@olo-labs'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: manual-native-*
-          path: build/client/release
-          merge-multiple: true
-      - name: Assemble client downloads
-        env:
-          TOOLGATE_CHROME_STORE_URL: ${{ vars.TOOLGATE_CHROME_STORE_URL }}
-        run: |
-          python tools/client/extension.py --output build/client/release
-          python tools/client/manifest.py
-      - name: Build containers and library packages
-        env:
-          RELEASE_SHA: ${{ github.sha }}
-          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        run: |
-          npm ci --ignore-scripts --no-audit
-          python tools/release/manual_development.py build
-      - name: Publish Java and TypeScript libraries
-        env:
-          MAVEN_REPOSITORY_URL: ${{ vars.MAVEN_REPOSITORY_URL || format('https://maven.pkg.github.com/{0}', github.repository) }}
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-          DEFAULT_MAVEN_URL: ${{ format('https://maven.pkg.github.com/{0}', github.repository) }}
-          GH_TOKEN: ${{ github.token }}
-          NODE_AUTH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$MAVEN_REPOSITORY_URL" = "$DEFAULT_MAVEN_URL" ]; then
-            export MAVEN_USERNAME="${MAVEN_USERNAME:-$GITHUB_ACTOR}"
-            export MAVEN_PASSWORD="${MAVEN_PASSWORD:-$GH_TOKEN}"
-          fi
-          library_version="$(python -c 'import json; print(json.load(open("build/manual-development/assets/development-release.json"))["libraryVersion"])')"
-          ./gradlew --no-daemon "-PcontractsPublicationVersion=$library_version" :contracts-java:publishMavenJavaPublicationToRemoteRepository -x test
-          npm publish build/manual-development/assets/olo-labs-toolgate-contracts-*.tgz --registry https://npm.pkg.github.com --tag dev --ignore-scripts
-      - name: Publish development images, Helm chart and GitHub packages
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_SHA: ${{ github.sha }}
-          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: python tools/release/manual_development.py publish
+      id-token: write
+      attestations: write
+  publish-typescript:
+    name: Publish TypeScript library
+    needs: [select, build]
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/')
+    uses: ./.github/workflows/release-typescript.yml
+    with:
+      selection_artifact_id: ${{ needs.select.outputs.selection_artifact_id }}
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+# Maven publication is disconnected pending the release-only pipeline.
+# The reusable implementation remains in release-maven.yml.
+'on':
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: Source branch (main, release/* or any feature branch)
+        type: string
+        default: main
+        required: true

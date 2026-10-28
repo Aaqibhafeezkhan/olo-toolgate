@@ -87,7 +87,7 @@ class Configuration:
         elif user in saved: self.login(key,user,saved[user])
         else: raise ValueError('Local fixture password was already changed; supply its credential explicitly')
 
-    def api(self, path, body=None, method=None, user='admin', revision=None):
+    def api(self, path, body=None, method=None, user='admin', revision=None, with_status=False):
         headers = {'Authorization': 'Bearer '+self.tokens[user],
                    'Content-Type': 'application/json', 'X-Request-ID': secrets.token_hex(16)}
         if body is not None or method=='DELETE': headers['Idempotency-Key'] = secrets.token_hex(16)
@@ -97,7 +97,9 @@ class Configuration:
             method=method or ('POST' if body is not None else 'GET'))
         try:
             with self.opener.open(request, timeout=30) as response:
-                return json.loads(response.read(1048576))
+                data = response.read(1048576)
+                document = json.loads(data) if data else None
+                return (response.status, document) if with_status else document
         except urllib.error.HTTPError as error:
             raise ValueError(f'Debug configuration API rejected {method or "GET"} {path}: HTTP {error.code}') from None
 
@@ -108,9 +110,15 @@ class Configuration:
             document = {**document, 'revision': existing['revision']}
             if document == existing: return
             path += '/'+document['id']
-        change = self.api(path, document, 'PUT' if existing else 'POST', revision=existing['revision'] if existing else None)
-        self.apply_change(change)
-        print('Reviewed '+collection+': '+document['id'], flush=True)
+        self.mutate(path, document, 'PUT' if existing else 'POST', revision=existing['revision'] if existing else None)
+        print('Configured '+collection+': '+document['id'], flush=True)
+
+    def mutate(self, path, body=None, method=None, revision=None):
+        status, document = self.api(path, body, method, revision=revision, with_status=True)
+        if status == 202:
+            self.apply_change(document)
+        elif status not in (200, 201, 204):
+            raise ValueError('Unexpected configuration mutation response: HTTP '+str(status))
 
     def all(self, collection):
         result=[];cursor='';seen=set()
@@ -141,9 +149,9 @@ class Configuration:
     def memberships(self, collection, id, groups):
         current=self.api('/api/control/v1/'+collection+'/'+id+'/groups')
         if sorted(current['groupIds'])==sorted(groups):return
-        self.apply_change(self.api('/api/control/v1/'+collection+'/'+id+'/groups',
-            {**current,'groupIds':groups},'PUT',revision=current['revision']))
-        print('Reviewed group allocation: '+id+' -> '+', '.join(groups),flush=True)
+        self.mutate('/api/control/v1/'+collection+'/'+id+'/groups',
+            {**current,'groupIds':groups},'PUT',revision=current['revision'])
+        print('Configured group allocation: '+id+' -> '+', '.join(groups),flush=True)
 
     def presets(self):
         snapshot=self.api('/api/control/v1/config/export');records=load_configuration()['records'];changed=False
@@ -151,12 +159,12 @@ class Configuration:
             existing={x['id'] for x in snapshot[collection]}
             additions=[v for v in values if v['id'] not in existing]
             snapshot[collection].extend(additions);changed|=bool(additions)
-        if changed:self.apply_change(self.api('/api/control/v1/config/import',
-            dict(snapshot=snapshot,mode='MERGE',dryRun=False),revision=snapshot['revision']))
+        if changed:self.mutate('/api/control/v1/config/import',
+            dict(snapshot=snapshot,mode='MERGE',dryRun=False),revision=snapshot['revision'])
 
     def delete(self, collection, id):
         old=next((x for x in self.all(collection) if x['id']==id),None)
-        if old:self.apply_change(self.api('/api/control/v1/'+collection+'/'+id,method='DELETE',revision=old['revision']))
+        if old:self.mutate('/api/control/v1/'+collection+'/'+id,method='DELETE',revision=old['revision'])
 
     def test_users(self):
         for user, tier in (('test-readonly','ReadOnly'),('test-readwrite','ReadAndWrite'),('test-admin','Admin')):
@@ -170,7 +178,41 @@ class Configuration:
             self.fixture_login(user,user)
 
 
-def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWriteAgentGroup'):
+# The HotFolder package's tools the mimic calls. They exist only once the package is installed and released to the
+# device (ADR 026/027); this helper never creates or changes a tool definition.
+MIMIC_TOOLS = ('examples.hotfolder/write_text', 'examples.hotfolder/read_text')
+
+
+def configure_package_access(config, device, installed, group):
+    """Authorize installed SDK exports explicitly; standard FILE actions do not authorize invoke."""
+    base = dict(enabled=True, revision=1)
+    tools, devices, agents = 'debug-mimic-tools', 'debug-mimic-devices', 'debug-mimic-agents'
+    if not any(row['id'] == tools for row in config.all('tool-groups')):
+        config.upsert('tool-groups', dict(**base, id=tools, name='Debug HotFolder tools', toolIds=[]))
+    config.upsert('device-groups', dict(**base, id=devices, name='Debug selected device', deviceIds=[device]))
+    if not any(row['id'] == agents for row in config.all('agent-groups')):
+        config.upsert('agent-groups', dict(**base, id=agents, name='Debug package agent', agentIds=[], roleIds=[]))
+    # Moving an agent to ReadOnly (including --allocate-agent) removes this opt-in capability.
+    config.memberships('agents', 'debug-mimic-agent', [group]+([agents] if group != 'ReadOnlyAgentGroup' else []))
+    config.memberships('devices', device, ['ReadAndWriteDeviceGroup', devices])
+    for tool in MIMIC_TOOLS:
+        config.memberships('tools', tool, [tools])
+    scope = dict(toolGroups=dict(ids=[tools], all=False), deviceGroups=dict(ids=[devices], all=False),
+        actions=['invoke'], allActions=False,
+        resources=[dict(kind='CUSTOM', locator='tool://'+tool, match='EXACT') for tool in sorted(MIMIC_TOOLS)],
+        conditions=dict(notBeforeUnixMs=0, expiresAtUnixMs=0, networkCidrs=[], devicePosture=[],
+                        regions=[], hoursUtc=[], requireOnline=True, highRisk=False))
+    for purpose in ('CAPABILITY', 'SERVICE'):
+        config.upsert('grants', dict(**base, id='debug-mimic-'+purpose.lower(), name='Debug package '+purpose.lower(),
+            sourceType='AGENT_GROUP', sourceId=agents, purpose=purpose, scope=scope))
+    config.upsert('policies', dict(**base, id='debug-mimic-access', name='Debug package access', decision='ALLOW',
+        scope=scope, teams=dict(ids=[], all=False), agentGroups=dict(ids=[agents], all=False), approverTeams=dict(ids=[], all=False)))
+    config.upsert('bindings', dict(**base, id='debug-mimic-binding', name='Debug selected-device execution',
+        toolGroupId=tools, deviceGroupId=devices, actions=['invoke'],
+        allowedPackageDigests=sorted({tool['packageDigest'] for tool in installed.values()}), requireOnline=True, ownerDependency=False))
+
+
+def configure(device, local_fixture_reviewers=False, group='ReadAndWriteAgentGroup'):
     # Verify private token custody before publishing any rotated workload credential.
     path = ROOT/'.dev/debug/client-agent-token'
     private_file(path)
@@ -181,23 +223,11 @@ def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWri
     endpoint = config.api('/api/control/v1/endpoint/devices/'+device)
     if endpoint.get('state') != 'ACTIVE' or endpoint.get('connectionApproved') is False or int(time.time()*1000)-endpoint.get('lastSeenUnixMs',0)>120000:
         raise ValueError('The selected device must already be enrolled, approved and connected')
-    selected = [p for p in profiles if p['tool']['id'] in ('hotfolder.write_text','client.read_log_entry')]
-    if len(selected) != 2: raise ValueError('Installed profiles must include the existing file-write and diagnostic-log tools')
-    for profile in selected:
-        config.upsert('extractors', profile['extractor'])
-        config.upsert('tools', profile['tool'])
+    installed = {tool['id']: tool for tool in config.all('tools') if tool['id'] in MIMIC_TOOLS}
+    if set(installed) != set(MIMIC_TOOLS):
+        raise ValueError('Install the examples.hotfolder package and release it to this device first; its tools are not installed')
     config.upsert('agents', dict(id='debug-mimic-agent', name='Debug mimic agent', enabled=True, revision=1, ownerUserId='admin'))
-    config.memberships('agents','debug-mimic-agent',[group])
-    config.memberships('devices',device,['ReadAndWriteDeviceGroup'])
-    for profile in selected:config.memberships('tools',profile['tool']['id'],['ReadAndWriteToolGroup'])
-    config.upsert('bindings', dict(id='standard-ReadAndWrite-ReadAndWrite', name='ReadAndWrite tools on ReadAndWrite devices', enabled=True, revision=1,
-        toolGroupId='ReadAndWriteToolGroup', deviceGroupId='ReadAndWriteDeviceGroup', actions=['write','read'],
-        allowedPackageDigests=sorted({p['tool']['packageDigest'] for p in selected}), requireOnline=True, ownerDependency=False))
-    for purpose in ('capability','service'):config.delete('grants','debug-mimic-'+purpose)
-    config.delete('bindings','debug-mimic-binding')
-    for collection, id in (('agent-groups','debug-mimic-agents'),('device-groups','debug-mimic-devices')):
-        old=next((x for x in config.all(collection) if x['id']==id),None)
-        if old and not old.get('agentIds',old.get('deviceIds',[])):config.delete(collection,id)
+    configure_package_access(config, device, installed, group)
     if local_fixture_reviewers:config.test_users()
     token = secrets.token_urlsafe(48)
     digest = hashlib.sha256(token.encode()).hexdigest()
@@ -209,11 +239,13 @@ def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWri
         credentialSha256=digest,credentialEpoch=epoch,expiresAtUnixMs=expires))
     private_file(path,token)
     credential = dict(tokenSha256=digest, expiresAtUnixMs=expires,
-        context=dict(requestId='debug-mimic',tenantId='quickstart',mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='debug-mimic-agent',
+        context=dict(requestId='debug-mimic',tenantId=None,mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='debug-mimic-agent',
             workloadBindingId='debug-mimic-workload',chain=[],credentialEpoch=epoch,expiresAtUnixMs=expires,credentialSha256=digest,
-            bindingId='standard-ReadAndWrite-ReadAndWrite'))
+            bindingId='debug-mimic-binding'))
+    # Quickstart allocates a UUID tenant at first start; the container fills it in below.
     docker_script("import sys,json,time,os;os.umask(0o077);sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
         "p=s.DATA/'client-runtime-credentials.json';v=s.strict(p.read_bytes()) if p.exists() else [];c=json.load(sys.stdin);"
+        "c['context']['tenantId']=s.strict((s.DATA/'state/tenant.json').read_bytes())['tenantId'];"
         "v=[x for x in v if x['expiresAtUnixMs']>int(time.time()*1000) and x['context'].get('workloadBindingId')!='debug-mimic-workload'];"
         "assert len(v)<32;s.atomic(p,json.dumps(v+[c]))", json.dumps(credential))
     subprocess.run(['docker','restart',CONTAINER],check=True,capture_output=True)
@@ -229,7 +261,6 @@ def configure(device, profiles, local_fixture_reviewers=False, group='ReadAndWri
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device-id')
-    parser.add_argument('--profiles',type=Path)
     parser.add_argument('--agent-group',choices=['ReadOnlyAgentGroup','ReadAndWriteAgentGroup','AdminAgentGroup'],default='ReadAndWriteAgentGroup')
     parser.add_argument('--local-fixture-reviewers',action='store_true',help='Explicit local Quickstart test setup using independent fixture password logins')
     parser.add_argument('--allocate-agent',help='Only allocate an existing Agent using the reviewed membership API; do not rotate credentials or configure devices')
@@ -239,8 +270,8 @@ if __name__ == '__main__':
             config=Configuration(args.local_fixture_reviewers)
             config.memberships('agents',args.allocate_agent,[args.agent_group])
         else:
-            if not args.device_id or not args.profiles:raise ValueError('Provide --device-id and --profiles for initial provisioning')
-            configure(args.device_id,json.loads(args.profiles.read_text(encoding='utf-8-sig')),args.local_fixture_reviewers,args.agent_group)
+            if not args.device_id:raise ValueError('Provide --device-id for initial provisioning')
+            configure(args.device_id,args.local_fixture_reviewers,args.agent_group)
     except (ValueError,OSError,KeyError,subprocess.SubprocessError) as error:
         print('FAILED: '+(str(error) if isinstance(error,ValueError) else 'Debug setup failed; private details withheld'))
         raise SystemExit(1)

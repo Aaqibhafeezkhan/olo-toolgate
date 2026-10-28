@@ -1,124 +1,112 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Real OCI adapter protocol/security gate; owns only nonce-named fixtures and test state."""
+"""Real-engine gate for the client's managed runtime (ADR 026/027): Java and Python Hello World on pinned bases,
+runs over tool protocol v2 under the client's sandbox. Owns only its nonce-named image tag and test state."""
 import argparse
 import json
 import os
-import re
+from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
-import urllib.request
-import hashlib
 import uuid
-from pathlib import Path
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-PYTHON = 'python@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4'
-NODE = 'node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c'
-JDK = 'eclipse-temurin:21-jdk-noble@sha256:70898f0f893a6b772a0f29834d8b022e3ac20b6a0c33a922973cf66342ef56be'
-JRE = 'eclipse-temurin:21-jre-noble@sha256:22138efd69393501fccd8176ae16b01791ed71ff801b28f0359415389b17c766'
-POWERSHELL = 'mcr.microsoft.com/powershell@sha256:7ab5bd5ca6f95a3351fa0c6a1205237d57048c94542355aab55519a0861a9b25'
-DOTNET_SDK = 'mcr.microsoft.com/dotnet/sdk@sha256:e70cdb7f80b0348f5cb85f19a8f670fca061f033d57eed12fa003d58b0e06317'
-DOTNET = 'mcr.microsoft.com/dotnet/runtime@sha256:b89586dc17781f25531909993658aa8161205ae38b8cec8847df4a8221a403d5'
-PULL_IMAGE = 'python@sha256:bb2988715db2cf7ace7b53f38f3cffbef7c7046a656bee66245eb0ed386e2e81'
+# The approved base Control builds client-tool images on (ADR 026); its Java 21.0.12.1 is managed version 21.0.12+1.
+BASE = 'eclipse-temurin@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c'
+PACKAGE = 'ololabs.hello-world'
+PYTHON_BASE = 'python@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1'
 
 
 def run(args, **kwargs):
     return subprocess.run(args, cwd=ROOT, check=True, **kwargs)
 
 
-def pinned_python_version(image):
-    """Read version from digest-verified primary registry metadata, not a mutable tag."""
-    endpoint='https://registry-1.docker.io/v2/library/python/'
-    token=json.load(urllib.request.urlopen('https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/python:pull',timeout=15))['token']
-    def fetch(path,digest):
-        request=urllib.request.Request(endpoint+path,headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json'})
-        raw=urllib.request.urlopen(request,timeout=15).read(1048577)
-        if len(raw)>1048576 or 'sha256:'+hashlib.sha256(raw).hexdigest()!=digest:raise ValueError('Pinned registry metadata digest mismatch')
-        return json.loads(raw)
-    digest=image.split('@')[1]
-    index=fetch('manifests/'+digest,digest)
-    architecture=run(['docker','info','--format','{{.Architecture}}'],capture_output=True,text=True).stdout.strip()
-    architecture={'x86_64':'amd64','aarch64':'arm64'}.get(architecture,architecture)
-    manifest=next(m for m in index['manifests'] if m['platform']['os']=='linux' and m['platform']['architecture']==architecture)
-    manifest=fetch('manifests/'+manifest['digest'],manifest['digest'])
-    config=fetch('blobs/'+manifest['config']['digest'],manifest['config']['digest'])
-    return next(v.split('=',1)[1] for v in config['config']['Env'] if v.startswith('PYTHON_VERSION='))
+def hello_world_artifact(output, work, package, extension):
+    """Extract the artifact from the same sealed package the Control image ships."""
+    packages = sorted(output.glob(package + '-[0-9]*.tgpkg'))
+    if len(packages) != 1:
+        raise ValueError('Expected exactly one Hello World package')
+    with zipfile.ZipFile(packages[0]) as archive:
+        manifest = json.loads(archive.read('toolgate-package.json'))
+        artifacts = [a['path'] for a in manifest['artifacts'] if a['path'].endswith('.' + extension)]
+        if len(artifacts) != 1:
+            raise ValueError('Hello World must carry exactly one SDK artifact')
+        (work/('tool.' + extension)).write_bytes(archive.read(artifacts[0]))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--test-binary', type=Path, help='Already compiled native Rust execution test executable')
-    parser.add_argument('--native-fixture', type=Path, required=True, help='Real Linux x64/ARM64 runtime_fixture executable')
+    parser.add_argument('--cli', type=Path, required=True, help='The toolgate CLI built for this runner')
+    parser.add_argument('--test-binary', type=Path, help='Already compiled execution test executable')
+    parser.add_argument('--sdk', choices=('java', 'python', 'all'), default='all')
     args = parser.parse_args()
-    (ROOT/'.dev').mkdir(exist_ok=True)
     engine = Path(shutil.which('docker') or '')
     if not engine.is_file():
-        raise SystemExit('A local Docker engine is required for this explicit gate')
+        raise SystemExit('A local container engine is required for this explicit gate')
     base = Path(os.environ['ProgramData']) if os.name == 'nt' else Path(tempfile.gettempdir())
-    state = base / ('toolgate-runtime-test-' + uuid.uuid4().hex)
-    if os.name != 'nt':
-        state.mkdir(mode=0o700)
+    state = base/('toolgate-runtime-test-' + uuid.uuid4().hex)
+    states = []
     endpoint = 'npipe:////./pipe/dockerDesktopLinuxEngine' if os.name == 'nt' else 'unix:///var/run/docker.sock'
+    tag = 'olo-toolgate-runtime-test:' + uuid.uuid4().hex
     tags = []
     try:
         (ROOT/'.dev').mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix='runtime-images-', dir=ROOT/'.dev') as temporary:
+        with tempfile.TemporaryDirectory(prefix='runtime-image-', dir=ROOT/'.dev') as temporary:
             work = Path(temporary)
-            for source in (ROOT/'tools/client/runtime-fixtures').iterdir():
-                shutil.copyfile(source, work/source.name)
-            shutil.copyfile(args.native_fixture, work/'run')
-            images = {}
-            plans = {
-                'PYTHON': (f'FROM {PYTHON}\nENV IMAGE_SECRET_SENTINEL=should-not-leak\nCOPY --chmod=0444 python.py /opt/tool/tool.py\n', ['/usr/local/bin/python3', '--version']),
-                'NODE': (f'FROM {NODE}\nCOPY --chmod=0444 node.mjs /opt/tool/tool.mjs\n', ['/usr/local/bin/node', '--version']),
-                'SHELL': (f'FROM {PYTHON}\nCOPY --chmod=0444 shell.sh /opt/tool/tool.sh\n', ['/bin/bash', '--version']),
-                'NATIVE': (f'FROM {PYTHON}\nCOPY --chmod=0555 run /opt/tool/run\n', ['/opt/tool/run', '--version']),
-                'JAVA_JAR': (f'FROM {JDK} AS compile\nWORKDIR /source\nCOPY Tool.java .\nRUN javac Tool.java && jar --create --file tool.jar --main-class Tool Tool.class\nFROM {JRE}\nCOPY --from=compile --chmod=0444 /source/tool.jar /opt/tool/tool.jar\n', ['/opt/java/openjdk/bin/java', '-version']),
-                'POWERSHELL': (f'FROM {POWERSHELL}\nCOPY --chmod=0444 tool.ps1 /opt/tool/tool.ps1\n', ['/usr/bin/pwsh', '--version']),
-                'DOTNET': (f'FROM {DOTNET_SDK} AS compile\nWORKDIR /source\nCOPY Program.cs tool.csproj ./\nRUN dotnet publish tool.csproj --configuration Release --output /output\nFROM {DOTNET}\nCOPY --from=compile /output/ /opt/tool/\n', ['/usr/share/dotnet/dotnet', '--list-runtimes']),
-            }
-            for kind, (plan, version_command) in plans.items():
-                tag = 'olo-toolgate-runtime-test:' + uuid.uuid4().hex
-                tags.append(tag)
-                (work/'Dockerfile').write_text('# Copyright 2026 OLO Labs\n# SPDX-License-Identifier: Apache-2.0\n'+plan+'RUN chmod 0755 /opt /opt/tool\n', encoding='utf-8')
-                run(['docker', 'build', '-t', tag, str(work)])
-                identity = run(['docker', 'image', 'inspect', '--format', '{{.Id}}', tag], capture_output=True, text=True).stdout.strip()
-                probe = run(['docker', 'run', '--rm', '--network', 'none', '--entrypoint', version_command[0], identity, *version_command[1:]], capture_output=True, text=True)
-                first = (probe.stdout + probe.stderr).splitlines()[0]
-                version = re.search(r'(?<!\d)(\d+\.\d+\.\d+(?:\.\d+)?)', first)
-                if not version:
-                    raise ValueError('Version probe did not produce exact SemVer')
-                exact_version = version[1]
-                if kind == 'JAVA_JAR' and exact_version.count('.') == 3:
-                    exact_version = exact_version.rsplit('.', 1)[0] + '+' + exact_version.rsplit('.', 1)[1]
-                images[kind] = {'image': identity, 'version': exact_version}
-            # A separate pinned official Python image exercises actual provisioning.
-            # Previously cached images are reused; user images are never deleted.
-            pull_version = pinned_python_version(PULL_IMAGE)
-            initially_present = subprocess.run(['docker','image','inspect',PULL_IMAGE],capture_output=True).returncode == 0
-            env = dict(os.environ, TOOLGATE_RUNTIME_TEST_IMAGES=json.dumps(images),
-                       TOOLGATE_RUNTIME_TEST_STATE=str(state), TOOLGATE_RUNTIME_TEST_ENGINE=str(engine),
-                       TOOLGATE_RUNTIME_TEST_ENDPOINT=endpoint, TOOLGATE_RUNTIME_LEAK_SENTINEL='should-not-leak',
-                       TOOLGATE_RUNTIME_PULL_IMAGE=PULL_IMAGE, TOOLGATE_RUNTIME_PULL_VERSION=pull_version)
-            command = [str(args.test_binary.resolve())] if args.test_binary else ['cargo', 'test', '-p', 'olo-toolgate-client', '--test', 'execution', '--locked', '--']
-            run([*command, 'real_managed_runtime_security_boundary', '--ignored', '--nocapture'], env=env)
-            evidence = ROOT/'build/client/runtime-smoke.json'
-            evidence.parent.mkdir(parents=True, exist_ok=True)
-            evidence.write_text(json.dumps({'realDocker': True, 'adapters': images, 'jsonProtocol': True,
-                'argumentInjection': True, 'childProcessesDenied': True, 'networkDenied': True,
-                'environmentCleared': True, 'timeoutOutputMemory': True, 'malformedAndWrongVersionRejected': True,
-                'onlineAuthorizationRequired': True, 'firstUseProvisionOrCache': True, 'initiallyPresentRuntimeImage': initially_present, 'cleanup': True}, indent=2)+'\n', encoding='utf-8')
-            print('Real managed runtime adapter/security gate passed')
+            output = work/'core-mcp'
+            run([sys.executable, 'core-mcp/build.py', '--cli', str(args.cli.resolve(strict=True)), '--output', str(output)])
+            evidence_runs = []
+            for sdk in (('java', 'python') if args.sdk == 'all' else (args.sdk,)):
+                sdk_tag = tag + '-' + sdk
+                tags.append(sdk_tag)
+                sdk_state = state.with_name(state.name + '-' + sdk)
+                states.append(sdk_state)
+                package = PACKAGE + ('-python' if sdk == 'python' else '')
+                extension = 'pyz' if sdk == 'python' else 'jar'
+                runtime_base = PYTHON_BASE if sdk == 'python' else BASE
+                hello_world_artifact(output, work, package, extension)
+                # Root-owned, read-only, run as 65532 with the client's fixed launch vector.
+                (work/'Dockerfile').write_text('# Copyright 2026 OLO Labs\n# SPDX-License-Identifier: Apache-2.0\n'
+                    f'FROM {runtime_base}\nRUN mkdir -p /opt/tool/{package} && chmod 0755 /opt/tool /opt/tool/{package}\n'
+                    f'COPY --chmod=0444 tool.{extension} /opt/tool/{package}/tool.{extension}\n'
+                    'USER 65532:65532\nENTRYPOINT []\nCMD []\n', encoding='utf-8')
+                run(['docker', 'build', '-t', sdk_tag, str(work)])
+                image = run(['docker', 'image', 'inspect', '--format', '{{.Id}}', sdk_tag], capture_output=True, text=True).stdout.strip()
+                version = '21.0.12+1'
+                if sdk == 'python':
+                    config = json.loads(run(['docker', 'image', 'inspect', sdk_tag], capture_output=True, text=True).stdout)[0]
+                    version = next(item.split('=', 1)[1] for item in config['Config']['Env'] if item.startswith('PYTHON_VERSION='))
+                env = dict(os.environ, TOOLGATE_RUNTIME_TEST_IMAGE=image, TOOLGATE_RUNTIME_TEST_STATE=str(sdk_state),
+                           TOOLGATE_RUNTIME_TEST_ENGINE=str(engine), TOOLGATE_RUNTIME_TEST_ENDPOINT=endpoint,
+                           TOOLGATE_RUNTIME_TEST_SDK=sdk, TOOLGATE_RUNTIME_TEST_VERSION=version)
+                command = [str(args.test_binary.resolve())] if args.test_binary else ['cargo', 'test', '-p', 'olo-toolgate-client', '--test', 'execution', '--locked', '--']
+                try:
+                    result = run([*command, 'real_engine_runs_hello_world_over_tool_protocol_v2', '--ignored', '--exact', '--nocapture'],
+                                 env=env, capture_output=True, text=True)
+                except subprocess.CalledProcessError as error:
+                    print((error.stdout or '') + (error.stderr or ''))
+                    raise
+                print(result.stdout + result.stderr)
+                if 'test real_engine_runs_hello_world_over_tool_protocol_v2 ... ok' not in result.stdout:
+                    raise SystemExit('The real-engine Hello World test did not run: ' + sdk)
+                evidence_runs.append(dict(sdk=sdk, base=runtime_base, package=package, image=image,
+                                          arguments=[{}, {'text': 'Anupriya'}], outputs=['Hello World', 'Hello Anupriya']))
+        evidence = ROOT/'build/client/runtime-smoke.json'
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text(json.dumps({'realEngine': True, 'protocol': 2, 'runs': evidence_runs,
+                                        'cleanup': True}, indent=2) + '\n', encoding='utf-8')
+        print('Real managed runtime gate passed')
     finally:
-        for tag in tags:
-            subprocess.run(['docker', 'image', 'rm', tag], cwd=ROOT, capture_output=True)
-        # Single-interpreter deletion of this verified nonce-named test directory only.
-        if state.resolve().parent != base.resolve() or not state.name.startswith('toolgate-runtime-test-'):
-            raise ValueError('Owned test path verification failed')
-        if state.exists():
-            shutil.rmtree(state)
+        for sdk_tag in tags:
+            subprocess.run(['docker', 'image', 'rm', sdk_tag], cwd=ROOT, capture_output=True)
+        for sdk_state in states:
+            if sdk_state.resolve().parent != base.resolve() or not sdk_state.name.startswith('toolgate-runtime-test-'):
+                raise ValueError('Owned test path verification failed')
+            if sdk_state.exists():
+                shutil.rmtree(sdk_state)
 
 
 if __name__ == '__main__':

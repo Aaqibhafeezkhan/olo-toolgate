@@ -1,0 +1,6 @@
+[
+  {
+    "request": { "route": "orders.get", "method": "GET", "variables": { "orderId": "7" } },
+    "response": { "status": 200, "headers": { "Content-Type": "application/json" }, "body": { "id": "7", "status": "OPEN" } }
+  }
+]

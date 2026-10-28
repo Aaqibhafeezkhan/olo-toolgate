@@ -1,0 +1,23 @@
+# Live tenant identity qualification
+
+After building a matching Quickstart image, run:
+
+```sh
+python tools/tenancy/check.py --image IMAGE --output build/quickstart/tenant-runtime-evidence.json
+python tools/tenancy/check.py --postgresql --image IMAGE --output build/quickstart/tenant-postgresql-runtime-evidence.json
+TOOLGATE_TENANT_RUNTIME_EVIDENCE="$PWD/build/quickstart/tenant-runtime-evidence.json" cargo test --locked -p olo-toolgate-tenant-identity --test runtime_cutover -- --ignored
+```
+
+The first command creates and removes its own Docker container and fresh volume. It uses an existing local image, publishes no ports, and keeps networking on loopback. Optional `--control-app` and `--gateway-binary` paths mount matching local build artifacts for focused development checks. The fixture deliberately disables optional package/profile initialization and embedded builds; the full Quickstart release check qualifies those separately.
+
+The fixture provisions two tenant UUIDs with separate signing/CA custody and canonical hostnames. TLS hostname and certificate validation stay enabled. It verifies signed discovery, repeated device identifiers, administrator approval, authenticated check-in without a tenant header, foreign JWT/certificate refusal, and two Gateway processes bound to separate tenant credentials. Anonymous Gateway metadata works with no service-JWT file present.
+
+Four Control launches exercise initial keys, preannouncement, activation with CA overlap, and retirement. Gateway processes retain their verification floors across those launches. An old tenant CA remains in the public listener trust store deliberately: application authorization must still reject its retired certificate. The second tenant continues using its original certificate. The protected operator lifecycle command then checks uniform public unknown/suspended errors and an unaffected second Gateway. The same fixture also verifies dry-run preview, late one-time provisioning, inspect and identity publication without restarting Control.
+
+The exported JSON contains synthetic public signed documents and certificates, with no private keys, enrollment device codes or tokens. The Rust test consumes that evidence using the production shared verifier, including an offline missed-announcement HTTPS refresh, serialized trust floors, rollback denial, CA overlap/retirement and cross-tenant identity denial. It replays each short-lived packet at its captured issue time; production verification uses the current clock.
+
+Replay each SQLite and PostgreSQL evidence file separately. Release qualification uses the fresh image without `--control-app` or `--gateway-binary` overrides. The full `tools/quickstart/check.py` gate also exercises sealed Java/Python packages, HUMAN/SERVICE/ASK flows, revocation, restart and actual offline SQLite image recovery. `tools/tenancy/recovery_check.py` qualifies shared and selected PostgreSQL recovery. Native installers require all six matching-source records from the feature qualification workflow; see [deployment and evidence](../../docs/deployment/multitenant.md).
+
+This is protocol/runtime qualification. Dedicated execution-pool mounts/networks, operator lifecycle administration, quotas, tenant recovery and the complete native OS/release matrix retain their separate deployment/release gates.
+
+Operator use and credential custody are documented in [tenant operations](../../docs/control-plane/tenant-operations.md). Deployment definitions and pool isolation checks are in [the shared topology](../../deploy/compose/Multitenant/README.md).

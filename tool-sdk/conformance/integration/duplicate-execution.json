@@ -4,8 +4,8 @@
   "area": "duplicate-execution",
   "title": "Duplicate execution and effect semantics",
   "sources": [
-    "plan.md §11.4",
-    "plan.md §11.7",
+    "platform-requirements.md §11.4",
+    "platform-requirements.md §11.7",
     "docs/security/threat-models/tool-host.md"
   ],
   "cases": [
@@ -13,7 +13,7 @@
       "id": "ledger/ambiguous-dispatch",
       "title": "An ambiguous dispatch is never retried elsewhere",
       "requirements": [
-        "plan.md §11.4",
+        "platform-requirements.md §11.4",
         "T-AD-4"
       ],
       "level": "integration",
@@ -32,7 +32,7 @@
       "id": "ledger/crash-after-admitted",
       "title": "A host crash after ADMITTED ends OUTCOME_UNKNOWN",
       "requirements": [
-        "plan.md §11.4",
+        "platform-requirements.md §11.4",
         "T-AD-4"
       ],
       "level": "integration",
@@ -52,7 +52,7 @@
       "id": "duplicate/gateway-crash",
       "title": "A Gateway crash does not duplicate execution",
       "requirements": [
-        "plan.md §21 integration"
+        "platform-requirements.md §21 integration"
       ],
       "level": "integration",
       "targets": [
@@ -70,7 +70,7 @@
       "id": "duplicate/client-reissue",
       "title": "A client re-issue matches the existing invocation",
       "requirements": [
-        "plan.md §11.4"
+        "platform-requirements.md §11.4"
       ],
       "level": "integration",
       "targets": [
@@ -87,7 +87,7 @@
       "id": "duplicate/refused-retry",
       "title": "REFUSED is retried on another host",
       "requirements": [
-        "plan.md §11.4"
+        "platform-requirements.md §11.4"
       ],
       "level": "integration",
       "targets": [
@@ -104,7 +104,7 @@
       "id": "effects/reconcile",
       "title": "Reconcile answers update OUTCOME_UNKNOWN",
       "requirements": [
-        "plan.md §11.7 reconciliation",
+        "platform-requirements.md §11.7 reconciliation",
         "execution.md §5"
       ],
       "level": "integration",
@@ -123,7 +123,7 @@
       "id": "effects/no-reconcile-no-reexecute",
       "title": "Tools without reconcile are never re-executed",
       "requirements": [
-        "plan.md §11.7"
+        "platform-requirements.md §11.7"
       ],
       "level": "integration",
       "targets": [
@@ -139,7 +139,7 @@
       "id": "effects/broker-evidence",
       "title": "The broker records evidence for each request",
       "requirements": [
-        "plan.md §11.7 rules"
+        "platform-requirements.md §11.7 rules"
       ],
       "level": "integration",
       "targets": [
@@ -155,7 +155,7 @@
       "id": "effects/retry-library-warning",
       "title": "The packager warns about retry libraries",
       "requirements": [
-        "plan.md §11.7 rules"
+        "platform-requirements.md §11.7 rules"
       ],
       "level": "unit",
       "targets": [

@@ -1,0 +1,29 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: toolgate-device
+services:
+  device:
+    image: ${TOOLGATE_DEVICE_IMAGE:-ololab/olo-toolgate-device:dev}
+    platform: ${TOOLGATE_DEVICE_PLATFORM:-linux/amd64}
+    pull_policy: always
+    hostname: ${TOOLGATE_DEVICE_NAME:-toolgate-device}
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 1
+    stop_grace_period: 30s
+    environment:
+      TOOLGATE_GATEWAY_URLS: ${TOOLGATE_GATEWAY_URLS:?Set comma-separated HTTPS gateway URLs}
+      TOOLGATE_GATEWAY_CONSOLE_URLS: ${TOOLGATE_GATEWAY_CONSOLE_URLS:-}
+    tmpfs:
+      - /run:rw,nosuid,size=8m,mode=755
+    volumes:
+      - device-config:/etc/olo-toolgate
+      - device-state:/var/lib/olo-toolgate
+volumes:
+  device-config:
+  device-state:

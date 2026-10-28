@@ -25,7 +25,7 @@ foreach ($fixtures as $name => $fixture) {
     }
     $count++;
 }
-if ($count !== 247) { throw new RuntimeException('Incomplete fixture coverage'); }
+if ($count !== 278) { throw new RuntimeException('Incomplete fixture coverage'); }
 foreach ([['decision' => 'UNKNOWN'], ['bypass' => true], ['decision' => null]] as $change) {
     try {
         $bad = array_replace($fixtures['EnterpriseDecision'], $change);

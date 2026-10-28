@@ -5,6 +5,181 @@
   "title": "Endpoint identity foundation",
   "$ref": "#/$defs/ClientHealth",
   "$defs": {
+    "ConsoleDeviceLookup": {
+      "type": "object",
+      "description": "Exactly one enrollment code or existing device identifier for establishing console device context.",
+      "additionalProperties": false,
+      "properties": {
+        "userCode": {
+          "type": "string",
+          "pattern": "^[A-F0-9]{16}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": []
+    },
+    "ConsoleDeviceChallenge": {
+      "description": "A short-lived server challenge bound to a verified console session and device key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "nonce",
+        "deviceId",
+        "keyFingerprint",
+        "expiresAtUnixMs"
+      ]
+    },
+    "ConsoleDeviceProofRequest": {
+      "description": "Bounded local native-client proof request for the selected console origin.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "console-device-proof"
+        },
+        "consoleUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "kind",
+        "consoleUrl",
+        "nonce"
+      ]
+    },
+    "ConsoleDeviceProof": {
+      "description": "Device-key signature over the domain-separated console challenge nonce.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,256}$"
+        }
+      },
+      "required": [
+        "nonce",
+        "deviceId",
+        "keyFingerprint",
+        "signature"
+      ]
+    },
+    "ConsoleDeviceVerified": {
+      "description": "Current-device context accepted for the authenticated console session.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "deviceId",
+        "expiresAtUnixMs"
+      ]
+    },
+    "EndpointPresencePing": {
+      "type": "object",
+      "description": "Key-proved device presence with the client's current local UTC offset for hourly revoked-device scheduling.",
+      "additionalProperties": false,
+      "properties": {
+        "announcement": {
+          "$ref": "#/$defs/EndpointEnrollmentStart"
+        },
+        "utcOffset": {
+          "type": "string",
+          "pattern": "^[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00)$"
+        }
+      },
+      "required": [
+        "announcement",
+        "utcOffset"
+      ]
+    },
+    "EndpointConnectionAction": {
+      "type": "string",
+      "enum": [
+        "ENROLL",
+        "CHECK_IN",
+        "WAIT"
+      ]
+    },
+    "EndpointConnectionDirective": {
+      "type": "object",
+      "description": "Server-authoritative response to a device presence ping; presence never grants tool access.",
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "#/$defs/EndpointState"
+        },
+        "action": {
+          "$ref": "#/$defs/EndpointConnectionAction"
+        },
+        "reportSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextIntervalMs": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 3600000
+        }
+      },
+      "required": [
+        "deviceId",
+        "state",
+        "action",
+        "reportSequence",
+        "nextIntervalMs"
+      ]
+    },
     "ClientPlatform": {
       "type": "string",
       "enum": [
@@ -232,7 +407,7 @@
     },
     "EndpointEnrollmentReview": {
       "type": "object",
-      "description": "Endpoint identity foundation wire model.",
+      "description": "Endpoint identity foundation wire model. userCode and keyFingerprint are returned only to callers who may approve through a group rule.",
       "additionalProperties": false,
       "properties": {
         "enrollmentId": {
@@ -273,10 +448,8 @@
       },
       "required": [
         "enrollmentId",
-        "userCode",
         "deviceId",
         "platform",
-        "keyFingerprint",
         "state",
         "expiresAtUnixMs"
       ]
@@ -413,7 +586,7 @@
           "type": "array",
           "maxItems": 50,
           "items": {
-            "$ref": "builtins.schema.json#/$defs/BuiltinToolInfo"
+            "$ref": "local-tools.schema.json#/$defs/LocalToolInfo"
           }
         }
       },
@@ -440,16 +613,11 @@
           "minimum": 0,
           "maximum": 9007199254740991
         },
-        "nextIntervalSeconds": {
-          "type": "integer",
-          "minimum": 2,
-          "maximum": 3600
-        },
         "nextIntervalMs": {
           "type": "integer",
           "minimum": 500,
           "maximum": 3600000,
-          "description": "Negotiated check-in interval for clients requesting milliseconds; takes precedence over nextIntervalSeconds."
+          "description": "The next check-in interval, spread by the configured jitter."
         },
         "identity": {
           "$ref": "endpoint.schema.json#/$defs/DeviceIdentity"
@@ -468,12 +636,12 @@
         "deviceId",
         "sequence",
         "serverTimeUnixMs",
-        "nextIntervalSeconds"
+        "nextIntervalMs"
       ]
     },
     "EndpointDeviceRecord": {
       "type": "object",
-      "description": "Endpoint identity foundation wire model.",
+      "description": "Endpoint identity foundation wire model. keyFingerprint is returned only to callers who may approve through a group rule.",
       "additionalProperties": false,
       "properties": {
         "deviceId": {
@@ -545,31 +713,19 @@
         "deviceId",
         "tenantId",
         "userId",
-        "keyFingerprint",
         "state",
         "revision",
         "lastSeenUnixMs",
         "reportSequence"
       ]
     },
-    "SystemExecutorKind": {
-      "type": "string",
-      "enum": [
-        "BUILTINS",
-        "HOTFOLDER",
-        "REST_FORWARDING"
-      ]
-    },
     "EndpointManagedDevice": {
       "type": "object",
-      "description": "Directory identity, enrolled approval and pending request combined for administrative management.",
+      "description": "Directory identity, enrolled approval and pending request with server-resolved target permissions.",
       "additionalProperties": false,
       "properties": {
         "deviceId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
-        },
-        "systemExecutor": {
-          "type": "boolean"
         },
         "directoryDevice": {
           "$ref": "control.schema.json#/$defs/ControlDevice"
@@ -582,13 +738,6 @@
         },
         "registeredUser": {
           "$ref": "control.schema.json#/$defs/ControlUser"
-        },
-        "systemExecutorKind": {
-          "$ref": "endpoint.schema.json#/$defs/SystemExecutorKind"
-        },
-        "systemAvailable": {
-          "type": "boolean",
-          "description": "Composition readiness for a server executor; absent when availability is unknown."
         },
         "systemName": {
           "type": "string",
@@ -603,11 +752,20 @@
           "maxLength": 45,
           "pattern": "^[0-9a-fA-F:.]+$",
           "description": "Server-observed transport IP address; may represent NAT or a proxy."
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$"
+          },
+          "maxItems": 32,
+          "uniqueItems": true,
+          "description": "Current target-specific feature actions resolved by Control; never inferred from displayed enrollment metadata."
         }
       },
       "required": [
-        "deviceId",
-        "systemExecutor"
+        "deviceId"
       ]
     },
     "EndpointManagedDevicePage": {
@@ -740,7 +898,9 @@
         "HEALTH",
         "ENROLL",
         "CHECK_IN",
-        "ACTIVITY"
+        "ACTIVITY",
+        "POWER_ON",
+        "POWER_OFF"
       ]
     },
     "ClientIpcRequest": {
@@ -791,6 +951,9 @@
           "items": {
             "$ref": "endpoint.schema.json#/$defs/ClientGatewayConnection"
           }
+        },
+        "power": {
+          "$ref": "client.schema.json#/$defs/DevicePower"
         }
       },
       "required": [
@@ -869,6 +1032,15 @@
         },
         "invocationId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "traceparent": {
+          "type": "string",
+          "minLength": 55,
+          "maxLength": 55,
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        },
+        "executionContext": {
+          "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
         }
       },
       "required": [
@@ -902,6 +1074,19 @@
         },
         "permit": {
           "$ref": "enterprise.schema.json#/$defs/EnterpriseSignedPermit"
+        },
+        "traceparent": {
+          "type": "string",
+          "minLength": 55,
+          "maxLength": 55,
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        },
+        "executionContext": {
+          "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
+        },
+        "collectSpans": {
+          "type": "boolean",
+          "description": "DETAILED Insights: the device records and uploads its execution span (ADR 031 \u00a79)."
         }
       },
       "required": [
@@ -1072,7 +1257,7 @@
           "type": "array",
           "maxItems": 50,
           "items": {
-            "$ref": "builtins.schema.json#/$defs/BuiltinToolInfo"
+            "$ref": "local-tools.schema.json#/$defs/LocalToolInfo"
           }
         }
       },
@@ -1085,9 +1270,7 @@
       "enum": [
         "CHECK_IN",
         "AUTHORIZE",
-        "RESULT",
-        "BUILDER_POLL",
-        "BUILDER_RESULT"
+        "RESULT"
       ],
       "description": "Fixed authenticated operations on the active-job channel."
     },
@@ -1331,6 +1514,152 @@
         "serverUrl",
         "focused",
         "health"
+      ]
+    },
+    "DeviceDeploymentMetadata": {
+      "type": "object",
+      "description": "Operator-collected Docker deployment details for display only; never enrollment, permission or trusted network evidence.",
+      "additionalProperties": false,
+      "properties": {
+        "executionKind": {
+          "$ref": "endpoint.schema.json#/$defs/DeviceExecutionKind"
+        },
+        "containerId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "containerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+        },
+        "systemName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[a-zA-Z0-9._-]+$"
+        },
+        "networkId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "networkName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+        },
+        "ipAddress": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 45,
+          "pattern": "^[0-9a-fA-F:.]+$"
+        }
+      },
+      "required": [
+        "executionKind",
+        "containerId",
+        "containerName",
+        "systemName",
+        "networkId",
+        "networkName",
+        "ipAddress"
+      ]
+    },
+    "DeviceExecutionKind": {
+      "type": "string",
+      "enum": [
+        "ENDPOINT_CLIENT",
+        "TOOL_HOST_DIRECT",
+        "TOOL_HOST_PULL"
+      ]
+    },
+    "DeviceDeploymentRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "deployment": {
+          "$ref": "endpoint.schema.json#/$defs/DeviceDeploymentMetadata"
+        }
+      },
+      "required": [
+        "deviceId",
+        "deployment"
+      ],
+      "description": "Public deployment details attached only to an already visible enrolled device."
+    },
+    "EndpointManagedDeviceDeploymentPage": {
+      "type": "object",
+      "description": "Opt-in administrative deployment view. Default device responses retain their existing closed schema.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 544,
+          "items": {
+            "$ref": "endpoint.schema.json#/$defs/EndpointManagedDevice"
+          }
+        },
+        "deployments": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "endpoint.schema.json#/$defs/DeviceDeploymentRecord"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "EndpointEnrollmentLookup": {
+      "type": "object",
+      "description": "Look up one pending enrollment by the code its client shows.",
+      "additionalProperties": false,
+      "properties": {
+        "userCode": {
+          "type": "string",
+          "pattern": "^[A-F0-9]{16}$"
+        }
+      },
+      "required": [
+        "userCode"
+      ]
+    },
+    "EndpointEnrollmentLookupResult": {
+      "type": "object",
+      "description": "The pending enrollment a valid code names, for comparison with the client before approval.",
+      "additionalProperties": false,
+      "properties": {
+        "enrollmentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "deviceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "platform": {
+          "$ref": "endpoint.schema.json#/$defs/ClientPlatform"
+        },
+        "keyFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "enrollmentId",
+        "deviceId",
+        "platform",
+        "keyFingerprint",
+        "expiresAtUnixMs"
       ]
     }
   }

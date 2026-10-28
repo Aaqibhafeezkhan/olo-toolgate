@@ -1,8 +1,14 @@
 {{/* Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 */}}
 {{- if .Values.control.enabled }}
 {{- $g := .Values.control }}
+{{- if $g.builder.enabled }}{{ fail "Embedded SDK builds are restricted to local single-tenant Quickstart; deploy isolated external builds and publish verified packages" }}{{- end }}
 {{- $name := include "olo-toolgate.controlName" . }}
 {{- $c := $g.clientCheckIn }}
+{{- if eq $g.cache.mode "redis" }}
+{{- if not $g.cache.tls }}{{ fail "control.cache requires verified TLS" }}{{ end }}
+{{- if or (not $g.cache.host) (not $g.cache.namespace) (not $g.cache.credentialsSecret) }}{{ fail "control.cache requires host, namespace and credentialsSecret" }}{{ end }}
+{{- if and $g.networkPolicy.enabled (or (not $g.networkPolicy.cacheTo) (not $g.networkPolicy.dnsTo)) }}{{ fail "control.cache requires explicit cacheTo and dnsTo egress peers" }}{{ end }}
+{{- end }}
 {{- if gt (add (int $c.checkInMs) (div (mul (int $c.checkInMs) (int $c.jitterPct)) 100) 5000) 30000 }}{{ fail "control.clientCheckIn: check-in plus jitter plus 5 s must fit the 30 s sync deadline" }}{{ end }}
 {{- if le (int $g.terminationGracePeriodSeconds) 20 }}{{ fail "termination grace must exceed application drain deadline" }}{{ end }}
 {{- if and $g.autoscaling.enabled (gt (int $g.autoscaling.minReplicas) (int $g.autoscaling.maxReplicas)) }}{{ fail "HPA minimum must not exceed maximum" }}{{ end }}
@@ -25,9 +31,42 @@ data:
   MP_JWT_VERIFY_ISSUER: {{ $g.jwt.issuer | quote }}
   MP_JWT_VERIFY_AUDIENCES: {{ $g.jwt.audience | quote }}
   TOOLGATE_CONTROL_DEVELOPMENT_MODE: {{ $g.developmentMode | quote }}
+  TOOLGATE_CONTROL_CACHE_MODE: {{ $g.cache.mode | quote }}
+  {{- if eq $g.cache.mode "redis" }}
+  TOOLGATE_CONTROL_CACHE_HOST: {{ $g.cache.host | quote }}
+  TOOLGATE_CONTROL_CACHE_PORT: {{ printf "%d" (int $g.cache.port) | quote }}
+  TOOLGATE_CONTROL_CACHE_TLS: {{ $g.cache.tls | quote }}
+  TOOLGATE_CONTROL_CACHE_USERNAME: {{ $g.cache.username | quote }}
+  TOOLGATE_CONTROL_CACHE_NAMESPACE: {{ $g.cache.namespace | quote }}
+  TOOLGATE_CONTROL_CACHE_TIMEOUT_MS: {{ printf "%d" (int $g.cache.timeoutMs) | quote }}
+  TOOLGATE_CONTROL_CACHE_TTL_SECONDS: {{ printf "%d" (int $g.cache.ttlSeconds) | quote }}
+  TOOLGATE_CONTROL_CACHE_PASSWORD_PATH: /etc/toolgate/cache/password
+  TOOLGATE_CONTROL_CACHE_ENCRYPTION_KEY_PATH: /etc/toolgate/cache/encryption-key
+  {{- if $g.cache.caSecret }}
+  TOOLGATE_CONTROL_CACHE_CA_PATH: /etc/toolgate/cache-ca/ca.pem
+  {{- end }}
+  {{- end }}
+  TOOLGATE_CONTROL_BUILDER_ENABLED: {{ $g.builder.enabled | quote }}
+  TOOLGATE_CONTROL_BUILDER_DATA_DIRECTORY: /data/builder
   TOOLGATE_CONTROL_MAX_RECORDS: {{ printf "%d" (int $g.limits.maxRecords) | quote }}
   TOOLGATE_CONTROL_MAX_CONFIG_BYTES: {{ printf "%d" (int $g.limits.maxConfigBytes) | quote }}
+  TOOLGATE_CAPACITY_REQUESTS_PER_SECOND: {{ printf "%d" (int $g.limits.requestsPerSecond) | quote }}
+  TOOLGATE_CAPACITY_HTTP_CONCURRENCY: {{ printf "%d" (int $g.limits.httpConcurrency) | quote }}
+  TOOLGATE_CAPACITY_DATABASE_CONCURRENCY: {{ printf "%d" (int $g.limits.databaseConcurrency) | quote }}
   TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED: {{ $g.tracing.enabled | quote }}
+  TOOLGATE_INSIGHTS_MODE: {{ $g.insights.mode | default "NONE" | quote }}
+  {{- with $g.insights.spans }}
+  TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO: {{ .sampleRatio | default "0.1" | quote }}
+  TOOLGATE_INSIGHTS_SPAN_SLOW_MS: {{ printf "%d" (int (.slowMs | default 5000)) | quote }}
+  TOOLGATE_INSIGHTS_SPAN_BUFFER_MIB: {{ printf "%d" (int (.bufferMiB | default 64)) | quote }}
+  TOOLGATE_INSIGHTS_SPAN_RETENTION_HOURS: {{ printf "%d" (int (.retentionHours | default 72)) | quote }}
+  {{- end }}
+  {{- with $g.insights.otlp }}
+  {{- if .endpoint }}
+  TOOLGATE_INSIGHTS_OTLP_ENDPOINT: {{ .endpoint | quote }}
+  TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: {{ .environment | default "" | quote }}
+  {{- end }}
+  {{- end }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {{ printf "https://%s:%v" $g.tracing.host $g.tracing.port | quote }}
   QUARKUS_OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: {{ $g.tracing.protocol | quote }}
   TOOLGATE_CONTROL_EFFECT_ENABLED: {{ $g.effect.enabled | quote }}
@@ -42,6 +81,38 @@ data:
   TOOLGATE_CONTROL_RECOVERY_TRUST_PATH: /etc/toolgate/recovery-trust/reviewer-keys.json
   {{- end }}
   TOOLGATE_CONTROL_APPROVAL_ENABLED: {{ $g.approval.enabled | quote }}
+  TOOLGATE_CONTROL_MARKETPLACE_ENABLED: {{ $g.marketplace.enabled | quote }}
+  {{- if $g.marketplace.enabled }}
+  TOOLGATE_CONTROL_MARKETPLACE_ID: {{ required "control.marketplace.id required" $g.marketplace.id | quote }}
+  TOOLGATE_CONTROL_MARKETPLACE_BASE_URL: {{ required "control.marketplace.baseUrl required" $g.marketplace.baseUrl | quote }}
+  TOOLGATE_CONTROL_MARKETPLACE_KEYS: {{ required "control.marketplace.keys required" $g.marketplace.keys | quote }}
+  {{- if $g.marketplace.caSecret }}
+  TOOLGATE_CONTROL_MARKETPLACE_CA_PATH: /etc/toolgate/marketplace-ca/ca.pem
+  {{- end }}
+  {{- end }}
+  {{- if $g.profile.configMap }}
+  TOOLGATE_CONTROL_PROFILE_PATH: /etc/toolgate/profile/profile.json
+  {{- end }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_ENABLED: {{ $g.clientImages.enabled | quote }}
+  {{- if $g.clientImages.enabled }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_REGISTRY_URL: {{ required "control.clientImages.registryUrl required" $g.clientImages.registryUrl | quote }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_REPOSITORY: {{ required "control.clientImages.repository required" $g.clientImages.repository | quote }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_BASE: {{ required "control.clientImages.base required" $g.clientImages.base | quote }}
+  {{- if $g.clientImages.pythonBase }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_PYTHON_BASE: {{ $g.clientImages.pythonBase | quote }}
+  {{- end }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_PLATFORMS: {{ $g.clientImages.platforms | quote }}
+  {{- if $g.clientImages.credentialsSecret }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_CREDENTIALS_PATH: /etc/toolgate/client-images-credentials/credentials
+  {{- end }}
+  {{- if $g.clientImages.caSecret }}
+  TOOLGATE_CONTROL_CLIENT_IMAGES_CA_PATH: /etc/toolgate/client-images-ca/ca.pem
+  {{- end }}
+  {{- end }}
+  {{- if $g.packageRelease.signingSecret }}
+  TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH: /etc/toolgate/package-release/private.pem
+  TOOLGATE_CONTROL_PACKAGE_RELEASE_KEY_ID: {{ required "control.packageRelease.keyId required" $g.packageRelease.keyId | quote }}
+  {{- end }}
   TOOLGATE_CONTROL_FLEET_ENABLED: {{ $g.fleet.enabled | quote }}
   {{- if $g.fleet.enabled }}
   TOOLGATE_CONTROL_FLEET_KEY_ID: {{ required "control.fleet.keyId required" $g.fleet.keyId | quote }}
@@ -55,6 +126,21 @@ data:
   {{- end }}
   {{- end }}
   TOOLGATE_CONTROL_ENDPOINT_ENABLED: {{ $g.endpoint.enabled | quote }}
+  TOOLGATE_DEFAULT_TENANT_ALIAS: {{ $g.defaultTenantAlias | quote }}
+  TOOLGATE_TENANCY_MODE: {{ $g.tenancy.mode | quote }}
+  {{- if and (eq $g.tenancy.mode "subdomain") (not $g.tenancy.initializationSecret) }}{{ fail "subdomain tenancy requires control.tenancy.initializationSecret" }}{{ end }}
+  {{- if $g.tenancy.hosts }}
+  TOOLGATE_SINGLE_TENANT_HOSTS: {{ join "," $g.tenancy.hosts | quote }}
+  {{- end }}
+  {{- if $g.tenancy.initializationSecret }}
+  TOOLGATE_INITIALIZE_MANIFEST: /etc/toolgate/initialization/manifest.json
+  {{- if not $g.tenancy.initializationItems }}{{ fail "initializationSecret requires explicit initializationItems including manifest.json" }}{{ end }}
+  {{- if not $g.vaultKeyRingSecret }}{{ fail "tenant initialization requires control.vaultKeyRingSecret" }}{{ end }}
+  {{- end }}
+  TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH: /etc/toolgate/platform-db/password
+  {{- if $g.vaultKeyRingSecret }}
+  TOOLGATE_CONTROL_VAULT_WRAPPING_KEY_RING_PATH: /etc/toolgate/vault-wrapping/key-ring.json
+  {{- end }}
   TOOLGATE_CONTROL_CLIENT_CHECKIN_MS: {{ printf "%d" (int $c.checkInMs) | quote }}
   TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT: {{ printf "%d" (int $c.jitterPct) | quote }}
   {{- if gt (int $c.offlineAfterMs) 0 }}
@@ -62,13 +148,15 @@ data:
   {{- end }}
   TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY: {{ ternary "/opt/toolgate/client-downloads" "" $g.clientDownloads.enabled | quote }}
   {{- if $g.endpoint.enabled }}
-  TOOLGATE_CONTROL_ENDPOINT_TENANT_ID: {{ required "control.endpoint.tenantId required" $g.endpoint.tenantId | quote }}
+  TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: /opt/toolgate/core-mcp/core-packages.lock.json
+  {{- if not $g.tenancy.initializationSecret }}
   TOOLGATE_CONTROL_ENDPOINT_SERVER_ID: {{ required "control.endpoint.serverId required" $g.endpoint.serverId | quote }}
   TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION: {{ required "control.endpoint.organization required" $g.endpoint.organization | quote }}
   TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL: {{ required "control.endpoint.controlUrl required" $g.endpoint.controlUrl | quote }}
   TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL: {{ required "control.endpoint.gatewayUrl required" $g.endpoint.gatewayUrl | quote }}
-  TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH: /etc/toolgate/device-ca/private.pem
-  TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH: /etc/toolgate/device-ca/ca.pem
+  {{- end }}
+  TOOLGATE_CONTROL_IDENTITY_CUSTODY_ROOT: /etc/toolgate/tenant-identity
+  TOOLGATE_CONTROL_IDENTITY_PUBLICATION_PATH: /etc/toolgate/tenant-identity/publication.json
   QUARKUS_HTTP_INSECURE_REQUESTS: disabled
   QUARKUS_HTTP_SSL_PORT: "8082"
   QUARKUS_HTTP_SSL_CLIENT_AUTH: request
@@ -169,7 +257,7 @@ spec:
                 secretKeyRef: {name: {{ required "control.endpoint.trustStoreSecret required" $g.endpoint.trustStoreSecret | quote }}, key: password}
             {{- end }}
             - {name: MP_JWT_VERIFY_PUBLICKEY_LOCATION, value: /etc/toolgate/identity/public.pem}
-            {{- range $env, $key := dict "QUARKUS_DATASOURCE_USERNAME" "username" "QUARKUS_DATASOURCE_PASSWORD" "password" "QUARKUS_FLYWAY_USERNAME" "migrationUsername" "QUARKUS_FLYWAY_PASSWORD" "migrationPassword" }}
+            {{- range $env, $key := dict "QUARKUS_DATASOURCE_USERNAME" "username" "QUARKUS_DATASOURCE_PASSWORD" "password" "QUARKUS_FLYWAY_USERNAME" "migrationUsername" "QUARKUS_FLYWAY_PASSWORD" "migrationPassword" "TOOLGATE_CONTROL_PLATFORM_USERNAME" "platformUsername" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef: {name: {{ $g.database.credentialsSecret | quote }}, key: {{ $key }}}
@@ -187,12 +275,43 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
           volumeMounts:
+            {{- if $g.tenancy.initializationSecret }}
+            - {name: initialization, mountPath: /etc/toolgate/initialization, readOnly: true}
+            {{- end }}
+            - {name: platform-db, mountPath: /etc/toolgate/platform-db, readOnly: true}
+            {{- if $g.vaultKeyRingSecret }}
+            - {name: vault-wrapping, mountPath: /etc/toolgate/vault-wrapping, readOnly: true}
+            {{- end }}
+            {{- if eq $g.cache.mode "redis" }}
+            - {name: cache-credentials, mountPath: /etc/toolgate/cache, readOnly: true}
+            {{- if $g.cache.caSecret }}
+            - {name: cache-ca, mountPath: /etc/toolgate/cache-ca, readOnly: true}
+            {{- end }}
+            {{- end }}
+            {{- if $g.builder.enabled }}
+            - {name: builder-data, mountPath: /data/builder}
+            {{- end }}
             {{- if $g.effect.enabled }}
             - {name: effect-signing, mountPath: /etc/toolgate/effect-signing, readOnly: true}
             {{- end }}
             {{- if $g.recovery.enabled }}
             - {name: recovery-packet, mountPath: /etc/toolgate/recovery-packet, readOnly: true}
             - {name: recovery-trust, mountPath: /etc/toolgate/recovery-trust, readOnly: true}
+            {{- end }}
+            {{- if and $g.marketplace.enabled $g.marketplace.caSecret }}
+            - {name: marketplace-ca, mountPath: /etc/toolgate/marketplace-ca, readOnly: true}
+            {{- end }}
+            {{- if $g.profile.configMap }}
+            - {name: profile, mountPath: /etc/toolgate/profile, readOnly: true}
+            {{- end }}
+            {{- if and $g.clientImages.enabled $g.clientImages.credentialsSecret }}
+            - {name: client-images-credentials, mountPath: /etc/toolgate/client-images-credentials, readOnly: true}
+            {{- end }}
+            {{- if and $g.clientImages.enabled $g.clientImages.caSecret }}
+            - {name: client-images-ca, mountPath: /etc/toolgate/client-images-ca, readOnly: true}
+            {{- end }}
+            {{- if $g.packageRelease.signingSecret }}
+            - {name: package-release, mountPath: /etc/toolgate/package-release, readOnly: true}
             {{- end }}
             {{- if $g.fleet.enabled }}
             - {name: fleet-signing, mountPath: /etc/toolgate/fleet-signing, readOnly: true}
@@ -204,7 +323,7 @@ spec:
             - {name: identity, mountPath: /etc/toolgate/identity, readOnly: true}
             - {name: tmp, mountPath: /tmp}
             {{- if $g.endpoint.enabled }}
-            - {name: device-ca, mountPath: /etc/toolgate/device-ca, readOnly: true}
+            - {name: tenant-identity, mountPath: /etc/toolgate/tenant-identity, readOnly: true}
             - {name: server-tls, mountPath: /etc/toolgate/server-tls, readOnly: true}
             - {name: device-trust, mountPath: /etc/toolgate/device-trust, readOnly: true}
             {{- end }}
@@ -215,6 +334,45 @@ spec:
             - {name: database-ca, mountPath: /etc/toolgate/database, readOnly: true}
             {{- end }}
       volumes:
+        {{- if $g.tenancy.initializationSecret }}
+        - name: initialization
+          secret:
+            secretName: {{ $g.tenancy.initializationSecret | quote }}
+            defaultMode: 0440
+            items:
+              {{- toYaml $g.tenancy.initializationItems | nindent 14 }}
+        {{- end }}
+        {{- if $g.vaultKeyRingSecret }}
+        - name: vault-wrapping
+          secret:
+            secretName: {{ $g.vaultKeyRingSecret | quote }}
+            defaultMode: 0440
+            items: [{key: key-ring.json, path: key-ring.json}]
+        {{- end }}
+        - name: platform-db
+          secret:
+            secretName: {{ $g.database.credentialsSecret | quote }}
+            defaultMode: 0440
+            items: [{key: platformPassword, path: password}]
+        {{- if eq $g.cache.mode "redis" }}
+        - name: cache-credentials
+          secret:
+            secretName: {{ $g.cache.credentialsSecret | quote }}
+            defaultMode: 0440
+            items: [{key: password, path: password}, {key: encryption-key, path: encryption-key}]
+        {{- if $g.cache.caSecret }}
+        - name: cache-ca
+          secret:
+            secretName: {{ $g.cache.caSecret | quote }}
+            defaultMode: 0440
+            items: [{key: ca.pem, path: ca.pem}]
+        {{- end }}
+        {{- end }}
+        {{- if $g.builder.enabled }}
+        - name: builder-data
+          persistentVolumeClaim:
+            claimName: {{ required "control.builder.existingClaim required when Builder is enabled" $g.builder.existingClaim | quote }}
+        {{- end }}
         {{- if $g.effect.enabled }}
         - name: effect-signing
           secret:
@@ -233,6 +391,41 @@ spec:
             secretName: {{ required "control.recovery.trustSecret required" $g.recovery.trustSecret | quote }}
             defaultMode: 0440
             items: [{key: {{ $g.recovery.trustKey | quote }}, path: reviewer-keys.json}]
+        {{- end }}
+        {{- if and $g.marketplace.enabled $g.marketplace.caSecret }}
+        - name: marketplace-ca
+          secret:
+            secretName: {{ $g.marketplace.caSecret | quote }}
+            defaultMode: 0440
+            items: [{key: ca.pem, path: ca.pem}]
+        {{- end }}
+        {{- if $g.profile.configMap }}
+        - name: profile
+          configMap:
+            name: {{ $g.profile.configMap | quote }}
+            defaultMode: 0444
+            items: [{key: profile.json, path: profile.json}]
+        {{- end }}
+        {{- if and $g.clientImages.enabled $g.clientImages.credentialsSecret }}
+        - name: client-images-credentials
+          secret:
+            secretName: {{ $g.clientImages.credentialsSecret | quote }}
+            defaultMode: 0440
+            items: [{key: credentials, path: credentials}]
+        {{- end }}
+        {{- if and $g.clientImages.enabled $g.clientImages.caSecret }}
+        - name: client-images-ca
+          secret:
+            secretName: {{ $g.clientImages.caSecret | quote }}
+            defaultMode: 0440
+            items: [{key: ca.pem, path: ca.pem}]
+        {{- end }}
+        {{- if $g.packageRelease.signingSecret }}
+        - name: package-release
+          secret:
+            secretName: {{ $g.packageRelease.signingSecret | quote }}
+            defaultMode: 0440
+            items: [{key: private.pem, path: private.pem}]
         {{- end }}
         {{- if $g.fleet.enabled }}
         - name: fleet-signing
@@ -254,11 +447,15 @@ spec:
         {{- end }}
         {{- end }}
         {{- if $g.endpoint.enabled }}
-        - name: device-ca
+        - name: tenant-identity
           secret:
-            secretName: {{ required "control.endpoint.deviceCaSecret required" $g.endpoint.deviceCaSecret | quote }}
+            secretName: {{ required "control.endpoint.identityCustodySecret required" $g.endpoint.identityCustodySecret | quote }}
             defaultMode: 0440
-            items: [{key: private.pem, path: private.pem}, {key: ca.pem, path: ca.pem}]
+            items:
+              - {key: publication.json, path: publication.json}
+              {{- range $item := $g.endpoint.identityKeyFiles }}
+              - {key: {{ $item.key | quote }}, path: {{ $item.path | quote }}}
+              {{- end }}
         - name: server-tls
           secret:
             secretName: {{ required "control.endpoint.tlsSecret required" $g.endpoint.tlsSecret | quote }}
@@ -329,8 +526,25 @@ spec:
     matchLabels:
       {{- include "olo-toolgate.controlSelector" . | nindent 6 }}
   policyTypes: [Ingress, Egress]
-  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) }}
+  {{- if or $g.networkPolicy.databaseTo $g.networkPolicy.dnsTo (and (eq $g.cache.mode "redis") $g.networkPolicy.cacheTo) (and $g.tracing.enabled $g.networkPolicy.collectorTo) (and $g.insights.otlp.endpoint $g.networkPolicy.insightsCollectorTo) (and $g.fleet.enabled $g.networkPolicy.artifactTo) (and $g.marketplace.enabled $g.networkPolicy.marketplaceTo) (and $g.clientImages.enabled $g.networkPolicy.registryTo) }}
   egress:
+    {{- if and (eq $g.cache.mode "redis") $g.networkPolicy.cacheTo }}
+    - ports: [{protocol: TCP, port: {{ $g.cache.port }}}]
+      to:
+        {{- toYaml $g.networkPolicy.cacheTo | nindent 8 }}
+    {{- end }}
+    {{- if and $g.clientImages.enabled $g.networkPolicy.registryTo }}
+    {{- $registry := urlParse $g.clientImages.registryUrl }}
+    {{- $hostPort := splitList ":" $registry.host }}
+    - ports: [{protocol: TCP, port: {{ if gt (len $hostPort) 1 }}{{ index $hostPort 1 }}{{ else }}443{{ end }}}]
+      to:
+        {{- toYaml $g.networkPolicy.registryTo | nindent 8 }}
+    {{- end }}
+    {{- if and $g.marketplace.enabled $g.networkPolicy.marketplaceTo }}
+    - ports: [{protocol: TCP, port: 443}]
+      to:
+        {{- toYaml $g.networkPolicy.marketplaceTo | nindent 8 }}
+    {{- end }}
     {{- if and $g.fleet.enabled $g.networkPolicy.artifactTo }}
     - ports: [{protocol: TCP, port: {{ $g.fleet.artifactPort }}}]
       to:
@@ -350,6 +564,11 @@ spec:
     - ports: [{protocol: TCP, port: {{ $g.tracing.port }}}]
       to:
         {{- toYaml $g.networkPolicy.collectorTo | nindent 8 }}
+    {{- end }}
+    {{- if and $g.insights.otlp.endpoint $g.networkPolicy.insightsCollectorTo }}
+    - ports: [{protocol: TCP, port: {{ $g.insights.otlp.port | default 4318 }}}]
+      to:
+        {{- toYaml $g.networkPolicy.insightsCollectorTo | nindent 8 }}
     {{- end }}
   {{- else }}
   egress: []

@@ -7,6 +7,12 @@ import java.util.List;
 
 /** All methods run inside the tenant transaction which also commits audit and directory state. */
 public interface EnterpriseStore {
+    /** Merges the caller's declared correlation into the invocation's first Insights fact (ADR 031); a no-op when Insights is off. */
+    default void insightsContext(String invocationId,io.ololabs.toolgate.contracts.v2.ExecutionContext context){}
+    Long userCredentialDeadline(String id);
+    void userCredentialDeadline(String id,long expiresAt);
+    boolean operationCancelled(String id);
+    void cancelOperation(String id);
     long authorizationEpoch();
     EnterpriseOperationalStatus operationalStatus(long now);
     EnterpriseInvocation invocation(String id);
@@ -39,6 +45,12 @@ public interface EnterpriseStore {
     void rememberCreator(String kind,String id,String user);
     long budgetUsage(String budget,long since,String excludingInvocation);
     void reserveBudget(String budget,String invocation,long now);
-    record Secret(String name,String toolGroupId,String deviceGroupId,String cipher) {}
-    record Nonce(String id,String invocationId,String evaluationDigest,long authorizationEpoch,long expiresAt,Long consumedAt) {}
+    record Secret(String name,String toolGroupId,String deviceGroupId,long version,long keyVersion,String cipher) {}
+    record VaultKey(long version,String state,String providerReference,String wrappedEncryptionKey,String wrappedRetryKey) {}
+    VaultKey vaultKey(long version);
+    VaultKey currentVaultKey();
+    List<VaultKey> vaultKeys();
+    void insertVaultKey(VaultKey key);
+    void updateVaultKey(VaultKey key,String expectedState);
+    record Nonce(String id,String invocationId,String evaluationDigest,long authorizationEpoch,long issuedAt,long expiresAt,Long consumedAt) {}
 }

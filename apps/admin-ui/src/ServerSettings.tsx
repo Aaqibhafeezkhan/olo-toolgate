@@ -1,8 +1,8 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 import {useCallback,useEffect,useRef,useState} from 'react';
-import type {ControlServerSettings,ControlServerSettingsPatch} from '@olo-labs/toolgate-contracts/v2';
 import {ApiError,ControlClient} from './api';
+import type {PendingServerSettings as ControlServerSettings,PendingServerSettingsPatch as ControlServerSettingsPatch,RequiredReviews} from './pendingContracts';
 import {Failure} from './Failure';
 
 export const DEFAULT_AUTO_APPROVE_DAYS=30;
@@ -11,28 +11,16 @@ export const CHANGED_ELSEWHERE='These settings changed elsewhere. The current va
 const days=(value:string)=>/^[0-9]{1,4}$/.test(value)&&Number(value)>=1&&Number(value)<=3650?Number(value):undefined;
 const identifier=(value:string)=>/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(value);
 const gatewayName=(value:string)=>/^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,63}$/.test(value);
-const durationDays=(settings:ControlServerSettings)=>String(Math.round((settings.deviceApproval.durationMs??DEFAULT_AUTO_APPROVE_DAYS*DAY_MS)/DAY_MS));
-
-/** Parses an exported settings file (formatVersion 2). Its revision and clientCheckIn are ignored on restore. */
-export function importedSettings(value:unknown):ControlServerSettings{
-  if(!value||typeof value!=='object')throw new Error('Invalid settings');
-  const settings=value as Partial<ControlServerSettings>;const approval=settings.deviceApproval;
-  if(settings.formatVersion!==2||!settings.gateway||typeof settings.gateway.gatewayName!=='string'||!gatewayName(settings.gateway.gatewayName)
-    ||!approval||typeof approval.autoApprove!=='boolean'
-    ||(approval.durationMs!==undefined&&(!Number.isSafeInteger(approval.durationMs)||approval.durationMs<DAY_MS||approval.durationMs>3650*DAY_MS))
-    ||(approval.ownerUserId!==undefined&&(typeof approval.ownerUserId!=='string'||!identifier(approval.ownerUserId)))
-    ||(approval.autoApprove&&approval.ownerUserId===undefined))throw new Error('Invalid settings');
-  return settings as ControlServerSettings;
-}
+const durationDays=(settings:ControlServerSettings)=>String(Math.round((settings.deviceApproval!.durationMs??DEFAULT_AUTO_APPROVE_DAYS*DAY_MS)/DAY_MS));
 
 /** Loads the settings record and saves one page's groups with the loaded revision. A 409 reloads the current values. */
-function useSettings(client:ControlClient){
+function useSettings(client:ControlClient,section:'server'|'device'){
   const [saved,setSaved]=useState<ControlServerSettings>();const [error,setError]=useState<unknown>();
   const [busy,setBusy]=useState(false);const [notice,setNotice]=useState('');const [attempt,setAttempt]=useState(0);
   const locked=useRef(false);const pending=useRef<{body:string;key:string}|undefined>(undefined);
   useEffect(()=>{const abort=new AbortController();setError(undefined);
-    client.serverSettings(abort.signal).then(settings=>{if(!abort.signal.aborted)setSaved(settings);},failure=>{if(!abort.signal.aborted)setError(failure);});
-    return()=>abort.abort();},[client,attempt]);
+    client.serverSettings(abort.signal,section).then(settings=>{if(!abort.signal.aborted)setSaved(settings);},failure=>{if(!abort.signal.aborted)setError(failure);});
+    return()=>abort.abort();},[client,section,attempt]);
   const reload=useCallback(()=>setAttempt(value=>value+1),[]);
   const run=useCallback(async(encoded:string,request:(key:string)=>Promise<ControlServerSettings>,done:string):Promise<boolean>=>{
     if(locked.current)return false;if(pending.current?.body!==encoded)pending.current={body:encoded,key:crypto.randomUUID()};
@@ -41,16 +29,22 @@ function useSettings(client:ControlClient){
     catch(failure){if(failure instanceof ApiError&&failure.status===409){pending.current=undefined;setNotice(CHANGED_ELSEWHERE);reload();}else setError(failure);return false;}
     finally{locked.current=false;setBusy(false);}},[reload]);
   const patch=useCallback((groups:ControlServerSettingsPatch,done:string)=>saved?run(JSON.stringify(groups),key=>client.patchServerSettings(groups,saved.revision,key),done):Promise.resolve(false),[client,run,saved]);
-  const restore=useCallback((settings:ControlServerSettings,done:string)=>saved?run(JSON.stringify(settings),key=>client.restoreServerSettings({...settings,revision:saved.revision},saved.revision,key),done):Promise.resolve(false),[client,run,saved]);
   const status=<>{notice&&<p role="status">{notice}</p>}{error!==undefined&&<><Failure error={error}/><button disabled={busy} onClick={reload}>Reload settings</button></>}</>;
-  return {saved,error,busy,status,patch,restore,setNotice,setError};
+  return {saved,error,busy,status,patch,setNotice};
 }
 
-/** Configuration > Server: the gateway name devices show. */
+export const REVIEW_POLICY_CHANGE='toolgate:review-policy-change';
+const reviewChoices:readonly {value:RequiredReviews;label:string}[]=[{value:0,label:'0 — changes apply immediately'},{value:1,label:'1 independent review'},{value:2,label:'2 independent reviews'}];
+
+/** Administration > Server: the gateway name devices show and the configuration review threshold. */
 export function ServerConfiguration({client}:{client:ControlClient}){
-  const {saved,error,busy,status,patch,setNotice}=useSettings(client);const [name,setName]=useState<string>();
-  useEffect(()=>{if(saved)setName(saved.gateway.gatewayName);},[saved]);
-  const trimmed=name?.trim()??'';const valid=gatewayName(trimmed);const changed=Boolean(saved)&&trimmed!==saved!.gateway.gatewayName;
+  const {saved,error,busy,status,patch,setNotice}=useSettings(client,'server');const [name,setName]=useState<string>();
+  const [reviews,setReviews]=useState<RequiredReviews>();
+  useEffect(()=>{if(saved?.gateway){setName(saved.gateway.gatewayName);setReviews(saved.configuration?.requiredReviews);}},[saved]);
+  const current=saved?.configuration?.requiredReviews;
+  function saveReviews(){if(reviews===undefined)return;
+    void patch({configuration:{requiredReviews:reviews}},'Configuration reviews saved.').then(ok=>{if(ok)window.dispatchEvent(new Event(REVIEW_POLICY_CHANGE));});}
+  const trimmed=name?.trim()??'';const valid=gatewayName(trimmed);const changed=Boolean(saved?.gateway)&&trimmed!==saved!.gateway!.gatewayName;
   return <><div className="page-heading"><h1>Server</h1></div>
     <p className="intro">Settings for this ToolGate server. Saving changes only the fields on this page.</p>
     <section className="guidance" aria-label="Server settings">
@@ -62,17 +56,23 @@ export function ServerConfiguration({client}:{client:ControlClient}){
         {!valid&&<p role="alert">Enter a gateway name that starts with a letter or number.</p>}
         <button className="primary" disabled={!valid||!changed} onClick={()=>void patch({gateway:{gatewayName:trimmed}},'Server settings saved.')}>Save server settings</button>
       </fieldset>}
+      {saved&&current!==undefined&&reviews!==undefined&&<fieldset disabled={busy}><legend>Configuration reviews</legend>
+        <label htmlFor="required-reviews">Configuration reviews</label>
+        <select id="required-reviews" value={reviews} onChange={event=>{setReviews(Number(event.target.value) as RequiredReviews);setNotice('');}} aria-describedby="required-reviews-help">{reviewChoices.map(choice=><option key={choice.value} value={choice.value}>{choice.label}</option>)}</select>
+        <p id="required-reviews-help" className="hint">Independent reviews each configuration change needs before it applies. With 0, changes apply immediately and every page shows a banner. A change keeps the count in force when it was created. Changing this value itself needs the current number of reviews{current>0?`, so saving creates a configuration change that ${current===1?'one reviewer':'two reviewers'} must approve`:''}; the Super Admin bypass does not apply. Operation approvals are not affected. It starts as TOOLGATE_CONFIG_REQUIRED_REVIEWS.</p>
+        <button className="primary" disabled={reviews===current} onClick={saveReviews}>Save configuration reviews</button>
+      </fieldset>}
       {status}
     </section></>;
 }
 
 type ApprovalDraft={autoApprove:boolean;days:string;owner:string};
-const approvalDraft=(settings:ControlServerSettings):ApprovalDraft=>({autoApprove:settings.deviceApproval.autoApprove,days:durationDays(settings),owner:settings.deviceApproval.ownerUserId??''});
+const approvalDraft=(settings:ControlServerSettings):ApprovalDraft=>({autoApprove:settings.deviceApproval!.autoApprove,days:durationDays(settings),owner:settings.deviceApproval!.ownerUserId??''});
 
 /** Configuration > Device: bounded device auto-approval and the deployment's read-only check-in values. */
 export function DeviceConfiguration({client}:{client:ControlClient}){
-  const {saved,error,busy,status,patch,setNotice}=useSettings(client);const [draft,setDraft]=useState<ApprovalDraft>();
-  useEffect(()=>{if(saved)setDraft(approvalDraft(saved));},[saved]);
+  const {saved,error,busy,status,patch,setNotice}=useSettings(client,'device');const [draft,setDraft]=useState<ApprovalDraft>();
+  useEffect(()=>{if(saved?.deviceApproval)setDraft(approvalDraft(saved));},[saved]);
   const duration=draft&&days(draft.days);const owner=draft?.owner.trim()??'';
   const valid=Boolean(draft)&&duration!==undefined&&(owner===''?!draft?.autoApprove:identifier(owner));
   const changed=Boolean(saved&&draft)&&JSON.stringify(approvalDraft(saved!))!==JSON.stringify({...draft!,owner});
@@ -100,26 +100,4 @@ export function DeviceConfiguration({client}:{client:ControlClient}){
       </fieldset>}
       {status}
     </section></>;
-}
-
-/** Configuration > Backup/Restore: the server settings file. Restore replaces the editable groups after review. */
-export function SettingsTransfer({client}:{client:ControlClient}){
-  const {saved,busy,status,restore,setNotice,setError}=useSettings(client);const [loaded,setLoaded]=useState<ControlServerSettings>();
-  function exportSettings(){if(!saved)return;
-    const url=URL.createObjectURL(new Blob([JSON.stringify(saved,null,2)+'\n'],{type:'application/json'}));
-    const link=document.createElement('a');link.href=url;link.download=`toolgate-server-settings-r${saved.revision}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);
-    setNotice('Server settings exported. Mount the file as server-settings.json in the configuration import folder to apply it during bring-up.');}
-  async function importSettings(file:File|undefined){if(!file)return;setError(undefined);setLoaded(undefined);
-    if(file.size>16384){setNotice('Choose a settings file no larger than 16 KiB.');return;}
-    try{setLoaded(importedSettings(JSON.parse(await file.text()) as unknown));setNotice('Settings file loaded. Review it, then restore.');}
-    catch{setNotice('The file is not an exported ToolGate server settings document (format version 2).');}}
-  return <section className="guidance" aria-label="Server settings file"><h2>Server settings file</h2>
-    <button disabled={busy||!saved} onClick={exportSettings}>Export server settings</button>
-    <label>Server settings JSON file<input type="file" accept=".json,application/json" disabled={busy||!saved} onChange={event=>{void importSettings(event.target.files?.[0]);event.target.value='';}}/></label>
-    {loaded&&<><dl className="policy-details"><dt>Gateway name</dt><dd>{loaded.gateway.gatewayName}</dd><dt>Auto approve devices</dt><dd>{loaded.deviceApproval.autoApprove?'On':'Off'}</dd>
-      <dt>Auto approve duration</dt><dd>{durationDays(loaded)} days</dd><dt>Owner user ID</dt><dd>{loaded.deviceApproval.ownerUserId??'None'}</dd></dl>
-      <button className="primary" disabled={busy} onClick={()=>void restore(loaded,'Server settings restored.').then(ok=>{if(ok)setLoaded(undefined);})}>Restore server settings</button></>}
-    <p className="hint">Check-in values in a settings file are ignored; they always come from the deployment. At bring-up, the server also imports server-settings.json from the folder in TOOLGATE_CONFIG_IMPORT_DIRECTORY, then applies TOOLGATE_SETTINGS_AUTO_APPROVE_DEVICES, TOOLGATE_SETTINGS_AUTO_APPROVE_DURATION_DAYS and TOOLGATE_SETTINGS_AUTO_APPROVE_OWNER. Startup import only seeds settings once unless TOOLGATE_CONFIG_IMPORT_OVERWRITE is true.</p>
-    {status}
-  </section>;
 }

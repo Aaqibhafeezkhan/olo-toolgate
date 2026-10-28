@@ -6,7 +6,7 @@
   "sources": [
     "tool-sdk/spec/sdk-compat/README.md",
     "tool-sdk/spec/sdk-compat/2026-10-10/results.md",
-    "plan.md §5.10"
+    "platform-requirements.md §5.10"
   ],
   "cases": [
     {
@@ -14,7 +14,7 @@
       "title": "typescript builds resolve exactly the pinned artifacts",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §5.10"
+        "platform-requirements.md §5.10"
       ],
       "level": "component",
       "targets": [
@@ -34,7 +34,7 @@
       "title": "typescript passes the 37 required 2026-07-28 server scenarios",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §21 official-sdk"
+        "platform-requirements.md §21 official-sdk"
       ],
       "level": "component",
       "targets": [
@@ -73,7 +73,7 @@
       "title": "python builds resolve exactly the pinned artifacts",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §5.10"
+        "platform-requirements.md §5.10"
       ],
       "level": "component",
       "targets": [
@@ -93,7 +93,7 @@
       "title": "python passes the 37 required 2026-07-28 server scenarios",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §21 official-sdk"
+        "platform-requirements.md §21 official-sdk"
       ],
       "level": "component",
       "targets": [
@@ -132,7 +132,7 @@
       "title": "dotnet builds resolve exactly the pinned artifacts",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §5.10"
+        "platform-requirements.md §5.10"
       ],
       "level": "component",
       "targets": [
@@ -152,7 +152,7 @@
       "title": "dotnet passes the 37 required 2026-07-28 server scenarios",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §21 official-sdk"
+        "platform-requirements.md §21 official-sdk"
       ],
       "level": "component",
       "targets": [
@@ -191,7 +191,7 @@
       "title": "java builds resolve exactly the pinned artifacts",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §5.10"
+        "platform-requirements.md §5.10"
       ],
       "level": "component",
       "targets": [
@@ -211,7 +211,7 @@
       "title": "java passes the 37 required 2026-07-28 server scenarios",
       "requirements": [
         "tool-sdk/spec/sdk-compat/README.md",
-        "plan.md §21 official-sdk"
+        "platform-requirements.md §21 official-sdk"
       ],
       "level": "component",
       "targets": [

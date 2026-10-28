@@ -1,0 +1,6 @@
+[
+  {
+    "request": { "route": "file.get", "variables": { "folder": "reports", "file": "missing.csv" } },
+    "response": { "status": 404, "body": { "error": "not found" } }
+  }
+]

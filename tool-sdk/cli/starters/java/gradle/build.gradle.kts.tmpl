@@ -1,0 +1,23 @@
+plugins {
+    id("io.ololabs.toolgate.sdk") version "{{sdkVersion}}"
+}
+
+group = "{{group}}"
+version = "0.1.0"
+
+repositories {
+{{gradleRepositories}}    mavenCentral()
+}
+
+toolgate {
+    // Pinned so an SDK upgrade never changes the generated descriptors until you move it.
+    descriptorGeneration.set(1)
+}
+
+dependencies {
+    testImplementation("org.junit.jupiter:junit-jupiter:5.14.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.14.2")
+}
+
+tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
+tasks.test { useJUnitPlatform() }

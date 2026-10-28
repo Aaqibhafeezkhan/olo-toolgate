@@ -5,7 +5,7 @@
   "title": "Broker request channel",
   "sources": [
     "docs/security/threat-models/tool-host.md §4.3",
-    "plan.md §11.8",
+    "platform-requirements.md §11.8",
     "ADR 013 decision 6"
   ],
   "cases": [
@@ -30,7 +30,7 @@
       "title": "A route outside the permit route set is refused",
       "requirements": [
         "T-BR-1",
-        "plan.md §5.4"
+        "platform-requirements.md §5.4"
       ],
       "level": "component",
       "targets": [
@@ -46,7 +46,7 @@
       "id": "broker/profile-by-digest",
       "title": "The broker enforces the profile named by the permit digest only",
       "requirements": [
-        "plan.md §11.8 item 3"
+        "platform-requirements.md §11.8 item 3"
       ],
       "level": "component",
       "targets": [
@@ -132,7 +132,7 @@
       "title": "A capability from another sandbox or invocation is refused",
       "requirements": [
         "T-BR-4",
-        "plan.md §11.8 item 2"
+        "platform-requirements.md §11.8 item 2"
       ],
       "level": "component",
       "targets": [
@@ -148,7 +148,7 @@
       "id": "broker/no-retry-ledger",
       "title": "The broker never retries or redirects for a ledger tool",
       "requirements": [
-        "plan.md §11.7, §11.8 item 6"
+        "platform-requirements.md §11.7, §11.8 item 6"
       ],
       "level": "component",
       "targets": [
@@ -166,7 +166,7 @@
       "id": "broker/limits",
       "title": "Per-invocation and per-route rate, byte and connection caps hold",
       "requirements": [
-        "plan.md §11.8 item 6"
+        "platform-requirements.md §11.8 item 6"
       ],
       "level": "component",
       "targets": [
@@ -182,7 +182,7 @@
       "id": "broker/streaming-refused",
       "title": "Streaming is refused unless the route allows it",
       "requirements": [
-        "plan.md §11.8 item 4"
+        "platform-requirements.md §11.8 item 4"
       ],
       "level": "component",
       "targets": [
@@ -198,7 +198,7 @@
       "id": "broker/audit-record",
       "title": "Every broker decision is audited without bodies or credentials",
       "requirements": [
-        "plan.md §11.8 item 7"
+        "platform-requirements.md §11.8 item 7"
       ],
       "level": "component",
       "targets": [

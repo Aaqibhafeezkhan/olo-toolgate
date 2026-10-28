@@ -10,7 +10,8 @@ export default defineConfig({
     // Release images pass the CI run number and commit; local builds say so.
     __APP_BUILD__: JSON.stringify(process.env.TOOLGATE_BUILD || 'local'),
   },
-  build: { outDir: 'dist', sourcemap: false, manifest: true },
+  // insights.html is the operator page, served only by Control's operator listener (ADR 031 §8).
+  build: { outDir: 'dist', sourcemap: false, manifest: true, rollupOptions: { input: { main: 'index.html', insights: 'insights.html' } } },
   // Development only. Production is embedded at the Control origin.
   server: { proxy: { '/api/control/v1': 'http://127.0.0.1:8082' } },
 });

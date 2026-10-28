@@ -1,9 +1,11 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import {test,expect} from '@playwright/test';
+import {test,expect as baseExpect} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import {mkdirSync} from 'node:fs';
 
+// Match ControlClient's request deadline for this real-container acceptance test.
+const expect=baseExpect.configure({timeout:15000});
 test.skip(!process.env.TOOLGATE_ENTERPRISE_ORIGIN,'Requires the isolated enterprise Quickstart gate');
 test('real group administration, inherited provenance and review impact are accessible',async({page,browser})=>{
   test.setTimeout(360000);
@@ -11,10 +13,28 @@ test('real group administration, inherited provenance and review impact are acce
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.name));
   const origin=process.env.TOOLGATE_ENTERPRISE_ORIGIN!;
   await page.goto(origin+'/console/');
+  await page.getByLabel('Username',{exact:true}).fill(process.env.TOOLGATE_ENTERPRISE_USERNAME||'admin');
   await page.getByLabel('Password',{exact:true}).fill(process.env.TOOLGATE_ENTERPRISE_PASSWORD!);
-  await page.getByRole('button',{name:'Connect to workspace',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
-  for(const [route,title] of [['users','Users'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['bindings','Execution bindings'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['config-reviews','Configuration reviews'],['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
+  async function connect(workspace:typeof page){
+    // Password verification and the subsequent Control session are separate requests.
+    // Playwright's page timeout does not change its default 5s assertion timeout.
+    const [login]=await Promise.all([
+      workspace.waitForResponse(response=>new URL(response.url()).pathname==='/api/quickstart/v1/login'
+        &&response.request().method()==='POST',{timeout:15000}),
+      workspace.getByRole('button',{name:'Connect to workspace',exact:true}).click()
+    ]);
+    expect(login.status()).toBe(200);
+    await expect(workspace.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
+  }
+  await connect(page);
+  for(const [route,title] of [['users','Users'],['agents','Agents'],['agentGroups','Agent groups'],['toolGroups','Tool groups'],['deviceGroups','Device groups'],['grants','Access grants'],['bindings','Execution bindings'],['outcomes','Effect outcomes'],['simulation','Access simulation'],['config-reviews','Configuration reviews']] as const){
+    await page.goto(origin+'/console/#'+route);
+    await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+    await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
+    expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+  }
+  // The maker is an Administrator with explicit full-scope management rules, including settings reads.
+  for(const [route,title] of [['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
     await page.goto(origin+'/console/#'+route);
     await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
     await expect(page.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
@@ -35,14 +55,23 @@ test('real group administration, inherited provenance and review impact are acce
     for(const [index,reviewer] of reviewers.entries()){
       reviewer.setDefaultTimeout(15000);
       await reviewer.goto(origin+'/console/');
-      await reviewer.getByLabel('Local account').selectOption('reviewer-'+(index+1));
+      await reviewer.getByLabel('Username',{exact:true}).fill(process.env['TOOLGATE_ENTERPRISE_REVIEWER_'+(index+1)+'_USER']||'reviewer-'+(index+1));
       await reviewer.getByLabel('Password',{exact:true}).fill(process.env['TOOLGATE_ENTERPRISE_REVIEWER_'+(index+1)]!);
-      await reviewer.getByRole('button',{name:'Connect to workspace',exact:true}).click();
-      await expect(reviewer.getByRole('heading',{name:'Your organization, at a glance'})).toBeVisible();
+      await connect(reviewer);
+    }
+    // Reviewer 2 is the installation owner; keep this session separate from the maker.
+    const owner=reviewers[1];
+    owner.on('pageerror',e=>errors.push(e.name));
+    for(const [route,title] of [['config-server','Server'],['config-device','Device'],['config-backup','Backup/Restore']] as const){
+      await owner.goto(origin+'/console/#'+route);
+      await expect(owner.getByRole('heading',{name:title,exact:true})).toBeVisible();
+      await expect(owner.getByRole('status').filter({hasText:'Loading'})).toHaveCount(0);
+      expect((await new AxeBuilder({page:owner}).analyze()).violations).toEqual([]);
     }
     async function applyDraft(){
       const link=page.getByRole('link',{name:'Review configuration draft'});
       const href=(await link.getAttribute('href'))!;
+      const detailPath='/api/control/v1/configuration-changes/'+new URLSearchParams(href.split('?')[1]).get('id');
       await link.click();
       const confirmation='I reviewed the affected groups, inherited access, complete configuration and digests.';
       await page.getByLabel(confirmation).check();
@@ -65,12 +94,28 @@ test('real group administration, inherited provenance and review impact are acce
       await page.getByRole('button',{name:'Approve exact configuration'}).click();
       await expect(page.getByRole('alert')).toBeVisible();
       for(const reviewer of reviewers.slice(0,requiredReviews!)){
-        await reviewer.goto(origin+'/console/'+href);
+        const [detail]=await Promise.all([
+          reviewer.waitForResponse(response=>new URL(response.url()).pathname===detailPath&&response.request().method()==='GET'),
+          reviewer.goto(origin+'/console/'+href)
+        ]);
+        expect(detail.status(),'Independent reviewer can read the exact submitted change').toBe(200);
         await reviewer.getByLabel(confirmation).check();
-        await reviewer.getByRole('button',{name:'Approve exact configuration'}).click();
+        const [approved]=await Promise.all([
+          reviewer.waitForResponse(response=>new URL(response.url()).pathname===detailPath+'/transition'
+            &&response.request().method()==='POST'&&response.request().postDataJSON().action==='APPROVE'),
+          reviewer.getByRole('button',{name:'Approve exact configuration'}).click()
+        ]);
+        expect(approved.status(),'Independent approval committed before the next reviewer reads the change').toBe(200);
         await expect(reviewer.getByLabel(confirmation)).not.toBeChecked();
       }
-      await page.getByRole('button',{name:'Refresh changes'}).click();
+      // Navigating to the same hash does not reload this mounted screen. Use
+      // its refresh action to read the reviews committed in the other sessions.
+      const [refreshed]=await Promise.all([
+        page.waitForResponse(response=>new URL(response.url()).pathname===detailPath&&response.request().method()==='GET'),
+        page.getByRole('button',{name:'Refresh changes',exact:true}).click()
+      ]);
+      expect(refreshed.status(),'Maker reloads the current independent reviews').toBe(200);
+      await expect(page.getByRole('region',{name:'Configuration impact'}).getByText('APPROVED',{exact:true})).toBeVisible();
       await expect(page.getByRole('button',{name:'Apply reviewed change'})).toBeVisible();
       await page.getByLabel(confirmation).check();
       await page.getByRole('button',{name:'Apply reviewed change'}).click();
@@ -97,7 +142,7 @@ test('real group administration, inherited provenance and review impact are acce
     await applyDraft();
     await page.goto(origin+'/console/#mapping');
     await page.getByRole('combobox',{name:'Agent Group',exact:true}).selectOption('default-agents');
-    await page.getByRole('button',{name:'Browser reviewed capability',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-capability',exact:true}).click();
     await expect(page.getByLabel('Resource locator')).toHaveValue('builtin/calculator.evaluate');
     console.info('PASS reviewed capability mapping persisted');
     await page.goto(origin+'/console/#users');
@@ -108,7 +153,7 @@ test('real group administration, inherited provenance and review impact are acce
     await page.getByRole('button',{name:'Save user',exact:true}).click();
     await applyDraft();
     await page.goto(origin+'/console/#users');
-    await page.getByRole('button',{name:'Browser pending user',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-pending-user',exact:true}).click();
     await expect(page.getByLabel('Enabled in directory')).not.toBeChecked();
     await expect(page.getByText('team-default',{exact:true}).first()).toBeVisible();
     console.info('PASS reviewed disabled user/default membership persisted');
@@ -121,7 +166,7 @@ test('real group administration, inherited provenance and review impact are acce
     await applyDraft();
     console.info('PASS reviewed Team creation persisted');
     await page.goto(origin+'/console/#users');
-    await page.getByRole('button',{name:'Browser pending user',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-pending-user',exact:true}).click();
     const membership=page.getByRole('region',{name:'Group membership',exact:true});
     await membership.getByRole('button',{name:'Choose teams',exact:true}).click();
     await page.getByRole('dialog').getByLabel(/team-default/).uncheck();
@@ -131,14 +176,14 @@ test('real group administration, inherited provenance and review impact are acce
     await membership.getByRole('button',{name:'Save group membership'}).click();
     await applyDraft();
     await page.goto(origin+'/console/#users');
-    await page.getByRole('button',{name:'Browser pending user',exact:true}).click();
+    await page.getByRole('button',{name:'Edit browser-pending-user',exact:true}).click();
     await expect(page.getByRole('region',{name:'Group membership',exact:true}).getByText('browser-team',{exact:true}).first()).toBeVisible();
     console.info('PASS reviewed membership transfer persisted');
     await page.goto(origin+'/console/#local');
     await expect(page.getByLabel('Tool',{exact:true}).locator('option')).toHaveCount(0);
   } finally { await Promise.all(contexts.map(c=>c.close())); }
   await page.goto(origin+'/console/#users');
-  await page.getByRole('button',{name:'Quickstart admin',exact:true}).click();
+  await page.getByRole('button',{name:'Edit admin',exact:true}).click();
   await expect(page.getByText(/Inherited access/).first()).toBeVisible();
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   await page.setViewportSize({width:390,height:844});

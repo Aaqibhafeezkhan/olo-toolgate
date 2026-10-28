@@ -36,22 +36,26 @@ final class EndpointTest {
     }
     private static String csr(String device)throws Exception{
         var generator=KeyPairGenerator.getInstance("EC");generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));var pair=generator.generateKeyPair();
+        return csr(device,pair);
+    }
+    private static String csr(String device,KeyPair pair)throws Exception{
         return pem(new JcaPKCS10CertificationRequestBuilder(new X500Name("CN="+device),pair.getPublic()).build(new JcaContentSignerBuilder("SHA256withECDSA").build(pair.getPrivate())));
     }
+    private static String consoleSignature(KeyPair pair,String nonce)throws Exception{var signer=Signature.getInstance("SHA256withECDSA");signer.initSign(pair.getPrivate());signer.update((ConsoleDeviceSessions.DOMAIN+nonce).getBytes(java.nio.charset.StandardCharsets.UTF_8));return Base64.getUrlEncoder().withoutPadding().encodeToString(signer.sign());}
     private record Setup(EndpointService service,DirectoryService directory,DirectoryService.Actor admin,PostgresStore store,MutableClock clock,X509DeviceIssuer issuer){}
     private Setup setup()throws Exception{
         var base=Objects.requireNonNull(System.getenv("CONTROL_TEST_URL"));var password=Objects.requireNonNull(System.getenv("CONTROL_TEST_PASSWORD"));var database="endpoint_"+UUID.randomUUID().toString().replace("-","");
         try(var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()){statement.execute("CREATE DATABASE "+database);}
         var url=base.replace("/control?","/"+database+"?");
-        org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).target("4").load().migrate();
-        assertEquals(14,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
+        assertEquals(1,org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate().migrationsExecuted);
         var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
-        return configured(new PostgresStore(source,codec));
+        return configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec));
     }
     private Setup configured(PostgresStore store)throws Exception{
-        var directory=new DirectoryService(store,codec,512,1048576);var admin=TestSupport.seed(store,codec,new Ids.TenantId("endpoint"),"owner");
+        var directory=new DirectoryService(store,codec,512,1048576);var admin=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint"),"owner");
         for(var user:List.of("other"))directory.mutate(admin,Ids.Kind.USER,user,"CREATE",DomainTest.user(user,1),0,user,"request");
-        var clock=new MutableClock();var issuer=issuer();var service=new EndpointService(store,codec,issuer,clock,true,"endpoint","server","Organization","https://control.example.test","https://gateway.example.test");
+        var clock=new MutableClock();var issuer=issuer();var service=new EndpointService(store,codec,issuer,clock,true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server","Organization","https://control.example.test","https://gateway.example.test");
+        service.checkInPolicy(ClientCheckInPolicy.configure(500L,0,120000L)); // Explicit fast-cycle fixture; production defaults to 2 s.
         service.operations(new EnterpriseOperations(store,codec,null,clock,"control","toolgate-client",60000,256));
         return new Setup(service,directory,admin,store,clock,issuer);
     }
@@ -60,7 +64,39 @@ final class EndpointTest {
     private void decide(Setup s,EndpointEnrollmentChallenge challenge,EnrollmentChoice choice,String key){var review=review(s,challenge);s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(challenge.userCode(),review.keyFingerprint(),choice,START+604800000,null)),key,"request");}
     private EndpointEnrollmentResult poll(Setup s,EndpointEnrollmentChallenge challenge){return codec.model(s.service.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class);}
     private java.security.cert.X509Certificate certificate(DeviceIdentity identity)throws Exception{return (java.security.cert.X509Certificate)java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(identity.certificatePem().getBytes(java.nio.charset.StandardCharsets.US_ASCII)));}
-    @Test void queuedBuildAndDeploymentCannotOutliveTheirCreatorsGroupAuthority()throws Exception{
+    /** ADR 031 §2: released clients reject unknown task members, so a relayed task carries its trace context,
+     *  execution context and span request only to clients that name the feature. */
+    @Test void relayedTaskContextGoesOnlyToClientsThatAcceptIt()throws Exception{
+        var fixture=(com.fasterxml.jackson.databind.node.ObjectNode)new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(java.nio.file.Path.of(System.getProperty("toolgate.fixtures")).toFile()).get("RemoteToolTask");
+        fixture.put("traceparent","00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01").put("collectSpans",true)
+            .putObject("executionContext").put("sessionId","sess-42");
+        var task=codec.model(fixture.toString(),RemoteToolTask.class);
+        assertSame(task,EndpointService.forClient(task,true));
+        var released=EndpointService.forClient(task,false);
+        assertNull(released.traceparent());assertNull(released.executionContext());assertNull(released.collectSpans());
+        assertEquals(new com.fasterxml.jackson.databind.ObjectMapper().readTree(new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(java.nio.file.Path.of(System.getProperty("toolgate.fixtures")).toFile()).get("RemoteToolTask").toString()),
+            new com.fasterxml.jackson.databind.ObjectMapper().readTree(codec.json(released)),"exactly the shape released clients decode");
+        assertNull(EndpointService.forClient(null,false));
+        assertTrue(EndpointService.taskContext("other.v1, remote-task-context.v1"));
+        assertFalse(EndpointService.taskContext(null));assertFalse(EndpointService.taskContext("remote-task-context.v2"));
+    }
+
+    @Test void discoveryUsesProductClientVersion()throws Exception{
+        var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint");
+        var profile=new Store.RuntimeProfile("server","Organization","https://control.example.test","https://gateway.example.test");
+        var fixture=new TenantIdentityFixtures(codec,tenant,profile);long now=System.currentTimeMillis();
+        var bound=fixture.custody.bind(tenant,profile,fixture.custody.prepare(tenant,profile,1,fixture.references,now),now);
+        var service=new EndpointService(null,codec,bound.issuer(),Clock.systemUTC(),true,tenant.value(),profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl())
+            .discoverySigner((minimum,time)->bound.discovery(codec,tenant,profile,minimum,time));
+        var envelope=codec.model(service.discovery().body(),io.ololabs.toolgate.contracts.v2.SignedTenantDiscovery.class);
+        var discovery=RsaTenantDiscovery.verify(codec,envelope,profile.controlUrl(),tenant,null,System.currentTimeMillis()).manifest();
+        assertEquals(System.getProperty("toolgate.productVersion"),discovery.minimumClientVersion());
+        var unsigned=new EndpointService(null,codec,issuer(),Clock.systemUTC(),true,tenant.value(),profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl());
+        assertEquals(503,assertThrows(Failure.class,unsigned::discovery).status());
+    }
+    @Test void queuedDeploymentCannotOutliveItsCreatorsGroupAuthority()throws Exception{
         var s=setup();
         // This proof exercises a restricted role; an installation owner intentionally retains all management operations.
         s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var role=codec.model(entries.get(Ids.Kind.ROLE.id("test-recovery-role")).document(),ControlRole.class);
@@ -70,13 +106,7 @@ final class EndpointTest {
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         var challenge=start(s,"queue-device");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");var peer=certificate(poll(s,challenge).identity());
         var releaseFixture=new FleetTest();var crypto=releaseFixture.crypto();
-        var fleet=new FleetService(s.store,codec,crypto,s.service,s.clock,true,"endpoint","server");
-        var builder=new BuilderService(s.store,codec,crypto,fleet,s.service,s.clock,true,"endpoint","server");
-        var fixtures=new com.fasterxml.jackson.databind.ObjectMapper().readTree(java.nio.file.Path.of(System.getProperty("toolgate.fixtures")).toFile());
-        var definition=codec.model(fixtures.get("BuilderDefinition").toString(),BuilderDefinition.class);
-        builder.save(s.admin,codec.json(new BuilderDraftRequest("queued-draft",0L,definition)),"draft","request");
-        var job=codec.model(builder.test(s.admin,codec.json(new BuilderTestRequest("queued-job","queued-draft",1L,"queue-device",0L)),"test","request").body(),BuilderTestRecord.class);
-        assertNotNull(codec.model(builder.poll(peer,"poll").body(),BuilderTestPoll.class).task());
+        var fleet=new FleetService(s.store,codec,crypto,s.service,s.clock,true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server");
         var release=codec.model(releaseFixture.fixtures().get("release").toString(),FleetPackageRelease.class);
         fleet.publish(s.admin,codec.json(release),"publish","request");
         fleet.rollout(s.admin,codec.json(new FleetRolloutRequest("queued-rollout",release.packageId(),release.version(),List.of("queue-device"),true,100L)),"rollout","request");
@@ -84,52 +114,46 @@ final class EndpointTest {
         var grant=codec.model(fleet.grant(peer,codec.json(new FleetArtifactGrantRequest(1L,release.manifestDigest())),"artifact").body(),FleetSignedDocument.class);
         s.store.transaction(s.admin.tenant(),true,tx->{assertEquals(release,fleet.authorizeDownload(tx,peer,grant));return null;});
         var role=codec.model(s.directory.get(s.admin,Ids.Kind.ROLE,"test-recovery-role").body(),ControlRole.class);
-        var rules=role.managementRules().stream().map(r->new EnterpriseManagementRule(r.actions().stream().filter(a->!Set.of("build","deploy").contains(a)).toList(),r.groupType(),r.groups(),r.grantableScopes(),r.conditions())).toList();
+        var rules=role.managementRules().stream().map(r->new EnterpriseManagementRule(r.actions().stream().filter(a->!Set.of("tool_builder.build","package.deploy").contains(a)).toList(),r.groupType(),r.groups(),r.grantableScopes(),r.conditions(),null)).toList();
         var revoked=new ControlRole(role.id(),role.name(),role.enabled(),role.revision(),role.portalRole(),role.roleType(),rules);
         s.directory.mutate(s.admin,Ids.Kind.ROLE,role.id(),"UPDATE",codec.json(revoked),role.revision(),"revoke-build-deploy","request");
-        assertNull(codec.model(builder.poll(peer,"revoked-poll").body(),BuilderTestPoll.class).task());
-        assertEquals(403,assertThrows(Failure.class,()->builder.result(peer,codec.json(new BuilderTestResult(job.id(),job.leaseId(),job.definitionDigest(),true,null)),"revoked-result")).status());
         assertEquals(403,assertThrows(Failure.class,()->fleet.desired(peer)).status());
         assertEquals(403,assertThrows(Failure.class,()->s.store.transaction(s.admin.tenant(),true,tx->fleet.authorizeDownload(tx,peer,grant))).status());
-        assertTrue(s.store.transaction(s.admin.tenant(),false,tx->tx.auditPage(0,100)).contains("BUILDER_AUTHORITY_REVOKED"));
     }
     @Test void enrollmentBindsOwnerKeyAndDurableSequenceAndRevocation()throws Exception{
         var s=setup();var challenge=start(s,"device");var review=review(s,challenge);assertEquals(EnrollmentState.PENDING,poll(s,challenge).state());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.review(new DirectoryService.Actor(new Ids.TenantId("other"),"a".repeat(64),true),"owner",challenge.userCode())).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.review(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"a".repeat(64),true),"owner",challenge.userCode())).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.review(s.admin,"unknown",challenge.userCode())).status());
         assertEquals(409,assertThrows(Failure.class,()->s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(challenge.userCode(),"0".repeat(64),EnrollmentChoice.APPROVE,null,null)),"wrong-key","request")).status());
         decide(s,challenge,EnrollmentChoice.APPROVE,"approve");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");
         assertEquals(409,assertThrows(Failure.class,()->decide(s,challenge,EnrollmentChoice.DENY,"other-key")).status());
-        s.clock.time+=5000;var result=poll(s,challenge);assertEquals(EnrollmentState.CONSUMED,result.state());var identity=result.identity();assertEquals("owner",identity.userId());assertEquals("endpoint",identity.tenantId());
-        var peer=certificate(identity);assertEquals(review.keyFingerprint(),s.issuer.peerFingerprint(peer,s.clock.time));assertEquals(-1,peer.getBasicConstraints());
+        s.clock.time+=5000;var result=poll(s,challenge);assertEquals(EnrollmentState.CONSUMED,result.state());var identity=result.identity();assertEquals("owner",identity.userId());assertEquals(io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),identity.tenantId());
+        var peer=certificate(identity);assertEquals(review.keyFingerprint(),s.issuer.verifyPeer(peer,s.clock.time).fingerprint());assertEquals(-1,peer.getBasicConstraints());
         s.service.verifySocketPeer(peer);
         assertEquals(List.of("1.3.6.1.5.5.7.3.2"),peer.getExtendedKeyUsage());
         s.clock.time+=5000;assertEquals(identity,poll(s,challenge).identity());
-        var report=new ClientReport("device","0.6.0-dev",0L,List.of());var body=codec.json(new EndpointCheckIn(1L,report,null,null));
+        var report=new ClientReport("device","0.6.0-dev",0L,List.of(),null);var body=codec.json(new EndpointCheckIn(1L,report,null,null));
         var ack=s.service.checkIn(peer,body,"request");assertEquals(ack.body(),s.service.checkIn(peer,body,"retry").body());
         assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"too-fast")).status());
-        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(1L,new ClientReport("device","0.6.1",0L,List.of()),null,null)),"changed")).status());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,new ClientReport("other","0.6.0-dev",0L,List.of()),null,null)),"wrong")).status());
+        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(1L,new ClientReport("device","0.6.1",0L,List.of(),null),null,null)),"changed")).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,new ClientReport("other","0.6.0-dev",0L,List.of(),null),null,null)),"wrong")).status());
         assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"gap")).status());
-        assertFalse(ack.body().contains("nextIntervalMs"));
-        var optedIn=codec.model(s.service.checkIn(peer,body,"millisecond-retry",true).body(),EndpointCheckInAck.class);
-        assertEquals(500L,optedIn.nextIntervalMs());
-        assertEquals(ack.body(),s.service.checkIn(peer,body,"legacy-retry").body());
+        // Every acknowledgement carries the interval in milliseconds; there is no other unit to negotiate.
+        assertEquals(500L,codec.model(ack.body(),EndpointCheckInAck.class).nextIntervalMs());
+        assertFalse(ack.body().contains("nextIntervalSeconds"));
         s.clock.time+=249;
-        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"burst",true)).status());
+        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"burst")).status());
         s.clock.time+=1;
-        var fast=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"millisecond",true).body(),EndpointCheckInAck.class);
-        assertEquals(2L,fast.nextIntervalSeconds());
+        var fast=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(2L,report,null,null)),"millisecond").body(),EndpointCheckInAck.class);
         assertEquals(500L,fast.nextIntervalMs());
         // A configured check-in changes the negotiated interval and scales the burst guard with it.
         s.service.checkInPolicy(ClientCheckInPolicy.configure(4000L,0,null));
         s.clock.time+=1999;
-        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured-burst",true)).status());
+        assertEquals(409,assertThrows(Failure.class,()->s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured-burst")).status());
         s.clock.time+=1;
-        var configured=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured",true).body(),EndpointCheckInAck.class);
+        var configured=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(3L,report,null,null)),"configured").body(),EndpointCheckInAck.class);
         assertEquals(4000L,configured.nextIntervalMs());
-        assertEquals(4L,configured.nextIntervalSeconds());
-        s.service.checkInPolicy(ClientCheckInPolicy.QUICKSTART);
+        s.service.checkInPolicy(ClientCheckInPolicy.configure(500L,0,120000L));
         s.clock.time=START+50000000;var renewed=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(4L,report,null,null)),"renew").body(),EndpointCheckInAck.class).identity();assertNotNull(renewed);assertTrue(renewed.expiresAtUnixMs()>identity.expiresAtUnixMs());
         var device=codec.model(s.service.device(s.admin,"device").body(),EndpointDeviceRecord.class);assertEquals(4,device.reportSequence());
         var revoked=s.service.revoke(s.admin,"device",codec.json(new EndpointRevokeRequest(device.revision())),"revoke","request");assertEquals(revoked.body(),s.service.revoke(s.admin,"device",codec.json(new EndpointRevokeRequest(device.revision())),"revoke","request").body());
@@ -158,16 +182,16 @@ final class EndpointTest {
         }finally{pool.shutdownNow();}
         var second=start(s,"audit");var secondReview=review(s,second);
         Store failing=new Store(){public<T>T transaction(Ids.TenantId tenant,boolean write,java.util.function.Function<Session,T> work){return s.store.transaction(tenant,write,tx->work.apply((Session)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{Session.class},(proxy,method,args)->{if(method.getName().equals("audit"))throw Failure.unavailable();try{return method.invoke(tx,args);}catch(java.lang.reflect.InvocationTargetException failure){throw failure.getCause();}})));}};
-        var service=new EndpointService(failing,codec,s.issuer,s.clock,true,"endpoint","server","Organization","https://control.example.test","https://gateway.example.test");
+        var service=new EndpointService(failing,codec,s.issuer,s.clock,true,io.ololabs.toolgate.control.fixtures.Tenants.id("endpoint").value(),"server","Organization","https://control.example.test","https://gateway.example.test");
         assertThrows(Failure.class,()->service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(second.userCode(),secondReview.keyFingerprint(),EnrollmentChoice.APPROVE,null,null)),"audit-fail","request"));
         assertEquals(EnrollmentState.PENDING,review(s,second).state());assertThrows(Failure.class,()->s.service.device(s.admin,"audit"));
     }
     private static io.ololabs.toolgate.contracts.v2.ControlServerSettings settings(boolean auto,long days,String owner,String name){
         return new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,1L,new io.ololabs.toolgate.contracts.v2.GatewaySettings(name),
-            new io.ololabs.toolgate.contracts.v2.DeviceApproval(auto,days*ServerSettingsService.DAY_MS,owner),ClientCheckInPolicy.QUICKSTART.effective());
+            new io.ololabs.toolgate.contracts.v2.DeviceApproval(auto,days*ServerSettingsService.DAY_MS,owner),ClientCheckInPolicy.QUICKSTART.effective(),new io.ololabs.toolgate.contracts.v2.ConfigurationSettings(2L));
     }
     @Test void autoApprovalUsesSettingsAndSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        var s=configured(new PostgresStore(SqliteState.open(directory.resolve("auto.sqlite")),codec));
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("auto.sqlite"))),codec));
         var policy=ClientCheckInPolicy.configure(2000L,20,null);s.service.checkInPolicy(policy);
         var settings=new ServerSettingsService(s.store,codec,policy);
         var defaults=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
@@ -199,29 +223,28 @@ final class EndpointTest {
         assertEquals(List.of(manual.userCode()),codec.model(s.service.pending(s.admin,"owner").body(),EndpointEnrollmentPage.class).items().stream().map(EndpointEnrollmentReview::userCode).toList());
         // Restoring an export replaces the record; its check-in values are ignored.
         var exported=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
-        var foreign=new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,3L,exported.gateway(),new io.ololabs.toolgate.contracts.v2.DeviceApproval(false,7L*ServerSettingsService.DAY_MS,null),ClientCheckInPolicy.QUICKSTART.effective());
+        var foreign=new io.ololabs.toolgate.contracts.v2.ControlServerSettings(2L,3L,exported.gateway(),new io.ololabs.toolgate.contracts.v2.DeviceApproval(false,7L*ServerSettingsService.DAY_MS,null),ClientCheckInPolicy.QUICKSTART.effective(),new io.ololabs.toolgate.contracts.v2.ConfigurationSettings(2L));
         var restored=codec.model(settings.update(s.admin,codec.json(foreign),3,"restore","request").body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
         assertEquals(4L,restored.revision());assertFalse(restored.deviceApproval().autoApprove());assertEquals(policy.effective(),restored.clientCheckIn());
         assertEquals(400,assertThrows(Failure.class,()->settings.update(s.admin,"{\"formatVersion\":1,\"revision\":4,\"autoApproveDevices\":false,\"autoApproveDurationDays\":7}",4,"v1","request")).status());
         assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"gateway\":{\"gatewayName\":\" spaced\"}}",4,"bad-name","request")).status());
         assertEquals(400,assertThrows(Failure.class,()->settings.patch(s.admin,"{\"deviceApproval\":{\"autoApprove\":false,\"durationMs\":1000}}",4,"too-short","request")).status());
-        // Startup import seeds only once unless overwrite is requested.
-        assertFalse(settings.importAtStartup(s.admin.tenant(),settings(false,7,null,"Lab Gateway"),false,"startup"));
-        assertTrue(settings.importAtStartup(s.admin.tenant(),settings(false,7,null,"Imported"),true,"startup"));
+        // Initialization cannot overwrite an administrator's saved record.
+        assertFalse(s.store.<Boolean>transaction(s.admin.tenant(),true,tx->settings.initialize(tx,settings(false,7,null,"Imported"),"startup")).booleanValue());
         var imported=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
-        assertEquals(5L,imported.revision());assertEquals(7L*ServerSettingsService.DAY_MS,imported.deviceApproval().durationMs());assertEquals("Imported",imported.gateway().gatewayName());
+        assertEquals(4L,imported.revision());assertEquals(7L*ServerSettingsService.DAY_MS,imported.deviceApproval().durationMs());assertEquals("Lab Gateway",imported.gateway().gatewayName());
         assertEquals(EnrollmentState.PENDING,review(s,start(s,"after-off")).state());
         assertEquals(30L,ConfigurationImportBootstrap.days("30Day"));assertEquals(7L,ConfigurationImportBootstrap.days("7"));
         assertThrows(IllegalStateException.class,()->ConfigurationImportBootstrap.days("month"));
     }
     @Test void pendingDeviceListAndConnectionDeadlinesUsePostgres()throws Exception{deadlineFlow(setup());}
     @Test void pendingDeviceListAndConnectionDeadlinesUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        deadlineFlow(configured(new PostgresStore(SqliteState.open(directory.resolve("deadline.sqlite")),codec)));
+        deadlineFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("deadline.sqlite"))),codec)));
     }
     private void deadlineFlow(Setup s)throws Exception{
         var first=start(s,"timed");var second=start(s,"second");var denied=start(s,"denied");var legacy=start(s,"legacy-caller");
         assertEquals(4,codec.model(s.service.pending(s.admin,"owner").body(),EndpointEnrollmentPage.class).items().size());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.pending(new DirectoryService.Actor(new Ids.TenantId("other"),"b".repeat(64),true),"owner")).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.pending(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"b".repeat(64),true),"owner")).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.pending(s.admin,"unknown")).status());
         var review=review(s,first);long until=START+108000000; // 30 hours, longer than one certificate lifetime.
         for(long invalid:List.of(START,START-1))assertEquals(400,assertThrows(Failure.class,()->s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(first.userCode(),review.keyFingerprint(),EnrollmentChoice.APPROVE,invalid,null)),"invalid-"+invalid,"request")).status());
@@ -235,7 +258,7 @@ final class EndpointTest {
         var page=s.service.pending(s.admin,"owner").body();assertEquals(List.of(second.userCode()),codec.model(page,EndpointEnrollmentPage.class).items().stream().map(EndpointEnrollmentReview::userCode).toList());
         for(String secret:List.of(first.deviceCode(),"csrPem","certificatePem","deviceCode"))assertFalse(page.contains(secret));
         var identity=poll(s,first).identity();assertEquals(START+86400000,identity.expiresAtUnixMs());var peer=certificate(identity);
-        var report=new ClientReport("timed","0.6.0-dev",0L,List.of());
+        var report=new ClientReport("timed","0.6.0-dev",0L,List.of(),null);
         s.clock.time=START+50000000;
         var renewed=codec.model(s.service.checkIn(peer,codec.json(new EndpointCheckIn(1L,report,null,null)),"renew").body(),EndpointCheckInAck.class).identity();
         assertNotNull(renewed);assertEquals(until,renewed.expiresAtUnixMs());assertEquals(until,certificate(renewed).getNotAfter().getTime());
@@ -250,14 +273,164 @@ final class EndpointTest {
         assertEquals(approved,s.service.decide(s.admin,"owner",body,"timed-approval","late-replay"));
         assertEquals(until,codec.model(s.service.device(s.admin,"timed").body(),EndpointDeviceRecord.class).connectionExpiresAtUnixMs());
     }
+    @Test void ownerPowerSwitchIsAuditedAndSkipsPlacementUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("power.sqlite"))),codec));
+        var challenge=start(s,"powered");decide(s,challenge,EnrollmentChoice.APPROVE,"approve-powered");var peer=certificate(poll(s,challenge).identity());
+        s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
+            TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("power-devices","Power devices",true,1L,List.of("powered")));
+            TestSupport.put(entries,codec,Ids.Kind.BINDING,new ControlExecutionBinding("power-binding","Power binding",true,1L,"power-tools","power-devices",List.of("read"),List.of(),true,false));
+            tx.save(before,new Directory(before.revision()+1,entries));return null;});
+        var placement=new DevicePlacement(codec,ClientCheckInPolicy.QUICKSTART);
+        var context=new io.ololabs.toolgate.contracts.v2.RequestContext("power-call","endpoint",io.ololabs.toolgate.contracts.v2.RequestMode.SERVICE,io.ololabs.toolgate.contracts.v2.CredentialKind.STATIC_TOKEN,null,null,null,null,List.of(),null,null,null,null,"power-binding",null);
+        java.util.function.Function<String,List<String>> candidates=label->s.store.transaction(s.admin.tenant(),false,tx->placement.candidates(tx,context,s.clock.millis()));
+        java.util.function.BiFunction<Long,DevicePower,Store.Reply> report=(sequence,power)->s.service.checkIn(peer,codec.json(new EndpointCheckIn(sequence,new ClientReport("powered","0.10.0-dev",0L,List.of(),power),null,null)),"power-"+sequence);
+        report.apply(1L,null);assertEquals(List.of("powered"),candidates.apply("on"));
+        // The owner's final report is accepted inside the burst guard and takes the device out of placement at once.
+        s.clock.time+=100;var off=report.apply(2L,DevicePower.OFF);assertNull(codec.model(off.body(),EndpointCheckInAck.class).task());
+        assertEquals(DevicePower.OFF,codec.model(s.service.device(s.admin,"powered").body(),EndpointDeviceRecord.class).report().power());
+        assertTrue(candidates.apply("off").isEmpty());assertEquals(off.body(),report.apply(2L,DevicePower.OFF).body());
+        s.clock.time+=100;report.apply(3L,null);assertEquals(List.of("powered"),candidates.apply("on-again"));
+        s.clock.time+=100;assertEquals(409,assertThrows(Failure.class,()->report.apply(4L,null)).status());
+        var audit=s.directory.audit(s.admin,0,100).body();assertTrue(audit.contains("DEVICE_POWER_OFF"));assertTrue(audit.contains("DEVICE_POWER_ON"));
+        assertTrue(DevicePlacement.poweredOff(new ClientReport("powered","0.10.0-dev",0L,List.of(),DevicePower.OFF)));
+        assertFalse(DevicePlacement.poweredOff(new ClientReport("powered","0.10.0-dev",0L,List.of(),DevicePower.ON)));
+        assertFalse(DevicePlacement.poweredOff((ClientReport)null));
+    }
     @Test void unlimitedApprovalAndReversibleManagementUsePostgres()throws Exception{managementFlow(setup());}
+    @Test void presenceDeletionAndExpiredApprovalUsePostgres()throws Exception{presenceFlow(setup());}
+    @Test void presenceDeletionAndExpiredApprovalUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
+        presenceFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("presence.sqlite"))),codec)));
+    }
+    private void presenceFlow(Setup s)throws Exception{
+        String csr=csr("live");String announcement=codec.json(new EndpointEnrollmentStart("live","0.10.0-dev",ClientPlatform.LINUX,csr,List.of()));
+        String presence=codec.json(new EndpointPresencePing(codec.model(announcement,EndpointEnrollmentStart.class),"+00:00"));
+        assertEquals(EndpointConnectionAction.ENROLL,codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class).action());
+        var challenge=codec.model(s.service.start(announcement,"first-enrollment").body(),EndpointEnrollmentChallenge.class);
+        decide(s,challenge,EnrollmentChoice.APPROVE,"first-approval");var identity=poll(s,challenge).identity();
+        var report=new ClientReport("live","0.10.0-dev",0L,List.of(),null);
+        s.service.checkIn(certificate(identity),codec.json(new EndpointCheckIn(1L,report,null,null)),"first-check-in");
+        var directory=codec.model(s.directory.get(s.admin,Ids.Kind.DEVICE,"live").body(),ControlDevice.class);
+        s.directory.mutate(s.admin,Ids.Kind.DEVICE,"live","DELETE",null,directory.revision(),"delete-live","request");
+        var ping=codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class);
+        assertEquals(EndpointState.UNENROLLED,ping.state());assertEquals(EndpointConnectionAction.ENROLL,ping.action());assertEquals(1L,ping.reportSequence());
+        assertEquals(410,assertThrows(Failure.class,()->s.service.checkIn(certificate(identity),codec.json(new EndpointCheckIn(2L,report,null,null)),"deleted-check-in")).status());
+        assertEquals(403,assertThrows(Failure.class,()->poll(s,challenge)).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.ping(codec.json(new EndpointPresencePing(new EndpointEnrollmentStart("live","0.10.0-dev",ClientPlatform.LINUX,csr("impostor"),List.of()),"+00:00")))).status());
+        var fresh=codec.model(s.service.start(announcement,"reenroll").body(),EndpointEnrollmentChallenge.class);
+        assertEquals(EnrollmentState.PENDING,review(s,fresh).state());
+        var listed=codec.model(s.service.devices(s.admin).body(),EndpointManagedDevicePage.class).items().getFirst();
+        assertEquals("live",listed.deviceId());assertNull(listed.endpointDevice());assertNull(listed.directoryDevice());assertNotNull(listed.enrollment());
+        assertEquals(EndpointState.PENDING,codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class).state());
+        s.service.enabled(s.admin,"owner","live",codec.json(new EndpointEnabledRequest(0L,false)),"disable-pending","request");
+        assertEquals(410,assertThrows(Failure.class,()->s.service.verifySocketPeer(certificate(identity))).status());
+        s.service.decide(s.admin,"owner",codec.json(new EndpointEnrollmentDecision(fresh.userCode(),review(s,fresh).keyFingerprint(),EnrollmentChoice.APPROVE,s.clock.time+60000,null)),"fresh-approval","request");
+        assertEquals(EndpointConnectionAction.WAIT,codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class).action());
+        s.service.enabled(s.admin,"owner","live",codec.json(new EndpointEnabledRequest(1L,true)),"enable-fresh","request");
+        var freshIdentity=poll(s,fresh).identity();s.clock.time+=500;
+        s.service.checkIn(certificate(freshIdentity),codec.json(new EndpointCheckIn(2L,report,null,null)),"fresh-check-in");
+        assertEquals(EndpointConnectionAction.CHECK_IN,codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class).action());
+        s.clock.time=START+60000;
+        for(int i=0;i<2;i++)assertEquals(EndpointConnectionAction.WAIT,codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class).action());
+        listed=codec.model(s.service.devices(s.admin).body(),EndpointManagedDevicePage.class).items().getFirst();
+        assertNotNull(listed.endpointDevice());assertEquals(START+60000,listed.endpointDevice().connectionExpiresAtUnixMs());
+        s.service.approval(s.admin,"owner","live",codec.json(new EndpointApprovalRequest(listed.endpointDevice().approvalRevision(),true,null,true)),"renew-approval","request");
+        assertEquals(EndpointConnectionAction.CHECK_IN,codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class).action());
+        var endpoint=codec.model(s.service.device(s.admin,"live").body(),EndpointDeviceRecord.class);
+        s.service.revoke(s.admin,"live",codec.json(new EndpointRevokeRequest(endpoint.revision())),"retire-key","request");
+        for(int i=0;i<2;i++){
+            ping=codec.model(s.service.ping(presence).body(),EndpointConnectionDirective.class);assertEquals(EndpointState.REVOKED,ping.state());assertEquals(EndpointConnectionAction.WAIT,ping.action());
+        }
+        directory=codec.model(s.directory.get(s.admin,Ids.Kind.DEVICE,"live").body(),ControlDevice.class);
+        s.directory.mutate(s.admin,Ids.Kind.DEVICE,"live","DELETE",null,directory.revision(),"delete-revoked","request");
+        assertEquals(403,assertThrows(Failure.class,()->s.service.start(announcement,"revoked-reenrollment")).status());
+    }
+    @Test void revokedDeviceCanExplicitlyRequestFreshApprovalUsePostgres()throws Exception{revocationRequestFlow(setup());}
+    @Test void revokedDeviceCanExplicitlyRequestFreshApprovalUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
+        revocationRequestFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("retry.sqlite"))),codec)));
+    }
+    private void revocationRequestFlow(Setup s)throws Exception{
+        for(boolean fromClient:List.of(true,false)){
+            String id=fromClient?"retry-client":"retry-admin";String csr=csr(id);
+            var settings=new ServerSettingsService(s.store,codec,ClientCheckInPolicy.QUICKSTART);
+            var current=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+            settings.patch(s.admin,"{\"deviceApproval\":{\"autoApprove\":false}}",current.revision(),"manual-"+id,"request");
+            var announcement=new EndpointEnrollmentStart(id,"0.10.0-dev",ClientPlatform.LINUX,csr,List.of());
+            var original=codec.model(s.service.start(codec.json(announcement),"initial-"+id).body(),EndpointEnrollmentChallenge.class);
+            decide(s,original,EnrollmentChoice.APPROVE,"approve-"+id);var oldIdentity=poll(s,original).identity();
+            var report=new ClientReport(id,"0.10.0-dev",0L,List.of(),null);
+            s.service.checkIn(certificate(oldIdentity),codec.json(new EndpointCheckIn(1L,report,null,null)),"report-"+id);
+            var device=codec.model(s.service.device(s.admin,id).body(),EndpointDeviceRecord.class);
+            s.service.revoke(s.admin,id,codec.json(new EndpointRevokeRequest(device.revision())),"revoke-"+id,"request");
+            var intervals=Map.of("+00:00",2800000L,"+05:30",1000000L,"+05:45",100000L,"-03:30",1000000L);
+            for(var interval:intervals.entrySet()){
+                var ping=codec.model(s.service.ping(codec.json(new EndpointPresencePing(announcement,interval.getKey()))).body(),EndpointConnectionDirective.class);
+                assertEquals(EndpointState.REVOKED,ping.state());assertEquals(EndpointConnectionAction.WAIT,ping.action());
+                assertEquals(interval.getValue()-(s.clock.millis()-START),ping.nextIntervalMs());
+            }
+            assertEquals(403,assertThrows(Failure.class,()->poll(s,original)).status());
+            assertEquals(403,assertThrows(Failure.class,()->s.service.start(codec.json(announcement),"automatic-retry-"+id)).status());
+            current=codec.model(settings.get(s.admin).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class);
+            settings.patch(s.admin,"{\"deviceApproval\":{\"autoApprove\":true,\"ownerUserId\":\"owner\"}}",current.revision(),"auto-"+id,"request");
+            EndpointEnrollmentChallenge fresh;
+            if(fromClient){
+                var impostor=new EndpointEnrollmentStart(id,"0.10.0-dev",ClientPlatform.LINUX,csr("impostor"),List.of());
+                assertEquals(403,assertThrows(Failure.class,()->s.service.requestApproval(codec.json(impostor),"wrong-key")).status());
+                fresh=codec.model(s.service.requestApproval(codec.json(announcement),"explicit-retry").body(),EndpointEnrollmentChallenge.class);
+            }else{
+                device=codec.model(s.service.device(s.admin,id).body(),EndpointDeviceRecord.class);
+                String request=codec.json(new EndpointRevokeRequest(device.revision()));
+                assertEquals(403,assertThrows(Failure.class,()->s.service.requestApproval(new DirectoryService.Actor(s.admin.tenant(),"a".repeat(64),false),"owner",id,request,"no-role","request")).status());
+                assertEquals(409,assertThrows(Failure.class,()->s.service.requestApproval(s.admin,"owner",id,codec.json(new EndpointRevokeRequest(1L)),"stale-retry","request")).status());
+                var reset=s.service.requestApproval(s.admin,"owner",id,request,"admin-retry","request");
+                assertEquals(reset,s.service.requestApproval(s.admin,"owner",id,request,"admin-retry","retry"));
+                var awaiting=codec.model(reset.body(),EndpointDeviceRecord.class);assertFalse(awaiting.connectionApproved());
+                assertEquals(409,assertThrows(Failure.class,()->s.service.approval(s.admin,"owner",id,codec.json(new EndpointApprovalRequest(awaiting.approvalRevision(),true,null,true)),"skip-review","request")).status());
+                fresh=codec.model(s.service.start(codec.json(announcement),"fresh-admin-request").body(),EndpointEnrollmentChallenge.class);
+            }
+            assertEquals(EnrollmentState.PENDING,review(s,fresh).state());assertNull(poll(s,fresh).identity());
+            assertEquals(410,assertThrows(Failure.class,()->s.service.verifySocketPeer(certificate(oldIdentity))).status());
+            var listed=codec.model(s.service.devices(s.admin).body(),EndpointManagedDevicePage.class).items().stream().filter(row->row.deviceId().equals(id)).findFirst().orElseThrow();
+            assertNotNull(listed.enrollment());assertNull(listed.endpointDevice());
+            decide(s,fresh,EnrollmentChoice.APPROVE,"fresh-approve-"+id);s.clock.time+=5001;var identity=poll(s,fresh).identity();
+            assertNotNull(identity);s.service.checkIn(certificate(identity),codec.json(new EndpointCheckIn(2L,report,null,null)),"fresh-report-"+id);
+            assertEquals(EndpointConnectionAction.CHECK_IN,codec.model(s.service.ping(codec.json(new EndpointPresencePing(announcement,"+05:30"))).body(),EndpointConnectionDirective.class).action());
+        }
+    }
     @Test void unlimitedApprovalAndReversibleManagementUseSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
-        managementFlow(configured(new PostgresStore(SqliteState.open(directory.resolve("managed.sqlite")),codec)));
+        managementFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("managed.sqlite"))),codec)));
+    }
+    @Test void aCertificateCannotCrossTenantsEvenWhenTheSamePublicKeyWasEnrolledInBoth(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("certificate-binding.sqlite"))),codec));
+        var other=TestSupport.seed(s.store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"owner");
+        var target=s.service.forTenant(other.tenant(),new Store.RuntimeProfile("other-server","Other organization","https://other.example.test","https://other.example.test"));
+        String id="shared-key-device",request=csr(id);
+        var challenge=codec.model(target.start(codec.json(new EndpointEnrollmentStart(id,"0.6.0-dev",ClientPlatform.LINUX,request,List.of("endpoint.identity.v1"))),"request").body(),EndpointEnrollmentChallenge.class);
+        var review=codec.model(target.review(other,"owner",challenge.userCode()).body(),EndpointEnrollmentReview.class);
+        target.decide(other,"owner",codec.json(new EndpointEnrollmentDecision(challenge.userCode(),review.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"approve","request");
+        s.clock.time+=5000;
+        var identity=codec.model(target.poll(codec.json(new EndpointEnrollmentPoll(challenge.enrollmentId(),challenge.deviceCode())),"request").body(),EndpointEnrollmentResult.class).identity();
+        var own=certificate(identity);
+        var foreign=certificate(s.issuer.issue(request,id,s.admin.tenant().value(),"owner","server",s.clock.time));
+        assertEquals(s.issuer.verifyPeer(own,s.clock.time).fingerprint(),s.issuer.verifyPeer(foreign,s.clock.time).fingerprint());
+        assertEquals(id,s.store.transaction(other.tenant(),false,tx->target.authenticate(tx,own,s.clock.time)).deviceId());
+        assertEquals(ErrorCode.TENANT_MISMATCH,assertThrows(Failure.class,()->s.store.transaction(other.tenant(),false,tx->target.authenticate(tx,foreign,s.clock.time))).code());
+        assertEquals(ErrorCode.TENANT_MISMATCH,assertThrows(Failure.class,()->target.verifySocketPeer(foreign)).code());
+        String report=codec.json(new EndpointCheckIn(1L,new ClientReport(id,"0.6.0-dev",0L,List.of(),null),null,null));
+        assertEquals(ErrorCode.TENANT_MISMATCH,assertThrows(Failure.class,()->target.checkIn(foreign,report,"request")).code());
+        for(var wrong:List.of(
+            s.issuer.issue(request,"another-device",other.tenant().value(),"owner","other-server",s.clock.time),
+            s.issuer.issue(request,id,other.tenant().value(),"another-user","other-server",s.clock.time),
+            s.issuer.issue(request,id,other.tenant().value(),"owner","another-server",s.clock.time))) {
+            var invalid=certificate(wrong);
+            assertEquals(ErrorCode.FORBIDDEN,assertThrows(Failure.class,()->s.store.transaction(other.tenant(),false,tx->target.authenticate(tx,invalid,s.clock.time))).code());
+        }
+        assertEquals(0L,s.store.<Long>transaction(other.tenant(),false,tx->codec.model(tx.endpoint(id).document(),EndpointDeviceRecord.class).reportSequence()).longValue());
+        assertEquals(200,target.checkIn(own,report,"correct-tenant").status());
     }
     private void managementFlow(Setup s)throws Exception{
         var challenge=start(s,"managed");var review=review(s,challenge);
         assertEquals(1,codec.model(s.service.devices(s.admin).body(),EndpointManagedDevicePage.class).items().size());
-        assertEquals(403,assertThrows(Failure.class,()->s.service.devices(new DirectoryService.Actor(new Ids.TenantId("other"),"a".repeat(64),true))).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.devices(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"a".repeat(64),true))).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.devices(new DirectoryService.Actor(s.admin.tenant(),"a".repeat(64),false))).status());
         var disabled=codec.model(s.service.enabled(s.admin,"owner","managed",codec.json(new EndpointEnabledRequest(0L,false)),"pending-disable","request").body(),ControlDevice.class);
         assertFalse(disabled.enabled());assertEquals("owner",disabled.ownerUserId());
@@ -268,7 +441,7 @@ final class EndpointTest {
         assertEquals(423,assertThrows(Failure.class,()->poll(s,challenge)).status());
         s.service.enabled(s.admin,"owner","managed",codec.json(new EndpointEnabledRequest(1L,true)),"enable","request");
         var identity=poll(s,challenge).identity();assertEquals(START+86400000,identity.expiresAtUnixMs());var peer=certificate(identity);
-        var report=new ClientReport("managed","0.6.0-dev",0L,List.of());s.service.checkIn(peer,codec.json(new EndpointCheckIn(1L,report,null,null)),"first");
+        var report=new ClientReport("managed","0.6.0-dev",0L,List.of(),null);s.service.checkIn(peer,codec.json(new EndpointCheckIn(1L,report,null,null)),"first");
         var suspendBody=codec.json(new EndpointApprovalRequest(1L,false,null,null));
         var suspended=s.service.approval(s.admin,"owner","managed",suspendBody,"deapprove","request");assertEquals(suspended,s.service.approval(s.admin,"owner","managed",suspendBody,"deapprove","retry"));
         var suspendedDevice=codec.model(suspended.body(),EndpointDeviceRecord.class);assertFalse(suspendedDevice.connectionApproved());assertEquals("owner",suspendedDevice.userId());
@@ -295,5 +468,91 @@ final class EndpointTest {
         s.service.revoke(s.admin,"managed",codec.json(new EndpointRevokeRequest(row.revision())),"permanent","request");
         assertEquals(409,assertThrows(Failure.class,()->s.service.approval(s.admin,"owner","managed",codec.json(new EndpointApprovalRequest(4L,true,null,true)),"revoked-reapprove","request")).status());
         assertEquals(403,assertThrows(Failure.class,()->s.service.start(codec.json(new EndpointEnrollmentStart("managed","0.6.0-dev",ClientPlatform.LINUX,registeredCsr,List.of())),"revoked-recover")).status());
+    }
+    @Test void ownDevicesApprovalKeepsCodesPrivateAndLimitsEachAccountToOneDevice()throws Exception{
+        ownDevicesFlow(setup());
+    }
+    @Test void verifiedPendingDevicesArePrivateAndUnapprovedInSqlite(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
+        ownDevicesFlow(configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("own-devices.sqlite"))),codec)));
+    }
+    @Test void currentDeviceProofIsSessionBoundSingleUseAndNeverApprovesAccess(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
+        var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("console-proof.sqlite"))),codec));
+        s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
+            TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("self-user","Self user",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"self-user");
+            TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("self-devices","Self devices",true,1L,List.of()));
+            var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
+            var rule=new EnterpriseManagementRule(List.of("device.read","device.enroll","device.approve"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("self-devices"),false),List.of(),conditions,"CURRENT");
+            TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("self-role","Self role",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of(rule)));
+            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("self-team","Self team",true,1L,List.of("self-user"),List.of("self-role")));
+            tx.save(before,new Directory(before.revision()+1,entries));return null;});
+        var actor=s.directory.portalActor(s.admin.tenant(),"b".repeat(64),"self-user").consoleSession("c".repeat(64),START+900000,null);
+        var generator=KeyPairGenerator.getInstance("EC");generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));var pair=generator.generateKeyPair();
+        var start=codec.model(s.service.start(codec.json(new EndpointEnrollmentStart("proof-device","0.6.0-dev",ClientPlatform.WINDOWS,csr("proof-device",pair),List.of())),"start").body(),EndpointEnrollmentChallenge.class);
+        assertTrue(codec.model(s.service.devices(actor).body(),EndpointManagedDevicePage.class).items().isEmpty());
+        var challenge=codec.model(s.service.consoleChallenge(actor,codec.json(new ConsoleDeviceLookup(start.userCode(),null)),"challenge").body(),ConsoleDeviceChallenge.class);
+        var proof=new ConsoleDeviceProof(challenge.nonce(),challenge.deviceId(),challenge.keyFingerprint(),consoleSignature(pair,challenge.nonce()));
+        var otherSession=actor.consoleSession("d".repeat(64),START+900000,null);
+        assertEquals(409,assertThrows(Failure.class,()->s.service.consoleVerify(otherSession,codec.json(proof),"wrong-session")).status());
+        var wrong=new ConsoleDeviceProof(challenge.nonce(),challenge.deviceId(),challenge.keyFingerprint(),consoleSignature(generator.generateKeyPair(),challenge.nonce()));
+        assertEquals(403,assertThrows(Failure.class,()->s.service.consoleVerify(actor,codec.json(wrong),"wrong-key")).status());
+        assertEquals(200,s.service.consoleVerify(actor,codec.json(proof),"verified").status());
+        assertEquals(409,assertThrows(Failure.class,()->s.service.consoleVerify(actor,codec.json(proof),"replay")).status());
+        var items=codec.model(s.service.devices(actor).body(),EndpointManagedDevicePage.class).items();
+        assertEquals(List.of("proof-device"),items.stream().map(EndpointManagedDevice::deviceId).toList());assertTrue(items.getFirst().permissions().contains("device.approve"));assertNull(items.getFirst().endpointDevice());
+        s.store.transaction(actor.tenant(),false,tx->{assertNull(tx.endpoint("proof-device"));assertNull(tx.enrollmentCode(DirectoryService.digest(start.userCode())).certificate());assertEquals("proof-device",ConsoleDeviceSessions.current(tx,codec,actor.sessionId(),actor.userId(),START));return null;});
+        assertTrue(codec.model(s.service.devices(otherSession).body(),EndpointManagedDevicePage.class).items().isEmpty());
+        s.clock.time=START+900001;
+        assertTrue(codec.model(s.service.devices(actor).body(),EndpointManagedDevicePage.class).items().isEmpty());
+    }
+    private void ownDevicesFlow(Setup s)throws Exception{
+        var tenant=s.admin.tenant();
+        s.store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var all=new GroupSelection(List.of(),true);var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
+            var rules=new ArrayList<EnterpriseManagementRule>();for(var kind:EnterpriseGroupType.values())rules.add(new EnterpriseManagementRule(ManagementPermissionCatalog.ALL.stream().filter(p->p.endsWith(".read")&&!p.equals("device.read")).sorted().toList(),kind,all,List.of(),conditions,null));
+            rules.add(new EnterpriseManagementRule(List.of("device.approve","device.enroll","device.read"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("visitor-devices"),false),List.of(),conditions,"OWNED"));
+            TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("visitor-devices","Visitor devices",true,1L,List.of()));
+            for(var user:List.of("visitor-a","visitor-b"))TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser(user,user,true,1L));
+            TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("visitor-role","Visitor",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
+            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("visitors","Visitors",true,1L,List.of("visitor-a","visitor-b"),List.of("visitor-role")));
+            tx.save(before,new Directory(before.revision()+1,entries));return null;});
+        var a=s.directory.portalActor(tenant,"c".repeat(64),"visitor-a");var b=s.directory.portalActor(tenant,"d".repeat(64),"visitor-b");
+        var mine=start(s,"device-a");var theirs=start(s,"device-b");
+        // Visitor B sees no pending enrollment at all, and the administrator's group rule still shows codes.
+        assertTrue(codec.model(s.service.pending(b,"visitor-b").body(),EndpointEnrollmentPage.class).items().isEmpty());
+        assertTrue(codec.model(s.service.devices(b).body(),EndpointManagedDevicePage.class).items().isEmpty());
+        assertTrue(codec.model(s.service.pending(s.admin,"owner").body(),EndpointEnrollmentPage.class).items().stream().allMatch(r->r.userCode()!=null&&r.keyFingerprint()!=null));
+        assertEquals(404,assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup("0".repeat(16))))).status());
+        var found=codec.model(s.service.lookup(a,"visitor-a",codec.json(new EndpointEnrollmentLookup(mine.userCode()))).body(),EndpointEnrollmentLookupResult.class);
+        assertEquals("device-a",found.deviceId());assertEquals(review(s,mine).keyFingerprint(),found.keyFingerprint());
+        var waiting=codec.model(s.service.devices(a).body(),EndpointManagedDevicePage.class).items();
+        assertEquals(List.of("device-a"),waiting.stream().map(EndpointManagedDevice::deviceId).toList());
+        assertEquals("visitor-a",waiting.getFirst().registeredUser().id());assertNull(waiting.getFirst().endpointDevice());
+        assertEquals(mine.userCode(),waiting.getFirst().enrollment().userCode());assertEquals(found.keyFingerprint(),waiting.getFirst().enrollment().keyFingerprint());
+        assertEquals(List.of(mine.userCode()),codec.model(s.service.pending(a,"visitor-a").body(),EndpointEnrollmentPage.class).items().stream().map(EndpointEnrollmentReview::userCode).toList());
+        assertTrue(codec.model(s.service.devices(b).body(),EndpointManagedDevicePage.class).items().isEmpty());
+        assertTrue(codec.model(s.service.pending(b,"visitor-b").body(),EndpointEnrollmentPage.class).items().isEmpty());
+        assertEquals(404,assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(mine.userCode())))).status());
+        s.store.transaction(tenant,false,tx->{assertNull(tx.endpoint("device-a"));assertNull(tx.enrollment(mine.enrollmentId()).certificate());return null;});
+        var approved=codec.model(s.service.decide(a,"visitor-a",codec.json(new EndpointEnrollmentDecision(mine.userCode(),found.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"own-approve","request").body(),EndpointEnrollmentReview.class);
+        assertEquals(EnrollmentState.APPROVED,approved.state());assertNull(approved.keyFingerprint());
+        s.store.transaction(tenant,false,tx->{assertEquals("visitor-a",codec.model(tx.load().entries().get(Ids.Kind.DEVICE.id("device-a")).document(),ControlDevice.class).ownerUserId());assertEquals(List.of("visitor-devices"),GroupGraph.memberships(tx.load(),codec,Ids.Kind.DEVICE,"device-a",false));return null;});
+        poll(s,mine);
+        // A sees only its own device, without the fingerprint; the administrator sees it with the fingerprint.
+        var own=codec.model(s.service.devices(a).body(),EndpointManagedDevicePage.class).items();assertEquals(List.of("device-a"),own.stream().map(EndpointManagedDevice::deviceId).toList());assertNull(own.getFirst().endpointDevice().keyFingerprint());
+        assertNotNull(codec.model(s.service.device(s.admin,"device-a").body(),EndpointDeviceRecord.class).keyFingerprint());assertEquals(403,assertThrows(Failure.class,()->s.service.device(b,"device-a")).status());
+        // B cannot take A's device after approval, by code or by id; A can unapprove and approve its own.
+        assertEquals(403,assertThrows(Failure.class,()->s.service.decide(b,"visitor-b",codec.json(new EndpointEnrollmentDecision(mine.userCode(),found.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"theft","request")).status());
+        assertEquals(403,assertThrows(Failure.class,()->s.service.approval(b,"visitor-b","device-a",codec.json(new EndpointApprovalRequest(1L,false,null,null)),"theft-id","request")).status());
+        assertEquals(200,s.service.approval(a,"visitor-a","device-a",codec.json(new EndpointApprovalRequest(1L,false,null,null)),"own-off","request").status());
+        // One owned device per account.
+        var second=start(s,"device-a2");var secondFound=codec.model(s.service.lookup(a,"visitor-a",codec.json(new EndpointEnrollmentLookup(second.userCode()))).body(),EndpointEnrollmentLookupResult.class);
+        var limit=assertThrows(Failure.class,()->s.service.decide(a,"visitor-a",codec.json(new EndpointEnrollmentDecision(second.userCode(),secondFound.keyFingerprint(),EnrollmentChoice.APPROVE,START+604800000,null)),"second","request"));
+        assertEquals(409,limit.status());assertEquals(ControlErrorDetailCode.ONE_DEVICE_PER_ACCOUNT,limit.detail());
+        // Failed lookups and approvals are rate limited per user: B has three failures, two more, then 429 even for a valid code.
+        // The failed attempt to claim A's code above counts toward B's limit too.
+        for(int i=0;i<1;i++)assertEquals(404,assertThrows(Failure.class,()->s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup("1".repeat(16))))).status());
+        var nextRequest=s.service.forTenant(s.admin.tenant(),new Store.RuntimeProfile("server","Organization","https://control.example.test","https://gateway.example.test"));
+        var limited=assertThrows(Failure.class,()->nextRequest.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(theirs.userCode()))));assertEquals(429,limited.status());assertEquals(ControlErrorDetailCode.RATE_LIMITED,limited.detail());
+        s.clock.time+=600001;assertTrue(codec.model(s.service.pending(a,"visitor-a").body(),EndpointEnrollmentPage.class).items().isEmpty());
+        var later=start(s,"device-b2");assertEquals("device-b2",codec.model(s.service.lookup(b,"visitor-b",codec.json(new EndpointEnrollmentLookup(later.userCode()))).body(),EndpointEnrollmentLookupResult.class).deviceId());
     }
 }

@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Adapter A2: the Tasks extension {@code io.modelcontextprotocol/tasks} over a {@link TaskStore} (protocol-layer.md
- * §3, plan.md §12.4 and §12.6). The runtime creates tasks and reports their progress, input requests and outcome;
+ * §3, platform-requirements.md §12.4 and §12.6). The runtime creates tasks and reports their progress, input requests and outcome;
  * the protocol core routes {@code tasks/get}, {@code tasks/update} and {@code tasks/cancel} here.
  */
 public final class Tasks implements AutoCloseable {
@@ -34,6 +34,7 @@ public final class Tasks implements AutoCloseable {
     private final long ttlMs;
     private final long pollIntervalMs;
     private final Map<String, Runnable> cancelHandlers = new ConcurrentHashMap<>();
+    private final java.util.List<java.util.function.Consumer<TaskRecord>> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final Object changed = new Object();
     private final SecureRandom random = new SecureRandom();
     private final ScheduledExecutorService sweeper = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -49,6 +50,11 @@ public final class Tasks implements AutoCloseable {
         this.pollIntervalMs = pollIntervalMs;
         long sweep = Math.max(10, pollIntervalMs / 2);
         sweeper.scheduleWithFixedDelay(this::sweep, sweep, sweep, TimeUnit.MILLISECONDS);
+    }
+
+    /** Called with the task after each change of status or status message, for {@code notifications/tasks}. */
+    public void onChange(java.util.function.Consumer<TaskRecord> listener) {
+        listeners.add(listener);
     }
 
     // ---- runtime side ----
@@ -105,9 +111,15 @@ public final class Tasks implements AutoCloseable {
 
     /** Ends the task with a protocol-level error. */
     public void fail(String taskId, int code, String message) {
+        fail(taskId, code, message, null);
+    }
+
+    /** Ends the task with a protocol-level error that carries {@code data}. */
+    public void fail(String taskId, int code, String message, com.fasterxml.jackson.databind.JsonNode data) {
         end(taskId, t -> {
             t.status = TaskStatus.FAILED;
             t.error = JSON.objectNode().put("code", code).put("message", message);
+            if (data != null) t.error.set("data", data);
         });
     }
 
@@ -168,6 +180,11 @@ public final class Tasks implements AutoCloseable {
         }
     }
 
+    /** The task {@code taskId} if {@code owner} owns it and it still exists. */
+    public java.util.Optional<TaskRecord> find(String owner, String taskId) {
+        return store.get(taskId, owner);
+    }
+
     // ---- protocol side ----
 
     /** {@code tasks/get}. */
@@ -216,8 +233,8 @@ public final class Tasks implements AutoCloseable {
             if (!t.status.terminal()) runCancel(t.taskId);
             cancelHandlers.remove(t.taskId);
         }
-        for (TaskRecord t : store.all()) {
-            if (t.cancelIfAbandoned && !t.status.terminal() && !t.cancelRequested
+        for (TaskRecord t : store.active()) {
+            if (t.cancelIfAbandoned && !t.cancelRequested
                     && now.isAfter(t.lastPolledAt.plusMillis(t.pollIntervalMs * ABANDONED_AFTER_POLLS))) {
                 change(t.taskId, x -> x.cancelRequested = true);
                 runCancel(t.taskId);
@@ -243,11 +260,23 @@ public final class Tasks implements AutoCloseable {
     }
 
     private void change(String taskId, java.util.function.Consumer<TaskRecord> change) {
-        store.transition(taskId, t -> {
+        String[] before = new String[1];
+        Optional<TaskRecord> after = store.transition(taskId, t -> {
+            before[0] = t.status + "\u0000" + t.statusMessage;
             change.accept(t);
             t.lastUpdatedAt = Instant.now();
         });
         signal();
+        after.ifPresent(t -> {
+            if (before[0].equals(t.status + "\u0000" + t.statusMessage)) return;
+            for (java.util.function.Consumer<TaskRecord> l : listeners) {
+                try {
+                    l.accept(t);
+                } catch (RuntimeException e) {
+                    // a listener failure never affects the task
+                }
+            }
+        });
     }
 
     private void end(String taskId, java.util.function.Consumer<TaskRecord> change) {

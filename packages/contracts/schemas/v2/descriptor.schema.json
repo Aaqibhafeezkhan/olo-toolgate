@@ -22,7 +22,7 @@
         "NON_IDEMPOTENT",
         "UNKNOWN"
       ],
-      "description": "Declared effect safety (plan.md §11.7)."
+      "description": "Declared effect safety (platform-requirements.md \u00a711.7)."
     },
     "KeyNamespace": {
       "type": "string",
@@ -31,7 +31,7 @@
         "DELEGATED_USER",
         "TENANT"
       ],
-      "description": "Business-key namespace (plan.md §11.7)."
+      "description": "Business-key namespace (platform-requirements.md \u00a711.7)."
     },
     "IdempotencyScope": {
       "type": "string",
@@ -48,7 +48,7 @@
         "WASI",
         "HOST_NATIVE"
       ],
-      "description": "Client runtime isolation tier (plan.md §13.4)."
+      "description": "Client runtime isolation tier (platform-requirements.md \u00a713.4)."
     },
     "ValueType": {
       "type": "string",
@@ -67,7 +67,7 @@
         "ARRAY",
         "BINARY"
       ],
-      "description": "Declared value type (authoring/README.md §7)."
+      "description": "Declared value type (authoring/README.md \u00a77)."
     },
     "SecretScope": {
       "type": "string",
@@ -87,7 +87,7 @@
         "CONNECTION",
         "CUSTOM"
       ],
-      "description": "HTTP auth strategy (plan.md §5.4)."
+      "description": "HTTP auth strategy (platform-requirements.md \u00a75.4)."
     },
     "HttpMethod": {
       "type": "string",
@@ -118,9 +118,11 @@
         "CREDENTIALS_IN_SANDBOX",
         "USER_SECRET",
         "TOKEN_EXCHANGE",
-        "CONNECTION"
+        "CONNECTION",
+        "DEVICE_FILES_READ",
+        "DEVICE_FILES_WRITE"
       ],
-      "description": "Derived permission (descriptor §2)."
+      "description": "Derived permission (descriptor \u00a72)."
     },
     "ErrorDeclaration": {
       "type": "object",
@@ -342,7 +344,8 @@
         "caBundle": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 65536,
+          "description": "Inline PEM trust bundle; never a filesystem path or URL."
         }
       },
       "required": [
@@ -568,6 +571,45 @@
         "claims"
       ]
     },
+    "ToolAuthorization": {
+      "type": "object",
+      "description": "The tool's single permission and the resources it acts on (OLO M3.7). Absent: action invoke on tool://{toolId}.",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_-]{0,31}([.][a-z][a-z0-9_-]{0,31}){0,3}$"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 512,
+            "pattern": "^[a-z][a-z0-9+.-]{0,31}://[{]tenant[}](/([A-Za-z0-9._-]{1,64}|[{][A-Za-z][A-Za-z0-9_]{0,63}[}]))+$",
+            "description": "Locator template: {tenant} is the verified tenant, {name} a required string argument holding an opaque id."
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "action",
+        "resources"
+      ]
+    },
+    "ToolReconciliation": {
+      "type": "string",
+      "enum": [
+        "DOWNSTREAM_IDEMPOTENCY",
+        "STATUS_LOOKUP",
+        "MANUAL"
+      ],
+      "description": "How an unknown outcome of this tool is settled (OLO M5.4): resend with the same downstream idempotency key, look the effect up with the reconcile tool, or an operator decides."
+    },
     "ToolDescriptor": {
       "type": "object",
       "description": "Semantic tool descriptor, generation 1. Identical in standalone and governed mode.",
@@ -684,6 +726,12 @@
           },
           "maxItems": 16,
           "uniqueItems": true
+        },
+        "authorization": {
+          "$ref": "descriptor.schema.json#/$defs/ToolAuthorization"
+        },
+        "reconciliation": {
+          "$ref": "descriptor.schema.json#/$defs/ToolReconciliation"
         }
       },
       "required": [

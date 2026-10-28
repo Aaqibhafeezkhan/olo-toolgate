@@ -53,20 +53,22 @@ def named(schema):
 
 # v1 models may reference v2 definitions (`../v2/...`), which the bindings name in the v2 namespace.
 V2_QUALIFIED = {'java': 'io.ololabs.toolgate.contracts.v2.', 'rust': 'v2::', 'ts': 'V2.', 'php': '\\OloLabs\\ToolGate\\Contracts\\V2\\'}
+V1_QUALIFIED = {'java': 'io.ololabs.toolgate.contracts.', 'rust': 'crate::', 'ts': 'V1.', 'php': '\\OloLabs\\ToolGate\\Contracts\\'}
 
 
 def cross_version(schema):
-    return schema['$ref'].startswith('../v2/')
+    return next((version for version in VERSIONS if schema['$ref'].startswith('../'+version+'/')), None)
 
 
 def field_type(schema, language, defs):
     if '$ref' in schema:
         name = named(schema)
-        if cross_version(schema):
-            target = definitions('v2')[name]
+        version = cross_version(schema)
+        if version:
+            target = definitions(version)[name]
             if target.get('type') == 'object' or 'enum' in target:
-                return V2_QUALIFIED[language] + name
-            return field_type(target, language, definitions('v2'))
+                return (V2_QUALIFIED if version=='v2' else V1_QUALIFIED)[language] + name
+            return field_type(target, language, definitions(version))
         target = defs[name]
         if target.get('type') == 'object' or 'enum' in target:
             return name
@@ -99,8 +101,9 @@ def php_value(schema, expr, defs):
     if '$ref' in schema:
         name = named(schema)
         qualified = name
-        if cross_version(schema):
-            defs, qualified = definitions('v2'), V2_QUALIFIED['php'] + name
+        version = cross_version(schema)
+        if version:
+            defs, qualified = definitions(version), (V2_QUALIFIED if version=='v2' else V1_QUALIFIED)['php'] + name
         target = defs[name]
         if 'enum' in target:
             return f'{qualified}::from({expr})'
@@ -156,7 +159,7 @@ def render_version(ver, version, outputs):
                 '                Err(serde::de::Error::custom(concat!(', '                    "expected constant ",', '                    stringify!($value)', '                )))', '            }', '        }', '    };', '}']
     else:
         rust = ['//! Shared structural contracts. Validate canonical schemas at input boundaries.', '// ' + HEADER.replace('\n', '\n// '), 'use serde::{Deserialize, Serialize};', '', '/// Contract set v2 models, side by side with v1 during migration.', 'pub mod v2;']
-    ts = ['// ' + HEADER.replace('\n', '\n// ')] + ([] if v2 else ['import type * as V2 from "./v2/index.js";'])
+    ts = ['// ' + HEADER.replace('\n', '\n// ')] + (['import type * as V1 from "../index.js";'] if v2 else ['import type * as V2 from "./v2/index.js";'])
     rust_consts = []
     for name, schema in sorted(defs.items()):
         java = ['// ' + HEADER.replace('\n', '\n// '), f'package {java_package};', '']
@@ -198,7 +201,18 @@ def render_version(ver, version, outputs):
             if name == 'ContractSet' and not v2:
                 java += ['    }', '    /** Stable package identity. */', '    public static final String NAME = "olo-toolgate-contracts";', '    /** Canonical contract-set version. */', f'    public static final String VERSION = "{version}";', '    /** Embedded canonical schema inventory. */', '    public static final java.util.List<String> SCHEMA_FILES = java.util.List.of('+','.join('\"'+p.name+'\"' for p in sorted((CONTRACTS/'schemas/v1').glob('*.json')))+');', '    /** Current contract-set marker.\n     * @return the canonical identity and version\n     */', '    public static ContractSet current() { return new ContractSet(NAME, VERSION); }', '}']
             else:
-                java += ['    }', '}']
+                java += ['    }']
+                # Retain the pre-email/pre-bootstrap-metadata Java construction API.
+                if not v2 and name in ('ControlUser', 'AdminSession'):
+                    previous = [key for key in props if key in required]
+                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
+                    arguments = ', '.join(java_ident(key) if key in required else 'null' for key in props)
+                    java += ['    /** Construct a record without optional installation metadata.\n     *\n' + '\n'.join(f'     * @param {java_ident(key)} canonical {key} value' for key in previous) + '\n     */',
+                             f'    public {name}({signature}) {{ this({arguments}); }}']
+                if not v2 and name == 'AdminSession':
+                    java += ['    /** Construct a session without an optional tenant display name. */',
+                             '    public AdminSession(java.util.List<String> permissions, UserRole role, String bootstrapAdminUserId, String tenantId) { this(permissions, role, bootstrapAdminUserId, tenantId, null); }']
+                java += ['}']
             rust += [f'/// {description}'.rstrip(), '#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]', '#[serde(rename_all = "camelCase", deny_unknown_fields)]', f'pub struct {name} {{']
             ts += [f'/** {description} */', f'export interface {name} {{']
             php += [f'/** {description} */', f'final readonly class {name} implements \\JsonSerializable {{', '    public function __construct(']

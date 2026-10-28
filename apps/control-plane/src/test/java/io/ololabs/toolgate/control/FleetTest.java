@@ -30,7 +30,7 @@ final class FleetTest {
         assertThrows(Failure.class,()->crypto.release(new FleetSignedDocument(String.join(".",parts))));
         assertThrows(Failure.class,()->crypto.grant(release.release()));
         assertThrows(Failure.class,()->crypto.release(new FleetSignedDocument("e30.e30.c2ln")));
-        var grant=new FleetArtifactGrantClaims("fleet","server","device",3L,release.manifestDigest(),release.sizeBytes(),"grant",1700000000000L,1700000060000L);
+        var grant=new FleetArtifactGrantClaims(io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(),"server","device",3L,release.manifestDigest(),release.sizeBytes(),"grant",1700000000000L,1700000060000L);
         assertEquals(grant,crypto.grant(crypto.grant(grant)));
         var document=crypto.release(release.release()).model();FleetService.validatePackage(document);
         assertThrows(Failure.class,()->FleetService.validatePackage(new FleetPackageDocument(document.formatVersion(),document.packageId(),document.version(),document.platforms(),document.architectures(),document.minimumClientVersion(),document.runtimes(),document.tools(),List.of())));
@@ -40,14 +40,14 @@ final class FleetTest {
         try(var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()){statement.execute("CREATE DATABASE "+database);}
         var url=base.replace("/control?","/"+database+"?");org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
-        var store=new PostgresStore(source,codec);var directory=new DirectoryService(store,codec,512,1048576);var tenant=new Ids.TenantId("fleet");var admin=TestSupport.seed(store,codec,tenant,"root");
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);var directory=new DirectoryService(store,codec,512,1048576);var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("fleet");var admin=TestSupport.seed(store,codec,tenant,"root");
         directory.mutate(admin,Ids.Kind.USER,"owner","CREATE",DomainTest.user("owner",1),0,"user","request");
         var clock=Clock.fixed(Instant.ofEpochMilli(1700000000000L),ZoneOffset.UTC);
-        var endpoint=new EndpointService(store,codec,null,clock,true,"fleet","server","Organization","https://control.example.test","https://gateway.example.test");
-        var fleet=new FleetService(store,codec,crypto(),endpoint,clock,true,"fleet","server");
+        var endpoint=new EndpointService(store,codec,null,clock,true, io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(), "server","Organization","https://control.example.test","https://gateway.example.test");
+        var fleet=new FleetService(store,codec,crypto(),endpoint,clock,true, io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(), "server");
         for(var id:List.of("device-a","device-b")){
             directory.mutate(admin,Ids.Kind.DEVICE,id,"CREATE",codec.json(new ControlDevice(id,id,true,1L,"owner")),0,id,"request");
-            store.transaction(tenant,true,tx->{tx.saveEndpoint(new Store.EndpointRecord(id,DirectoryService.digest(id),codec.json(new EndpointDeviceRecord(id,"fleet","owner",DirectoryService.digest(id),EndpointState.ACTIVE,1L,1700000000000L,1L,null,null,null,null,null,null)),"public","0".repeat(64),"{}"));return null;});
+            store.transaction(tenant,true,tx->{tx.saveEndpoint(new Store.EndpointRecord(id,DirectoryService.digest(id),codec.json(new EndpointDeviceRecord(id,io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(),"owner",DirectoryService.digest(id),EndpointState.ACTIVE,1L,1700000000000L,1L,null,null,null,null,null,null)),"public","0".repeat(64),"{}"));return null;});
         }
         var release=codec.model(fixtures().get("release").toString(),FleetPackageRelease.class);
         var publication=fleet.publish(admin,codec.json(release),"publish","request");assertEquals(publication,fleet.publish(admin,codec.json(release),"publish","request"));
@@ -58,12 +58,12 @@ final class FleetTest {
         var page=codec.model(fleet.rollouts(admin,null).body(),FleetRolloutPage.class);assertEquals(1L,page.items().getFirst().pending());assertEquals(1L,page.items().getFirst().waiting());
         var advanced=codec.model(fleet.advance(admin,"canary",codec.json(new FleetRolloutAdvance(1L,100L)),"advance","request").body(),FleetRolloutRecord.class);
         assertEquals(2L,advanced.revision());assertThrows(Failure.class,()->fleet.advance(admin,"canary",codec.json(new FleetRolloutAdvance(1L,100L)),"stale","request"));
-        assertThrows(Failure.class,()->fleet.rollouts(new DirectoryService.Actor(new Ids.TenantId("other"),"a".repeat(64),true),null));
+        assertThrows(Failure.class,()->fleet.rollouts(new DirectoryService.Actor(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),"a".repeat(64),true),null));
         store.transaction(tenant,true,tx->{
             var desired=codec.model(tx.fleet().get(FleetStore.Kind.DESIRED,"device-a").document(),FleetDesiredSnapshot.class);
-            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation(),List.of(new ReportedPackage("wrong","1.0.0",PackageState.READY)))));
-            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation()+1,List.of())));
-            FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",0L,List.of()));
+            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation(),List.of(new ReportedPackage("wrong","1.0.0",PackageState.READY)),null)));
+            assertThrows(Failure.class,()->FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",desired.generation()+1,List.of(),null)));
+            FleetService.validateReport(tx,codec,new ClientReport("device-a","0.9.0-dev",0L,List.of(),null));
             return null;
         });
         var race=new FleetRolloutRequest("race",release.packageId(),release.version(),List.of("device-a","device-b"),true,100L);
@@ -86,7 +86,9 @@ final class FleetTest {
         fleet.rollout(admin,codec.json(new FleetRolloutRequest("rollback",release.packageId(),release.version(),List.of("device-a","device-b"),true,100L)),"rollback","request");
         store.transaction(tenant,false,tx->{assertEquals(4L,tx.fleet().get(FleetStore.Kind.DESIRED,"device-a").revision());return null;});
         try(var connection=source.getConnection();var statement=connection.createStatement()){
+            TestSupport.scope(connection, tenant);
             assertThrows(java.sql.SQLException.class,()->statement.executeUpdate("UPDATE control_fleet SET revision=revision+1 WHERE kind='RELEASE'"));
+            connection.rollback();
             assertThrows(java.sql.SQLException.class,()->statement.executeUpdate("DELETE FROM control_fleet"));
         }
     }

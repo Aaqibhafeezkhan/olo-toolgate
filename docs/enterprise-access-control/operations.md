@@ -1,4 +1,4 @@
-# Enterprise operation, migration and recovery
+# Enterprise operation and recovery
 
 ## Authority and incident response
 
@@ -16,13 +16,11 @@ A durable reservation is single-use. A consumed effect that expires without reli
 
 Use Effect outcomes to propose an exact terminal state with the expected invocation revision, every confirmed resource, evidence digest and result digest. A different currently authorized checker reviews the exact proposal revision. Reconciliation changes durable outcome metadata, never issues a new effect permit or redispatches work. The certificate-bound native client may recover its local fence only from the exact authoritative terminal outcome. Current grants remain necessary for any subsequent new operation.
 
-## Reviewed configuration and migration
+## Reviewed configuration
 
 Directory writes create drafts with a digest, graph revision/epoch, changed records, affected groups and individuals. Submit, obtain the required independent current reviewers, then apply. Self-review, stale reviews, revoked reviewers and conflicting retries reject. Import and high-risk expansion require two reviewers. Reviews expire within thirty minutes.
 
-Before cutover, stop obsolete producers and capture immutable configuration/audit evidence. Ordered PostgreSQL/SQLite migrations archive retired individual permissions and disable old runtime authority. They do not translate empty fields to wildcard grants or create an ALLOW fallback. Preserve stable identities, identifiers, credential history and audit.
-
-Use `tools/enterprise/migration.py prepare` with the exact post-cutover baseline and explicit operator-authored group mappings. Its output records archive, proposal and reason digests and preserved identifiers. Run `shadow` against captured requests with trusted identity and evidence; inspect each access expansion. Shadow evaluation has no effects, quota charge, approval consumption or secret disclosure. Apply the exact reviewed snapshot through configuration import with two independent reviewers. Compare current decisions and adoption before reopening traffic. Rollback is a new monotonic reviewed configuration, never restoration of old individual ACLs.
+Initialize an empty PostgreSQL or SQLite database from the release V1 schema. Pre-release databases and configuration formats are unsupported. Use current configuration export/import and simulation to review changes. Shadow evaluation has no effects, quota charge, approval consumption or secret disclosure. Rollback creates a new monotonic reviewed configuration.
 
 ## Backup and recovery
 
@@ -30,13 +28,15 @@ Use consistent database and custody backups with protected external storage. Kee
 
 For SQLite, `tools/enterprise/restore.py prepare`, separate `sign` invocations and `assemble` create a fifteen-minute two-reviewer authorization bound to the exact manifest and external floors/retirements. Mount the review and public trust separately and run the stopped supervisor's reviewed restore command into an empty independent destination. The restore verifies inventory/hash/path safety, advances authority, disables runtime grants/definitions/devices/workloads/custom groups/roles, clears management assignments, invalidates sessions and credentials, retains consumed nonces/audit/history and records uncertain executions. Post-backup retired identities and their dependent facts cannot be resurrected. The source backup is unchanged.
 
-For PostgreSQL, capture a consistent custom-format `pg_dump` archive and a layout-2 manifest containing its SHA-256. Use the same external `restore.py prepare/sign/assemble` review workflow. Run `tools/enterprise/postgresql_restore.py --archive BACKUP --manifest MANIFEST --review REVIEW --trust TRUST --connection PRIVATE_TARGET_JSON` with psycopg 3 and matching PostgreSQL client tools. The target must be a different empty database owned by the restore operator. Connection configuration requires `verify-full` TLS; trust/credentials must be mounted independently of the backup. The utility revokes runtime CONNECT before restoration and applies the same quarantine in one exclusive transaction. Runtime connectivity remains revoked on success and failure. Verify the recovery packet and rotate external signing/device/Agent custody before granting the runtime role CONNECT and starting Core. The test-only loopback flag does not permit remote unverified database transport.
+For every PostgreSQL recovery, including a single tenant, follow [the tenant recovery runbook](../control-plane/tenant-recovery.md). The current layout-3 manifest requires complete UUID reviews and live key-retirement inventory. Inventory-free layout-2 archives are rejected.
+
+Run `tools/enterprise/postgresql_restore.py --archive BACKUP --manifest MANIFEST --review REVIEW_BUNDLE --trust TRUST --connection PRIVATE_TARGET_JSON` with psycopg 3 and matching PostgreSQL client tools. Single-tenant archives use the same one-entry review bundle and key inventory as shared recovery. The target must be a different empty database owned by a non-superuser restore principal in the platform role. Connection configuration requires `verify-full` TLS; trust/credentials must be mounted independently of the backup. Runtime CONNECT remains revoked on success and failure, and recovered tenants remain suspended. Re-establish reviewed management access, fresh signing/device custody and intended runtime grants before reconnecting customer traffic. The test-only loopback flag does not permit remote unverified database transport.
 
 `tools/enterprise/recovery.py` prepares a separate management-only recovery packet. Each independent reviewer signs with their own protected RSA key; Control uses separately mounted trust. Existing-tenant recovery requires two distinct key holders, an exact live revision and a time window of at most one hour. It cannot restore runtime grants, rebind stable identity facts or enable a disabled account. Fresh empty-tenant installation is a separately pinned one-time initialization. Reapplying an accepted packet cannot reseed old authority.
 
 ## Supported execution boundaries
 
-Built-in filesystem operations use containment, restricted portable paths, bounded files, exclusive/atomic writes and symlink/hardlink protection. Web search checks public addresses, resolves once, pins sockets and TLS host names, and forbids proxies/redirects and private destinations. Group-scoped Vault delivery requires a consumed certificate-bound effect, current complete secret-use grants and the declared exact secret reference; values are never exposed in management lists or logs.
+Device files-area operations use containment, restricted portable paths, bounded files, exclusive/atomic writes and symlink/hardlink protection. Web search checks public addresses, resolves once, pins sockets and TLS host names, and forbids proxies/redirects and private destinations. Group-scoped Vault delivery requires a consumed certificate-bound effect, current complete secret-use grants and the declared exact secret reference; values are never exposed in management lists or logs.
 
 Managed OCI tools use pinned image/source/manifest digests, fixed argv, bounded JSON protocols, unprivileged read-only sandboxes, no host mount and no network. Arbitrary host shell, raw SQL, host filesystem mounts, unreviewed egress and generic secret-environment injection are not supported. Such requests fail closed. Introduce a structured provider/extractor and independently tested confinement before supporting a new protected effect kind. Nested/dynamic groups and offline execution are likewise unsupported; no inferred membership or offline lease is manufactured.
 

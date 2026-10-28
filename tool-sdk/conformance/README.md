@@ -3,7 +3,11 @@
 
 ## Purpose
 
-This directory holds the conformance cases for the ToolGate Tool SDK and the governed platform, one set for each suite in [plan.md §21](../../docs/sdk-plan/plan.md). Design gate D3 authors every case. The milestones then make them pass. A milestone cannot exit while a case it owns is not passing (plan.md §22.1).
+This directory holds the acceptance cases for the SDK and governed platform.
+[suites.json](suites.json) defines each suite, runner and required evidence.
+[Platform requirement IDs](../../docs/contracts/platform-requirements.md) connect
+the cases to maintained design sources. Use the language and component guides
+for current implementation support.
 
 The cases say **what** must hold, in the words of the design they come from. Each language and component writes its own runner, which reads these files.
 
@@ -12,7 +16,7 @@ The cases say **what** must hold, in the words of the design they come from. Eac
 | Path | Contents |
 |---|---|
 | [`case.schema.json`](case.schema.json) | JSON Schema for a case file |
-| [`suites.json`](suites.json) | The nine suites from plan.md §21: what each contains, when it runs, what it blocks, its runner and the milestone where it first passes |
+| [`suites.json`](suites.json) | The nine conformance suites: what each contains, when it runs, what it blocks, its runner and the milestone where it first passes |
 | `<suite>/<area>.json` | The cases for one area of one suite |
 | [`fixtures/packages/`](fixtures/packages/README.md) | Package archive fixtures for `contract-descriptor/packages.json`, plus their generator |
 
@@ -36,7 +40,7 @@ Each case has:
 
 ## Status rules
 
-- At D3 every case is `authored`.
+- A case without passing runner evidence stays `authored`.
 - A case becomes `passing` only in the PR where its runner passes it in CI. That PR sets `status` and fills `evidence` with the runner and test name.
 - A passing case that later fails blocks the same scope its suite blocks (`suites.json`).
 - A case is changed or removed only together with the design text it cites. If that text is a frozen design artifact, the change needs the ADR amendment that re-opens its gate.
@@ -52,7 +56,7 @@ A runner for a suite:
 - every file validates against the schema and sits in its suite's folder;
 - case ids are unique, and every suite has cases;
 - every Tool Host threat names cases that exist;
-- every invocation transition T1 to T14 and every persistence row 1 to 11 of plan.md §12.7 has a case;
+- every invocation transition T1 to T14 and every persistence row 1 to 11 of platform-requirements.md §12.7 has a case;
 - every composition error code has a case;
 - every referenced fixture exists;
 - the package fixtures match their generator.
@@ -73,6 +77,6 @@ A runner for a suite:
 
 ## Known gaps
 
-- The plan does not name the exact error codes for package archive rejections, the stale-catalog error or the launcher's launch failures. Those cases expect a rejection. M1 names the codes and updates the cases.
-- The compatibility matrix of Tool Host, client and OS versions (plan.md §5.6) is not enumerated yet. `language-matrix/matrix.json` will take its rows from the matrix when M6 publishes it.
+- The specifications do not yet name the exact error codes for package archive rejections, the stale-catalog error or the launcher's launch failures. Those cases expect a rejection. M1 names the codes and updates the cases.
+- The compatibility matrix of Tool Host, client and OS versions (platform-requirements.md §5.6) is not enumerated yet. `language-matrix/matrix.json` will take its rows from the matrix when M6 publishes it.
 - Recorded IdP sample tokens (`security/credentials.json`) are captured in M1 for each shipped template.
