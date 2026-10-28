@@ -1,7 +1,7 @@
 <!-- GENERATED FILE: tools/contracts/version.py; do not edit -->
-# OLO ToolGate 1.0.0-dev.1 release notes
+# OLO ToolGate 0.10.0-dev release notes
 
-Contracts version: `1.0.0-dev.1`.
+Contracts version: `0.10.0-dev`.
 
 License: Apache-2.0. See LICENSE and bundled third-party notices/SBOMs.
 
@@ -12,42 +12,6 @@ All notable project changes should be documented here.
 The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
-
-- Operator Insights (ADR 031): installation operators see how tools are used and behave across every tenant: call
-  volume, outcomes, latency, retries, admission denials, sessions and the history of any one invocation. It is off
-  by default. `TOOLGATE_INSIGHTS_MODE` (`NONE`, `BASIC`, `DETAILED`; the same on Control and every Gateway) turns it
-  on. With `NONE` no Insights table is written and no worker runs. Insights records metadata only, never tool
-  arguments, outputs, secrets or fencing tokens. Tenants and callers never see it. See
-  `docs/control-plane/insights.md`.
-  - **Correlation.** Every invocation keeps one `invocationId`; every attempt gets its own `executionId`. The
-    Gateway, Tool Host and endpoint client pass W3C `traceparent` and an `executionContext` to tools, and SDKs
-    expose them. Older SDK packages ignore the new member.
-  - **`BASIC`.** Each state-changing ledger transition writes one transition fact in the same transaction. Control
-    projects facts into invocation and attempt summaries and minute/hour/day aggregates, with retention, a
-    per-tenant quota, rebuild and reconciliation. Gateways send best-effort admission-denial counters.
-  - **Operator API and page.** A separate HTTPS listener (`TOOLGATE_INSIGHTS_OPERATOR_PORT`, off unless set)
-    accepts only operator-CA client certificates and serves the Insights page and its API. The tenant console does
-    not serve it.
-  - **`DETAILED`.** Tool Hosts and endpoint clients upload execution spans; Control keeps failed, slow and sampled
-    calls within a memory budget and shows them as a waterfall. `TOOLGATE_INSIGHTS_OTLP_ENDPOINT` exports spans and
-    per-minute metrics as OTLP/HTTP JSON; Collector configs for Datadog and New Relic are in
-    `deploy/insights/collector`, and the Helm chart gains `control.insights.*` values.
-  - **Sessions.** Calls that declare a session are grouped, and an optional `parentInvocationId` nests a call under
-    another call of the same tenant.
-  - **Endpoint clients.** New clients send `Toolgate-Client-Features: remote-task-context.v1`; Control adds the new
-    relayed-task members only for clients that send it, so released clients keep working.
-  - Contracts: new `v2/insights` models; `RemoteToolTask` gains optional `traceparent`, `executionContext` and
-    `collectSpans`. The PostgreSQL and SQLite initial schemas gain the Insights tables.
-  - Known limits: the overhead budgets of ADR 031 §6 are not yet met or measured on production hardware (#214),
-    delivery to Datadog and New Relic is unverified, and attempts that ran without context on an older client are
-    not flagged. See `docs/control-plane/insights-stage7.md`.
-
-- Gateway validates the canonical cancellation acknowledgement, so a successful
-  cancellation is returned to callers instead of an erroneous validation failure.
-
-- Denied and revoked operation approvals atomically end the original invocation.
-  Revocation after dispatch retains an unknown outcome for reconciliation, and
-  invalidated approvals cannot trigger a downstream-idempotency resend.
 
 - Downstream memory/RAG authorization epoch reads reserve a writer transaction
   because they persist the anti-rollback clock. This prevents a read-only SQLite

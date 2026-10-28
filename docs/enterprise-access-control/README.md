@@ -1,7 +1,7 @@
 # Evaluate ToolGate for enterprise use
 
 ToolGate provides group-based authorization and reviewed administration for AI
-tools. Evaluate the current development release against your own identity,
+tools. ToolGate is in Beta Release. Evaluate it against your own identity,
 execution, availability and recovery requirements before adopting it.
 
 ## Supported boundaries
@@ -34,14 +34,23 @@ execution, availability and recovery requirements before adopting it.
 
 ## Current limits
 
-Quickstart is single-node evaluation software. Tool Host process launch and broker
-checks exist, but container/network isolation and durable result retry remain
-unfinished. Managed endpoint OCI confinement is a different execution path.
-The Marketplace is hosted separately at [olo-labs.org](https://olo-labs.org). Java and Python authoring implementations
-are available; TypeScript and .NET authoring APIs remain specifications.
+- **Tool Host isolation:** process launch and broker checks exist, but container
+  and network isolation are unfinished. Enhancement: [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
+- **Durable result retry:** the Tool Host result outbox is not implemented.
+  Enhancement: [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
+- **Offline protected effects:** unsupported; live Control authority remains
+  required. Design review: [#239](https://github.com/olo-labs/olo-toolgate/issues/239).
+- **Nested or dynamic groups:** unsupported. Enhancement: [#240](https://github.com/olo-labs/olo-toolgate/issues/240).
+- **Quickstart:** single-node evaluation software with no HA guarantee.
+  Production HA qualification: [#241](https://github.com/olo-labs/olo-toolgate/issues/241).
+- **Authoring:** Java and Python implementations are available; TypeScript and .NET
+  authoring APIs remain specifications. Implementations: TypeScript [#242](https://github.com/olo-labs/olo-toolgate/issues/242)
+  and .NET [#243](https://github.com/olo-labs/olo-toolgate/issues/243).
 
-Nested/dynamic groups and offline protected effects are unsupported. Recorded
-acceptance and small-fixture performance results apply to the tested revision and
+Managed endpoint OCI confinement is a different execution path.
+The Marketplace is hosted separately at [olo-labs.org](https://olo-labs.org).
+
+Recorded acceptance and small-fixture performance results apply to the tested revision and
 environment. They do not establish your organization's deployment readiness,
 capacity or compliance certification.
 

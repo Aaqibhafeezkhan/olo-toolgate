@@ -1,6 +1,6 @@
 # Tool Host
 
-**Status:** Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Sandbox isolation (network namespace, container) comes next.
+**Status:** ToolGate is in Beta Release. Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Sandbox isolation (network namespace, container) and durable result delivery are tracked in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
 **Primary stack:** Rust
 
 ## Responsibility

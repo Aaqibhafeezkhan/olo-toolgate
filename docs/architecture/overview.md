@@ -32,13 +32,13 @@ See [device controls](../control-plane/device-registry.md) and
 ## Deployments
 
 Quickstart runs the services together with SQLite by default and persistent
-local custody. It is single-node evaluation software. Separate Gateway and
+local custody. It is single-node evaluation software ([#241](https://github.com/olo-labs/olo-toolgate/issues/241)). Separate Gateway and
 Control deployments use external PostgreSQL and separately provisioned identity,
 keys and runtime configuration. The console is served by Control.
 
 Managed endpoint packages use signed fleet assignments and OCI confinement.
 The server Tool Host supports Java execution, content verification and brokered
-routes; container/network isolation and a durable result outbox are not implemented. These execution paths have different current limits.
+routes; container/network isolation and a durable result outbox are not implemented ([#230](https://github.com/olo-labs/olo-toolgate/issues/230)). These execution paths have different current limits.
 
 The Marketplace is developed in a separate private repository and hosted at
 [olo-labs.org](https://olo-labs.org).

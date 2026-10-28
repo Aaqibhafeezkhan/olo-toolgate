@@ -5,7 +5,7 @@ The Java authoring API, descriptor processor, runtime, build integrations and CL
 are implemented. Java server tools also run through the Tool Host and Gateway;
 host isolation and reliable result retry still have unfinished scope.
 The Python SDK implements the same authoring, runtime, testing and packaging path;
-see [Python SDK](python-sdk/README.md). TypeScript and .NET implementations remain planned.
+see [Python SDK](python-sdk/README.md). TypeScript ([#242](https://github.com/olo-labs/olo-toolgate/issues/242)) and .NET ([#243](https://github.com/olo-labs/olo-toolgate/issues/243)) implementations remain planned.
 
 | Task | Guide |
 |---|---|

@@ -62,7 +62,7 @@ class ReleaseNotesTests(unittest.TestCase):
     def test_accumulation_numeric_order_unicode_and_repeatable_bytes(self):
         self.write('10-last.yml')
         second = copy.deepcopy(self.document)
-        second['contributor']['name'] = 'Zoë'
+        second['contributor']['name'] = 'ZoÃ«'
         second['changes'].insert(0, dict(type='breaking', summary='Review compatibility.'))
         self.write('2-second.yaml', second)
         baseline = (self.root/'RELEASE-NOTES.md').read_bytes()
@@ -75,7 +75,7 @@ class ReleaseNotesTests(unittest.TestCase):
                          ['1-contributor.yaml', '2-second.yaml', '10-last.yml'])
         rendered = first['RELEASE-NOTES.md'].decode()
         self.assertIn('Existing compatibility warnings.', rendered)
-        self.assertIn('Zoë', rendered)
+        self.assertIn('ZoÃ«', rendered)
         self.assertLess(rendered.index('### Breaking'), rendered.index('### Fixed'))
         self.assertEqual(baseline, (self.root/'RELEASE-NOTES.md').read_bytes())
         self.assertEqual(len(list(self.folder.iterdir())), 3)
@@ -224,8 +224,9 @@ class ReleaseNotesTests(unittest.TestCase):
         info = dict(sourceCommit='a'*40)
         destination = self.root/'overlay'
         with patch.object(development_source.prepare, 'run', side_effect=['a'*40, '', '']), \
-                patch.object(development_source.prepare, 'stamp_versions'):
+                patch.object(development_source.prepare, 'stamp_versions', side_effect=lambda root, info: (root/'release.json').write_text(json.dumps(dict(version=self.version[1:], channel='Development')))):
             development_source.overlay(self.root, destination, info)
+        self.assertTrue((destination/'release.json').is_file())
         self.assertIn('Contributor', (destination/'release-notes/RELEASE-NOTES.md').read_text())
         self.assertEqual(json.loads((destination/'release-notes/contributors.json').read_text())['version'], self.version)
 

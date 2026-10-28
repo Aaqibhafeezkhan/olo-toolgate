@@ -1,5 +1,8 @@
 # Develop ToolGate
 
+ToolGate is in Beta Release. See [production and security status](../../README.md#production-and-security-status)
+for current limitations and their open enhancement tickets.
+
 Run commands from the repository root. The repository contains working services,
 but `make dev`, `make stop` and `make client` are still scaffolds. Use the commands
 below and the component guides for the implemented workflows.

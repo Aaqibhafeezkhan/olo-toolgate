@@ -1,5 +1,8 @@
 # Security
 
+ToolGate is in Beta Release. See [production and security status](../../README.md#production-and-security-status)
+for current limitations and their open enhancement tickets.
+
 Control is the authority for runtime decisions and effect permits. Default
 membership, tool installation, device approval and management roles do not grant
 runtime access. Protected effects require current authorization; unavailable or

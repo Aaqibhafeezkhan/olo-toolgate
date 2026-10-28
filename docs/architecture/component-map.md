@@ -6,7 +6,7 @@
 | Control Plane | Java | Tenant graph, authorization, review, permit signing, device registry, deployment and durable state | Arbitrary tool code executes elsewhere |
 | Admin UI | React/TypeScript | Human administration and impact/review presentation | Backend owns validation and security decisions |
 | Endpoint Client | Rust | Device identity, signed package tools in a sandbox, the brokered files area | Current Control authorization and runtime confinement remain required |
-| Tool Host | Rust | Server Java tool admission, verified content, broker and execution | Container/network isolation and result outbox remain unfinished |
+| Tool Host | Rust | Server Java tool admission, verified content, broker and execution | Container/network isolation and result outbox remain unfinished ([#230](https://github.com/olo-labs/olo-toolgate/issues/230)) |
 | Quickstart | Combined services | Single-node evaluation with local state/custody | No HA guarantee |
 
 Control already supports importing from a configured external OLO Orgs registry;
