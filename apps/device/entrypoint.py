@@ -186,7 +186,7 @@ def main():
     else:
         # The config/state volumes hold the key; the executable always comes from this image.
         shutil.copyfile(SOURCE, device.CLIENT)
-        os.chmod(device.CLIENT, 0o755)
+        os.chmod(device.CLIENT, 0o700)
     device.supervise()
 
 

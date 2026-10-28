@@ -21,6 +21,7 @@ class CoverageBaselineTests(unittest.TestCase):
         self.assertIsNotNone(inventory.exclusion(Path('apps/admin-ui/src/vite-env.d.ts')))
 
     def test_missing_reports_are_explicit(self):
+        (ROOT/'.dev').mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT/'.dev') as temp:
             root = Path(temp)
             (root/'settings.gradle.kts').write_text('project(":example").projectDir = file("example")')

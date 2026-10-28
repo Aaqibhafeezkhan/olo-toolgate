@@ -1,284 +1,956 @@
-// Copyright 2026 OLO Labs
-// SPDX-License-Identifier: Apache-2.0
-package io.ololabs.toolgate.control.application;
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+"""Single-node composition root. Child failure removes readiness and stops every process.
 
-import io.ololabs.toolgate.control.domain.*;
-import io.ololabs.toolgate.control.domain.Ids.Kind;
-import io.ololabs.toolgate.contracts.*;
-import io.ololabs.toolgate.contracts.v2.RequestMode;
-import java.time.Clock;
-import java.util.*;
+Only fixed local adapters run here: identity bootstrap, encrypted vault and HTTP
+composition. Tools run only from verified packages: on the composed Tool Hosts, or on
+enrolled client devices. No credential is emitted in logs.
+"""
+import argparse
+import base64
+from contextlib import closing
+import datetime
+import fcntl
+import hashlib
+import hmac
+import http.client
+import http.server
+from http.cookies import SimpleCookie, CookieError
+import ipaddress
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import signal
+import socket
+import socketserver
+import sqlite3
+import ssl
+import subprocess
+import threading
+import time
+import urllib.parse
+import urllib.request
+import uuid
 
-/** Online effect authority. Submission, approval, reservation and consumption share current group semantics.
- * Invocation IDs bind exact arguments/resources/versions. A consumed capability is never issued again.
- * Database commit proves consumption, not exactly-once completion of an external side effect.
- */
-public final class EnterpriseOperations {
-    private final Store store;private final Codec codec;private final EffectSigner signer;private final Clock clock;
-    private final String issuer,audience;private final long lifetime;private final int capacity;
-    /** How long an operation may wait for approval (OLO M2.4: 7 days); defaults to the invocation lifetime. */
-    private volatile long approvalExpiry=-1;
-    public static final long MAX_APPROVAL_EXPIRY_MS=7L*24*60*60*1000;
-    public EnterpriseOperations approvalExpiry(long ms){if(ms<1000||ms>MAX_APPROVAL_EXPIRY_MS)throw new IllegalArgumentException("Approval expiry must be 1 s to 7 days");approvalExpiry=ms;return this;}
-    private long approvalExpiry(){return approvalExpiry>0?approvalExpiry:lifetime;}
-    private volatile ClientCheckInPolicy checkIn=ClientCheckInPolicy.configure(null,null,null);
-    /** The running check-in policy decides which devices are online for placement. */
-    public EnterpriseOperations checkInPolicy(ClientCheckInPolicy value){checkIn=java.util.Objects.requireNonNull(value);return this;}
-    private volatile String userCredentialIssuer;
-    /** Accept Gateway {@code HUMAN} contexts verified from user credentials of this issuer (M3.4); null refuses all. */
-    public EnterpriseOperations userCredentialIssuer(String issuer){userCredentialIssuer=issuer==null||issuer.isBlank()?null:Ids.valid(issuer);return this;}
-    public EnterpriseOperations(Store store,Codec codec,EffectSigner signer,Clock clock,String issuer,String audience,long lifetime,int capacity){
-        if(lifetime<1000||lifetime>300000||capacity<1||capacity>10000)throw new IllegalArgumentException("Invalid operation limits");
-        this.store=store;this.codec=codec;this.signer=signer;this.clock=clock;this.issuer=Ids.valid(issuer);this.audience=Ids.valid(audience);this.lifetime=lifetime;this.capacity=capacity;
-    }
-    private <T> T authoritative(Ids.TenantId tenant,String actor,String requestId,String digest,java.util.function.Function<Store.Session,T> work){
-        long[] observed={-1};
-        try{return store.transaction(tenant,true,tx->{long current=clock.millis();observed[0]=Math.max(current,tx.approvalClock(current));if(observed[0]>current)throw Failure.unavailable();return work.apply(tx);});}
-        catch(Failure rejected){
-            // The failed operation rolls back first. A separate redacted denial event never commits partial effects.
-            store.transaction(tenant,true,tx->{if(observed[0]>=0)tx.approvalClock(observed[0]);tx.audit(actor,"ACCESS_DENIED","operation",tx.load().revision(),requestId,digest);return null;});throw rejected;
-        }
-    }
-    private long now(Store.Session tx){long now=clock.millis();if(now<0||tx.approvalClock(now)>now)throw Failure.unavailable();return now;}
-    private static void gateway(DirectoryService.Actor actor){if(actor.admin()||actor.userId()!=null)throw ManagementAccess.denied();}
-    private Store.Reply reply(Object value,long revision){return new Store.Reply(200,codec.json(value),revision);}
-    private static String approvalId(String invocation){return "operation-"+DirectoryService.digest(invocation).substring(0,40);}
-    /** The M2.4 request fingerprint: what is asked, by whom, of what. Session and credential epochs are left out, so a
-     *  renewed or rotated credential replays the same invocation; they are rechecked when it is decided. */
-    private String requestDigest(EnterpriseEvaluation e,String downstream){var c=e.context();
-        var stable=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),null,null,c.bindingId(),c.deviceId());
-        return DirectoryService.digest(codec.json(new EnterpriseEvaluation(stable,e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),0L,0L,true,e.amountMinorUnits(),e.operation()))+"\n"+(downstream==null?"":downstream));
-    }
-    private static EnterpriseEvaluation current(EnterpriseEvaluation e,Directory directory,long now){return new EnterpriseEvaluation(e.context(),e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),now,directory.revision(),true,e.amountMinorUnits(),e.operation());}
-    private EnterpriseDecision decide(Ids.TenantId tenant,Store.Session tx,EnterpriseEvaluation e,long now,boolean existing){return decide(tenant,tx,e,now,existing,new java.util.TreeSet<>());}
-    private EnterpriseDecision decide(Ids.TenantId tenant,Store.Session tx,EnterpriseEvaluation e,long now,boolean existing,java.util.Set<String> budgets){
-        var usage=new java.util.HashMap<String,Long>();
-        var d=new EnterpriseEvaluator(codec).evaluateWithQuotas(tenant,tx.load(),current(e,tx.load(),now),budget->{budgets.add(budget);return usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),existing?e.context().requestId():null));});
-        if(d.decision()==Decision.BLOCK)throw ManagementAccess.denied();return d;
-    }
-    private EnterpriseInvocation invocation(Store.Session tx,String id){var i=tx.enterprise().invocation(Ids.valid(id));if(i==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Invocation not found");
-        long time=clock.millis();if(i.expiresAtUnixMs()<=time&&Set.of(EnterpriseInvocationState.PENDING_APPROVAL,EnterpriseInvocationState.QUEUED,EnterpriseInvocationState.RESERVED,EnterpriseInvocationState.EXECUTING).contains(i.state())){
-            var state=i.state()==EnterpriseInvocationState.EXECUTING?EnterpriseInvocationState.OUTCOME_UNKNOWN:EnterpriseInvocationState.EXPIRED;
-            var next=changed(i,state,i.reservedNonce(),i.completedResources(),i.resultDigest());tx.enterprise().saveInvocation(next,time,i.revision());tx.audit("effect-watchdog","INVOCATION_"+state.name(),"invocation:"+id,next.revision(),i.evaluation().context().requestId(),i.requestDigest(),evidence(next));i=next;
-        }return i;}
-    /** A replay under a renewed or rotated credential: the stored invocation takes the current session and credential
-     *  epochs, so the decision that follows checks the caller's current authority, never the authority it once had. */
-    private EnterpriseInvocation renewed(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,EnterpriseContext current,long now){
-        var c=i.evaluation().context();
-        if(java.util.Objects.equals(c.sessionEpoch(),current.sessionEpoch())&&java.util.Objects.equals(c.credentialEpoch(),current.credentialEpoch()))return i;
-        var context=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),current.sessionEpoch(),current.credentialEpoch(),c.bindingId(),c.deviceId());
-        var e=i.evaluation();
-        var evaluation=new EnterpriseEvaluation(context,e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),e.nowUnixMs(),e.authorityRevision(),e.online(),e.amountMinorUnits(),e.operation());
-        var next=new EnterpriseInvocation(i.id(),i.requestDigest(),evaluation,i.state(),i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation());
-        tx.enterprise().saveInvocation(next,now,i.revision());audit(tx,actor,"INVOCATION_RENEWED",next);return next;}
-    /** The reconciliation method the tool declared (OLO M5.4); a tool with effects that declared none is settled manually. */
-    private ReconciliationMethod reconciliation(Directory directory,String toolId){
-        var entry=directory.entries().get(Kind.TOOL.id(toolId));if(entry==null)return ReconciliationMethod.MANUAL;
-        var declared=codec.model(entry.document(),ControlTool.class).definition().reconciliation();
-        return declared!=null?declared:ReconciliationMethod.MANUAL;}
-    /** OLO M5.4: replaying the key of an OUTCOME_UNKNOWN call of a DOWNSTREAM_IDEMPOTENCY tool queues it again, so it is
-     *  resent under the same invocation and the same arguments, and the target deduplicates by its idempotency key.
-     *  STATUS_LOOKUP and MANUAL calls stay unknown until reconciled; nothing else is ever resent. */
-    private EnterpriseInvocation reconciled(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,long now){
-        if(i.state()!=EnterpriseInvocationState.OUTCOME_UNKNOWN||i.reconciliation()!=ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY)return i;
-        var approval=tx.enterprise().approval(approvalId(i.id()));
-        if(approval!=null&&(approval.state()!=EnterpriseApprovalState.APPROVED||approval.expiresAtUnixMs()<=now||approval.authorizationEpoch()!=tx.enterprise().authorizationEpoch()))return i;
-        var resend=changed(i,EnterpriseInvocationState.QUEUED,null,i.completedResources(),null);
-        var queued=new EnterpriseInvocation(resend.id(),resend.requestDigest(),resend.evaluation(),resend.state(),resend.revision(),resend.authorizationEpoch(),null,now+lifetime,resend.completedResources(),resend.downstreamIdempotencyKey(),null,resend.diagnosticId(),resend.reconciliation());
-        tx.enterprise().saveInvocation(queued,now,i.revision());audit(tx,actor,"RECONCILIATION_RESEND",queued);return queued;}
-    private EnterpriseInvocation changed(EnterpriseInvocation i,EnterpriseInvocationState state,String nonce,List<ResourceDescriptor> completed,String result){return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),state,i.revision()+1,i.authorizationEpoch(),nonce,i.expiresAtUnixMs(),completed,i.downstreamIdempotencyKey(),result,i.diagnosticId(),i.reconciliation());}
-    /** M4.4: who, as whom, through which workload, what operation on which resources, the decision, the policy and
-     *  authorization epoch, and the resulting state, as separate audit fields. Never arguments, payloads or credentials;
-     *  more than 16 resources are recorded by count and digest only. */
-    String evidence(EnterpriseInvocation i){var e=i.evaluation();var c=e.context();var m=new java.util.LinkedHashMap<String,Object>();
-        m.put("invocationId",i.id());m.put("mode",c.mode().name());if(c.userId()!=null)m.put("subjectUserId",c.userId());if(c.agentId()!=null)m.put("actorAgentId",c.agentId());
-        if(!c.chain().isEmpty())m.put("delegationChain",c.chain().stream().map(h->h.agentId()).limit(16).toList());if(c.workloadBindingId()!=null)m.put("workloadBindingId",c.workloadBindingId());
-        m.put("toolId",e.toolId());m.put("operation",e.action());var resources=e.resources().stream().map(r->r.kind().name()+":"+r.locator()).toList();
-        if(resources.size()<=16&&resources.stream().allMatch(r->r.length()<=512))m.put("resources",resources);m.put("resourceCount",resources.size());
-        m.put("resourcesDigest",DirectoryService.digest(String.join("\n",resources)));m.put("decision",i.state()==EnterpriseInvocationState.PENDING_APPROVAL?"ASK":"ALLOW");
-        m.put("state",i.state().name());m.put("authorizationEpoch",i.authorizationEpoch());m.put("policyRevision",e.authorityRevision());
-        String json=codec.json(m);if(json.length()<=4096)return json;m.remove("resources");return codec.json(m);}
-    private void audit(Store.Session tx,DirectoryService.Actor actor,String operation,EnterpriseInvocation i){tx.audit(actor.id(),operation,"invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest(),evidence(i));}
-    private void fresh(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation i,long now){
-        Long credentialDeadline=tx.enterprise().userCredentialDeadline(i.id());
-        if(credentialDeadline!=null&&credentialDeadline<=now)throw ManagementAccess.denied();
-        if(i.expiresAtUnixMs()<=now||i.authorizationEpoch()!=tx.enterprise().authorizationEpoch())throw ManagementAccess.denied();
-        var decision=decide(tenant,tx,i.evaluation(),now,true);
-        if(decision.decision()==Decision.ASK){var approval=tx.enterprise().approval(approvalId(i.id()));
-            if(approval==null||approval.approvalType()!=EnterpriseApprovalType.OPERATION||approval.state()!=EnterpriseApprovalState.APPROVED||approval.expiresAtUnixMs()<=now
-                ||!approval.requestDigest().equals(i.requestDigest())||!java.util.Objects.equals(approval.authorizationEpoch(),i.authorizationEpoch())||!approval.obligationIds().equals(decision.obligations()))throw ManagementAccess.denied();
-            // Reviewer privilege and membership remain live obligations, including bounded/JIT roles.
-            for(var review:approval.reviews())if(review.decision()==EnterpriseReviewDecision.APPROVE)reviewer(tx,review.reviewerUserId(),i,review.obligationId(),now);
-        }
-    }
-    public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==RequestMode.HUMAN&&!gatewayUser(request.context())||request.context().mode()==RequestMode.DELEGATED&&onBehalfOf(actor.tenant(),request.context())&&!gatewayDelegated(request.context())||request.context().mode()==RequestMode.DELEGATED&&laundered(request.context()))throw ManagementAccess.denied();return submitVerified(actor,request,null);}
-    /** A Gateway HUMAN context exists only for a verified user credential: JWT kind, the configured issuer, a credential digest,
-     *  and no agent or workload. The evaluator then requires the user enabled and the identity binding at this session epoch. */
-    private boolean gatewayUser(io.ololabs.toolgate.contracts.v2.RequestContext c){String trusted=userCredentialIssuer;
-        return trusted!=null&&c.credentialKind()==io.ololabs.toolgate.contracts.v2.CredentialKind.JWT&&trusted.equals(c.issuer())&&c.credentialSha256()!=null
-            &&c.userId()!=null&&c.sessionEpoch()!=null&&c.agentId()==null&&c.workloadBindingId()==null&&c.chain().isEmpty();}
-    /** M3.10: whether any hop of a DELEGATED context uses an on-behalf-of workload binding. */
-    private boolean onBehalfOf(Ids.TenantId tenant,io.ololabs.toolgate.contracts.v2.RequestContext c){var hops=new java.util.ArrayList<String>();c.chain().forEach(h->hops.add(h.workloadBindingId()));if(c.workloadBindingId()!=null)hops.add(c.workloadBindingId());
-        var directory=store.transaction(tenant,false,tx->tx.load());
-        return hops.stream().map(id->directory.entries().get(Kind.WORKLOAD_BINDING.id(id))).anyMatch(e->e!=null&&EnterpriseEvaluator.onBehalfOf(codec.model(e.document(),ControlWorkloadBinding.class)));}
-    /** An on-behalf-of context carries a verified user credential from the configured issuer, plus the agent's workload credential. */
-    private boolean gatewayDelegated(io.ololabs.toolgate.contracts.v2.RequestContext c){String trusted=userCredentialIssuer;
-        return trusted!=null&&c.credentialKind()==io.ololabs.toolgate.contracts.v2.CredentialKind.JWT&&trusted.equals(c.issuer())&&c.userId()!=null&&c.sessionEpoch()!=null
-            &&c.agentId()!=null&&c.workloadBindingId()!=null&&c.credentialSha256()!=null;}
-    /** M3.5: the reserved service principal never carries delegated authority, as the agent or as a chain hop. */
-    private boolean laundered(io.ololabs.toolgate.contracts.v2.RequestContext c){var olo=codec.protections();
-        return olo.reserved(c.agentId())||c.chain().stream().anyMatch(h->olo.reserved(h.agentId()));}
-    /** A person names the device; it must belong to the execution binding's device group. */
-    public Store.Reply submitHuman(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String device){if(actor.userId()==null||device==null||request.context().mode()!=RequestMode.HUMAN||!actor.userId().equals(request.context().userId()))throw ManagementAccess.denied();return submitVerified(actor,request,device);}
-    /** M2.4 atomic create: concurrent submissions of one key insert at most one invocation. A submission that loses the
-     *  race is decided once more, so it gets the winner's invocation, or a conflict if its fingerprint differs. */
-    private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){
-        try{return submitOnce(actor,request,chosen);}
-        catch(Failure lost){
-            if(lost.status()!=409||store.transaction(actor.tenant(),false,tx->tx.enterprise().invocation(request.context().requestId()))==null)throw lost;
-            return submitOnce(actor,request,chosen);
-        }
-    }
-    private Store.Reply submitOnce(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){
-        // Correlation context is not part of the operation: a retry carrying a new trace span is the same request.
-        var operation=request.executionContext()==null?request:new EnterpriseInvocationRequest(request.context(),request.request(),request.toolDigest(),request.packageDigest(),request.downstreamIdempotencyKey(),null);
-        String document=codec.json(operation)+(chosen==null?"":"\n"+chosen);
-        return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);if(tx.enterprise().operationCancelled(request.context().requestId()))throw Failure.conflict();var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
-            // A replay keeps the device the first submission was placed on, whatever the pool's load is now.
-            var placed=tx.enterprise().invocation(request.context().requestId());
-            var e=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),request.context(),chosen!=null?chosen:placed!=null?placed.evaluation().context().deviceId():placement.place(tx,request.context(),now,request.request(),request.toolDigest(),request.packageDigest()),request.request(),request.toolDigest(),request.packageDigest(),now);
-            Long credentialExpiry=request.context().expiresAtUnixMs();
-            if(credentialExpiry!=null){if(credentialExpiry<=now)throw ManagementAccess.denied();tx.enterprise().userCredentialDeadline(e.context().requestId(),credentialExpiry);}
-            String digest=requestDigest(e,request.downstreamIdempotencyKey());var previous=tx.enterprise().invocation(e.context().requestId());
-            if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();previous=renewed(tx,actor,previous,e.context(),now);previous=reconciled(tx,actor,previous,now);decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
-            if(tx.enterprise().invocationsSince(Math.max(0,now-lifetime))>=capacity)throw Failure.conflict();var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,now,false,budgets);long epoch=tx.enterprise().authorizationEpoch();
-            var state=decision.decision()==Decision.ASK?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
-            var i=new EnterpriseInvocation(e.context().requestId(),digest,e,state,1L,epoch,null,now+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),request.downstreamIdempotencyKey(),null,decision.diagnosticId(),reconciliation(tx.load(),e.toolId()));
-            for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),now);tx.enterprise().saveInvocation(i,now,0);tx.enterprise().insightsContext(i.id(),request.executionContext());if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
-            audit(tx,actor,"INVOCATION_SUBMIT",i);return reply(i,i.revision());});
-    }
-    public Store.Reply reserve(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseReservationRequest.class);
-        return authoritative(actor.tenant(),actor.id(),request.invocationId(),DirectoryService.digest(document),tx->{var reservation=reserveInSession(actor.tenant(),tx,request,actor.id());return reply(reservation,reservation.invocation().revision());});
-    }
-    EnterpriseReservation reserveInSession(Ids.TenantId tenant,Store.Session tx,EnterpriseReservationRequest request,String actorId){
-        var lease=lease(tenant,tx,request.invocationId(),request.expectedRevision(),actorId);var i=lease.invocation();var e=i.evaluation();
-        var claims=new EnterprisePermitClaims(issuer,audience,lease.nonce(),i.id(),i.requestDigest(),lease.evaluationDigest(),i.authorizationEpoch(),tx.load().revision(),lease.issuedAt(),lease.expiresAt(),e.toolDigest(),e.packageDigest(),e.context().bindingId(),e.context().deviceId(),lease.approvalIds());
-        return new EnterpriseReservation(i,signer.sign(claims));
-    }
-    /** One single-use nonce for a fresh attempt, at most 10 s; the invocation moves to RESERVED. Signing is the caller's. */
-    record Lease(EnterpriseInvocation invocation,String nonce,String evaluationDigest,long issuedAt,long expiresAt,List<String> approvalIds) {}
-    Lease lease(Ids.TenantId tenant,Store.Session tx,String invocationId,long expectedRevision,String actorId){
-        long now=now(tx);var i=invocation(tx,invocationId);if(i.revision()!=expectedRevision)throw Failure.conflict();fresh(tenant,tx,i,now);
-            if(i.state()==EnterpriseInvocationState.RESERVED){var old=tx.enterprise().nonce(i.reservedNonce());if(old==null||old.consumedAt()!=null||old.expiresAt()>now)throw Failure.conflict();}
-            else if(i.state()!=EnterpriseInvocationState.QUEUED)throw Failure.conflict();
-            var decision=decide(tenant,tx,i.evaluation(),now,true);String nonce=UUID.randomUUID().toString();long expires=Math.min(i.expiresAtUnixMs(),Math.min(now+10000,decision.validUntilUnixMs()));
-            String evalDigest=DirectoryService.digest(codec.json(i.evaluation()));var e=i.evaluation();var approval=tx.enterprise().approval(approvalId(i.id()));var ids=approval==null?List.<String>of():List.of(approval.id());
-            var next=changed(i,EnterpriseInvocationState.RESERVED,nonce,i.completedResources(),null);tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nonce,i.id(),evalDigest,i.authorizationEpoch(),now,expires,null));tx.enterprise().saveInvocation(next,now,i.revision());tx.audit(actorId,"PERMIT_RESERVE","invocation:"+next.id(),next.revision(),e.context().requestId(),next.requestDigest(),evidence(next));
-            return new Lease(next,nonce,evalDigest,now,expires,ids);
-    }
-    String issuer(){return issuer;}
-    EffectSigner signer(){return signer;}
-    EnterpriseInvocation invocationIn(Store.Session tx,String id){return invocation(tx,id);}
-    void requireFresh(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation invocation){fresh(tenant,tx,invocation,now(tx));}
-    EnterpriseInvocation secretAuthority(Ids.TenantId tenant,Store.Session tx,String device,String invocationId,String name,String fencingToken){
-        var i=invocation(tx,invocationId);
-        // Revalidate current authority before considering caller-supplied fencing claims.
-        fresh(tenant,tx,i,now(tx));
-        if(fencingToken==null||fencingToken.isEmpty()||fencingToken.length()>128||i.reservedNonce()==null
-            ||!java.security.MessageDigest.isEqual(i.reservedNonce().getBytes(java.nio.charset.StandardCharsets.UTF_8),fencingToken.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-            ||i.state()!=EnterpriseInvocationState.EXECUTING||!device.equals(i.evaluation().context().deviceId())
-            ||i.evaluation().resources().stream().noneMatch(r->r.kind()==ResourceKind.CUSTOM&&r.locator().equals("secret://"+name)))throw ManagementAccess.denied();
-        var nonce=tx.enterprise().nonce(i.reservedNonce());
-        // Consumption starts the attempt. Its admission expiry does not shorten a running invocation's authority.
-        if(nonce==null||nonce.consumedAt()==null||!nonce.invocationId().equals(i.id())||nonce.authorizationEpoch()!=i.authorizationEpoch())throw ManagementAccess.denied();
-        return i;
-    }
-    void checkpoint(Ids.TenantId tenant,Store.Session tx,String deviceId,EnterpriseInvocation invocation,AuthorizationRequest request){
-        if(invocation.state()!=EnterpriseInvocationState.EXECUTING||!deviceId.equals(invocation.evaluation().context().deviceId())
-            ||!request.toolId().equals(invocation.evaluation().toolId())||!request.action().equals(invocation.evaluation().action())
-            ||!DirectoryService.digest(codec.json(request.arguments())).equals(invocation.evaluation().argumentsDigest()))throw ManagementAccess.denied();
-        fresh(tenant,tx,invocation,now(tx));
-    }
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from enterprise_bootstrap import Refused, execution_binding, prepare, workload_context
 
-    /** The adapter obtains deviceId from a verified client certificate, never from the submitted body. */
-    public Store.Reply consume(Ids.TenantId tenant,String authenticatedDevice,String document){
-        return consume(tenant,tx->authenticatedDevice,document);
-    }
-    public Store.Reply consume(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String document){var request=codec.model(document,EnterprisePermitConsumption.class);var claims=signer.verify(request.permit());
-        return authoritative(tenant,"device-effect",request.invocationId(),DirectoryService.digest(document),tx->{long now=now(tx);String authenticatedDevice=certificate.apply(tx);var i=invocation(tx,request.invocationId());var e=i.evaluation();var lease=tx.enterprise().nonce(claims.nonce());
-            if(!issuer.equals(claims.issuer())||!audience.equals(claims.audience())||!authenticatedDevice.equals(claims.deviceId())||!authenticatedDevice.equals(e.context().deviceId())
-                ||!claims.invocationId().equals(i.id())||!claims.requestDigest().equals(i.requestDigest())||!claims.evaluationDigest().equals(DirectoryService.digest(codec.json(e)))
-                ||!claims.toolDigest().equals(request.toolDigest())||!claims.packageDigest().equals(request.packageDigest())||!e.toolDigest().equals(request.toolDigest())||!e.packageDigest().equals(request.packageDigest())
-                ||!claims.bindingId().equals(e.context().bindingId())||!request.argumentsDigest().equals(e.argumentsDigest())||!request.resources().equals(e.resources())
-                ||claims.issuedAtUnixMs()>now||claims.expiresAtUnixMs()<=now||claims.expiresAtUnixMs()-claims.issuedAtUnixMs()>10000
-                ||!java.util.Objects.equals(claims.authorizationEpoch(),i.authorizationEpoch())||claims.directoryRevision()!=tx.load().revision()||i.state()!=EnterpriseInvocationState.RESERVED||!claims.nonce().equals(i.reservedNonce())
-                ||lease==null||!lease.invocationId().equals(i.id())||!lease.evaluationDigest().equals(claims.evaluationDigest())||!java.util.Objects.equals(lease.authorizationEpoch(),i.authorizationEpoch())||!java.util.Objects.equals(lease.expiresAt(),claims.expiresAtUnixMs()))throw ManagementAccess.denied();
-            fresh(tenant,tx,i,now);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
-            tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest(),evidence(next));return reply(next,next.revision());});
-    }
-    /** v2 consumption by a Tool Host (platform-requirements.md ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.3): the host's certificate names the device the permit is addressed to.
-     *  The fencing token is the permit's nonce; reports and secret deliveries carry it back. */
-    public Store.Reply consumeInvocation(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String document){var request=codec.model(document,io.ololabs.toolgate.contracts.v2.PermitConsumption.class);var claims=signer.verifyInvocation(request.permit());var target=claims.target();
-        return authoritative(tenant,"device-effect",request.invocationId(),DirectoryService.digest(document),tx->{long now=now(tx);String authenticatedDevice=certificate.apply(tx);var i=invocation(tx,request.invocationId());var e=i.evaluation();var lease=tx.enterprise().nonce(claims.nonce());
-            if(!issuer.equals(claims.iss())||!authenticatedDevice.equals(claims.aud())||!authenticatedDevice.equals(e.context().deviceId())||tx.packages().toolHost(authenticatedDevice)==null
-                ||!claims.invocationId().equals(i.id())||!request.argumentsDigest().equals(claims.argumentsDigest())||!request.toolDescriptorDigest().equals(target.toolDescriptorDigest())
-                ||!request.packageDigest().equals(target.packageDigest())||!request.artifactDigest().equals(target.artifactDigest())||!target.packageDigest().equals("sha256:"+e.packageDigest())||!target.toolId().equals(e.toolId())
-                ||claims.iat()>now||claims.exp()<=now||claims.exp()-claims.iat()>10000||!java.util.Objects.equals(claims.identity().authorizationEpoch(),i.authorizationEpoch())
-                ||i.state()!=EnterpriseInvocationState.RESERVED||!claims.nonce().equals(i.reservedNonce())
-                ||lease==null||lease.consumedAt()!=null||!lease.invocationId().equals(i.id())||!java.util.Objects.equals(lease.authorizationEpoch(),i.authorizationEpoch())||!java.util.Objects.equals(lease.expiresAt(),claims.exp()))throw ManagementAccess.denied();
-            fresh(tenant,tx,i,now);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
-            tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest(),evidence(next));
-            return reply(new io.ololabs.toolgate.contracts.v2.PermitConsumed(i.id(),claims.nonce(),i.expiresAtUnixMs()),next.revision());});
-    }
-    /** v2 result from a Tool Host: COMPLETED completed every resource and FAILED none (the host reports a lost run of a
-     *  tool that needs the execution ledger as OUTCOME_UNKNOWN); anything else may have had effects. */
-    public Store.Reply reportInvocation(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String document,String fencingToken){var report=codec.model(document,io.ololabs.toolgate.contracts.v2.InvocationResultReport.class);
-        if(!report.fencingToken().equals(fencingToken))throw ManagementAccess.denied();
-        return authoritative(tenant,"device-effect",report.invocationId(),DirectoryService.digest(document),tx->{String device=certificate.apply(tx);var i=invocation(tx,report.invocationId());
-            if(!report.fencingToken().equals(i.reservedNonce())||tx.packages().toolHost(device)==null)throw ManagementAccess.denied();
-            var result=report.result()==null?null:(com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(report.result()));
-            var state=switch(report.outcome()){case COMPLETED->EnterpriseInvocationState.SUCCEEDED;case FAILED->EnterpriseInvocationState.FAILED;default->EnterpriseInvocationState.OUTCOME_UNKNOWN;};
-            if(state==EnterpriseInvocationState.SUCCEEDED&&result==null)throw Failure.validation();
-            var effect=new EnterpriseEffectReport(i.id(),i.state()==EnterpriseInvocationState.EXECUTING?i.revision():i.revision()-1,state,state==EnterpriseInvocationState.SUCCEEDED?i.evaluation().resources():List.of(),
-                state==EnterpriseInvocationState.SUCCEEDED?Canonical.digest(result).substring(7):null);
-            var next=reportInSession(tenant,tx,device,effect);
-            Integer attempt=tx.runEvents().attempt(i.id(),report.fencingToken());new RunEvents(store,codec,this).recordResult(tx,i,attempt==null?1:attempt,report.fencingToken(),device,report.result(),clock.millis());
-            // A call the Gateway took to the host directly: keep its result as a finished dispatch, as for a call the host
-            // fetched, so a repeated call returns it instead of running the tool again.
-            if(tx.packages().relayed(i.id())==null){
-                var finished=com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();var status=finished.putObject("status");
-                status.put("invocationId",i.id()).put("hostId",device).put("state","FINISHED");
-                status.set("result",(com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(new io.ololabs.toolgate.contracts.v2.ResultMessage(report.invocationId(),report.fencingToken(),report.outcome(),report.result()))));
-                tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),device,"FINISHED",i.expiresAtUnixMs(),codec.json(finished)));
-            }
-            return reply(next,next.revision());});
-    }
-    private void reviewer(Store.Session tx,String user,EnterpriseInvocation i,String obligation,long now){
-        var d=tx.load();var e=i.evaluation();if(new ManagementAccess(codec).superAdministrator(d,user)){var policyEntry=d.entries().get(Kind.POLICY.id(obligation));if(policyEntry==null||!policyEntry.enabled()||codec.model(policyEntry.document(),ControlPolicy.class).decision()!=Decision.ASK)throw ManagementAccess.denied();return;}if(user.equals(e.context().userId()))throw ManagementAccess.denied();
-        var agentIds=new ArrayList<String>();e.context().chain().forEach(h->agentIds.add(h.agentId()));if(e.context().agentId()!=null)agentIds.add(e.context().agentId());
-        for(var agent:agentIds){var a=codec.model(d.entries().get(Kind.AGENT.id(agent)).document(),ControlAgent.class);if(user.equals(a.ownerUserId()))throw ManagementAccess.denied();}
-        var entry=d.entries().get(Kind.POLICY.id(obligation));if(entry==null||!entry.enabled())throw ManagementAccess.denied();var policy=codec.model(entry.document(),ControlPolicy.class);
-        var teams=GroupGraph.memberships(d,codec,Kind.USER,user,true);if(policy.decision()!=Decision.ASK||!EnterpriseEvaluator.intersects(policy.approverTeams(),teams))throw ManagementAccess.denied();
-        var binding=codec.model(d.entries().get(Kind.BINDING.id(e.context().bindingId())).document(),ControlExecutionBinding.class);var access=new ManagementAccess(codec);
-        access.require(d,user,"operation.approve",Kind.TOOL_GROUP,binding.toolGroupId(),now);access.require(d,user,"operation.approve",Kind.DEVICE_GROUP,binding.deviceGroupId(),now);
-    }
-    public Store.Reply decide(DirectoryService.Actor actor,String id,String document,String key){if(actor.userId()==null)throw ManagementAccess.denied();Ids.valid(key);var request=codec.model(document,EnterpriseApprovalDecisionRequest.class);
-        return store.transaction(actor.tenant(),true,tx->{long now=now(tx);var a=tx.enterprise().approval(Ids.valid(id));if(a==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Approval not found");var i=invocation(tx,a.invocationId());
-            reviewer(tx,actor.userId(),i,request.obligationId(),now);if(a.approvalType()!=EnterpriseApprovalType.OPERATION||!a.obligationIds().contains(request.obligationId())||a.expiresAtUnixMs()<=now||a.authorizationEpoch()!=tx.enterprise().authorizationEpoch())throw ManagementAccess.denied();
-            String hash=DirectoryService.digest(id+"\n"+codec.json(request));var replay=tx.replay(actor.id(),key,hash);if(replay!=null)return replay;
-            decide(actor.tenant(),tx,i.evaluation(),now,true);if(!java.util.Objects.equals(a.revision(),request.expectedRevision())||a.state()!=EnterpriseApprovalState.PENDING&&request.decision()!=EnterpriseReviewDecision.REVOKE)throw Failure.conflict();
-            var reviews=new ArrayList<>(a.reviews());if(reviews.stream().anyMatch(r->r.obligationId().equals(request.obligationId())&&request.decision()!=EnterpriseReviewDecision.REVOKE))throw Failure.conflict();reviews.add(new EnterpriseApprovalReview(request.obligationId(),actor.userId(),request.decision(),now));
-            var state=request.decision()==EnterpriseReviewDecision.REVOKE?EnterpriseApprovalState.REVOKED:request.decision()==EnterpriseReviewDecision.DENY?EnterpriseApprovalState.DENIED:
-                a.obligationIds().stream().allMatch(ob->reviews.stream().anyMatch(r->r.obligationId().equals(ob)&&r.decision()==EnterpriseReviewDecision.APPROVE))?EnterpriseApprovalState.APPROVED:EnterpriseApprovalState.PENDING;
-            var next=new EnterpriseApproval(a.id(),a.approvalType(),a.invocationId(),a.requestDigest(),a.authorizationEpoch(),a.directoryRevision(),a.obligationIds(),reviews,state,a.revision()+1,a.expiresAtUnixMs());tx.enterprise().saveApproval(next,a.revision());
-            if(state==EnterpriseApprovalState.APPROVED){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var approved=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);
-                // The approved operation resumes (M5.5) with a fresh dispatch window, however long the review took.
-                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),now+lifetime,approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId(),approved.reconciliation());tx.enterprise().saveInvocation(queued,now,i.revision());}
-            else if((state==EnterpriseApprovalState.DENIED||state==EnterpriseApprovalState.REVOKED)&&Set.of(EnterpriseInvocationState.PENDING_APPROVAL,EnterpriseInvocationState.QUEUED,EnterpriseInvocationState.RESERVED,EnterpriseInvocationState.DISPATCHED,EnterpriseInvocationState.EXECUTING).contains(i.state())){
-                // End the original wait atomically with the review. Once dispatch may have started, cancellation
-                // cannot prove the effect did not happen: retain uncertainty for reconciliation instead.
-                var endedState=state==EnterpriseApprovalState.DENIED?EnterpriseInvocationState.FAILED:
-                    Set.o…32243 tokens truncated…ished restore cannot be backed up')
+DATA = Path('/data')
+# Optional second volume: device CA and server TLS keys outlive a /data reset, so enrolled clients keep trusting it.
+TRUST = Path('/trust')
+TRUST_FILES = {'device-ca.crt': 'device-ca.crt', 'device-ca.key': 'device-ca.pem', 'server.crt': 'server.crt',
+               'server.key': 'server-tls.pem', 'device-trust.p12': 'device-trust.p12'}
+TENANT = None  # Set from protected, persisted UUID state before composition starts.
+ISSUER = 'https://quickstart.local'
+GROUPS = ()  # Human portal permissions derive only from the reviewed Team/Role graph.
+# Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
+BASE_USERS = ('admin', 'reviewer-1', 'reviewer-2', 'test-readonly', 'test-readwrite', 'test-admin')
+CLAIM_PATH = '/api/quickstart/v1/demo-accounts/claim'
+CREDENTIALS_LOCK = threading.RLock()
+CLAIM_LOCK = threading.Lock()
+
+
+class Forbidden(Exception):
+    """Authenticated, but this account may not perform the operation."""
+
+
+def trust_mounted():
+    try: return any(line.split()[4] == str(TRUST) for line in Path('/proc/self/mountinfo').read_text().splitlines())
+    except (OSError, IndexError): return False
+
+
+def trust(name):
+    """Path of a trust file: in /trust when that volume is mounted, otherwise in /data/keys as before."""
+    return TRUST/name if trust_mounted() else DATA/'keys'/TRUST_FILES[name]
+
+
+def installation():
+    """Local installation state written by prepare(); installations made before it have none."""
+    path = DATA/'state/installation.json'
+    if not path.exists(): return dict(users=[], agents=[], pool=[], environment={}, maxPool=32, fixedCredentials=1)
+    return strict(path.read_bytes())
+
+
+def demo_accounts():
+    path = DATA/'state/demo-accounts.json'
+    return strict(path.read_bytes()) if path.exists() else {'accounts': {}}
+
+
+def local_users():
+    return BASE_USERS+tuple(user['id'] for user in installation()['users'])+tuple(demo_accounts()['accounts'])
+
+
+def shown_on_login(user):
+    return any(entry['id'] == user and entry['showOnLogin'] for entry in installation()['users'])
+
+
+def password_disabled():
+    value = os.environ.get('TOOLGATE_DISABLE_ADMIN_PASSWORD', 'false')
+    if value not in ('true', 'false'): raise ValueError('Invalid password mode')
+    return value == 'true'
+
+
+def database_mode():
+    mode = os.environ.get('TOOLGATE_QUICKSTART_DATABASE_MODE', 'sqlite')
+    if mode not in ('sqlite', 'postgresql'): raise ValueError('Invalid database mode')
+    return mode
+
+
+class Database:
+    """Same parameterized vault/audit operations with explicit external PG custody."""
+    def __init__(self):
+        self.pg = database_mode() == 'postgresql'
+        if self.pg:
+            import psycopg
+            url = os.environ['QUARKUS_DATASOURCE_JDBC_URL']
+            if not url.startswith('jdbc:postgresql://'): raise ValueError('PostgreSQL JDBC URL required')
+            parsed = urllib.parse.urlsplit(url[5:])
+            if parsed.username or parsed.password or parsed.fragment: raise ValueError('Separate DB credentials required')
+            options = dict(urllib.parse.parse_qsl(parsed.query, strict_parsing=True))
+            if set(options)-{'sslmode','sslrootcert'}: raise ValueError('Unsupported database option')
+            if options.get('sslmode') not in ('verify-full','require','disable'): raise ValueError('Explicit database TLS mode required')
+            self.connection = psycopg.connect(host=parsed.hostname, port=parsed.port or 5432,
+                dbname=parsed.path.lstrip('/'), user=os.environ['QUARKUS_DATASOURCE_USERNAME'],
+                password=os.environ['QUARKUS_DATASOURCE_PASSWORD'], connect_timeout=3,
+                options='-c statement_timeout=3000', **options)
+        else:
+            self.connection = sqlite3.connect(DATA/'state/control.sqlite', timeout=3)
+            self.connection.execute('PRAGMA foreign_keys=ON')
+    def __enter__(self):
+        # This helper owns one transaction for local identity reads/audit writes.
+        if self.pg:
+            try: self.connection.execute("SELECT set_config('app.tenant_id', %s, true)", (TENANT,))
+            except Exception:
+                self.connection.close()
+                raise
+        return self
+    def __exit__(self, typ, value, trace):
+        try:
+            if typ: self.connection.rollback()
+            else: self.connection.commit()
+        finally: self.connection.close()
+    def execute(self, sql, values=()):
+        if self.pg:
+            if sql == 'BEGIN IMMEDIATE':
+                # Advisory transaction locks need no placeholder table and release on commit/rollback.
+                return self.connection.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))',
+                                               ('toolgate:quickstart-bootstrap:'+TENANT,))
+            sql = sql.replace('?', '%s')
+        return self.connection.execute(sql, values)
+    def commit(self): self.connection.commit()
+
+
+def strict(raw):
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value: raise ValueError('Duplicate field')
+            value[key] = item
+        return value
+    return json.loads(raw, object_pairs_hook=unique, parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+
+
+def atomic(path, value):
+    """Private files use exclusive temporary creation, fsync and an atomic rename."""
+    path = Path(path)
+    if path.is_symlink(): raise ValueError('Unsafe state path')
+    temp = path.with_name(path.name + '.' + secrets.token_hex(8))
+    try:
+        with os.fdopen(os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as output:
+            output.write(value if isinstance(value, bytes) else value.encode())
+            output.flush(); os.fsync(output.fileno())
+        temp.replace(path)
+        descriptor = os.open(path.parent, os.O_RDONLY)
+        try: os.fsync(descriptor)
+        finally: os.close(descriptor)
+    finally: temp.unlink(missing_ok=True)
+
+
+def password_valid(value):
+    return isinstance(value, str) and 16 <= len(value) <= 128 and value.isascii() and all(32 < ord(c) < 127 for c in value) and len(set(value)) >= 8
+
+
+def password_record(value, changed=True, generation=1):
+    if not password_valid(value): raise ValueError('Password must be 16–128 printable ASCII characters with eight distinct characters')
+    salt = secrets.token_bytes(32)
+    return {'salt': salt.hex(), 'hash': hashlib.pbkdf2_hmac('sha256', value.encode(), salt, 600000).hex(), 'changed': changed, 'generation': generation}
+
+
+def identity_path(user):
+    if not isinstance(user, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', user) or user not in local_users(): raise PermissionError()
+    return DATA/('identity.json' if user == 'admin' else 'identity-'+user+'.json')
+
+
+def identity_audit(operation, generation, request_id, user='admin'):
+    """Persist credential-change intent before changing custody; never audit verifier bytes."""
+    path=DATA/'state/control.sqlite'
+    if database_mode() == 'sqlite' and (not path.is_file() or path.is_symlink()): raise ValueError('Identity audit unavailable')
+    with Database() as db:
+        db.execute('INSERT INTO control_audit(tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES(?,?,?,?,?,?,?)',
+                   (TENANT,hashlib.sha256((ISSUER+'\n'+user).encode()).hexdigest(),operation,'local-identity:'+user,generation,request_id,
+                    hashlib.sha256((operation+'\n'+str(generation)).encode()).hexdigest()))
+        db.commit()
+
+
+class LocalIdentity:
+    """One composition-owned password writer; durable verifier/generation stay in custody."""
+    def __init__(self): self.lock=threading.Lock()
+    def authenticate(self, value, replacement=None, user='admin'):
+        with self.lock:
+            record = strict(identity_path(user).read_bytes())
+            candidate = value if isinstance(value, str) and len(value) <= 128 else ''
+            digest = hashlib.pbkdf2_hmac('sha256', candidate.encode(), bytes.fromhex(record['salt']), 600000).hex()
+            if not hmac.compare_digest(digest, record['hash']): raise PermissionError()
+            # No account must change its password at login. Shared accounts shown on the login page never may.
+            if replacement is not None:
+                if shown_on_login(user): raise Forbidden()
+                if not password_valid(replacement) or replacement == value: raise ValueError('A different strong password is required')
+                record = password_record(replacement, True, record['generation']+1)
+                request_id=secrets.token_hex(16)
+                identity_audit('PASSWORD_CHANGE_REQUESTED',record['generation'],request_id,user)
+                atomic(identity_path(user), json.dumps(record))
+                (DATA/('bootstrap-password' if user=='admin' else 'bootstrap-password-'+user)).unlink(missing_ok=True)
+                identity_audit('PASSWORD_CHANGED',record['generation'],request_id,user)
+            return jwt(GROUPS, user, generation=record['generation'])
+
+
+# The Tool Host's device id: Control places server-tool calls on it, and the Gateway dispatches them there.
+TOOL_HOST='tool-host-local'
+# A second Tool Host the Gateway has no route to, like one on a laptop: it fetches its calls from Control. A deployment
+# that names it runs there, so moving a tool between machines is a redeploy.
+REMOTE_TOOL_HOST='tool-host-remote'
+
+
+def key(name):
+    kept = {'device-ca': 'device-ca.key', 'server-tls': 'server.key'}.get(name)
+    path = trust(kept) if kept else DATA/'keys'/f'{name}.pem'
+    if not path.exists():
+        private = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+        atomic(path, private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+        if path.parent == DATA/'keys':
+            atomic(path.with_name(name+'-public.pem'), private.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    return serialization.load_pem_private_key(path.read_bytes(), password=None)
+
+
+def jwt(groups, subject='admin', generation=None, directory_bound=True):
+    global TENANT
+    if TENANT is None: TENANT=tenant_identity()
+    now = int(time.time())
+    claims = {'iss': ISSUER, 'aud': 'toolgate-control', 'sub': subject, 'user_id': subject, 'tenant_id': TENANT, 'groups': groups, 'iat': now, 'exp': now+900}
+    if not directory_bound: claims.pop('user_id')
+    elif subject in local_users():
+        with Database() as db:
+            row=db.execute('SELECT CAST(document AS TEXT) FROM control_records WHERE tenant_id=? AND kind=? AND record_id=?',
+                           (TENANT,'IDENTITY_BINDING','installed-'+subject)).fetchone()
+        if not row: raise PermissionError()
+        claims['session_epoch']=strict(row[0])['sessionEpoch']
+    if generation is not None: claims['password_generation'] = generation
+    encode = lambda value: base64.urlsafe_b64encode(json.dumps(value, separators=(',', ':')).encode()).rstrip(b'=')
+    message = encode({'alg': 'RS256', 'typ': 'JWT'})+b'.'+encode(claims)
+    signature = key('identity').sign(message, padding.PKCS1v15(), hashes.SHA256())
+    return (message+b'.'+base64.urlsafe_b64encode(signature).rstrip(b'=')).decode()
+
+
+def session(header):
+    """Never accept machine tokens or stale password generations at the public proxy."""
+    try:
+        if not header.startswith('Bearer ') or len(header)>16384: raise ValueError()
+        a, b, c = header[7:].split('.')
+        decode = lambda text: base64.urlsafe_b64decode(text+'='*(-len(text)%4))
+        if strict(decode(a)) != {'alg': 'RS256', 'typ': 'JWT'}: raise ValueError()
+        key('identity').public_key().verify(decode(c), (a+'.'+b).encode(), padding.PKCS1v15(), hashes.SHA256())
+        claims = strict(decode(b)); now = int(time.time())
+        record = strict(identity_path(claims['sub']).read_bytes())
+        if claims['iss'] != ISSUER or claims['aud'] != 'toolgate-control' or claims['tenant_id'] != TENANT or not claims['iat'] <= now < claims['exp'] <= claims['iat']+900 or claims.get('password_generation') != record['generation']: raise ValueError()
+        return claims
+    except Exception: raise PermissionError() from None
+
+
+def certificates():
+    """Device CA, server TLS certificate and trust store; with /trust mounted they survive a /data reset."""
+    if not trust('device-trust.p12').exists():
+        issue()
+    if trust_mounted():  # Public copies keep /data/keys/device-ca.crt the one place local tools read the CA from.
+        for name in ('device-ca.crt', 'server.crt'): atomic(DATA/'keys'/name, trust(name).read_bytes())
+
+
+def tenant_certificates(tenant):
+    """Independent discovery and device signing custody; the original root is TLS-only."""
+    root=DATA/'tenant-identity'
+    packet=root/'publication.json'
+    if root.is_symlink(): raise ValueError('Unsafe tenant identity custody')
+    root.mkdir(exist_ok=True,mode=0o700);root.chmod(0o700)
+    if not packet.exists():
+        # A partial set is refused, never silently replaced after a failed bring-up.
+        if any(root.iterdir()): raise ValueError('Incomplete tenant identity custody')
+        now=datetime.datetime.now(datetime.timezone.utc);references=[]
+        for purpose in ('DISCOVERY','DEVICE_CA'):
+            private=rsa.generate_private_key(public_exponent=65537,key_size=3072)
+            reference=dict(purpose=purpose,keyId='discovery-1',state='ACTIVE')
+            if purpose=='DEVICE_CA':
+                name=x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME,'ToolGate tenant device CA'),x509.NameAttribute(x509.NameOID.ORGANIZATIONAL_UNIT_NAME,tenant)])
+                certificate=x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(private.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=3650)).add_extension(x509.BasicConstraints(ca=True,path_length=0),critical=True).add_extension(x509.KeyUsage(False,False,False,False,False,True,True,False,False),critical=True).sign(private,hashes.SHA256())
+                reference.update(keyId=hashlib.sha256(certificate.public_bytes(serialization.Encoding.DER)).hexdigest(),certificatePem=certificate.public_bytes(serialization.Encoding.PEM).decode())
+            directory=root/tenant/purpose;directory.mkdir(parents=True,mode=0o700)
+            atomic(directory/(reference['keyId']+'.pk8.pem'),private.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
+            references.append(reference)
+        atomic(packet,json.dumps(dict(formatVersion=1,publications=[dict(tenantId=tenant,generation=1,keys=references)])))
+    value=strict(packet.read_bytes())
+    publication=value['publications']
+    if value['formatVersion']!=1 or len(publication)!=1 or publication[0]['tenantId']!=tenant: raise ValueError('Tenant identity publication mismatch')
+    # Rebuild the public client trust store from retained tenant CAs before opening TLS.
+    # No TLS issuer is trusted to authenticate a device.
+    store=root/'device-trust.p12';partial=root/'device-trust.p12.partial';partial.unlink(missing_ok=True)
+    for reference in publication[0]['keys']:
+        if reference['purpose']!='DEVICE_CA' or reference['state'] not in ('ACTIVE','READ_ONLY'): continue
+        certificate=root/(reference['keyId']+'.crt');atomic(certificate,reference['certificatePem'])
+        subprocess.run(['keytool','-importcert','-noprompt','-alias',reference['keyId'],'-file',str(certificate),'-keystore',str(partial),'-storetype','PKCS12','-storepass','changeit'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    if not partial.exists(): raise ValueError('Tenant client trust required')
+    partial.replace(store)
+
+
+def issue():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    ca_key = key('device-ca'); server_key = key('server-tls')
+    name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'ToolGate Quickstart Device CA')])
+    ca = x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(ca_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=3650)).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True).add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True).add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False).sign(ca_key, hashes.SHA256())
+    server = x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'localhost')])).issuer_name(name).public_key(server_key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=365)).add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True).add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost'), x509.IPAddress(ipaddress.ip_address('127.0.0.1'))]), critical=False).add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False).add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False).add_extension(x509.SubjectKeyIdentifier.from_public_key(server_key.public_key()), critical=False).sign(ca_key, hashes.SHA256())
+    atomic(trust('device-ca.crt'), ca.public_bytes(serialization.Encoding.PEM))
+    atomic(trust('server.crt'), server.public_bytes(serialization.Encoding.PEM))
+    store = trust('device-trust.p12'); partial = store.with_name(store.name+'.partial'); partial.unlink(missing_ok=True)
+    subprocess.run(['keytool', '-importcert', '-noprompt', '-alias', 'device-ca', '-file', str(trust('device-ca.crt')), '-keystore', str(partial), '-storetype', 'PKCS12', '-storepass', 'changeit'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    partial.replace(store)  # The trust store is written last: it marks the set complete.
+
+
+def initialize():
+    if (DATA/'restore.pending').exists(): raise ValueError('Unfinished restore; recover into a new empty data volume')
+    password_disabled(); mode = database_mode()
+    os.umask(0o077)
+    DATA.mkdir(exist_ok=True)
+    if DATA.is_symlink() or DATA.stat().st_uid != os.getuid(): raise ValueError('Private service-owned /data required')
+    DATA.chmod(0o700)
+    if trust_mounted():
+        if TRUST.is_symlink() or TRUST.stat().st_uid != os.getuid(): raise ValueError('Private service-owned /trust required')
+        TRUST.chmod(0o700)
+    for name in ('keys', 'run', 'state', 'artifacts'):
+        path = DATA/name
+        if path.is_symlink(): raise ValueError('Unsafe local layout')
+        path.mkdir(exist_ok=True); path.chmod(0o700)
+    layout = DATA/'layout.json'
+    if layout.exists() and strict(layout.read_bytes()) != {'layoutVersion': 1}: raise ValueError('Unsupported local layout; restore or use a compatible image')
+    if not layout.exists(): atomic(layout, '{"layoutVersion":1}')
+    storage = DATA/'storage.json'
+    previous = strict(storage.read_bytes())['mode'] if storage.exists() else ('sqlite' if (DATA/'state/control.sqlite').exists() else mode)
+    if previous != mode: raise ValueError('Use separate /data when changing database backend; migration is explicit')
+    if not storage.exists(): atomic(storage, json.dumps({'mode': mode}))
+    if not (DATA/'identity.json').exists():
+        supplied = os.environ.pop('TOOLGATE_BOOTSTRAP_PASSWORD', None)
+        password = supplied if supplied is not None else secrets.token_urlsafe(32)
+        atomic(DATA/'identity.json', json.dumps(password_record(password)))
+        if supplied is None: atomic(DATA/'bootstrap-password', password+'\n')
+    else: os.environ.pop('TOOLGATE_BOOTSTRAP_PASSWORD', None)  # Existing identity is never reset by startup settings.
+    for user in BASE_USERS[1:]:
+        if not identity_path(user).exists():
+            password=secrets.token_urlsafe(32)
+            atomic(identity_path(user),json.dumps(password_record(password)))
+            atomic(DATA/('bootstrap-password-'+user),password+'\n')
+    for name in ('identity', 'policy', 'permit', 'device-ca', 'server-tls', 'fleet', 'package-release'): key(name)
+    if (DATA/'keys/vault.key').exists(): raise ValueError('Unsupported raw vault key; select a fresh empty data directory')
+    if not (DATA/'keys/vault-wrapping.json').exists():
+        atomic(DATA/'keys/vault-wrapping.json', json.dumps(dict(formatVersion=1,currentKeyId='local-1',keys={'local-1':base64.b64encode(secrets.token_bytes(32)).decode()})))
+        (DATA/'keys/vault-wrapping.json').chmod(0o600)
+    certificates()
+    fleet_keys()
+
+
+def dependencies_ready():
+    # A live dependency may time out during an outage. Clear readiness while
+    # retaining the processes and sockets so online authorization can deny and recover.
+    try:
+        return call('/q/health/ready',port=9092)[0]==200 and call('/v1/health/ready',port=9091)[0]==200
+    except (OSError, http.client.HTTPException):
+        return False
+
+
+def origin_target(value):
+    """Only origin-form targets may reach the fixed loopback upstream."""
+    if not isinstance(value, str) or not value.startswith('/') or value.startswith('//') or any(ord(c)<32 or ord(c)==127 for c in value) or '\\' in value:
+        raise ValueError('Invalid local request target')
+    target = urllib.parse.urlsplit(value)
+    if target.scheme or target.netloc or target.fragment:
+        raise ValueError('Invalid local request target')
+    return urllib.parse.urlunsplit(('', '', target.path, target.query, ''))
+
+
+def call(path, token=None, body=None, port=8082, secure=False, method=None, extra_headers=None):
+    client = http.client.HTTPSConnection('127.0.0.1', port, timeout=10, context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt'))) if secure else http.client.HTTPConnection('127.0.0.1', port, timeout=10)
+    headers = {'Content-Type': 'application/json', 'X-Request-ID': secrets.token_hex(16)}
+    if token: headers['Authorization'] = 'Bearer '+token
+    if body is not None: headers['Idempotency-Key'] = secrets.token_hex(16)
+    if extra_headers: headers.update(extra_headers)
+    try:
+        client.request(method or ('POST' if body is not None else 'GET'), origin_target(path), json.dumps(body).encode() if body is not None else None, headers)
+        response = client.getresponse(); raw = response.read(2*1024*1024+1)
+        if len(raw)>2*1024*1024: raise ValueError()
+        return response.status, raw, dict(response.getheaders())
+    finally: client.close()
+
+
+def client_credentials():
+    """Administrator-installed workload facts; grants and credential epochs remain in Control."""
+    if os.environ.get('TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS', 'false') != 'true': return []
+    path = DATA/'client-runtime-credentials.json'
+    if not path.exists(): return []
+    metadata = path.stat()
+    if path.is_symlink() or not path.is_file() or metadata.st_size > 65536 or metadata.st_mode & 0o077 or metadata.st_uid not in (0, os.geteuid()): raise ValueError('Unsafe client credential file')
+    values = strict(path.read_bytes())
+    if not isinstance(values, list) or len(values)>credential_cap(): raise ValueError('Invalid workload credentials')
+    now = int(time.time()*1000)
+    for value in values:
+        if not isinstance(value,dict) or set(value)!={'tokenSha256','context','expiresAtUnixMs'} or not isinstance(value['expiresAtUnixMs'],int) or isinstance(value['expiresAtUnixMs'],bool): raise ValueError('Invalid workload credentials')
+        context=value['context']
+        if not isinstance(context,dict) or context.get('tenantId')!=TENANT or context.get('mode') not in ('SERVICE','DELEGATED') or context.get('credentialSha256')!=value['tokenSha256']: raise ValueError('Invalid workload identity')
+    return [value for value in values if value['expiresAtUnixMs']>now]
+
+
+def credential_cap():
+    """Largest pool the record budget allows plus every fixed credential; the Gateway accepts at most 256."""
+    state = installation()
+    return min(256, state['maxPool']+state['fixedCredentials'])
+
+
+def workload_credentials():
+    """Live agent token hashes and Gateway contexts by workload binding. Raw tokens are never kept here."""
+    path = DATA/'state/workload-credentials.json'
+    return strict(path.read_bytes()) if path.exists() else {}
+
+
+def private(path, value):
+    atomic(path, json.dumps(value)); Path(path).chmod(0o600)
+
+
+def accounts():
+    """Logins for initialize-file users and the one private credentials file. Idempotent on every start."""
+    state = installation(); path = DATA/'credentials.json'
+    saved = strict(path.read_bytes()) if path.exists() else None
+    known = {user['username']: user['password'] for user in saved['users']} if saved else {}
+    users, created = [], {}
+    for user in BASE_USERS[:3]:
+        bootstrap = DATA/('bootstrap-password' if user == 'admin' else 'bootstrap-password-'+user)
+        users.append(dict(username=user, password=bootstrap.read_text().strip() if bootstrap.exists() else None, showOnLogin=False))
+    for entry in state['users']:
+        password = known.get(entry['id']) or secrets.token_urlsafe(32)
+        users.append(dict(username=entry['id'], password=password, showOnLogin=entry['showOnLogin']))
+        if not identity_path(entry['id']).exists(): created[entry['id']] = password
+    # Written before the login records, so a restart after a crash reuses exactly these passwords.
+    if saved is None:
+        private(path, dict(users=users, agents=[dict(agentId=agent['agentId'], workloadBindingId=agent['workloadBindingId'],
+                token=agent.get('token'), userId=agent['userId']) for agent in state['agents']], claimToken=secrets.token_urlsafe(32)))
+    for user, password in created.items(): atomic(identity_path(user), json.dumps(password_record(password)))
+    stored = workload_credentials()
+    for agent in state['agents']:
+        stored.setdefault(agent['workloadBindingId'], dict(tokenSha256=agent['context']['credentialSha256'], context=agent['context']))
+    private(DATA/'state/workload-credentials.json', stored)
+    if any('token' in agent for agent in state['agents']):
+        for agent in state['agents']: agent.pop('token', None)
+        private(DATA/'state/installation.json', state)
+
+
+def gateway_credentials():
+    """Write the Gateway's whole credential set atomically; returns the digest of the exact bytes written."""
+    with CREDENTIALS_LOCK:
+        digest = hashlib.sha256((DATA/'run/runtime-token').read_text().encode()).hexdigest()
+        expires = int(time.time()*1000)+86400000
+        # This disabled workload is an authentication identity only. Installation creates no workload grants.
+        # No device in the context: Control places each call on a device of binding-default's group.
+        context = dict(requestId='local-workload',tenantId=TENANT,mode='SERVICE',credentialKind='STATIC_TOKEN',agentId='agent-local',
+                       workloadBindingId='workload-local',chain=[],credentialEpoch=1,bindingId='binding-default',
+                       credentialSha256=digest)
+        credentials = [dict(tokenSha256=digest,context=context,expiresAtUnixMs=expires)]
+        credentials.extend(dict(tokenSha256=value['tokenSha256'],context=value['context'],expiresAtUnixMs=expires)
+                           for value in workload_credentials().values())
+        credentials.extend(client_credentials())
+        if len(credentials) > credential_cap(): raise ValueError('Gateway credential cap exceeded')
+        raw = json.dumps(credentials).encode()
+        atomic(DATA/'run/credentials.json', raw)
+        return hashlib.sha256(raw).hexdigest()
+
+
+def install(signal_gateway, timeout=15):
+    """Write the credential set, signal the Gateway and wait until its management listener reports that file."""
+    with CREDENTIALS_LOCK:
+        digest = gateway_credentials(); deadline = time.monotonic()+timeout; again = 0
+        while time.monotonic() < deadline:
+            try:
+                status, raw, _ = call('/v1/credentials', port=9091)
+                if status == 200 and strict(raw).get('sha256') == digest: return
+                # A Gateway that answers has its SIGHUP handler installed, so the signal reloads and never stops it.
+                if status == 200 and time.monotonic() >= again: signal_gateway(); again = time.monotonic()+1
+            except (OSError, http.client.HTTPException, ValueError): pass
+            time.sleep(.05)
+        raise TimeoutError('Gateway did not confirm the credential reload')
+
+
+def admin_token():
+    """A short-lived session of the installation's Super Admin, for the supervisor's own Control calls."""
+    return jwt(GROUPS, 'admin', generation=strict((DATA/'identity.json').read_bytes())['generation'])
+
+
+def control(path, token, body=None):
+    status, raw, _ = call(path, token, body)
+    if status not in (200, 201): raise RuntimeError('Control refused the request')
+    return strict(raw) if raw else {}
+
+
+def rotate(binding_id, token, actor, execution=None):
+    """Control stores the new token's hash and epoch and enables the binding; the Gateway context follows it."""
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    reply = control('/api/control/v1/workload-bindings/'+urllib.parse.quote(binding_id, safe='')+'/credential', actor,
+                    {'credentialSha256': digest, 'enable': True})
+    binding = reply['binding'] if isinstance(reply.get('binding'), dict) else reply
+    if binding.get('id') != binding_id or binding.get('credentialSha256') != digest: raise RuntimeError('Unexpected credential rotation')
+    supplied = reply['context'] if isinstance(reply.get('context'), dict) else {}
+    context = workload_context(TENANT, binding, supplied.get('bindingId') or execution)
+    with CREDENTIALS_LOCK:
+        stored = workload_credentials(); stored[binding_id] = dict(tokenSha256=digest, context=context)
+        private(DATA/'state/workload-credentials.json', stored)
+
+
+def refresh_at():
+    return os.environ.get('TOOLGATE_DEMO_REFRESH_AT', '').strip() or None
+
+
+def claim_account(requester, signal_gateway):
+    """Hand one pool account to a requester with a fresh password and agent token; a repeat claim revokes the old ones."""
+    pool = {entry['userId']: entry for entry in installation()['pool']}
+    with CLAIM_LOCK:
+        state = demo_accounts(); claimed = state['accounts']
+        user = next((name for name, value in claimed.items() if hmac.compare_digest(value['requester'].encode(), requester.encode())), None)
+        if user is None:
+            user = next((name for name in pool if name not in claimed), None)
+            if user is None: return None
+            # Recorded before any credential exists: no account goes to a second requester in this volume's life.
+            claimed[user] = dict(requester=requester, claimedAtUnixMs=int(time.time()*1000), enabled=False)
+            private(DATA/'state/demo-accounts.json', state)
+        admin = admin_token()
+        if not claimed[user]['enabled']:
+            status, _, _ = call('/api/control/v1/users/'+urllib.parse.quote(user, safe='')+'/enable', admin, {})
+            if status not in (200, 204, 409): raise RuntimeError('Control refused to enable the account')
+            claimed[user]['enabled'] = True; private(DATA/'state/demo-accounts.json', state)
+        password, token = secrets.token_urlsafe(32), secrets.token_urlsafe(48)
+        path = identity_path(user)
+        generation = strict(path.read_bytes())['generation']+1 if path.exists() else 1
+        identity_audit('PASSWORD_ISSUED', generation, secrets.token_hex(16), user)
+        atomic(path, json.dumps(password_record(password, True, generation)))  # Ends every earlier session.
+        rotate(pool[user]['workloadBindingId'], token, admin, pool[user]['context'].get('bindingId'))
+        install(signal_gateway)  # The previous token leaves the Gateway in this same reload.
+        gateway = os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL', 'https://localhost:8443').rstrip('/')+'/mcp'
+        return dict(username=user, password=password, agentToken=token,
+                    consoleUrl=os.environ.get('TOOLGATE_PUBLIC_CONSOLE_URL', '').strip() or 'http://localhost:8080/console/',
+                    gatewayUrl=os.environ.get('TOOLGATE_PUBLIC_MCP_URL', '').strip() or gateway, expiresAt=refresh_at())
+
+
+def reauthorize(binding_id, actor, signal_gateway):
+    """An authorized administrator issues a fresh token for one workload binding; it is returned once and never stored."""
+    status, raw, _ = call('/api/control/v1/admin-session', actor)
+    if status != 200 or 'workload_binding.rotate_credential' not in strict(raw).get('permissions', []): raise Forbidden()
+    stored = workload_credentials().get(binding_id)
+    execution = stored['context'].get('bindingId') if stored else None
+    if execution is None:
+        snapshot = control('/api/control/v1/config/export', actor)
+        snapshot = snapshot['snapshot'] if isinstance(snapshot.get('snapshot'), dict) else snapshot
+        agent = next(row['agentId'] for row in snapshot.get('workloadBindings', []) if row['id'] == binding_id)
+        execution = execution_binding(snapshot, agent)
+    token = secrets.token_urlsafe(48)
+    rotate(binding_id, token, actor, execution)
+    install(signal_gateway)
+    return token
+
+
+def login_hints():
+    """Shared demo logins only (showOnLogin); administrator and reviewer passwords are never listed."""
+    path = DATA/'credentials.json'
+    users = strict(path.read_bytes())['users'] if path.exists() else []
+    return {'accounts': [dict(username=user['username'], password=user['password']) for user in users if user['showOnLogin']],
+            'refreshAt': refresh_at()}
+
+
+def tenant_identity():
+    """A fresh composition allocates its UUID once; aliases never become identity claims."""
+    path=DATA/'state/tenant.json'
+    alias=os.environ.get('TOOLGATE_DEFAULT_TENANT_ALIAS','quickstart')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}',alias): raise ValueError('Invalid default tenant alias')
+    if path.is_symlink(): raise ValueError('Unsafe tenant state')
+    if path.exists():
+        value=strict(path.read_bytes())
+        if set(value)!={'formatVersion','alias','tenantId'} or value['formatVersion']!=1 or value['alias']!=alias: raise ValueError('Invalid or conflicting tenant state')
+        if str(uuid.UUID(value['tenantId']))!=value['tenantId']: raise ValueError('Canonical UUID tenant state required')
+        return value['tenantId']
+    if (DATA/'state/control.sqlite').exists() or (DATA/'installation-review.json').exists():
+        raise ValueError('Unsupported development state; use a new empty data directory')
+    tenant=str(uuid.uuid4())
+    atomic(path,json.dumps(dict(formatVersion=1,alias=alias,tenantId=tenant)))
+    path.chmod(0o600)
+    return tenant
+
+
+def configure():
+    global TENANT
+    TENANT = tenant_identity()
+    tenant_certificates(TENANT)
+    runtime_path=DATA/'run/runtime-token'
+    if not runtime_path.exists(): atomic(runtime_path,secrets.token_urlsafe(48))
+    packet, review_trust = prepare(DATA,TENANT,ISSUER,key,atomic)
+    accounts()
+    gateway_credentials()
+    config = {'listen':'127.0.0.1:8081','managementListen':'127.0.0.1:9091',
+              'trustedTlsProxy':False,'allowedOrigins':[],'tenantHosts':['127.0.0.1:8081'],
+              'publicDiscovery':dict(controlOrigin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443'),gatewayOrigin=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL','https://localhost:8443')),
+              'limits':{'maxBodyBytes':65536,'maxHeaderBytes':8192,'maxConcurrentRequests':128,
+                        'maxConnections':256,'requestsPerSecond':1000,'requestTimeoutMs':20000,
+                        'connectionTimeoutMs':35000,'shutdownTimeoutMs':35000,'auditQueueCapacity':256},
+              'control':{'tenantId':TENANT,'url':'http://127.0.0.1:8082','caCertificatePath':str(DATA/'keys/device-ca.crt'),'tokenPath':'/data/run/machine-token',
+                         'developmentLoopbackHttp':True},
+              'toolHosts':[{'hostId':TOOL_HOST,'url':'http://127.0.0.1:8095'}]}
+    atomic(DATA/'run/gateway.json',json.dumps(config))
+    # The Tool Host enrolls as a device like any client; an administrator approves it before it runs packages.
+    atomic(DATA/'run/tool-host.json',json.dumps(dict(hostId=TOOL_HOST,listen='127.0.0.1:8095',
+           permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
+           storeDir=str(DATA/'tool-host/store'),workDir=str(DATA/'tool-host/work'),
+           control=dict(tenantId=TENANT,url=tool_host_control_url(DATA/'state/tool-host'),caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           enrollment=dict(identityDir=str(DATA/'state/tool-host')),runtimes=dict(javaPath='java'))))
+    atomic(DATA/'run/tool-host-remote.json',json.dumps(dict(hostId=REMOTE_TOOL_HOST,listen='127.0.0.1:8096',
+           permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
+           storeDir=str(DATA/'tool-host-remote/store'),workDir=str(DATA/'tool-host-remote/work'),
+           control=dict(tenantId=TENANT,url=tool_host_control_url(DATA/'state/tool-host-remote'),caCertificatePath=str(DATA/'keys/device-ca.crt')),
+           enrollment=dict(identityDir=str(DATA/'state/tool-host-remote')),runtimes=dict(javaPath='java'))))
+    machine()
+    env = dict(os.environ)
+    settings = {'TOOLGATE_QUICKSTART_ENABLED': 'true', 'TOOLGATE_QUICKSTART_DATABASE': '/data/state/control.sqlite',
+                'QUARKUS_PROFILE':'quickstart', 'QUARKUS_FLYWAY_ACTIVE':'false', 'QUARKUS_DATASOURCE_ACTIVE': 'false', 'QUARKUS_DATASOURCE_HEALTH_ENABLED': 'false', 'QUARKUS_FLYWAY_MIGRATE_AT_START': 'false',
+                'QUARKUS_HTTP_HOST': '0.0.0.0', 'QUARKUS_HTTP_PORT': '8082', 'QUARKUS_HTTP_SSL_PORT': '8443',
+                'QUARKUS_HTTP_INSECURE_REQUESTS': 'enabled', 'QUARKUS_MANAGEMENT_HOST': '127.0.0.1',
+                'QUARKUS_HTTP_SSL_CERTIFICATE_FILES': str(trust('server.crt')), 'QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES': str(trust('server.key')),
+                'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_FILE': str(DATA/'tenant-identity/device-trust.p12'), 'QUARKUS_HTTP_SSL_CERTIFICATE_TRUST_STORE_PASSWORD': 'changeit',
+                'TOOLGATE_CONTROL_IDENTITY_CUSTODY_ROOT': str(DATA/'tenant-identity'),
+                'TOOLGATE_CONTROL_IDENTITY_PUBLICATION_PATH': str(DATA/'tenant-identity/publication.json'),
+                'MP_JWT_VERIFY_ISSUER': ISSUER, 'MP_JWT_VERIFY_AUDIENCES': 'toolgate-control', 'MP_JWT_VERIFY_PUBLICKEY_LOCATION': '/data/keys/identity-public.pem',
+                'TOOLGATE_CONTROL_BUNDLE_ENABLED': 'true', 'TOOLGATE_CONTROL_BUNDLE_KEY_ID': 'policy-local', 'TOOLGATE_CONTROL_BUNDLE_PRIVATE_KEY_PATH': '/data/keys/policy.pem',
+                'TOOLGATE_QUICKSTART_ARTIFACT_DIRECTORY': '/data/artifacts',
+                'TOOLGATE_CONTROL_FLEET_ENABLED': 'true', 'TOOLGATE_CONTROL_FLEET_KEY_ID': 'fleet-local',
+                'TOOLGATE_CONTROL_FLEET_PRIVATE_KEY_PATH': '/data/keys/fleet.pem',
+                'TOOLGATE_CONTROL_FLEET_RELEASE_KEYS_PATH': '/data/keys/release-keys.json',
+                'TOOLGATE_CONTROL_FLEET_ORGANIZATION_KEYS_PATH': '/data/keys/organization-keys.json',
+                # The package-release authority signs client releases (ADR 026); it is never the organization key.
+                'TOOLGATE_CONTROL_PACKAGE_RELEASE_PRIVATE_KEY_PATH': '/data/keys/package-release.pem', 'TOOLGATE_CONTROL_PACKAGE_RELEASE_KEY_ID': 'package-local',
+                'TOOLGATE_CONTROL_FLEET_ARTIFACT_ORIGIN': env.get('TOOLGATE_CONTROL_FLEET_ARTIFACT_ORIGIN', 'https://localhost:8443/artifacts'),
+                'TOOLGATE_CONTROL_FLEET_ARTIFACT_CA_PATH': env.get('TOOLGATE_CONTROL_FLEET_ARTIFACT_CA_PATH', '/data/keys/device-ca.crt'),
+                'TOOLGATE_CONTROL_EFFECT_ENABLED':'true', 'TOOLGATE_CONTROL_EFFECT_PRIVATE_KEY_PATH':'/data/keys/permit.pem',
+                'TOOLGATE_CONTROL_EFFECT_KEY_ID':'effect-local','TOOLGATE_CONTROL_EFFECT_ISSUER':'control',
+                'TOOLGATE_CONTROL_EFFECT_AUDIENCE':'toolgate-client',
+                'TOOLGATE_CONTROL_VAULT_WRAPPING_KEY_RING_PATH':'/data/keys/vault-wrapping.json',
+                'TOOLGATE_CONTROL_RECOVERY_PACKET_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_PACKET_PATH',str(packet)),'TOOLGATE_CONTROL_RECOVERY_TRUST_PATH':env.get('TOOLGATE_CONTROL_RECOVERY_TRUST_PATH',str(review_trust)),
+                'TOOLGATE_CONTROL_ENDPOINT_ENABLED': 'true',
+                # Quickstart check-in defaults (platform-requirements.md §17.2); the enterprise defaults are 2000 ms and 20 % jitter.
+                'TOOLGATE_CONTROL_CLIENT_CHECKIN_MS': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_MS') or '2000',
+                'TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT': env.get('TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT') or '0',
+                'TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS': env.get('TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS') or '120000',
+                'TOOLGATE_CONTROL_ENDPOINT_PRIVATE_KEY_PATH': str(trust('device-ca.key')), 'TOOLGATE_CONTROL_ENDPOINT_CA_CERTIFICATE_PATH': str(trust('device-ca.crt')),
+                'TOOLGATE_DEFAULT_TENANT_ALIAS': os.environ.get('TOOLGATE_DEFAULT_TENANT_ALIAS','quickstart'), 'TOOLGATE_CONTROL_ENDPOINT_SERVER_ID': 'quickstart-server',
+                'TOOLGATE_CONTROL_ENDPOINT_ORGANIZATION': installation().get('tenantName', 'Quickstart'),
+                'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443'),
+                'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL': env.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL', 'https://localhost:8443'),
+                'TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY': env.get('TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY','/opt/toolgate/client-downloads')}
+    if (DATA/'state/initialize-snapshot.json').exists(): settings['TOOLGATE_CONTROL_INITIALIZE_PATH']=str(DATA/'state/initialize-snapshot.json')
+    if database_mode() == 'postgresql':
+        for name in ('QUARKUS_DATASOURCE_JDBC_URL','QUARKUS_DATASOURCE_USERNAME','QUARKUS_DATASOURCE_PASSWORD','QUARKUS_FLYWAY_USERNAME','QUARKUS_FLYWAY_PASSWORD'):
+            if not env.get(name): raise ValueError('External database settings required')
+        settings.update(TOOLGATE_QUICKSTART_STORAGE='postgresql', QUARKUS_FLYWAY_ACTIVE='true',
+            QUARKUS_DATASOURCE_ACTIVE='true', QUARKUS_DATASOURCE_HEALTH_ENABLED='true', QUARKUS_FLYWAY_MIGRATE_AT_START='true')
+    # Initialize-file server settings seed Control; an explicit container value always wins.
+    settings.update({name: value for name, value in installation()['environment'].items() if not env.get(name)})
+    env.update(settings)
+    return env
+
+
+def tool_host_control_url(identity_dir):
+    """Use the signed published origin, including its port, for local Tool Host discovery."""
+    url = os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL', 'https://localhost:8443').rstrip('/')
+    path = Path(identity_dir)/'device.json'
+    if path.exists() and not path.is_symlink():
+        state = strict(path.read_bytes())
+        # Earlier compositions wrote the internal port before ever verifying discovery.
+        # Only an unbound journal may adopt the operator-configured published origin;
+        # established trust, pending approvals, keys and identity facts remain untouched.
+        if (url != 'https://localhost:8443' and state.get('formatVersion') == 3
+                and state.get('tenantId') == TENANT and state.get('serverUrl') == 'https://localhost:8443'
+                and state.get('sequence') == 0
+                and all(state.get(name) is None for name in ('manifest', 'discoveryTrust', 'identity', 'challenge'))):
+            state['serverUrl'] = url
+            private(path, state)
+    return url
+
+def fleet_keys():
+    """Persistent disjoint package release and desired-state trust domains."""
+    for name, kid, filename in (('fleet', 'fleet-local', 'organization-keys.json'),
+                                ('package-release', 'package-local', 'release-keys.json')):
+        numbers = key(name).public_key().public_numbers()
+        encode = lambda value: base64.urlsafe_b64encode(value.to_bytes((value.bit_length()+7)//8, 'big')).rstrip(b'=').decode()
+        atomic(DATA/'keys'/filename, json.dumps([{'kid': kid, 'n': encode(numbers.n), 'e': encode(numbers.e)}]))
+
+
+def machine():
+    atomic(DATA/'run/machine-token',jwt(['toolgate-relay-gateway'],'gateway',directory_bound=False))
+
+
+class TlsLoopbackBridge(socketserver.ThreadingTCPServer):
+    """Forward unchanged TLS bytes to the local listener, retaining the published TLS authority."""
+    daemon_threads=True
+    allow_reuse_address=True
+    def __init__(self,port):
+        if not 1024<=port<=65535 or port in (8080,8081,8082,8083,9091,9092): raise ValueError('Unsafe loopback TLS port')
+        super().__init__(('127.0.0.1',port),TlsBridgeHandler)
+        self.capacity=threading.BoundedSemaphore(32)
+    def process_request(self,request,address):
+        if not self.capacity.acquire(False): request.close();return
+        try: super().process_request(request,address)
+        except Exception: self.capacity.release();raise
+    def process_request_thread(self,request,address):
+        try: super().process_request_thread(request,address)
+        finally: self.capacity.release()
+
+
+class TlsBridgeHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        import select
+        with socket.create_connection(('127.0.0.1',8443),timeout=5) as upstream:
+            self.request.settimeout(15);upstream.settimeout(15)
+            deadline=time.monotonic()+35
+            while time.monotonic()<deadline:
+                readable,_,_=select.select([self.request,upstream],[],[],1)
+                for source in readable:
+                    data=source.recv(32768)
+                    if not data:return
+                    (upstream if source is self.request else self.request).sendall(data)
+
+
+def tls_bridges():
+    bridges=[]
+    origins={os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443'),
+             os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL','https://localhost:8443')}
+    for origin in origins:
+        parsed=urllib.parse.urlsplit(origin)
+        if parsed.scheme!='https' or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ('','/'): raise ValueError('Exact HTTPS origin required')
+        if parsed.hostname in ('localhost','127.0.0.1') and parsed.port and parsed.port!=8443:
+            if any(server.server_address[1]==parsed.port for server in bridges):continue
+            server=TlsLoopbackBridge(parsed.port);threading.Thread(target=server.serve_forever,daemon=True).start();bridges.append(server)
+    return bridges
+
+
+class BoundedServer(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+    def __init__(self, address, handler, ready):
+        super().__init__(address,handler)
+        self.ready=ready
+        self.capacity=threading.BoundedSemaphore(16)
+        self.identity=LocalIdentity()
+        self.login_lock=threading.Lock()
+        self.login_times=[]
+        self.signal_gateway=lambda: None  # main() sends SIGHUP to the running Gateway.
+    def process_request(self, request, address):
+        if not self.capacity.acquire(False): request.close(); return
+        try: super().process_request(request, address)
+        except Exception: self.capacity.release(); raise
+    def process_request_thread(self, request, address):
+        try: super().process_request_thread(request, address)
+        finally: self.capacity.release()
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    server_version = 'ToolGate'
+    def log_message(self, *_): pass
+    def setup(self):
+        super().setup(); self.connection.settimeout(10)
+    def reply(self, status, body, kind='application/json', headers=None):
+        request_id=(headers or {}).get('X-Request-ID') or (headers or {}).get('x-request-id') or self.headers.get('X-Request-ID','')
+        if not re.fullmatch(r'[A-Za-z0-9._-]{1,128}',request_id): request_id=secrets.token_hex(16)
+        if status>=400:
+            value=strict(body) if isinstance(body,bytes) else body
+            if isinstance(value,dict) and 'code' in value:
+                code={'INVALID_REQUEST':'VALIDATION','RATE_LIMITED':'DEPENDENCY_UNAVAILABLE'}.get(value['code'],value['code'])
+                body={'code':code,'requestId':request_id,'retryable':status in (423,429,503)}
+        raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+        self.send_response(status); self.send_header('Content-Type', kind)
+        self.send_header('Content-Length', str(len(raw))); self.send_header('Cache-Control', 'no-store')
+        self.send_header('X-Content-Type-Options', 'nosniff'); self.send_header('X-Request-ID', request_id)
+        for key_, value in (headers or {}).items():
+            if key_.lower() in ('content-security-policy','referrer-policy','permissions-policy','content-disposition','etag','location','set-cookie'): self.send_header(key_, value)
+        self.end_headers(); self.wfile.write(raw)
+    def session_cookie(self, token=''):
+        # Cookies are not port-scoped: isolate simultaneous local Quickstarts by
+        # their validated public Host port. Never forward this cookie to Control.
+        host = self.headers.get('Host', '')
+        if not re.fullmatch(r'(localhost|127\.0\.0\.1)(:[0-9]{1,5})?', host): raise PermissionError()
+        name = 'olo_toolgate_session_' + (host.rsplit(':', 1)[1] if ':' in host else '80')
+        cookie = SimpleCookie()
+        cookie[name] = token
+        cookie[name]['path'] = '/api/quickstart/v1'
+        cookie[name]['httponly'] = True
+        cookie[name]['samesite'] = 'Strict'
+        if isinstance(self.connection, ssl.SSLSocket): cookie[name]['secure'] = True
+        if not token: cookie[name]['max-age'] = 0
+        return name, cookie.output(header='').strip()
+    def browser_token(self):
+        name, _ = self.session_cookie()
+        cookie = SimpleCookie()
+        raw = self.headers.get('Cookie', '')
+        if len(raw) > 32768: raise PermissionError()
+        try:
+            cookie.load(raw)
+            token = cookie[name].value
+            session('Bearer ' + token)
+            return token
+        except (KeyError, ValueError, CookieError): raise PermissionError() from None
+    def dispatch(self):
+        try:
+            # The claim API is server to server on the container network: a bearer secret, no cookie, no browser Origin.
+            claiming = urllib.parse.urlsplit(self.path).path==CLAIM_PATH and self.command=='POST'
+            host = self.headers.get('Host', '')
+            if not claiming and not re.fullmatch(r'(localhost|127\.0\.0\.1)(:[0-9]{1,5})?', host): raise PermissionError()
+            origin = self.headers.get('Origin')
+            if origin is not None and (claiming or origin != 'http://'+host): raise PermissionError()
+            if self.headers.get('Transfer-Encoding') or len(self.path)>2048 or '\\' in self.path or '..' in urllib.parse.unquote(self.path): raise ValueError()
+            length = int(self.headers.get('Content-Length','0'))
+            # Packages and whole configuration snapshots are the large bodies; Control verifies and bounds them itself
+            # (a snapshot is at most 1 MiB of records, and deployed tools carry their descriptors).
+            target_path = urllib.parse.urlsplit(self.path).path if self.command=='POST' else ''
+            limit = 64*1024*1024 if target_path=='/api/control/v1/packages/uploads' else 2*1024*1024 if target_path in ('/api/control/v1/config/import','/api/control/v1/access/shadow') else 65536
+            if not 0<=length<=limit: raise ValueError()
+            raw = self.rfile.read(length)
+            if len(raw)!=length: raise ValueError()
+            path = urllib.parse.urlsplit(self.path).path
+            if path=='/api/quickstart/v1/status' and self.command=='GET':
+                return self.reply(200, {'mode': 'Quickstart', 'tenant': TENANT, 'tenantId': TENANT, 'tenantName': installation().get('tenantName', 'Quickstart'), 'nonHa': True, 'ready': self.server.ready.is_set(), 'version': Path('/opt/quickstart/VERSION').read_text().strip(), 'passwordRequired': not password_disabled(), 'database': database_mode(), 'authority': 'online'})
+            if path=='/api/quickstart/v1/login-hints' and self.command=='GET': return self.reply(200, login_hints())
+            if claiming:
+                saved = strict((DATA/'credentials.json').read_bytes()) if (DATA/'credentials.json').exists() else {}
+                header = self.headers.get('Authorization', '')
+                if not saved.get('claimToken') or not header.startswith('Bearer ') or not hmac.compare_digest(header[7:].encode(), saved['claimToken'].encode()): raise PermissionError()
+                data = strict(raw)
+                if not isinstance(data, dict) or set(data)!={'requester'} or not isinstance(data['requester'], str) or not re.fullmatch(r'[\x21-\x7e]{1,256}', data['requester']): raise ValueError()
+                result = claim_account(data['requester'], self.server.signal_gateway)
+                if result is None: return self.reply(409, {'error': 'POOL_EMPTY', 'nextResetAt': refresh_at()})
+                return self.reply(200, result)
+            if path=='/health/ready' and self.command=='GET': return self.reply(200 if self.server.ready.is_set() else 503, {'ready': self.server.ready.is_set()})
+            if path=='/api/quickstart/v1/session' and self.command=='GET':
+                try:
+                    return self.reply(200, {'accessToken': self.browser_token()})
+                except PermissionError:
+                    return self.reply(401, {'code':'UNAUTHORIZED'}, headers={'Set-Cookie': self.session_cookie()[1]})
+            if path=='/api/quickstart/v1/logout' and self.command=='POST':
+                return self.reply(200, {}, headers={'Set-Cookie': self.session_cookie()[1]})
+            if path=='/api/quickstart/v1/login' and self.command=='POST':
+                with self.server.login_lock:
+                    now = time.monotonic(); self.server.login_times[:] = [t for t in self.server.login_times if now-t<60]
+                    if len(self.server.login_times)>=10: return self.reply(429, {'code':'RATE_LIMITED'})
+                    self.server.login_times.append(now)
+                data = strict(raw)
+                if not isinstance(data, dict) or set(data)-{'username','password','newPassword'}: raise ValueError()
+                user=data.get('username','admin')
+                if user not in local_users(): raise PermissionError()
+                if password_disabled() and user=='admin':
+                    record = strict((DATA/'identity.json').read_bytes())
+                    token = jwt(GROUPS, 'admin', generation=record['generation'])
+                else:
+                    token = self.server.identity.authenticate(data.get('password'), data.get('newPassword'),user)
+                return self.reply(200, {'accessToken': token}, headers={'Set-Cookie': self.session_cookie(token)[1]})
+            protected = path.startswith(('/api/control/', '/api/quickstart/'))
+            if protected: session(self.headers.get('Authorization',''))
+            workload = re.fullmatch(r'/api/quickstart/v1/workloads/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})/reauthorize', path)
+            if workload and self.command=='POST':
+                return self.reply(200, {'token': reauthorize(workload.group(1), self.headers['Authorization'][7:], self.server.signal_gateway)})
+            if path=='/api/quickstart/v1/vault' and self.command in ('GET','POST'):
+                token_=self.headers['Authorization'][7:]
+                if self.command=='GET':
+                    status,response,upstream=call('/api/control/v1/vault',token_)
+                    if status==200:response=json.dumps({'names':[item['name'] for item in strict(response)['items']]}).encode()
+                else:
+                    data=strict(raw)
+                    if not isinstance(data,dict) or set(data)!={'name','value'}:raise ValueError()
+                    data.update(toolGroupId='default-tools',deviceGroupId='default-devices')
+                    key_=self.headers.get('Idempotency-Key','')
+                    if not re.fullmatch('[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}',key_):raise ValueError()
+                    status,response,upstream=call('/api/control/v1/vault',token_,data,extra_headers={'Idempotency-Key':key_})
+                return self.reply(status,response,headers=upstream)
+            # Opt-in for deployments whose public HTTP port is bound to loopback.
+            # Gateway still validates the opaque agent credential and every device scope.
+            mcp_http = path=='/mcp' and self.command=='POST' and os.environ.get('TOOLGATE_ALLOW_LOOPBACK_MCP_HTTP')=='true'
+            if mcp_http or path.startswith(('/console/', '/api/control/v1/', '/api/public/v1/clients', '/api/public/v1/installers')) or path in ('/','/console'):
+                # Direct TLS adapter is used for enrollment administration; device peers use :8443 itself.
+                # A Marketplace import fetches and verifies the package in Control (60 s per request), so it waits longer.
+                secure = path.startswith(('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/'))
+                client = http.client.HTTPSConnection('127.0.0.1',8443,context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt')),timeout=10) if secure else http.client.HTTPConnection('127.0.0.1',8081 if mcp_http else 8082,timeout=35 if mcp_http else 75 if path=='/api/control/v1/marketplace/imports' else 10)
+                forwarded = {'authorization','content-type','idempotency-key','if-match','x-request-id','traceparent','toolgate-tenant-id'}
+                if mcp_http: forwarded.update(('accept','mcp-protocol-version','mcp-method','mcp-name'))
+                headers = {k:v for k,v in self.headers.items() if k.lower() in forwarded}
+                try:
+                    client.request(self.command, origin_target(self.path), raw or None, headers)
+                    response = client.getresponse(); limit = 131072 if mcp_http else 64*1024*1024
+                    body = response.read(limit+1)
+                    if len(body)>limit: raise ValueError()
+                    if path=='/api/control/v1/endpoint/devices' and self.command=='GET' and response.status==200:
+                        page=strict(body)
+                        if urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('deployment')==['true']:
+                            page=deployment_details(page)
+                        body=json.dumps(page).encode()
+                    if path in ('/console/','/console/index.html') and response.status==200 and b'toolgate-mode' not in body:
+                        body = body.replace(b'<head>', b'<head><meta name="toolgate-mode" content="quickstart">', 1)
+                    return self.reply(response.status, body, response.getheader('Content-Type','application/octet-stream'),dict(response.getheaders()))
+                finally: client.close()
+            return self.reply(404, {'code':'NOT_FOUND'})
+        except Forbidden: self.reply(403, {'code':'FORBIDDEN'})
+        except PermissionError: self.reply(401, {'code':'UNAUTHORIZED'})
+        except (ValueError, KeyError, TypeError): self.reply(400, {'code':'INVALID_REQUEST'})
+        except Exception: self.reply(503, {'code':'DEPENDENCY_UNAVAILABLE'})
+    do_GET = dispatch
+    do_POST = dispatch
+    do_PUT = dispatch
+    do_DELETE = dispatch
+
+
+def deployment_details(page):
+    """Attach bounded composition-owned display metadata without changing identity or observed peers."""
+    path=DATA/'run/deployment-metadata.json'
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size>65536:return page
+        document=strict(path.read_bytes())
+        if set(document)!={'gatewaySystemName','devices'} or document['gatewaySystemName']!=socket.gethostname():return page
+        records=document['devices']
+        if not isinstance(records,dict) or len(records)>64:return page
+        required={'executionKind','containerId','containerName','systemName','networkId','networkName','ipAddress'}
+        for value in records.values():
+            if not isinstance(value,dict) or set(value)!=required or not all(isinstance(v,str) for v in value.values()):return page
+            if value['executionKind'] not in ('ENDPOINT_CLIENT','TOOL_HOST_DIRECT','TOOL_HOST_PULL'):return page
+            if any(not re.fullmatch('[a-f0-9]{64}',value[k]) for k in ('containerId','networkId')):return page
+            if any(not re.fullmatch('[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}',value[k]) for k in ('containerName','networkName')):return page
+            if not re.fullmatch('[a-zA-Z0-9._-]{1,255}',value['systemName']):return page
+            if not re.fullmatch('[0-9a-fA-F:.]{2,45}',value['ipAddress']):return page
+            ipaddress.ip_address(value['ipAddress'])
+        page['deployments']=[dict(deviceId=row['deviceId'],deployment=records[row['deviceId']])
+                             for row in page['items'] if row['deviceId'] in records]
+    except (OSError,ValueError,KeyError,TypeError):pass  # Optional display evidence cannot break device administration.
+    return page
+
+
+def backup(destination):
+    """Offline backup under the exclusive data lock; includes all trust/vault custody."""
+    import shutil
+    if (DATA/'restore.pending').exists(): raise ValueError('Unfinished restore cannot be backed up')
     if database_mode() != 'sqlite': raise ValueError('External PostgreSQL requires pg_dump plus matching custody backup')
     destination = Path(destination)
     if destination.exists() or not destination.is_absolute() or destination.is_relative_to(DATA): raise ValueError('Backup must be a new absolute path outside /data')
