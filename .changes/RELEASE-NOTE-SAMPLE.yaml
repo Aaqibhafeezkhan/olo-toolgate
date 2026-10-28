@@ -5,7 +5,7 @@
 # Check the target collection first; choose the highest number + 1, with no leading zeros.
 # Replace spaces in your name with hyphens; use the .yaml extension.
 # COPY this sample into .changes/<active-version>/<your-filename>.yaml.
-# Read .changes/config.json for the active version; currently it is v0.1.0-beta.1.
+# Read .changes/config.json for the active version; currently it is v1.0.
 # This sample in .changes/ is documentation only and is never compiled into release notes.
 # Replace every example name, handle, number, URL and description before submitting.
 # Keep schemaVersion, contributor.name, changes, and each change's type and summary.

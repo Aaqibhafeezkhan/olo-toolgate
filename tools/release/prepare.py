@@ -300,6 +300,8 @@ def main():
             emit(info, commit=commit_branch(root, info))
     else:
         sha, info = resolve(os.environ['RELEASE_BRANCH'])
+        if os.environ.get('GITHUB_REF') != 'refs/heads/'+info['branch'] or os.environ.get('GITHUB_SHA') != sha:
+            raise ValueError('Release workflow must run on the exact prepared release branch commit')
         reuse = os.environ.get('BUILD_RUN_ID', '').strip()
         if reuse and not re.fullmatch(r'[1-9][0-9]*', reuse):
             raise ValueError('Build run ID must be empty or a numeric Actions run ID')

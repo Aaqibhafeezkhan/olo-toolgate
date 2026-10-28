@@ -3,6 +3,11 @@
 name: Coverage and Sonar summary
 on:
   workflow_call:
+    inputs:
+      required_checks:
+        type: boolean
+        default: false
+        description: Fail releases on coverage or configured Sonar gate failures
     secrets:
       SONAR_TOKEN:
         required: false
@@ -15,7 +20,7 @@ concurrency:
 jobs:
   reports:
     runs-on: ubuntu-24.04
-    continue-on-error: true
+    continue-on-error: ${{ !inputs.required_checks }}
     env:
       SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
       SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
@@ -39,29 +44,29 @@ jobs:
       - run: npm ci
       - name: Java tests and JaCoCo reports
         id: coverage
-        continue-on-error: true
+        continue-on-error: ${{ !inputs.required_checks }}
         run: python tools/ci/java_coverage.py
       - name: TypeScript UI coverage
         id: typescript
         if: ${{ !cancelled() }}
-        continue-on-error: true
+        continue-on-error: ${{ !inputs.required_checks }}
         run: npm --workspace @olo-labs/toolgate-admin-ui exec -- vitest run --coverage --config vitest.coverage.config.ts
       - name: JavaScript and contracts coverage
         id: javascript
         if: ${{ !cancelled() }}
-        continue-on-error: true
+        continue-on-error: ${{ !inputs.required_checks }}
         run: |
           npm run contracts:build
           npx --yes c8@10.1.3 --all --include='apps/browser-extension/**/*.mjs' --include='tools/**/*.mjs' --include='packages/contracts/typescript/dist/**/*.js' --exclude='**/tests/**' --reporter=lcov --reporter=html --reports-dir=build/coverage/javascript node --test apps/browser-extension/tests/*.mjs packages/contracts/typescript/test/*.mjs
       - name: Python coverage
         id: python
         if: ${{ !cancelled() }}
-        continue-on-error: true
+        continue-on-error: ${{ !inputs.required_checks }}
         run: python tools/ci/python_coverage.py
       - name: Rust workspace coverage
         id: rust
         if: ${{ !cancelled() }}
-        continue-on-error: true
+        continue-on-error: ${{ !inputs.required_checks }}
         run: |
           rustup component add llvm-tools-preview
           cargo install cargo-llvm-cov --locked --version 0.6.21
@@ -70,18 +75,19 @@ jobs:
       - name: Normalize coverage paths for Sonar
         if: ${{ !cancelled() }}
         run: python tools/ci/normalize_coverage.py
-      - name: Sonar analysis (reporting only)
+      - name: Sonar analysis and configured quality gate
         id: sonar
         if: ${{ !cancelled() && env.SONAR_HOST_URL != '' && env.SONAR_PROJECT_KEY != '' }}
-        continue-on-error: true
+        continue-on-error: ${{ !inputs.required_checks }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           if [ -z "$SONAR_TOKEN" ]; then
             echo 'Sonar skipped: SONAR_TOKEN unavailable' >> "$GITHUB_STEP_SUMMARY"
+            if [ '${{ inputs.required_checks }}' = 'true' ]; then exit 1; fi
             exit 0
           fi
-          ./gradlew --no-daemon --no-configuration-cache sonar -Dsonar.qualitygate.wait=false
+          ./gradlew --no-daemon --no-configuration-cache sonar -Dsonar.qualitygate.wait=${{ inputs.required_checks }}
       - name: Build summary
         if: always()
         env:

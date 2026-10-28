@@ -120,20 +120,21 @@ this branch: prepare a new release from a source branch containing the fixes.
 
 ## Job 2: build, inspect, and publish
 
-Open **Actions → Build and release binaries → Run workflow**, select workflow branch **main**:
+Open **Actions → Build and release binaries → Run workflow**, select the prepared workflow branch **release/<version>**:
 
 | Input | First build |
 |---|---|
-| `release_branch` | Branch from Job 1, e.g. `release/1.0.0-beta.42` |
+| Workflow branch | Branch from Job 1, e.g. `release/1.0.0-beta.42` |
 | `mode` | `build-only` |
 | `build_run_id` | Leave empty |
 
 ```sh
-gh workflow run build-release.yml --ref main \
-  -f release_branch=release/1.0.0-beta.42 -f mode=build-only
+gh workflow run build-release.yml --ref release/1.0.0-beta.42 \
+  -f mode=build-only
 ```
 
-The job runs metadata checks, foundation tests/scans, all six native platform builds and
+The workflow runs on the exact prepared release branch commit. It runs CI preflight,
+blocking coverage checks and the Sonar quality gate when configured, foundation tests/scans, all six native platform builds and
 installer checks, and production container validation. Build/test stages have no publishing
 credentials. Foundation and native builds reuse the existing workflows; publication does
 not rebuild Java libraries or containers.
@@ -149,8 +150,8 @@ Record the original build Actions run ID from the summary or run URL. To publish
 exact bytes, run **the same second workflow** again:
 
 ```sh
-gh workflow run build-release.yml --ref main \
-  -f release_branch=release/1.0.0-beta.42 -f mode=build-and-publish \
+gh workflow run build-release.yml --ref release/1.0.0-beta.42 \
+  -f mode=build-and-publish \
   -f build_run_id=123456789
 ```
 
@@ -209,3 +210,13 @@ registry coordinates and container digests. Check these with the included checks
 Cross-registry publication is not atomic. A failed run can leave packages visible before
 the complete GitHub Release exists; use the original run and publication records to recover.
 The old `ci.yml` version-tag trigger is removed so these jobs own product release publication.
+
+## Contribution collections
+
+The shared `.changes/v1.0/` collection is included in each 1.0 beta, RC, stable
+and patch release from its selected source commit. Exact-version collections add
+release-specific notes. Other major/minor series remain separate. See the
+[contributor guide](../../.changes/README.md) and
+[annotated contribution template](../../.changes/RELEASE-NOTE-SAMPLE.yaml).
+Run `python tools/release/notes.py --check --version v1.0.0-beta.1`
+before preparation; CI and release source validation also validate contributions.

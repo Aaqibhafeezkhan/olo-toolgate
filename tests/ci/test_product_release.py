@@ -310,8 +310,8 @@ class OriginalBuildGateTests(unittest.TestCase):
     def test_reuse_requires_successful_original_platform_gates_and_reserved_run(self):
         info=dict(release(),commit=PREPARED,buildRun='200')
         producer=dict(path='.github/workflows/build-release.yml',event='workflow_dispatch',
-                      head_branch='main',head_sha=SHA,repository=dict(full_name='olo-labs/olo-toolgate'))
-        names=['foundation / check','clients / public-bundle','images / verify','Collect immutable release bundle']
+                      head_branch=info['branch'],head_sha=PREPARED,repository=dict(full_name='olo-labs/olo-toolgate'))
+        names=['coverage / reports','preflight / metadata','foundation / check','clients / public-bundle','images / verify','Collect immutable release bundle']
         names += ['clients / native ('+target+')' for target in (
             'x86_64-unknown-linux-gnu','aarch64-unknown-linux-gnu','x86_64-pc-windows-msvc',
             'aarch64-pc-windows-msvc','x86_64-apple-darwin','aarch64-apple-darwin')]
@@ -326,12 +326,29 @@ class OriginalBuildGateTests(unittest.TestCase):
                 with self.subTest(conclusion=conclusion),self.assertRaises(ValueError):
                     pipeline.verify_run('200',collected=True)
             jobs[-1]['conclusion']='success'
+            for field, wrong in (('head_branch', 'main'), ('head_sha', SHA)):
+                original = producer[field]
+                producer[field] = wrong
+                with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'trusted'):
+                    pipeline.verify_run('200', collected=True)
+                producer[field] = original
             producer['event']='pull_request'
             with self.assertRaisesRegex(ValueError,'trusted'):
                 pipeline.verify_run('200',collected=True)
 
 
 class ProductWorkflowTests(unittest.TestCase):
+    def test_release_quality_checks_are_blocking(self):
+        workflow = yaml.safe_load((ROOT/'.github/workflows/quality-summary.yml').read_text())
+        job = workflow['jobs']['reports']
+        self.assertEqual(job['continue-on-error'], '${{ !inputs.required_checks }}')
+        for step in job['steps']:
+            if 'continue-on-error' in step:
+                self.assertEqual(step['continue-on-error'], '${{ !inputs.required_checks }}')
+        sonar = next(step for step in job['steps'] if step.get('id') == 'sonar')
+        self.assertIn('-Dsonar.qualitygate.wait=${{ inputs.required_checks }}', sonar['run'])
+        self.assertIn('then exit 1', sonar['run'])
+
     def test_two_manual_entrypoints_keep_build_credentials_separate(self):
         prepare_workflow = yaml.safe_load((ROOT/'.github/workflows/create-release-branch.yml').read_text())
         workflow = yaml.safe_load((ROOT/'.github/workflows/build-release.yml').read_text())
@@ -339,6 +356,10 @@ class ProductWorkflowTests(unittest.TestCase):
             self.assertEqual(set(document['on']), {'workflow_dispatch'})
         jobs = workflow['jobs']
         self.assertEqual(jobs['publish']['environment'], 'production-release')
+        self.assertTrue(jobs['coverage']['with']['required_checks'])
+        self.assertIn('coverage', jobs['collect']['needs'])
+        self.assertNotIn('release_branch', workflow['on']['workflow_dispatch']['inputs'])
+        self.assertEqual(jobs['select']['if'], "startsWith(github.ref, 'refs/heads/release/')")
         self.assertIn('needs.collect.result', jobs['publish']['if'])
         for name in ('foundation','clients','images'):
             self.assertEqual(jobs[name]['with']['source_sha'], '${{ needs.select.outputs.commit }}')

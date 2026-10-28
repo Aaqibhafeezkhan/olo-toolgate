@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import yaml
 from tools.ci import preflight
-from tools.release import development as shared, tagged
+from tools.release import development as shared, tagged, notes
 
 ROOT=Path(__file__).resolve().parents[2]
 SHA='a'*40
@@ -66,7 +66,7 @@ class TaggedReleaseTests(unittest.TestCase):
         self.assertIn('Rahul Nigam', combined)
         self.assertIn('Anupriya Srivastava', combined)
         manifest = json.loads((self.assets/'contributors.json').read_text(encoding='utf-8'))
-        self.assertEqual([f['contributor']['github'] for f in manifest['fragments']], ['olo-labs', 'olo-orgs'])
+        self.assertEqual(manifest['fragments'], notes.load(ROOT)[1])
         self.assertIn('RELEASE-NOTES.combined.md', tagged.verified_files(self.assets))
 
     def foundation_checksums(self):

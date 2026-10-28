@@ -87,11 +87,11 @@ class AdmissionTests(unittest.TestCase):
                 # and full-test gates, independent of development RC admission.
                 self.assertEqual(set(events),{'workflow_dispatch'})
                 entry='prepare' if path.name=='create-release-branch.yml' else 'select'
-                self.assertEqual(jobs[entry]['if'],"github.ref == 'refs/heads/main'")
+                self.assertEqual(jobs[entry]['if'], "github.ref == 'refs/heads/main'" if entry == 'prepare' else "startsWith(github.ref, 'refs/heads/release/')")
                 self.assertNotIn('admission',jobs)
                 if entry=='select':
                     for name in ('foundation','clients'):
-                        self.assertEqual(jobs[name]['needs'],'select')
+                        self.assertEqual(jobs[name]['needs'],['select','preflight'])
                     self.assertTrue(jobs['clients']['with']['run_tests'])
                     self.assertTrue(jobs['images']['with']['run_tests'])
                     self.assertEqual(jobs['publish']['environment'],'production-release')

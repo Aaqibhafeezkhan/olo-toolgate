@@ -12,6 +12,7 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 VERSION = re.compile(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?')
+SERIES = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 FILENAME = re.compile(r'([1-9][0-9]*)-[^/\\]+\.ya?ml')
 TYPES = ('breaking', 'added', 'changed', 'fixed', 'security', 'docs', 'internal')
 AI_IDENTITY = re.compile(r'(?i)(?:openai|codex|chatgpt|github[\s_-]*copilot|claude[\s_-]*(?:code|ai)|gemini[\s_-]*(?:cli|ai))')
@@ -63,20 +64,26 @@ def load(root, version=None):
         # Controller tools may build historical branches predating fragments.
         if not changes.exists():
             return None, []
-        version = json.loads((changes/'config.json').read_text(encoding='utf-8'))['version']
-    if not isinstance(version, str) or not VERSION.fullmatch(version):
+        manifest = root/'release.json'
+        version = ('v'+json.loads(manifest.read_text(encoding='utf-8'))['version'] if manifest.is_file()
+                   else json.loads((changes/'config.json').read_text(encoding='utf-8'))['version'])
+    if not isinstance(version, str) or not (VERSION.fullmatch(version) or SERIES.fullmatch(version)):
         raise ValueError('Invalid release-note version')
-    folder = changes/version
-    if changes.is_symlink() or folder.is_symlink() or not folder.is_dir():
-        raise ValueError('Release-note collection must be a regular directory: '+str(folder))
+    series = '.'.join(version.split('.')[:2])
+    folders = [changes/series]
+    if version != series:
+        folders.append(changes/version)
+    folders = [folder for folder in folders if folder.exists() or folder.is_symlink()]
+    if not folders or changes.is_symlink() or any(folder.is_symlink() or not folder.is_dir() for folder in folders):
+        raise ValueError('Release-note collection must be a regular directory: '+str(changes/version))
     # Schema belongs to the controller, never to the selected historical source.
     validator = Draft202012Validator(json.loads((ROOT/'.changes/fragment.schema.json').read_text(encoding='utf-8')))
     fragments = []
-    paths = list(folder.iterdir())
+    paths = [path for folder in folders for path in folder.iterdir()]
     for path in paths:
         if path.is_symlink() or not path.is_file() or not FILENAME.fullmatch(path.name):
             raise ValueError('Expected <number>-<contributor>.yaml: '+str(path))
-    paths.sort(key=lambda p: (int(FILENAME.fullmatch(p.name)[1]), p.name))
+    paths.sort(key=lambda p: (int(FILENAME.fullmatch(p.name)[1]), p.name, p.parent.name))
     for path in paths:
         document = yaml_document(path)
         errors = sorted(validator.iter_errors(document), key=lambda e: str(list(e.path)))
@@ -87,7 +94,7 @@ def load(root, version=None):
         human_attribution(document, path)
         fragments.append(dict(file=path.relative_to(root).as_posix(), **document))
     if not fragments:
-        raise ValueError('Release-note collection is empty: '+str(folder))
+        raise ValueError('Release-note collection is empty: '+str(changes/version))
     return version, fragments
 
 

@@ -33,8 +33,30 @@ class ReleaseNotesTests(unittest.TestCase):
 
     def test_repository_collection_is_valid(self):
         version, fragments = notes.load(notes.ROOT)
-        self.assertEqual(version, 'v0.1.0-beta.1')
+        self.assertEqual(version, 'v1.0')
         self.assertTrue(fragments)
+
+    def test_series_contributions_follow_beta_rc_stable_and_patch_releases(self):
+        series = self.root/'.changes/v1.0'
+        series.mkdir()
+        (series/'2-series.yaml').write_text(yaml.safe_dump(self.document))
+        for version in ('v1.0.0-beta.1', 'v1.0.0-rc.1', 'v1.0.0', 'v1.0.1'):
+            with self.subTest(version=version):
+                selected, fragments = notes.load(self.root, version)
+                self.assertEqual(selected, version)
+                self.assertEqual(len(fragments), 1)
+                self.assertIn('.changes/v1.0/', fragments[0]['file'])
+        with self.assertRaises(ValueError):
+            notes.load(self.root, 'v1.1.0')
+        exact = self.root/'.changes/v1.0.0-beta.1'
+        exact.mkdir()
+        (exact/'3-exact.yaml').write_text(yaml.safe_dump(self.document))
+        self.assertEqual(len(notes.load(self.root, 'v1.0.0-beta.1')[1]), 2)
+        (self.root/'release.json').write_text(json.dumps(dict(version='1.0.0-beta.1')))
+        notes.generate(self.root, self.output)
+        manifest = json.loads((self.output/'contributors.json').read_text())
+        self.assertEqual(manifest['version'], 'v1.0.0-beta.1')
+        self.assertEqual(len(manifest['fragments']), 2)
 
     def test_accumulation_numeric_order_unicode_and_repeatable_bytes(self):
         self.write('10-last.yml')

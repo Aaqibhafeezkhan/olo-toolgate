@@ -1,0 +1,34 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+schemaVersion: 1
+contributor:
+  name: Elkero
+  github: YuuGR1337
+  roles: [contributor, documentation]
+changes:
+  - type: docs
+    component: Development releases
+    summary: Added a development release artifact table describing the published artifacts and where to find them.
+    impact: Developers can identify the appropriate development release artifact more easily.
+    audience: [developers]
+    pullRequests:
+      - number: 24
+        title: 'docs: add a simple development release artifact table'
+        url: https://github.com/olo-labs/olo-toolgate/pull/24
+    tickets:
+      - system: github
+        id: '#7'
+        url: https://github.com/olo-labs/olo-toolgate/issues/7
+  - type: docs
+    component: Configuration import
+    summary: Documented configuration Merge versus Replace behavior with two small examples.
+    impact: Readers can understand the effect of each import mode before choosing one.
+    audience: [administrators, operators]
+    pullRequests:
+      - number: 25
+        title: 'docs: explain configuration Merge versus Replace with two small examples'
+        url: https://github.com/olo-labs/olo-toolgate/pull/25
+    tickets:
+      - system: github
+        id: '#12'
+        url: https://github.com/olo-labs/olo-toolgate/issues/12

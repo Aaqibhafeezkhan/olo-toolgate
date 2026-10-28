@@ -12,7 +12,7 @@ Tracked `RELEASE-NOTES.md` files are release snapshots, not files to regenerate 
 ordinary PRs. Current notes are generated into release assets during release.
 
 When human attribution is needed, add a YAML file under the active collection in `config.json`, currently
-`v0.1.0-beta.1/`. Name it `<number>-<name>.yaml`, for example
+`v1.0/`. Name it `<number>-<name>.yaml`, for example
 `3-your-name.yaml`. Use your own name and optional GitHub login; do not include
 email addresses or private details. Multiple files per contributor are allowed.
 The number controls display order; equal numbers sort by filename.
@@ -141,15 +141,30 @@ UTF-8 with LF newlines, stable category/file/change order and no timestamps.
 Contributor text is escaped when rendered as Markdown. Repeated builds of the
 same source produce identical bytes; changes accumulate throughout the branch.
 
-`config.json` identifies the planned release collection independently of the
-actual binary/build version (for example a `-dev.<run>` or allocated beta number).
-Every build uses the config and fragments from its selected source commit, never
-from a newer controller checkout. To start the next collection, add its version
-directory with an initial fragment and update `config.json` in that source
-branch. Preserve previous collections. Use `--version v0.1.0-beta.1` to preview
-an archived collection explicitly. Invalid or empty configured collections fail
-the build; historical source branches without `.changes/` retain baseline notes
-and receive an empty contributor manifest.
+`config.json` identifies the active contribution series, currently `v1.0`.
+All fragments under `.changes/v1.0/` are included in every 1.0 release from the
+selected source commit: beta, RC, stable and patch releases. Prepared releases
+select their actual version from `release.json`; notes for 1.1 or 2.0 never pick
+up the 1.0 collection. Changes accumulate without consuming fragments.
+
+An optional exact-version folder, such as `.changes/v1.0.0-beta.2/`, adds notes
+only for that version, alongside the shared series entries. Keep a contribution
+in one collection to avoid duplicating it. Use a series folder for work shared
+across the release line and an exact-version folder for release-specific changes.
+
+Preview and validate the corresponding release with:
+
+```sh
+python tools/release/notes.py --check --version v1.0.0-beta.1
+python tools/release/notes.py --version v1.0.0-rc.1 --output build/release-notes
+python tools/release/notes.py --version v1.0.0 --output build/release-notes
+```
+
+`contributors.json` records the requested release version and original fragment
+paths. To start another series, add its collection with an initial fragment and
+update `config.json`. Preserve previous collections. Missing or empty selected
+collections fail validation. Historical sources without `.changes/` retain
+baseline notes and receive an empty contributor manifest.
 
 Prepared releases validate fragments before expensive builds and generate assets
 before bundle checksums and provenance. Manual development preparation carries

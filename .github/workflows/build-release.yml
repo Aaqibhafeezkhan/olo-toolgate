@@ -4,10 +4,6 @@ name: Build and release binaries
 'on':
   workflow_dispatch:
     inputs:
-      release_branch:
-        description: Immutable branch produced by Prepare release branch (release/1.0.0-beta.42)
-        type: string
-        required: true
       mode:
         description: Build/test only, or build/test and publish
         type: choice
@@ -23,12 +19,12 @@ permissions:
   actions: read
   pull-requests: read
 concurrency:
-  group: product-release-${{ inputs.release_branch }}
+  group: product-release-${{ github.ref_name }}
   cancel-in-progress: false
 jobs:
   select:
     name: Select immutable release
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -50,7 +46,7 @@ jobs:
       id: select
       env:
         GH_TOKEN: ${{ github.token }}
-        RELEASE_BRANCH: ${{ inputs.release_branch }}
+        RELEASE_BRANCH: ${{ github.ref_name }}
         BUILD_RUN_ID: ${{ inputs.build_run_id }}
       run: python tools/release/prepare.py resolve
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -69,15 +65,29 @@ jobs:
         overwrite: true
         retention-days: 90
         if-no-files-found: error
-  foundation:
+  preflight:
     needs: select
+    if: needs.select.outputs.reuse != 'true'
+    uses: ./.github/workflows/preflight.yml
+    with:
+      shared_checks: true
+  coverage:
+    needs: [select, preflight]
+    if: needs.select.outputs.reuse != 'true'
+    uses: ./.github/workflows/quality-summary.yml
+    with:
+      required_checks: true
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  foundation:
+    needs: [select, preflight]
     if: needs.select.outputs.reuse != 'true'
     uses: ./.github/workflows/foundation.yml
     with:
       source_sha: ${{ needs.select.outputs.commit }}
       build_number: ${{ needs.select.outputs.build }}
   clients:
-    needs: select
+    needs: [select, preflight]
     if: needs.select.outputs.reuse != 'true'
     uses: ./.github/workflows/client.yml
     with:
@@ -94,7 +104,7 @@ jobs:
       run_tests: true
   collect:
     name: Collect immutable release bundle
-    needs: [select, foundation, clients, images]
+    needs: [select, preflight, coverage, foundation, clients, images]
     if: needs.select.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -140,7 +150,7 @@ jobs:
     name: Publish verified release
     needs: [select, collect]
     if: >-
-      always() && github.ref == 'refs/heads/main' && inputs.mode == 'build-and-publish' &&
+      always() && startsWith(github.ref, 'refs/heads/release/') && inputs.mode == 'build-and-publish' &&
       needs.select.result == 'success' &&
       (needs.select.outputs.reuse == 'true' || needs.collect.result == 'success')
     runs-on: ubuntu-24.04
