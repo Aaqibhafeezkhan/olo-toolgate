@@ -116,3 +116,27 @@ fork PRs without secrets. JaCoCo reporting still runs. Configure Sonar's GitHub
 integration to see server-side findings on the PR. SonarLint remains the IDE
 extension; CI uses SonarScanner for Gradle. This workflow covers Java modules
 included in the root build, not independent example builds or Rust/TypeScript.
+
+## Coverage baseline scope
+
+The reporting workflow collects Java (JaCoCo), Rust (cargo-llvm-cov), Python
+(coverage.py), UI TypeScript (Vitest), and Node/contract code (c8). Its Java
+runner reuses the isolated PostgreSQL fixture and cleans it up even on failure.
+The root Java report includes compiled classes from modules without tests;
+Python, UI and c8 source includes retain unexecuted files in their denominators.
+Collectors continue independently; missing or failed collection is explicitly
+incomplete and must not be read as 100% or as a trustworthy whole-repo total.
+
+Download `java-coverage-and-sonar` for reports and `source-inventory.json`.
+The Actions summary lists collector status, module completeness and exclusions.
+Independent example builds and unsupported shell/probe languages are named
+measurement gaps. Tests, fixtures, frozen probe evidence, generated output and
+TypeScript declarations are excluded; documentation/configuration are outside
+executable coverage. Production/generated contracts that are compiled as part
+of Java remain in that report; exclusions never blanket-remove contract code.
+
+Sonar receives Java XML, Python XML and JS/Rust LCOV. It may still analyze
+partial results if a collector fails; review the workflow completeness summary.
+Sonar source scope explicitly includes the non-Java production trees alongside
+the Java subprojects. Paths are rooted at the repository checkout. No new
+coverage threshold is enforced; the existing narrow UI check remains unchanged.
