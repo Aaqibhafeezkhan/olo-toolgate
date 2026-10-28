@@ -136,7 +136,7 @@ def discovery(index):
 def enroll(index,device):
     key=ec.generate_private_key(ec.SECP256R1())
     csr=x509.CertificateSigningRequestBuilder().subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME,device)])).sign(key,hashes.SHA256())
-    announcement=dict(deviceId=device,clientVersion='0.10.0-dev',platform='LINUX',csrPem=csr.public_bytes(serialization.Encoding.PEM).decode(),capabilities=[])
+    announcement=dict(deviceId=device,clientVersion=Path('/opt/quickstart/VERSION').read_text().strip(),platform='LINUX',csrPem=csr.public_bytes(serialization.Encoding.PEM).decode(),capabilities=[])
     challenge=ok(request(index,'/api/control/v1/endpoint/enrollments',announcement))
     review=ok(request(index,'/api/control/v1/endpoint/enrollments/review?code='+challenge['userCode'],token=admin(index)))
     ok(request(index,'/api/control/v1/endpoint/enrollments/decision',dict(userCode=review['userCode'],keyFingerprint=review['keyFingerprint'],choice='APPROVE'),admin(index)))
@@ -145,7 +145,7 @@ def enroll(index,device):
     cert=own/'client.crt';private=own/'client.key'
     s.atomic(cert,issued['certificatePem']);s.atomic(private,key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
     context=ssl.create_default_context(cafile='/data/keys/device-ca.crt');context.load_cert_chain(cert,private)
-    report=dict(sequence=1,report=dict(deviceId=device,clientVersion='0.10.0-dev',appliedRevision=0,packages=[]))
+    report=dict(sequence=1,report=dict(deviceId=device,clientVersion=Path('/opt/quickstart/VERSION').read_text().strip(),appliedRevision=0,packages=[]))
     ok(request(index,'/api/control/v1/endpoint/check-in',report,context=context))
     return issued,context,report
 def start_gateways():

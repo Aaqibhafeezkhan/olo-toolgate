@@ -144,7 +144,7 @@ class VersionPropagationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
             exact = {'VERSION','LICENSE','NOTICE.md','CHANGELOG.md','RELEASE-NOTES.md','Cargo.toml','Cargo.lock','package.json','build.gradle.kts',
-                     'package-lock.json','apps/admin-ui/package.json','apps/browser-extension/manifest.json',
+                     'package-lock.json','apps/admin-ui/package.json','apps/browser-extension/manifest.json','core-mcp/echo/toolgate.json',
                      'deploy/helm/olo-toolgate/Chart.yaml','tools/contracts/version.py','tools/contracts/generate.py'}
             names = subprocess.check_output(['git','ls-files','-z'], cwd=ROOT).decode().split('\0')
             for name in names:
@@ -159,6 +159,7 @@ class VersionPropagationTests(unittest.TestCase):
             for language in ('java', 'rust', 'typescript', 'php'):
                 self.assertEqual(rendered, (target/f'packages/contracts/{language}/RELEASE-NOTES.md').read_text(encoding='utf-8'))
             self.assertEqual((target/'VERSION').read_text().strip(), '1.0.0-beta.42')
+            self.assertEqual(json.loads((target/'core-mcp/echo/toolgate.json').read_text())['sdkVersion'], '1.0.0-beta.42')
             self.assertEqual((target/'packages/contracts/VERSION').read_text().strip(), '1.0.0-beta.42')
             self.assertEqual(tomllib.loads((target/'Cargo.toml').read_text())['workspace']['package']['version'], '1.0.0-beta.42')
             lock = tomllib.loads((target/'Cargo.lock').read_text())

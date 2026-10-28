@@ -13,7 +13,8 @@ RUN case "$TARGETARCH" in amd64) target=x86_64-unknown-linux-gnu ;; arm64) targe
     python tools/client/extract.py --source /work/assets --target "$target" --output /opt/toolgate/client
 # Match the native GNU client's glibc baseline and install only its supervisor.
 FROM ubuntu:24.04
-ARG VERSION=0.10.0-dev
+ARG VERSION
+RUN test -n "$VERSION"
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="OLO ToolGate Linux device" \
       org.opencontainers.image.version=$VERSION \

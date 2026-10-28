@@ -243,3 +243,10 @@ The annotated preparation tag records provenance; `release.json` is generated
 in build checkouts and is not a second tracked configuration file. Existing
 preparation/build reservations remain immutable: use a new allocated build number
 when the old prepared source has changed. All existing release checks still apply.
+
+Version literals in generated package manifests and bindings are build outputs,
+not independent settings. Runtime code reads the generated metadata. Historical
+changelogs, dated screenshots and qualification evidence retain the version that
+was actually recorded; illustrative examples and independently versioned tools
+and dependencies do not define the ToolGate release. Current status text should
+link to `version.json` or the published releases rather than copying a version.

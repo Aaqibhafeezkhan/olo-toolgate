@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "0.10.0-dev",
+  "sdkVersion": "${sdkVersion}",
   "id": "ololabs.hello-world-json",
   "name": "Hello World",
   "publisher": "ololabs",

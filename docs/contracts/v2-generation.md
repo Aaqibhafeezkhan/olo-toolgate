@@ -37,7 +37,7 @@ How milestone M1 generates Rust, Java, TypeScript and PHP bindings for the froze
 
 6. **Fixtures.** `tests/fixtures/contracts/v2/valid.json` is the v2 round-trip corpus. The per-language round-trip tests (`rust/tests/roundtrip.rs`, `ContractRoundTripTest.java`, `php/tests/roundtrip.php`, `typescript/test/roundtrip.mjs`) gain a v2 section that decodes and re-encodes every v2 fixture byte-equivalently (after JSON normalisation). `invalid.json` stays a schema-validation corpus; bindings are structural and are not expected to reject every invalid case.
 
-7. **Version.** The contract set moves from `0.10.0-dev` to `1.0.0` when M1 ships the v2 bindings, because v2 is the major break (no device in `RequestContext`, Control-issued Tool Host permits). v1 bindings stay published in the same artifacts for at least the legacy window in ADR 018.
+7. **Version.** Product and SDK release versions follow [version.json](../../version.json). The v2 wire-schema change removes device identity from `RequestContext` and uses Control-issued Tool Host permits; the wire-schema version is independent of the release channel. v1 bindings stay published in the same artifacts for at least the legacy window in ADR 018.
 
 8. **Descriptor digests are not computed by the bindings.** Canonicalisation and digests live in the SDK packagers and Control, implemented against [tool-sdk/spec/descriptor](../../tool-sdk/spec/descriptor/README.md) and its vectors, not in generated code.
 
