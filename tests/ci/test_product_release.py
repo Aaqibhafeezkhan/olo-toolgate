@@ -371,7 +371,16 @@ class ProductWorkflowTests(unittest.TestCase):
         self.assertNotIn('tags', yaml.safe_load((ROOT/'.github/workflows/ci.yml').read_text())['on']['push'])
         download = next(s for s in jobs['publish']['steps'] if s.get('with',{}).get('name') == 'release-bundle')
         self.assertEqual(download['with']['run-id'], '${{ needs.select.outputs.buildRun }}')
-        self.assertEqual(jobs['publish']['steps'][-1]['run'], 'python tools/release/pipeline.py finalize')
+        steps = jobs['publish']['steps']
+        names = [step.get('name') for step in steps]
+        login = names.index('Log in to GHCR for image attestations')
+        self.assertGreater(login, names.index('Validate original build evidence and resume registry publication'))
+        self.assertLess(login, names.index('Attest Control image'))
+        self.assertIn('--password-stdin', steps[login]['run'])
+        self.assertEqual(steps[login]['env']['GH_TOKEN'], '${{ github.token }}')
+        self.assertEqual(steps[-1]['if'], 'always()')
+        self.assertEqual(steps[-1]['run'], 'docker logout ghcr.io')
+        self.assertEqual(steps[-2]['run'], 'python tools/release/pipeline.py finalize')
 
 
 if __name__ == '__main__':

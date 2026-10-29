@@ -200,6 +200,11 @@ jobs:
         MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
         MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
       run: python tools/release/pipeline.py publish
+    - name: Log in to GHCR for image attestations
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REGISTRY_USERNAME: ${{ github.actor }}
+      run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$REGISTRY_USERNAME" --password-stdin
     - name: Attest Control image
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
       with:
@@ -239,3 +244,6 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         NODE_AUTH_TOKEN: ${{ github.token }}
       run: python tools/release/pipeline.py finalize
+    - name: Log out of GHCR
+      if: always()
+      run: docker logout ghcr.io
