@@ -11,5 +11,3 @@ services:
   gateway:
     environment:
       TOOLGATE_INSIGHTS_MODE: BASIC
-
-
