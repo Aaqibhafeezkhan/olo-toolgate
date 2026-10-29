@@ -265,6 +265,46 @@ def publish_images(info):
     return result
 
 
+def dockerhub_namespace():
+    namespace = os.environ.get('DOCKERHUB_NAMESPACE') or os.environ.get('DOCKERHUB_USERNAME', '')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', namespace):
+        raise ValueError('Set a valid Docker Hub namespace or username')
+    if not os.environ.get('DOCKERHUB_USERNAME') or not os.environ.get('DOCKERHUB_TOKEN'):
+        raise ValueError('Set DOCKERHUB_USERNAME and DOCKERHUB_TOKEN for production-release')
+    return namespace
+
+
+def publish_dockerhub(info):
+    namespace = dockerhub_namespace()
+    result = {}
+    run('docker', 'login', 'docker.io', '--username', os.environ['DOCKERHUB_USERNAME'],
+        '--password-stdin', input=os.environ['DOCKERHUB_TOKEN'])
+    try:
+        for component, (local, name) in IMAGES.items():
+            run('docker', 'load', '-i', str(OUTPUT/'images'/component/'image.tar'))
+            doc = json.loads(run('docker', 'image', 'inspect', local, capture=True).stdout)[0]
+            labels = doc['Config'].get('Labels') or {}
+            if (labels.get('org.opencontainers.image.version') != info['version']
+                    or labels.get('org.opencontainers.image.revision') != info['commit']):
+                raise ValueError('Docker Hub source image identity mismatch: '+component)
+            target = f'docker.io/{namespace}/{name}:{info["version"]}'
+            remote = remote_manifest(target, missing=True)
+            if remote is None:
+                run('docker', 'tag', local, target)
+                run('docker', 'push', target)
+                remote = remote_manifest(target)
+            manifest = remote.get('SchemaV2Manifest') or remote.get('OCIManifest') or {}
+            if manifest.get('config', {}).get('digest') != doc['Id']:
+                raise ValueError('Existing Docker Hub version contains a different image: '+target)
+            reference = target.rsplit(':', 1)[0]+'@'+remote['Descriptor']['digest']
+            prepare.create_tag('published/'+info['version']+'/dockerhub/'+component,
+                               info['commit'], dict(image=reference, config=doc['Id']))
+            result[component] = reference
+    finally:
+        run('docker', 'logout', 'docker.io')
+    return result
+
+
 def maven_request(url, data=None, authenticated=True):
     headers = {}
     if authenticated:
@@ -368,11 +408,19 @@ def publish_helm(info):
     return registry+'/olo-toolgate:'+info['version']
 
 
+def verify_prepared_release(info):
+    prepared = prepare.tag(info['preparedTag'])
+    if (prepared is None or prepared[0] != info['commit']
+            or any(prepared[1].get(key) != info[key] for key in ('version', 'branch', 'build'))):
+        raise ValueError('Immutable prepared tag no longer identifies the release commit')
+
+
 def publish():
     info = validate_bundle()
     verify_packages(info, OUTPUT/'assets')
     from tools.release.development import validate_maven_repository
     validate_maven_repository()
+    dockerhub_namespace()
     default = 'https://maven.pkg.github.com/'+os.environ['GITHUB_REPOSITORY']
     if os.environ['MAVEN_REPOSITORY_URL'].rstrip('/') != default and (not os.environ.get('MAVEN_USERNAME') or not os.environ.get('MAVEN_PASSWORD')):
         raise ValueError('Custom Maven repositories require explicit MAVEN_USERNAME and MAVEN_PASSWORD')
@@ -380,12 +428,11 @@ def publish():
     receipt = json.loads((OUTPUT/'assets/build-manifest.json').read_text())
     if receipt['controllerCommit'] != producer['head_sha']:
         raise ValueError('Bundle controller commit differs from original build workflow')
-    if prepare.resolve(info['branch'])[0] != info['commit']:
-        raise ValueError('Prepared branch no longer identifies the release commit')
+    verify_prepared_release(info)
     # Work on a separate copy: the retained build bundle is never mutated.
     release = ROOT/'build/publication/assets'
     shutil.copytree(OUTPUT/'assets', release)
-    registries = dict(images=publish_images(info), maven=publish_maven(info), npm=publish_npm(info), helm=publish_helm(info))
+    registries = dict(images=publish_images(info), dockerhub=publish_dockerhub(info), maven=publish_maven(info), npm=publish_npm(info), helm=publish_helm(info))
     prepare.write_json(release/'registry-publication.json', dict(version=info['version'], commit=info['commit'], **registries))
     checksum_assets(release)
 
@@ -395,6 +442,14 @@ def version_order(version):
     if not match:
         raise ValueError('Unexpected channel alias version; inspect it before replacing it')
     return (*map(int, match.groups()[:3]), {'beta':0, 'rc':1, None:2}[match[4]], int(match[5] or 0))
+
+
+def advance_npm_channel(info, registries):
+    # Advance only the matching npm channel, and never move an alias backwards.
+    alias = {'Beta':'beta', 'RC':'rc', 'Stable':'latest'}[info['channel']]
+    tags = json.loads(run('npm', 'view', registries['npm'], 'dist-tags', '--registry', 'https://npm.pkg.github.com', '--json', capture=True).stdout)
+    if alias not in tags or version_order(tags[alias]) < version_order(info['version']):
+        run('npm', 'dist-tag', 'add', registries['npm'], alias, '--registry', 'https://npm.pkg.github.com')
 
 
 def finalize():
@@ -407,11 +462,7 @@ def finalize():
     prepare.create_tag(info['tag'], info['commit'], dict(version=info['version'], buildRun=info['buildRun']))
     github_release.publish(run, os.environ['GITHUB_REPOSITORY'], info['tag'], info['commit'], release,
                            'OLO ToolGate '+info['version'], release/'RELEASE-NOTES.md', prerelease=info['channel'] != 'Stable')
-    # Advance only the matching npm channel, and never move an alias backwards.
-    alias = {'Beta':'beta', 'RC':'rc', 'Stable':'latest'}[info['channel']]
-    tags = json.loads(run('npm', 'view', '@olo-labs/toolgate-contracts', 'dist-tags', '--registry', 'https://npm.pkg.github.com', '--json', capture=True).stdout)
-    if alias not in tags or version_order(tags[alias]) < version_order(info['version']):
-        run('npm', 'dist-tag', 'add', registries['npm'], alias, '--registry', 'https://npm.pkg.github.com')
+    advance_npm_channel(info, registries)
     prepare.emit(info, commit=info['commit'], buildRun=info['buildRun'])
 
 
