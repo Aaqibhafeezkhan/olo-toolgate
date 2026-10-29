@@ -1,0 +1,13 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: 1
+datasources:
+  - name: ToolGate Traces
+    uid: toolgate-tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      nodeGraph:
+        enabled: true

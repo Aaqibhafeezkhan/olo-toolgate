@@ -1,0 +1,71 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Shared service definitions, extended by each self-contained monitoring stack.
+services:
+  quickstart:
+    hostname: monitoring-device
+    image: ${QUICKSTART_IMAGE:-ololab/olo-toolgate-quickstart:dev}
+    platform: linux/amd64
+    environment:
+      TOOLGATE_ALLOW_LOOPBACK_MCP_HTTP: "true"
+    volumes:
+      - quickstart-data:/data
+      - ./use-cases.py:/opt/monitoring/use-cases.py:ro
+    networks: [toolgate]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532"]
+    mem_limit: 1536m
+    cpus: 2
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, /opt/quickstart-python/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      start_period: 90s
+      retries: 30
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+  device-ca:
+    image: ${QUICKSTART_IMAGE:-ololab/olo-toolgate-quickstart:dev}
+    user: "0:0"
+    entrypoint: [/opt/quickstart-python/bin/python, -c]
+    command:
+      - "from pathlib import Path; import json,urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8080/api/public/v1/clients/local-trust',timeout=10)); path=Path('/public/gateway-ca.crt'); path.write_text(data['caCertificatePem']); path.chmod(0o644)"
+    depends_on:
+      quickstart:
+        condition: service_healthy
+    volumes:
+      - device-trust:/public
+    network_mode: service:quickstart
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  device:
+    image: ${TOOLGATE_DEVICE_IMAGE:-ololab/olo-toolgate-device:dev}
+    platform: linux/amd64
+    # Keep localhost TLS certificate verification intact without a host gateway or relay.
+    network_mode: service:quickstart
+    depends_on:
+      quickstart:
+        condition: service_healthy
+      device-ca:
+        condition: service_completed_successfully
+    environment:
+      TOOLGATE_GATEWAY_URLS: https://localhost:8443
+      TOOLGATE_GATEWAY_CA_FILE: /public/gateway-ca.crt
+    volumes:
+      - device-config:/etc/olo-toolgate
+      - device-state:/var/lib/olo-toolgate
+      - device-trust:/public:ro
+    tmpfs: ["/run:rw,nosuid,size=8m,mode=755"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    cpus: 1
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}

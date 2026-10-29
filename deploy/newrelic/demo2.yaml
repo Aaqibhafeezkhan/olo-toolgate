@@ -1,0 +1,11 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Merge with olo-marketplace/deploy/docker/compose.yaml, using its .env and project.
+services:
+  toolgate-quickstart-demo2:
+    environment:
+      TOOLGATE_INSIGHTS_MODE: DETAILED
+      TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO: "1.0"
+      TOOLGATE_INSIGHTS_OTLP_ENDPOINT: http://toolgate-newrelic-collector:4318
+      TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME: olo-toolgate-demo2
+      TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: demo2
