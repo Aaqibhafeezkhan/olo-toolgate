@@ -64,7 +64,10 @@ cannot prove that a source change is backward compatible.
 - Allow 90-day Actions artifact retention, or adjust the two workflows to the repository's
   supported limit. Keep sufficient storage for five container archives and six native platforms.
 
-No Docker Hub credential is needed for this release path. Versioned images go to GHCR.
+Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in `production-release` (repository secrets also work).
+Set `DOCKERHUB_NAMESPACE` to the organization namespace, or omit it to use the Docker Hub username.
+The same tested image archives are published to GHCR and Docker Hub with immutable version tags.
+Retries verify existing image identity and reject conflicting versions; no images are rebuilt.
 Existing development workflows remain separate and retain their own credentials/behavior.
 
 ## Initialize a release line once
@@ -154,7 +157,7 @@ same build; dispatch a fresh run with no reuse ID for a new release number.
 |---|---|
 | Contracts JAR, sources, Javadoc, POM and Gradle module | Configured Maven repository; default GitHub Maven Packages |
 | `@olo-labs/toolgate-contracts` | GitHub npm Packages |
-| Control, Gateway, Quickstart, device, secured device | `ghcr.io/olo-labs/<image>:1.0.0-beta.42` |
+| Control, Gateway, Quickstart, device, secured device | `ghcr.io/olo-labs/<image>:1.0.0-beta.42` and `docker.io/<namespace>/<image>:1.0.0-beta.42` |
 | Helm chart | `oci://ghcr.io/olo-labs/charts/olo-toolgate:1.0.0-beta.42` |
 | Installers, distributions, SDK JARs, SBOMs and manifests | GitHub Release `v1.0.0-beta.42` |
 

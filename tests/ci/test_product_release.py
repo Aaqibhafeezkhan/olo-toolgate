@@ -339,6 +339,59 @@ class OriginalBuildGateTests(unittest.TestCase):
                 pipeline.verify_run('200',collected=True)
 
 
+class ImmutablePublicationTests(unittest.TestCase):
+    def test_publish_uses_prepared_identity_after_branch_advances(self):
+        info = dict(release(), commit=PREPARED)
+        with patch.object(prepare, 'tag', return_value=(PREPARED, info)) as tag, \
+                patch.object(prepare, 'resolve', side_effect=AssertionError('Moving branch must not be resolved')):
+            pipeline.verify_prepared_release(info)
+            tag.assert_called_once_with(info['preparedTag'])
+        for record in (None, (SHA, info), (PREPARED, dict(info, version='1.0.0-beta.99')),
+                       (PREPARED, dict(info, branch='release/2.x')), (PREPARED, dict(info, build=99))):
+            with self.subTest(record=record), patch.object(prepare, 'tag', return_value=record):
+                with self.assertRaisesRegex(ValueError, 'Immutable prepared tag'):
+                    pipeline.verify_prepared_release(info)
+
+
+class NpmChannelTests(unittest.TestCase):
+    def test_query_uses_existing_version_without_relying_on_latest(self):
+        info = release()
+        coordinate = '@olo-labs/toolgate-contracts@'+info['version']
+        for tags, writes in [('{}', True), ('{"beta":"1.0.0-beta.9"}', True),
+                             ('{"beta":"1.0.0-beta.99"}', False)]:
+            with self.subTest(tags=tags), patch.object(pipeline, 'run') as run:
+                run.return_value.stdout = tags
+                pipeline.advance_npm_channel(info, dict(npm=coordinate))
+                self.assertEqual(run.call_args_list[0].args[:4], ('npm', 'view', coordinate, 'dist-tags'))
+                self.assertEqual(run.call_count, 2 if writes else 1)
+
+
+class DockerHubPublicationTests(unittest.TestCase):
+    def test_resume_and_conflicting_images(self):
+        info = dict(release(), commit=PREPARED)
+        doc = dict(Id='sha256:checked', Config=dict(Labels={
+            'org.opencontainers.image.version':info['version'],
+            'org.opencontainers.image.revision':PREPARED}))
+        remote = dict(Descriptor=dict(digest='sha256:remote'), SchemaV2Manifest=dict(config=dict(digest=doc['Id'])))
+        with patch.dict(os.environ, DOCKERHUB_NAMESPACE='olo-labs', DOCKERHUB_USERNAME='publisher', DOCKERHUB_TOKEN='test'), \
+                patch.object(pipeline, 'IMAGES', {'control':('local:tested','olo-toolgate-control')}), \
+                patch.object(pipeline, 'run') as run, patch.object(pipeline, 'remote_manifest') as manifest, \
+                patch.object(prepare, 'create_tag') as tag:
+            run.return_value.stdout = json.dumps([doc])
+            for responses, pushes in [([None, remote],1), ([remote],0)]:
+                run.reset_mock()
+                manifest.side_effect = responses
+                result = pipeline.publish_dockerhub(info)
+                self.assertEqual(result['control'], 'docker.io/olo-labs/olo-toolgate-control@sha256:remote')
+                self.assertEqual(sum(c.args[:2] == ('docker','push') for c in run.call_args_list), pushes)
+                self.assertEqual(run.call_args_list[-1].args, ('docker','logout','docker.io'))
+            remote['SchemaV2Manifest']['config']['digest'] = 'sha256:wrong'
+            manifest.side_effect = [remote]
+            with self.assertRaisesRegex(ValueError, 'different image'):
+                pipeline.publish_dockerhub(info)
+            self.assertEqual(run.call_args_list[-1].args, ('docker','logout','docker.io'))
+
+
 class ProductWorkflowTests(unittest.TestCase):
     def test_quality_workflow_supports_explicit_blocking_checks(self):
         workflow = yaml.safe_load((ROOT/'.github/workflows/quality-summary.yml').read_text())
