@@ -460,8 +460,12 @@ def finalize():
     if registries['commit'] != info['commit'] or registries['version'] != info['version']:
         raise ValueError('Publication receipt identity mismatch')
     prepare.create_tag(info['tag'], info['commit'], dict(version=info['version'], buildRun=info['buildRun']))
+    from tools.release.page import render as render_page
+    fragments = json.loads((release/'contributors.json').read_text(encoding='utf-8'))['fragments']
+    description = ROOT/'build/publication/release-description.md'
+    description.write_text(render_page(info, fragments, registries), encoding='utf-8', newline='\n')
     github_release.publish(run, os.environ['GITHUB_REPOSITORY'], info['tag'], info['commit'], release,
-                           'OLO ToolGate '+info['version'], release/'RELEASE-NOTES.md', prerelease=info['channel'] != 'Stable')
+                           'OLO ToolGate '+info['version'], description, prerelease=info['channel'] != 'Stable')
     advance_npm_channel(info, registries)
     prepare.emit(info, commit=info['commit'], buildRun=info['buildRun'])
 

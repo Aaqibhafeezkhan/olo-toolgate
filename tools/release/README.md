@@ -67,3 +67,19 @@ Fingerprint: `D9B1F04C5F8D5A2F71399FC440366EFD376915A0`; expires October 14, 202
 Its private key and passphrase are configured as `development-release` environment
 secrets. The public key is published to `hkps://keyserver.ubuntu.com`. Rotate the
 environment secrets and this public certificate together before expiration.
+
+## Generated release descriptions
+
+`page-template.md` defines the public release layout; `page.py` fills it from
+verified release identity, the registry publication receipt, and `.changes`
+contribution records. Build-time `notes.py` generation uses the same renderer.
+Finalization renders the public description again after registry publication,
+including GHCR and Docker Hub digests. Versions, channels, source links and human
+credits are derived from metadata; the historical changelog is linked separately.
+
+Edit the template or contribution records through normal source changes. Do not
+hand-edit a generated release description. Tracked release-note snapshots and
+previously published artifact bytes are preserved.
+
+Run `python -m unittest discover -s tests/ci -p test_release_page.py` and the
+release-note/product-release regression suites when changing this renderer.
