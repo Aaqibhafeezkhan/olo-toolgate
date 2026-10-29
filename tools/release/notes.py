@@ -127,7 +127,7 @@ def render(version, fragments):
             references = change.get('pullRequests', [])+([change['pr']] if 'pr' in change else [])
             prs = sorted({reference if isinstance(reference, int) else reference['number'] for reference in references})
             pr = ' ('+', '.join('#'+str(number) for number in prs)+')' if prs else ''
-            lines.append('- '+prefix+text(change['summary'])+' — '+author+pr)
+            lines.append('- '+prefix+text(change['summary'])+' â€” '+author+pr)
             for field in ('impact', 'migration'):
                 if field in change:
                     lines.append('  - '+field.title()+': '+text(change[field]))
@@ -170,7 +170,14 @@ def generate(root, output, version=None):
     (output/'RELEASE-NOTES.generated.md').write_text(generated, encoding='utf-8', newline='\n')
     (output/'contributors.json').write_text(json.dumps(dict(schemaVersion=1, version=version, fragments=fragments),
         ensure_ascii=False, indent=2, sort_keys=True)+'\n', encoding='utf-8', newline='\n')
-    (output/'RELEASE-NOTES.md').write_text(baseline.rstrip()+'\n'+ ('\n'+generated if generated else ''),
+    page = baseline.rstrip()+'\n'+ ('\n'+generated if generated else '')
+    manifest = root/'release.json'
+    if manifest.is_file():
+        info = json.loads(manifest.read_text(encoding='utf-8'))
+        if info.get('sourceCommit') or info.get('commit'):
+            from tools.release.page import render as render_page
+            page = render_page(info, fragments)
+    (output/'RELEASE-NOTES.md').write_text(page,
         encoding='utf-8', newline='\n')
 
 
