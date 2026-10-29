@@ -1,0 +1,10 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Merge after deploy/compose/QuickStart/compose.yaml.
+services:
+  quickstart:
+    environment:
+      TOOLGATE_INSIGHTS_MODE: BASIC
+      TOOLGATE_INSIGHTS_OTLP_ENDPOINT: http://toolgate-prometheus-collector:4318
+      TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME: ${TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME:-olo-toolgate}
+      TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: ${TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT:-development}

@@ -1,0 +1,14 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Merge after deploy/compose/GatewayControl/compose.yaml.
+services:
+  control:
+    environment:
+      TOOLGATE_INSIGHTS_MODE: DETAILED
+      TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO: ${TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO:-1.0}
+      TOOLGATE_INSIGHTS_OTLP_ENDPOINT: http://toolgate-datadog-collector:4318
+      TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME: ${TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME:-olo-toolgate}
+      TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: ${TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT:-development}
+  gateway:
+    environment:
+      TOOLGATE_INSIGHTS_MODE: DETAILED

@@ -1,0 +1,123 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: toolgate-prometheus
+services:
+  quickstart:
+    extends:
+      file: ../insights/standalone/compose.yaml
+      service: quickstart
+    environment:
+      TOOLGATE_INSIGHTS_MODE: DETAILED
+      TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO: "1.0"
+      TOOLGATE_INSIGHTS_OTLP_ENDPOINT: http://insights-collector:4318
+      TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME: olo-toolgate-prometheus
+      TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: standalone-prometheus
+    ports:
+      - "127.0.0.1:${QUICKSTART_HTTP_PORT:-18083}:8080"
+      - "127.0.0.1:${QUICKSTART_TLS_PORT:-18483}:8443"
+  device-ca:
+    extends:
+      file: ../insights/standalone/compose.yaml
+      service: device-ca
+  device:
+    extends:
+      file: ../insights/standalone/compose.yaml
+      service: device
+  insights-collector:
+    image: ${INSIGHTS_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.120.0}
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./collector.yaml:/etc/otelcol/config.yaml:ro
+    networks:
+      toolgate:
+        aliases: [toolgate-prometheus-collector]
+      monitoring:
+    expose: ["4318", "8889"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.2.1}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks: [monitoring, web]
+    depends_on: [insights-collector]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.1.0}
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/toolgate.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    networks: [monitoring, web]
+    depends_on: [prometheus, tempo]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+  tempo:
+    image: ${TEMPO_IMAGE:-grafana/tempo:2.7.2}
+    command: ["-config.file=/etc/tempo.yaml"]
+    user: "10001:10001"
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    networks: [monitoring]
+    expose: ["3200", "4318"]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+networks:
+  toolgate:
+  monitoring:
+    internal: true
+  web:
+volumes:
+  prometheus-data:
+  grafana-data:
+  quickstart-data:
+  device-trust:
+  device-config:
+  device-state:
+  tempo-data:

@@ -1,0 +1,52 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+name: toolgate-datadog
+services:
+  quickstart:
+    extends:
+      file: ../insights/standalone/compose.yaml
+      service: quickstart
+    environment:
+      TOOLGATE_INSIGHTS_MODE: DETAILED
+      TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO: "1.0"
+      TOOLGATE_INSIGHTS_OTLP_ENDPOINT: http://insights-collector:4318
+      TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME: olo-toolgate-datadog
+      TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: standalone-datadog
+    ports:
+      - "127.0.0.1:${QUICKSTART_HTTP_PORT:-18082}:8080"
+      - "127.0.0.1:${QUICKSTART_TLS_PORT:-18482}:8443"
+  device-ca:
+    extends:
+      file: ../insights/standalone/compose.yaml
+      service: device-ca
+  device:
+    extends:
+      file: ../insights/standalone/compose.yaml
+      service: device
+  insights-collector:
+    image: ${INSIGHTS_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.120.0}
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ../insights/collector/datadog.yaml:/etc/otelcol/config.yaml:ro
+    environment:
+      DD_API_KEY: ${DD_API_KEY:?Set your Datadog API key in deploy/datadog/.env}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+    networks:
+      toolgate:
+        aliases: [toolgate-datadog-collector]
+    expose: ["4318"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    restart: unless-stopped
+    logging:
+      driver: local
+      options: {max-size: "10m", max-file: "3"}
+networks:
+  toolgate:
+volumes:
+  quickstart-data:
+  device-trust:
+  device-config:
+  device-state:

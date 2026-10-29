@@ -1,0 +1,42 @@
+[
+  {
+    "panel": "Collector scrape health",
+    "series": 1
+  },
+  {
+    "panel": "Estimated calls in selected range",
+    "series": 1
+  },
+  {
+    "panel": "Current call rate",
+    "series": 1
+  },
+  {
+    "panel": "p95 execution duration",
+    "series": 1
+  },
+  {
+    "panel": "Call rate by outcome",
+    "series": 2
+  },
+  {
+    "panel": "Execution duration percentiles",
+    "series": 1
+  },
+  {
+    "panel": "Execution duration percentiles",
+    "series": 1
+  },
+  {
+    "panel": "Execution duration percentiles",
+    "series": 1
+  },
+  {
+    "panel": "Busiest tools by call rate",
+    "series": 2
+  },
+  {
+    "panel": "Admission rate by category",
+    "series": 1
+  }
+]
