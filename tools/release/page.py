@@ -19,7 +19,7 @@ def render(info, fragments, registries=None, repository=None):
     if not re.fullmatch(r'[0-9a-f]{40}', commit or ''):
         raise ValueError('Invalid release-page source commit')
     repo = 'https://github.com/'+repository
-    status = 'Stable Release' if '-' not in version else ('Beta Release' if '-beta.' in version else 'Release Candidate' if '-rc.' in version else 'Development Release')
+    status = 'Stable Release' if '-' not in version else ('Alpha Release' if '-alpha.' in version else 'Beta Release' if '-beta.' in version else 'Release Candidate' if '-rc.' in version else 'Development Release')
     images = (registries or {}).get('images', {})
     mirrors = (registries or {}).get('dockerhub', {})
     rows = []
