@@ -60,6 +60,7 @@ describe('Login page',()=>{
     expect(within(hints).getByText(`This demo resets at ${new Date(refreshAt).toLocaleString()}.`)).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Copy password for public'}));await screen.findByText('Password copied.');expect(writeText).toHaveBeenCalledWith('shown-demo-password');
     fireEvent.click(screen.getByRole('button',{name:'Copy username public'}));expect(writeText).toHaveBeenLastCalledWith('public');
+    expect(within(hints).queryByText('Agent token')).toBeNull();
     expect(screen.queryByLabelText(/New password/)).toBeNull();expect(document.body.textContent).not.toContain('First login requires');
     expect(transport.mock.calls.find(([url])=>url.endsWith('/login-hints'))?.[1]?.credentials).toBe('omit');
     fireEvent.click(screen.getByRole('button',{name:'Use public'}));
@@ -69,6 +70,21 @@ describe('Login page',()=>{
     expect(screen.getByText('Tenant ID: quickstart')).toBeTruthy();
     expect(JSON.parse(String(transport.mock.calls.find(([url])=>url.endsWith('/login'))![1]!.body))).toEqual({username:'public',password:'shown-demo-password'});
     expect(JSON.stringify(localStorage)).not.toContain('shown-demo-password');
+  });
+  it('shows the shared agent token with a copy button only when the hints carry one',async()=>{
+    quickstartMode();
+    const agentToken='shared_demo_agent_token_0123456789';const writeText=vi.fn(async()=>{});vi.stubGlobal('navigator',{...navigator,clipboard:{writeText}});
+    vi.stubGlobal('fetch',vi.fn(async(input:string)=>input.endsWith('/login-hints')?json({accounts:[{username:'public',password:'shown-demo-password',agentToken}],refreshAt:null})
+      :input.endsWith('/session')?json({},401):input.endsWith('/status')?json({passwordRequired:true}):json({items:[]})));
+    render(<App/>);
+    const hints=await screen.findByRole('region',{name:'Demo sign-in'});
+    expect(within(hints).getByText('Agent token')).toBeTruthy();expect(within(hints).getByText(agentToken)).toBeTruthy();
+    expect(within(hints).getByText('Anyone can use these shared accounts. Their passwords and agent tokens change at every reset.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Copy agent token for public'}));await screen.findByText('Agent token copied.');expect(writeText).toHaveBeenCalledWith(agentToken);
+  });
+  it('drops a malformed agent token but keeps the account',()=>{
+    expect(parseLoginHints({accounts:[{username:'public',password:'pw',agentToken:'<script>'}],refreshAt:null})).toEqual({accounts:[{username:'public',password:'pw'}],refreshAt:null});
+    expect(parseLoginHints({accounts:[{username:'public',password:'pw',agentToken:'short'}],refreshAt:null})!.accounts[0]).not.toHaveProperty('agentToken');
   });
   it('shows nothing extra without hints and rejects malformed hint data',async()=>{
     expect(parseLoginHints({accounts:[{username:'<b>',password:'x'},{username:'ok',password:''},'bad'],refreshAt:'not a date'})).toEqual({accounts:[],refreshAt:null});

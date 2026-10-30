@@ -237,6 +237,11 @@ class AccountTests(unittest.TestCase):
         url=self.serve(Control())
         with urllib.request.urlopen(url+'/api/quickstart/v1/login-hints') as response:
             self.assertEqual(json.load(response)['accounts'][0]['username'],'public')
+        # The shared agent's token is listed only when TOOLGATE_LOGIN_HINT_AGENT names an agent that has one.
+        with patch.dict(os.environ,{'TOOLGATE_LOGIN_HINT_AGENT':'public-agent'}):
+            self.assertEqual(quickstart.login_hints()['accounts'],[dict(username='public',password=users['public']['password'],agentToken=saved['agents'][0]['token'])])
+        with patch.dict(os.environ,{'TOOLGATE_LOGIN_HINT_AGENT':'unknown-agent'}):
+            self.assertNotIn('agentToken',quickstart.login_hints()['accounts'][0])
         status,_=self.post(url+'/api/quickstart/v1/login',dict(username='public',password=users['public']['password'],newPassword='replacement-Strong-Password-2026'))
         self.assertEqual(status,403)
         status,_=self.post(url+'/api/quickstart/v1/login',dict(username='public',password=users['public']['password']))
@@ -295,6 +300,17 @@ class AccountTests(unittest.TestCase):
         rotation=next(c for c in control.calls if c[0].endswith('/credential'))
         self.assertEqual((rotation[1],rotation[2]),(admin,{'credentialSha256':sha(body['token']),'enable':True}))
         self.assertEqual(json.loads((quickstart.DATA/'credentials.json').read_text())['agents'][0]['token'],old)  # Shown once only.
+
+    def test_reauthorizing_the_login_hint_agent_keeps_its_listed_token_live(self):
+        saved=self.install();control=Control();url=self.serve(control)
+        quickstart.gateway_credentials()
+        admin=quickstart.jwt(quickstart.GROUPS,'admin',generation=1)
+        with patch.object(quickstart,'call',control),patch.dict(os.environ,{'TOOLGATE_LOGIN_HINT_AGENT':'public-agent'}):
+            status,body=self.post(url+'/api/quickstart/v1/workloads/public-workload/reauthorize',{},{'Authorization':'Bearer '+admin})
+            self.assertEqual(status,200);self.assertNotEqual(body['token'],saved['agents'][0]['token'])
+            self.assertEqual(quickstart.login_hints()['accounts'][0]['agentToken'],body['token'])
+        path=quickstart.DATA/'credentials.json'
+        self.assertEqual(path.stat().st_mode&0o777,0o600);self.assertEqual(self.gateway()['public-workload']['tokenSha256'],sha(body['token']))
 
 
 if __name__=='__main__':unittest.main()

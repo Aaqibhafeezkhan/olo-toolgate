@@ -1304,7 +1304,7 @@ routes exist only in Quickstart. The supervisor accepts only `localhost` or
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/quickstart/v1/status` | None | Mode, tenant, readiness, version, database mode |
-| GET | `/api/quickstart/v1/login-hints` | None | Demo login hints, when enabled |
+| GET | `/api/quickstart/v1/login-hints` | None | Demo login hints, when enabled, with the shared agent token named by `TOOLGATE_LOGIN_HINT_AGENT` |
 | POST | `/api/quickstart/v1/login` | None (rate-limited to 10 per minute) | Exchange a password for a 15-minute console JWT. Also sets a session cookie. |
 | GET | `/api/quickstart/v1/session` | Session cookie | Re-issue the JWT from the cookie |
 | POST | `/api/quickstart/v1/logout` | None | Clear the session cookie |
