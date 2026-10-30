@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Tool schema for training: `toolgate pack` also writes `<name>-<version>.tool-schema.json` beside the `.tgpkg`
+  (each tool's name, description, `useWhen`, effect, parameters with types, defaults, enums and bounds, and the
+  input and output schemas), merging optional phrasing hints from the project's `training/annotations.json`.
+  `toolgate schema <file.tgpkg>` writes it for any package. The file is not packaged, so no digest changes.
+  `core-mcp/hello-world` ships annotations.
 - Operator Insights (ADR 031): installation operators see how tools are used and behave across every tenant: call
   volume, outcomes, latency, retries, admission denials, sessions and the history of any one invocation. It is off
   by default. `TOOLGATE_INSIGHTS_MODE` (`NONE`, `BASIC`, `DETAILED`; the same on Control and every Gateway) turns it

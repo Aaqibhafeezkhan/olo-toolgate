@@ -370,6 +370,18 @@ For Java the executable is `artifacts/tool.jar`, a fat jar of your jar and its w
 
 Optional files under `marketplace/` (`listing.json`, `README.md`, `CHANGELOG.md`, `icon.png`), `tests/self-tests.json` and `sbom/cyclonedx.json` in the staging directory are included as well.
 
+**Tool schema for training.** Beside the package, `pack` also writes `<name>-<version>.tool-schema.json`: each tool's name, description, `useWhen`, effect and parameters (type, description, required, default, enum and bounds), with the full input and output schemas. Training pipelines read it to generate tool-calling examples so a model learns to emit valid calls. Add phrasing hints and example values in `training/annotations.json` in your project; they are copied into the schema under each tool's `annotations`:
+
+```json
+{"tools": {"greet": {
+  "phrasings": ["Say hello to {name}"],
+  "defaultPhrasings": ["Say hello"],
+  "parameters": {"name": {"examples": ["Ada", "the team"]}},
+  "examples": [{"prompt": "Greet Ada", "arguments": {"name": "Ada"}}]}}}
+```
+
+Annotations naming a tool the package does not have fail the build. The schema is not part of the package and does not change any digest. `toolgate schema <file.tgpkg>` writes it for any package you already have.
+
 Bump `version` in your build for every release you hand to an administrator. The same version with different contents is a different digest and will be treated as a new package.
 
 ## 13. Run it under ToolGate
