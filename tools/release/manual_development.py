@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Explicit manual development builds/publication; no CI, tests, scans or smoke gates."""
+"""Explicit manual development builds/publication; no CI, tests, scans or smoke gates, only a startup gate."""
 import json
 import os
 from pathlib import Path
@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
+import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +42,29 @@ def metadata():
     return info
 
 
+def startup_gate(image, timeout=180):
+    """Refuses an image whose Control never becomes ready, such as a dependency mismatch that only fails at boot."""
+    container = run('docker', 'run', '-d', '--tmpfs', '/data:rw,uid=65532,gid=65532', '-p', '127.0.0.1::8080',
+                    image, capture=True).stdout.strip()
+    try:
+        port = run('docker', 'port', container, '8080/tcp', capture=True).stdout.split(':')[-1].strip()
+        deadline = time.monotonic()+timeout
+        while time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(f'http://127.0.0.1:{port}/health/ready', timeout=3) as response:
+                    if response.status == 200:
+                        return
+            except OSError:
+                pass
+            if run('docker', 'inspect', '-f', '{{.State.Running}}', container, capture=True).stdout.strip() != 'true':
+                break
+            time.sleep(1)
+        print(run('docker', 'logs', '--tail', '50', container, capture=True).stdout, file=sys.stderr)
+        raise RuntimeError(image+' did not become ready; refusing to publish it')
+    finally:
+        subprocess.run(['docker', 'rm', '-f', container], cwd=ROOT, capture_output=True)
+
+
 def build():
     ASSETS.mkdir(parents=True, exist_ok=True)
     info = metadata()
@@ -58,6 +83,7 @@ def build():
     run('docker', 'build', '-f', 'apps/quickstart/Dockerfile', *common, *clients,
         '--build-arg', 'CONTROL_IMAGE=olo-toolgate-control:manual-quickstart',
         '-t', 'olo-toolgate-quickstart:manual-development', '.')
+    startup_gate('olo-toolgate-quickstart:manual-development')
     run('docker', 'build', '-f', 'apps/device/Dockerfile', *common,
         '--build-arg', 'QUICKSTART_IMAGE=olo-toolgate-quickstart:manual-development',
         '-t', 'olo-toolgate-device:manual-development', '.')
@@ -129,7 +155,8 @@ def publish():
     notes = OUTPUT/'notes.md'
     notes.write_text('Manual development build for commit `'+info['commit']+'`.\n\n'
         'Source branch: `'+info['sourceBranch']+'`.\n\n'
-        'No CI verification, tests, scans or smoke tests were run. Maven registry publication is disabled.\n\n'
+        'No CI verification, tests, scans or smoke tests were run; the Quickstart image only had to start and become ready. '
+        'Maven registry publication is disabled.\n\n'
         'Library version: `'+info['libraryVersion']+'`. Container digests and checksums are attached.\n\n'
         +(ASSETS/'RELEASE-NOTES.md').read_text(encoding='utf-8'), encoding='utf-8')
     github_release.publish(run, repo, info['releaseTag'], info['commit'], ASSETS,
