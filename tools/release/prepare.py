@@ -119,7 +119,7 @@ def allocate(branch, commit, base, channel, release_branch=None):
                 for page in pages('git/matching-refs/'+kind+'?per_page=100') for item in page]
     releases = [item['tag_name'] for page in pages('releases?per_page=100') for item in page]
     for value in reserved+releases:
-        match = re.search(re.escape(base)+r'-(?:beta|rc)\.([0-9]+)$', value)
+        match = re.search(re.escape(base)+r'-(?:dev|alpha|beta|rc)\.([0-9]+)$', value)
         if match:
             highest = max(highest, int(match[1]))
     info = dict(schemaVersion=1, **identity.versions(base, highest+1, channel),

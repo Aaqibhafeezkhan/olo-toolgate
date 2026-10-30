@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class VersionConfigTests(unittest.TestCase):
     def test_dev_beta_rc_and_stable_have_matching_package_coordinates(self):
-        for tag, expected in [('dev', '1.0.0-dev.1'), ('beta', '1.0.0-beta.1'),
+        for tag, expected in [('dev', '1.0.0-dev.1'), ('alpha', '1.0.0-alpha.1'), ('beta', '1.0.0-beta.1'),
                               ('rc', '1.0.0-rc.1'), ('stable', '1.0.0')]:
             info = config.coordinates(dict(version='1.0.0', tag=tag), 1)
             self.assertEqual(info['version'], expected)
@@ -71,7 +71,10 @@ class VersionConfigTests(unittest.TestCase):
                 config.materialize(root)
                 self.assertEqual(stamp.call_args.args[1]['branch'], 'release/1.x')
                 self.assertEqual(stamp.call_args.args[1]['version'], '1.1.0-beta.2')
-                config_file.write_text(json.dumps(dict(version='2.0.0', tag='beta')))
+                config_file.write_text(json.dumps(dict(version='1.1.0', tag='dev')))
+                config.materialize(root)
+                self.assertEqual(stamp.call_args.args[1]['version'], '1.1.0-dev.2')
+                config_file.write_text(json.dumps(dict(version='2.0.0', tag='dev')))
                 with self.assertRaisesRegex(ValueError, 'major/channel'):
                     config.materialize(root)
 

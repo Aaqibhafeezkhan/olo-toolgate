@@ -9,12 +9,16 @@ Use a long-lived branch for each supported major version:
 | Branch | Version config | Purpose |
 |---|---|---|
 | `main` | `version: 1.0.0`, `tag: dev` | Compatible development builds such as `1.0.0-dev.1` |
-| `release/1.x` | `version: 1.0.0`, `tag: beta` | Qualified releases such as `1.0.0-beta.1` |
-| `release/2.x` | `version: 2.0.0`, `tag: beta` | A future breaking major version |
+| `release/1.x` | `version: 1.0.0`, `tag: dev` | Qualified releases such as `1.0.0-beta.1` |
+| `release/2.x` | `version: 2.0.0`, `tag: dev` | A future breaking major version |
 
-`version.json` is the only manually maintained version/channel configuration.
-Supported channel tags are `dev`, `beta`, `rc` and `stable`. The source trees of
-synchronized main and release branches differ only in this file. Package
+`version.json` is the only manually maintained version configuration. Its tag
+stays `dev` on every branch, so CI and development builds are `<version>-dev.<n>`.
+The release channel is not stored in the file: each **Build and release binaries**
+run selects `dev`, `alpha`, `beta`, `rc` or `release` (default `dev`). The
+`release` channel publishes the plain version, such as `1.0.0`, with no channel
+or build suffix; the other channels publish `<version>-<channel>.<build>`.
+Synchronized main and release branches share the same source tree. Package
 manifests, `VERSION`, SDK bindings, Helm metadata and platform versions are
 materialized in build checkouts; do not manually change individual versions.
 The shared checked-in generated baseline is the same on both branches.
@@ -29,7 +33,8 @@ the counter and cannot be published again with different bytes.
 
 Examples:
 
-- `1.0.0-beta.1`, `1.0.0-beta.2`, then `1.0.0-rc.3`, then `1.0.0`.
+- `1.0.0-alpha.1`, `1.0.0-beta.2`, `1.0.0-beta.3`, then `1.0.0-rc.4`, then
+  `1.0.0` (channel `release`; build 5 is recorded but not part of the version).
 - A bug fix after stable: update the shared base version to `1.0.1`, retain the
   release branch, qualify and publish `1.0.1`.
 - A compatible feature: update the base version to `1.1.0` and use the same
@@ -73,17 +78,17 @@ Existing development workflows remain separate and retain their own credentials/
 ## Initialize a release line once
 
 Merge the release tooling into main first. Open **Actions → Prepare release branch**,
-run on **main**, and choose the source branch/commit and channel. The base version
-comes from the selected source's `version.json`.
+run on **main**, and choose the source branch/commit. The base version
+comes from the selected source's `version.json`, whose tag must be `dev`.
 
 ```sh
 gh workflow run create-release-branch.yml --ref main \
-  -f source_branch=main -f source_commit=latest -f channel=Beta
+  -f source_branch=main -f source_commit=latest
 ```
 
 A full 40-character ancestor commit SHA may replace `latest`. Initialization
-creates `release/<major>.x` with the selected source tree and a channel-only
-config change. It does not allocate a release build number. If the line already
+creates `release/<major>.x` at the selected source commit without changing
+`version.json`. It does not allocate a release build number. If the line already
 exists, initialization refuses to overwrite it; use a synchronization PR.
 
 Existing build-numbered branches and their immutable preparation tags remain
@@ -94,10 +99,9 @@ source bytes. The active version-1 line is `release/1.x`.
 
 1. Land reviewed fixes or compatible features on main.
 2. Set the shared base version for the intended patch or minor release in
-   `version.json`; main retains `tag: dev`.
-3. Open a synchronization PR into `release/1.x`. Keep the release channel
-   (`beta`, `rc`, or `stable`) in that branch's config while taking the intended
-   compatible base version and source changes from main.
+   `version.json`; every branch retains `tag: dev`.
+3. Open a synchronization PR into `release/1.x` with the intended compatible
+   base version and source changes from main.
 4. Run and pass the CI/security checks, review the source diff and merge.
 5. Dispatch the release workflow from the release branch itself.
 
@@ -108,13 +112,17 @@ merging the breaking changes. Bring applicable fixes into main as well.
 ## Build and optionally publish
 
 Open **Actions → Build and release binaries**, select **release/1.x**, choose
-`build-only` or `build-and-publish`, and leave `build_run_id` empty for a new build.
+`build-only` or `build-and-publish`, choose the `channel` (`dev`, `alpha`, `beta`,
+`rc` or `release`; default `dev`), and leave `build_run_id` empty for a new build.
 
 ```sh
-gh workflow run build-release.yml --ref release/1.x -f mode=build-only
+gh workflow run build-release.yml --ref release/1.x -f mode=build-only -f channel=beta
 ```
 
-The workflow reads the config at the dispatch commit, reserves the next number,
+When reusing a `build_run_id`, the original build's channel and version are kept
+and the `channel` input is ignored.
+
+The workflow reads the base version at the dispatch commit, reserves the next number,
 and records immutable `release-builds/<base>/<number>`, `prepared/<version>` and
 `release-runs/<version>` bookkeeping tags. The generated `release.json` records
 the selected source and version; it is a build artifact, not another tracked
@@ -167,8 +175,8 @@ distributions are available as release assets. Installers remain unsigned/not no
 as in the existing native packaging workflow. Provenance does not claim OS code signing.
 
 All required registries and attestations must succeed before the GitHub release becomes
-public. Beta/RC releases are prereleases. npm publication initially uses an immutable build
-tag; the `beta`, `rc` or stable `latest` npm alias advances only after finalization and never
+public. Dev/alpha/beta/RC releases are prereleases. npm publication initially uses an immutable build
+tag; the `dev`, `alpha`, `beta`, `rc` or stable `latest` npm alias advances only after finalization and never
 moves backwards. Container `dev`/`latest` aliases are not changed. GitHub stable releases
 also leave the repository's `latest` selection unchanged.
 

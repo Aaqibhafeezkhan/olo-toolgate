@@ -12,13 +12,13 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.release import identity, prepare
 
-TAGS = {'dev': 'Dev', 'beta': 'Beta', 'rc': 'RC', 'stable': 'Stable'}
+TAGS = {'dev': 'Dev', 'alpha': 'Alpha', 'beta': 'Beta', 'rc': 'RC', 'stable': 'Stable'}
 
 
 def load(root=ROOT):
     document = json.loads((root/'version.json').read_text(encoding='utf-8'))
     if set(document) != {'version', 'tag'} or document['tag'] not in TAGS:
-        raise ValueError('version.json must contain only version and tag (dev, beta, rc, stable)')
+        raise ValueError('version.json must contain only version and tag (dev, alpha, beta, rc, stable)')
     identity.versions(document['version'], 1, TAGS[document['tag']])
     return document
 
@@ -36,9 +36,9 @@ def materialize(root=ROOT, build=None, selection=None):
         return  # An explicitly selected development overlay already has its immutable identity.
     ref = os.environ.get('GITHUB_REF_NAME', '')
     major_line = re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', ref)
-    if major_line and (major_line[1] != config['version'].split('.')[0] or config['tag'] == 'dev'):
+    if major_line and major_line[1] != config['version'].split('.')[0]:
         raise ValueError('Release line major/channel differs from version.json')
-    match = re.fullmatch(r'(?:release/|v)'+re.escape(config['version'])+r'-(dev|beta|rc)\.([1-9][0-9]*)', ref)
+    match = re.fullmatch(r'(?:release/|v)'+re.escape(config['version'])+r'-(dev|alpha|beta|rc)\.([1-9][0-9]*)', ref)
     if match and match[1] != config['tag']:
         raise ValueError('Branch or tag channel differs from version.json')
     number = build if build is not None else (int(match[2]) if match else int(os.environ.get('GITHUB_RUN_NUMBER', '1')))
@@ -48,7 +48,8 @@ def materialize(root=ROOT, build=None, selection=None):
         info.update(branch=ref, sourceBranch=ref)
     if selection:
         selected = json.loads(selection.read_text())
-        if selected['baseVersion'] != config['version'] or identity.CHANNELS[selected['channel']] != config['tag']:
+        # Release-line builds take their channel from the release job input, not version.json.
+        if selected['baseVersion'] != config['version']:
             raise ValueError('Selected release differs from version.json')
         info = {key: value for key, value in selected.items() if key not in ('commit', 'buildRun')}
     elif os.environ.get('GITHUB_WORKFLOW') == 'Build and release binaries':

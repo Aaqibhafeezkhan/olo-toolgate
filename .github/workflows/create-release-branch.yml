@@ -14,12 +14,6 @@ name: Prepare release branch
         type: string
         default: latest
         required: true
-      channel:
-        description: Release channel
-        type: choice
-        options: [Beta, RC, Stable]
-        default: Beta
-        required: true
 permissions:
   contents: read
 concurrency:
@@ -44,5 +38,4 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         SOURCE_BRANCH: ${{ inputs.source_branch }}
         SOURCE_COMMIT: ${{ inputs.source_commit }}
-        CHANNEL: ${{ inputs.channel }}
       run: python tools/release/line.py

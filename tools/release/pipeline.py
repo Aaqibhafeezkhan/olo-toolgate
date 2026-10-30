@@ -438,15 +438,15 @@ def publish():
 
 
 def version_order(version):
-    match = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(?:-(beta|rc)\.(\d+))?', version)
+    match = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(?:-(dev|alpha|beta|rc)\.(\d+))?', version)
     if not match:
         raise ValueError('Unexpected channel alias version; inspect it before replacing it')
-    return (*map(int, match.groups()[:3]), {'beta':0, 'rc':1, None:2}[match[4]], int(match[5] or 0))
+    return (*map(int, match.groups()[:3]), {'dev':0, 'alpha':1, 'beta':2, 'rc':3, None:4}[match[4]], int(match[5] or 0))
 
 
 def advance_npm_channel(info, registries):
     # Advance only the matching npm channel, and never move an alias backwards.
-    alias = {'Beta':'beta', 'RC':'rc', 'Stable':'latest'}[info['channel']]
+    alias = {'Dev':'dev', 'Alpha':'alpha', 'Beta':'beta', 'RC':'rc', 'Stable':'latest'}[info['channel']]
     tags = json.loads(run('npm', 'view', registries['npm'], 'dist-tags', '--registry', 'https://npm.pkg.github.com', '--json', capture=True).stdout)
     if alias not in tags or version_order(tags[alias]) < version_order(info['version']):
         run('npm', 'dist-tag', 'add', registries['npm'], alias, '--registry', 'https://npm.pkg.github.com')

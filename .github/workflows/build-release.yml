@@ -10,6 +10,12 @@ name: Build and release binaries
         options: [build-only, build-and-publish]
         default: build-only
         required: true
+      channel:
+        description: Release channel; release publishes the plain version without a channel suffix (ignored when reusing a build run)
+        type: choice
+        options: [dev, alpha, beta, rc, release]
+        default: dev
+        required: true
       build_run_id:
         description: Leave empty for first build; enter original Actions run ID to reuse its verified bundle
         type: string
@@ -47,6 +53,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         RELEASE_BRANCH: ${{ github.ref_name }}
+        CHANNEL: ${{ inputs.channel }}
         BUILD_RUN_ID: ${{ inputs.build_run_id }}
       run: python tools/release/prepare.py resolve
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

@@ -271,6 +271,8 @@ class RegistryResumeTests(unittest.TestCase):
     def test_alias_order_does_not_compare_build_numbers_as_strings(self):
         self.assertGreater(pipeline.version_order('1.0.0-beta.42'), pipeline.version_order('1.0.0-beta.9'))
         self.assertGreater(pipeline.version_order('1.0.0-rc.43'), pipeline.version_order('1.0.0-beta.42'))
+        self.assertGreater(pipeline.version_order('1.0.0-beta.3'), pipeline.version_order('1.0.0-alpha.2'))
+        self.assertGreater(pipeline.version_order('1.0.0-alpha.2'), pipeline.version_order('1.0.0-dev.1'))
         self.assertGreater(pipeline.version_order('1.0.0'), pipeline.version_order('1.0.0-rc.43'))
 
 
@@ -414,6 +416,9 @@ class ProductWorkflowTests(unittest.TestCase):
         self.assertNotIn('coverage', jobs)
         self.assertEqual(set(jobs['collect']['needs']), {'select', 'preflight', 'foundation', 'clients', 'images'})
         self.assertNotIn('release_branch', workflow['on']['workflow_dispatch']['inputs'])
+        channel = workflow['on']['workflow_dispatch']['inputs']['channel']
+        self.assertEqual((channel['options'], channel['default']), (['dev', 'alpha', 'beta', 'rc', 'release'], 'dev'))
+        self.assertNotIn('channel', prepare_workflow['on']['workflow_dispatch']['inputs'])
         self.assertEqual(jobs['select']['if'], "startsWith(github.ref, 'refs/heads/release/')")
         self.assertIn('needs.collect.result', jobs['publish']['if'])
         for name in ('foundation','clients','images'):

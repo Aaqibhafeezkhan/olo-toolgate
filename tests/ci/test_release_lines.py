@@ -4,6 +4,8 @@
 import base64
 import json
 import os
+from pathlib import Path
+import tempfile
 from unittest.mock import patch
 import unittest
 from tools.release import line, prepare, identity
@@ -16,12 +18,12 @@ REPO = 'olo-labs/olo-toolgate'
 class ReleaseLineTests(unittest.TestCase):
     def setUp(self):
         self.env = patch.dict(os.environ, GITHUB_SHA=SHA, GITHUB_REF='refs/heads/'+BRANCH,
-                              GITHUB_RUN_ID='100', GITHUB_REPOSITORY=REPO, BUILD_RUN_ID='')
+                              GITHUB_RUN_ID='100', GITHUB_REPOSITORY=REPO, BUILD_RUN_ID='', CHANNEL='beta')
         self.env.start()
         self.addCleanup(self.env.stop)
         self.records = {}
         self.tags = {}
-        self.config = dict(version='1.0.0', tag='beta')
+        self.config = dict(version='1.0.0', tag='dev')
 
     def api(self, path, data=None):
         if path.startswith('contents/version.json'):
@@ -62,12 +64,31 @@ class ReleaseLineTests(unittest.TestCase):
                 self.assertEqual(line.resolve(BRANCH), (SHA, first))
             self.assertEqual(len(self.records), 2)
 
-    def test_major_mismatch_and_development_channel_fail_before_reserving(self):
+    def test_release_job_input_selects_channel_and_release_has_no_suffix(self):
+        with patch.object(prepare, 'api', side_effect=self.api), patch.object(prepare, 'pages', side_effect=self.pages), \
+                patch.object(prepare, 'create_tag', side_effect=self.create), patch.object(prepare, 'tag', side_effect=self.tags.get), \
+                patch.object(prepare, 'ref', return_value=None):
+            versions = []
+            for run, channel in enumerate(('dev', 'alpha', 'beta', 'rc', 'release', ''), 200):
+                with patch.dict(os.environ, GITHUB_RUN_ID=str(run), CHANNEL=channel):
+                    versions.append(line.resolve(BRANCH)[1]['version'])
+        # One shared build sequence; the release version omits channel and build number.
+        self.assertEqual(versions, ['1.0.0-dev.1', '1.0.0-alpha.2', '1.0.0-beta.3', '1.0.0-rc.4', '1.0.0', '1.0.0-dev.6'])
+
+    def test_reusable_workflows_read_the_channel_from_the_dispatch_event(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            event = Path(temporary)/'event.json'
+            event.write_text(json.dumps(dict(inputs=dict(channel='rc'))))
+            with patch.dict(os.environ, CHANNEL='', GITHUB_EVENT_PATH=str(event)):
+                self.assertEqual(line.requested_channel(), 'RC')
+            with patch.dict(os.environ, CHANNEL='stable'), self.assertRaisesRegex(ValueError, 'dev, alpha, beta, rc or release'):
+                line.requested_channel()
+
+    def test_major_mismatch_fails_before_reserving(self):
         with patch.object(prepare, 'api', side_effect=self.api), patch.object(prepare, 'allocate') as allocate:
-            for document in (dict(version='2.0.0', tag='beta'), dict(version='1.0.0', tag='dev')):
-                self.config = document
-                with self.assertRaisesRegex(ValueError, 'major/channel'):
-                    line.resolve(BRANCH)
+            self.config = dict(version='2.0.0', tag='dev')
+            with self.assertRaisesRegex(ValueError, 'major differs'):
+                line.resolve(BRANCH)
             allocate.assert_not_called()
 
     def test_cross_line_artifact_reuse_is_rejected(self):
@@ -83,7 +104,7 @@ class ReleaseLineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'major version'):
             identity.validate(info)
 
-    def test_initialization_changes_only_config_and_does_not_reserve_a_build(self):
+    def test_initialization_keeps_dev_config_and_does_not_reserve_a_build(self):
         writes = []
         def api(path, data=None):
             if data is not None:
@@ -91,13 +112,11 @@ class ReleaseLineTests(unittest.TestCase):
                 return dict(sha='b'*40)
             if path == 'commits/main': return dict(sha=SHA)
             if path.startswith('contents/'): return dict(content=base64.b64encode(b'{"version":"1.1.0","tag":"dev"}').decode())
-            if path.startswith('git/commits/'): return dict(tree=dict(sha='tree'))
             raise AssertionError(path)
         with patch.object(prepare, 'api', side_effect=api), patch.object(prepare, 'ref', return_value=None), \
                 patch.object(prepare, 'create_tag') as tag:
-            result = line.initialize('main', 'latest', 'Beta')
+            result = line.initialize('main', 'latest')
             tag.assert_not_called()
         self.assertEqual(result['branch'], BRANCH)
-        entries = next(data['tree'] for path, data in writes if path == 'git/trees')
-        self.assertEqual([item['path'] for item in entries], ['version.json'])
-        self.assertEqual(json.loads(entries[0]['content']), dict(version='1.1.0', tag='beta'))
+        self.assertEqual(result['tag'], 'dev')
+        self.assertEqual(writes, [('git/refs', dict(ref='refs/heads/'+BRANCH, sha=SHA))])
