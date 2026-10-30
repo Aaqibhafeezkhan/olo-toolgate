@@ -13,7 +13,9 @@ Use a long-lived branch for each supported major version:
 | `release/2.x` | `version: 2.0.0`, `tag: dev` | A future breaking major version |
 
 `version.json` is the only manually maintained version configuration. Its tag
-stays `dev` on every branch, so CI and development builds are `<version>-dev.<n>`.
+stays `dev` on every branch, so CI and development builds on `main` and `release/*`
+are `<version>-dev.<n>`; builds from any other branch are
+`<version>-dev-branch-<branch>.<n>` (see [development releases](development-releases.md)).
 The release channel is not stored in the file: each **Build and release binaries**
 run selects `dev`, `alpha`, `beta`, `rc` or `release` (default `dev`). The
 `release` channel publishes the plain version, such as `1.0.0`, with no channel

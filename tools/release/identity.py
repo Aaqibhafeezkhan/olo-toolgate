@@ -9,16 +9,27 @@ ROOT = Path(__file__).resolve().parents[2]
 CORE = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 SHA = re.compile(r'[0-9a-f]{40}')
 CHANNELS = {'Dev': 'dev', 'Alpha': 'alpha', 'Beta': 'beta', 'RC': 'rc', 'Stable': None}
+DEV_LABEL = re.compile(r'dev(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?')
 
 
-def versions(base, build, channel):
+def branch_label(branch):
+    """Development tag: dev on main and release/*, dev-branch-<branch> on every other branch."""
+    if not branch or branch == 'main' or branch.startswith('release/'):
+        return 'dev'
+    slug = re.sub(r'[^a-z0-9]+', '-', branch.lower()).strip('-')[:40].strip('-')
+    return 'dev-branch-'+slug if slug else 'dev-branch'
+
+
+def versions(base, build, channel, label=None):
     match = CORE.fullmatch(base)
     if not match or any(int(n) > 65535 for n in match.groups()):
         raise ValueError('Base version must be MAJOR.MINOR.PATCH with components <= 65535')
     if type(build) is not int or not 1 <= build <= 65535 or channel not in CHANNELS:
         raise ValueError('Build must be 1..65535; channel must be Dev, Alpha, Beta, RC or Stable')
+    if label is not None and (channel != 'Dev' or not DEV_LABEL.fullmatch(label)):
+        raise ValueError('Only development builds take a dev or dev-branch-<branch> label')
     # Stable package coordinates deliberately omit the build: one immutable stable version.
-    package = base if channel == 'Stable' else f'{base}-{CHANNELS[channel]}.{build}'
+    package = base if channel == 'Stable' else f'{base}-{label or CHANNELS[channel]}.{build}'
     display = package
     return dict(baseVersion=base, build=build, channel=channel, version=package,
                 displayVersion=display, numericVersion=f'{base}.{build}',

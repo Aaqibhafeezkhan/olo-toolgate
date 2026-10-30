@@ -15,6 +15,32 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class VersionConfigTests(unittest.TestCase):
+    def setUp(self):
+        # Keep the surrounding CI run's pull request branch out of version naming.
+        environment = patch.dict(os.environ, GITHUB_HEAD_REF='', GITHUB_REF_TYPE='branch')
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def test_dev_builds_outside_main_and_release_branches_are_tagged_dev_branch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'version.json').write_text(json.dumps(dict(version='1.0.0', tag='dev')))
+            cases = [(dict(GITHUB_REF_NAME='main'), '1.0.0-dev.7'),
+                     (dict(GITHUB_REF_NAME='release/1.x'), '1.0.0-dev.7'),
+                     (dict(GITHUB_REF_NAME='feature/Tool_Schema'), '1.0.0-dev-branch-feature-tool-schema.7'),
+                     (dict(GITHUB_REF_NAME='266/merge', GITHUB_HEAD_REF='fix/x'), '1.0.0-dev-branch-fix-x.7'),
+                     (dict(GITHUB_REF_NAME='some-tag', GITHUB_REF_TYPE='tag'), '1.0.0-dev.7')]
+            for environment, expected in cases:
+                with self.subTest(**environment), \
+                        patch.dict(os.environ, GITHUB_RUN_NUMBER='7', GITHUB_WORKFLOW='CI', **environment), \
+                        patch.object(prepare, 'run', return_value='a'*40), \
+                        patch.object(prepare, 'stamp_versions') as stamp:
+                    config.materialize(root)
+                    self.assertEqual(stamp.call_args.args[1]['version'], expected)
+        self.assertEqual(identity.branch_label('/'), 'dev-branch')
+        with self.assertRaises(ValueError):
+            identity.versions('1.0.0', 1, 'Beta', 'dev-feature')
+
     def test_dev_beta_rc_and_stable_have_matching_package_coordinates(self):
         for tag, expected in [('dev', '1.0.0-dev.1'), ('alpha', '1.0.0-alpha.1'), ('beta', '1.0.0-beta.1'),
                               ('rc', '1.0.0-rc.1'), ('stable', '1.0.0')]:

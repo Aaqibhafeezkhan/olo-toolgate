@@ -42,7 +42,7 @@ def select(branch, commit):
     run_id, attempt = os.environ['GITHUB_RUN_ID'], os.environ.get('GITHUB_RUN_ATTEMPT', '1')
     if not all(re.fullmatch('[1-9][0-9]*', value) for value in (run_id, attempt)):
         raise ValueError('Invalid workflow run identity')
-    version = f"{base}-dev.{numeric['build']}"
+    version = f"{base}-{identity.branch_label(branch)}.{numeric['build']}"
     key = branch_key(branch)
     return dict(schemaVersion=1, sourceBranch=branch, sourceCommit=sha, commit=sha,
                 requestedCommit=commit, baseVersion=base, build=numeric['build'],
