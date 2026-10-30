@@ -8,7 +8,8 @@ class ReleasePageTests(unittest.TestCase):
     def test_dynamic_identity_channels_registries_and_contributors(self):
         fragments = [dict(contributor=dict(name='Zoë', github='human'), changes=[
             dict(type='fixed', summary='Repair startup.', pr=123)])]
-        for version, status in [('2.1.3-beta.7', 'Beta Release'), ('2.1.3-rc.8', 'Release Candidate'), ('2.1.3', 'Stable Release')]:
+        for version, status in [('2.1.3-beta.7', 'Beta Release'), ('2.1.3-rc.8', 'Release Candidate'), ('2.1.3', 'Stable Release'),
+                                ('2.1.3-alpha.6', 'Alpha Release'), ('2.1.3-dev-branch-feature-x.5', 'Development Release')]:
             info = dict(version=version, commit='a'*40)
             receipt = dict(images=dict(control='ghcr.io/example/control@sha256:abc'),
                            dockerhub=dict(control='docker.io/example/control@sha256:abc'))

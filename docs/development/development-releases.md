@@ -35,9 +35,13 @@ releases retain their full validation and provenance gates.
 
 ## One version and isolated aliases
 
-Every generated first-party binary/package uses one SemVer, for example
-`1.0.0-dev.123456789.1.g0123456789ab`. Its base comes from the selected commit's
-`VERSION`; the suffix contains the workflow run ID, attempt and commit prefix.
+Every generated first-party binary/package uses one SemVer. Its base comes from the
+selected commit's `version.json` and its build number is the workflow run number.
+Builds from `main` or `release/*` are `<base>-dev.<run>`, for example `1.0.0-dev.42`.
+Builds from any other branch are tagged `dev-branch-<branch>`, where the branch name
+is lowercased with other characters replaced by `-` (up to 40 characters):
+`feature/my-change` run 42 is `1.0.0-dev-branch-feature-my-change.42`. CI builds
+follow the same rule; pull request builds use their source branch.
 Native clients, CLI/browser host, containers, UI, contracts, Java, Rust, PHP,
 TypeScript and Helm all receive that same version before compilation. Numeric-only
 OS/extension fields are derived from the base version and workflow run number;
@@ -51,16 +55,16 @@ branch names cannot share an alias.
 
 Docker and npm expose a `dev-<branch-key>` alias only when the selected SHA is still
 the current head of that branch. Docker also exposes `dev-branch` for the latest
-published development build from a non-main branch, even when that branch has
-advanced while the build was running. This
-channel moves between feature/release branches as their builds publish; use the
+published development build from a branch other than `main` and `release/*`, even
+when that branch has advanced while the build was running. This
+channel moves between feature branches as their builds publish; use the
 versioned tag or `dev-<branch-key>` to select a particular build or branch.
 For example, `ololab/olo-toolgate-quickstart:dev-branch` follows branch development
 builds, while the release metadata records the source branch, commit and version.
 The shared `dev` alias is updated only by a manual
 release selecting **main** at its current head. A feature or release branch cannot
 update shared `dev`, even if its SHA equals main. Older commits still publish their
-unique version and the Docker `dev-branch` channel without advancing branch-specific
+unique version (and, outside `main` and `release/*`, the Docker `dev-branch` channel) without advancing branch-specific
 aliases. Production `latest` is unchanged.
 
 ## Outputs and credentials

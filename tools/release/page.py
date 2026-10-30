@@ -10,7 +10,7 @@ from string import Template
 def render(info, fragments, registries=None, repository=None):
     from tools.release.notes import render as contributions
     version = info['version']
-    if not re.fullmatch(r'\d+\.\d+\.\d+(?:-(?:beta|rc|dev)\.\d+)?', version):
+    if not re.fullmatch(r'\d+\.\d+\.\d+(?:-(?:alpha|beta|rc|dev(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?)\.\d+)?', version):
         raise ValueError('Invalid release-page version')
     repository = repository or os.environ.get('GITHUB_REPOSITORY', 'olo-labs/olo-toolgate')
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository):

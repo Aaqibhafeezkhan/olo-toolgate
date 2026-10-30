@@ -47,7 +47,7 @@ class ImagePublicationTests(unittest.TestCase):
                 with self.subTest(branch=branch,current=current):
                     _,calls,_=self.publish(current=current,source_branch=branch)
                     pushes=[args[2] for args,_ in calls if args[:2]==('docker','push')]
-                    self.assertEqual('namespace/gateway:dev-branch' in pushes,branch!='main')
+                    self.assertEqual('namespace/gateway:dev-branch' in pushes,branch=='feature/test')
                     self.assertEqual('namespace/gateway:dev' in pushes,current and branch=='main')
 
     def test_push_failure_still_logs_out(self):

@@ -23,8 +23,17 @@ def load(root=ROOT):
     return document
 
 
-def coordinates(config, build):
-    return identity.versions(config['version'], build, TAGS[config['tag']])
+def coordinates(config, build, branch=None):
+    # Dev builds from branches other than main and release/* are tagged dev-branch-<branch>.
+    label = identity.branch_label(branch) if config['tag'] == 'dev' else None
+    return identity.versions(config['version'], build, TAGS[config['tag']], label)
+
+
+def build_branch():
+    # Pull request builds are named after their source branch; tag builds after no branch.
+    if os.environ.get('GITHUB_HEAD_REF'):
+        return os.environ['GITHUB_HEAD_REF']
+    return '' if os.environ.get('GITHUB_REF_TYPE') == 'tag' else os.environ.get('GITHUB_REF_NAME', '')
 
 
 def materialize(root=ROOT, build=None, selection=None):
@@ -42,7 +51,7 @@ def materialize(root=ROOT, build=None, selection=None):
     if match and match[1] != config['tag']:
         raise ValueError('Branch or tag channel differs from version.json')
     number = build if build is not None else (int(match[2]) if match else int(os.environ.get('GITHUB_RUN_NUMBER', '1')))
-    info = dict(schemaVersion=1, **coordinates(config, number),
+    info = dict(schemaVersion=1, **coordinates(config, number, None if match else build_branch()),
                 sourceBranch='main', sourceCommit=prepare.run('git', 'rev-parse', 'HEAD', cwd=root))
     if major_line:
         info.update(branch=ref, sourceBranch=ref)

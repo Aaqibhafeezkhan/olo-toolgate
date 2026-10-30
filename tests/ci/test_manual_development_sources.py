@@ -39,12 +39,15 @@ class ManualSourceTests(unittest.TestCase):
             return source.select(branch, commit)
 
     def test_any_valid_branch_gets_one_pinned_version_without_product_allocation(self):
-        for branch in ('main', 'release/1.0.0-beta.7', 'feature/test', 'bugfix/customer-123'):
+        for branch, version in [('main', '1.0.0-dev.42'), ('release/1.0.0-beta.7', '1.0.0-dev.42'),
+                                ('feature/test', '1.0.0-dev-branch-feature-test.42'),
+                                ('Bugfix/Customer_123', '1.0.0-dev-branch-bugfix-customer-123.42')]:
             with self.subTest(branch=branch), patch.object(source.prepare, 'create_tag') as reserve:
                 info = self.select(branch)
             self.assertEqual(info['sourceCommit'], SHA)
             self.assertEqual({info[k] for k in ('version','displayVersion','libraryVersion','binaryVersion','dockerTag')},
-                             {'1.0.0-dev.42'})
+                             {version})
+            self.assertEqual(info['releaseTag'], 'v'+version)
             self.assertEqual(info['numericVersion'], '1.0.0.42')
             reserve.assert_not_called()
 
