@@ -72,11 +72,18 @@ sourceSets.test { resources.srcDir("src/enterpriseTest/resources") }
 enterpriseTests.java.srcDir("src/sharedTest/java")
 // The enforced Quarkus 3.40 BOM pins Guava 33.6.0; 33.7.2 fixes CVE-2026-102554.
 val guava = libs.guava.get()
+// It also pins OpenTelemetry 1.62.0; 1.67.0 fixes CVE-2026-118259. The core artifacts
+// share one release train, so align them all (alpha modules keep their -alpha suffix).
+val openTelemetry = libs.opentelemetry.api.get()
 configurations.configureEach {
     resolutionStrategy.eachDependency {
         if (requested.group == guava.group && requested.name == guava.name) {
             useVersion(guava.version!!)
             because("CVE-2026-102554")
+        }
+        if (requested.group == openTelemetry.group && requested.version?.startsWith("1.62.0") == true) {
+            useVersion(requested.version!!.replace("1.62.0", openTelemetry.version!!))
+            because("CVE-2026-118259")
         }
     }
 }
