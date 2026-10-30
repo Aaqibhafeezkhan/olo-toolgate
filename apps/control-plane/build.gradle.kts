@@ -72,21 +72,49 @@ sourceSets.test { resources.srcDir("src/enterpriseTest/resources") }
 enterpriseTests.java.srcDir("src/sharedTest/java")
 // The enforced Quarkus 3.40 BOM pins Guava 33.6.0; 33.7.2 fixes CVE-2026-102554.
 val guava = libs.guava.get()
-// It also pins OpenTelemetry 1.62.0; 1.67.0 fixes CVE-2026-118259. The core artifacts
-// share one release train, so align them all (alpha modules keep their -alpha suffix).
-val openTelemetry = libs.opentelemetry.api.get()
 configurations.configureEach {
     resolutionStrategy.eachDependency {
         if (requested.group == guava.group && requested.name == guava.name) {
             useVersion(guava.version!!)
             because("CVE-2026-102554")
         }
-        if (requested.group == openTelemetry.group && requested.version?.startsWith("1.62.0") == true) {
-            useVersion(requested.version!!.replace("1.62.0", openTelemetry.version!!))
-            because("CVE-2026-118259")
+    }
+}
+// OpenTelemetry is never overridden: the Quarkus OpenTelemetry extension calls internal classes of the SDK and
+// exporters, and the SDK calls internal classes of the API, so any module off the BOM's version fails at startup
+// (1.67.0 removed both). CVE-2026-118259 in the 1.62.0 API waits for a Quarkus release that ships 1.67.0 or later.
+// This fails the build, not the started app, when any OpenTelemetry module leaves the BOM's version.
+val quarkusOpenTelemetry = configurations.detachedConfiguration(
+    dependencies.enforcedPlatform("io.quarkus.platform:quarkus-bom:${libs.versions.quarkus.get()}"),
+    dependencies.create("io.opentelemetry:opentelemetry-sdk"),
+).apply { resolutionStrategy.deactivateDependencyLocking() }
+val verifyOpenTelemetryAlignment = tasks.register("verifyOpenTelemetryAlignment") {
+    group = "verification"
+    description = "Checks that every OpenTelemetry module is on the Quarkus BOM's version"
+    val expected = quarkusOpenTelemetry.incoming.resolutionResult.rootComponent.map { root ->
+        root.dependencies.filterIsInstance<org.gradle.api.artifacts.result.ResolvedDependencyResult>()
+            .map { it.selected.moduleVersion!! }.single { it.name == "opentelemetry-sdk" }.version
+    }
+    val resolved = configurations.runtimeClasspath.flatMap { it.incoming.resolutionResult.rootComponent }.map { root ->
+        val seen = mutableSetOf<org.gradle.api.artifacts.result.ResolvedComponentResult>()
+        fun walk(component: org.gradle.api.artifacts.result.ResolvedComponentResult) {
+            if (seen.add(component)) component.dependencies
+                .filterIsInstance<org.gradle.api.artifacts.result.ResolvedDependencyResult>().forEach { walk(it.selected) }
+        }
+        walk(root)
+        seen.mapNotNull { it.moduleVersion }.filter { it.group == "io.opentelemetry" }.map { "${it.name}:${it.version}" }
+    }
+    doLast {
+        val bom = expected.get()
+        val drifted = resolved.get().filter { it.substringAfter(":").removeSuffix("-alpha") != bom }
+        check(drifted.isEmpty()) {
+            "OpenTelemetry modules must match the Quarkus BOM ($bom); upgrade Quarkus instead of overriding them. " +
+                "Found: ${drifted.joinToString()}"
         }
     }
 }
+tasks.named("check") { dependsOn(verifyOpenTelemetryAlignment) }
+tasks.named("quarkusBuild") { dependsOn(verifyOpenTelemetryAlignment) }
 configurations[enterpriseTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
 configurations[enterpriseTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 tasks.register<Test>("enterpriseTest") {

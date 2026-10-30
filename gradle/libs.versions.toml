@@ -9,7 +9,6 @@ json-schema = "1.5.9"
 bouncycastle = "1.86"
 sqlite = "3.53.4.0"
 guava = "33.7.2-jre"
-opentelemetry = "1.67.0"
 
 [libraries]
 jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version = "2.21" }
@@ -23,7 +22,6 @@ bouncycastle-pkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = 
 
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
-opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry" }
 
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }
