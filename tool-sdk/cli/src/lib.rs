@@ -11,6 +11,7 @@ pub mod init;
 pub mod package;
 pub mod project;
 pub mod schemas;
+pub mod tool_schema;
 
 use serde_json::Value;
 use std::fmt;

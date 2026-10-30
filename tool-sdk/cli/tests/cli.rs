@@ -85,3 +85,85 @@ fn guide_prints_the_bundled_community_guide() {
     );
     assert_eq!(2, toolgate(&["guide", "extra"]).0);
 }
+
+#[test]
+fn pack_writes_the_tool_schema_beside_the_package() {
+    let dir = stage("schema", &source_manifest(), ARTIFACT);
+    std::fs::create_dir_all(dir.join("training")).unwrap();
+    std::fs::write(
+        dir.join("training/annotations.json"),
+        r#"{"tools":{"orders.lookup":{"phrasings":["where is order {orderId}"]}}}"#,
+    )
+    .unwrap();
+    let output = dir.join("acme.orders-1.4.0.tgpkg");
+    let (code, packed) = toolgate(&[
+        "pack",
+        &dir.display().to_string(),
+        "-o",
+        &output.display().to_string(),
+    ]);
+    assert_eq!(0, code, "{packed}");
+    let path = dir.join("acme.orders-1.4.0.tool-schema.json");
+    assert!(
+        packed.contains(&format!("wrote {}", path.display())),
+        "{packed}"
+    );
+    let schema: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!("toolgate.tool-schema", schema["format"]);
+    assert_eq!("acme.orders", schema["package"]["id"]);
+    let lookup = schema["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "orders.lookup")
+        .unwrap();
+    assert_eq!("acme.orders/orders.lookup", lookup["toolId"]);
+    assert_eq!(
+        "The user asks about a specific order number.",
+        lookup["useWhen"]
+    );
+    let order_id = &lookup["parameters"][0];
+    assert_eq!("orderId", order_id["name"]);
+    assert_eq!(true, order_id["required"]);
+    assert_eq!("^[0-9]{6,12}$", order_id["constraints"]["pattern"]);
+    assert_eq!(false, lookup["parameters"][1]["required"]);
+    assert_eq!(
+        "where is order {orderId}",
+        lookup["annotations"]["phrasings"][0]
+    );
+
+    // The same schema from the package alone, with annotations from a file.
+    let notes = dir.join("training/annotations.json").display().to_string();
+    let again = dir.join("again.json");
+    let (code, out) = toolgate(&[
+        "schema",
+        &output.display().to_string(),
+        "--annotations",
+        &notes,
+        "-o",
+        &again.display().to_string(),
+    ]);
+    assert_eq!(0, code, "{out}");
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        std::fs::read(&again).unwrap()
+    );
+}
+
+#[test]
+fn schema_refuses_annotations_for_unknown_tools() {
+    let dir = stage("schema-unknown", &source_manifest(), ARTIFACT);
+    std::fs::create_dir_all(dir.join("training")).unwrap();
+    std::fs::write(
+        dir.join("training/annotations.json"),
+        r#"{"tools":{"nope":{}}}"#,
+    )
+    .unwrap();
+    let (code, out) = toolgate(&["schema", &dir.display().to_string()]);
+    assert_eq!(1, code);
+    assert!(
+        out.contains("\"nope\" is not a tool in this package"),
+        "{out}"
+    );
+    assert_eq!(2, toolgate(&["schema"]).0);
+}

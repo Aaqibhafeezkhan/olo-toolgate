@@ -5,7 +5,9 @@
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use toolgate_cli::{canonical, descriptor, init, package, project, strict_json, Error};
+use toolgate_cli::{
+    canonical, descriptor, init, package, project, strict_json, tool_schema, Error,
+};
 
 const USAGE: &str = "toolgate: create, run, check and pack ToolGate tools
 
@@ -16,7 +18,8 @@ Project commands (run in a tool project, or name its directory):
   toolgate dev [<dir>] [--http <host:port>] [--digests]
                                                   Build and serve the tools as an MCP server (stdio by default)
   toolgate check [<dir>]                          Compile, run the tests and every example
-  toolgate pack [<dir>] [-o <file.tgpkg>]         Build the package and validate it
+  toolgate pack [<dir>] [-o <file.tgpkg>]         Build the package and validate it; also writes
+                                                  <file>.tool-schema.json for training tool-calling models
   toolgate guide                                  Print the guide to building tools with the SDK
 
 Package commands:
@@ -24,6 +27,8 @@ Package commands:
   toolgate validate <file.tgpkg | dir>            Archive rules plus manifest, descriptor and digest checks;
                                                   a project directory runs check
   toolgate verify <file.tgpkg>                    Archive rules only, as every hop runs them
+  toolgate schema <file.tgpkg | staging-dir> [--annotations <file>] [-o <file>]
+                                                  Write the tool schema used to train tool-calling models
   toolgate digest <descriptor.json>...            toolDescriptorDigest of each, and the set digest
   toolgate canonical <descriptor.json>            Print the canonical (NFC + RFC 8785) bytes
   toolgate equivalent <a.json> <b.json>           Compare two descriptors under rewrite list 1
@@ -258,8 +263,9 @@ fn run(args: &[String]) -> Result<(), Failure> {
                         ))
                     }
                 };
-                std::fs::write(&output, data)?;
+                std::fs::write(&output, &data)?;
                 println!("wrote {}", output.display());
+                write_tool_schema(&output, &data, tool_schema::annotations_in(dir)?)?;
                 print_report(&report);
             } else {
                 let built = project_run(dir, &p)?.package()?;
@@ -272,8 +278,35 @@ fn run(args: &[String]) -> Result<(), Failure> {
                     None => built,
                 };
                 println!("wrote {}", written.display());
+                let data = std::fs::read(&written)?;
+                write_tool_schema(&written, &data, tool_schema::annotations_in(dir)?)?;
                 print_report(&report);
             }
+        }
+        ("schema", rest) => {
+            let p = Parsed::new(rest, &["-o", "--output", "--annotations"], &[])?;
+            let [target] = p.positionals.as_slice() else {
+                return Err(Failure::Usage);
+            };
+            let target = Path::new(target);
+            let (manifest, default_output, annotations) = if target.is_dir() {
+                let manifest = strict_json(&std::fs::read(target.join(package::MANIFEST))?)?;
+                let annotations = tool_schema::annotations_in(target)?;
+                (manifest, target.join("tool-schema.json"), annotations)
+            } else {
+                let manifest = package::verify(&std::fs::read(target)?)?.manifest;
+                (manifest, tool_schema::path_for(target), None)
+            };
+            let annotations = match p.option(&["--annotations"]) {
+                Some(file) => Some(tool_schema::read_annotations(Path::new(file))?),
+                None => annotations,
+            };
+            let output = p
+                .option(&["-o", "--output"])
+                .map(PathBuf::from)
+                .unwrap_or(default_output);
+            tool_schema::write(&output, &manifest, annotations.as_ref())?;
+            println!("wrote {}", output.display());
         }
         ("verify", [file]) => {
             println!(
@@ -307,6 +340,19 @@ fn run(args: &[String]) -> Result<(), Failure> {
         }
         _ => return Err(Failure::Usage),
     }
+    Ok(())
+}
+
+/// Writes `<package>.tool-schema.json` beside a package that was just built.
+fn write_tool_schema(
+    package: &Path,
+    data: &[u8],
+    annotations: Option<serde_json::Value>,
+) -> Result<(), Failure> {
+    let manifest = package::verify(data)?.manifest;
+    let path = tool_schema::path_for(package);
+    tool_schema::write(&path, &manifest, annotations.as_ref())?;
+    println!("wrote {}", path.display());
     Ok(())
 }
 

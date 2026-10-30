@@ -1,0 +1,35 @@
+{
+  "tools": {
+    "client_greet": {
+      "phrasings": [
+        "Say hello to {text} on my device",
+        "Greet {text} from my laptop",
+        "Show a greeting for {text} on this client",
+        "Can you say hi to {text} on my computer?"
+      ],
+      "defaultPhrasings": [
+        "Say hello on my device",
+        "Show the hello world greeting on this client"
+      ],
+      "parameters": {
+        "text": { "examples": ["Ada", "the team", "Priya", "everyone in the room", "Dr. Okafor"] }
+      },
+      "examples": [
+        { "prompt": "Greet Ada on my laptop", "arguments": { "text": "Ada" } }
+      ]
+    },
+    "server_greet": {
+      "phrasings": [
+        "Greet {text} from the server",
+        "Have the tool host say hello to {text}",
+        "Send a hello to {text} using the server greeting tool"
+      ],
+      "defaultPhrasings": [
+        "Run the server hello world greeting"
+      ],
+      "parameters": {
+        "text": { "examples": ["Grace", "the ops team", "Lin", "new users"] }
+      }
+    }
+  }
+}
