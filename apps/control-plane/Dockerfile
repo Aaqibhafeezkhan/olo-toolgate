@@ -70,6 +70,8 @@ LABEL org.opencontainers.image.title="OLO ToolGate Control Plane" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$REVISION
+# The pinned base predates the Ubuntu fix for CVE-2026-111497; images built on Control inherit it.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade libbrotli1 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ARG CLIENT_ASSETS_DIR=deploy/client-assets/empty
 ARG CLIENT_DOWNLOADS_DIRECTORY=""
