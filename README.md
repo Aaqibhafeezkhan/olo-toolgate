@@ -207,6 +207,62 @@ Earlier enrollment/client captures are labelled in the tour guide.
 Screens were captured from a local `0.10.0-dev` installation on October 27, 2026.
 Enabled tools and grants are fictional demo configuration, not installation defaults.
 
+### Observability: Grafana, Prometheus and New Relic
+
+ToolGate exports OpenTelemetry traces and metrics through a collector, so the same
+gateway request, authorization, dispatch and Tool Host execution data can be explored
+in your own monitoring stack. Ready-to-run stacks:
+[Prometheus and Grafana](deploy/prometheus/README.md) and
+[New Relic](deploy/newrelic/README.md); see also [Insights](docs/control-plane/insights.md).
+
+<details>
+<summary><strong>📊 Grafana</strong>: ToolGate tool-call overview dashboard</summary>
+<br>
+
+<p align="center">
+  <img src="docs/media/screenshots/grafana-toolgate-full.jpg" width="100%" alt="Grafana ToolGate tool-call overview: call totals and rate, p95 duration, call rate by outcome, duration percentiles, busiest tools and policy denials">
+</p>
+
+The bundled **Tool-call overview** dashboard, filterable by tenant and tool: call
+volume and rate, call rate by outcome, p50/p95/p99 execution duration, busiest tools
+and admission rate by category (for example `POLICY_DENIED`).
+
+</details>
+
+<details>
+<summary><strong>🔥 Prometheus</strong>: ToolGate metrics</summary>
+<br>
+
+<p align="center">
+  <img src="docs/media/screenshots/prometheus-toolgate-full.jpg" width="100%" alt="Prometheus query summing toolgate_insights_calls by tool name and outcome">
+</p>
+
+The same metrics queried directly in PromQL: `toolgate_insights_calls` summed by
+tool name and outcome for one tenant.
+
+</details>
+
+<details>
+<summary><strong>🔭 New Relic</strong>: distributed traces of a governed tool call</summary>
+<br>
+
+<p align="center">
+  <img src="docs/media/newrelic-traces.gif" width="100%" alt="New Relic slideshow: trace overview, call waterfall and execution attributes for a governed tool call">
+</p>
+
+**What to look for in the slides:**
+
+- 🔭 **Trace overview:** traces from the `olo-toolgate-newrelic` service for a Hello World call.
+- 🪜 **Call waterfall:** gateway request, authorization, dispatch and Tool Host execution spans.
+- 🏷️ **Execution attributes:** correlation attributes linking the span to the ToolGate execution.
+
+Full-resolution frames: [overview](docs/media/screenshots/newrelic-traces-overview-full.jpg),
+[waterfall](docs/media/screenshots/newrelic-call-waterfall-full.jpg) and
+[attributes](docs/media/screenshots/newrelic-execution-attributes-full.jpg).
+More captures: [New Relic capture notes](docs/media/screenshots/newrelic-captures.md).
+
+</details>
+
 ## Production and security status
 
 ToolGate is in Beta Release. The authorization path described above is
