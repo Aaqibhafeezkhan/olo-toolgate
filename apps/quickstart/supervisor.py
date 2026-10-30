@@ -556,7 +556,8 @@ def claim_account(requester, signal_gateway):
 
 
 def reauthorize(binding_id, actor, signal_gateway):
-    """An authorized administrator issues a fresh token for one workload binding; it is returned once and never stored."""
+    """An authorized administrator issues a fresh token for one workload binding; it is returned once and stored
+    only for the agent the login page shows (login_hint_agent)."""
     status, raw, _ = call('/api/control/v1/admin-session', actor)
     if status != 200 or 'workload_binding.rotate_credential' not in strict(raw).get('permissions', []): raise Forbidden()
     stored = workload_credentials().get(binding_id)
@@ -569,14 +570,30 @@ def reauthorize(binding_id, actor, signal_gateway):
     token = secrets.token_urlsafe(48)
     rotate(binding_id, token, actor, execution)
     install(signal_gateway)
+    # The login page must never show a token the Gateway no longer accepts.
+    path, hinted = DATA/'credentials.json', login_hint_agent()
+    if hinted and path.exists():
+        saved = strict(path.read_bytes())
+        matches = [agent for agent in saved.get('agents', []) if agent['workloadBindingId'] == binding_id and agent['agentId'] == hinted]
+        for agent in matches: agent['token'] = token
+        if matches: private(path, saved)
     return token
 
 
+def login_hint_agent():
+    """The agent whose token the login page shows with the shared demo logins, or None for none."""
+    return os.environ.get('TOOLGATE_LOGIN_HINT_AGENT', '').strip() or None
+
+
 def login_hints():
-    """Shared demo logins only (showOnLogin); administrator and reviewer passwords are never listed."""
+    """Shared demo logins only (showOnLogin), each with the shared agent token when TOOLGATE_LOGIN_HINT_AGENT names one;
+    administrator and reviewer passwords are never listed."""
     path = DATA/'credentials.json'
-    users = strict(path.read_bytes())['users'] if path.exists() else []
-    return {'accounts': [dict(username=user['username'], password=user['password']) for user in users if user['showOnLogin']],
+    saved = strict(path.read_bytes()) if path.exists() else {}
+    hinted = login_hint_agent()
+    token = next((agent.get('token') for agent in saved.get('agents', []) if hinted and agent['agentId'] == hinted), None)
+    return {'accounts': [dict(username=user['username'], password=user['password'], **({'agentToken': token} if token else {}))
+                         for user in saved.get('users', []) if user['showOnLogin']],
             'refreshAt': refresh_at()}
 
 

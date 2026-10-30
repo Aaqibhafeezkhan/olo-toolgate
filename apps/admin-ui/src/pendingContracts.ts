@@ -55,4 +55,4 @@ export type PendingManagementRule=EnterpriseManagementRule;
 /** Quickstart: POST /api/quickstart/v1/workloads/{id}/reauthorize returns the new agent token once. */
 export interface ReauthorizedWorkload {readonly token:string}
 /** Quickstart: unauthenticated GET /api/quickstart/v1/login-hints, showOnLogin accounts only. */
-export interface LoginHints {readonly accounts:readonly {readonly username:string;readonly password:string}[];readonly refreshAt:string|null}
+export interface LoginHints {readonly accounts:readonly {readonly username:string;readonly password:string;readonly agentToken?:string}[];readonly refreshAt:string|null}
