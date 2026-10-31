@@ -1,0 +1,65 @@
+{
+  "tools": {
+    "check": {
+      "phrasings": [
+        "Is the service up?",
+        "Check the health endpoint",
+        "Ping the service's {path} endpoint",
+        "Is the API healthy? Check {path}",
+        "Health check on {path}, it should report {expectStatus}",
+        "Is the service up and reporting {expectStatus}?",
+        "Check {path} with a {timeoutMs} ms timeout",
+        "How long does the health check take?",
+        "Is the backend responding?",
+        "Call {path} and tell me the status"
+      ],
+      "defaultPhrasings": [
+        "Is the service healthy?",
+        "Run the health check",
+        "Is the service up?",
+        "Health check please",
+        "Is the API alive?",
+        "Check the service health",
+        "Is the backend up?",
+        "Ping the health endpoint",
+        "service status?",
+        "Is the app responding?",
+        "Run the endpoint check",
+        "Is the service OK?"
+      ],
+      "parameters": {
+        "path": {
+          "examples": [
+            "healthz",
+            "actuator/health",
+            "status",
+            "api/health",
+            "ready"
+          ]
+        },
+        "expectStatus": {
+          "examples": [
+            "UP",
+            "OK",
+            "healthy",
+            "READY"
+          ]
+        },
+        "timeoutMs": {
+          "examples": [
+            1000,
+            2000,
+            3000,
+            8000,
+            10000
+          ]
+        }
+      },
+      "negatives": [
+        "What should a health endpoint return?",
+        "How do I add actuator/health to Spring Boot?",
+        "What's a good timeout for HTTP calls?"
+      ]
+    }
+  }
+}

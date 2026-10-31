@@ -1,0 +1,169 @@
+{
+  "tools": {
+    "files": {
+      "phrasings": [
+        "Which CSV files can you read?",
+        "List the CSV files available",
+        "What data files do you have, and their columns?",
+        "Show me the columns of the CSV files",
+        "What spreadsheets can I query?",
+        "Which CSVs are in the data folder?",
+        "What CSV data can you query?",
+        "Show me the available CSV files and their headers",
+        "Which columns does each CSV have?",
+        "list csv files",
+        "What tables of CSV data are there?",
+        "Before I query anything: which CSV files exist?",
+        "What files are in the CSV data directory?",
+        "Which CSV exports can I search?",
+        "Do you have an orders CSV? List the files",
+        "What fields are in the CSV files?",
+        "Show the CSV catalogue",
+        "csv files?",
+        "What data do you have in CSV form?",
+        "Which CSVs can csv.query read?",
+        "Give me an overview of the CSV files",
+        "I want to query a CSV - which ones are there?",
+        "Name the CSV files you can open",
+        "What's the column list for the CSV data?",
+        "Which data sets are available as CSV?",
+        "Show CSV files with columns"
+      ],
+      "negatives": [
+        "How do I open a CSV file in Excel?",
+        "What's the difference between CSV and TSV?",
+        "Convert this list to CSV for me: apples, pears, plums"
+      ]
+    },
+    "query": {
+      "phrasings": [
+        "Show the rows of {file} where {where}",
+        "From {file}, get {columns} where {where}",
+        "In {file}, count rows grouped by {groupBy}",
+        "Total {sum} per {groupBy} in {file}",
+        "Read {file} and sort by {sortBy}, {descending}",
+        "Top {limit} rows of {file} sorted by {sortBy} {descending}",
+        "Filter {file} on {where}",
+        "From {file} give me only {columns}",
+        "How many rows in {file} per {groupBy}?",
+        "Query {file}: {where}, first {limit}",
+        "Show me {file}"
+      ],
+      "defaultPhrasings": [
+        "Show me the rows in {file}",
+        "Read {file}"
+      ],
+      "parameters": {
+        "file": {
+          "examples": [
+            "orders.csv",
+            "customers.csv",
+            "sales-2026.csv",
+            "inventory.csv",
+            "employees.csv",
+            "export-10.csv"
+          ]
+        },
+        "where": {
+          "examples": [
+            [
+              "status=shipped"
+            ],
+            [
+              "country=DE"
+            ],
+            [
+              "amount>100"
+            ],
+            [
+              "status=open",
+              "priority=high"
+            ],
+            [
+              "region=EMEA",
+              "amount>=500"
+            ],
+            [
+              "quantity<10"
+            ]
+          ]
+        },
+        "columns": {
+          "examples": [
+            [
+              "id",
+              "status"
+            ],
+            [
+              "name",
+              "email"
+            ],
+            [
+              "order_id",
+              "amount",
+              "status"
+            ],
+            [
+              "sku",
+              "quantity"
+            ],
+            [
+              "country",
+              "total"
+            ]
+          ]
+        },
+        "groupBy": {
+          "examples": [
+            "status",
+            "country",
+            "region",
+            "category",
+            "customer_id"
+          ]
+        },
+        "sum": {
+          "examples": [
+            "amount",
+            "quantity",
+            "total",
+            "price"
+          ]
+        },
+        "sortBy": {
+          "examples": [
+            "amount",
+            "date",
+            "count",
+            "sum",
+            "name",
+            "quantity"
+          ]
+        },
+        "limit": {
+          "examples": [
+            5,
+            10,
+            20,
+            50,
+            200
+          ]
+        },
+        "descending": {
+          "phrasings": {
+            "true": [
+              "largest first",
+              "descending",
+              "highest first"
+            ]
+          }
+        }
+      },
+      "negatives": [
+        "How do I filter rows in pandas?",
+        "Write a SQL query that groups orders by status",
+        "What is a CSV delimiter?"
+      ]
+    }
+  }
+}

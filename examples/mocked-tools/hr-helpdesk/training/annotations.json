@@ -1,0 +1,142 @@
+{
+  "tools": {
+    "employee": {
+      "phrasings": [
+        "Who is {query}?",
+        "Find {query} in the directory",
+        "Who does {query} report to?",
+        "Which team is {query} in?",
+        "Look up colleague {query}",
+        "What's {query}'s job title and office?"
+      ],
+      "parameters": {
+        "query": {
+          "examples": [
+            "Priya",
+            "E-1042",
+            "jane.smith",
+            "Okafor",
+            "m.rossi@example.com",
+            "Lars Berg"
+          ]
+        }
+      },
+      "negatives": [
+        "How do I write a good employee review?",
+        "What makes a good manager?"
+      ]
+    },
+    "policy": {
+      "phrasings": [
+        "{question}",
+        "What does the HR policy say: {question}",
+        "Check the handbook: {question}",
+        "HR question: {question}",
+        "Find the HR policy for this: {question}"
+      ],
+      "parameters": {
+        "question": {
+          "examples": [
+            "How many days of annual leave do I get?",
+            "Can I work from home on Fridays?",
+            "What's the parental leave policy?",
+            "Do unused holidays carry over to next year?",
+            "How do I claim travel expenses?",
+            "What is the notice period if I resign?"
+          ]
+        }
+      },
+      "negatives": [
+        "What is my insurance policy number?",
+        "Write a remote-work policy for a startup",
+        "Is my car insurance policy still valid?"
+      ]
+    },
+    "my-leave": {
+      "phrasings": [
+        "How much leave do I have left?",
+        "What's my holiday balance?",
+        "How many sick days do I have?",
+        "My leave balances please",
+        "How many vacation days are left this year?",
+        "How many holidays have I got left?",
+        "What's my annual leave balance?",
+        "Do I have any leave left?",
+        "How many days off can I still take?",
+        "Check my leave balances",
+        "How much vacation have I used?",
+        "My remaining sick leave?",
+        "How many annual leave days remain for me?",
+        "What's left of my holiday allowance?",
+        "leave balance?",
+        "Can I still take a week off this year?",
+        "Show my leave",
+        "How much parental leave do I have?",
+        "How many PTO days do I have?",
+        "Remaining days off for me",
+        "Check how much time off I have",
+        "What's my time-off balance?",
+        "How many holiday days are left for me this year?"
+      ],
+      "negatives": [
+        "How many vacation days is normal in Germany?"
+      ]
+    },
+    "request-leave": {
+      "phrasings": [
+        "Book {type} leave from {from} to {to}, request {reference}",
+        "I'd like to take {type} leave {from} until {to} (ref {reference})",
+        "Request {type} leave between {from} and {to}, id {reference}",
+        "Put in for {type} leave, {from} to {to}. Reference {reference}"
+      ],
+      "parameters": {
+        "type": {
+          "phrasings": {
+            "ANNUAL": [
+              "annual",
+              "vacation",
+              "holiday"
+            ],
+            "SICK": [
+              "sick"
+            ],
+            "PARENTAL": [
+              "parental"
+            ]
+          }
+        },
+        "from": {
+          "examples": [
+            "2026-11-03",
+            "2026-11-10",
+            "2026-12-01",
+            "2026-11-17",
+            "2026-12-21"
+          ]
+        },
+        "to": {
+          "examples": [
+            "2026-11-07",
+            "2026-11-14",
+            "2026-12-05",
+            "2026-11-21",
+            "2027-01-02"
+          ]
+        },
+        "reference": {
+          "examples": [
+            "case-4471",
+            "req-20261031-01",
+            "conv-88213",
+            "ticket-flow-17",
+            "chat-5520",
+            "REQ-3307"
+          ]
+        }
+      },
+      "negatives": [
+        "How do I ask my manager for time off?"
+      ]
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "tools": {
+    "echo": {
+      "phrasings": [
+        "Echo {text}",
+        "Say {text} back to me",
+        "Connectivity test: echo {text}",
+        "Repeat {text}",
+        "Ping the tool host with {text}"
+      ],
+      "defaultPhrasings": [
+        "Run an echo test",
+        "Is the tool host reachable? Echo something",
+        "Echo test please",
+        "Ping the echo tool",
+        "Is the tool host reachable?",
+        "Test the connection with echo",
+        "Do an echo",
+        "Connectivity check",
+        "echo"
+      ],
+      "parameters": {
+        "text": {
+          "examples": [
+            "hello",
+            "test 123",
+            "are you there?",
+            "pong",
+            "check"
+          ]
+        }
+      },
+      "negatives": [
+        "What is an echo chamber?",
+        "Why do I hear an echo on calls?"
+      ]
+    }
+  }
+}
