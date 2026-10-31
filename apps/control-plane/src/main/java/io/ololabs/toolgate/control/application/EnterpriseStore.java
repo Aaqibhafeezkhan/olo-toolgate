@@ -7,6 +7,10 @@ import java.util.List;
 
 /** All methods run inside the tenant transaction which also commits audit and directory state. */
 public interface EnterpriseStore {
+    record Operation(String id,String state,boolean legacy,long revision) {}
+    record Attempt(String id,String operationId,String state,Long consumedAt,long issuedAt,long expiresAt,long revision,long evidenceCount) {}
+    default Operation operation(String id){throw Failure.unavailable();}
+    default List<Attempt> attempts(String operationId,long now){throw Failure.unavailable();}
     record BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt) {}
     default BusinessKey businessKey(String tool,String namespace,String identity,String hash){throw Failure.unavailable();}
     default void saveBusinessKey(BusinessKey value,long now){throw Failure.unavailable();}
@@ -35,7 +39,9 @@ public interface EnterpriseStore {
     List<EnterpriseApproval> approvals(String after,int limit);
     void saveApproval(EnterpriseApproval approval,long expectedRevision);
     Nonce nonce(String id);
+    /** Non-execution capability nonce (for the existing service permit boundary). */
     void reserveNonce(Nonce nonce);
+    default void reserveExecutionNonce(Nonce nonce){throw Failure.unavailable();}
     void consumeNonce(String id,long now);
     boolean credentialUsed(String sha256);
     void rememberCredential(String sha256);

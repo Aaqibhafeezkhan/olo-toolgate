@@ -60,7 +60,7 @@ final class ExecutionLeaseTest {
     @Test void lateEvidenceIsAcceptedWithoutRestoringAuthorityOrOverwritingTheOutcome(){
         var r=rig(NOW-1,"OUTCOME_UNKNOWN");
         r.store.transaction(r.tenant,true,tx->{
-            tx.enterprise().reserveNonce(new EnterpriseStore.Nonce("fence-1","inv-1","a".repeat(64),0,NOW-1000,NOW-500,null));
+            tx.enterprise().reserveExecutionNonce(new EnterpriseStore.Nonce("fence-1","inv-1","a".repeat(64),0,NOW-1000,NOW-500,null));
             tx.enterprise().consumeNonce("fence-1",NOW-900);
             tx.packages().saveToolHost("host-1","{}");return null;
         });
@@ -68,6 +68,8 @@ final class ExecutionLeaseTest {
         assertEquals(403,assertThrows(Failure.class,()->r.operations.reportInvocation(r.tenant,tx->"host-2",report,"fence-1")).status());
         assertEquals(200,r.operations.reportInvocation(r.tenant,tx->"host-1",report,"fence-1").status());
         assertEquals(200,r.operations.reportInvocation(r.tenant,tx->"host-1",report,"fence-1").status());
-        r.store.transaction(r.tenant,false,tx->{assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,tx.enterprise().invocation("inv-1").state());assertTrue(tx.enterprise().executionLease("inv-1").expiresAt()<NOW);return null;});
+        r.store.transaction(r.tenant,false,tx->{assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,tx.enterprise().invocation("inv-1").state());assertTrue(tx.enterprise().executionLease("inv-1").expiresAt()<NOW);
+            var attempts=tx.enterprise().attempts("inv-1",NOW);assertEquals(1,attempts.size());assertEquals("fence-1",attempts.getFirst().id());assertEquals(1,attempts.getFirst().evidenceCount());
+            assertEquals("OUTCOME_UNKNOWN",tx.enterprise().operation("inv-1").state());return null;});
     }
 }

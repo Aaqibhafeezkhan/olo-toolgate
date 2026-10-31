@@ -47,6 +47,7 @@ class ServicePermitBridgeTest {
         assertEquals(i.evaluation().resources(),c.resources());assertEquals(i.evaluation().argumentsDigest(),c.requestFingerprint());
         assertEquals(15000,c.exp()-c.iat());
         permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(p)));
+        assertEquals(1,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().attempts(i.id(),EnterpriseConformanceTest.NOW).size()).intValue());
         assertThrows(Failure.class,()->issue(i));
         assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(p))));
     }

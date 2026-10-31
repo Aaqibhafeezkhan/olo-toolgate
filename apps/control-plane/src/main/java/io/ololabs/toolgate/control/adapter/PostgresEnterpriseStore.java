@@ -9,6 +9,8 @@ import java.util.*;
 
 /** SQL compare-and-swap and tenant serialization protect replica/restart execution boundaries. */
 final class PostgresEnterpriseStore implements EnterpriseStore {
+    public Operation operation(String id){return new JdbcOperationLedger(connection,tenant).operation(id);}
+    public List<Attempt> attempts(String id,long now){return new JdbcOperationLedger(connection,tenant).attempts(id,now);}
     public BusinessKey businessKey(String tool,String namespace,String identity,String hash){
         try(var s=query("SELECT fingerprint,caller_agent_id,caller_user_id,invocation_id,retain_until,tombstoned_at FROM control_business_keys WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=?",tool,namespace,identity,hash);var rows=s.executeQuery()){
             if(!rows.next())return null;long tombstone=rows.getLong(6);Long marked=rows.wasNull()?null:tombstone;
@@ -92,6 +94,7 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
             }
             if(changed!=1)throw Failure.conflict();
         }catch(SQLException failure){throw Failure.unavailable();}
+        new JdbcOperationLedger(connection,tenant).observe(value,document,createdAt,expectedRevision==0);
         // Commit terminal business-key outcome with its invocation, including watchdog settlement.
         String outcome=switch(value.state()){
             case SUCCEEDED -> "COMPLETED";
@@ -154,7 +157,13 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         }catch(SQLException failure){throw Failure.unavailable();}
     }
     public Nonce nonce(String id){try(var s=query("SELECT invocation_id,evaluation_digest,authorization_epoch,expires_at,consumed_at,issued_at FROM control_enterprise_nonces WHERE tenant_id=? AND nonce=?",id);var rows=s.executeQuery()){if(!rows.next())return null;long consumed=rows.getLong(5);boolean absent=rows.wasNull();return new Nonce(id,rows.getString(1),rows.getString(2),rows.getLong(3),rows.getLong(6),rows.getLong(4),absent?null:consumed);}catch(SQLException failure){throw Failure.unavailable();}}
-    public void reserveNonce(Nonce value){try(var s=query("INSERT INTO control_enterprise_nonces(tenant_id,nonce,invocation_id,evaluation_digest,authorization_epoch,issued_at,expires_at) VALUES(?,?,?,?,?,?,?)",value.id(),value.invocationId(),value.evaluationDigest(),value.authorizationEpoch(),value.issuedAt(),value.expiresAt())){s.executeUpdate();}catch(SQLException failure){throw Failure.unavailable();}}
+    public void reserveNonce(Nonce value){reserveNonce(value,false);}
+    public void reserveExecutionNonce(Nonce value){reserveNonce(value,true);}
+    private void reserveNonce(Nonce value,boolean execution){
+        try(var s=query("INSERT INTO control_enterprise_nonces(tenant_id,nonce,invocation_id,evaluation_digest,authorization_epoch,issued_at,expires_at,purpose) VALUES(?,?,?,?,?,?,?,?)",value.id(),value.invocationId(),value.evaluationDigest(),value.authorizationEpoch(),value.issuedAt(),value.expiresAt(),execution?"EXECUTION":"SERVICE")){
+            s.executeUpdate();if(execution)new JdbcOperationLedger(connection,tenant).reserve(value);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
     public void consumeNonce(String id,long now){try(var s=connection.prepareStatement("UPDATE control_enterprise_nonces SET consumed_at=? WHERE tenant_id=? AND nonce=? AND consumed_at IS NULL AND expires_at>?")){s.setLong(1,now);s.setString(2,tenant);s.setString(3,id);s.setLong(4,now);if(s.executeUpdate()!=1)throw Failure.conflict();}catch(SQLException failure){throw Failure.unavailable();}}
     private <T> String checked(T value,Class<T> model){String json=codec.json(value);if(json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>131072)throw Failure.validation();codec.model(json,model);return json;}
 }

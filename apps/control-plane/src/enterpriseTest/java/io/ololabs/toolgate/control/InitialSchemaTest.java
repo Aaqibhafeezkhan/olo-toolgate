@@ -26,7 +26,7 @@ class InitialSchemaTest {
         try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.createStatement();
             var rows=s.executeQuery("SELECT version FROM flyway_schema_history ORDER BY installed_rank")){
             assertTrue(rows.next());assertEquals("1",rows.getString(1));
-            assertTrue(rows.next());assertEquals("2",rows.getString(1));assertFalse(rows.next());
+            assertTrue(rows.next());assertEquals("2",rows.getString(1));assertTrue(rows.next());assertEquals("3",rows.getString(1));assertFalse(rows.next());
         }
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);

@@ -1867,6 +1867,135 @@
         "INSERT",
         "SELECT"
       ]
+    },
+    {
+      "name": "control_operations",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_enterprise_invocations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "invocation_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
+      "name": "control_operation_attempts",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "attempt_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id"
+          ]
+        },
+        {
+          "table": "control_enterprise_nonces",
+          "columns": [
+            "tenant_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "nonce"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_attempt_snapshots",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "attempt_id",
+        "revision"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operation_attempts",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
     }
   ]
 }

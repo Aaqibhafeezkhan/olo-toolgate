@@ -181,8 +181,8 @@ class EnterpriseOperationTest {
         assertEquals(invocation.id(),unknown.id());assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());
         assertThrows(Failure.class,()->reserve(unknown));
     }
-    /** M5.4: an unknown outcome of a DOWNSTREAM_IDEMPOTENCY tool is resent by replaying its key; the target deduplicates. */
-    @Test void downstreamIdempotentToolsAreResentWhenTheirKeyIsReplayed(){
+    /** A declaration alone cannot authorize a new consumed attempt (ADR 035). */
+    @Test void downstreamIdempotentDeclarationDoesNotReopenAnUnknownAttempt(){
         var old=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
         var definition=graph.codec.model(graph.codec.json(old.definition()).replaceFirst("[{]","{\"reconciliation\":\"DOWNSTREAM_IDEMPOTENCY\","),ToolDefinition.class);
         graph.add(Kind.TOOL,new ControlTool(old.id(),old.name(),old.enabled(),old.revision()+1,definition,old.extractorId(),old.version(),old.packageDigest()));saveGraph();
@@ -191,9 +191,9 @@ class EnterpriseOperationTest {
         var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);
         operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report));
         var resent=submit("resend");
-        assertEquals("resend",resent.id());assertEquals(EnterpriseInvocationState.QUEUED,resent.state());
+        assertEquals("resend",resent.id());assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,resent.state());
         assertEquals(i.requestDigest(),resent.requestDigest());
-        assertEquals(EnterpriseInvocationState.RESERVED,reserve(resent).invocation().state());}
+        assertThrows(Failure.class,()->reserve(resent));}
     @Test void invocationsRecordTheirToolsReconciliationMethod(){assertEquals(ReconciliationMethod.MANUAL,submit("manual").reconciliation());}
     @Test void unknownExternalOutcomeCannotTriggerBlindRetry(){var i=consume(reserve(submit("request")));var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report)).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());assertThrows(Failure.class,()->reserve(unknown));assertEquals(unknown,submit("request"));}
     @Test void successRequiresEveryResourceAndAResultDigest(){var i=consume(reserve(submit("request")));assertThrows(Failure.class,()->operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,List.of(),EnterpriseConformanceTest.DIGEST))));var success=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST);assertEquals(EnterpriseInvocationState.SUCCEEDED,graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(success)).body(),EnterpriseInvocation.class).state());}
@@ -275,6 +275,7 @@ class EnterpriseOperationTest {
         concurrentBusinessKeyReservationsCreateOneInvocation();
         ambiguousBusinessOperationCannotBeReopenedByDownstreamRetry();
         businessKeyOwnerAndExpiredRetentionNeverPermitAnotherExecutionPostgres();
+        expiredReservationsRetainIndependentAttemptHistory();
     }
     void businessKeyOwnerAndExpiredRetentionNeverPermitAnotherExecutionPostgres(){
         var first=keyed("pg-retry-a","data/report.txt","f".repeat(64));
@@ -307,6 +308,44 @@ class EnterpriseOperationTest {
         var missing=request("op-"+"0".repeat(64),"data/report.txt").context();
         assertEquals(404,assertThrows(Failure.class,()->operations.cancelFromGateway(gateway,graph.codec.json(missing))).status());
         assertFalse(store.transaction(gateway.tenant(),false,tx->tx.enterprise().operationCancelled(missing.requestId())).booleanValue());
+    }
+
+    @Test void expiredReservationsRetainIndependentAttemptHistory(){
+        var first=reserve(submit("attempt-history"));String oldFence=first.invocation().reservedNonce();
+        operations=new EnterpriseOperations(store,graph.codec,signer,Clock.offset(clock,Duration.ofSeconds(11)),"control","toolgate-client",60000,100);
+        var next=reserve(first.invocation());assertNotEquals(oldFence,next.invocation().reservedNonce());
+        var attempts=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(first.invocation().id(),clock.millis()+11000));
+        assertEquals(2,attempts.size());assertEquals("EXPIRED",attempts.getFirst().state());assertNull(attempts.getFirst().consumedAt());
+        assertEquals("RESERVED",attempts.getLast().state());assertEquals(oldFence,attempts.getFirst().id());
+        assertThrows(Failure.class,()->consume(first));
+        var executing=consume(next);
+        var success=new EnterpriseEffectReport(executing.id(),executing.revision(),EnterpriseInvocationState.SUCCEEDED,executing.evaluation().resources(),EnterpriseConformanceTest.DIGEST);
+        operations.report(gateway.tenant(),"device",graph.codec.json(success));
+        assertEquals("OUTCOME_UNKNOWN",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(executing.id()).state()));
+        var retained=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(executing.id(),clock.millis()+11000));
+        assertEquals("EXPIRED",retained.getFirst().state());assertEquals("SUCCEEDED",retained.getLast().state());
+        assertNotNull(retained.getLast().consumedAt());
+    }
+    @Test void operationCanFinalizeFailureOnlyWithoutConsumedAuthority(){
+        var reserved=reserve(submit("never-started-operation"));
+        operations=new EnterpriseOperations(store,graph.codec,signer,Clock.offset(clock,Duration.ofSeconds(61)),"control","toolgate-client",60000,100);
+        var expired=submit("never-started-operation");assertEquals(EnterpriseInvocationState.EXPIRED,expired.state());
+        assertEquals("FAILED",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(expired.id()).state()));
+        assertThrows(Failure.class,()->consume(reserved));
+    }
+    @Test void consumedFailureRemainsUnknownAtOperationLevel(){
+        var executing=consume(reserve(submit("failed-attempt")));
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(executing.id(),executing.revision(),EnterpriseInvocationState.FAILED,List.of(),null)));
+        assertEquals("OUTCOME_UNKNOWN",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(executing.id()).state()));
+        assertEquals("FAILED",store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(executing.id(),clock.millis()).getFirst().state()));
+    }
+    @Test void operationIntentAndAttemptHistorySurviveStoreReopen(){
+        var executing=consume(reserve(submit("reopen-attempt")));
+        store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("operations.sqlite"))),graph.codec);
+        var operation=store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(executing.id()));
+        assertEquals("RUNNING",operation.state());assertFalse(operation.legacy());
+        var attempts=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(executing.id(),clock.millis()));
+        assertEquals(executing.reservedNonce(),attempts.getFirst().id());assertEquals("EXECUTING",attempts.getFirst().state());assertNotNull(attempts.getFirst().consumedAt());
     }
 
 }

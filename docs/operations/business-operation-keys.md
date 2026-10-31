@@ -55,11 +55,14 @@ cannot replace a recorded unknown outcome with success.
 If a keyed operation is OUTCOME_UNKNOWN, reconcile it through the existing
 reviewed reconciliation workflow. Retrying cannot reopen it even when the tool
 has declared DOWNSTREAM_IDEMPOTENCY. Failed/expired operations also remain bound;
-this conservative slice has no automatic attempt rebinding. Do not generate a new
+whole-invocation rebinding remains disabled. Expired unconsumed permit replacement inside
+the original deadline is recorded as a separate attempt by the
+[operation/attempt journal](operation-attempt-journal.md). Do not generate a new
 key to bypass uncertainty: that is a new operation with potential duplicate effects.
 
 This protection currently requires an explicit key. Calls without keys keep
-legacy request-ID replay behavior. Generalized requiresBusinessKey enforcement,
-separate attempts and effect-level recovery remain outstanding; see
+request-ID identity/replay lookup; they also cannot reopen consumed unknown
+attempts. Generalized requiresBusinessKey enforcement,
+whole-operation rebinding and effect-level recovery remain outstanding; see
 [the live progress document](../security/zero-trust-execution-status.md) and
 [ADR 034](../adr/034-durable-business-operation-binding.md).

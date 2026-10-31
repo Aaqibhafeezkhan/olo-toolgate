@@ -10,9 +10,9 @@ does not establish a passing security claim.
 Updated: **2026-10-31**. Branch: `feature/zero-trust-execution-plan`.
 Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
 
-**Overall: partially implemented.** Three scoped deliveries are implemented:
+**Overall: partially implemented.** Four scoped deliveries are implemented:
 renewable leases/durable execution recovery, qualified Python OCI containment,
-and conservative explicit business-key binding. Executed validation for the current
+explicit business-key binding, and independent operation/permit-attempt journaling. Executed validation for the current
 delivery is recorded below. **0 of 7 full roadmap phases have met every exit
 criterion.** Phases 0–2 have
 partial delivery; phases 3–6 have not started as generalized implementations.
@@ -21,7 +21,7 @@ No percentage is assigned because the phases differ substantially in scope.
 | Plan phase | Status | Delivered | Remaining before full phase completion |
 |---|---|---|---|
 | 0 — Boundary and harness | Partial | Preserved revision-10 plan, claim inventory, scoped documentation and executable OCI conformance gate with revision/source/image evidence. | Adopt the full threat matrix across security docs; execute all C1–C8 conformance cases and publish a complete release scorecard. |
-| 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key operation binding. | Generalized requiresBusinessKey/namespace/dedupe-window policy, retention maintenance, safe unconsumed rebinding, separate attempt records and operation-level recovery/finalization; complete admission/rebinding and crash conformance. |
+| 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key binding; V3 operation/attempt records, immutable snapshots, historical backfill, positive-proof reservation replacement and conservative operation summaries. | Generalized requiresBusinessKey/namespace/dedupe-window policy, retention maintenance, whole-invocation rebinding and full effect-aware operation finalization/caller integration; complete admission/rebinding and crash conformance. |
 | 2 — Containment | Partial; Python worker slice delivered | Rootless Podman/crun workers; permit-bound image; isolated namespaces and UID ranges; read-only files; enforced resource limits; stdio broker; teardown/restart recovery; no native fallback; service unit and CI gate. | Separate the trusted broker's OS identity/network namespace as specified by the plan; broader deployment/interface conformance and deployment SLO evidence. Other languages and VM tiers require separate qualification. |
 | 3 — Effect authorization and recovery | Not started | Existing OLO service permits remain a narrower baseline, not the generalized phase-3 implementation. | Per-effect ledger/generations/dispatch ownership, complete request binding, consent slots, target fencing SDK/shared claims, deduplication guarantees, reconciliation and operation finalization. |
 | 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
@@ -36,15 +36,16 @@ The complete first milestone in issue #230 is **not yet accepted**.
 |---|---|---|
 | Exact consent rejects recipient changes and additional effects | Not implemented | Requires phase-3 request binding and consent slots. |
 | Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down a real OCI SDK worker; generalized sensitive-effect authorization and measured deployment bounds remain outstanding. |
-| Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery and unknown outcomes are tested; target-commit/effect-ledger crash scenarios remain outstanding. |
+| Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; target-commit/effect-ledger crash scenarios remain outstanding. |
 | Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; cooperating-target fencing and replica races remain outstanding. |
-| Operation finalization includes all attempts/effects and late evidence | Partial | Late executor evidence and explicit-key operations are retained across new request IDs; terminal key outcomes commit with invocation state. Operation-wide attempt/effect aggregation is not implemented. |
+| Operation finalization includes all attempts/effects and late evidence | Partial | Each permit has independent identity/snapshots and late evidence. New operations finalize FAILED only without consumption; consumed terminal work remains unknown. Complete effect aggregation and caller-visible finalization remain outstanding. |
 | Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target guarantees and the complete release scorecard remain outstanding. |
 
-**Next implementation target:** explicit operation/attempt records, conservative
-rebinding and operation-level finalization required by the per-effect ledger; then
-phase-3 authorization, consent and target fencing. The delivered key binding is
-single-attempt and never silently rebinds a consumed or expired operation.
+**Next implementation target:** the phase-3 effect ledger, exact request binding
+and manifests needed for target-deduplicated retries and effect-aware operation
+finalization. Whole-invocation rebinding, generalized key policy and public history
+presentation remain outstanding. Only an expired unconsumed permit may be replaced
+inside its operation's original deadline; consumed attempts remain fenced.
 
 ### Progress maintenance
 
@@ -67,9 +68,9 @@ carry this requirement into future work.
 | C3c, bounded unmediated execution | Partial | Native direct-worker supervision and OCI teardown on cancellation/deadline are tested. Enforced service cgroups contain worker processes; measured deployment revocation SLOs remain required. |
 | C4, bound admission intent | Implemented existing boundary | Tool Host admission binds signature, audience, arguments and content digests; dispatch integration tests. |
 | C5, contained execution | Available for qualified Python OCI pools | Executed rootless namespace, UID, filesystem, socket, syscall, resource, flooding, cancellation and recovery tests. Requires the documented delegated service; other runtime tiers do not inherit the claim. |
-| C6, honest tamper-evident record | Partial | Durable admission, immutable executor evidence and host result retry; standalone SDK SQLite restart/late-completion recovery uses immediate writer transactions. Hash chains and external anchors remain required. |
+| C6, honest tamper-evident record | Partial | Durable admission, immutable executor evidence, independent immutable attempt snapshots and host result retry; standalone SDK SQLite restart/late-completion recovery uses immediate writer transactions. Hash chains and external anchors remain required. |
 | C7, revocation | Partial | Renewable leases and current authority checks; full target and compromised-host distinctions remain required. |
-| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Separate attempts, generalized key policy, effect slots, generations, target deduplication and operation finalization remain required. |
+| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; all consumed same-row replay is disabled. Generalized key policy, whole-operation rebinding, effect slots, generations, target deduplication and full operation finalization remain required. |
 
 This is an implementation inventory, not a passing per-release C1–C8 scorecard.
 No full-plan acceptance is claimed by this increment. A release scorecard must
@@ -107,14 +108,17 @@ resend. The standalone Java SDK task store also reserves SQLite writer authority
 before reading transitions, preventing a late old-runtime completion/poll race
 from failing the restarted runtime with SQLITE_BUSY. Terminal key outcomes commit with invocation state on SQLite/PostgreSQL.
 
-No separate-attempt or effect-level guarantee is claimed. Automatic rebind,
+This earlier business-key delivery alone did not establish separate-attempt or
+effect-level guarantees. The attempt-journal increment below adds independent
+permit records; effect-level guarantees remain outstanding. Automatic rebind,
 mandatory-key tool policy, argument keys, TENANT sharing, dedupe windows and
 retention/tombstone jobs remain outstanding. Historical native transport keys are
 not backfilled: the operator guide requires a coordinated cutover and settlement
-of legacy workflows on their original invocation IDs. Existing unkeyed calls retain their
-legacy behavior. This delivery does not satisfy the complete first milestone.
+of legacy workflows on their original invocation IDs. That business-key increment left unkeyed calls on their existing behavior; the
+newer journal below also fences their consumed attempts. This earlier delivery
+did not satisfy the complete first milestone.
 
-Executed validation for the final business-key source:
+Executed validation for the business-key delivery at `2dacd836`:
 
 - `EnterpriseOperationTest`: **43 passed, no skips**, including a concurrent
   reservation/replay/unknown-outcome case through a disposable real PostgreSQL
@@ -144,3 +148,50 @@ and `.py` files recursively under `apps/control-plane/src`, `apps/gateway/src`,
 `apps/gateway/tests`, `packages/contracts/schemas`, `tools/contracts` and
 `tool-sdk/java-sdk/runtime-mcp/src/main/java`. Documentation is excluded so this
 record can be committed with the tested code without a self-referential hash.
+
+## Operation/attempt journal delivery
+
+[ADR 035](../adr/035-operation-attempt-journal.md) and the
+[operator guide](../operations/operation-attempt-journal.md) define the V3 foundation.
+Every admission has an operation record. Every issued execution permit has an immutable
+attempt identity and independent append-only snapshots; late executor evidence
+remains associated with its original nonce. V3 backfills retained permits without
+inventing historical snapshots or promoting old success to verified finality.
+
+Replacement requires Control's existing expired, never-consumed nonce and attempt
+binding, within the original invocation deadline. Database guards refuse live,
+consumed, missing or unbound execution predecessors and prohibit consumption resets.
+The unkeyed legacy DOWNSTREAM_IDEMPOTENCY requeue path is also removed.
+
+The internal summary aggregates current execution/consumption evidence:
+RUNNING takes precedence while execution is active; consumed terminal work stays
+OUTCOME_UNKNOWN. A new, completely journaled operation can become final FAILED
+only without ever consuming a permit. Full manifest/effect finalization and caller
+presentation are not claimed; legacy invocation/business-key outcomes retain their
+existing executor/reconciler grade. This increment does not finish phase 1 or the
+first vertical-slice acceptance milestone.
+
+Executed validation:
+
+- Final focused real-PostgreSQL run: **59 enterprise tests and 18 main tests
+  passed, no skips**. Covers attempt history/reopen, expired unconsumed permit
+  replacement, stale-permit refusal, conservative operation grades, historical
+  backfill, forced tenant RLS/privilege catalog, nonce reset/retry denials, existing
+  service permit/TLS/vault compatibility and late-evidence association.
+- Full contract suite: **134 passed, 2 configured PostgreSQL-only skips (136
+  total)**. PostgreSQL behavior is exercised separately through Java's isolated
+  runtime-role fixture. Final SQLite journal/nonce-guard and prospective-migration
+  tests were also rerun after the nonce-purpose distinction.
+- Complete `./gradlew --no-parallel --max-workers=2 javaCheck`: **passed** with
+  an isolated real PostgreSQL fixture. Full enterprise suite: **166 passed, no
+  skips**; main Control suite: **259 passed, 5 configured skips (264 total)**.
+- After adding the per-operation nonce lookup index, the final migration/runtime
+  selection was rerun against another fresh PostgreSQL fixture: **59 enterprise
+  and 18 main tests passed, no skips**. SQLite journal and prospective-migration
+  checks also passed against the final indexed migration.
+
+Source SHA-256: `d4b1e18e3b99a6c8dd5613634994f53727bac1834f7f1a2fba20ad9bcd0ddd4a` (271 files). Hash input is each sorted POSIX
+relative path, a NUL byte and its file bytes, for `.java`, `.sql` and `.json` files
+under `apps/control-plane/src`, plus
+`tests/contracts/test_operation_attempt_storage.py`. Documentation is excluded.
+No current-commit SHA is invented; this source record travels with its code.

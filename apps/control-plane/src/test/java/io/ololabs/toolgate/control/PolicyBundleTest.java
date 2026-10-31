@@ -73,7 +73,7 @@ final class PolicyBundleTest {
         try (var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()) { statement.execute("CREATE DATABASE "+database); }
         var url=base.replace("/control?","/"+database+"?");
         var flyway=org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load();
-        assertEquals(2,flyway.migrate().migrationsExecuted);
+        assertEquals(3,flyway.migrate().migrationsExecuted);
         assertEquals(0,flyway.migrate().migrationsExecuted);
         flyway.validate();
         var source=new org.postgresql.ds.PGSimpleDataSource(); source.setURL(url);source.setUser("control_app");source.setPassword(password);

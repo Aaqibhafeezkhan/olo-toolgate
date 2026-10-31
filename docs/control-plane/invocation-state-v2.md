@@ -140,8 +140,8 @@ The trigger `control_business_key_guard` allows a rebind only from outcome `EXPI
 |---|---|---|---|
 | Flyway (PostgreSQL) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/migration/V1__initial_schema.sql) | Applied once to an empty database | Invocation/task columns, constraints and indexes; business keys; result payloads; guard triggers; grants |
 | Quickstart (SQLite) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/quickstart/V1.sql) | Applied once to an empty database | Same state; cross-column checks use triggers |
-| Flyway | [Prospective V2 kill switch](migrations-v2/flyway/V2__kill_switch.sql) | Ships when implemented | [kill-switch.md](kill-switch.md) §2 |
-| Quickstart | [Prospective V2 kill switch](migrations-v2/quickstart/V2.sql) | Ships when implemented | Same |
+| Flyway | [Prospective V4 kill switch](migrations-v2/flyway/V4__kill_switch.sql) | Ships when implemented | [kill-switch.md](kill-switch.md) §2 |
+| Quickstart | [Prospective V4 kill switch](migrations-v2/quickstart/V4.sql) | Ships when implemented | Same |
 
 **Rules:**
 - **Frozen content.** Released migration files are immutable. Future schema changes append a new version. The initial schema supports only the current application model; pre-release database histories are unsupported.

@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Control keeps independent operation and permit-attempt records with immutable
+  snapshots and historical backfill on PostgreSQL/SQLite. Expired unconsumed
+  reservations can be replaced inside the original deadline; consumed unknown
+  invocations no longer auto-requeue on a downstream-idempotency declaration.
+  Consumed terminal attempts stay provisionally unknown until effect evidence
+  establishes finality. See `docs/operations/operation-attempt-journal.md`.
+
 - Explicit native Gateway and modern MCP business keys now bind durably to one
   operation across request IDs and restarts. Changed inputs or owners conflict;
   ambiguous outcomes cannot reopen through legacy downstream resend. See
