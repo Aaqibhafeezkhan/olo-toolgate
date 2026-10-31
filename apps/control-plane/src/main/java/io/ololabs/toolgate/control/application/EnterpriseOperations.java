@@ -82,7 +82,7 @@ public final class EnterpriseOperations {
      *  resent under the same invocation and the same arguments, and the target deduplicates by its idempotency key.
      *  STATUS_LOOKUP and MANUAL calls stay unknown until reconciled; nothing else is ever resent. */
     private EnterpriseInvocation reconciled(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation i,long now){
-        if(i.state()!=EnterpriseInvocationState.OUTCOME_UNKNOWN||i.reconciliation()!=ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY)return i;
+        if(tx.enterprise().businessInvocation(i.id())||i.state()!=EnterpriseInvocationState.OUTCOME_UNKNOWN||i.reconciliation()!=ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY)return i;
         var approval=tx.enterprise().approval(approvalId(i.id()));
         if(approval!=null&&(approval.state()!=EnterpriseApprovalState.APPROVED||approval.expiresAtUnixMs()<=now||approval.authorizationEpoch()!=tx.enterprise().authorizationEpoch()))return i;
         var resend=changed(i,EnterpriseInvocationState.QUEUED,null,i.completedResources(),null);
@@ -137,6 +137,18 @@ public final class EnterpriseOperations {
     /** M2.4 atomic create: concurrent submissions of one key insert at most one invocation. A submission that loses the
      *  race is decided once more, so it gets the winner's invocation, or a conflict if its fingerprint differs. */
     private Store.Reply submitVerified(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){
+        if(request.businessKeyHash()!=null){
+            var c=request.context();String hash=request.businessKeyHash();
+            if(!hash.matches("[a-f0-9]{64}"))throw Failure.validation();
+            String namespace=c.agentId()!=null?"AGENT":"DELEGATED_USER",identity=c.agentId()!=null?c.agentId():c.userId();
+            if(identity==null)throw ManagementAccess.denied();
+            String id="op-"+DirectoryService.digest("toolgate-operation-v1\n"+actor.tenant().value()+"\n"+request.request().toolId()+"\n"+namespace+"\n"+identity+"\n"+hash);
+            var context=new io.ololabs.toolgate.contracts.v2.RequestContext(id,c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
+            request=new EnterpriseInvocationRequest(context,request.request(),request.toolDigest(),request.packageDigest(),request.downstreamIdempotencyKey(),request.executionContext(),hash);
+        }
+        return submitRetry(actor,request,chosen);
+    }
+    private Store.Reply submitRetry(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){
         try{return submitOnce(actor,request,chosen);}
         catch(Failure lost){
             if(lost.status()!=409||store.transaction(actor.tenant(),false,tx->tx.enterprise().invocation(request.context().requestId()))==null)throw lost;
@@ -145,20 +157,34 @@ public final class EnterpriseOperations {
     }
     private Store.Reply submitOnce(DirectoryService.Actor actor,EnterpriseInvocationRequest request,String chosen){
         // Correlation context is not part of the operation: a retry carrying a new trace span is the same request.
-        var operation=request.executionContext()==null?request:new EnterpriseInvocationRequest(request.context(),request.request(),request.toolDigest(),request.packageDigest(),request.downstreamIdempotencyKey(),null);
+        var operation=request.executionContext()==null?request:new EnterpriseInvocationRequest(request.context(),request.request(),request.toolDigest(),request.packageDigest(),request.downstreamIdempotencyKey(),null,request.businessKeyHash());
         String document=codec.json(operation)+(chosen==null?"":"\n"+chosen);
         return authoritative(actor.tenant(),actor.id(),request.context().requestId(),DirectoryService.digest(document),tx->{long now=now(tx);if(tx.enterprise().operationCancelled(request.context().requestId()))throw Failure.conflict();var placement=new DevicePlacement(codec,checkIn);if(chosen!=null&&!placement.member(tx,request.context().bindingId(),chosen))throw ManagementAccess.denied();
+            var context=request.context();String namespace=context.agentId()!=null?"AGENT":"DELEGATED_USER",identity=context.agentId()!=null?context.agentId():context.userId();
+            var business=request.businessKeyHash()==null?null:tx.enterprise().businessKey(request.request().toolId(),namespace,identity,request.businessKeyHash());
+            if(business!=null){
+                // Compare ownership before fingerprints and never return another caller's result.
+                if(!Objects.equals(business.agent(),context.agentId()==null?"":context.agentId())||!Objects.equals(business.user(),context.userId()))throw Failure.conflict();
+                if(business.tombstonedAt()!=null||business.retainUntil()<=now)throw Failure.conflict();
+            }
             // A replay keeps the device the first submission was placed on, whatever the pool's load is now.
             var placed=tx.enterprise().invocation(request.context().requestId());
             var e=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),request.context(),chosen!=null?chosen:placed!=null?placed.evaluation().context().deviceId():placement.place(tx,request.context(),now,request.request(),request.toolDigest(),request.packageDigest()),request.request(),request.toolDigest(),request.packageDigest(),now);
             Long credentialExpiry=request.context().expiresAtUnixMs();
             if(credentialExpiry!=null){if(credentialExpiry<=now)throw ManagementAccess.denied();tx.enterprise().userCredentialDeadline(e.context().requestId(),credentialExpiry);}
-            String digest=requestDigest(e,request.downstreamIdempotencyKey());var previous=tx.enterprise().invocation(e.context().requestId());
-            if(previous!=null){if(!previous.requestDigest().equals(digest))throw Failure.conflict();previous=renewed(tx,actor,previous,e.context(),now);previous=reconciled(tx,actor,previous,now);decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
+            String digest=requestDigest(e,request.downstreamIdempotencyKey());
+            if(business!=null&&(!business.fingerprint().equals("sha256:"+digest)||!business.invocation().equals(e.context().requestId())))throw Failure.conflict();
+            var previous=tx.enterprise().invocation(e.context().requestId());
+            if(previous!=null){if(request.businessKeyHash()!=null&&business==null)throw Failure.conflict();if(!previous.requestDigest().equals(digest))throw Failure.conflict();previous=invocation(tx,previous.id());previous=renewed(tx,actor,previous,e.context(),now);previous=reconciled(tx,actor,previous,now);decide(actor.tenant(),tx,previous.evaluation(),now,true);return reply(previous,previous.revision());}
             if(tx.enterprise().invocationsSince(Math.max(0,now-lifetime))>=capacity)throw Failure.conflict();var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,now,false,budgets);long epoch=tx.enterprise().authorizationEpoch();
             var state=decision.decision()==Decision.ASK?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
             var i=new EnterpriseInvocation(e.context().requestId(),digest,e,state,1L,epoch,null,now+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),request.downstreamIdempotencyKey(),null,decision.diagnosticId(),reconciliation(tx.load(),e.toolId()));
-            for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),now);tx.enterprise().saveInvocation(i,now,0);tx.enterprise().insightsContext(i.id(),request.executionContext());if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
+            for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),now);tx.enterprise().saveInvocation(i,now,0);
+            if(request.businessKeyHash()!=null){
+                if(business!=null)throw Failure.unavailable();
+                tx.enterprise().saveBusinessKey(new EnterpriseStore.BusinessKey(e.toolId(),namespace,identity,request.businessKeyHash(),"sha256:"+digest,context.agentId()==null?"":context.agentId(),context.userId(),i.id(),Math.addExact(now,30L*24*60*60*1000),null),now);
+            }
+            tx.enterprise().insightsContext(i.id(),request.executionContext());if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
             audit(tx,actor,"INVOCATION_SUBMIT",i);return reply(i,i.revision());});
     }
     public Store.Reply reserve(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseReservationRequest.class);
@@ -356,6 +382,7 @@ public final class EnterpriseOperations {
         gateway(actor);var c=codec.model(document,io.ololabs.toolgate.contracts.v2.RequestContext.class);
         if(!actor.tenant().value().equals(c.tenantId()))throw ManagementAccess.denied();
         return store.transaction(actor.tenant(),true,tx->{var i=tx.enterprise().invocation(c.requestId());
+            if(i==null&&c.requestId().startsWith("op-"))throw new Failure(ErrorCode.NOT_FOUND,404,"Operation not found");
             if(i!=null){var old=i.evaluation().context();if(old.mode()!=c.mode()||!Objects.equals(old.userId(),c.userId())||!Objects.equals(old.agentId(),c.agentId())||!old.chain().stream().map(h->h.agentId()).toList().equals(c.chain().stream().map(h->h.agentId()).toList()))throw ManagementAccess.denied();}
             tx.enterprise().cancelOperation(c.requestId());
             if(i!=null&&!Set.of(EnterpriseInvocationState.SUCCEEDED,EnterpriseInvocationState.FAILED,EnterpriseInvocationState.PARTIAL,EnterpriseInvocationState.OUTCOME_UNKNOWN,EnterpriseInvocationState.CANCELLED,EnterpriseInvocationState.EXPIRED).contains(i.state())){

@@ -557,7 +557,11 @@ async fn authorize(State(s): State<Arc<AppState>>, request: Request) -> Response
         return error(ErrorCode::Validation, &correlation.request_id);
     };
     context.request_id = invocation_id(&context, key);
-    match s.gateway.authorize(request, context).await {
+    match s
+        .gateway
+        .authorize_business(request, context, None, Some(key))
+        .await
+    {
         Ok(outcome) => match s.gateway.reserve(outcome).await {
             Ok(outcome) => {
                 if matches!(

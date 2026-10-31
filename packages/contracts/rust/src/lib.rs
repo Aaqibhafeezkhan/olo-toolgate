@@ -1819,6 +1819,8 @@ pub struct EnterpriseInvocationRequest {
     pub downstream_idempotency_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_context: Option<v2::ExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_key_hash: Option<String>,
 }
 /// Canonical EnterpriseInvocationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

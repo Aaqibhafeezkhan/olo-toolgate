@@ -1164,3 +1164,112 @@ async fn identity_extension_reports_only_authenticated_binding_without_authorizi
     assert!(a.submission.lock().unwrap().is_none());
     assert_eq!(a.reservations.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn explicit_business_keys_ignore_request_ids_and_bind_input_and_identity() {
+    let authority = Arc::new(Authority::default());
+    let state = state(authority);
+    let first = state
+        .gateway
+        .authorize_business(
+            serde_json::from_value(payload()).unwrap(),
+            context(),
+            None,
+            Some("invoice-42"),
+        )
+        .await
+        .unwrap();
+    let mut retry = context();
+    retry.request_id = "new-agent-step".into();
+    let second = state
+        .gateway
+        .authorize_business(
+            serde_json::from_value(payload()).unwrap(),
+            retry.clone(),
+            None,
+            Some("invoice-42"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.invocation.id, second.invocation.id);
+    assert!(first.invocation.id.starts_with("op-"));
+    retry.user_id = Some("other-user".into());
+    // AGENT namespace stays stable; Control enforces the original user owner before disclosing a result.
+    let other = state
+        .gateway
+        .authorize_business(
+            serde_json::from_value(payload()).unwrap(),
+            retry,
+            None,
+            Some("invoice-43"),
+        )
+        .await
+        .unwrap();
+    assert_ne!(first.invocation.id, other.invocation.id);
+    for key in ["", "key with spaces", "key/with/slashes"] {
+        assert_eq!(
+            state
+                .gateway
+                .authorize_business(
+                    serde_json::from_value(payload()).unwrap(),
+                    context(),
+                    None,
+                    Some(key)
+                )
+                .await
+                .unwrap_err(),
+            ErrorCode::Validation
+        );
+    }
+}
+
+#[tokio::test]
+async fn mcp_business_metadata_survives_new_rpc_ids_and_rejects_non_strings() {
+    let authority = Arc::new(Authority {
+        ended: Some(EnterpriseInvocationState::OutcomeUnknown),
+        ..Default::default()
+    });
+    let router = runtime_router(state(authority.clone()));
+    let mut references = Vec::new();
+    for id in [7, 101] {
+        let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+        let bytes = to_bytes(body, 65536).await.unwrap();
+        let mut value: Value = serde_json::from_slice(&bytes).unwrap();
+        value["id"] = json!(id);
+        value["params"]["_meta"]["io.ololabs.toolgate/businessKey"] = json!("run-7.step-42");
+        let (code, response) = call(
+            router.clone(),
+            Request::from_parts(parts, Body::from(value.to_string())),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK);
+        let reference = response["result"]["structuredContent"]["invocationId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(reference.starts_with("op-"));
+        assert!(response["result"]["_meta"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|v| v == &json!(reference)));
+        references.push(reference);
+    }
+    assert_eq!(references[0], references[1]);
+    assert!(authority.permit.lock().unwrap().is_none());
+    for malformed in [Value::Null, json!(42), json!({"key":"x"}), json!("")] {
+        let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+        let mut value: Value =
+            serde_json::from_slice(&to_bytes(body, 65536).await.unwrap()).unwrap();
+        value["params"]["_meta"]["io.ololabs.toolgate/businessKey"] = malformed;
+        assert_eq!(
+            call(
+                router.clone(),
+                Request::from_parts(parts, Body::from(value.to_string()))
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+}

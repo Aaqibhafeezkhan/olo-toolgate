@@ -197,8 +197,16 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 .filter(|v| !v.is_empty() && v.len() <= 128)
             {
                 let mut cancellation = context;
-                cancellation.request_id =
-                    crate::http::invocation_id(&cancellation, &json!(operation).to_string());
+                cancellation.request_id = if operation.strip_prefix("op-").is_some_and(|hash| {
+                    hash.len() == 64
+                        && hash
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                }) {
+                    operation.to_owned()
+                } else {
+                    crate::http::invocation_id(&cancellation, &json!(operation).to_string())
+                };
                 s.gateway
                     .authority
                     .cancel(&cancellation)
@@ -216,12 +224,28 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             }
         }
         "tools/call" => {
+            if meta
+                .get("io.ololabs.toolgate/businessKey")
+                .is_some_and(|value| !value.is_string())
+            {
+                return error(ErrorCode::Validation, &correlation.request_id);
+            }
             let (traceparent, tracestate) = forwarded_trace(&correlation, meta);
             let trace = Trace {
                 traceparent,
                 context: declared_context(meta, &headers, tracestate),
             };
-            let invocation_id = crate::http::invocation_id(&context, &id.to_string());
+            let invocation_id = match meta["io.ololabs.toolgate/businessKey"].as_str() {
+                Some(key) => match crate::application::business_operation_id(
+                    &context,
+                    params["name"].as_str().unwrap_or_default(),
+                    key,
+                ) {
+                    Ok(id) => id,
+                    Err(code) => return error(code, &correlation.request_id),
+                },
+                None => crate::http::invocation_id(&context, &id.to_string()),
+            };
             let started = unix_ms().unwrap_or(0);
             let request_span = trace.traceparent.clone();
             let result = tools_call(
@@ -490,7 +514,12 @@ async fn tools_call(
     let authorizing = unix_ms().unwrap_or(0);
     let authorized = s
         .gateway
-        .authorize_with(request.clone(), context.clone(), trace.context.clone())
+        .authorize_business(
+            request.clone(),
+            context.clone(),
+            trace.context.clone(),
+            params["_meta"]["io.ololabs.toolgate/businessKey"].as_str(),
+        )
         .await;
     let gateway_span =
         (trace.traceparent.len() == 55).then(|| trace.traceparent[36..52].to_owned());

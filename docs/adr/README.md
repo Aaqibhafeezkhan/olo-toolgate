@@ -58,3 +58,7 @@ Use `000-template.md`.
 - [029: UUID tenant ownership with shared management and isolated execution](029-tenant-ownership-and-trust-boundaries.md)
 - [030: Existing MCP servers become tenant-owned MCP_PROXY packages](030-mcp-proxy-packages.md)
 - [031: Execution correlation and operator Insights](031-execution-correlation-operator-insights.md) (proposed)
+
+- [032: Renewable execution authority](032-renewable-execution-authority.md)
+- [033: Rootless Tool Host containment](033-rootless-tool-host-containment.md)
+- [034: Durable business-operation binding](034-durable-business-operation-binding.md)

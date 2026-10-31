@@ -7,6 +7,10 @@ import java.util.List;
 
 /** All methods run inside the tenant transaction which also commits audit and directory state. */
 public interface EnterpriseStore {
+    record BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt) {}
+    default BusinessKey businessKey(String tool,String namespace,String identity,String hash){throw Failure.unavailable();}
+    default void saveBusinessKey(BusinessKey value,long now){throw Failure.unavailable();}
+    default boolean businessInvocation(String invocation){throw Failure.unavailable();}
     record ExecutionLease(String invocationId,String fencingToken,String deviceId,long expiresAt) {}
     default ExecutionLease executionLease(String invocationId){throw Failure.unavailable();}
     default void saveExecutionLease(ExecutionLease lease){throw Failure.unavailable();}

@@ -26,6 +26,25 @@ impl Gateway {
         context: RequestContext,
         execution_context: Option<ExecutionContext>,
     ) -> Result<EnterpriseAuthorizationOutcome, ErrorCode> {
+        self.authorize_business(request, context, execution_context, None)
+            .await
+    }
+    /// Bind an explicit caller key durably at Control, independently of transport request IDs.
+    pub async fn authorize_business(
+        &self,
+        request: AuthorizationRequest,
+        mut context: RequestContext,
+        execution_context: Option<ExecutionContext>,
+        business_key: Option<&str>,
+    ) -> Result<EnterpriseAuthorizationOutcome, ErrorCode> {
+        let business_key_hash = business_key.map(|key| {
+            crate::digest(
+                format!("toolgate-business-key-v1\0{}\0{}", context.tenant_id, key).as_bytes(),
+            )
+        });
+        if let Some(key) = business_key {
+            context.request_id = business_operation_id(&context, &request.tool_id, key)?;
+        }
         if !self.contracts.valid(
             "AuthorizationRequest",
             &serde_json::to_value(&request).map_err(|_| ErrorCode::Validation)?,
@@ -48,6 +67,7 @@ impl Gateway {
             package_digest: tool.package_digest.clone(),
             downstream_idempotency_key: None,
             execution_context,
+            business_key_hash,
         };
         let invocation = self.authority.invoke(&submission).await?;
         // A dependency cannot substitute another actor, binding or input. Control chooses the device.
@@ -112,4 +132,41 @@ impl Gateway {
     pub fn ready(&self, now: u64) -> bool {
         self.authority.ready(now)
     }
+}
+
+/// Tenant, tool and authenticated namespace domain separation; shared with MCP response metadata.
+pub(crate) fn business_operation_id(
+    context: &RequestContext,
+    tool: &str,
+    key: &str,
+) -> Result<String, ErrorCode> {
+    if key.is_empty()
+        || key.len() > 128
+        || !key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    {
+        return Err(ErrorCode::Validation);
+    }
+    let hash = crate::digest(
+        format!("toolgate-business-key-v1\0{}\0{}", context.tenant_id, key).as_bytes(),
+    );
+    let (namespace, identity) = if let Some(agent) = &context.agent_id {
+        ("AGENT", agent)
+    } else {
+        (
+            "DELEGATED_USER",
+            context.user_id.as_ref().ok_or(ErrorCode::Forbidden)?,
+        )
+    };
+    Ok(format!(
+        "op-{}",
+        crate::digest(
+            format!(
+                "toolgate-operation-v1\n{}\n{}\n{}\n{}\n{}",
+                context.tenant_id, tool, namespace, identity, hash
+            )
+            .as_bytes()
+        )
+    ))
 }

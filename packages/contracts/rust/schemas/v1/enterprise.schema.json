@@ -1905,6 +1905,11 @@
         },
         "executionContext": {
           "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
+        },
+        "businessKeyHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Tenant-domain-separated SHA-256 of an explicit caller business key. Control derives its owner and namespace from authenticated context."
         }
       },
       "required": [

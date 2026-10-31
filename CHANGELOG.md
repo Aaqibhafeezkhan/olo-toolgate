@@ -6,6 +6,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Explicit native Gateway and modern MCP business keys now bind durably to one
+  operation across request IDs and restarts. Changed inputs or owners conflict;
+  ambiguous outcomes cannot reopen through legacy downstream resend. See
+  `docs/operations/business-operation-keys.md` for scope and compatibility.
+- Standalone Java SDK task transitions acquire the SQLite writer lock before
+  reading, preventing read-to-write lock failures during restart recovery and
+  late completion from the previous runtime.
+
 - Python server tools can run in qualified rootless OCI pools with a signed
   runtime-image pin, no worker network or host mounts, separate identity ranges,
   enforced resource limits, bounded output and durable teardown recovery. The

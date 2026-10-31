@@ -9,6 +9,17 @@ import java.util.*;
 
 /** SQL compare-and-swap and tenant serialization protect replica/restart execution boundaries. */
 final class PostgresEnterpriseStore implements EnterpriseStore {
+    public BusinessKey businessKey(String tool,String namespace,String identity,String hash){
+        try(var s=query("SELECT fingerprint,caller_agent_id,caller_user_id,invocation_id,retain_until,tombstoned_at FROM control_business_keys WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=?",tool,namespace,identity,hash);var rows=s.executeQuery()){
+            if(!rows.next())return null;long tombstone=rows.getLong(6);Long marked=rows.wasNull()?null:tombstone;
+            return new BusinessKey(tool,namespace,identity,hash,rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getLong(5),marked);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public boolean businessInvocation(String id){try(var s=query("SELECT 1 FROM control_business_keys WHERE tenant_id=? AND invocation_id=?",id);var rows=s.executeQuery()){return rows.next();}catch(SQLException failure){throw Failure.unavailable();}}
+    public void saveBusinessKey(BusinessKey key,long now){
+        try(var s=query("INSERT INTO control_business_keys(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,source,fingerprint,caller_agent_id,caller_user_id,invocation_id,created_at,retain_until) VALUES(?,?,?,?,?,'HEADER',?,?,?,?,?,?) ON CONFLICT DO NOTHING",key.tool(),key.namespace(),key.identity(),key.hash(),key.fingerprint(),key.agent(),key.user(),key.invocation(),now,key.retainUntil())){if(s.executeUpdate()!=1)throw Failure.conflict();}
+        catch(SQLException failure){throw Failure.unavailable();}
+    }
     public void saveExecutionEvidence(String id,String fence,String digest,String document,long now){
         try(var s=query("INSERT INTO control_execution_evidence(tenant_id,invocation_id,fencing_token,report_digest,document,recorded_at) VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING",id,fence,digest,document,now)){s.executeUpdate();}
         catch(SQLException failure){throw Failure.unavailable();}
@@ -80,6 +91,18 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
                 s.setString(1,value.state().name());s.setLong(2,value.authorizationEpoch());s.setLong(3,value.expiresAtUnixMs());s.setLong(4,value.revision());s.setString(5,document);s.setString(6,tenant);s.setString(7,value.id());s.setLong(8,expectedRevision);s.setString(9,value.requestDigest());changed=s.executeUpdate();
             }
             if(changed!=1)throw Failure.conflict();
+        }catch(SQLException failure){throw Failure.unavailable();}
+        // Commit terminal business-key outcome with its invocation, including watchdog settlement.
+        String outcome=switch(value.state()){
+            case SUCCEEDED -> "COMPLETED";
+            case FAILED -> "FAILED";
+            case CANCELLED -> "CANCELLED";
+            case EXPIRED -> "EXPIRED";
+            case OUTCOME_UNKNOWN,PARTIAL -> "OUTCOME_UNKNOWN";
+            default -> null;
+        };
+        if(outcome!=null)try(var s=connection.prepareStatement("UPDATE control_business_keys SET outcome=? WHERE tenant_id=? AND invocation_id=? AND (outcome IS NULL OR (outcome='OUTCOME_UNKNOWN' AND ? IN ('COMPLETED','FAILED')))")){
+            s.setString(1,outcome);s.setString(2,tenant);s.setString(3,value.id());s.setString(4,outcome);s.executeUpdate();
         }catch(SQLException failure){throw Failure.unavailable();}
         if(!value.state().name().equals(previous)){
             long now=System.currentTimeMillis();
