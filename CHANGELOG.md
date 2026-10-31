@@ -6,6 +6,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Control records effect authorization generations for OLO service writes, with
+  immutable bindings, single-send/consume transitions, expiry to ambiguity and
+  retained outcome evidence. Consumption remains distinct from completion;
+  target deduplication and generalized exact HTTP binding are still required.
+  See `docs/operations/effect-generations.md`.
+
 - Control keeps independent operation and permit-attempt records with immutable
   snapshots and historical backfill on PostgreSQL/SQLite. Expired unconsumed
   reservations can be replaced inside the original deadline; consumed unknown

@@ -63,3 +63,4 @@ Use `000-template.md`.
 - [033: Rootless Tool Host containment](033-rootless-tool-host-containment.md)
 - [034: Durable business-operation binding](034-durable-business-operation-binding.md)
 - [035: Independent operation and attempt journal](035-operation-attempt-journal.md)
+- [036: Durable effect authorization generations](036-effect-authorization-generations.md)

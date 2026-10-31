@@ -52,6 +52,12 @@ public final class ServicePermits {
             if(existing!=null&&!existing.evaluationDigest().equals(digest))throw ManagementAccess.denied();
             var permit=operations.signer().signService(claims);
             if(existing==null)tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(claims.nonce(),i.id(),digest,i.authorizationEpoch(),issuedAt,expiry,null));
+            if(!read){
+                String route=request.audience().name()+"/"+op;
+                String effect="eff-"+DirectoryService.digest(codec.json(List.of("toolgate-effect-v1",tenant.value(),i.id(),route,"service-write")));
+                tx.effects().authorize(new EffectStore.Binding(effect,i.id(),i.reservedNonce(),route,binding(claims),device,
+                    i.reservedNonce(),nonceId,nonceId,expiry,expiry+60000),now);
+            }
             tx.audit(DirectoryService.digest(device),"SERVICE_PERMIT_ISSUE","invocation:"+i.id(),i.revision(),c.requestId(),i.requestDigest());
             return new Store.Reply(200,codec.json(permit),i.revision());
         });
@@ -73,6 +79,12 @@ public final class ServicePermits {
                 ||!nonce.evaluationDigest().equals(DirectoryService.digest(codec.json(claims)))
                 ||nonce.authorizationEpoch()!=claims.authorizationEpoch())throw ManagementAccess.denied();
             operations.requireFresh(service.tenant(),tx,i);
+            if(!Set.of("memory.read","rag.query").contains(claims.operation())){
+                var effect=tx.effects().byNonce(claims.nonce());
+                if(effect==null||!effect.binding().operationId().equals(i.id())||!effect.binding().attemptId().equals(i.reservedNonce()))throw ManagementAccess.denied();
+                var consumed=tx.effects().consume(claims.nonce(),binding(claims),audience.name(),"legacy:"+claims.executorKeySha256(),now);
+                if(!consumed.newAuthority())throw ManagementAccess.denied();
+            }
             tx.enterprise().consumeNonce(claims.nonce(),now);
             tx.audit(service.id(),"SERVICE_PERMIT_CONSUME","invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest());
             return new Store.Reply(200,codec.json(new ServicePermitConsumed(true)),i.revision());
@@ -85,6 +97,12 @@ public final class ServicePermits {
             service.tenant().value(),tx.enterprise().authorizationEpoch(),operations.clock(tx))),tx.load().revision()));
     }
     public Map<String,Object> keys(){return Map.of("keys",List.of(operations.signer().servicePublicKey()));}
+    private String binding(ServicePermitClaims claims){
+        var values=new TreeMap<String,Object>();values.put("audience",claims.aud());values.put("operation",claims.operation());
+        values.put("resources",claims.resources());values.put("requestFingerprint",claims.requestFingerprint());
+        values.put("subject",claims.sub());values.put("mode",claims.mode());
+        return "sha256:"+DirectoryService.digest(codec.json(values));
+    }
     private static ServiceAudience audience(String operation) {
         return switch(operation){
             case "memory.read","memory.append","memory.delete","memory.share","memory.export" -> ServiceAudience.olo_memory;

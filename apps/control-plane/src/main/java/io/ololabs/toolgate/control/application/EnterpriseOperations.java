@@ -401,7 +401,7 @@ public final class EnterpriseOperations {
         Ids.valid(id);sweep(tenant);return store.transaction(tenant,false,tx->{var device=certificate.apply(tx);var i=invocation(tx,id);if(!device.equals(i.evaluation().context().deviceId()))throw ManagementAccess.denied();return reply(i,i.revision());});
     }
     /** Bounded durable watchdog. Commit expiry separately from rejected authorizations. */
-    public int sweep(Ids.TenantId tenant){return store.transaction(tenant,true,tx->{long time=now(tx);var expired=tx.enterprise().expiredInvocations(time,100);for(var i:expired)invocation(tx,i.id());return expired.size();});}
+    public int sweep(Ids.TenantId tenant){return store.transaction(tenant,true,tx->{long time=now(tx);var expired=tx.enterprise().expiredInvocations(time,100);for(var i:expired)invocation(tx,i.id());tx.effects().expire(time);return expired.size();});}
     private void scope(Store.Session tx,String user,EnterpriseInvocation i,String action,long time){
         action=action.equals("read")?"operation.read":ManagementAccess.permission(Kind.BINDING,action);
         var entry=tx.load().entries().get(Kind.BINDING.id(i.evaluation().context().bindingId()));if(entry==null)throw ManagementAccess.denied();var b=codec.model(entry.document(),ControlExecutionBinding.class);var access=new ManagementAccess(codec);

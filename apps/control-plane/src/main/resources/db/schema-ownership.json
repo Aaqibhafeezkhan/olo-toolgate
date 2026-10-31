@@ -1996,6 +1996,142 @@
         "INSERT",
         "SELECT"
       ]
+    },
+    {
+      "name": "control_effects",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "effect_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
+      "name": "control_effect_generations",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "effect_id",
+        "generation"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_effects",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "effect_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "effect_id"
+          ]
+        },
+        {
+          "table": "control_operation_attempts",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
+      "name": "control_effect_evidence",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "effect_id",
+        "generation",
+        "evidence_digest"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_effect_generations",
+          "columns": [
+            "tenant_id",
+            "effect_id",
+            "generation"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "effect_id",
+            "generation"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
     }
   ]
 }

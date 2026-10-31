@@ -18,6 +18,7 @@ public interface Store {
         default void initializeIdentityKey(IdentityKey key){throw Failure.unavailable();}
         default RuntimeProfile runtimeProfile(){return null;}
         default void initializeRuntimeProfile(RuntimeProfile profile){throw Failure.unavailable();}
+        default EffectStore effects(){throw Failure.unavailable();}
         default EnterpriseStore enterprise() { throw Failure.unavailable(); }
         default FleetStore fleet() { throw Failure.unavailable(); }
         default BuilderStore builder() { throw Failure.unavailable(); }

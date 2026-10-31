@@ -30,6 +30,7 @@ final class JdbcOperationLedger {
         var previous=operation(value.id());
         if(previous==null&&!newInvocation)throw Failure.unavailable();
         boolean active=switch(value.state()){case PENDING_APPROVAL,QUEUED,RESERVED,DISPATCHED,EXECUTING->true;default->false;};
+        if(!active)new JdbcEffectStore(connection,tenant).abandon(value.id());
         String state="OUTCOME_UNKNOWN";
         if(active)state="RUNNING";
         else if((previous==null||!previous.legacy())&&Set.of("FAILED","CANCELLED","EXPIRED").contains(value.state().name())){
