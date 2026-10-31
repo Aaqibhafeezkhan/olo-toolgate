@@ -59,6 +59,7 @@ class DevelopmentReleaseTests(unittest.TestCase):
             with patch.object(manual_development,'ROOT',root),patch.object(manual_development,'OUTPUT',output), \
                  patch.object(manual_development,'ASSETS',assets),patch.object(manual_development,'CLIENTS',clients), \
                  patch.object(manual_development,'metadata',return_value=info),patch.object(manual_development,'run'), \
+                 patch.object(manual_development,'startup_gate'), \
                  patch.dict(os.environ,{'GITHUB_RUN_NUMBER':'1','DOCKERHUB_NAMESPACE':'fixture'}):
                 manual_development.build()
             self.assertEqual((assets/'toolgate-contracts-1.0.0-dev.fixture.pom').read_bytes(),b'prepared pom')

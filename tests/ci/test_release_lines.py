@@ -17,7 +17,8 @@ REPO = 'olo-labs/olo-toolgate'
 
 class ReleaseLineTests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, GITHUB_SHA=SHA, GITHUB_REF='refs/heads/'+BRANCH,
+        # Ignore the runner's real dispatch event, whose channel input would leak into these tests.
+        self.env = patch.dict(os.environ, GITHUB_EVENT_PATH='', GITHUB_SHA=SHA, GITHUB_REF='refs/heads/'+BRANCH,
                               GITHUB_RUN_ID='100', GITHUB_REPOSITORY=REPO, BUILD_RUN_ID='', CHANNEL='beta')
         self.env.start()
         self.addCleanup(self.env.stop)
