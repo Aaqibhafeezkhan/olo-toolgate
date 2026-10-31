@@ -5,6 +5,55 @@ The [revision-10 plan](../plans/zero-trust-tool-execution.md) is the preserved
 proposal linked by issue #230. A merged design or an authored conformance case
 does not establish a passing security claim.
 
+## Overall task progress
+
+Updated: **2026-10-31**. Branch: `feature/zero-trust-execution-plan`.
+Latest validated implementation: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
+
+**Overall: partially implemented.** Two scoped deliveries are implemented and
+tested: renewable leases/durable execution recovery, and qualified Python OCI
+containment. **0 of 7 full roadmap phases have met every exit criterion.** Phases 0–2 have
+partial delivery; phases 3–6 have not started as generalized implementations.
+No percentage is assigned because the phases differ substantially in scope.
+
+| Plan phase | Status | Delivered | Remaining before full phase completion |
+|---|---|---|---|
+| 0 — Boundary and harness | Partial | Preserved revision-10 plan, claim inventory, scoped documentation and executable OCI conformance gate with revision/source/image evidence. | Adopt the full threat matrix across security docs; execute all C1–C8 conformance cases and publish a complete release scorecard. |
+| 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests. | Business-key operation binding, explicit attempt records and operation-level recovery/finalization; complete admission/rebinding and crash conformance. |
+| 2 — Containment | Partial; Python worker slice delivered | Rootless Podman/crun workers; permit-bound image; isolated namespaces and UID ranges; read-only files; enforced resource limits; stdio broker; teardown/restart recovery; no native fallback; service unit and CI gate. | Separate the trusted broker's OS identity/network namespace as specified by the plan; broader deployment/interface conformance and deployment SLO evidence. Other languages and VM tiers require separate qualification. |
+| 3 — Effect authorization and recovery | Not started | Existing OLO service permits remain a narrower baseline, not the generalized phase-3 implementation. | Per-effect ledger/generations/dispatch ownership, complete request binding, consent slots, target fencing SDK/shared claims, deduplication guarantees, reconciliation and operation finalization. |
+| 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
+| 5 — Identity hardening | Not started | Existing device certificates remain the baseline. | Sender-constrained agent-run credentials, narrowing delegation and continuously verified executor posture. |
+| 6 — Policy differentiation | Not started | Existing approvals remain the baseline. | Broker OAuth/token exchange, trusted provenance, exact effect previews and stronger step-up approvals. |
+
+### First vertical-slice acceptance
+
+The complete first milestone in issue #230 is **not yet accepted**.
+
+| Acceptance item | Status | Evidence / outstanding work |
+|---|---|---|
+| Exact consent rejects recipient changes and additional effects | Not implemented | Requires phase-3 request binding and consent slots. |
+| Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down a real OCI SDK worker; generalized sensitive-effect authorization and measured deployment bounds remain outstanding. |
+| Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery and unknown outcomes are tested; target-commit/effect-ledger crash scenarios remain outstanding. |
+| Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; cooperating-target fencing and replica races remain outstanding. |
+| Operation finalization includes all attempts/effects and late evidence | Partial | Late executor evidence is retained; operation-wide attempt/effect aggregation is not implemented. |
+| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target guarantees and the complete release scorecard remain outstanding. |
+
+**Next implementation target:** business-key operation/attempt binding required by
+the per-effect ledger, followed by phase-3 authorization, consent and target fencing.
+
+### Progress maintenance
+
+For every future issue-230 implementation change, update these tables and the
+claim inventory **in the same commit as the code**, then push them together to
+the feature branch. Record delivered scope, executed validation and remaining
+work. A scoped delivery or passing subset must not mark an entire phase complete.
+Use a known tested revision or source digest; never invent the SHA of a commit
+that has not yet been created. Repository instructions in [AGENTS.md](../../AGENTS.md)
+carry this requirement into future work.
+
+## Security claim inventory
+
 | Claim | Implementation status | Evidence / remaining work |
 |---|---|---|
 | C1, no ambient target authority | Available for qualified Python OCI pools | Workers have no network socket authority, route, resolver, host mounts or ambient supervisor environment. Native pools do not establish this claim. |
