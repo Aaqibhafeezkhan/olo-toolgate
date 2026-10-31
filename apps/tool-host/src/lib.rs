@@ -18,6 +18,7 @@ pub mod mcp_scan;
 pub mod outbox;
 pub mod permit;
 pub mod runner;
+pub mod sandbox;
 pub mod server;
 pub mod store;
 pub mod stream;

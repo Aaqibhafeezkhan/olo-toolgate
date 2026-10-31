@@ -627,6 +627,7 @@ export interface InvocationResultReport {
   readonly outcome: InvocationOutcome;
   readonly result?: ResultFrame;
   readonly notStarted?: RefusalReason;
+  readonly executionTier?: RuntimeTier;
 }
 /** v2 body of POST /access/invocations (invocation-state-v2.md T1). The Gateway generates invocationId; Control evaluates policy, reserves the business key and decides whether a task exists. */
 export interface InvocationSubmission {

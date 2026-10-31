@@ -212,6 +212,12 @@ def render_version(ver, version, outputs):
                 if not v2 and name == 'AdminSession':
                     java += ['    /** Construct a session without an optional tenant display name. */',
                              '    public AdminSession(java.util.List<String> permissions, UserRole role, String bootstrapAdminUserId, String tenantId) { this(permissions, role, bootstrapAdminUserId, tenantId, null); }']
+                if v2 and name == 'InvocationResultReport':
+                    previous = [key for key in props if key != 'executionTier']
+                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
+                    arguments = ', '.join(java_ident(key) if key != 'executionTier' else 'null' for key in props)
+                    java += ['    /** Construct legacy executor evidence without a reported execution tier. */',
+                             f'    public {name}({signature}) {{ this({arguments}); }}']
                 java += ['}']
             rust += [f'/// {description}'.rstrip(), '#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]', '#[serde(rename_all = "camelCase", deny_unknown_fields)]', f'pub struct {name} {{']
             ts += [f'/** {description} */', f'export interface {name} {{']

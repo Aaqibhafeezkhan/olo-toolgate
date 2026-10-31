@@ -109,6 +109,7 @@ struct Seen {
     revoke: bool,
     short_lease: bool,
     partition: bool,
+    lease_ms: Option<u64>,
     /// Run-event batches, and the order in which events and reports reached Control.
     events: Vec<Value>,
     order: Vec<&'static str>,
@@ -141,7 +142,7 @@ async fn control(seen: Shared) -> u16 {
         if seen.partition {
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
-        Json(json!({"invocationId":body["invocationId"],"fencingToken":body["fencingToken"],"leaseExpiresAtUnixMs":tool_host::now_ms()+if seen.short_lease{600}else{10_000},"cancelRequested":seen.revoke})).into_response()
+        Json(json!({"invocationId":body["invocationId"],"fencingToken":body["fencingToken"],"leaseExpiresAtUnixMs":tool_host::now_ms()+seen.lease_ms.unwrap_or(if seen.short_lease{600}else{10_000}),"cancelRequested":seen.revoke})).into_response()
     }
     async fn consume(State(seen): State<Shared>, Json(body): Json<Value>) -> impl IntoResponse {
         seen.lock().unwrap().consumed.push(body.clone());
@@ -288,6 +289,10 @@ async fn rig() -> Option<Rig> {
 }
 
 async fn rig_for(python_sdk: bool) -> Option<Rig> {
+    rig_for_tier(python_sdk, None, false).await
+}
+
+async fn rig_for_tier(python_sdk: bool, image_digest: Option<&str>, oci: bool) -> Option<Rig> {
     let python = ["/usr/bin/python3", "/usr/local/bin/python3", "/bin/python3"]
         .into_iter()
         .find(|p| Path::new(p).exists())?;
@@ -306,6 +311,9 @@ async fn rig_for(python_sdk: bool) -> Option<Rig> {
     for artifact in m["artifacts"].as_array_mut().unwrap() {
         artifact.as_object_mut().unwrap().remove("artifactDigest");
         artifact.as_object_mut().unwrap().remove("sizeBytes");
+    }
+    if let Some(digest) = image_digest {
+        m.get_mut("runtimes").unwrap()[0]["baseImageDigest"] = json!(digest);
     }
     let staging = dir.join("staging");
     std::fs::create_dir_all(staging.join("artifacts")).unwrap();
@@ -332,6 +340,15 @@ modules = ["orders"]
 "#,
         )
         .unwrap();
+        if let Some(digest) = image_digest {
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(project.join("pyproject.toml"))
+                .unwrap()
+                .write_all(format!("runtime_image_digest = \"{digest}\"\n").as_bytes())
+                .unwrap();
+        }
         std::fs::write(project.join("orders.py"), r#"
 from typing import Annotated, Any
 from toolgate import *
@@ -343,10 +360,14 @@ http_route(id="orders.get", destination="acme-api", method="GET", path="/orders/
 @Secret(name="ApiKey")
 @Global(name="TimeoutSeconds", type=ValueType.INT, default_value="10")
 @JwtClaim(name="UserName", claim="UserName")
-def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *, context: ToolContext) -> dict[str, Any]:
+async def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *, context: ToolContext) -> dict[str, Any]:
     context.log.info("Calling the order API")
     context.progress(.5, "calling")
-    return context.http.route("orders.get").path_var("orderId", order_id).header("X-On-Behalf-Of", context.jwt.get_str("UserName")).send(dict[str, Any])
+    reply = context.http.route("orders.get").path_var("orderId", order_id).header("X-On-Behalf-Of", context.jwt.get_str("UserName")).send(dict[str, Any])
+    if order_id == "999999":
+        import time
+        time.sleep(60)
+    return reply
 "#).unwrap();
         // The ordinary SDK staging command builds the executable and manifest, rather than a test runtime double.
         let built = std::process::Command::new(python)
@@ -399,7 +420,7 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *,
             .unwrap(),
     )
     .unwrap();
-    let config: Config = serde_json::from_value(json!({
+    let mut config_value = json!({
         "hostId": "host-1",
         "listen": "127.0.0.1:0",
         "permitKeys": [{"kid": "k1", "publicKeyPath": public}],
@@ -410,10 +431,27 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *,
         "runtimes": {"javaPath": runtime, "pythonPath": python},
         "limits": {"maxConcurrent": 4, "maxInputBytes": 65536, "maxOutputBytes": 1048576, "syncDeadlineMs": 20000, "memoryBytes": 268435456, "maxPermitWindowMs": 30000},
         "developmentLoopbackHttp": true
-    }))
-    .unwrap();
+    });
+    if oci {
+        config_value["sandbox"] = json!({"podmanPath":"/usr/bin/podman","pythonImage":std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap(),"cgroupParent":std::env::var("TOOLGATE_SANDBOX_CGROUP_PARENT").unwrap(),"ioDevice":std::env::var("TOOLGATE_SANDBOX_IO_DEVICE").unwrap(),"ioBytesPerSecond":67108864,"scratchBytes":8388608});
+    }
+    let config: Config = serde_json::from_value(config_value).unwrap();
     let host = tool_host::server::Host::new(config).unwrap();
     let port = serve(tool_host::server::router(host.clone())).await;
+    if oci {
+        let health = format!("http://127.0.0.1:{port}/v1/health");
+        assert_eq!(
+            reqwest::get(&health).await.unwrap().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        host.qualify_execution()
+            .await
+            .expect("OCI tier must qualify before admission");
+        assert_eq!(
+            reqwest::get(&health).await.unwrap().status(),
+            StatusCode::OK
+        );
+    }
 
     let tool = &packaged["tools"][0];
     let target = json!({
@@ -520,6 +558,73 @@ async fn a_real_python_sdk_package_runs_through_admission_broker_and_control_rep
     assert_eq!(seen.upstream[0]["onBehalfOf"], "ada");
     assert_eq!(seen.reports[0]["outcome"], "COMPLETED");
     assert!(!seen.events.is_empty());
+}
+
+#[tokio::test]
+async fn an_image_bound_runtime_is_refused_by_a_native_host_before_consumption() {
+    let digest = format!("sha256:{}", "a".repeat(64));
+    let rig = rig_for_tier(false, Some(&digest), false)
+        .await
+        .expect("Python fixture required");
+    let arguments = json!({"orderId":"123456"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[0]["kind"], "REFUSED");
+    assert_eq!(lines[0]["reason"], "UNSUPPORTED_TIER");
+    let seen = rig.seen.lock().unwrap();
+    assert!(seen.consumed.is_empty());
+    assert!(seen.upstream.is_empty());
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+#[ignore = "requires a delegated rootless OCI service; run tools/security/sandbox.py"]
+async fn a_pinned_sdk_package_runs_in_oci_and_lease_revocation_tears_it_down() {
+    let image = std::env::var("TOOLGATE_SANDBOX_IMAGE").expect("pinned image required");
+    let digest = image.split_once('@').unwrap().1;
+    let rig = rig_for_tier(true, Some(digest), true)
+        .await
+        .expect("Python SDK required");
+    let arguments = json!({"orderId":"123456"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[0]["kind"], "ADMITTED");
+    assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
+    assert_eq!(lines[1]["result"]["structuredContent"]["orderId"], "123456");
+    assert_eq!(
+        rig.seen.lock().unwrap().reports[0]["executionTier"],
+        "OCI_SANDBOX"
+    );
+    rig.seen.lock().unwrap().lease_ms = Some(2000);
+    let arguments = json!({"orderId":"999999"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let seen = rig.seen.clone();
+    let revoke = async move {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if seen.lock().unwrap().upstream.len() >= 2 {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("worker did not reach its broker");
+        seen.lock().unwrap().revoke = true;
+    };
+    let (lines, ()) = tokio::join!(dispatch(&rig, &jws, &arguments), revoke);
+    assert_eq!(lines[1]["outcome"], "OUTCOME_UNKNOWN");
+    assert_eq!(
+        std::fs::read_dir(rig.dir.join("work/sandbox-spool"))
+            .unwrap()
+            .count(),
+        1,
+        "the owned container must be gone before reporting lease loss"
+    );
+    assert_eq!(
+        rig.seen.lock().unwrap().reports[1]["executionTier"],
+        "OCI_SANDBOX"
+    );
 }
 
 /// ADR 031 and conformance case `mcp-core/trace-propagation`: the tool input continues the dispatch's trace with the

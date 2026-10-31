@@ -30,6 +30,10 @@ async fn main() -> ExitCode {
             return ExitCode::from(78);
         }
     };
+    if let Err(failure) = host.qualify_execution().await {
+        eprintln!("execution tier refused: {failure}");
+        return ExitCode::from(78);
+    }
     if let Err(failure) = host.control().qualify().await {
         eprintln!("workload identity refused: {failure}");
         return ExitCode::from(78);

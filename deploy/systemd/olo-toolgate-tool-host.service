@@ -1,0 +1,29 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+# Provision toolgate's subordinate IDs and pinned runtime image before enabling.
+[Unit]
+Description=ToolGate rootless OCI Tool Host
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=toolgate
+Group=toolgate
+StateDirectory=toolgate-tool-host
+StateDirectoryMode=0700
+RuntimeDirectory=toolgate-tool-host
+RuntimeDirectoryMode=0700
+Environment=HOME=/var/lib/toolgate-tool-host
+Environment=XDG_RUNTIME_DIR=/run/toolgate-tool-host
+Environment=TOOLGATE_TOOL_HOST_CONFIG=/etc/toolgate/tool-host.json
+ExecStart=/usr/local/bin/olo-toolgate-tool-host
+Delegate=yes
+DelegateSubgroup=supervisor
+KillMode=control-group
+TimeoutStopSec=15
+SendSIGKILL=yes
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

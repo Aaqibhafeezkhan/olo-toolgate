@@ -22,6 +22,7 @@ Create an ADR when changing:
 Use `000-template.md`.
 
 - [032: Renewable execution authority and durable evidence](032-renewable-execution-authority.md)
+- [033: Rootless OCI Tool Host containment](033-rootless-tool-host-containment.md)
 
 - [001: Shared contracts and foundation](001-foundation-contract-generation.md)
 - [002: Gateway static foundation](002-gateway-static-foundation.md)

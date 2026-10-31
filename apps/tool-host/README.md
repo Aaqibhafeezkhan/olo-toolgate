@@ -1,7 +1,11 @@
 # Tool Host
 
-**Status:** ToolGate is in Beta Release. Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Renewable leases, admission spooling and durable result delivery are described in the [execution recovery guide](../../docs/operations/execution-leases.md). Sandbox isolation (network namespace, container) and per-effect authorization remain tracked in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
+**Status:** ToolGate is in Beta Release. Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Renewable leases, admission spooling and durable result delivery are described in the [execution recovery guide](../../docs/operations/execution-leases.md). Python OCI containment is available on qualified pools; per-effect authorization and the later roadmap remain tracked in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
 **Primary stack:** Rust
+
+Qualified Python pools can use the [rootless OCI tier](../../docs/operations/rootless-tool-host.md),
+with a permit-bound runtime image, enforced limits and container teardown.
+`HOST_NATIVE` remains the legacy compatibility tier and provides no container isolation.
 
 ## Responsibility
 

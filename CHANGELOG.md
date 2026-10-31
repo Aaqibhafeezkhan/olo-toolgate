@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Python server tools can run in qualified rootless OCI pools with a signed
+  runtime-image pin, no worker network or host mounts, separate identity ranges,
+  enforced resource limits, bounded output and durable teardown recovery. The
+  tier fails closed and never falls back to native launch. See
+  `docs/operations/rootless-tool-host.md` for preparation and executed conformance.
 - Tool Hosts renew durable, device-bound execution leases against current Control
   authority and stop supervised workers on refusal or lease expiry. Admission
   uncertainty records and exact result reports survive restart; late evidence is

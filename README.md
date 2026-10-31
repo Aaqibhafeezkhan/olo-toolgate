@@ -118,7 +118,7 @@ cached policy. See [architecture](ARCHITECTURE.md),
 | [MCP governance](docs/gateway/mcp-proxy.md) | Put existing MCP servers behind ToolGate policy, approval and audit without changing them | Available |
 | [Runtime policy](docs/security/README.md) | ALLOW / ASK / BLOCK on every tool invocation, against current authority | Available |
 | [Delegated authority](docs/security/enterprise-access-control.md) | Constrain what an agent may do on behalf of a person or another agent | Available |
-| [Zero-trust execution](docs/control-plane/approvals.md) | Single-use, Control-signed permits checked at the execution boundary | Available; Tool Host container/network isolation unfinished ([#230](https://github.com/olo-labs/olo-toolgate/issues/230)) |
+| [Zero-trust execution](docs/control-plane/approvals.md) | Single-use permits, renewable leases and qualified Python OCI containment | Partial; per-effect consent/fencing remain in [#230](https://github.com/olo-labs/olo-toolgate/issues/230) |
 | [Human approval](docs/control-plane/approvals.md) | Independent review of sensitive calls before they run | Available |
 | [Tool distribution](docs/client/package-deployment.md) | Package, version and deliver signed tools to devices and Tool Hosts | Available; Java and Python authoring; TypeScript [#242](https://github.com/olo-labs/olo-toolgate/issues/242) and .NET [#243](https://github.com/olo-labs/olo-toolgate/issues/243) are specifications |
 | [Audit and analytics](docs/control-plane/insights.md) | Correlate identities, decisions and outcomes; tenant Analytics and Operator Insights | Available |
@@ -268,8 +268,9 @@ More captures: [New Relic capture notes](docs/media/screenshots/newrelic-capture
 ToolGate is in Beta Release. The authorization path described above is
 enforced today; the following are **not yet** in place:
 
-- **Tool Host isolation:** process launch and broker checks exist, but container
-  and network isolation are unfinished. Enhancement: [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
+- **Tool Host isolation:** [qualified Python OCI pools](docs/operations/rootless-tool-host.md)
+  enforce rootless container and network isolation. Native pools remain uncontained;
+  other runtimes and broker process separation remain work in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
 - **Execution recovery:** Tool Hosts have renewable execution leases, an admission
   spool and a durable result outbox ([operator guide](docs/operations/execution-leases.md)).
   Per-effect authorization, consent, target fencing and operation-wide recovery

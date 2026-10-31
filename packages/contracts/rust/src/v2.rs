@@ -1210,6 +1210,8 @@ pub struct InvocationResultReport {
     pub result: Option<ResultFrame>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub not_started: Option<RefusalReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_tier: Option<RuntimeTier>,
 }
 /// v2 body of POST /access/invocations (invocation-state-v2.md T1). The Gateway generates invocationId; Control evaluates policy, reserves the business key and decides whether a task exists.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

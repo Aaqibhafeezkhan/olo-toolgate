@@ -97,19 +97,35 @@ pub async fn run(
         .env("LANG", "C.UTF-8")
         .env("TOOLGATE_PROTOCOL", "2")
         .env("TOOLGATE_EXECUTION_TARGET", "SERVER")
-        .current_dir(launch.sandbox_dir)
+        .current_dir(launch.sandbox_dir);
+    exchange(
+        command,
+        input,
+        deadline_unix_ms,
+        launch.max_output_bytes,
+        frames,
+        broker,
+    )
+    .await
+}
+
+/// The same bounded stdio protocol for a native child or an attached OCI worker.
+pub(crate) async fn exchange(
+    mut command: tokio::process::Command,
+    input: &ToolInput,
+    deadline_unix_ms: u64,
+    max_output_bytes: usize,
+    frames: Option<&crate::events::Sink>,
+    broker: &crate::broker::Invocation,
+) -> Ran {
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(e) => {
-            return Ran::Crashed(format!(
-                "cannot start the {} runtime: {e}",
-                launch.runtime_id
-            ))
-        }
+        Err(e) => return Ran::Crashed(format!("cannot start the {} runtime: {e}", "worker")),
     };
     let mut line = match serde_json::to_vec(input) {
         Ok(line) => line,
@@ -121,14 +137,19 @@ pub async fn run(
     let stderr = child.stderr.take().expect("piped");
     // The terminal frame carries maxOutputBytes plus its envelope. Reserve a bounded
     // additional budget for SDK response frames; exceeding it fails the run explicitly.
-    let out_cap = launch.max_output_bytes + 576 * 1024;
+    let out_cap = max_output_bytes + 576 * 1024;
     let work = async {
         let _ = stdin.write_all(&line).await;
         let _ = stdin.flush().await;
-        let (out, err) = tokio::join!(
-            converse(stdout, &mut stdin, out_cap, frames, broker),
-            bounded(stderr, MAX_STDERR)
-        );
+        let (out, err) = {
+            let read_out = converse(stdout, &mut stdin, out_cap, frames, broker);
+            let read_err = bounded(stderr, MAX_STDERR);
+            tokio::pin!(read_out, read_err);
+            tokio::select! {
+                out=&mut read_out=>{if out.1{let _=child.kill().await;}(out,read_err.await)},
+                err=&mut read_err=>{if err.1{let _=child.kill().await;}(read_out.await,err)},
+            }
+        };
         drop(stdin);
         let status = child.wait().await;
         (out, err, status)
@@ -148,6 +169,9 @@ pub async fn run(
     }
     if out.1 {
         return Ran::Crashed(format!("the tool wrote more than {out_cap} bytes"));
+    }
+    if err.1 {
+        return Ran::Crashed("the tool exceeded its diagnostic output budget".into());
     }
     let text = String::from_utf8_lossy(&out.0);
     let last = text

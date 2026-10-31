@@ -39,9 +39,23 @@ pub struct Host {
     slots: Arc<Semaphore>,
     outbox: crate::outbox::Outbox,
     intents: crate::outbox::Outbox,
+    sandbox: Option<Arc<crate::sandbox::Sandbox>>,
 }
 
 impl Host {
+    pub async fn qualify_execution(&self) -> Result<(), String> {
+        if let Some(pool) = &self.sandbox {
+            pool.qualify().await?;
+        }
+        Ok(())
+    }
+    fn execution_tier(&self) -> olo_toolgate_contracts::v2::RuntimeTier {
+        if self.sandbox.is_some() {
+            olo_toolgate_contracts::v2::RuntimeTier::OciSandbox
+        } else {
+            olo_toolgate_contracts::v2::RuntimeTier::HostNative
+        }
+    }
     /// The Control client dispatch uses; enrollment swaps its certificate in place.
     pub fn control(&self) -> Arc<Control> {
         self.control.clone()
@@ -73,6 +87,18 @@ impl Host {
         let outbox = crate::outbox::Outbox::open(config.work_dir.join("result-outbox"))?;
         let intents = crate::outbox::Outbox::open(config.work_dir.join("admission-spool"))?;
         intents.recover_into(&outbox)?;
+        let sandbox = config
+            .sandbox
+            .clone()
+            .map(|sandbox| {
+                crate::sandbox::Sandbox::open(
+                    sandbox,
+                    &config.work_dir,
+                    &format!("{}:{}", config.control.tenant_id, config.host_id),
+                    config.limits.max_concurrent,
+                )
+            })
+            .transpose()?;
         Ok(Arc::new(Host {
             verifier: Verifier::new(
                 keys,
@@ -86,6 +112,7 @@ impl Host {
             slots: Arc::new(Semaphore::new(config.limits.max_concurrent)),
             outbox,
             intents,
+            sandbox,
             config,
         }))
     }
@@ -101,12 +128,22 @@ pub fn router(host: Arc<Host>) -> Router {
 }
 
 async fn health(State(host): State<Arc<Host>>) -> Response {
+    let ready = host.sandbox.as_ref().is_none_or(|pool| pool.available());
     let body = serde_json::json!({
-        "ready": true,
+        "ready": ready,
         "hostId": host.config.host_id,
         "available": host.slots.available_permits(),
     });
-    ([(header::CACHE_CONTROL, "no-store")], axum::Json(body)).into_response()
+    (
+        if ready {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        },
+        [(header::CACHE_CONTROL, "no-store")],
+        axum::Json(body),
+    )
+        .into_response()
 }
 
 fn line<T: serde::Serialize>(value: &T) -> Bytes {
@@ -298,6 +335,16 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
             return Err(refusal(&id, RefusalReason::UnsupportedTier));
         }
     };
+    let supported = match &host.sandbox {
+        Some(pool) => pool.accepts(
+            &prepared.runtime.runtime_id,
+            prepared.runtime.base_image_digest.as_deref(),
+        ),
+        None => prepared.runtime.base_image_digest.is_none(),
+    };
+    if !supported {
+        return Err(refusal(&id, RefusalReason::UnsupportedTier));
+    }
     let input_cap = prepared
         .tool
         .limits
@@ -337,7 +384,11 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
     };
     if host
         .intents
-        .enqueue(&admission_intent(&id, &consumed.fencing_token))
+        .enqueue(&admission_intent(
+            &id,
+            &consumed.fencing_token,
+            host.execution_tier(),
+        ))
         .is_err()
     {
         return Err(refusal(&id, RefusalReason::StoreUnavailable));
@@ -399,6 +450,9 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
             _=supervision=>{},
             result=run_authorized(host.clone(),admitted)=>return result,
         }
+    }
+    if let Some(pool) = &host.sandbox {
+        pool.stop(&id).await;
     }
     // Dropping the worker future kills its process. A revoked or partitioned run
     // may already have produced effects; never turn lost authority into FAILED.
@@ -541,6 +595,7 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 max_output_bytes: output,
             };
             let (sink, source) = crate::events::channel();
+            let sink = Arc::new(sink);
             let forwarder = tokio::spawn(crate::events::forward(
                 host.control.clone(),
                 id.clone(),
@@ -548,7 +603,20 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 claims.attempt,
                 source,
             ));
-            let ran = runner::run(&launch, &input, deadline, Some(&sink), &invocation).await;
+            let ran = if let Some(pool) = &host.sandbox {
+                pool.run(
+                    &id,
+                    &prepared.executable,
+                    &input,
+                    memory,
+                    output,
+                    sink.clone(),
+                    invocation.clone(),
+                )
+                .await
+            } else {
+                runner::run(&launch, &input, deadline, Some(&sink), &invocation).await
+            };
             // Frames reach Control before the result, so the stream's terminal event follows them.
             drop(sink);
             if tokio::time::timeout(std::time::Duration::from_secs(5), forwarder)
@@ -564,7 +632,9 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 .map(|e| e.clone())
                 .unwrap_or_default();
             let service_write = invocation.service_effect_started.load(Ordering::SeqCst);
-            let unknown = claims.requires_execution_ledger || service_write;
+            let unknown = claims.requires_execution_ledger
+                || service_write
+                || host.sandbox.as_ref().is_some_and(|pool| !pool.available());
             match ran {
                 Ran::Frame(frame)
                     if frame.is_error
@@ -696,13 +766,18 @@ fn send_spans(
 }
 
 /// Reports an invocation's outcome to Control and answers the dispatch with it.
-fn admission_intent(id: &str, fence: &str) -> InvocationResultReport {
+fn admission_intent(
+    id: &str,
+    fence: &str,
+    tier: olo_toolgate_contracts::v2::RuntimeTier,
+) -> InvocationResultReport {
     InvocationResultReport {
         invocation_id: id.into(),
         fencing_token: fence.into(),
         outcome: InvocationOutcome::OutcomeUnknown,
         result: None,
         not_started: None,
+        execution_tier: Some(tier),
     }
 }
 
@@ -721,13 +796,15 @@ async fn finish(
         outcome: outcome.clone(),
         result: Some(result.clone()),
         not_started,
+        execution_tier: Some(host.execution_tier()),
     };
     match host.outbox.enqueue(&report) {
         Ok(path) => {
-            if let Err(e) = host
-                .intents
-                .remove_report(&admission_intent(&id, &fencing_token))
-            {
+            if let Err(e) = host.intents.remove_report(&admission_intent(
+                &id,
+                &fencing_token,
+                host.execution_tier(),
+            )) {
                 tracing::warn!(invocation_id=%id,error=%e,"admission intent cleanup incomplete");
             }
             if host.control.report(&report).await.is_ok() {

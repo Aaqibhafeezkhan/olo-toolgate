@@ -58,7 +58,11 @@ not provide healthy-host renewal supervision; do not claim the bound for them.
 The [preserved issue #230 plan](../plans/zero-trust-tool-execution.md) describes
 the complete roadmap. This lease/evidence increment does not implement the full
 roadmap: business-key operation binding, the per-effect ledger and exact effect
-consent, Linux container/network isolation, cooperating-target fencing, operation
+consent, cooperating-target fencing, operation
 finalization across attempts, externally anchored audit verification,
 sender-constrained run credentials, provenance and broker OAuth remain separate
 work. Third-party target outcomes are not proven by dispatch or permit consumption.
+
+Python workers can additionally use the [qualified rootless OCI tier](rootless-tool-host.md)
+to contain filesystem, network and process authority. Its cgroup teardown covers
+the worker container; native hosts retain the direct-process limitation above.

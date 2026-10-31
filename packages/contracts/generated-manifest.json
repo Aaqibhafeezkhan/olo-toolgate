@@ -32,11 +32,11 @@
     "packages/contracts/schemas/v2/package.schema.json": "4d919a8114e617c0ed80d05a1c292514787f0b8085403ec80d84972c4cf3978e",
     "packages/contracts/schemas/v2/permit.schema.json": "98abdc836fac634d7e0bfbc0b439989f041aa1687cad666013b7bd46e2dcbc3e",
     "packages/contracts/schemas/v2/profile.schema.json": "3e5f1724034938b400883eaebac709f1123e9b78f4dfb11f2d646549741a5768",
-    "packages/contracts/schemas/v2/protocol.schema.json": "35ec3686b2d2c407f2453e4eb8fed8c27d539a541f7dfb61d908b7aab998f2b3",
+    "packages/contracts/schemas/v2/protocol.schema.json": "ba06726144bc0dd00185c6dacdedaf258c4672dab2d5204bdbbee52c2ed49982",
     "packages/contracts/schemas/v2/service-profile.schema.json": "90c872d21bf836c45456c906243e1947bccfd5ba4c522415d284597522e16cd5",
     "packages/contracts/schemas/v2/settings.schema.json": "2a55ae4fd562d8904f33104177a66f6789912509035e4fe8da91b92b2776da5a"
   },
-  "generatorSha256": "1e9b47e6603f9678564b6b4bfbd5d389e1359867dab364938c41b81478ec58f7",
+  "generatorSha256": "14227ea5a5170eeb63c85928c102f7a33267be2b9244b8e2b3924c1e545009a8",
   "outputs": [
     "packages/contracts/java/LICENSE",
     "packages/contracts/java/NOTICE.md",

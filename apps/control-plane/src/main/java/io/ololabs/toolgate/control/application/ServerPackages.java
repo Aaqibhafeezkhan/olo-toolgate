@@ -435,6 +435,7 @@ public final class ServerPackages {
             var deployment = node(raw);
             if (!deployment.get("packageDigest").asText().equals("sha256:" + e.packageDigest()) || !targets(tx.load(), codec, deployment, device)) throw Failure.conflict();
             var version = tx.packages().version(deployment.get("packageDigest").asText()); var manifest = node(version.document()).get("manifest");
+            PackageCompatibility.require(PackageCompatibility.hostProblems(manifest,device,node(tx.packages().toolHost(device))));
             JsonNode tool = null;
             for (var t : manifest.path("tools")) if (t.path("descriptor").path("toolId").asText().equals(e.toolId())) tool = t;
             if (tool == null) throw Failure.conflict();
