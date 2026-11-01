@@ -73,3 +73,5 @@ Use `000-template.md`.
 - [040: Knowledge target HTTP bindings](040-knowledge-target-http-bindings.md)
 
 - [041: Owner-bound OLO dispatch](041-owned-olo-dispatch.md)
+
+- [042: Shared target SQL claims](042-shared-target-claims.md)

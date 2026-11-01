@@ -8,6 +8,8 @@ dependencies {
     implementation(libs.jackson.databind)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)
+    testRuntimeOnly(libs.sqlite.jdbc)
+    testRuntimeOnly("org.postgresql:postgresql:42.7.13")
 }
 
 tasks.withType<Test>().configureEach {

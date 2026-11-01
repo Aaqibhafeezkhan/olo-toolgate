@@ -17,3 +17,7 @@ New broker permits also bind the prepared HTTP request. For those permits pass
 and actual accepted URI, method and repeated headers to the five-argument
 `Request` constructor. Missing transport facts fail closed. Upgrade target
 integrations before deploying the updated broker; see the installation guide.
+
+The SQL target-claim foundation is available as JdbcEffectClaims. Every replica
+must share the store and use caller-owned transactions. It is not yet integrated
+into OLO online consumption. See the [transaction and recovery guide](../../docs/operations/target-effect-claims.md).

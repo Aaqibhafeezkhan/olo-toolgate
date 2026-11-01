@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add a shared JDBC target-claim foundation with unique ownership, pre-apply
+  recovery fencing and caller-transaction completion. Control claim replay and
+  memory/RAG integration remain outstanding; see the target effect claims guide.
+
 - Bound OLO writes require recorded broker/handler ownership and one authenticated
   AUTHORIZED-to-SENDING transition before dispatch. Target consumption refuses
   unsent generations. Upgrade broker and Control together.
