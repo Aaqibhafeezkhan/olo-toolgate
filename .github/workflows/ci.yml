@@ -44,3 +44,6 @@ jobs:
     uses: ./.github/workflows/quality-summary.yml
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  zero-trust-diagnostics:
+    needs: preflight
+    uses: ./.github/workflows/zero-trust-scorecard.yml

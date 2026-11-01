@@ -72,7 +72,7 @@ class AdmissionTests(unittest.TestCase):
                 self.assertEqual(set(events),{'workflow_dispatch'})
                 self.assertNotIn('admission',jobs)
                 self.assertEqual(document['permissions'],{'contents':'read','pull-requests':'read'})
-                self.assertEqual(set(jobs),{'preflight','foundation','clients','images','coverage'})
+                self.assertEqual(set(jobs),{'preflight','foundation','clients','images','coverage','zero-trust-diagnostics'})
                 for name,job in jobs.items():
                     self.assertNotIn('if',job)
                     if name=='coverage':

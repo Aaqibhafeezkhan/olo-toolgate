@@ -17,6 +17,7 @@ replay supported jobs. It reports coverage gaps explicitly.
 | SDK conformance | [Cases and runner contract](../../tool-sdk/conformance/README.md) |
 | Performance | [Gateway methodology](../gateway/performance.md) |
 | Release checks and scans | [Release process](../development/release-process.md) |
+| Zero Trust diagnostic scorecard | [Runner, nonzero results and CI publication](zero-trust-scorecard.md) |
 | Documentation | `make docs` |
 
 Use deterministic fixtures for unit tests and real service boundaries for

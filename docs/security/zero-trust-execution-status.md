@@ -10,13 +10,13 @@ does not establish a passing security claim.
 Updated: **2026-11-01**. Branch: `feature/zero-trust-execution-plan`.
 Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
 
-**Overall: partially implemented.** Fifteen scoped deliveries are implemented:
+**Overall: partially implemented.** Sixteen scoped deliveries are implemented:
 renewable leases/durable execution recovery, qualified Python OCI containment,
-explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, OLO claim-token consumption/status/outcome APIs, verified target-claim orchestration with memory/RAG transaction integration, source-bound actual Control/Gateway/target outcome qualification, and adoption of the complete A1–A9/C1–C8 security model. Executed validation for the current
+explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, OLO claim-token consumption/status/outcome APIs, verified target-claim orchestration with memory/RAG transaction integration, source-bound actual Control/Gateway/target outcome qualification, adoption of the complete A1–A9/C1–C8 security model, and a fail-closed diagnostic scorecard/CI harness. Executed validation for the current
 delivery is recorded below. **0 of 7 full roadmap phases have met every exit
 criterion.** Phases 0–3 have
 partial delivery; phases 4–6 have not started as generalized implementations.
-**Weighted delivery progress: 23.7% complete; 76.3% pending.** This planning metric credits only completed delivery stages, not partially completed stages. It is separate from full-phase security acceptance (still 0 of 7). See the baseline below.
+**Weighted delivery progress: 25.0% complete; 75.0% pending.** This planning metric credits only completed delivery stages, not partially completed stages. It is separate from full-phase security acceptance (still 0 of 7). See the baseline below.
 
 The roadmap defines **7 major phases**, not a fixed number of incremental
 deliveries. Its original per-phase estimates sum to approximately **35–44
@@ -26,7 +26,7 @@ completion forecast. The midpoint of each original phase estimate supplies the f
 
 | Plan phase | Status | Delivered | Remaining before full phase completion |
 |---|---|---|---|
-| 0 — Boundary and harness | Partial | Weighted delivery baseline and one-commit stage workflow; source-bound actual stack gate; adopted A1–A9/C1–C8 threat model across security docs; preserved revision-10 plan, claim inventory and executable OCI conformance gate with revision/source/image evidence. | Execute all C1–C8 conformance cases and publish a complete release scorecard. |
+| 0 — Boundary and harness | Partial | Weighted delivery baseline and one-commit stage workflow; source-bound actual stack gate; adopted A1–A9/C1–C8 threat model across security docs; diagnostic scorecard/CI harness inventories all 209 security/integration cases with explicit missing coverage; preserved revision-10 plan, claim inventory and executable OCI conformance gate with revision/source/image evidence. | Execute the full C1–C8 case/target matrix and integrate a strict release scorecard; obtain hosted CI/release evidence. Four delivery-stage checkmarks do not satisfy these full-phase exit criteria. |
 | 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key binding; V3 operation/attempt records, immutable snapshots, historical backfill, positive-proof reservation replacement and conservative operation summaries. | Generalized requiresBusinessKey/namespace/dedupe-window policy, retention maintenance, whole-invocation rebinding and full effect-aware operation finalization/caller integration; complete admission/rebinding and crash conformance. |
 | 2 — Containment | Partial; Python worker slice delivered | Rootless Podman/crun workers; permit-bound image; isolated namespaces and UID ranges; read-only files; enforced resource limits; stdio broker; teardown/restart recovery; no native fallback; service unit and CI gate. | Separate the trusted broker's OS identity/network namespace as specified by the plan; broader deployment/interface conformance and deployment SLO evidence. Other languages and VM tiers require separate qualification. |
 | 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; the actual memory/RAG adapters now integrate it. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. The target SDK separates verified facts from online consumption, persists APPLYING before external actions, and atomically journals completion/outcome delivery with business SQL. The owned actual Control/Gateway fixture now verifies committed memory/RAG outcome settlement against Control records. | Generalize the independently validated OLO path to broker enforcement for all route classes, effect keys/manifests, generalized owner protocol, consent slots, generalized target fencing/deduplication, reconciliation and operation finalization. |
@@ -38,7 +38,7 @@ completion forecast. The midpoint of each original phase estimate supplies the f
 
 The complete first milestone in issue #230 is **not yet accepted**.
 S03 adopts the [threat model and claim definitions](zero-trust-boundaries.md);
-documentation alignment supplies no additional runtime acceptance. All acceptance
+documentation alignment supplies no additional runtime acceptance. S04 now publishes diagnostic gaps and scoped observations, not vertical-slice acceptance. All acceptance
 items below retain their existing implementation status.
 
 | Acceptance item | Status | Evidence / outstanding work |
@@ -48,10 +48,10 @@ items below retain their existing implementation status.
 | Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; owner races permit one SENDING winner and refused gates contact no target; actual target tests now exercise paused-owner abandonment, two JVMs, writer loss after business commit and lost outcome acknowledgement; complete Control/Gateway crash scenarios remain outstanding. |
 | Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; shared SQLite/PostgreSQL claims and actual memory/RAG JVM replicas now exercise one mutation, paused-owner fencing, writer loss and outcome redelivery; actual Control/Gateway normal-path settlement now passes; complete partition/crash qualification remains outstanding. |
 | Operation finalization includes all attempts/effects and late evidence | Partial | Each permit has independent identity/snapshots and late evidence. New operations finalize FAILED only without consumption; consumed terminal work remains unknown. Authenticated target outcomes now retain late completion/conflict evidence independently of permit expiry or signing-key rotation. Complete effect aggregation and caller-visible finalization remain outstanding. |
-| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target component evidence now pins verified SDK/contracts artifacts and executes replica/crash cases; actual Control/Gateway development qualification now passes; deployment guarantees and the complete release scorecard remain outstanding. |
+| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target component evidence now pins verified SDK/contracts artifacts and executes replica/crash cases; actual Control/Gateway development qualification now passes; S04 diagnostic reports bind source and explicitly disclose missing cases; deployment guarantees and strict release acceptance remain outstanding. |
 
-**Next implementation stage:** S04, complete the release conformance scorecard.
-S03 threat-matrix/security-document adoption is complete. Continue in stage order;
+**Next implementation stage:** S08, generalized business-key policy.
+S03 and the clarified S04 diagnostic harness are complete. Continue in stage order;
 dependencies may be implemented inside a stage but cannot earn duplicate credit.
 S17 development-stack qualification is complete; generalized grants, exact consent,
 operation finalization and production deployment evidence remain outstanding.
@@ -67,15 +67,15 @@ A stage earns its entire weight only when its stated scope and executed validati
 are complete; Partial and Pending earn zero. Existing work is credited only for
 the bounded Done stages below, not for the complete parent phase.
 
-**Completed weight = 1.5 + 3.5 + 1.75 + 2.625 = 9.375.**
-**Completion = 100 × 9.375 / 39.5 = 23.734…%, rounded to 23.7%.**
-Pending weight is 30.125, or 76.3%. Ten of 33 delivery stages are Done;
+**Completed weight = 2 + 3.5 + 1.75 + 2.625 = 9.875.**
+**Completion = 100 × 9.875 / 39.5 = 25.0%.**
+Pending weight is 29.625, or 75.0%. Eleven of 33 delivery stages are Done;
 stage count is not the percentage formula. No phase receives full acceptance
 until all its original exit criteria have executed evidence.
 
 | Roadmap phase | Planning weight (weeks) | Stages done / total | Earned weight | Weighted contribution |
 |---|---:|---:|---:|---:|
-| 0 | 2 | 3 / 4 | 1.5 | 3.80% |
+| 0 | 2 | 4 / 4 | 2 | 5.06% |
 | 1 | 7 | 3 / 6 | 3.5 | 8.86% |
 | 2 | 7 | 1 / 4 | 1.75 | 4.43% |
 | 3 | 7 | 3 / 8 | 2.625 | 6.65% |
@@ -92,7 +92,7 @@ Future percentages use this formula and the evidence-backed stage statuses.
 | S01 | 0 | Plan and claim inventory | Done | Preserved revision-10 plan and authoritative claim inventory. |
 | S02 | 0 | Revision-bound OCI qualification runner | Done | Six executed OCI cases; source/image/revision evidence. |
 | S03 | 0 | Complete threat matrix and security documentation | Done | Adopted A1–A9/C1–C8 model and aligned security/trust/custody/endpoint/OLO documentation; structure/local-link checks and preserved-plan check passed. |
-| S04 | 0 | Complete release conformance scorecard | Partial | CI executes all required C1–C8 cases and publishes revision-bound failures/results; close boundary/harness phase criteria. |
+| S04 | 0 | Complete diagnostic scorecard and CI harness | Done | Inventory all required security/integration cases; execute supported observations; report missing/failed/stale evidence without acceptance; publish revision-bound CI diagnostics. Full case implementations and release acceptance remain in their owning stages/S33; local validation passed, hosted CI not yet observed. |
 | S05 | 1 | Renewable execution leases | Done | Lease, heartbeat, watchdog, revocation and expiry tests. |
 | S06 | 1 | Durable admission and evidence delivery | Done | Admission spool, result outbox and immutable late evidence; recovery tests. |
 | S07 | 1 | Independent attempt journal | Done | V3 attempts, immutable snapshots and historical backfill tests. |
@@ -121,7 +121,7 @@ Future percentages use this formula and the evidence-backed stage statuses.
 | S30 | 6 | Broker OAuth and token exchange | Pending | Broker-owned scoped token exchange; no worker token authority; lifecycle/refusal tests. |
 | S31 | 6 | Trusted provenance policy | Pending | Authenticated provenance and policy decisions; injected/untrusted input refusal tests. |
 | S32 | 6 | Exact effect preview | Pending | Reviewer preview binds the canonical authorized effect; mutation invalidates approval. |
-| S33 | 6 | Stronger step-up approvals and final acceptance | Pending | Step-up binds identity/effect/deadline; flagship demo, external red-team exercise and complete release/phase acceptance. |
+| S33 | 6 | Stronger step-up approvals and final acceptance | Pending | Step-up binds identity/effect/deadline; flagship demo, external red-team exercise and complete release/phase acceptance, including all missing case adapters and strict C1–C8 release gating from S04. |
 
 ### One commit per completed stage
 
@@ -175,7 +175,7 @@ The adopted [A1–A9 matrix and C1–C8 definitions](zero-trust-boundaries.md)
 now apply across the security documentation. S03 corrects claim scope, especially
 C2's sender constraint, C3b's effect ordering, C3c/C7's healthy-host limitation,
 C5's qualified runtime scope, C6's missing anchors and C8's ambiguous-retry rule;
-it changes no runtime guarantee or claim implementation status.
+it changes no runtime guarantee or claim implementation status. The S04 diagnostic scorecard additionally records all ten claim checks as INCOMPLETE and does not promote scoped observations to whole-claim evidence.
 
 This is an implementation inventory, not a passing per-release C1–C8 scorecard.
 No full-plan acceptance is claimed by this increment. A release scorecard must
@@ -862,3 +862,57 @@ completion moves from 8.875/39.5 (22.5%) to 9.375/39.5 (23.7%).
 All seven full phases and the first vertical slice still have outstanding exit
 criteria. Next: S04, executable release conformance scorecard and CI coverage;
 unexecuted requirements must remain explicit failures or missing evidence.
+
+
+## S04 — Diagnostic scorecard and CI harness
+
+The stage definition is clarified to avoid a dependency cycle: the earlier
+wording required every security case to execute before the later stages
+implementing those controls. The original phase-0 proposal explicitly allows
+failing conformance. S04 delivers the executable diagnostic harness and complete
+inventory; full case adapters, target matrices and release acceptance stay with
+their owning implementation stages and S33. Phase 0 is not accepted by a green
+diagnostic job. No weights or denominator change; the validated harness earns S04's fixed
+0.5 weight on delivery, moving progress from 23.7% to 25.0%. This is a recorded scope
+clarification, not an increase in delivered runtime guarantees.
+
+The current implementation inventories 209 security/integration definitions,
+reports all complete case adapters MISSING, and retains one separately scoped
+actual Rust mTLS send-order observation. C1–C8 (ten checks including C3a/b/c)
+remain INCOMPLETE; declared passing metadata earns no credit. The strict CLI
+returns nonzero for incomplete acceptance. CI uploads JSON, Markdown and logs,
+then independently checks revision/source, inventory, observation execution,
+log hash and summary agreement; producer failures cannot hide behind the
+expected nonzero acceptance result. Automatic/manual CI and local coverage
+classification are kept aligned. See [the guide](../testing/zero-trust-scorecard.md).
+
+Focused validation so far: nine negative/positive scorecard tests, 57 workflow/
+local-runner tests, 32 admission tests, and the actual single-send mTLS test.
+The first broad CI run found workflow integration defects (fixed) and unrelated
+Windows PowerShell interop failures in the inherited WSL PATH. A rerun with the
+documented Linux tool PATH exposed one remaining manual-job expectation (fixed).
+Final validation passed: the CI suite ran 380 tests (363 passed, 17 explicitly
+skipped for unavailable platform/tool prerequisites), all nine scorecard tests
+passed, all 13 conformance-definition tests passed, make docs and whitespace
+checks passed. The fresh actual mTLS observation passed and the strict command
+returned 1 as required for incomplete acceptance. The independent diagnostic
+publication verifier passed. Hosted GitHub execution was not run locally.
+
+Known tested parent: 57b18790. Full source snapshot from the fresh observation:
+c9ef71d0b0bb54ef441fad3d57783f5d2ca641db106f474e742a8dd72ea0cb5b.
+That snapshot precedes this final validation-text/status append. Changed
+implementation/workflow/test source digest (sorted path + NUL + raw bytes):
+8925e26060ec1ad292a684466b1b9401104d084a6712c7b080a30d359d1a78b7 (8 files; Markdown excluded).
+Generated JSON/Markdown and observation logs are retained under ignored
+build/zero-trust-scorecard. They are diagnostic evidence, not a signed artifact
+or a completed C1–C8 release scorecard. Full case adapters, exact consent,
+generalized enforcement and production qualification remain outstanding.
+
+Scope clarification history: S04's original wording required every case to
+execute before later stages implemented those cases. The delivered definition
+is the complete phase-0 diagnostic harness (failures/missing coverage explicit);
+full case execution remains in the owning stages and S33. No case implementation
+was deleted, no baseline weight changed, and no runtime/security completion is
+credited for that deferred work. Phase 0 remains Partial despite 4/4 bounded
+delivery stages, because full phase acceptance still requires complete executed
+release evidence. Next stage: S08, generalized business-key policy.

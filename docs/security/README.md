@@ -13,6 +13,7 @@ consent are still pending; admission is not permission for arbitrary later effec
 
 - [Zero Trust Execution boundaries, A1–A9 threats and C1–C8 claims](zero-trust-boundaries.md)
 - [Live implementation and qualification scope](zero-trust-execution-status.md)
+- [Zero Trust diagnostic scorecard](../testing/zero-trust-scorecard.md)
 - [Security invariants](security-invariants.md)
 - [Enterprise access control](enterprise-access-control.md) and [user roles](user-roles.md)
 - [Trust boundaries](../architecture/trust-boundaries.md)

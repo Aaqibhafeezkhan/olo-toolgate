@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add a source-bound Zero Trust diagnostic scorecard and CI artifact/summary.
+  Authored case status supplies no acceptance; missing runners remain explicit
+  gaps. The diagnostic job is separate from security release acceptance.
+
 - Qualify actual development-stack target outcomes against Control records, with
   source, installed-artifact and runtime-image pins. Publish a weighted delivery
   baseline and require one commit per completed delivery stage.
