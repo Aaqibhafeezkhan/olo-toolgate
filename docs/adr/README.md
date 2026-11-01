@@ -67,3 +67,5 @@ Use `000-template.md`.
 - [037: Prepare one immutable broker HTTP request](037-prepared-http-request-binding.md)
 
 - [038: OLO prepared HTTP request grants](038-olo-http-request-grants.md)
+
+- [039: Independent Control HTTP manifest validation](039-control-http-manifest-validation.md)

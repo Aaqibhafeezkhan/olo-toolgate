@@ -151,3 +151,31 @@ missing facts and transport changes consume no authority. Control also compares
 the target-observed digest to the signed value. The optional contract additions
 change generated Java constructor signatures and require coordinated recompilation.
 They do not implement generalized effect APIs, exact consent or target deduplication.
+
+
+### Independent Control profile and route checks
+
+Leased v2 issuance now also requires `httpRequestManifest` and
+`invocationPermit`. The updated broker submits both from its immutable prepared
+request and original admitted dispatch; workers never receive that authority.
+Control verifies the signed admission and live execution lease, loads the profile
+by the signed digest, validates route/destination/metadata and admitted body hash,
+and recomputes the submitted request fingerprint. The short admission window may
+have expired after consumption; current execution authority must still be live.
+
+A v2 host cannot omit all binding fields to fall back to legacy issuance.
+Digest-only bound brokers from the preceding development checkpoint must upgrade
+with Control. Unbound legacy issuance is available only without a v2 lease.
+No raw body or credential value belongs in the manifest. The original signed
+permit and non-credential manifest are authority metadata: do not log their
+contents or return them to package code.
+
+Whole-segment path variables support a single bounded linear character class;
+unsupported complex/embedded patterns fail closed. OLO endpoint paths must match
+the admitted operation. Query names/values use canonical RFC 3986 encoding,
+sorted by encoded names with repeated-name order preserved. Header names are
+lowercase; only declared semantic headers and the implicit Accept default are
+accepted. Broker and target continue to enforce byte limits.
+
+These checks approve a declared route and bind its exact transport. They do not
+supply the separate exact-consent slots or general effect-owner protocol.

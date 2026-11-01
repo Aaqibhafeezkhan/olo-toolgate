@@ -9,7 +9,7 @@ use std::time::Duration;
 use tool_host::egress::{client, AddressPolicy};
 
 #[tokio::test]
-async fn broker_negotiates_only_http1_when_target_prefers_http2() {
+async fn broker_uses_fresh_http1_connections_when_target_prefers_http2() {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let pem = certified.cert.pem();
@@ -28,44 +28,51 @@ async fn broker_negotiates_only_http1_when_target_prefers_http2() {
     listener.set_nonblocking(true).unwrap();
     let port = listener.local_addr().unwrap().port();
     let peer = tokio::task::spawn_blocking(move || {
-        let until = std::time::Instant::now() + Duration::from_secs(5);
-        let socket = loop {
-            match listener.accept() {
-                Ok((socket, _)) => break socket,
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    assert!(std::time::Instant::now() < until, "broker did not connect");
-                    std::thread::sleep(Duration::from_millis(5));
+        let config = Arc::new(config);
+        let mut keepalive = Vec::new();
+        for _ in 0..2 {
+            let until = std::time::Instant::now() + Duration::from_secs(5);
+            let socket = loop {
+                match listener.accept() {
+                    Ok((socket, _)) => break socket,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(std::time::Instant::now() < until, "broker did not connect");
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("accept: {error}"),
                 }
-                Err(error) => panic!("accept: {error}"),
+            };
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            socket
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let connection = rustls::ServerConnection::new(config.clone()).unwrap();
+            let mut stream = rustls::StreamOwned::new(connection, socket);
+            while stream.conn.is_handshaking() {
+                stream.conn.complete_io(&mut stream.sock).unwrap();
             }
-        };
-        socket
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        socket
-            .set_write_timeout(Some(Duration::from_secs(5)))
-            .unwrap();
-        let connection = rustls::ServerConnection::new(Arc::new(config)).unwrap();
-        let mut stream = rustls::StreamOwned::new(connection, socket);
-        while stream.conn.is_handshaking() {
-            stream.conn.complete_io(&mut stream.sock).unwrap();
+            assert_eq!(stream.conn.alpn_protocol(), Some(b"http/1.1".as_slice()));
+            let mut wire = Vec::new();
+            let mut byte = [0u8; 1];
+            while !wire.ends_with(b"\r\n\r\n") {
+                assert!(wire.len() < 16384);
+                stream.read_exact(&mut byte).unwrap();
+                wire.push(byte[0]);
+            }
+            assert!(wire.starts_with(b"POST /write HTTP/1.1\r\n"));
+            let mut body = [0u8; 7];
+            stream.read_exact(&mut body).unwrap();
+            assert_eq!(&body, b"payload");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+                .unwrap();
+            stream.flush().unwrap();
+            // Keep the first socket alive: a pooling client would reuse it and never
+            // open the second connection this test requires.
+            keepalive.push(stream);
         }
-        assert_eq!(stream.conn.alpn_protocol(), Some(b"http/1.1".as_slice()));
-        let mut wire = Vec::new();
-        let mut byte = [0u8; 1];
-        while !wire.ends_with(b"\r\n\r\n") {
-            assert!(wire.len() < 16384);
-            stream.read_exact(&mut byte).unwrap();
-            wire.push(byte[0]);
-        }
-        assert!(wire.starts_with(b"POST /write HTTP/1.1\r\n"));
-        let mut body = [0u8; 7];
-        stream.read_exact(&mut body).unwrap();
-        assert_eq!(&body, b"payload");
-        stream
-            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
-            .unwrap();
-        stream.flush().unwrap();
     });
     let destination = ServiceDestination {
         id: "test".into(),
@@ -88,14 +95,16 @@ async fn broker_negotiates_only_http1_when_target_prefers_http2() {
         },
     )
     .unwrap();
-    let result = client
-        .post(format!("https://localhost:{port}/write"))
-        .body("payload")
-        .timeout(Duration::from_secs(5))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(result.version(), reqwest::Version::HTTP_11);
-    assert_eq!(result.text().await.unwrap(), "ok");
+    for _ in 0..2 {
+        let result = client
+            .post(format!("https://localhost:{port}/write"))
+            .body("payload")
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(result.version(), reqwest::Version::HTTP_11);
+        assert_eq!(result.text().await.unwrap(), "ok");
+    }
     peer.await.unwrap();
 }

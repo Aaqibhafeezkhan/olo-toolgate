@@ -260,6 +260,7 @@ fn shared_fixture_round_trips() {
         PackageCompatibility,
         PackageManifest,
         PackageState,
+        PreparedHttpRequestManifest,
         ReconciliationMethod,
         RemoteToolAuthorization,
         RemoteToolAuthorizationAck,

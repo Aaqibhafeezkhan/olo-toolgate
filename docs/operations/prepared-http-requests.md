@@ -57,3 +57,16 @@ must recompute it from accepted request facts; see
 [service authorization](../control-plane/olo-service-permits.md#prepared-http-transport-binding).
 Generic routes still produce broker observations and have no generalized effect
 grant or exact-consent enforcement.
+
+
+For leased v2 OLO requests, Control now independently validates the credential-free
+manifest against the original signed admission permit and pinned profile.
+Digest-only issuance and unbound fallback from a v2 lease are refused.
+Other route classes still require generalized grants and consent enforcement.
+
+Broker egress now also disables idle HTTP/1 connection pooling. Hyper's
+canceled-request retry on reused connections sits below reqwest's retry policy;
+using fresh HTTP/1 connections removes that path. Each request establishes a
+new connection, trading connection reuse for the qualified no-replay behavior.
+A real TLS test keeps the first socket alive and requires a second connection
+for a second write; restoring pooling makes the test fail.

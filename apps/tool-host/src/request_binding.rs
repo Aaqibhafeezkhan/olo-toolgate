@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Exact buffered request preparation. A digest is an observation, not an authorization.
 use reqwest::{header, Client, Request, Response};
-#[cfg(test)]
 use serde_json::Value;
 use serde_json::{json, Map};
 use std::collections::BTreeSet;
@@ -19,7 +18,6 @@ pub(crate) struct PreparedRequest {
     request: Request,
     digest: String,
     service_permit_credential: bool,
-    #[cfg(test)]
     manifest: Value,
 }
 impl PreparedRequest {
@@ -174,9 +172,11 @@ impl PreparedRequest {
             request,
             digest,
             service_permit_credential: credentials.contains("toolgate-service-permit"),
-            #[cfg(test)]
             manifest,
         })
+    }
+    pub(crate) fn manifest(&self) -> &Value {
+        &self.manifest
     }
     pub(crate) fn digest(&self) -> &str {
         &self.digest

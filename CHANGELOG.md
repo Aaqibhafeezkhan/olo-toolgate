@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Independently validate pinned OLO HTTP request manifests at Control using the
+  original signed admission, current lease and immutable service profile. Refuse
+  altered destinations/route scope and v2 downgrade to unbound service permits.
+  Digest-only bound development clients must upgrade with Control.
+
 - Bind OLO service permits to the broker's prepared HTTP request fingerprint.
   Targets recompute the fingerprint from accepted request facts before consuming
   a write capability; missing/changed facts fail closed. Upgrade target

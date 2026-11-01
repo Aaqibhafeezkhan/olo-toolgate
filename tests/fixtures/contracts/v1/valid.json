@@ -2309,6 +2309,32 @@
     }
   },
   "PackageState": "READY",
+  "PreparedHttpRequestManifest": {
+    "version": "toolgate-http-request-v1",
+    "profileId": "profile",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "routeId": "write",
+    "scheme": "https",
+    "host": "example.test",
+    "port": 443,
+    "method": "POST",
+    "path": "/a%20b",
+    "query": "a=2&a=1&z=9",
+    "contentType": "application/json; charset=utf-8",
+    "bodyDigest": "sha256:5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22",
+    "headers": {
+      "x-recipient": [
+        "alice"
+      ],
+      "accept": [
+        "*/*"
+      ]
+    },
+    "authDeclarationId": "api-key",
+    "credentialHeaders": [
+      "authorization"
+    ]
+  },
   "ReconciliationMethod": "STATUS_LOOKUP",
   "RemoteToolAuthorization": {
     "requestId": "request",

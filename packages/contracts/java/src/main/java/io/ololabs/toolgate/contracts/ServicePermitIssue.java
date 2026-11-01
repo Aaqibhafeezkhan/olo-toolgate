@@ -9,13 +9,17 @@ package io.ololabs.toolgate.contracts;
  * @param fencingToken canonical fencingToken value
  * @param audience canonical audience value
  * @param httpRequestDigest canonical httpRequestDigest value
+ * @param httpRequestManifest canonical httpRequestManifest value
+ * @param invocationPermit canonical invocationPermit value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServicePermitIssue(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationId", required = true) String invocationId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "fencingToken", required = true) String fencingToken,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "audience", required = true) ServiceAudience audience,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestManifest", required = false) PreparedHttpRequestManifest httpRequestManifest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationPermit", required = false) io.ololabs.toolgate.contracts.v2.SignedInvocationPermit invocationPermit
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,6 +27,8 @@ public record ServicePermitIssue(
      * @param fencingToken canonical fencingToken value
      * @param audience canonical audience value
      * @param httpRequestDigest canonical httpRequestDigest value
+     * @param httpRequestManifest canonical httpRequestManifest value
+     * @param invocationPermit canonical invocationPermit value
      */
     public ServicePermitIssue {
         java.util.Objects.requireNonNull(invocationId, "invocationId");

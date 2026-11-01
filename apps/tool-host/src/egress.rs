@@ -201,7 +201,9 @@ pub fn client_with_identity(
         .tls_sslkeylogfile(false)
         .tls_info(true)
         .connect_timeout(Duration::from_secs(10))
-        .pool_max_idle_per_host(2)
+        // hyper can retry canceled requests on reused connections below reqwest retry policy.
+        // Disable HTTP/1 connection reuse so this path always uses a fresh connection.
+        .pool_max_idle_per_host(0)
         .dns_resolver(Arc::new(CheckedResolver(policy)));
     if let Some(identity) = identity {
         builder = builder.identity(identity);

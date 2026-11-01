@@ -59,6 +59,7 @@ pub struct Invocation {
     pub deadline_unix_ms: u64,
     pub profile_id: String,
     pub profile_digest: String,
+    pub invocation_permit: Option<olo_toolgate_contracts::v2::SignedInvocationPermit>,
     /// The permit's routes as the service profile approves them.
     pub routes: Vec<RouteDeclaration>,
     pub destinations: Vec<ServiceDestination>,
@@ -113,6 +114,7 @@ impl Invocation {
             deadline_unix_ms,
             profile_id,
             profile_digest,
+            invocation_permit: None,
             routes,
             destinations,
             private_ranges,
@@ -536,6 +538,11 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
                 &invocation.fencing_token,
                 audience,
                 prepared.digest(),
+                prepared.manifest(),
+                invocation
+                    .invocation_permit
+                    .as_ref()
+                    .ok_or_else(|| refused("signed admission proof required"))?,
             )
             .await
             .map_err(|_| refused("downstream service authorization refused"))?;

@@ -39,12 +39,13 @@ class ServicePermitTlsQualificationTest {
         var invocation=fixture.start("tls-storage");
         var permits=new ServicePermits(rig.store,rig.graph.codec,rig.operations);
         byte[] body=rig.graph.codec.json(fixture.request(invocation.id()).request().arguments()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        var profile=new HttpRequestFingerprint.Profile("profile","sha256:"+"a".repeat(64),"write","toolgate-service-permit:olo-memory",List.of("toolgate-service-permit"));
+        var bound=fixture.bound(invocation);
+        var profile=new HttpRequestFingerprint.Profile(bound.manifest().profileId(),bound.manifest().profileDigest(),"write","toolgate-service-permit:olo-memory",List.of("toolgate-service-permit"));
         var destination=java.net.URI.create("https://memory.test/v1/memory.append");
         var expectedHeaders=Map.of("content-type",List.of("application/json"),"accept",List.of("*/*"),"x-recipient",List.of("alice"));
         String httpDigest=HttpRequestFingerprint.digest(profile,destination,"POST",expectedHeaders,body);
         var permit=rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",executorHash,
-            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory,httpDigest))).body(),ServicePermit.class);
+            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory,httpDigest,bound.manifest(),bound.proof()))).body(),ServicePermit.class);
         var publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(EnterpriseOperationTest.key.getModulus(),EnterpriseOperationTest.key.getPublicExponent()));
         var verifier=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("permit-key",publicKey),rig.clock,
             tenant->null,(audience,request)->{permits.consume(rig.gateway,audience,rig.graph.codec.json(request));return true;});

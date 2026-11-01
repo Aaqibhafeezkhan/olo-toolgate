@@ -2666,6 +2666,26 @@ pub enum PackageState {
     #[serde(rename = "REVOKED")]
     Revoked,
 }
+/// Credential-free toolgate-http-request-v1 manifest of the exact prepared wire request. Never conveys authority on its own.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreparedHttpRequestManifest {
+    pub version: String,
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub route_id: String,
+    pub scheme: String,
+    pub host: String,
+    pub port: u64,
+    pub method: String,
+    pub path: String,
+    pub query: String,
+    pub content_type: String,
+    pub body_digest: String,
+    pub headers: std::collections::BTreeMap<String, serde_json::Value>,
+    pub auth_declaration_id: serde_json::Value,
+    pub credential_headers: Vec<String>,
+}
 /// Canonical ReconciliationMethod wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReconciliationMethod {
@@ -3010,6 +3030,10 @@ pub struct ServicePermitIssue {
     pub audience: ServiceAudience,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_request_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_request_manifest: Option<PreparedHttpRequestManifest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invocation_permit: Option<v2::SignedInvocationPermit>,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

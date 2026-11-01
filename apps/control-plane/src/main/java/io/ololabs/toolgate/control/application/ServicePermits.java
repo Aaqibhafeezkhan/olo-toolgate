@@ -27,6 +27,7 @@ public final class ServicePermits {
             var admission=tx.enterprise().nonce(i.reservedNonce());
             if(admission==null||admission.consumedAt()==null)throw ManagementAccess.denied();
             operations.requireFresh(tenant,tx,i);
+            ServiceRequestValidation.validate(tx,codec,operations.signer(),operations.issuer(),i,device,request,operations.clock(tx));
             String op=i.evaluation().action();
             if(c.mode()==RequestMode.DELEGATED || (c.mode()==RequestMode.SERVICE&&!op.equals("rag.update")))throw ManagementAccess.denied();
             if(!audience(op).equals(request.audience())||i.evaluation().resources().isEmpty()

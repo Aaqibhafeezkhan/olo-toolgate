@@ -160,6 +160,8 @@ impl Control {
         fence: &str,
         audience: olo_toolgate_contracts::ServiceAudience,
         http_request_digest: &str,
+        manifest: &serde_json::Value,
+        invocation_permit: &olo_toolgate_contracts::v2::SignedInvocationPermit,
     ) -> Result<olo_toolgate_contracts::ServicePermit, ControlError> {
         self.post(
             "/service-permits/issue",
@@ -168,6 +170,12 @@ impl Control {
                 fencing_token: fence.into(),
                 audience,
                 http_request_digest: Some(http_request_digest.into()),
+                http_request_manifest: Some(
+                    serde_json::from_value(manifest.clone()).map_err(|_| {
+                        ControlError::Unavailable("invalid prepared manifest".into())
+                    })?,
+                ),
+                invocation_permit: Some(invocation_permit.clone()),
             },
             None,
         )

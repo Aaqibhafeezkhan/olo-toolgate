@@ -34,3 +34,10 @@ This is a protocol restriction, not executed HTTP/2 recovery conformance.
 A real CA-verified TLS target offering h2 before http/1.1 verifies the negotiated
 protocol and the actual POST/body through the production client.
 Future HTTP/2 support requires its own no-replay qualification before enabling it.
+
+Broker egress now also disables idle HTTP/1 connection pooling. Hyper's
+canceled-request retry on reused connections sits below reqwest's retry policy;
+using fresh HTTP/1 connections removes that path. Each request establishes a
+new connection, trading connection reuse for the qualified no-replay behavior.
+A real TLS test keeps the first socket alive and requires a second connection
+for a second write; restoring pooling makes the test fail.

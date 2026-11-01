@@ -520,7 +520,7 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
             });
         }
     }
-    let invocation = Arc::new(Invocation::new(
+    let mut invocation = Invocation::new(
         id.clone(),
         fencing_token.clone(),
         deadline,
@@ -534,7 +534,9 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
         handles,
         host.config.development_loopback_http,
         host.control.clone(),
-    ));
+    );
+    invocation.invocation_permit = Some(dispatch.permit.clone());
+    let invocation = Arc::new(invocation);
 
     let (outcome, result, not_started) = match std::fs::create_dir_all(&sandbox) {
         Err(e) => {

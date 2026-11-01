@@ -76,7 +76,11 @@ class UserCredentialsTest {
             assertRefused("invalid_grant", () -> exchange(credentials, assertion("user-1", "JWT", "olo-1")));
             assertRefused("invalid_grant", () -> exchange(credentials, assertion("user-1", "olo-session-assertion+jwt", "other-kid")));
             var good = assertion("user-1", "olo-session-assertion+jwt", "olo-1");
-            var tampered = good.substring(0, good.lastIndexOf('.') + 1) + "A" + good.substring(good.lastIndexOf('.') + 2);
+            var parts=good.split("\\.",-1);
+            var signature=Base64.getUrlDecoder().decode(parts[2]);
+            signature[0]^=1;
+            var tampered=parts[0]+"."+parts[1]+"."+Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
+            assertNotEquals(good,tampered);
             assertRefused("invalid_grant", () -> exchange(credentials, tampered));
             var unsigned = encode("{\"alg\":\"none\",\"typ\":\"olo-session-assertion+jwt\",\"kid\":\"olo-1\"}") + "." + good.split("\\.")[1] + ".AA";
             assertRefused("invalid_grant", () -> exchange(credentials, unsigned));

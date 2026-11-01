@@ -1590,6 +1590,24 @@ export interface PackageManifest {
   readonly compatibility: PackageCompatibility;
 }
 export type PackageState = "ABSENT" | "STAGING" | "READY" | "FAILED" | "REVOKED";
+/** Credential-free toolgate-http-request-v1 manifest of the exact prepared wire request. Never conveys authority on its own. */
+export interface PreparedHttpRequestManifest {
+  readonly version: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly routeId: string;
+  readonly scheme: string;
+  readonly host: string;
+  readonly port: number;
+  readonly method: string;
+  readonly path: string;
+  readonly query: string;
+  readonly contentType: string;
+  readonly bodyDigest: string;
+  readonly headers: Record<string, unknown>;
+  readonly authDeclarationId: unknown;
+  readonly credentialHeaders: ReadonlyArray<string>;
+}
 export type ReconciliationMethod = "DOWNSTREAM_IDEMPOTENCY" | "STATUS_LOOKUP" | "MANUAL";
 /** A leased client rechecks the exact pending operation online before execution. */
 export interface RemoteToolAuthorization {
@@ -1792,6 +1810,8 @@ export interface ServicePermitIssue {
   readonly fencingToken: string;
   readonly audience: ServiceAudience;
   readonly httpRequestDigest?: string;
+  readonly httpRequestManifest?: PreparedHttpRequestManifest;
+  readonly invocationPermit?: V2.SignedInvocationPermit;
 }
 export type Sha256 = string;
 /** Endpoint identity foundation wire model. */
