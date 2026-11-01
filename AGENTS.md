@@ -21,3 +21,17 @@ For work implementing or fixing issue #230 and its attached execution plan:
   commit being created, or add a separate status commit solely to refer to itself.
 
 Follow `CONTRIBUTING.md` and the component's verification requirements as well.
+
+## Stage delivery workflow
+
+For issue #230, follow the weighted S01–S33 baseline and completion criteria in
+the authoritative status document. Within a stage, repeat small focused code
+changes, focused tests and fixes without intermediate commits. Once the complete
+stage scope is implemented, run thorough applicable stage-level verification,
+fix failures and rerun affected checks before committing. Then make one commit
+per affected repository containing its code,
+tests, documentation and progress updates; push before taking the next stage.
+Do not commit intermediate stage fragments or separate progress-only follow-ups.
+Preserve existing history. Partial stages earn no weight; full roadmap phases
+still require all original exit criteria. Record any baseline scope/weight change
+explicitly rather than silently changing the percentage denominator.

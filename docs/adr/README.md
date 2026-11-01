@@ -79,3 +79,5 @@ Use `000-template.md`.
 - [043: OLO claim consumption and target outcomes](043-olo-claim-consumption-outcomes.md)
 
 - [044: Verified target claim orchestration](044-target-claim-orchestration.md)
+
+- [045: Source-bound actual Control/knowledge qualification](045-knowledge-stack-qualification.md)

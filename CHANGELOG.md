@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Qualify actual development-stack target outcomes against Control records, with
+  source, installed-artifact and runtime-image pins. Publish a weighted delivery
+  baseline and require one commit per completed delivery stage.
+
 - Add verified-write SDK facts, claim-bound online consumption, durable target
   outcome delivery and expiry recovery. Actual memory/RAG adapters adopt the
   shared claim protocol with restricted SQL migrations and status-only duplicate
