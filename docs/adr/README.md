@@ -69,3 +69,5 @@ Use `000-template.md`.
 - [038: OLO prepared HTTP request grants](038-olo-http-request-grants.md)
 
 - [039: Independent Control HTTP manifest validation](039-control-http-manifest-validation.md)
+
+- [040: Knowledge target HTTP bindings](040-knowledge-target-http-bindings.md)

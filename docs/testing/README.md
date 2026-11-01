@@ -55,3 +55,14 @@ Record the source revision, command, environment and result. Keep generated logs
 under ignored build output. A conformance case marked `authored` is a requirement,
 not a passing test. Historical compatibility records and enterprise evidence
 remain useful only with their recorded scope and limitations.
+
+## Actual knowledge target qualification
+
+Run tools/security/knowledge.py --knowledge-source /path/to/olo-mono/olo-knowledge
+--gradle /path/to/gradle-8.12/bin/gradle after checking out the coordinated target
+feature branch. It publishes this SDK and runs real PostgreSQL/TLS/vector/corpus
+component qualification, retaining source/SDK-bound evidence under
+build/security/knowledge/conformance.json. The component uses scripted Control;
+full-stack and production SLO acceptance remain separate. The --verify-only mode
+checks previously executed evidence against current component/verifier source and
+the exact published SDK artifact, and refuses stale or skipped evidence.

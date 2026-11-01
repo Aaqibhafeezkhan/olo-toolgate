@@ -10,9 +10,9 @@ does not establish a passing security claim.
 Updated: **2026-10-31**. Branch: `feature/zero-trust-execution-plan`.
 Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
 
-**Overall: partially implemented.** Eight scoped deliveries are implemented:
+**Overall: partially implemented.** Nine scoped deliveries are implemented:
 renewable leases/durable execution recovery, qualified Python OCI containment,
-explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, and independent Control validation of their pinned manifests. Executed validation for the current
+explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, and actual knowledge-target transport integration. Executed validation for the current
 delivery is recorded below. **0 of 7 full roadmap phases have met every exit
 criterion.** Phases 0–3 have
 partial delivery; phases 4–6 have not started as generalized implementations.
@@ -23,7 +23,7 @@ No percentage is assigned because the phases differ substantially in scope.
 | 0 — Boundary and harness | Partial | Preserved revision-10 plan, claim inventory, scoped documentation and executable OCI conformance gate with revision/source/image evidence. | Adopt the full threat matrix across security docs; execute all C1–C8 conformance cases and publish a complete release scorecard. |
 | 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key binding; V3 operation/attempt records, immutable snapshots, historical backfill, positive-proof reservation replacement and conservative operation summaries. | Generalized requiresBusinessKey/namespace/dedupe-window policy, retention maintenance, whole-invocation rebinding and full effect-aware operation finalization/caller integration; complete admission/rebinding and crash conformance. |
 | 2 — Containment | Partial; Python worker slice delivered | Rootless Podman/crun workers; permit-bound image; isolated namespaces and UID ranges; read-only files; enforced resource limits; stdio broker; teardown/restart recovery; no native fallback; service unit and CI gate. | Separate the trusted broker's OS identity/network namespace as specified by the plan; broader deployment/interface conformance and deployment SLO evidence. Other languages and VM tiers require separate qualification. |
-| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance now independently checks signed admission facts and immutable pinned route/profile manifests. | Generalize the independently validated OLO path to broker enforcement for all route classes, effect keys/manifests, real broker instance/handler protocol, consent slots, target fencing SDK/shared claims, deduplication, reconciliation and operation finalization. |
+| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration now supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. | Generalize the independently validated OLO path to broker enforcement for all route classes, effect keys/manifests, real broker instance/handler protocol, consent slots, target fencing SDK/shared claims, deduplication, reconciliation and operation finalization. |
 | 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
 | 5 — Identity hardening | Not started | Existing device certificates remain the baseline. | Sender-constrained agent-run credentials, narrowing delegation and continuously verified executor posture. |
 | 6 — Policy differentiation | Not started | Existing approvals remain the baseline. | Broker OAuth/token exchange, trusted provenance, exact effect previews and stronger step-up approvals. |
@@ -34,10 +34,10 @@ The complete first milestone in issue #230 is **not yet accepted**.
 
 | Acceptance item | Status | Evidence / outstanding work |
 |---|---|---|
-| Exact consent rejects recipient changes and additional effects | Not implemented | OLO transport fingerprints are now independently route/profile-checked by Control and signed/target-checked; independent exact consent slots and additional-effect rejection remain unimplemented. |
+| Exact consent rejects recipient changes and additional effects | Not implemented | OLO fingerprints are independently route/profile-checked by Control and signed/target-checked, including actual memory/RAG component TLS tests; independent exact consent slots and additional-effect rejection remain unimplemented. |
 | Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down a real OCI SDK worker; generalized sensitive-effect authorization and measured deployment bounds remain outstanding. |
 | Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; target-commit/effect-ledger crash scenarios remain outstanding. |
-| Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; cooperating-target fencing and replica races remain outstanding. |
+| Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; cooperating-target fencing and replica races remain outstanding. |
 | Operation finalization includes all attempts/effects and late evidence | Partial | Each permit has independent identity/snapshots and late evidence. New operations finalize FAILED only without consumption; consumed terminal work remains unknown. Complete effect aggregation and caller-visible finalization remain outstanding. |
 | Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target guarantees and the complete release scorecard remain outstanding. |
 
@@ -63,7 +63,7 @@ carry this requirement into future work.
 | C1, no ambient target authority | Available for qualified Python OCI pools | Workers have no network socket authority, route, resolver, host mounts or ambient supervisor environment. Native pools do not establish this claim. |
 | C2, verified sender-constrained run identity | Partial | Device certificate admission exists; sender-constrained agent runs remain planned. |
 | C3a, current admission authorization | Implemented existing boundary | Signed-permit admission and current Control checks; Tool Host `bad_permits_are_refused_before_anything_runs`. |
-| C3b, current per-effect authorization | Partial; OLO write path only | Existing OLO current-authority checks now reserve/consume durable effect generations atomically. OLO permits also sign prepared HTTP fingerprints and the target verifier checks accepted-request facts. Control now independently verifies pinned OLO profile/route manifests and original signed admission scope; v2 leases cannot downgrade to unbound issuance. Generalized enforcement, consent and the target shared-claim SDK remain required. |
+| C3b, current per-effect authorization | Partial; OLO write path only | Existing OLO current-authority checks now reserve/consume durable effect generations atomically. OLO permits also sign prepared HTTP fingerprints and the target verifier checks accepted-request facts. Control now independently verifies pinned OLO profile/route manifests and original signed admission scope; v2 leases cannot downgrade to unbound issuance. Actual memory/RAG listeners now supply HTTP facts from accepted requests with trusted deployment bindings. Generalized enforcement, consent and the target shared-claim SDK remain required. |
 | C3c, bounded unmediated execution | Partial | Native direct-worker supervision and OCI teardown on cancellation/deadline are tested. Enforced service cgroups contain worker processes; measured deployment revocation SLOs remain required. |
 | C4, bound admission intent | Implemented existing boundary | Tool Host admission binds signature, audience, arguments and content digests; dispatch integration tests. |
 | C5, contained execution | Available for qualified Python OCI pools | Executed rootless namespace, UID, filesystem, socket, syscall, resource, flooding, cancellation and recovery tests. Requires the documented delegated service; other runtime tiers do not inherit the claim. |
@@ -318,8 +318,8 @@ At `23d82514`, this OLO-path delivery accepted the digest as a broker assertion.
 Independent Control manifest validation is delivered below. Neither increment
 establishes the generalized broker effect API or completes phase 3.
 Exact-consent slots, shared target claims/deduplication, independent broker-owner
-protocol and effect-aware finalization remain outstanding. The actual memory/RAG
-applications are outside this protocol-library delivery.
+protocol and effect-aware finalization remain outstanding. The original protocol-library delivery did not include actual applications;
+knowledge-target component integration is now recorded below.
 
 Executed validation (known parent revision `4185d9d5f7f4f86828c7a140c66af469fb86005c`):
 - `./gradlew --no-parallel --max-workers=2 javaCheck` passed with an isolated
@@ -428,3 +428,74 @@ POSIX relative path, NUL, then bytes of changed/new `.rs`, `.java`, `.kts`,
 `.json`, `.php`, `.ts` files plus the shared
 `tests/fixtures/security/http-request-binding-v1.json`. Documentation is excluded.
 No full phase or first-milestone acceptance criterion is marked complete.
+
+
+## Actual memory/RAG transport integration
+
+The user identified olo-mono and olo-marketplace and requested a standalone
+olo-knowledge checkout. The standalone repository was checked out
+cleanly at dd5e42cd0045e697c04ec0483db7ac501fd6dfa2. The consolidated applications
+and qualification scripts are in olo-mono/olo-knowledge, based on
+59c53d78ce8b1523c0f957d3bcf2594f51a3bc8d; marketplace contains publishing code.
+Implementation is on the matching feature/zero-trust-execution-plan branch in
+olo-mono. The standalone checkout and marketplace remain unchanged.
+
+[ADR 040](../adr/040-knowledge-target-http-bindings.md) connects the actual
+KnowledgeServer listener to transport-aware target verification. A read-only,
+closed trusted configuration supplies public origin, profile digest and route
+map; accepted raw URI/method/repeated headers and body supply request facts.
+Neither Host headers nor unverified claims select trusted profile metadata.
+A transport-aware verifier now refuses an unbound legacy permit before online
+consumption. Missing or malformed binding configuration fails service startup.
+
+The service dependency and tool-package plugin upgrade to SDK 1.0.0-dev.1. The
+owned stack fixture provisions packages and trusted profile bindings before
+starting listeners. TLS tests use separate service JVMs, real accepted mTLS and
+PostgreSQL; scripted Control supplies signed grants and consumption responses.
+They reject changed Accept/query facts and unbound downgrade without consuming
+the capability, then commit the authorized write once. Actual ACLs, receipt and
+revocation checks remain active. Vector/corpus tests use real Qdrant and Ollama.
+
+The component fixture now writes source/revision/SDK/image/model-bound counts,
+refuses source changes during tests, clears stale passing evidence before
+provisioning, refreshes working development artifacts and waits for the final
+PostgreSQL TCP listener. The ToolGate entry point is
+tools/security/knowledge.py, taking an explicit external component checkout and
+Gradle 8.12 executable. Its report verifies exact SDK artifact and source matches.
+
+This is component qualification with scripted Control, not a new full-stack
+Control/Gateway/target run or production SLO acceptance. Generalized grants,
+dispatch-owner protocol, exact consent, target shared claims, reconciliation,
+effect-aware finalization and later roadmap phases remain outstanding.
+
+Executed validation and delivery:
+- olo-mono implementation and component evidence were committed/pushed together
+  as [54d08504](https://github.com/olo-labs/olo-mono/commit/54d08504bdeec0fd5e62913b963c312e737a17bd)
+  on feature/zero-trust-execution-plan. The measured working-tree source digest
+  is dc45fad71d596a8db51f6b906e5c819611479dca711cc12324b41a03b513f160, based on known parent 59c53d78ce8b1523c0f957d3bcf2594f51a3bc8d.
+- tools/security/knowledge.py executed the SDK publication and complete real
+  component qualification, then verified source and artifact matches:
+  **28 passed, no skips** (service-core 2, memory 10, RAG 16).
+  The positive verify-only path passed; negative controls refused a skipped
+  result and changed component source.
+- Retrieval corpus: **200 documents, 150 queries**, recall@5 **1.0**,
+  precision@5 **0.7333**, **0 unauthorized chunks**, **750 citations** and
+  **0 citation errors**. This is service-component retrieval evidence; it does
+  not establish full-stack latency or revocation SLOs.
+- Exact SDK artifact SHA-256: 1007fb1878d376910d8578ff889d7287ec3d612d13eba8f556229d3c8081a35b.
+  Verifier component SHA-256: 866a71f71a09895c2c10e1f568b1e56c073fba592c952ded3ddf6f4f7b55b24d.
+  Reports retain actual PostgreSQL/Qdrant/Ollama image IDs and model digest.
+- Full ./gradlew --no-parallel --max-workers=2 javaCheck passed with isolated
+  PostgreSQL: **182 enterprise tests passed, no skips**; main Control
+  **260 passed, 5 configured skips (265 total)**.
+  Target library: **18 passed, no skips**.
+- The memory and RAG packages built/packed with SDK 1.0.0-dev.1 and Gradle 9.7.1;
+  both service installDist distributions built with Java 21 / Gradle 8.12.
+  Source-header/license checks and git diff --check passed.
+
+ToolGate known parent: 17b199e17005cb1b66878262fecea9714d028636. Final changed
+code SHA-256: 0da4b13329072f200bf403b9454a963369f7b4046a8b1be86f63f325290900ab (3 files), sorted POSIX relative path,
+NUL and bytes of changed/new .py/.java/.kts/.json files; documentation excluded.
+The exact component source selector and image/SDK pins are retained in the
+ignored build/security/knowledge/conformance.json report. No full roadmap phase
+or first-slice acceptance criterion is marked complete.

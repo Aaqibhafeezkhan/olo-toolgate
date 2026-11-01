@@ -179,3 +179,16 @@ accepted. Broker and target continue to enforce byte limits.
 
 These checks approve a declared route and bind its exact transport. They do not
 supply the separate exact-consent slots or general effect-owner protocol.
+
+### Actual memory/RAG listener integration
+
+The consolidated apps live in olo-labs/olo-mono under olo-knowledge. Their shared
+KnowledgeServer captures actual HTTP facts using read-only
+TOOLGATE_TRANSPORT_BINDINGS_FILE configuration provisioned from the approved
+deployment. See that component's README for the closed format and coordinated
+SDK/profile rollout. Never copy trusted profile fields from request headers or
+unverified JWT payloads.
+
+A verifier request with transport facts explicitly requires httpRequestDigest.
+An unbound legacy permit is refused before consumption. Other adapters using the
+legacy four-argument request constructor retain their existing behavior.

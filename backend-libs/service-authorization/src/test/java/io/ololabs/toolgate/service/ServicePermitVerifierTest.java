@@ -65,6 +65,11 @@ class ServicePermitVerifierTest {
         enforcing.authorizeKey(p,new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,facts),EXECUTOR);
         assertEquals(digest,observed.get());
     }
+    @Test void transportAwareTargetsRefuseLegacyUnboundPermitsBeforeConsumption()throws Exception{
+        var request=new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,transport("alice"));
+        assertThrows(SecurityException.class,()->verifier.authorizeKey(permit("memory.append"),request,EXECUTOR));
+        assertEquals(0,commits.get());
+    }
     @Test void transportHeadersAndBodyAreDefensivelyCopied(){
         var headers=new HashMap<String,List<String>>();var values=new ArrayList<>(List.of("alice"));
         headers.put("x-recipient",values);

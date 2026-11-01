@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Transport-aware target verifiers refuse unbound legacy permits before online
+  consumption. Coordinate the actual OLO memory/RAG listener upgrade and trusted
+  profile bindings in olo-mono/olo-knowledge.
+
 - Independently validate pinned OLO HTTP request manifests at Control using the
   original signed admission, current lease and immutable service profile. Refuse
   altered destinations/route scope and v2 downgrade to unbound service permits.

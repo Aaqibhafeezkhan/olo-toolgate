@@ -91,6 +91,8 @@ public final class ServicePermitVerifier {
                 ||!digest.equals(claims.requestFingerprint())||!executorKey.equals(claims.executorKeySha256())
                 ||claims.iat()>now||claims.exp()<=now||claims.exp()<=claims.iat()||claims.exp()-claims.iat()>15000
                 ||request.resources().isEmpty()||request.resources().stream().anyMatch(r->r.kind()!=ResourceKind.CUSTOM||!r.locator().startsWith("olo://"+request.tenant()+"/")))throw denied();
+            // Transport-aware targets never silently downgrade to an unbound permit.
+            if(request.transport()!=null&&claims.httpRequestDigest()==null)throw denied();
             String transportDigest=null;
             if(claims.httpRequestDigest()!=null){
                 var transport=request.transport();if(transport==null)throw denied();
