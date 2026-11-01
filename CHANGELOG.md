@@ -6,6 +6,9 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Restrict qualified broker egress explicitly to HTTP/1.1 and verify real TLS
+  protocol negotiation against a target offering HTTP/2 first.
+
 - Tool Host prepares and fingerprints the exact buffered HTTP request before
   sending, binds the pinned profile and route, preserves duplicate-query order,
   excludes declared credential values, and disables hidden protocol retries.

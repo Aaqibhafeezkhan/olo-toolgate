@@ -193,6 +193,9 @@ pub fn client_with_identity(
     }
     let mut builder = reqwest::Client::builder()
         .no_proxy()
+        // Keep HTTP/2 replay behavior outside the qualified transport, even if
+        // another dependency enables reqwest HTTP/2 through feature unification.
+        .http1_only()
         .redirect(reqwest::redirect::Policy::none())
         .retry(reqwest::retry::never())
         .tls_sslkeylogfile(false)

@@ -45,3 +45,8 @@ allowances. Content-type parameter normalization may change cosmetic header
 formatting; target semantics such as boundary case are preserved. See
 [ADR 037](../adr/037-prepared-http-request-binding.md) and the
 [live progress document](../security/zero-trust-execution-status.md).
+
+The qualified broker transport explicitly uses HTTP/1.1. HTTP/2 targets must
+also support HTTP/1.1; an HTTP/2-only target is unsupported. This prevents a
+dependency feature change from enabling HTTP/2 GOAWAY replay behavior. Enabling
+HTTP/2 requires a separate no-replay qualification.

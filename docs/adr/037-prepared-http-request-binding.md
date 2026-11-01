@@ -24,3 +24,13 @@ claim SDK integration are also still required.
 Only buffered bodies and header-injected credentials are supported by this
 preparation API. Query/cookie credential injection and automatic request
 compression are not added. Credential bytes never enter the manifest or logs.
+
+## Transport qualification follow-up
+
+The production destination client explicitly selects HTTP/1.1, including when
+Cargo feature unification enables additional reqwest protocols. The supported
+slice therefore cannot negotiate HTTP/2 or replay writes after HTTP/2 GOAWAY.
+This is a protocol restriction, not executed HTTP/2 recovery conformance.
+A real CA-verified TLS target offering h2 before http/1.1 verifies the negotiated
+protocol and the actual POST/body through the production client.
+Future HTTP/2 support requires its own no-replay qualification before enabling it.
