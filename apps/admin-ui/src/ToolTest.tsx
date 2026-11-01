@@ -85,10 +85,15 @@ export function ToolTest({ client, deviceId: fixedDevice }: { client: ControlCli
     let argumentsValue: unknown;
     try { argumentsValue = JSON.parse(input); } catch { setError(new ApiError(400, 'INVALID_JSON')); return; }
     if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) { setError(new ApiError(400, 'INVALID_REQUEST')); return; }
+    const keyArgument = selected.businessKeyPolicy?.argument;
+    const declaredKey = keyArgument === undefined ? undefined : (argumentsValue as Record<string, unknown>)[keyArgument];
+    if (declaredKey !== undefined && (typeof declaredKey !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(declaredKey))) {
+      setError(new ApiError(400, 'INVALID_BUSINESS_KEY')); return;
+    }
     const body = { bindingId, deviceId, request: { toolId: selected.toolId, action: selected.action, arguments: argumentsValue as Record<string, unknown> } };
     const exact = JSON.stringify(body);
     // The same request keeps its key, so a retry after an ambiguous failure or an approval is the same invocation.
-    if (retry.current?.body !== exact) retry.current = { body: exact, key: crypto.randomUUID() };
+    if (retry.current?.body !== exact) retry.current = { body: exact, key: typeof declaredKey === 'string' ? declaredKey : crypto.randomUUID() };
     setBusy(true); stream.current?.abort();
     try {
       const outcome = await client.invokeHumanTool(body, retry.current.key); const startedAt = Date.now();

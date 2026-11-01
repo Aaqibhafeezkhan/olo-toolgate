@@ -22,13 +22,14 @@ class EnterpriseOperationTest {
     static java.security.interfaces.RSAPrivateCrtKey key;
     EnterpriseConformanceTest graph;PostgresStore store;EnterpriseOperations operations;EffectSigner signer;Clock clock;
     DirectoryService.Actor gateway,reviewer;
+    javax.sql.DataSource keyPolicySource;
     @BeforeAll static void signingKey()throws Exception{var generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);key=(java.security.interfaces.RSAPrivateCrtKey)generator.generateKeyPair().getPrivate();}
     @BeforeEach void setup(){
         graph=new EnterpriseConformanceTest();graph.graph();clock=Clock.fixed(Instant.ofEpochMilli(EnterpriseConformanceTest.NOW),ZoneOffset.UTC);
         var rules=List.of(new EnterpriseManagementRule(List.of("operation.approve","operation.read","operation.cancel"),EnterpriseGroupType.TOOL_GROUP,new GroupSelection(List.of("tools-a"),false),List.of(),graph.conditions(),null),new EnterpriseManagementRule(List.of("operation.approve","operation.read","operation.cancel"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("devices-a"),false),List.of(),graph.conditions(),null));
         graph.add(Kind.ROLE,new ControlRole("reviewer-role","Reviewer",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
         graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,1L,List.of("alice","admin"),List.of("reviewer-role")));
-        store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("operations.sqlite"))),graph.codec);store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
+        keyPolicySource=SqliteState.open(temp.resolve("operations.sqlite"));store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(keyPolicySource),graph.codec);store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
         signer=new RsaEffectSigner(key,"permit-key",graph.codec);operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
         gateway=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"a".repeat(64),false);reviewer=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"c".repeat(64),true,false,"admin");
     }
@@ -269,7 +270,7 @@ class EnterpriseOperationTest {
         String url=base.replace("/control?","/"+database+"?");
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).cleanDisabled(true).load().migrate();
         var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
-        store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);
+        keyPolicySource=source;store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);
         store.transaction(gateway.tenant(),true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
         operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
         concurrentBusinessKeyReservationsCreateOneInvocation();
@@ -346,6 +347,419 @@ class EnterpriseOperationTest {
         assertEquals("RUNNING",operation.state());assertFalse(operation.legacy());
         var attempts=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(executing.id(),clock.millis()));
         assertEquals(executing.reservedNonce(),attempts.getFirst().id());assertEquals("EXECUTING",attempts.getFirst().state());assertNotNull(attempts.getFirst().consumedAt());
+    }
+
+
+    void businessPolicy(BusinessKeyPolicy policy) {
+        var original=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var d=original.definition();
+        var definition=new ToolDefinition(d.id(),d.name(),d.description(),d.actions(),d.inputSchema(),
+                d.outputSchema(),d.reconciliation(),policy);
+        graph.add(Kind.TOOL,new ControlTool(original.id(),original.name(),original.enabled(),
+                original.revision()+1,definition,original.extractorId(),original.version(),original.packageDigest()));
+        saveGraph();
+    }
+    @Test void requiredBusinessKeyIsRefusedBeforeAnyInvocationIsAdmitted() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,null,null));
+        assertEquals(400,assertThrows(Failure.class,()->submit("missing-required-key")).status());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100)).isEmpty());
+        assertTrue(keyed("required-key-present","data/report.txt","4".repeat(64)).id().startsWith("op-"));
+    }
+    @Test void tenantBusinessKeyUsesTheEmptyVerifiedNamespaceIdentity() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.TENANT,null,null,null,null));
+        var first=keyed("tenant-key-a","data/report.txt","5".repeat(64));
+        assertEquals("op-"+DirectoryService.digest("toolgate-operation-v1\n"+gateway.tenant().value()+"\ntool\nTENANT\n\n"+"5".repeat(64)),first.id());
+        assertEquals(first,keyed("tenant-key-b","data/report.txt","5".repeat(64)));
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","TENANT","","5".repeat(64)));
+        assertEquals(first.id(),row.invocation());
+        assertEquals("alice",row.user());
+        assertEquals(409,assertThrows(Failure.class,()->keyed("tenant-key-changed","data/other.txt","5".repeat(64))).status());
+    }
+    EnterpriseInvocation argumentKey(String id,String explicit) {
+        var r=request(id,"data/report.txt");
+        var arguments=new HashMap<>(r.request().arguments());
+        arguments.put("paymentKey",com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.textNode("payment-42"));
+        var call=new AuthorizationRequest(r.request().toolId(),r.request().action(),arguments);
+        return graph.codec.model(operations.submit(gateway,graph.codec.json(new EnterpriseInvocationRequest(
+                r.context(),call,r.toolDigest(),r.packageDigest(),null,null,explicit))).body(),EnterpriseInvocation.class);
+    }
+    @Test void argumentBusinessKeysAreDerivedAndPersistTheirSource() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,"paymentKey",null,null,null));
+        var first=argumentKey("argument-key-a",null);
+        assertEquals(first,argumentKey("argument-key-b",null));
+        String hash=DirectoryService.digest("toolgate-business-key-v1\0"+gateway.tenant().value()+"\0payment-42");
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent",hash));
+        assertEquals("ARGUMENT",row.source());
+        assertEquals(first.id(),row.invocation());
+        assertEquals(409,assertThrows(Failure.class,()->argumentKey("argument-key-mismatch","f".repeat(64))).status());
+        assertFalse(store.transaction(gateway.tenant(),false,tx->tx.auditPage(0,100)).contains("payment-42"));
+    }
+    @Test void businessKeyReplayDoesNotExtendSnapshottedRetention() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,60000L,30000L));
+        var first=keyed("retention-policy-a","data/report.txt","6".repeat(64));
+        long expected=clock.millis()+60000;
+        clock=Clock.fixed(Instant.ofEpochMilli(clock.millis()+1000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        assertEquals(first,keyed("retention-policy-b","data/report.txt","6".repeat(64)));
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","6".repeat(64)));
+        assertEquals(expected,row.retainUntil());
+    }
+    @Test void businessKeyPolicyReplaysStillRequireCurrentAuthorization() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,null,null));
+        keyed("policy-authority-a","data/report.txt","7".repeat(64));
+        graph.remove(Kind.GRANT,"capability");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->keyed("policy-authority-b","data/report.txt","7".repeat(64))).status());
+    }
+    @Test void businessKeyPoliciesAlsoHoldUnderPostgresRuntimeRole() throws Exception {
+        String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
+        Assumptions.assumeTrue(base!=null&&password!=null,"Requires isolated PostgreSQL fixture");
+        String database="keypolicy_"+UUID.randomUUID().toString().replace("-","");
+        try(var c=java.sql.DriverManager.getConnection(base,"control_migrator",password);var stmt=c.createStatement()){stmt.execute("CREATE DATABASE "+database);}
+        String url=base.replace("/control?","/"+database+"?");
+        org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).cleanDisabled(true).load().migrate();
+        var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
+        keyPolicySource=source;store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);
+        store.transaction(gateway.tenant(),true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        requiredBusinessKeyIsRefusedBeforeAnyInvocationIsAdmitted();
+        tenantBusinessKeyUsesTheEmptyVerifiedNamespaceIdentity();
+        argumentBusinessKeysAreDerivedAndPersistTheirSource();
+        businessKeyReplayDoesNotExtendSnapshottedRetention();
+        businessKeyPolicyReplaysStillRequireCurrentAuthorization();
+    }
+
+
+    @Test void businessKeyMaintenanceIsBoundedAndNeverTombstonesAmbiguousWork() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,1000L,null));
+        var owner=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        for(char key:List.of('8','9','a')) {
+            var invocation=keyed("maintenance-"+key,"data/report.txt",String.valueOf(key).repeat(64));
+            operations.cancel(owner,invocation.id(),invocation.revision());
+        }
+        var unknown=consume(reserve(keyed("maintenance-unknown","data/report.txt","b".repeat(64))));
+        clock=Clock.fixed(Instant.ofEpochMilli(clock.millis()+2000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        for(int n=0;n<3;n++)assertEquals(1,store.transaction(gateway.tenant(),true,
+                tx->tx.enterprise().tombstoneExpiredBusinessKeys(clock.millis(),1)).intValue());
+        assertEquals(0,store.transaction(gateway.tenant(),true,
+                tx->tx.enterprise().tombstoneExpiredBusinessKeys(clock.millis(),1)).intValue());
+        var expired=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","8".repeat(64)));
+        assertEquals(clock.millis(),expired.tombstonedAt());
+        assertEquals(409,assertThrows(Failure.class,()->keyed("maintenance-replay","data/report.txt","8".repeat(64))).status());
+        clock=Clock.fixed(Instant.ofEpochMilli(unknown.expiresAtUnixMs()+1),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        operations.sweep(gateway.tenant());
+        var unresolved=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","b".repeat(64)));
+        assertNull(unresolved.tombstonedAt());
+        assertEquals("OUTCOME_UNKNOWN",unresolved.outcome());
+    }
+    @Test void resolvedWindowReplacementArchivesExactlyOneImmutableGeneration() {
+        var original=submit("window-store-original");
+        long created=clock.millis();
+        var old=new EnterpriseStore.BusinessKey("tool","AGENT","agent","c".repeat(64),"sha256:"+original.requestDigest(),
+                "agent","alice",original.id(),created+10000,null,"DEDUPE_WINDOW",created+5000);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveBusinessKey(old,created);return null;});
+        operations.cancel(new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice"),original.id(),original.revision());
+        clock=Clock.fixed(Instant.ofEpochMilli(created+6000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var next=submit("window-store-next");
+        var previous=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","c".repeat(64)));
+        var replacement=new EnterpriseStore.BusinessKey(previous.tool(),previous.namespace(),previous.identity(),previous.hash(),
+                previous.fingerprint(),previous.agent(),previous.user(),next.id(),clock.millis()+10000,null,"DEDUPE_WINDOW",clock.millis()+5000);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().replaceBusinessKey(previous,replacement,clock.millis());return null;});
+        var history=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory("tool","AGENT","agent","c".repeat(64),100));
+        assertEquals(List.of(previous),history);
+        assertEquals(next.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","c".repeat(64))).invocation());
+        assertEquals(409,assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().replaceBusinessKey(previous,replacement,clock.millis());return null;
+        })).status());
+        assertEquals(history,store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory("tool","AGENT","agent","c".repeat(64),100)));
+    }
+    @Test void unresolvedWindowCannotBeReplacedDespiteElapsedTime() {
+        var original=consume(reserve(submit("window-store-ambiguous")));
+        long created=clock.millis();
+        var old=new EnterpriseStore.BusinessKey("tool","AGENT","agent","d".repeat(64),"sha256:"+original.requestDigest(),
+                "agent","alice",original.id(),created+10000,null,"DEDUPE_WINDOW",created+5000);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveBusinessKey(old,created);return null;});
+        clock=Clock.fixed(Instant.ofEpochMilli(created+6000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var next=submit("window-store-denied-next");
+        var replacement=new EnterpriseStore.BusinessKey(old.tool(),old.namespace(),old.identity(),old.hash(),old.fingerprint(),
+                old.agent(),old.user(),next.id(),clock.millis()+10000,null,"DEDUPE_WINDOW",clock.millis()+5000);
+        assertEquals(409,assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().replaceBusinessKey(old,replacement,clock.millis());return null;
+        })).status());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory("tool","AGENT","agent","d".repeat(64),100)).isEmpty());
+        assertEquals(original.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","d".repeat(64))).invocation());
+    }
+
+
+    void windowPolicy() { businessPolicy(new BusinessKeyPolicy(false,BusinessKeyNamespace.AGENT,null,5000L,10000L,null)); }
+    void advanceKeyClock(long millis) {
+        clock=Clock.fixed(Instant.ofEpochMilli(clock.millis()+millis),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+    }
+    @Test void optionalWindowCoalescesNewRequestIdsWithoutBecomingAnExplicitKey() {
+        windowPolicy();
+        var original=submit("optional-window-a");
+        assertEquals(original,submit("optional-window-b"));
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id()));
+        assertEquals("DEDUPE_WINDOW",key.source());
+        assertEquals(clock.millis()+5000,key.dedupeExpiresAt());
+        assertEquals(409,assertThrows(Failure.class,()->keyed("borrow-window-hash","data/report.txt",key.hash())).status());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+    }
+    @Test void elapsedWindowCannotReplaceAStillRunningOperation() {
+        windowPolicy();
+        var original=submit("window-still-running");
+        advanceKeyClock(6000);
+        assertEquals(409,assertThrows(Failure.class,()->submit("window-running-retry")).status());
+        assertEquals(original.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).getFirst().id()));
+    }
+    @Test void elapsedWindowCreatesANewOperationOnlyAfterPositiveResolution() {
+        windowPolicy();
+        var original=submit("window-positive-a");
+        var owner=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        operations.cancel(owner,original.id(),original.revision());
+        var previous=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id()));
+        advanceKeyClock(6000);
+        var next=submit("window-positive-b");
+        assertNotEquals(original.id(),next.id());
+        assertEquals(next,submit("window-positive-c"));
+        assertEquals(EnterpriseInvocationState.CANCELLED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(original.id())).state());
+        assertEquals(List.of(previous),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(
+                previous.tool(),previous.namespace(),previous.identity(),previous.hash(),100)));
+        assertEquals(2,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+    }
+    @Test void tombstonedWindowHistorySurvivesANewResolvedGeneration() {
+        windowPolicy();
+        var original=submit("window-tombstone-a");
+        operations.cancel(new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice"),original.id(),original.revision());
+        advanceKeyClock(11000);
+        operations.sweep(gateway.tenant());
+        var previous=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id()));
+        assertNotNull(previous.tombstonedAt());
+        var next=submit("window-tombstone-b");
+        assertNotEquals(original.id(),next.id());
+        var history=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(
+                previous.tool(),previous.namespace(),previous.identity(),previous.hash(),100));
+        assertEquals(List.of(previous),history);
+        assertNotNull(history.getFirst().tombstonedAt());
+        assertNull(store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(next.id())).tombstonedAt());
+    }
+    @Test void ambiguousWindowRemainsFencedAfterItsDedupeDeadline() {
+        windowPolicy();
+        var executing=consume(reserve(submit("window-unknown-a")));
+        var unknown=new EnterpriseInvocation(executing.id(),executing.requestDigest(),executing.evaluation(),
+                EnterpriseInvocationState.OUTCOME_UNKNOWN,executing.revision()+1,executing.authorizationEpoch(),
+                executing.reservedNonce(),executing.expiresAtUnixMs(),List.of(),executing.downstreamIdempotencyKey(),
+                null,executing.diagnosticId(),executing.reconciliation());
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(unknown,clock.millis(),executing.revision());return null;});
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(executing.id()));
+        advanceKeyClock(6000);
+        assertEquals(409,assertThrows(Failure.class,()->submit("window-unknown-b")).status());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(
+                key.tool(),key.namespace(),key.identity(),key.hash(),100)).isEmpty());
+    }
+    @Test void concurrentWindowSubmissionsFromTwoServiceInstancesShareOneOperation() throws Exception {
+        windowPolicy();
+        var other=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var pool=Executors.newFixedThreadPool(8);
+        try {
+            var calls=new ArrayList<Callable<String>>();
+            for(int n=0;n<8;n++) {
+                int index=n;
+                calls.add(()->{
+                    var service=index%2==0?operations:other;
+                    return graph.codec.model(service.submit(gateway,graph.codec.json(request("window-parallel-"+index,"data/report.txt"))).body(),EnterpriseInvocation.class).id();
+                });
+            }
+            var ids=new HashSet<String>();for(var result:pool.invokeAll(calls))ids.add(result.get());
+            assertEquals(1,ids.size());
+            assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        } finally {pool.shutdownNow();}
+    }
+    @Test void requiredKeyNeverFallsBackToItsConfiguredWindow() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,5000L,10000L,null));
+        assertEquals(400,assertThrows(Failure.class,()->submit("required-key-window-fallback")).status());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100)).isEmpty());
+    }
+    @FunctionalInterface interface KeyPolicyScenario { void run() throws Exception; }
+    @Test void windowAndRetentionScenariosHoldUnderPostgresRuntimeRole() throws Exception {
+        String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
+        Assumptions.assumeTrue(base!=null&&password!=null,"Requires isolated PostgreSQL fixture");
+        var scenarios=List.<KeyPolicyScenario>of(
+                this::optionalWindowCoalescesNewRequestIdsWithoutBecomingAnExplicitKey,
+                this::elapsedWindowCannotReplaceAStillRunningOperation,
+                this::elapsedWindowCreatesANewOperationOnlyAfterPositiveResolution,
+                this::tombstonedWindowHistorySurvivesANewResolvedGeneration,
+                this::ambiguousWindowRemainsFencedAfterItsDedupeDeadline,
+                this::concurrentWindowSubmissionsFromTwoServiceInstancesShareOneOperation,
+                this::requiredKeyNeverFallsBackToItsConfiguredWindow,
+                this::businessKeyMaintenanceIsBoundedAndNeverTombstonesAmbiguousWork,
+                this::resolvedWindowReplacementArchivesExactlyOneImmutableGeneration,
+                this::unresolvedWindowCannotBeReplacedDespiteElapsedTime,
+                this::tenantKeysNeverDiscloseAnotherOwnersResultForMatchingOrChangedInputs,
+                this::humanKeysUseTheVerifiedUserNamespaceAndCannotUseAnAbsentAgent,
+                this::invalidKeyPolicyCannotPassConfigurationReviewValidation,
+                this::databaseGuardsRejectRetentionRewritesHistoryDeletionAndForgedArchives,
+                this::catalogUsesCurrentControlKeyPolicyInsteadOfDeviceHints,
+                this::directHumanPolicyCallsUseCanonicalIdsAndOneDurableLocalDispatch);
+        for(var scenario:scenarios) {
+            graph=new EnterpriseConformanceTest();graph.graph();
+            clock=Clock.fixed(Instant.ofEpochMilli(EnterpriseConformanceTest.NOW),ZoneOffset.UTC);
+            String database="windowpolicy_"+UUID.randomUUID().toString().replace("-","");
+            try(var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()){statement.execute("CREATE DATABASE "+database);}
+            String url=base.replace("/control?","/"+database+"?");
+            org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).cleanDisabled(true).load().migrate();
+            var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
+            keyPolicySource=source;store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);
+            store.transaction(gateway.tenant(),true,tx->{tx.save(tx.load(),graph.directory());return null;});
+            EnterpriseConformanceTest.online(store,graph.codec,"device");
+            signer=new RsaEffectSigner(key,"permit-key",graph.codec);
+            operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+            scenario.run();
+        }
+    }
+
+
+    @Test void tenantKeysNeverDiscloseAnotherOwnersResultForMatchingOrChangedInputs() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.TENANT,null,null,null,null));
+        var original=keyed("tenant-owner-a","data/report.txt","e".repeat(64));
+        for(String path:List.of("data/report.txt","data/other.txt")) {
+            var r=request("tenant-owner-other",path);var c=r.context();
+            var other=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),"admin",
+                    c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),
+                    c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
+            var supplied=new EnterpriseInvocationRequest(other,r.request(),r.toolDigest(),r.packageDigest(),null,null,"e".repeat(64));
+            assertEquals(409,assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(supplied))).status());
+        }
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        assertEquals(original.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id())).invocation());
+    }
+    @Test void humanKeysUseTheVerifiedUserNamespaceAndCannotUseAnAbsentAgent() {
+        var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,null,null));
+        var denied=request("human-agent-key","data/report.txt");var c=denied.context();
+        var human=new RequestContext(c.requestId(),c.tenantId(),RequestMode.HUMAN,CredentialKind.STATIC_TOKEN,
+                null,"alice",null,null,List.of(),1L,null,null,null,c.bindingId(),null);
+        var supplied=new EnterpriseInvocationRequest(human,denied.request(),denied.toolDigest(),denied.packageDigest(),null,null,"f".repeat(64));
+        assertEquals(403,assertThrows(Failure.class,()->operations.submitHuman(alice,supplied,"device")).status());
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.DELEGATED_USER,null,null,null,null));
+        var allowed=request("human-user-key","data/report.txt");
+        var keyRequest=new EnterpriseInvocationRequest(human,allowed.request(),allowed.toolDigest(),allowed.packageDigest(),null,null,"f".repeat(64));
+        var invocation=graph.codec.model(operations.submitHuman(alice,keyRequest,"device").body(),EnterpriseInvocation.class);
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(invocation.id()));
+        assertEquals("DELEGATED_USER",key.namespace());assertEquals("alice",key.identity());assertEquals("",key.agent());
+        assertEquals("alice",key.user());
+    }
+    @Test void invalidKeyPolicyCannotPassConfigurationReviewValidation() {
+        var original=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var d=original.definition();
+        for(var invalid:List.of(
+                new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,1000L,2000L),
+                new BusinessKeyPolicy(false,BusinessKeyNamespace.AGENT,null,5000L,1000L,null))) {
+            var definition=new ToolDefinition(d.id(),d.name(),d.description(),d.actions(),d.inputSchema(),d.outputSchema(),d.reconciliation(),invalid);
+            graph.add(Kind.TOOL,new ControlTool(original.id(),original.name(),original.enabled(),original.revision()+1,
+                    definition,original.extractorId(),original.version(),original.packageDigest()));
+            assertThrows(IllegalArgumentException.class,()->graph.codec.validatePolicies(graph.directory()));
+        }
+    }
+    void deniedKeySql(String table,String invocation,String sql) throws Exception {
+        try(var connection=keyPolicySource.getConnection()) {
+            connection.setAutoCommit(false);
+            if(connection.getMetaData().getDatabaseProductName().equals("PostgreSQL"))
+                try(var scope=connection.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){
+                    scope.setString(1,gateway.tenant().value());scope.execute();
+                }
+            try(var check=connection.prepareStatement("SELECT count(*) FROM "+table+" WHERE tenant_id=? AND invocation_id=?")){
+                check.setString(1,gateway.tenant().value());check.setString(2,invocation);
+                try(var rows=check.executeQuery()){assertTrue(rows.next());assertEquals(1,rows.getInt(1));}
+            }
+            try(var statement=connection.prepareStatement(sql)){
+                statement.setString(1,gateway.tenant().value());statement.setString(2,invocation);
+                assertThrows(java.sql.SQLException.class,statement::executeUpdate);
+            }
+            connection.rollback();
+        }
+    }
+    @Test void databaseGuardsRejectRetentionRewritesHistoryDeletionAndForgedArchives() throws Exception {
+        resolvedWindowReplacementArchivesExactlyOneImmutableGeneration();
+        for(String update:List.of("retain_until=retain_until+1","dedupe_expires_at=dedupe_expires_at+1","namespace_identity='forged'"))
+            deniedKeySql("control_business_keys","window-store-next",
+                    "UPDATE control_business_keys SET "+update+" WHERE tenant_id=? AND invocation_id=?");
+        deniedKeySql("control_business_key_history","window-store-original",
+                "DELETE FROM control_business_key_history WHERE tenant_id=? AND invocation_id=?");
+        deniedKeySql("control_business_key_history","window-store-original",
+                "UPDATE control_business_key_history SET fingerprint='sha256:"+"0".repeat(64)+"' WHERE tenant_id=? AND invocation_id=?");
+        deniedKeySql("control_business_keys","window-store-next",
+                "INSERT INTO control_business_key_history(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,outcome,tombstoned_at,archived_at) SELECT tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,'FAILED',tombstoned_at,dedupe_expires_at+1 FROM control_business_keys WHERE tenant_id=? AND invocation_id=?");
+        try(var connection=keyPolicySource.getConnection()){
+            if(connection.getMetaData().getDatabaseProductName().equals("PostgreSQL")){
+                connection.setAutoCommit(false);
+                try(var scope=connection.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){
+                    scope.setString(1,io.ololabs.toolgate.control.fixtures.Tenants.id("other").value());scope.execute();
+                }
+                try(var query=connection.prepareStatement("SELECT count(*) FROM control_business_key_history WHERE tenant_id=?")){
+                    query.setString(1,gateway.tenant().value());
+                    try(var rows=query.executeQuery()){assertTrue(rows.next());assertEquals(0,rows.getInt(1));}
+                }
+                connection.rollback();
+            }
+        }
+    }
+
+
+    @Test void catalogUsesCurrentControlKeyPolicyInsteadOfDeviceHints() {
+        var policy=new BusinessKeyPolicy(true,BusinessKeyNamespace.TENANT,null,null,10000L,null);
+        businessPolicy(policy);
+        var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var hint=new LocalToolInfo("tool","read","Device hint",true,tool.definition().inputSchema(),
+                new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),tool.packageDigest(),
+                new BusinessKeyPolicy(false,BusinessKeyNamespace.AGENT,null,null,null,null));
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.saveEndpointConfiguration(new Store.EndpointConfiguration("device",tx.load().revision(),"{}",null,
+                    graph.codec.json(new LocalToolCatalog(List.of(hint)))));
+            return null;
+        });
+        var endpoints=new EndpointService(store,graph.codec,null,clock,true,gateway.tenant().value(),
+                "server","Organization","https://control.example.test","https://gateway.example.test");
+        var service=new McpService(store,graph.codec,endpoints,operations,clock,gateway.tenant(),"server");
+        String body=graph.codec.json(request("policy-catalog","data/report.txt").context());
+        var catalog=graph.codec.model(service.catalog(gateway,true,body).body(),LocalToolCatalog.class);
+        assertEquals(1,catalog.tools().size());
+        assertEquals(policy,catalog.tools().getFirst().businessKeyPolicy());
+        graph.remove(Kind.GRANT,"capability");saveGraph();
+        assertTrue(graph.codec.model(service.catalog(gateway,true,body).body(),LocalToolCatalog.class).tools().isEmpty());
+    }
+
+
+    @Test void directHumanPolicyCallsUseCanonicalIdsAndOneDurableLocalDispatch() {
+        var policy=new BusinessKeyPolicy(true,BusinessKeyNamespace.DELEGATED_USER,null,null,10000L,null);
+        businessPolicy(policy);
+        var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var hint=new LocalToolInfo("tool","read","Human local tool",true,tool.definition().inputSchema(),
+                new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),tool.packageDigest());
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.saveEndpointConfiguration(new Store.EndpointConfiguration("device",tx.load().revision(),"{}",null,
+                    graph.codec.json(new LocalToolCatalog(List.of(hint)))));return null;
+        });
+        var endpoints=new EndpointService(store,graph.codec,null,clock,true,gateway.tenant().value(),
+                "server","Organization","https://control.example.test","https://gateway.example.test").operations(operations);
+        var service=new McpService(store,graph.codec,endpoints,operations,clock,gateway.tenant(),"server");
+        var runtime=new HumanRuntime(store,graph.codec,operations,service,new ServerPackages(store,graph.codec,operations,clock));
+        var actor=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        var request=new EnterpriseHumanRequest("binding-a","device",request("human-local-policy","data/report.txt").request());
+        var first=graph.codec.model(runtime.invoke(actor,1,graph.codec.json(request),"human-step-42").body(),EnterpriseHumanOutcome.class);
+        assertTrue(first.invocation().id().startsWith("op-"));
+        assertEquals(first.invocation().id(),first.dispatch().record().requestId());
+        var replay=graph.codec.model(runtime.invoke(actor,1,graph.codec.json(request),"human-step-42").body(),EnterpriseHumanOutcome.class);
+        assertEquals(first.invocation().id(),replay.invocation().id());
+        assertEquals(first.dispatch().record().requestId(),replay.dispatch().record().requestId());
+        var binding=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(first.invocation().id()));
+        assertEquals("DELEGATED_USER",binding.namespace());assertEquals("alice",binding.identity());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(first.invocation().id(),clock.millis()).size()).intValue());
     }
 
 }

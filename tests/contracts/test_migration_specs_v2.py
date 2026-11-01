@@ -88,14 +88,14 @@ SCENARIOS = [
     (KEY.format("outcome='OUTCOME_UNKNOWN'", 'AGENT'), True),
     (KEY.format("outcome='COMPLETED'", 'AGENT'), True),                     # late result settles it
     (KEY.format("outcome='FAILED'", 'AGENT'), False),                       # final
-    (KEY.format("tombstoned_at=2100000", 'AGENT'), True),
+    (KEY.format("tombstoned_at=2100000", 'AGENT'), False), # no resolved Control operation proof
     (KEY.format("retain_until=3000000", 'AGENT'), False),                   # tombstones are final
     ("DELETE FROM control_business_keys", False),
     (key(identity='agent-2', source='DEDUPE_WINDOW', expires=6000), True),
     (KEY.format("invocation_id='i8',created_at=5000,dedupe_expires_at=11000", 'AGENT') +
      " AND namespace_identity='agent-2'", False),                         # window still open
     (KEY.format("invocation_id='i8',created_at=6000,dedupe_expires_at=11000", 'AGENT') +
-     " AND namespace_identity='agent-2'", True),
+     " AND namespace_identity='agent-2'", False), # V5 requires immutable history and resolved operation
     (RESULT.format("X'7b7d'"), True),
     (RESULT.format("X'7b7d'").replace("'i2'", "'missing'"), False),        # result needs its invocation
     ("UPDATE control_invocation_results SET payload=X'5b5d'", False),

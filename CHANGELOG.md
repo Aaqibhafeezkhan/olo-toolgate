@@ -6,6 +6,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Enforce reviewed business-key requirements, verified namespaces and argument
+  keys across Control, Gateway and human calls. Add bounded optional dedupe
+  windows with resolved-operation proof, immutable generation history and
+  retention tombstones. Upgrade V5/Control and current contract readers before
+  publishing policy metadata; ambiguous operations never rotate on elapsed time.
+
 - Add a source-bound Zero Trust diagnostic scorecard and CI artifact/summary.
   Authored case status supplies no acceptance; missing runners remain explicit
   gaps. The diagnostic job is separate from security release acceptance.

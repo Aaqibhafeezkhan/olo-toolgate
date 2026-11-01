@@ -24,6 +24,8 @@ fn shared_fixture_round_trips() {
         AuthorizationRequest,
         BundleHeader,
         BundlePublishRequest,
+        BusinessKeyNamespace,
+        BusinessKeyPolicy,
         CancellationAccepted,
         ClientActivity,
         ClientActivityEvent,

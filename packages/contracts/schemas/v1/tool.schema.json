@@ -65,9 +65,12 @@
         },
         "outputSchema": {
           "type": "object"
-        },
+        },
         "reconciliation": {
           "$ref": "tool.schema.json#/$defs/ReconciliationMethod"
+        },
+        "businessKeyPolicy": {
+          "$ref": "tool.schema.json#/$defs/BusinessKeyPolicy"
         }
       },
       "required": [
@@ -77,6 +80,57 @@
         "actions",
         "inputSchema",
         "outputSchema"
+      ]
+    },
+    "BusinessKeyNamespace": {
+      "type": "string",
+      "enum": [
+        "AGENT",
+        "DELEGATED_USER",
+        "TENANT"
+      ],
+      "description": "Control derives namespace identity from the verified caller; never from arguments."
+    },
+    "BusinessKeyPolicy": {
+      "type": "object",
+      "description": "Reviewed admission key policy. Missing policy retains conservative legacy explicit-key behavior.",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "namespace": {
+          "$ref": "tool.schema.json#/$defs/BusinessKeyNamespace"
+        },
+        "argument": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$",
+          "description": "Exact top-level string input field containing the key."
+        },
+        "dedupeWindowMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 86400000,
+          "description": "Optional unkeyed dedupe; cannot replace a required explicit/argument key."
+        },
+        "retentionMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 31536000000,
+          "description": "Reservation retention, default thirty days; snapshotted at creation, never shortened on replay."
+        },
+        "upstreamIdempotencyWindowMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 31536000000,
+          "description": "Declared downstream key window; retention must cover it."
+        }
+      },
+      "required": [
+        "required",
+        "namespace"
       ]
     }
   }

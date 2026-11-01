@@ -79,6 +79,44 @@ describe('ToolTest', () => {
     expect((bodies[1] as { request: { arguments: unknown } }).request.arguments).toEqual({ text: 'Anupriya' });
   });
 
+  it.each([false, true])('uses the declared business key and refuses malformed keys locally (malformed=%s)', async malformed => {
+    const keys: string[] = [];
+    const policyTool = { ...tool, businessKeyPolicy: { required: true, namespace: 'DELEGATED_USER', argument: 'paymentKey' },
+      inputSchema: { type: 'object', properties: { paymentKey: { type: 'string', default: 'workflow-42' }, text: { type: 'string', default: 'first' } } } };
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.includes('/bindings')) return response({ items: [{ id: 'b', name: 'B', enabled: true }] });
+      if (input.endsWith('/human/catalog')) return response({ tools: [policyTool] });
+      if (input.endsWith('/human/invocations')) {
+        keys.push(new Headers(init?.headers).get('Idempotency-Key') ?? '');
+        return response({ invocation: { id: 'canonical-operation', state: 'QUEUED' } });
+      }
+      if (input.includes('/events')) return response({ invocationId: 'canonical-operation', state: 'SUCCEEDED',
+        terminal: true, events: [], nextCursor: 0, more: false, truncated: false, droppedFrames: 0, expired: false, gaps: [] });
+      return response({}, 404);
+    }));
+    render(<ToolTest client={new ControlClient('session', () => {})} deviceId="host" />);
+    await screen.findByRole('option', { name: 'B' });
+    fireEvent.change(screen.getByLabelText('Execution binding'), { target: { value: 'b' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show available tools' }));
+    await screen.findByRole('button', { name: 'Test' });
+    if (malformed) {
+      for (const paymentKey of [123, 'invalid/key', '']) {
+        fireEvent.change(screen.getByLabelText(/Input/), { target: { value: JSON.stringify({ paymentKey }) } });
+        fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+        await screen.findByRole('alert');
+        expect(keys).toEqual([]);
+      }
+      return;
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Test' }).hasAttribute('disabled')).toBe(false));
+    expect(keys).toEqual(['workflow-42']);
+    // An edit keeps the declared business operation key, so Control can reject a fingerprint conflict.
+    fireEvent.change(screen.getByLabelText(/Input/), { target: { value: '{"paymentKey":"workflow-42","text":"changed"}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+    await waitFor(() => expect(keys).toEqual(['workflow-42', 'workflow-42']));
+  });
+
   it('stops following when access is revoked and reports gaps, truncation and drops explicitly', async () => {
     let calls = 0;
     vi.stubGlobal('fetch', vi.fn(async (input: string) => {

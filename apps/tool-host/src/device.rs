@@ -268,6 +268,7 @@ impl Device {
                     enabled: tool.enabled,
                     input_schema: tool.input_schema,
                     tool_digest: tool.tool_digest,
+                    business_key_policy: None, // Control supplies current policy in its catalog.
                 })
             })
             .collect();

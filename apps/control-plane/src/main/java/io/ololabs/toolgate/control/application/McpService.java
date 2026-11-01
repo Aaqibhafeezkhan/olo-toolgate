@@ -52,7 +52,7 @@ public final class McpService {
                 var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))continue;var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));
                 for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
                     var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
-                    if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest())&&listed.add(t.toolId()+"\n"+t.action()))tools.add(t);
+                    if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest())&&listed.add(t.toolId()+"\n"+t.action()))tools.add(new LocalToolInfo(t.toolId(),t.action(),t.description(),t.enabled(),t.inputSchema(),t.toolDigest(),t.packageDigest(),BusinessKeyPolicies.configured(tx,codec,t.toolId())));
                 }
             }return reply(new LocalToolCatalog(tools));});}
     public Store.Reply submit(DirectoryService.Actor actor,boolean gateway,String body,String requestId){gateway(actor,gateway);var submission=codec.model(body,RemoteToolSubmission.class);

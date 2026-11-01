@@ -81,3 +81,5 @@ Use `000-template.md`.
 - [044: Verified target claim orchestration](044-target-claim-orchestration.md)
 
 - [045: Source-bound actual Control/knowledge qualification](045-knowledge-stack-qualification.md)
+
+- [046: Control-owned business-key policy and retention](046-business-key-policy-retention.md)

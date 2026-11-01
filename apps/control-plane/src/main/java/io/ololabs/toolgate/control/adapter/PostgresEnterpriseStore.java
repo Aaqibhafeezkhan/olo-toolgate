@@ -12,14 +12,73 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
     public Operation operation(String id){return new JdbcOperationLedger(connection,tenant).operation(id);}
     public List<Attempt> attempts(String id,long now){return new JdbcOperationLedger(connection,tenant).attempts(id,now);}
     public BusinessKey businessKey(String tool,String namespace,String identity,String hash){
-        try(var s=query("SELECT fingerprint,caller_agent_id,caller_user_id,invocation_id,retain_until,tombstoned_at FROM control_business_keys WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=?",tool,namespace,identity,hash);var rows=s.executeQuery()){
-            if(!rows.next())return null;long tombstone=rows.getLong(6);Long marked=rows.wasNull()?null:tombstone;
-            return new BusinessKey(tool,namespace,identity,hash,rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getLong(5),marked);
+        try(var s=query("SELECT fingerprint,caller_agent_id,caller_user_id,invocation_id,retain_until,tombstoned_at,source,dedupe_expires_at,outcome FROM control_business_keys WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=?",tool,namespace,identity,hash);var rows=s.executeQuery()){
+            return rows.next()?businessKeyRow(rows,tool,namespace,identity,hash):null;
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    private static Long nullableLong(ResultSet rows,int column)throws SQLException{
+        long value=rows.getLong(column);return rows.wasNull()?null:value;
+    }
+    private static BusinessKey businessKeyRow(ResultSet rows,String tool,String namespace,String identity,String hash)throws SQLException{
+        Long tombstone=nullableLong(rows,6),dedupe=nullableLong(rows,8);
+        return new BusinessKey(tool,namespace,identity,hash,rows.getString(1),rows.getString(2),rows.getString(3),
+                rows.getString(4),rows.getLong(5),tombstone,rows.getString(7),dedupe,rows.getString(9));
+    }
+    private PreparedStatement bound(String sql,Object... values)throws SQLException{
+        var s=connection.prepareStatement(sql);for(int n=0;n<values.length;n++)s.setObject(n+1,values[n]);return s;
+    }
+    public BusinessKey businessKeyForInvocation(String invocation){
+        try(var s=query("SELECT fingerprint,caller_agent_id,caller_user_id,invocation_id,retain_until,tombstoned_at,source,dedupe_expires_at,outcome,tool_id,namespace,namespace_identity,business_key_hash FROM control_business_keys WHERE tenant_id=? AND invocation_id=? LIMIT 2",invocation);var rows=s.executeQuery()){
+            if(!rows.next())return null;
+            var value=businessKeyRow(rows,rows.getString(10),rows.getString(11),rows.getString(12),rows.getString(13));
+            if(rows.next())throw Failure.unavailable();
+            return value;
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public List<BusinessKey> businessKeyHistory(String tool,String namespace,String identity,String hash,int limit){
+        if(limit<1||limit>100)throw Failure.validation();
+        try(var s=query("SELECT fingerprint,caller_agent_id,caller_user_id,invocation_id,retain_until,tombstoned_at,'DEDUPE_WINDOW',dedupe_expires_at,outcome FROM control_business_key_history WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=? ORDER BY archived_at,invocation_id LIMIT ?",tool,namespace,identity,hash,limit);var rows=s.executeQuery()){
+            var result=new ArrayList<BusinessKey>();while(rows.next())result.add(businessKeyRow(rows,tool,namespace,identity,hash));return List.copyOf(result);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public void replaceBusinessKey(BusinessKey previous,BusinessKey next,long now){
+        var operation=operation(previous.invocation());
+        if(!"DEDUPE_WINDOW".equals(previous.source())||!"DEDUPE_WINDOW".equals(next.source())
+                ||previous.dedupeExpiresAt()==null||previous.dedupeExpiresAt()>now
+                ||next.dedupeExpiresAt()==null||next.dedupeExpiresAt()<=now||next.retainUntil()<next.dedupeExpiresAt()
+                ||next.outcome()!=null||next.tombstonedAt()!=null||previous.invocation().equals(next.invocation())
+                ||!previous.tool().equals(next.tool())||!previous.namespace().equals(next.namespace())
+                ||!previous.identity().equals(next.identity())||!previous.hash().equals(next.hash())
+                ||operation==null||operation.legacy()||!Set.of("FAILED","SUCCEEDED").contains(operation.state())
+                ||!previous.equals(businessKey(previous.tool(),previous.namespace(),previous.identity(),previous.hash())))throw Failure.conflict();
+        try{
+            try(var archive=bound("INSERT INTO control_business_key_history(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,outcome,tombstoned_at,archived_at) SELECT tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,outcome,tombstoned_at,? FROM control_business_keys WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=? AND invocation_id=? AND source='DEDUPE_WINDOW'",now,tenant,previous.tool(),previous.namespace(),previous.identity(),previous.hash(),previous.invocation())){
+                if(archive.executeUpdate()!=1)throw Failure.conflict();
+            }
+            try(var update=bound("UPDATE control_business_keys SET fingerprint=?,caller_agent_id=?,caller_user_id=?,invocation_id=?,created_at=?,dedupe_expires_at=?,retain_until=?,outcome=NULL,tombstoned_at=NULL WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=? AND invocation_id=? AND dedupe_expires_at<=?",
+                    next.fingerprint(),next.agent(),next.user(),next.invocation(),now,next.dedupeExpiresAt(),next.retainUntil(),tenant,
+                    previous.tool(),previous.namespace(),previous.identity(),previous.hash(),previous.invocation(),now)){
+                if(update.executeUpdate()!=1)throw Failure.conflict();
+            }
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public int tombstoneExpiredBusinessKeys(long now,int limit){
+        if(limit<1||limit>100)throw Failure.validation();
+        var keys=new ArrayList<String[]>();
+        try{
+            try(var s=query("SELECT k.tool_id,k.namespace,k.namespace_identity,k.business_key_hash,k.invocation_id FROM control_business_keys k JOIN control_operations o ON o.tenant_id=k.tenant_id AND o.operation_id=k.invocation_id WHERE k.tenant_id=? AND k.retain_until<=? AND k.tombstoned_at IS NULL AND k.outcome IS NOT NULL AND k.outcome<>'OUTCOME_UNKNOWN' AND NOT o.legacy AND o.state IN('FAILED','SUCCEEDED') ORDER BY k.retain_until,k.tool_id,k.namespace,k.namespace_identity,k.business_key_hash LIMIT ?",now,limit);var rows=s.executeQuery()){
+                while(rows.next())keys.add(new String[]{rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5)});
+            }
+            int count=0;
+            for(var key:keys)try(var s=bound("UPDATE control_business_keys SET tombstoned_at=? WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=? AND invocation_id=? AND tombstoned_at IS NULL AND retain_until<=?",now,tenant,key[0],key[1],key[2],key[3],key[4],now)){
+                count+=s.executeUpdate();
+            }
+            return count;
         }catch(SQLException failure){throw Failure.unavailable();}
     }
     public boolean businessInvocation(String id){try(var s=query("SELECT 1 FROM control_business_keys WHERE tenant_id=? AND invocation_id=?",id);var rows=s.executeQuery()){return rows.next();}catch(SQLException failure){throw Failure.unavailable();}}
     public void saveBusinessKey(BusinessKey key,long now){
-        try(var s=query("INSERT INTO control_business_keys(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,source,fingerprint,caller_agent_id,caller_user_id,invocation_id,created_at,retain_until) VALUES(?,?,?,?,?,'HEADER',?,?,?,?,?,?) ON CONFLICT DO NOTHING",key.tool(),key.namespace(),key.identity(),key.hash(),key.fingerprint(),key.agent(),key.user(),key.invocation(),now,key.retainUntil())){if(s.executeUpdate()!=1)throw Failure.conflict();}
+        try(var s=query("INSERT INTO control_business_keys(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,source,fingerprint,caller_agent_id,caller_user_id,invocation_id,created_at,retain_until,dedupe_expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",key.tool(),key.namespace(),key.identity(),key.hash(),key.source(),key.fingerprint(),key.agent(),key.user(),key.invocation(),now,key.retainUntil(),key.dedupeExpiresAt())){if(s.executeUpdate()!=1)throw Failure.conflict();}
         catch(SQLException failure){throw Failure.unavailable();}
     }
     public void saveExecutionEvidence(String id,String fence,String digest,String document,long now){

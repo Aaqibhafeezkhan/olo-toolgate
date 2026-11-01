@@ -37,6 +37,16 @@ export interface BundlePublishRequest {
   readonly gracePolicyIds?: ReadonlyArray<string>;
   readonly rollbackOf?: number;
 }
+export type BusinessKeyNamespace = "AGENT" | "DELEGATED_USER" | "TENANT";
+/** Reviewed admission key policy. Missing policy retains conservative legacy explicit-key behavior. */
+export interface BusinessKeyPolicy {
+  readonly required: boolean;
+  readonly namespace: BusinessKeyNamespace;
+  readonly argument?: string;
+  readonly dedupeWindowMs?: number;
+  readonly retentionMs?: number;
+  readonly upstreamIdempotencyWindowMs?: number;
+}
 /** Durable caller-scoped cancellation acknowledgement. */
 export interface CancellationAccepted {
   readonly cancelled: boolean;
@@ -1517,6 +1527,7 @@ export interface LocalToolInfo {
   readonly inputSchema: Record<string, unknown>;
   readonly toolDigest: string;
   readonly packageDigest: string;
+  readonly businessKeyPolicy?: BusinessKeyPolicy;
 }
 /** One JSON stdin document; arguments never become process command strings. */
 export interface LocalToolInput {
@@ -1875,6 +1886,7 @@ export interface ToolDefinition {
   readonly inputSchema: Record<string, unknown>;
   readonly outputSchema: Record<string, unknown>;
   readonly reconciliation?: ReconciliationMethod;
+  readonly businessKeyPolicy?: BusinessKeyPolicy;
 }
 export type UserRole = "BASIC" | "ADMINISTRATOR" | "SUPER_ADMIN";
 export const CONTRACT_SET_VERSION = "1.0.0-dev.1" as const;

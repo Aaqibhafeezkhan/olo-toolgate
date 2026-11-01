@@ -147,6 +147,9 @@ class FoundationTests(unittest.TestCase):
                     # proved below; every other frozen field stays checked.
                     current = copy.deepcopy(current)
                     del current['$defs']['ToolDefinition']['properties']['reconciliation']
+                    # ADR 046 also requires matching current readers. Its exact
+                    # extension and archived rejection are tested separately.
+                    del current['$defs']['ToolDefinition']['properties']['businessKeyPolicy']
                 compatible(schema,current,name)
 
     def test_reconciliation_requires_current_readers_without_weakening_other_fields(self):

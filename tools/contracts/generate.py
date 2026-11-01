@@ -212,6 +212,12 @@ def render_version(ver, version, outputs):
                 if not v2 and name == 'AdminSession':
                     java += ['    /** Construct a session without an optional tenant display name. */',
                              '    public AdminSession(java.util.List<String> permissions, UserRole role, String bootstrapAdminUserId, String tenantId) { this(permissions, role, bootstrapAdminUserId, tenantId, null); }']
+                if not v2 and name in ('ToolDefinition', 'LocalToolInfo'):
+                    previous = [key for key in props if key != 'businessKeyPolicy']
+                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
+                    arguments = ', '.join(java_ident(key) if key != 'businessKeyPolicy' else 'null' for key in props)
+                    java += ['    /** Construct legacy metadata without admission key policy. */',
+                             f'    public {name}({signature}) {{ this({arguments}); }}']
                 if not v2 and name == 'EnterpriseInvocationRequest':
                     previous = [key for key in props if key != 'businessKeyHash']
                     signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)

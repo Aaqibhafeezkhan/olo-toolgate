@@ -72,5 +72,6 @@ pub fn managed_info(
         input_schema: tool.input_schema.clone(),
         tool_digest: tool_digest(profile)?,
         package_digest: profile.tool.package_digest.clone(),
+        business_key_policy: profile.tool.definition.business_key_policy.clone(),
     })
 }

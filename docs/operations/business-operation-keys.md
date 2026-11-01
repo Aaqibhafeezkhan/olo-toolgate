@@ -37,13 +37,62 @@ raw keys. Start new workflows after cutover with new workflow-scoped keys.
 
 Upgrade Control and its contracts before rolling out the new Gateway. An older
 Control rejects the new closed-schema request field; Gateway does not silently
-drop the key or fall back to unkeyed admission. No storage migration is needed: the
-reservation uses the already shipped `control_business_keys` table.
+drop the key or fall back to unkeyed admission. Migration V5 adds immutable window-generation history and stricter key guards.
+Upgrade the database/Control and contract readers before publishing policy
+metadata; older closed-schema clients cannot read the new optional fields.
+Quickstart databases apply V5 on open and older images refuse the newer state.
+Keep the original key/operation history during rollback or restore.
 
-Keys are scoped by tenant, tool and authenticated agent (or user for calls without
-an agent). A different original user or changed input/code/binding returns HTTP
+Without a policy, keys retain their legacy tenant/tool/agent scope (or verified
+user scope for calls without an agent). A reviewed tool definition may declare
+the following optional `businessKeyPolicy`:
+
+```json
+{
+  "required": true,
+  "namespace": "TENANT",
+  "argument": "paymentKey",
+  "retentionMs": 2592000000,
+  "upstreamIdempotencyWindowMs": 86400000
+}
+```
+
+AGENT needs a verified agent. DELEGATED_USER uses the verified human and refuses
+SERVICE calls. TENANT uses an empty namespace identity. Arguments cannot assert
+that identity or enable result sharing. The original user and agent remain
+owners: another owner receives conflict without a result, including another agent
+acting for the same user. Cross-agent result reuse needs the later caller
+integration; selecting DELEGATED_USER does not grant it implicitly.
+
+A required key must arrive through the header/MCP metadata or the declared
+top-level string argument. Argument keys use the same 1–128 ASCII
+letter/digit/period/underscore/hyphen rule and tenant hash domain. When both
+sources are present they must agree; a malformed present argument is refused
+even when a header key is valid. Raw argument values still travel in governed
+tool payloads; only reservation/audit key metadata is hashed.
+
+Server deployment derives enforced key settings from its stored package
+descriptor; dropping or weakening the directory copy cannot bypass the pinned
+server declaration. Client releases include the key policy in the signed
+installed authorization profile. Resolved optional AGENT defaults, including
+legacy descriptors omitting the namespace, retain the old agent-or-human
+explicit-key behavior. Required keys, argument mappings or another declared
+namespace opt into enforcement.
+
+The authenticated native catalog exposes current policy. MCP tools/list exposes
+it as `_meta["io.ololabs.toolgate/businessKeyPolicy"]`. This is discovery metadata,
+not authorization. A caller's policy metadata cannot override Control. Gateway
+checks explicit/argument-derived IDs and accepts a Control-selected canonical ID
+only for a declared unkeyed window, while checking actor, inputs, code and binding.
+MCP results, local submissions and trace correlation use that validated ID.
+Direct human calls also use the canonical operation ID for local dispatch and
+replay. The console uses a declared argument key as its Idempotency-Key header,
+so both sources agree; editing other inputs with that key lets Control reject a
+fingerprint conflict instead of creating a different logical operation.
+
+ A different original user or changed input/code/binding returns HTTP
 409; it never receives the first caller's result. Current authorization remains
-required on replay. Retention expiry also returns 409 and never starts a new call.
+required on replay. Explicit-key retention expiry also returns 409 and never starts a new call.
 Control stores only the tenant-separated key hash, not the raw key. Key hashes
 are guessable identifiers, not credentials.
 
@@ -60,9 +109,40 @@ the original deadline is recorded as a separate attempt by the
 [operation/attempt journal](operation-attempt-journal.md). Do not generate a new
 key to bypass uncertainty: that is a new operation with potential duplicate effects.
 
-This protection currently requires an explicit key. Calls without keys keep
-request-ID identity/replay lookup; they also cannot reopen consumed unknown
-attempts. Generalized requiresBusinessKey enforcement,
-whole-operation rebinding and effect-level recovery remain outstanding; see
+## Optional dedupe windows and maintenance
+
+A policy with `required: false` may set `dedupeWindowMs` (1 second to 24 hours).
+Identical unkeyed intent within that window returns one operation across request
+IDs and replicas. The window hash binds sorted Control JSON of caller/chain,
+binding, exact input, tool/extractor/package digests and downstream key, excluding
+credential renewal, trace IDs and selected device. It uses the versioned
+toolgate-business-window-v1 domain, separately from signed JCS HTTP fingerprints.
+Input/code/binding changes are different implicit patterns; this is not
+package-major-only deduplication. Sensitive workflows should preserve explicit
+logical keys rather than rely on a time window.
+
+Elapsed time is not permission to repeat work. A new window generation requires
+Control's durable non-legacy resolved operation record and archives the entire
+old binding atomically. The current journal proves not-started failure for
+unconsumed terminal work; consumed terminal work remains unknown, even when a
+worker reports success, until effect-aware finalization supplies stronger proof.
+Running, legacy or ambiguous prior work returns conflict after window expiry.
+An explicit key never becomes a renewable window key.
+
+Retention defaults to 30 days; configured values range from 1 second to 365 days
+and must cover both the optional dedupe window and the declared upstream
+idempotency window. Replay cannot shorten or extend the snapshot. The watchdog
+processes at most 100 eligible key tombstones per tenant sweep, after expiring
+invocations. Only resolved non-legacy operations qualify; running/ambiguous
+records stay intact. Explicit tombstones remain bound indefinitely and are never
+deleted. An eligible new implicit window may supersede its retained predecessor,
+including a tombstoned one, only with the exact immutable history and resolution
+proof. History cannot be updated or deleted by the runtime role.
+
+Key-row retention does not purge independent task/result/dispatch payloads.
+Whole-invocation rebinding, cross-agent result reuse and effect-aware operation
+finalization remain outstanding. Calls without a declared window and without a
+key retain request-ID replay lookup. None of these paths can reopen consumed
+unknown attempts through legacy retry; see
 [the live progress document](../security/zero-trust-execution-status.md) and
 [ADR 034](../adr/034-durable-business-operation-binding.md).

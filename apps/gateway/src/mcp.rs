@@ -235,17 +235,7 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 traceparent,
                 context: declared_context(meta, &headers, tracestate),
             };
-            let invocation_id = match meta["io.ololabs.toolgate/businessKey"].as_str() {
-                Some(key) => match crate::application::business_operation_id(
-                    &context,
-                    params["name"].as_str().unwrap_or_default(),
-                    key,
-                ) {
-                    Ok(id) => id,
-                    Err(code) => return error(code, &correlation.request_id),
-                },
-                None => crate::http::invocation_id(&context, &id.to_string()),
-            };
+            let invocation_id = crate::http::invocation_id(&context, &id.to_string());
             let started = unix_ms().unwrap_or(0);
             let request_span = trace.traceparent.clone();
             let result = tools_call(
@@ -257,17 +247,21 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 params,
                 trace,
             )
-            .await
-            .map(|result| with_invocation_reference(result, &invocation_id));
+            .await;
             // The request span is the Gateway's own span, the parent its executors see.
             if request_span.len() == 55 {
+                let actual_id = result
+                    .as_ref()
+                    .ok()
+                    .and_then(|value| value["_meta"][INVOCATION_REFERENCE].as_str())
+                    .unwrap_or(&invocation_id);
                 let ok = result.as_ref().is_ok_and(|r| r["isError"] != json!(true));
                 s.spans.record(
                     olo_toolgate_contracts::v2::InsightsSpanName::GatewayRequest,
                     &request_span,
                     request_span[36..52].to_owned(),
                     None,
-                    &invocation_id,
+                    actual_id,
                     started,
                     unix_ms().unwrap_or(started),
                     ok,
@@ -294,7 +288,13 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
 async fn tools_list(s: &AppState, context: &RequestContext, id: &Value) -> Result<Value, Response> {
     match s.gateway.authority.catalog(context).await {
         Ok(catalog) => Ok(
-            json!({"tools":catalog.tools.iter().filter(|tool|tool.enabled).map(|tool|json!({"name":tool.tool_id,"description":tool.description,"inputSchema":tool.input_schema})).collect::<Vec<_>>(),"ttlMs":0,"cacheScope":"private"}),
+            json!({"tools":catalog.tools.iter().filter(|tool|tool.enabled).map(|tool|{
+                let mut value=json!({"name":tool.tool_id,"description":tool.description,"inputSchema":tool.input_schema});
+                if let Some(policy)=&tool.business_key_policy {
+                    value["_meta"]=json!({"io.ololabs.toolgate/businessKeyPolicy":policy});
+                }
+                value
+            }).collect::<Vec<_>>(),"ttlMs":0,"cacheScope":"private"}),
         ),
         Err(code) => Err(rpc_error(
             status(&code),
@@ -544,6 +544,9 @@ async fn tools_call(
             json!({"code":code}),
         )
     })?;
+    let canonical_id = outcome.invocation.id.clone();
+    context.request_id = canonical_id.clone();
+    let result = async {
     if outcome.invocation.state == EnterpriseInvocationState::PendingApproval {
         if let Some(now) = unix_ms() {
             s.admissions.record(
@@ -722,6 +725,8 @@ async fn tools_call(
             )
         })?;
     }
+    }.await;
+    result.map(|value| with_invocation_reference(value, &canonical_id))
 }
 
 /// Pull mode: hands the dispatch to Control, where the Tool Host fetches it, and waits for the

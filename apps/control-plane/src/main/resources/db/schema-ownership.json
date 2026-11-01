@@ -2132,6 +2132,48 @@
         "INSERT",
         "SELECT"
       ]
+    },
+    {
+      "name": "control_business_key_history",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "tool_id",
+        "namespace",
+        "namespace_identity",
+        "business_key_hash",
+        "invocation_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operations",
+          "columns": [
+            "tenant_id",
+            "invocation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
     }
   ]
 }

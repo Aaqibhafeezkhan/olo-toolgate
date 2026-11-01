@@ -14,12 +14,13 @@ final readonly class ToolDefinition implements \JsonSerializable {
         public array $actions,
         public \stdClass $inputSchema,
         public \stdClass $outputSchema,
-        public ?ReconciliationMethod $reconciliation = null
+        public ?ReconciliationMethod $reconciliation = null,
+        public ?BusinessKeyPolicy $businessKeyPolicy = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'name', 'description', 'actions', 'inputSchema', 'outputSchema', 'reconciliation']) || array_diff(['id', 'name', 'description', 'actions', 'inputSchema', 'outputSchema'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'name', 'description', 'actions', 'inputSchema', 'outputSchema', 'reconciliation', 'businessKeyPolicy']) || array_diff(['id', 'name', 'description', 'actions', 'inputSchema', 'outputSchema'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -29,7 +30,8 @@ final readonly class ToolDefinition implements \JsonSerializable {
             array_map(static fn ($item) => ToolAction::fromArray($item), $data['actions']),
             (object) $data['inputSchema'],
             (object) $data['outputSchema'],
-            array_key_exists('reconciliation', $data) ? ReconciliationMethod::from($data['reconciliation']) : null
+            array_key_exists('reconciliation', $data) ? ReconciliationMethod::from($data['reconciliation']) : null,
+            array_key_exists('businessKeyPolicy', $data) ? BusinessKeyPolicy::fromArray($data['businessKeyPolicy']) : null
         );
     }
 

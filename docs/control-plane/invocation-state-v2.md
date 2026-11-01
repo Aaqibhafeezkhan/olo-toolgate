@@ -85,6 +85,16 @@ T1 runs these steps under the tenant lock, in one transaction:
 
 ### 4.3 Outcomes for an existing row
 
+**Current implementation amendment:** [ADR 046](../adr/046-business-key-policy-retention.md)
+implements required keys, verified namespaces, argument derivation, retention and
+optional windows. The table below remains the broader design target. Current
+owner checks also bind the original agent in DELEGATED_USER; cross-agent result
+reuse and tenant result sharing are not enabled. Expired windows require positive
+non-legacy resolved-operation evidence and immutable history, rather than elapsed
+time alone. Explicit-key expiry returns conflict and cannot start new work.
+Whole-invocation rebinding in §4.4 remains a separate delivery stage; a worker's
+not-started report alone cannot establish its positive proof.
+
 Evaluated in this order:
 
 | Situation | Result | Returned |
@@ -140,8 +150,8 @@ The trigger `control_business_key_guard` allows a rebind only from outcome `EXPI
 |---|---|---|---|
 | Flyway (PostgreSQL) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/migration/V1__initial_schema.sql) | Applied once to an empty database | Invocation/task columns, constraints and indexes; business keys; result payloads; guard triggers; grants |
 | Quickstart (SQLite) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/quickstart/V1.sql) | Applied once to an empty database | Same state; cross-column checks use triggers |
-| Flyway | [Prospective V5 kill switch](migrations-v2/flyway/V5__kill_switch.sql) | Ships when implemented | [kill-switch.md](kill-switch.md) §2 |
-| Quickstart | [Prospective V5 kill switch](migrations-v2/quickstart/V5.sql) | Ships when implemented | Same |
+| Flyway | [Prospective V6 kill switch](migrations-v2/flyway/V6__kill_switch.sql) | Ships when implemented | [kill-switch.md](kill-switch.md) §2 |
+| Quickstart | [Prospective V6 kill switch](migrations-v2/quickstart/V6.sql) | Ships when implemented | Same |
 
 **Rules:**
 - **Frozen content.** Released migration files are immutable. Future schema changes append a new version. The initial schema supports only the current application model; pre-release database histories are unsupported.

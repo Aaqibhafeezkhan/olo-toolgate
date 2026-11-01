@@ -25,6 +25,11 @@
     "lifetimeMs": 60000,
     "graceMs": 0
   },
+  "BusinessKeyNamespace": "AGENT",
+  "BusinessKeyPolicy": {
+    "required": false,
+    "namespace": "AGENT"
+  },
   "CancellationAccepted": {
     "cancelled": true
   },

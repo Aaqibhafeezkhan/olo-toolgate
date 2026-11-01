@@ -423,4 +423,65 @@ final class ServerPackagesTest {
         assertFalse(entries.get(Ids.Kind.TOOL.id("acme.orders/items.list")).enabled());
         assertTrue(store.transaction(tenant, false, tx -> tx.enterprise().authorizationEpoch()) > epoch);
     }
+
+    @Test void packageKeyRequirementsSurviveMissingOrWeakenedDirectoryCopies() throws Exception {
+        var codec=new ContractCodec();
+        var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(
+                SqliteState.open(directory.resolve("package-key-policy.sqlite"))),codec);
+        var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("tenant");
+        var administrator=TestSupport.seed(store,codec,tenant,"root");
+        var packages=new ServerPackages(store,codec,null,java.time.Clock.systemUTC());
+        var files=new TreeMap<>(files());
+        files.remove("CHECKSUMS.sha256");
+        var manifest=(ObjectNode)JSON.readTree(files.get("toolgate-package.json"));
+        var tool=(ObjectNode)manifest.path("tools").get(0);
+        var descriptor=(ObjectNode)tool.path("descriptor");
+        descriptor.putObject("businessKey").put("required",true).put("namespace","TENANT");
+        byte[] canonical=Canonical.bytes(descriptor);
+        String descriptorDigest=Canonical.sha256(canonical);
+        tool.put("toolDescriptorDigest",descriptorDigest);
+        var set=JSON.createArrayNode();
+        set.addObject().put("toolId","acme.orders/items.get").put("toolDescriptorDigest",descriptorDigest);
+        manifest.put("descriptorSetDigest",Canonical.digest(set));
+        files.put("tools/items.get.json",canonical);
+        files.put("toolgate-package.json",JSON.writeValueAsBytes(manifest));
+        var checksums=new StringBuilder();
+        for(var entry:files.entrySet())checksums.append(Canonical.sha256(entry.getValue()).substring(7))
+                .append("  ").append(entry.getKey()).append('\n');
+        files.put("CHECKSUMS.sha256",checksums.toString().getBytes(StandardCharsets.UTF_8));
+        String digest=node(packages.upload(administrator,zip(files),"upload-key-policy").body()).path("packageDigest").asText();
+        packages.deploy(administrator,"{\"packageDigest\":\""+digest+"\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"}}","deploy-key-policy");
+        var copied=codec.model(store.transaction(tenant,false,tx->tx.load().entries().get(
+                Ids.Kind.TOOL.id("acme.orders/items.get"))).document(),ControlTool.class).definition().businessKeyPolicy();
+        assertTrue(copied.required());
+        assertEquals(BusinessKeyNamespace.TENANT,copied.namespace());
+        var operations=new EnterpriseOperations(store,codec,null,java.time.Clock.systemUTC(),"control","toolgate-client",60000,256);
+        var gateway=new DirectoryService.Actor(tenant,"b".repeat(64),false);
+        var context=new io.ololabs.toolgate.contracts.v2.RequestContext("missing-package-key",tenant.value(),
+                io.ololabs.toolgate.contracts.v2.RequestMode.SERVICE,
+                io.ololabs.toolgate.contracts.v2.CredentialKind.STATIC_TOKEN,null,null,"agent","workload",
+                List.of(),null,1L,null,null,"binding","a".repeat(64));
+        var request=new EnterpriseInvocationRequest(context,new AuthorizationRequest("acme.orders/items.get","invoke",
+                Map.of("id",JSON.getNodeFactory().textNode("123"))),"a".repeat(64),digest.substring(7),null,null);
+        String document=codec.json(request);
+        assertEquals(400,assertThrows(Failure.class,()->operations.submit(gateway,document)).status());
+        for(boolean remove:List.of(true,false)) {
+            store.transaction(tenant,true,tx->{
+                var before=tx.load();var entries=new HashMap<>(before.entries());
+                var previous=entries.get(Ids.Kind.TOOL.id("acme.orders/items.get"));
+                var value=(ObjectNode)nodeUnchecked(previous.document());
+                value.put("revision",previous.revision()+1);
+                var definition=(ObjectNode)value.path("definition");
+                if(remove)definition.remove("businessKeyPolicy");
+                else definition.putObject("businessKeyPolicy").put("required",false).put("namespace","TENANT");
+                entries.put(previous.id(),new io.ololabs.toolgate.control.domain.Directory.Entry(
+                        previous.id(),previous.enabled(),previous.revision()+1,value.toString(),previous.references()));
+                tx.save(before,new io.ololabs.toolgate.control.domain.Directory(before.revision()+1,entries));
+                return null;
+            });
+            assertEquals(remove?400:409,assertThrows(Failure.class,()->operations.submit(gateway,document)).status());
+        }
+        assertTrue(store.transaction(tenant,false,tx->tx.enterprise().invocations("",100)).isEmpty());
+    }
+
 }

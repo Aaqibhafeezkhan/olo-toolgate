@@ -200,6 +200,9 @@ struct Authority {
     replayed: bool,
     /// A repeated call whose invocation already ended in this state.
     ended: Option<EnterpriseInvocationState>,
+    business_policy: Option<BusinessKeyPolicy>,
+    canonical: Option<String>,
+    mismatched_context_id: bool,
 }
 impl Authority {
     /// The host claims the call on the second poll and finishes it on the third.
@@ -318,6 +321,7 @@ impl RelayPort for Authority {
                     input_schema: serde_json::from_value(json!({"type":"object"})).unwrap(),
                     tool_digest: "a".repeat(64),
                     package_digest: "b".repeat(64),
+                    business_key_policy: self.business_policy.clone(),
                 }],
             })
         })
@@ -345,7 +349,11 @@ impl RelayPort for Authority {
                 fields.remove(key);
             }
             fields.insert("deviceId".into(), json!("placed-device"));
-            i.id = r.context.request_id.clone();
+            i.id = self
+                .canonical
+                .clone()
+                .unwrap_or_else(|| r.context.request_id.clone());
+            fields.insert("requestId".into(), json!(i.id));
             i.evaluation.context = serde_json::from_value(c).unwrap();
             i.evaluation.tool_id = r.request.tool_id.clone();
             i.evaluation.action = r.request.action.clone();
@@ -369,6 +377,9 @@ impl RelayPort for Authority {
             i.revision = 1;
             if self.substitute {
                 i.evaluation.context.binding_id = "attacker-binding".into();
+            }
+            if self.mismatched_context_id {
+                i.evaluation.context.request_id = "wrong-context".into();
             }
             *self.invocation.lock().unwrap() = Some(i.clone());
             Ok(i)
@@ -1272,4 +1283,183 @@ async fn mcp_business_metadata_survives_new_rpc_ids_and_rejects_non_strings() {
             StatusCode::BAD_REQUEST
         );
     }
+}
+
+fn key_policy(value: Value) -> BusinessKeyPolicy {
+    serde_json::from_value(value).unwrap()
+}
+fn tenant_operation_reference(key: &str) -> String {
+    let tenant = credential().context.tenant_id;
+    let hash = digest(format!("toolgate-business-key-v1\0{tenant}\0{key}").as_bytes());
+    format!(
+        "op-{}",
+        digest(format!("toolgate-operation-v1\n{tenant}\nfiles.read\nTENANT\n\n{hash}").as_bytes())
+    )
+}
+
+#[tokio::test]
+async fn native_business_keys_follow_the_control_catalog_namespace() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(json!({"required":true,"namespace":"TENANT"}))),
+        ..Default::default()
+    });
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        req("/access/invocations", payload()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert_eq!(
+        response["invocation"]["id"],
+        json!(tenant_operation_reference("logical-request"))
+    );
+    assert_eq!(authority.reservations.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn header_argument_key_conflicts_are_refused_before_control_invocation() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":true,"namespace":"TENANT","argument":"operationKey"}),
+        )),
+        ..Default::default()
+    });
+    let mut body = payload();
+    body["arguments"]["operationKey"] = json!("different-key");
+    let (status, _) = call(
+        runtime_router(state(authority.clone())),
+        req("/access/invocations", body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(authority.invocation.lock().unwrap().is_none());
+    assert_eq!(authority.reservations.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn mcp_argument_keys_use_the_canonical_id_for_results_and_local_dispatch() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":true,"namespace":"TENANT","argument":"operationKey"}),
+        )),
+        ..Default::default()
+    });
+    let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+    let mut value: Value = serde_json::from_slice(&to_bytes(body, 65536).await.unwrap()).unwrap();
+    value["params"]["arguments"]["operationKey"] = json!("run-42");
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        Request::from_parts(parts, Body::from(value.to_string())),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    let expected = tenant_operation_reference("run-42");
+    assert_eq!(
+        response["result"]["_meta"]["io.ololabs.toolgate/invocationId"],
+        json!(expected)
+    );
+    let submitted = authority.submission.lock().unwrap().clone().unwrap();
+    assert_eq!(submitted.invocation_id, expected);
+    assert_eq!(submitted.context.request_id, expected);
+    assert_eq!(submitted.request.arguments["operationKey"], json!("run-42"));
+}
+
+#[tokio::test]
+async fn declared_unkeyed_windows_accept_only_a_valid_control_canonical_reference() {
+    let canonical = format!("op-{}", "a".repeat(64));
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":false,"namespace":"AGENT","dedupeWindowMs":5000}),
+        )),
+        canonical: Some(canonical.clone()),
+        ..Default::default()
+    });
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert_eq!(
+        response["result"]["_meta"]["io.ololabs.toolgate/invocationId"],
+        json!(canonical)
+    );
+    let submitted = authority.submission.lock().unwrap().clone().unwrap();
+    assert_eq!(submitted.invocation_id, canonical);
+    assert_eq!(submitted.context.request_id, canonical);
+}
+
+#[tokio::test]
+async fn undeclared_malformed_or_context_mismatched_canonical_ids_never_dispatch() {
+    let policy = key_policy(json!({"required":false,"namespace":"AGENT","dedupeWindowMs":5000}));
+    for (policy, canonical, mismatch) in [
+        (None, format!("op-{}", "a".repeat(64)), false),
+        (Some(policy.clone()), "inv-unexpected".into(), false),
+        (
+            Some(policy.clone()),
+            format!("op-{}", "A".repeat(64)),
+            false,
+        ),
+        (Some(policy), format!("op-{}", "a".repeat(64)), true),
+    ] {
+        let authority = Arc::new(Authority {
+            business_policy: policy,
+            canonical: Some(canonical),
+            mismatched_context_id: mismatch,
+            ..Default::default()
+        });
+        let (status, response) = call(
+            runtime_router(state(authority.clone())),
+            mcp("tools/call", Some("files.read")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+        assert!(authority.submission.lock().unwrap().is_none());
+        assert_eq!(authority.reservations.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn a_required_key_cannot_fall_back_to_a_window_at_the_gateway() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":true,"namespace":"AGENT","dedupeWindowMs":5000}),
+        )),
+        ..Default::default()
+    });
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+    assert!(authority.invocation.lock().unwrap().is_none());
+    assert!(authority.submission.lock().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn key_policy_discovery_cannot_be_overridden_by_caller_metadata() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(json!({"required":true,"namespace":"AGENT"}))),
+        ..Default::default()
+    });
+    let router = runtime_router(state(authority.clone()));
+    let (status, listed) = call(router.clone(), mcp("tools/list", None)).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    assert_eq!(
+        listed["result"]["tools"][0]["_meta"]["io.ololabs.toolgate/businessKeyPolicy"]["required"],
+        json!(true)
+    );
+    let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+    let mut value: Value = serde_json::from_slice(&to_bytes(body, 65536).await.unwrap()).unwrap();
+    value["params"]["_meta"]["io.ololabs.toolgate/businessKeyPolicy"] =
+        json!({"required":false,"namespace":"TENANT"});
+    let (status, response) = call(
+        router,
+        Request::from_parts(parts, Body::from(value.to_string())),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+    assert!(authority.invocation.lock().unwrap().is_none());
+    assert!(authority.submission.lock().unwrap().is_none());
 }

@@ -12,6 +12,7 @@ package io.ololabs.toolgate.contracts;
  * @param inputSchema canonical inputSchema value
  * @param outputSchema canonical outputSchema value
  * @param reconciliation canonical reconciliation value
+ * @param businessKeyPolicy canonical businessKeyPolicy value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ToolDefinition(
@@ -21,7 +22,8 @@ public record ToolDefinition(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "actions", required = true) java.util.List<ToolAction> actions,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "inputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> inputSchema,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "outputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> outputSchema,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "reconciliation", required = false) ReconciliationMethod reconciliation
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "reconciliation", required = false) ReconciliationMethod reconciliation,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "businessKeyPolicy", required = false) BusinessKeyPolicy businessKeyPolicy
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,6 +34,7 @@ public record ToolDefinition(
      * @param inputSchema canonical inputSchema value
      * @param outputSchema canonical outputSchema value
      * @param reconciliation canonical reconciliation value
+     * @param businessKeyPolicy canonical businessKeyPolicy value
      */
     public ToolDefinition {
         java.util.Objects.requireNonNull(id, "id");
@@ -44,4 +47,6 @@ public record ToolDefinition(
         java.util.Objects.requireNonNull(outputSchema, "outputSchema");
         outputSchema = outputSchema == null ? null : java.util.Map.copyOf(outputSchema);
     }
+    /** Construct legacy metadata without admission key policy. */
+    public ToolDefinition(String id, String name, String description, java.util.List<ToolAction> actions, java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> inputSchema, java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> outputSchema, ReconciliationMethod reconciliation) { this(id, name, description, actions, inputSchema, outputSchema, reconciliation, null); }
 }

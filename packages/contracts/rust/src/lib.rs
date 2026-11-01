@@ -57,6 +57,31 @@ pub struct BundlePublishRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rollback_of: Option<u64>,
 }
+/// Canonical BusinessKeyNamespace wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BusinessKeyNamespace {
+    #[serde(rename = "AGENT")]
+    Agent,
+    #[serde(rename = "DELEGATED_USER")]
+    DelegatedUser,
+    #[serde(rename = "TENANT")]
+    Tenant,
+}
+/// Reviewed admission key policy. Missing policy retains conservative legacy explicit-key behavior.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BusinessKeyPolicy {
+    pub required: bool,
+    pub namespace: BusinessKeyNamespace,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub argument: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dedupe_window_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_idempotency_window_ms: Option<u64>,
+}
 /// Durable caller-scoped cancellation acknowledgement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2549,6 +2574,8 @@ pub struct LocalToolInfo {
     pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub tool_digest: String,
     pub package_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_key_policy: Option<BusinessKeyPolicy>,
 }
 /// One JSON stdin document; arguments never become process command strings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3143,6 +3170,8 @@ pub struct ToolDefinition {
     pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reconciliation: Option<ReconciliationMethod>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_key_policy: Option<BusinessKeyPolicy>,
 }
 /// Canonical UserRole wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

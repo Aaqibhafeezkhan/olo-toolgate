@@ -11,9 +11,20 @@ public interface EnterpriseStore {
     record Attempt(String id,String operationId,String state,Long consumedAt,long issuedAt,long expiresAt,long revision,long evidenceCount) {}
     default Operation operation(String id){throw Failure.unavailable();}
     default List<Attempt> attempts(String operationId,long now){throw Failure.unavailable();}
-    record BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt) {}
+    record BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt,String source,Long dedupeExpiresAt,String outcome) {
+        public BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt) {
+            this(tool,namespace,identity,hash,fingerprint,agent,user,invocation,retainUntil,tombstonedAt,"HEADER",null,null);
+        }
+        public BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt,String source,Long dedupeExpiresAt) {
+            this(tool,namespace,identity,hash,fingerprint,agent,user,invocation,retainUntil,tombstonedAt,source,dedupeExpiresAt,null);
+        }
+    }
     default BusinessKey businessKey(String tool,String namespace,String identity,String hash){throw Failure.unavailable();}
     default void saveBusinessKey(BusinessKey value,long now){throw Failure.unavailable();}
+    default BusinessKey businessKeyForInvocation(String invocation){throw Failure.unavailable();}
+    default void replaceBusinessKey(BusinessKey previous,BusinessKey next,long now){throw Failure.unavailable();}
+    default List<BusinessKey> businessKeyHistory(String tool,String namespace,String identity,String hash,int limit){throw Failure.unavailable();}
+    default int tombstoneExpiredBusinessKeys(long now,int limit){throw Failure.unavailable();}
     default boolean businessInvocation(String invocation){throw Failure.unavailable();}
     record ExecutionLease(String invocationId,String fencingToken,String deviceId,long expiresAt) {}
     default ExecutionLease executionLease(String invocationId){throw Failure.unavailable();}
