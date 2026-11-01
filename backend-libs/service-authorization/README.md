@@ -11,3 +11,9 @@ and enforce the returned authorization deadline immediately before transaction c
 
 No method accepts identity, tenant, operation or body claims from an executor as authority. A consumed or ambiguous
 write is reconciled, never automatically retried under a new permit.
+
+New broker permits also bind the prepared HTTP request. For those permits pass
+`ServicePermitVerifier.Transport` containing trusted profile/route configuration
+and actual accepted URI, method and repeated headers to the five-argument
+`Request` constructor. Missing transport facts fail closed. Upgrade target
+integrations before deploying the updated broker; see the installation guide.

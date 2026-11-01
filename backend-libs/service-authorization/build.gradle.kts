@@ -9,3 +9,7 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)
 }
+
+tasks.withType<Test>().configureEach {
+    systemProperty("toolgate.httpBindingVectors", rootProject.file("tests/fixtures/security/http-request-binding-v1.json").absolutePath)
+}

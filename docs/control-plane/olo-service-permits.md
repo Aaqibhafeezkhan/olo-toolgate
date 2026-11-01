@@ -116,3 +116,38 @@ Only an administrator holding package.deploy may set them; package authors canno
 For example, deploy `olo.memory` to `ServiceHost=olo-memory`, approve only the actual private subnet for that host
 on TCP 8443, and set `destinationTls["olo-memory"]` to its server CA PEM. Do the same separately for `olo-rag`.
 Never grant `0.0.0.0/0`, use a TLS verification bypass, or install a database credential in an executor.
+
+
+## Prepared HTTP transport binding
+
+Updated brokers always request the optional `httpRequestDigest` claim before
+injecting the service-permit header. The signed claim and immutable effect
+binding cover the version-1 prepared request fingerprint. A changed fingerprint
+cannot reuse the same write nonce. Control still independently checks the
+admitted identity, operation, resources, body and current authority; the HTTP
+digest is an authenticated broker assertion, not independent route approval.
+
+Upgrade Control, this Java library and each target integration before the broker.
+Legacy unbound claims retain their existing checks. A new bound permit passed to
+the four-argument `Request` constructor is refused: use the five-argument
+constructor with `ServicePermitVerifier.Transport`. Generate its profile data
+from trusted routing configuration and its URI/method/headers from the accepted
+HTTP request, preserving encoded path/query and repeated header order. Use the
+configured public destination origin, not a forwarded-host header or internal
+load-balancer origin. Pass the exact buffered body. Do not copy a submitted
+digest, manifest or permit claim into the transport facts.
+
+`HttpRequestFingerprint.Profile` includes pinned profile ID/digest, route ID,
+auth declaration and excluded credential header names. The fixed service auth
+declaration is `toolgate-service-permit:olo-memory` or
+`toolgate-service-permit:olo-rag`, excluding only `toolgate-service-permit`.
+All other semantic headers, including Accept and recipient headers, must be
+observed and bound. The broker sends normalized content type and query; preserve
+their actual wire values. A proxy changing them causes safe refusal. Verifier
+transport maps/lists and body bytes are defensively copied.
+
+The target verifier recomputes the digest locally before online consumption;
+missing facts and transport changes consume no authority. Control also compares
+the target-observed digest to the signed value. The optional contract additions
+change generated Java constructor signatures and require coordinated recompilation.
+They do not implement generalized effect APIs, exact consent or target deduplication.

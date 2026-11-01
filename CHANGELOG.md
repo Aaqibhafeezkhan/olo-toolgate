@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Bind OLO service permits to the broker's prepared HTTP request fingerprint.
+  Targets recompute the fingerprint from accepted request facts before consuming
+  a write capability; missing/changed facts fail closed. Upgrade target
+  integrations and Control before deploying the updated broker.
+
 - Restrict qualified broker egress explicitly to HTTP/1.1 and verify real TLS
   protocol negotiation against a target offering HTTP/2 first.
 

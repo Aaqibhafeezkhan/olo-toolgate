@@ -4,6 +4,7 @@ package io.ololabs.toolgate.control;
 import io.ololabs.toolgate.contracts.*;
 import io.ololabs.toolgate.control.application.ServicePermits;
 import io.ololabs.toolgate.service.ServicePermitVerifier;
+import io.ololabs.toolgate.service.HttpRequestFingerprint;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import javax.net.ssl.*;
@@ -37,12 +38,16 @@ class ServicePermitTlsQualificationTest {
         String executorHash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(keys.getCertificate("executor").getPublicKey().getEncoded()));
         var invocation=fixture.start("tls-storage");
         var permits=new ServicePermits(rig.store,rig.graph.codec,rig.operations);
+        byte[] body=rig.graph.codec.json(fixture.request(invocation.id()).request().arguments()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var profile=new HttpRequestFingerprint.Profile("profile","sha256:"+"a".repeat(64),"write","toolgate-service-permit:olo-memory",List.of("toolgate-service-permit"));
+        var destination=java.net.URI.create("https://memory.test/v1/memory.append");
+        var expectedHeaders=Map.of("content-type",List.of("application/json"),"accept",List.of("*/*"),"x-recipient",List.of("alice"));
+        String httpDigest=HttpRequestFingerprint.digest(profile,destination,"POST",expectedHeaders,body);
         var permit=rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",executorHash,
-            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory))).body(),ServicePermit.class);
+            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory,httpDigest))).body(),ServicePermit.class);
         var publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(EnterpriseOperationTest.key.getModulus(),EnterpriseOperationTest.key.getPublicExponent()));
         var verifier=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("permit-key",publicKey),rig.clock,
             tenant->null,(audience,request)->{permits.consume(rig.gateway,audience,rig.graph.codec.json(request));return true;});
-        byte[] body=rig.graph.codec.json(fixture.request(invocation.id()).request().arguments()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
         Path storage=temp.resolve("service-storage.sqlite");
         try(var connection=DriverManager.getConnection("jdbc:sqlite:"+storage);var statement=connection.createStatement()){
             statement.execute("CREATE TABLE effects(invocation TEXT PRIMARY KEY,tenant TEXT,subject TEXT,actor TEXT)");
@@ -54,7 +59,25 @@ class ServicePermitTlsQualificationTest {
                 var result=pool.submit(()->{
                     try(var socket=(SSLSocket)server.accept()){
                         socket.startHandshake();
-                        var request=new ServicePermitVerifier.Request(rig.gateway.tenant().value(),"memory.append",invocation.evaluation().resources(),body);
+                        socket.setSoTimeout(10000);
+                        var input=socket.getInputStream();var head=new java.io.ByteArrayOutputStream();
+                        while(!head.toString(java.nio.charset.StandardCharsets.US_ASCII).endsWith("\r\n\r\n")){
+                            int next=input.read();assertTrue(next>=0);head.write(next);assertTrue(head.size()<65536);
+                        }
+                        String[] lines=head.toString(java.nio.charset.StandardCharsets.US_ASCII).split("\r\n");
+                        assertEquals("POST /v1/memory.append HTTP/1.1",lines[0]);
+                        var actualHeaders=new LinkedHashMap<String,List<String>>();
+                        for(int n=1;n<lines.length;n++){int colon=lines[n].indexOf(':');assertTrue(colon>0);
+                            String name=lines[n].substring(0,colon).toLowerCase(Locale.ROOT);
+                            actualHeaders.computeIfAbsent(name,k->new ArrayList<>()).add(lines[n].substring(colon+1).stripLeading());
+                        }
+                        byte[] actualBody=input.readNBytes(Integer.parseInt(actualHeaders.get("content-length").getFirst()));
+                        var transport=new ServicePermitVerifier.Transport(profile,destination,"POST",actualHeaders);
+                        var request=new ServicePermitVerifier.Request(rig.gateway.tenant().value(),"memory.append",invocation.evaluation().resources(),actualBody,transport);
+                        var changed=new LinkedHashMap<>(actualHeaders);changed.put("x-recipient",List.of("bob"));
+                        assertThrows(SecurityException.class,()->verifier.authorize(permit,new ServicePermitVerifier.Request(
+                            request.tenant(),request.operation(),request.resources(),actualBody,
+                            new ServicePermitVerifier.Transport(profile,destination,"POST",changed)),socket.getSession()));
                         var authorization=verifier.authorize(permit,request,socket.getSession());
                         var principal=authorization.claims();
                         try(var connection=DriverManager.getConnection("jdbc:sqlite:"+storage)){
@@ -71,7 +94,11 @@ class ServicePermitTlsQualificationTest {
                     }
                 });
                 try(var client=(SSLSocket)tls.getSocketFactory().createSocket("localhost",server.getLocalPort())){
-                    client.startHandshake();assertEquals(1,client.getInputStream().read());
+                    client.startHandshake();
+                    String head="POST /v1/memory.append HTTP/1.1\r\nHost: memory.test\r\nContent-Type: application/json\r\nAccept: */*\r\nX-Recipient: alice\r\nToolgate-Service-Permit: "+permit.jws()+"\r\nContent-Length: "+body.length+"\r\n\r\n";
+                    client.getOutputStream().write(head.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                    client.getOutputStream().write(body);client.getOutputStream().flush();
+                    assertEquals(1,client.getInputStream().read());
                 }
                 var principal=result.get(15,TimeUnit.SECONDS);assertEquals("alice",principal.sub());assertNull(principal.act());
                 try(var connection=DriverManager.getConnection("jdbc:sqlite:"+storage);var rows=connection.createStatement().executeQuery("SELECT tenant,subject,actor FROM effects")){

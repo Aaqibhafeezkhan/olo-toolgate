@@ -450,21 +450,6 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
 
     let service_write =
         service_audience.is_some() && !matches!(path.as_str(), "/v1/memory.read" | "/v1/rag.query");
-    if let Some(audience) = service_audience.clone() {
-        let permit = invocation
-            .control
-            .service_permit(
-                &invocation.invocation_id,
-                &invocation.fencing_token,
-                audience,
-            )
-            .await
-            .map_err(|_| refused("downstream service authorization refused"))?;
-        let mut value = reqwest::header::HeaderValue::from_str(&permit.jws)
-            .map_err(|_| refused("invalid service permit"))?;
-        value.set_sensitive(true);
-        outgoing.insert("toolgate-service-permit", value);
-    }
     // Credentials go in last, after every check, and never into the reply.
     if let Some(auth) = auth {
         let value = credential(invocation, auth).await.map_err(refused)?;
@@ -504,7 +489,7 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
         return Err(refused("the invocation has ended"));
     }
-    let (auth_id, credential_headers) = if let Some(audience) = service_audience {
+    let (auth_id, credential_headers) = if let Some(audience) = service_audience.clone() {
         (
             Some(
                 match audience {
@@ -543,6 +528,21 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         },
     )
     .map_err(refused)?;
+    let prepared = if let Some(audience) = service_audience {
+        let permit = invocation
+            .control
+            .service_permit(
+                &invocation.invocation_id,
+                &invocation.fencing_token,
+                audience,
+                prepared.digest(),
+            )
+            .await
+            .map_err(|_| refused("downstream service authorization refused"))?;
+        prepared.with_service_permit(&permit.jws).map_err(refused)?
+    } else {
+        prepared
+    };
     tracing::info!(target:"toolgate::audit",invocation_id=%invocation.invocation_id,route=%route.id,request_digest=%prepared.digest(),"prepared broker request");
     if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
         return Err(refused("the invocation has ended"));

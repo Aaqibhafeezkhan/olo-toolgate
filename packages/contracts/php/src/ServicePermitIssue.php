@@ -10,18 +10,20 @@ final readonly class ServicePermitIssue implements \JsonSerializable {
     public function __construct(
         public string $invocationId,
         public string $fencingToken,
-        public ServiceAudience $audience
+        public ServiceAudience $audience,
+        public ?string $httpRequestDigest = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['invocationId', 'fencingToken', 'audience']) || array_diff(['invocationId', 'fencingToken', 'audience'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['invocationId', 'fencingToken', 'audience', 'httpRequestDigest']) || array_diff(['invocationId', 'fencingToken', 'audience'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['invocationId'],
             $data['fencingToken'],
-            ServiceAudience::from($data['audience'])
+            ServiceAudience::from($data['audience']),
+            array_key_exists('httpRequestDigest', $data) ? $data['httpRequestDigest'] : null
         );
     }
 

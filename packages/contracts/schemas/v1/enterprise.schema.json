@@ -3180,6 +3180,11 @@
         },
         "executionNonce": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "httpRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Optional toolgate-http-request-v1 fingerprint of the exact prepared transport. Bound permits require matching target-observed HTTP facts; omission preserves legacy behavior."
         }
       }
     },
@@ -3201,6 +3206,11 @@
         },
         "audience": {
           "$ref": "#/$defs/ServiceAudience"
+        },
+        "httpRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Optional toolgate-http-request-v1 fingerprint of the exact prepared transport. Bound permits require matching target-observed HTTP facts; omission preserves legacy behavior."
         }
       }
     },
@@ -3254,6 +3264,11 @@
         "executorKeySha256": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "httpRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Optional toolgate-http-request-v1 fingerprint of the exact prepared transport. Bound permits require matching target-observed HTTP facts; omission preserves legacy behavior."
         }
       }
     },

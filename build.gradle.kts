@@ -130,6 +130,7 @@ tasks.register("javaCheck") {
     description = "Runs checks for all Java/Gradle modules."
     dependsOn(
         ":contracts-java:check",
+        ":service-authorization:check",
         ":package-archive:check",
         ":control-plane:check",
         ":sdk-java-api:check",

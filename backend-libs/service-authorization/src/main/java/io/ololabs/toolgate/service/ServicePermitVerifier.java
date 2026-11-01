@@ -17,9 +17,22 @@ public final class ServicePermitVerifier {
     public record Epoch(long value, long observedAtUnixMs) {}
     @FunctionalInterface public interface EpochFeed { Epoch current(String tenant); }
     @FunctionalInterface public interface WriteConsumer { boolean consume(ServiceAudience audience, ServicePermitConsumption request); }
-    public record Request(String tenant, String operation, List<ResourceDescriptor> resources, byte[] exactBody) {
+    public record Request(String tenant, String operation, List<ResourceDescriptor> resources, byte[] exactBody,
+                          Transport transport) {
+        public Request(String tenant,String operation,List<ResourceDescriptor> resources,byte[] exactBody){
+            this(tenant,operation,resources,exactBody,null);
+        }
         public Request { resources=List.copyOf(resources);exactBody=exactBody.clone(); }
         @Override public byte[] exactBody(){return exactBody.clone();}
+    }
+    /** Only accepted-request facts and trusted routing configuration belong here. */
+    public record Transport(HttpRequestFingerprint.Profile profile,java.net.URI uri,String method,
+                            Map<String,List<String>> headers) {
+        public Transport {
+            var copy=new HashMap<String,List<String>>();
+            headers.forEach((name,values)->copy.put(name,List.copyOf(values)));
+            headers=Map.copyOf(copy);
+        }
     }
     public final class Authorization {
         private final ServicePermitClaims claims;
@@ -78,6 +91,13 @@ public final class ServicePermitVerifier {
                 ||!digest.equals(claims.requestFingerprint())||!executorKey.equals(claims.executorKeySha256())
                 ||claims.iat()>now||claims.exp()<=now||claims.exp()<=claims.iat()||claims.exp()-claims.iat()>15000
                 ||request.resources().isEmpty()||request.resources().stream().anyMatch(r->r.kind()!=ResourceKind.CUSTOM||!r.locator().startsWith("olo://"+request.tenant()+"/")))throw denied();
+            String transportDigest=null;
+            if(claims.httpRequestDigest()!=null){
+                var transport=request.transport();if(transport==null)throw denied();
+                transportDigest=HttpRequestFingerprint.digest(transport.profile(),transport.uri(),transport.method(),
+                    transport.headers(),request.exactBody());
+                if(!transportDigest.equals(claims.httpRequestDigest()))throw denied();
+            }
             boolean read=switch(request.operation()){
                 case "memory.read","rag.query" -> true;
                 case "memory.append","memory.delete","memory.share","memory.export","rag.ingest","rag.update","rag.delete","rag.share" -> false;
@@ -85,7 +105,7 @@ public final class ServicePermitVerifier {
             };
             if(read){var epoch=epochs.current(request.tenant());
                 if(epoch==null||epoch.observedAtUnixMs()>now||now-epoch.observedAtUnixMs()>10000||epoch.value()!=claims.authorizationEpoch())throw new StaleReadEpoch();
-            } else if(!consumer.consume(audience,new ServicePermitConsumption(permit,request.operation(),request.resources(),digest,executorKey)))throw denied();
+            } else if(!consumer.consume(audience,new ServicePermitConsumption(permit,request.operation(),request.resources(),digest,executorKey,transportDigest)))throw denied();
             return new Authorization(claims);
         } catch(java.io.IOException|GeneralSecurityException|IllegalArgumentException invalid){throw denied();}
     }

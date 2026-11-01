@@ -18,6 +18,7 @@ pub(crate) struct PreparedRequest {
     client: Client,
     request: Request,
     digest: String,
+    service_permit_credential: bool,
     #[cfg(test)]
     manifest: Value,
 }
@@ -172,12 +173,30 @@ impl PreparedRequest {
             client: client.clone(),
             request,
             digest,
+            service_permit_credential: credentials.contains("toolgate-service-permit"),
             #[cfg(test)]
             manifest,
         })
     }
     pub(crate) fn digest(&self) -> &str {
         &self.digest
+    }
+    /// Only the excluded service credential may be added after request preparation.
+    pub(crate) fn with_service_permit(mut self, jws: &str) -> Result<Self, String> {
+        if !self.service_permit_credential
+            || self
+                .request
+                .headers()
+                .contains_key("toolgate-service-permit")
+        {
+            return Err("request is not awaiting a service permit".into());
+        }
+        let mut value = header::HeaderValue::from_str(jws).map_err(|_| "invalid service permit")?;
+        value.set_sensitive(true);
+        self.request
+            .headers_mut()
+            .insert("toolgate-service-permit", value);
+        Ok(self)
     }
     pub(crate) async fn send(self) -> Result<Response, reqwest::Error> {
         self.client.execute(self.request).await
@@ -349,6 +368,36 @@ mod tests {
         ] {
             assert_ne!(p.digest(), changed.digest());
         }
+    }
+    #[test]
+    fn only_the_excluded_service_credential_can_be_injected_after_binding() {
+        let c = client();
+        let mut meta = metadata();
+        meta.auth_id = Some("toolgate-service-permit:olo-memory".into());
+        meta.credential_headers = vec!["toolgate-service-permit".into()];
+        let p = PreparedRequest::new(
+            &c,
+            c.post("https://example.test/write")
+                .body("payload")
+                .build()
+                .unwrap(),
+            meta,
+        )
+        .unwrap();
+        let digest = p.digest().to_owned();
+        let p = p.with_service_permit("signed-credential").unwrap();
+        assert_eq!(p.digest(), digest);
+        assert_eq!(
+            p.request.headers()["toolgate-service-permit"],
+            "signed-credential"
+        );
+        assert!(!p.manifest.to_string().contains("signed-credential"));
+        assert!(p.with_service_permit("second").is_err());
+        assert!(
+            prepared("https://example.test", "payload", "alice", "secret")
+                .with_service_permit("signed")
+                .is_err()
+        );
     }
     #[test]
     fn content_type_parameters_are_canonical_and_duplicates_are_refused() {

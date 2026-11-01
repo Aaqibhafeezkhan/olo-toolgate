@@ -39,8 +39,36 @@ class ServicePermitBridgeTest {
         return rig.consume(rig.reserve(i));
     }
     ServicePermit issue(EnterpriseInvocation i){return rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",KEY,
-        rig.graph.codec.json(new ServicePermitIssue(i.id(),(i.reservedNonce()==null?"not-admitted":i.reservedNonce()),ServiceAudience.olo_memory))).body(),ServicePermit.class);}
-    ServicePermitConsumption consumption(ServicePermit p){var c=rig.signer.verifyService(p);return new ServicePermitConsumption(p,c.operation(),c.resources(),c.requestFingerprint(),KEY);}
+        rig.graph.codec.json(new ServicePermitIssue(i.id(),(i.reservedNonce()==null?"not-admitted":i.reservedNonce()),ServiceAudience.olo_memory,null))).body(),ServicePermit.class);}
+    ServicePermitConsumption consumption(ServicePermit p){var c=rig.signer.verifyService(p);return new ServicePermitConsumption(p,c.operation(),c.resources(),c.requestFingerprint(),KEY,c.httpRequestDigest());}
+    ServicePermit issueBound(EnterpriseInvocation i,String digest){
+        return rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",KEY,
+            rig.graph.codec.json(new ServicePermitIssue(i.id(),i.reservedNonce(),ServiceAudience.olo_memory,digest))).body(),ServicePermit.class);
+    }
+    @Test void preparedHttpDigestIsSignedImmutableAndRequiredForConsumption(){
+        var i=start("http-bound");String digest="sha256:"+"a".repeat(64);
+        var permit=issueBound(i,digest);var claims=rig.signer.verifyService(permit);
+        assertEquals(digest,claims.httpRequestDigest());assertEquals(permit,issueBound(i,digest));
+        assertThrows(Failure.class,()->issueBound(i,"sha256:"+"b".repeat(64)));
+        assertThrows(Failure.class,()->issue(i)); // no downgrade through the legacy issue request
+        var good=consumption(permit);
+        for(String bad:Arrays.asList(null,"sha256:"+"b".repeat(64))){
+            assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,
+                rig.graph.codec.json(new ServicePermitConsumption(permit,good.operation(),good.resources(),
+                    good.requestFingerprint(),KEY,bad))));
+        }
+        assertEquals("AUTHORIZED",rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().byNonce(claims.nonce()).state()));
+        permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(good));
+        assertEquals("CONSUMED",rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().byNonce(claims.nonce()).state()));
+        assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(good)));
+    }
+    @Test void malformedHttpDigestAndRevokedBoundGrantCannotAuthorize(){
+        var i=start("http-revoked");
+        assertThrows(Failure.class,()->issueBound(i,"not-a-digest"));
+        var permit=issueBound(i,"sha256:"+"c".repeat(64));
+        rig.graph.remove(Ids.Kind.GRANT,"human");rig.saveGraph();
+        assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(permit))));
+    }
     @Test void admittedIdentityScopeAndBodyReachTheServiceAndTheNonceIsSingleUse(){
         var i=start("service-write");var p=issue(i);assertEquals(p,issue(i));var c=rig.signer.verifyService(p);
         assertEquals("alice",c.sub());assertNull(c.act());assertEquals(rig.gateway.tenant().value(),c.tenantId());
@@ -58,13 +86,13 @@ class ServicePermitBridgeTest {
     }
     @Test void forgedBodyAudienceExecutorAndScopeAreRefused(){
         var p=issue(start("service-forgery"));var good=consumption(p);
-        for(var bad:List.of(new ServicePermitConsumption(p,good.operation(),good.resources(),"e".repeat(64),KEY),
-            new ServicePermitConsumption(p,good.operation(),good.resources(),good.requestFingerprint(),"e".repeat(64)),
-            new ServicePermitConsumption(p,"memory.delete",good.resources(),good.requestFingerprint(),KEY))){
+        for(var bad:List.of(new ServicePermitConsumption(p,good.operation(),good.resources(),"e".repeat(64),KEY,null),
+            new ServicePermitConsumption(p,good.operation(),good.resources(),good.requestFingerprint(),"e".repeat(64),null),
+            new ServicePermitConsumption(p,"memory.delete",good.resources(),good.requestFingerprint(),KEY,null))){
             assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(bad)));
         }
         assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_rag,rig.graph.codec.json(good)));
-        assertThrows(Failure.class,()->permits.issue(rig.gateway.tenant(),tx->"other",KEY,rig.graph.codec.json(new ServicePermitIssue("service-forgery","wrong-fence",ServiceAudience.olo_memory))));
+        assertThrows(Failure.class,()->permits.issue(rig.gateway.tenant(),tx->"other",KEY,rig.graph.codec.json(new ServicePermitIssue("service-forgery","wrong-fence",ServiceAudience.olo_memory,null))));
     }
     @Test void queuedAndApprovalCallsCannotObtainAPermit(){
         var queued=rig.graph.codec.model(submit(request("queued")).body(),EnterpriseInvocation.class);
@@ -85,14 +113,14 @@ class ServicePermitBridgeTest {
             java.time.Clock.fixed(java.time.Instant.ofEpochMilli(EnterpriseConformanceTest.NOW+14900),java.time.ZoneOffset.UTC),"control","toolgate-client",60000,100);
         var bridge=new ServicePermits(rig.store,rig.graph.codec,later);
         var p=rig.graph.codec.model(bridge.issue(rig.gateway.tenant(),tx->"device",KEY,
-            rig.graph.codec.json(new ServicePermitIssue(i.id(),i.reservedNonce(),ServiceAudience.olo_memory))).body(),ServicePermit.class);
+            rig.graph.codec.json(new ServicePermitIssue(i.id(),i.reservedNonce(),ServiceAudience.olo_memory,null))).body(),ServicePermit.class);
         var c=rig.signer.verifyService(p);
         assertEquals(EnterpriseConformanceTest.NOW+15000,c.exp());assertEquals(100,c.exp()-c.iat());
         var expired=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,
             java.time.Clock.fixed(java.time.Instant.ofEpochMilli(EnterpriseConformanceTest.NOW+15001),java.time.ZoneOffset.UTC),"control","toolgate-client",60000,100);
         var stopped=new ServicePermits(rig.store,rig.graph.codec,expired);
         assertThrows(Failure.class,()->stopped.issue(rig.gateway.tenant(),tx->"device",KEY,
-            rig.graph.codec.json(new ServicePermitIssue(i.id(),i.reservedNonce(),ServiceAudience.olo_memory))));
+            rig.graph.codec.json(new ServicePermitIssue(i.id(),i.reservedNonce(),ServiceAudience.olo_memory,null))));
         assertThrows(Failure.class,()->stopped.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(p))));
     }
 

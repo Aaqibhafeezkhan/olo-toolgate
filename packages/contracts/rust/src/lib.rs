@@ -2980,6 +2980,8 @@ pub struct ServicePermitClaims {
     pub iat: u64,
     pub exp: u64,
     pub execution_nonce: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_request_digest: Option<String>,
 }
 /// Single-use downstream write permit was consumed under current authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2996,6 +2998,8 @@ pub struct ServicePermitConsumption {
     pub resources: Vec<ResourceDescriptor>,
     pub request_fingerprint: String,
     pub executor_key_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_request_digest: Option<String>,
 }
 /// Executor request for downstream authorization; scope comes exclusively from the admitted invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3004,6 +3008,8 @@ pub struct ServicePermitIssue {
     pub invocation_id: String,
     pub fencing_token: String,
     pub audience: ServiceAudience,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_request_digest: Option<String>,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1771,6 +1771,7 @@ export interface ServicePermitClaims {
   readonly iat: number;
   readonly exp: number;
   readonly executionNonce: string;
+  readonly httpRequestDigest?: string;
 }
 /** Single-use downstream write permit was consumed under current authority. */
 export interface ServicePermitConsumed {
@@ -1783,12 +1784,14 @@ export interface ServicePermitConsumption {
   readonly resources: ReadonlyArray<ResourceDescriptor>;
   readonly requestFingerprint: string;
   readonly executorKeySha256: string;
+  readonly httpRequestDigest?: string;
 }
 /** Executor request for downstream authorization; scope comes exclusively from the admitted invocation. */
 export interface ServicePermitIssue {
   readonly invocationId: string;
   readonly fencingToken: string;
   readonly audience: ServiceAudience;
+  readonly httpRequestDigest?: string;
 }
 export type Sha256 = string;
 /** Endpoint identity foundation wire model. */

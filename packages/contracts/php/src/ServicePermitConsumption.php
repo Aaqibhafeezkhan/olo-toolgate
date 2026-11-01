@@ -12,12 +12,13 @@ final readonly class ServicePermitConsumption implements \JsonSerializable {
         public string $operation,
         public array $resources,
         public string $requestFingerprint,
-        public string $executorKeySha256
+        public string $executorKeySha256,
+        public ?string $httpRequestDigest = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['permit', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256']) || array_diff(['permit', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['permit', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'httpRequestDigest']) || array_diff(['permit', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +26,8 @@ final readonly class ServicePermitConsumption implements \JsonSerializable {
             $data['operation'],
             array_map(static fn ($item) => ResourceDescriptor::fromArray($item), $data['resources']),
             $data['requestFingerprint'],
-            $data['executorKeySha256']
+            $data['executorKeySha256'],
+            array_key_exists('httpRequestDigest', $data) ? $data['httpRequestDigest'] : null
         );
     }
 

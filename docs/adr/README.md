@@ -65,3 +65,5 @@ Use `000-template.md`.
 - [035: Independent operation and attempt journal](035-operation-attempt-journal.md)
 - [036: Durable effect authorization generations](036-effect-authorization-generations.md)
 - [037: Prepare one immutable broker HTTP request](037-prepared-http-request-binding.md)
+
+- [038: OLO prepared HTTP request grants](038-olo-http-request-grants.md)

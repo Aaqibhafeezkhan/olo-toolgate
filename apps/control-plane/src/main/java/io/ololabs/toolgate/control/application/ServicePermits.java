@@ -47,7 +47,7 @@ public final class ServicePermits {
             if(expiry>i.expiresAtUnixMs())throw ManagementAccess.denied();
             var claims=new ServicePermitClaims(operations.issuer(),request.audience(),tenant.value(),subject,
                 c.mode()==RequestMode.DELEGATED?c.agentId():null,c.mode(),op,i.evaluation().resources(),
-                i.evaluation().argumentsDigest(),executorKeySha256,i.id(),nonceId,i.authorizationEpoch(),issuedAt,expiry,i.reservedNonce());
+                i.evaluation().argumentsDigest(),executorKeySha256,i.id(),nonceId,i.authorizationEpoch(),issuedAt,expiry,i.reservedNonce(),request.httpRequestDigest());
             String digest=DirectoryService.digest(codec.json(claims));
             if(existing!=null&&!existing.evaluationDigest().equals(digest))throw ManagementAccess.denied();
             var permit=operations.signer().signService(claims);
@@ -73,6 +73,7 @@ public final class ServicePermits {
                 ||!claims.tenantId().equals(service.tenant().value())||claims.iat()>now||claims.exp()<=now
                 ||claims.exp()<=claims.iat()||claims.exp()-claims.iat()>MAX_LIFETIME_MS
                 ||!request.operation().equals(claims.operation())||!request.resources().equals(claims.resources())
+                ||!Objects.equals(request.httpRequestDigest(),claims.httpRequestDigest())
                 ||!request.requestFingerprint().equals(claims.requestFingerprint())||!request.executorKeySha256().equals(claims.executorKeySha256())
                 ||i.state()!=EnterpriseInvocationState.EXECUTING||!Objects.equals(i.reservedNonce(),claims.executionNonce())
                 ||nonce==null||nonce.consumedAt()!=null||!nonce.invocationId().equals(i.id())
@@ -100,6 +101,7 @@ public final class ServicePermits {
     private String binding(ServicePermitClaims claims){
         var values=new TreeMap<String,Object>();values.put("audience",claims.aud());values.put("operation",claims.operation());
         values.put("resources",claims.resources());values.put("requestFingerprint",claims.requestFingerprint());
+        if(claims.httpRequestDigest()!=null)values.put("httpRequestDigest",claims.httpRequestDigest());
         values.put("subject",claims.sub());values.put("mode",claims.mode());
         return "sha256:"+DirectoryService.digest(codec.json(values));
     }

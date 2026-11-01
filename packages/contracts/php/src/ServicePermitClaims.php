@@ -23,12 +23,13 @@ final readonly class ServicePermitClaims implements \JsonSerializable {
         public int $iat,
         public int $exp,
         public string $executionNonce,
-        public ?string $act = null
+        public ?string $act = null,
+        public ?string $httpRequestDigest = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['iss', 'aud', 'tenantId', 'sub', 'act', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce']) || array_diff(['iss', 'aud', 'tenantId', 'sub', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['iss', 'aud', 'tenantId', 'sub', 'act', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce', 'httpRequestDigest']) || array_diff(['iss', 'aud', 'tenantId', 'sub', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -47,7 +48,8 @@ final readonly class ServicePermitClaims implements \JsonSerializable {
             $data['iat'],
             $data['exp'],
             $data['executionNonce'],
-            array_key_exists('act', $data) ? $data['act'] : null
+            array_key_exists('act', $data) ? $data['act'] : null,
+            array_key_exists('httpRequestDigest', $data) ? $data['httpRequestDigest'] : null
         );
     }
 

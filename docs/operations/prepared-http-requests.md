@@ -50,3 +50,10 @@ The qualified broker transport explicitly uses HTTP/1.1. HTTP/2 targets must
 also support HTTP/1.1; an HTTP/2-only target is unsupported. This prevents a
 dependency feature change from enabling HTTP/2 GOAWAY replay behavior. Enabling
 HTTP/2 requires a separate no-replay qualification.
+
+OLO memory/RAG destinations now send the digest to Control service-permit
+issuance before inserting the excluded credential. Upgraded target integrations
+must recompute it from accepted request facts; see
+[service authorization](../control-plane/olo-service-permits.md#prepared-http-transport-binding).
+Generic routes still produce broker observations and have no generalized effect
+grant or exact-consent enforcement.

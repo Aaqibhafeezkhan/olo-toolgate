@@ -26,7 +26,7 @@ class ServicePermitVerifierTest {
     }
     ServicePermit permit(String operation)throws Exception{
         var claims=new ServicePermitClaims("control",ServiceAudience.olo_memory,TENANT,"alice",null,RequestMode.HUMAN,operation,RESOURCES,
-            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BODY)),EXECUTOR,"inv-1","nonce-1",7L,100000L,115000L,"execution-1");
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BODY)),EXECUTOR,"inv-1","nonce-1",7L,100000L,115000L,"execution-1",null);
         return signed("olo-service-permit+jws","effect-key",claims);
     }
     ServicePermit signed(String type,String kid,ServicePermitClaims claims)throws Exception{
@@ -36,6 +36,43 @@ class ServicePermitVerifierTest {
         return new ServicePermit(message+"."+b64.encodeToString(signature.sign()));
     }
     ServicePermitVerifier.Request request(String op){return new ServicePermitVerifier.Request(TENANT,op,RESOURCES,BODY);}
+    ServicePermit boundPermit(String operation,String digest)throws Exception{
+        var original=permit(operation);var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var c=json.readValue(Base64.getUrlDecoder().decode(original.jws().split("\\.")[1]),ServicePermitClaims.class);
+        return signed("olo-service-permit+jws","effect-key",new ServicePermitClaims(c.iss(),c.aud(),c.tenantId(),c.sub(),c.act(),
+            c.mode(),c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),
+            c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),digest));
+    }
+    ServicePermitVerifier.Transport transport(String recipient){
+        return new ServicePermitVerifier.Transport(
+            new HttpRequestFingerprint.Profile("profile","sha256:"+"a".repeat(64),"write","toolgate-service-permit:olo-memory",List.of("toolgate-service-permit")),
+            java.net.URI.create("https://memory.test/v1/memory.append"),"POST",
+            Map.of("content-type",List.of("application/json"),"accept",List.of("*/*"),"x-recipient",List.of(recipient),
+                "toolgate-service-permit",List.of("actual-signed-permit")));
+    }
+    @Test void boundPermitRequiresActualTransportFactsBeforeOnlineConsumption()throws Exception{
+        var facts=transport("alice");
+        String digest=HttpRequestFingerprint.digest(facts.profile(),facts.uri(),facts.method(),facts.headers(),BODY);
+        var p=boundPermit("memory.append",digest);
+        assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.append"),EXECUTOR));
+        var changed=new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,transport("bob"));
+        assertThrows(SecurityException.class,()->verifier.authorizeKey(p,changed,EXECUTOR));
+        assertEquals(0,commits.get());
+        var observed=new java.util.concurrent.atomic.AtomicReference<String>();
+        var enforcing=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("effect-key",key.getPublic()),
+            Clock.fixed(Instant.ofEpochMilli(100000),ZoneOffset.UTC),tenant->null,
+            (audience,request)->{observed.set(request.httpRequestDigest());return true;});
+        enforcing.authorizeKey(p,new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,facts),EXECUTOR);
+        assertEquals(digest,observed.get());
+    }
+    @Test void transportHeadersAndBodyAreDefensivelyCopied(){
+        var headers=new HashMap<String,List<String>>();var values=new ArrayList<>(List.of("alice"));
+        headers.put("x-recipient",values);
+        var facts=new ServicePermitVerifier.Transport(transport("alice").profile(),transport("alice").uri(),"POST",headers);
+        values.set(0,"bob");headers.clear();
+        assertEquals(List.of("alice"),facts.headers().get("x-recipient"));
+        assertThrows(UnsupportedOperationException.class,()->facts.headers().clear());
+    }
     @Test void directUserReadNeedsNoAgentAndNeverConsumesAWriteNonce()throws Exception{
         var auth=verifier.authorizeKey(permit("memory.read"),request("memory.read"),EXECUTOR);
         assertEquals("alice",auth.claims().sub());assertNull(auth.claims().act());assertEquals(0,commits.get());
@@ -105,7 +142,7 @@ class ServicePermitVerifierTest {
         var c=json.readValue(Base64.getUrlDecoder().decode(original.jws().split("\\.")[1]),ServicePermitClaims.class);
         for(var mode:List.of(RequestMode.DELEGATED,RequestMode.SERVICE)) {
             var bad=new ServicePermitClaims(c.iss(),c.aud(),c.tenantId(),c.sub(),mode==RequestMode.DELEGATED?"agent":null,
-                mode,c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce());
+                mode,c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),null);
             var token=signed("olo-service-permit+jws","effect-key",bad);
             assertThrows(SecurityException.class,()->verifier.authorizeKey(token,request("memory.read"),EXECUTOR));
         }

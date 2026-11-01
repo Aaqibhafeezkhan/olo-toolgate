@@ -10,6 +10,7 @@ package io.ololabs.toolgate.contracts;
  * @param resources canonical resources value
  * @param requestFingerprint canonical requestFingerprint value
  * @param executorKeySha256 canonical executorKeySha256 value
+ * @param httpRequestDigest canonical httpRequestDigest value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServicePermitConsumption(
@@ -17,7 +18,8 @@ public record ServicePermitConsumption(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "operation", required = true) String operation,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "resources", required = true) java.util.List<ResourceDescriptor> resources,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "requestFingerprint", required = true) String requestFingerprint,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "executorKeySha256", required = true) String executorKeySha256
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executorKeySha256", required = true) String executorKeySha256,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -26,6 +28,7 @@ public record ServicePermitConsumption(
      * @param resources canonical resources value
      * @param requestFingerprint canonical requestFingerprint value
      * @param executorKeySha256 canonical executorKeySha256 value
+     * @param httpRequestDigest canonical httpRequestDigest value
      */
     public ServicePermitConsumption {
         java.util.Objects.requireNonNull(permit, "permit");

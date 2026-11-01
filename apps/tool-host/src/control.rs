@@ -159,6 +159,7 @@ impl Control {
         invocation: &str,
         fence: &str,
         audience: olo_toolgate_contracts::ServiceAudience,
+        http_request_digest: &str,
     ) -> Result<olo_toolgate_contracts::ServicePermit, ControlError> {
         self.post(
             "/service-permits/issue",
@@ -166,6 +167,7 @@ impl Control {
                 invocation_id: invocation.into(),
                 fencing_token: fence.into(),
                 audience,
+                http_request_digest: Some(http_request_digest.into()),
             },
             None,
         )

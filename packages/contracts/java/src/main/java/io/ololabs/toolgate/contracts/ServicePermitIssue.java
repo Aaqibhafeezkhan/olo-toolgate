@@ -8,18 +8,21 @@ package io.ololabs.toolgate.contracts;
  * @param invocationId canonical invocationId value
  * @param fencingToken canonical fencingToken value
  * @param audience canonical audience value
+ * @param httpRequestDigest canonical httpRequestDigest value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServicePermitIssue(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationId", required = true) String invocationId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "fencingToken", required = true) String fencingToken,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "audience", required = true) ServiceAudience audience
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "audience", required = true) ServiceAudience audience,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
      * @param invocationId canonical invocationId value
      * @param fencingToken canonical fencingToken value
      * @param audience canonical audience value
+     * @param httpRequestDigest canonical httpRequestDigest value
      */
     public ServicePermitIssue {
         java.util.Objects.requireNonNull(invocationId, "invocationId");

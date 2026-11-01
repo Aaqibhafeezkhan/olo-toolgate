@@ -21,6 +21,7 @@ package io.ololabs.toolgate.contracts;
  * @param iat canonical iat value
  * @param exp canonical exp value
  * @param executionNonce canonical executionNonce value
+ * @param httpRequestDigest canonical httpRequestDigest value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServicePermitClaims(
@@ -39,7 +40,8 @@ public record ServicePermitClaims(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationEpoch", required = true) Long authorizationEpoch,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "iat", required = true) Long iat,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "exp", required = true) Long exp,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionNonce", required = true) String executionNonce
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionNonce", required = true) String executionNonce,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -59,6 +61,7 @@ public record ServicePermitClaims(
      * @param iat canonical iat value
      * @param exp canonical exp value
      * @param executionNonce canonical executionNonce value
+     * @param httpRequestDigest canonical httpRequestDigest value
      */
     public ServicePermitClaims {
         java.util.Objects.requireNonNull(iss, "iss");
