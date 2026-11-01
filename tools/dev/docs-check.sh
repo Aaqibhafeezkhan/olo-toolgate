@@ -23,4 +23,5 @@ for f in $required; do
   fi
 done
 
-printf '%s\n' 'Documentation structure check passed.'
+python3 tools/docs/check_links.py
+printf '%s\n' 'Documentation structure and link checks passed.'

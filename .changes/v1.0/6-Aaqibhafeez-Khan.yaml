@@ -1,0 +1,18 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+schemaVersion: 1
+contributor:
+  name: Aaqibhafeez Khan
+  github: Aaqibhafeezkhan
+  roles: [documentation]
+changes:
+  - type: added
+    component: Developer Experience
+    summary: Add automated validation for repository-relative Markdown links and anchors.
+    impact: Contributors can catch broken documentation links locally with make docs and through CI.
+    audience: [developers]
+    tickets:
+      - system: github
+        id: "#1"
+        url: https://github.com/olo-labs/olo-toolgate/issues/1
+        summary: Add automated Markdown link validation.
