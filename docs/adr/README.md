@@ -71,3 +71,5 @@ Use `000-template.md`.
 - [039: Independent Control HTTP manifest validation](039-control-http-manifest-validation.md)
 
 - [040: Knowledge target HTTP bindings](040-knowledge-target-http-bindings.md)
+
+- [041: Owner-bound OLO dispatch](041-owned-olo-dispatch.md)

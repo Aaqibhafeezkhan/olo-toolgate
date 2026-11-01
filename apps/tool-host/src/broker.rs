@@ -23,7 +23,7 @@ use olo_toolgate_contracts::v2::{
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// Request headers a tool may never set, whatever the route allows (ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.8.5).
@@ -52,6 +52,8 @@ const STRIPPED: [&str; 5] = [
     "proxy-authenticate",
 ];
 
+static BROKER_INSTANCE_ID: OnceLock<String> = OnceLock::new();
+
 /// Everything the broker enforces for one invocation, fixed at admission.
 pub struct Invocation {
     pub invocation_id: String,
@@ -60,6 +62,7 @@ pub struct Invocation {
     pub profile_id: String,
     pub profile_digest: String,
     pub invocation_permit: Option<olo_toolgate_contracts::v2::SignedInvocationPermit>,
+    broker_instance_id: String,
     /// The permit's routes as the service profile approves them.
     pub routes: Vec<RouteDeclaration>,
     pub destinations: Vec<ServiceDestination>,
@@ -115,6 +118,9 @@ impl Invocation {
             profile_id,
             profile_digest,
             invocation_permit: None,
+            broker_instance_id: BROKER_INSTANCE_ID
+                .get_or_init(|| crate::random_hex(16))
+                .clone(),
             routes,
             destinations,
             private_ranges,
@@ -410,7 +416,11 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         );
     }
 
-    let plain = invocation.development_loopback_http && is_loopback_host(&destination.host);
+    // Development loopback permission never downgrades a reserved OLO service to HTTP.
+    let service_destination = matches!(destination.id.as_str(), "olo-memory" | "olo-rag");
+    let plain = invocation.development_loopback_http
+        && is_loopback_host(&destination.host)
+        && !service_destination;
     let policy = AddressPolicy {
         host: destination.host.clone(),
         port: u16::try_from(destination.port)
@@ -530,22 +540,37 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         },
     )
     .map_err(refused)?;
-    let prepared = if let Some(audience) = service_audience {
-        let permit = invocation
-            .control
-            .service_permit(
-                &invocation.invocation_id,
-                &invocation.fencing_token,
-                audience,
-                prepared.digest(),
-                prepared.manifest(),
-                invocation
-                    .invocation_permit
-                    .as_ref()
-                    .ok_or_else(|| refused("signed admission proof required"))?,
-            )
-            .await
-            .map_err(|_| refused("downstream service authorization refused"))?;
+    let handler_id = crate::random_hex(16);
+    let permit = if let Some(audience) = service_audience {
+        Some(
+            invocation
+                .control
+                .service_permit(&olo_toolgate_contracts::ServicePermitIssue {
+                    invocation_id: invocation.invocation_id.clone(),
+                    fencing_token: invocation.fencing_token.clone(),
+                    audience,
+                    http_request_digest: Some(prepared.digest().into()),
+                    http_request_manifest: Some(
+                        serde_json::from_value(prepared.manifest().clone())
+                            .map_err(|_| refused("invalid prepared manifest"))?,
+                    ),
+                    invocation_permit: Some(
+                        invocation
+                            .invocation_permit
+                            .as_ref()
+                            .ok_or_else(|| refused("signed admission proof required"))?
+                            .clone(),
+                    ),
+                    broker_instance_id: Some(invocation.broker_instance_id.clone()),
+                    handler_id: Some(handler_id.clone()),
+                })
+                .await
+                .map_err(|_| refused("downstream service authorization refused"))?,
+        )
+    } else {
+        None
+    };
+    let prepared = if let Some(permit) = &permit {
         prepared.with_service_permit(&permit.jws).map_err(refused)?
     } else {
         prepared
@@ -555,6 +580,23 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         return Err(refused("the invocation has ended"));
     }
     if service_write {
+        let permit = permit
+            .as_ref()
+            .ok_or_else(|| refused("service permit required"))?;
+        invocation
+            .control
+            .service_sending(&olo_toolgate_contracts::ServicePermitDispatch {
+                permit: permit.clone(),
+                broker_instance_id: invocation.broker_instance_id.clone(),
+                handler_id,
+            })
+            .await
+            .map_err(|_| refused("downstream dispatch authorization refused"))?;
+        if invocation.closed.load(Ordering::SeqCst)
+            || crate::now_ms() >= invocation.deadline_unix_ms
+        {
+            return Err(refused("the invocation has ended"));
+        }
         invocation
             .service_effect_started
             .store(true, Ordering::SeqCst);

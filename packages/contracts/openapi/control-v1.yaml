@@ -9188,6 +9188,29 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitIssue
+  /api/control/v1/access/service-permits/sending:
+    post:
+      operationId: beginServicePermitDispatch
+      description: Direct device mTLS, signed service grant, current authority and recorded owner required; exactly one send CAS succeeds.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitDispatchAllowed
+        '409':
+          description: The dispatch was already started, expired or fenced; no replay authority
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitDispatch
   /api/control/v1/access/service-permits/{audience}/consume:
     post:
       operationId: consumeServicePermit

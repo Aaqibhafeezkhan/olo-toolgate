@@ -241,6 +241,7 @@ export const operations = {
   reportMcpQuarantine: { method: 'POST', path: '/api/control/v1/tool-hosts/mcp-quarantines' },
   cancelCallerOperation: { method: 'POST', path: '/api/control/v1/access/invocations/cancel' },
   issueServicePermit: { method: 'POST', path: '/api/control/v1/access/service-permits/issue' },
+  beginServicePermitDispatch: { method: 'POST', path: '/api/control/v1/access/service-permits/sending' },
   consumeServicePermit: { method: 'POST', path: '/api/control/v1/access/service-permits/{audience}/consume' },
   serviceAuthorizationEpoch: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/epoch' },
   servicePermitKeys: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/jwks' },

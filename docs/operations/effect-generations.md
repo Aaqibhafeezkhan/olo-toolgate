@@ -31,12 +31,18 @@ manifest includes all new tables.
 
 ## Current scope
 
-The live OLO adapter uses the execution nonce and service nonce as stable legacy
-broker/handler identifiers. Its request digest covers the existing signed service
-identity, operation, resource and body fingerprint binding. It does **not** yet
-cover the full HTTP transport. General broker instance/handler identities, exact
-HTTP request binding, effect keys for several logical writes, consent slots and a
-generalized broker API remain required.
+Bound OLO writes record a random process-local broker identity and a fresh handler
+identity per route call. Only the same owner can repeat issuance while AUTHORIZED.
+Before sending, the broker calls the direct-mTLS sending endpoint. Control
+rechecks current authority and atomically changes AUTHORIZED to SENDING once.
+A lost response cannot grant a second send. Bound target consumption requires
+SENDING. Restarted brokers and different handlers cannot recover dispatch
+authority by replaying issuance.
+
+Legacy unbound clients without v2 leases retain execution/service nonce owner
+identifiers. Bound requests include independently validated exact HTTP facts.
+General route classes, several logical writes, consent slots, public release or
+reopen APIs, and generalized effect authorization remain outstanding.
 
 Existing repeat service consumption still refuses execution; the target-side
 shared claim store/SDK and status-returning consume API are not implemented by

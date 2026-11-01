@@ -3021,6 +3021,20 @@ pub struct ServicePermitConsumption {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_request_digest: Option<String>,
 }
+/// Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitDispatch {
+    pub permit: ServicePermit,
+    pub broker_instance_id: String,
+    pub handler_id: String,
+}
+/// This owner won the single send transition; a lost response cannot be replayed into new authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitDispatchAllowed {
+    pub authorized: bool,
+}
 /// Executor request for downstream authorization; scope comes exclusively from the admitted invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3034,6 +3048,10 @@ pub struct ServicePermitIssue {
     pub http_request_manifest: Option<PreparedHttpRequestManifest>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invocation_permit: Option<v2::SignedInvocationPermit>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub broker_instance_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handler_id: Option<String>,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

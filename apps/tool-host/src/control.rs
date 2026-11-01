@@ -156,30 +156,15 @@ impl Control {
     }
     pub async fn service_permit(
         &self,
-        invocation: &str,
-        fence: &str,
-        audience: olo_toolgate_contracts::ServiceAudience,
-        http_request_digest: &str,
-        manifest: &serde_json::Value,
-        invocation_permit: &olo_toolgate_contracts::v2::SignedInvocationPermit,
+        request: &olo_toolgate_contracts::ServicePermitIssue,
     ) -> Result<olo_toolgate_contracts::ServicePermit, ControlError> {
-        self.post(
-            "/service-permits/issue",
-            &olo_toolgate_contracts::ServicePermitIssue {
-                invocation_id: invocation.into(),
-                fencing_token: fence.into(),
-                audience,
-                http_request_digest: Some(http_request_digest.into()),
-                http_request_manifest: Some(
-                    serde_json::from_value(manifest.clone()).map_err(|_| {
-                        ControlError::Unavailable("invalid prepared manifest".into())
-                    })?,
-                ),
-                invocation_permit: Some(invocation_permit.clone()),
-            },
-            None,
-        )
-        .await
+        self.post("/service-permits/issue", request, None).await
+    }
+    pub async fn service_sending(
+        &self,
+        request: &olo_toolgate_contracts::ServicePermitDispatch,
+    ) -> Result<olo_toolgate_contracts::ServicePermitDispatchAllowed, ControlError> {
+        self.post("/service-permits/sending", request, None).await
     }
     fn client(&self) -> reqwest::Client {
         self.client

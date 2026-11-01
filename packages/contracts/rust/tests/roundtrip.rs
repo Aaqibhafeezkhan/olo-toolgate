@@ -292,6 +292,8 @@ fn shared_fixture_round_trips() {
         ServicePermitClaims,
         ServicePermitConsumed,
         ServicePermitConsumption,
+        ServicePermitDispatch,
+        ServicePermitDispatchAllowed,
         ServicePermitIssue,
         SignedClientDiscovery,
         SignedPolicyBundle,

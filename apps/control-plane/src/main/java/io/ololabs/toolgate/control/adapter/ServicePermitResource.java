@@ -30,6 +30,15 @@ public class ServicePermitResource {
             return reply(permits().issue(tenant.tenant(),tx->endpoints.authenticate(tx,cert,System.currentTimeMillis()).deviceId(),key,body));
         } catch(java.security.GeneralSecurityException|javax.net.ssl.SSLPeerUnverifiedException invalid){throw ManagementAccess.denied();}
     }
+    @POST @Path("sending") @Consumes("application/json") @jakarta.annotation.security.PermitAll
+    public Response sending(String body){
+        try {
+            if(!routing.request().isSSL())throw ManagementAccess.denied();
+            var cert=(X509Certificate)routing.request().sslSession().getPeerCertificates()[0];
+            String key=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(cert.getPublicKey().getEncoded()));
+            return reply(permits().sending(tenant.tenant(),tx->endpoints.authenticate(tx,cert,System.currentTimeMillis()).deviceId(),key,body));
+        }catch(java.security.GeneralSecurityException|javax.net.ssl.SSLPeerUnverifiedException invalid){throw ManagementAccess.denied();}
+    }
     @POST @Path("{audience}/consume") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response consume(@PathParam("audience") String audience,String body){return reply(permits().consume(service(audience),ServiceAudience.valueOf(audience.replace('-','_')),body));}
     @GET @Path("{audience}/epoch") @io.quarkus.security.Authenticated

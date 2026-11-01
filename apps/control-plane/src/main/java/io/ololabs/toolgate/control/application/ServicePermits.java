@@ -56,11 +56,37 @@ public final class ServicePermits {
             if(!read){
                 String route=request.audience().name()+"/"+op;
                 String effect="eff-"+DirectoryService.digest(codec.json(List.of("toolgate-effect-v1",tenant.value(),i.id(),route,"service-write")));
-                tx.effects().authorize(new EffectStore.Binding(effect,i.id(),i.reservedNonce(),route,binding(claims),device,
-                    i.reservedNonce(),nonceId,nonceId,expiry,expiry+60000),now);
+                var authorization=tx.effects().authorize(new EffectStore.Binding(effect,i.id(),i.reservedNonce(),route,binding(claims),device,
+                    request.httpRequestDigest()==null?i.reservedNonce():request.brokerInstanceId(),
+                    request.httpRequestDigest()==null?nonceId:request.handlerId(),nonceId,expiry,expiry+60000),now);
+                if(request.httpRequestDigest()!=null&&!authorization.generation().state().equals("AUTHORIZED"))throw Failure.conflict();
             }
             tx.audit(DirectoryService.digest(device),"SERVICE_PERMIT_ISSUE","invocation:"+i.id(),i.revision(),c.requestId(),i.requestDigest());
             return new Store.Reply(200,codec.json(permit),i.revision());
+        });
+    }
+    /** One owner-bound CAS before the downstream wire send. A lost response never permits a replay. */
+    public Store.Reply sending(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,
+            String executorKeySha256,String document){
+        var request=codec.model(document,ServicePermitDispatch.class);
+        var claims=operations.signer().verifyService(request.permit());
+        return store.transaction(tenant,true,tx->{
+            String device=certificate.apply(tx);long now=operations.clock(tx);
+            var i=operations.invocationIn(tx,claims.invocationId());var nonce=tx.enterprise().nonce(claims.nonce());
+            if(!claims.iss().equals(operations.issuer())||!claims.tenantId().equals(tenant.value())
+                ||!claims.executorKeySha256().equals(executorKeySha256)||claims.httpRequestDigest()==null
+                ||Set.of("memory.read","rag.query").contains(claims.operation())||claims.iat()>now||claims.exp()<=now
+                ||i.state()!=EnterpriseInvocationState.EXECUTING||!device.equals(i.evaluation().context().deviceId())
+                ||!Objects.equals(i.reservedNonce(),claims.executionNonce())||nonce==null||nonce.consumedAt()!=null
+                ||!nonce.invocationId().equals(i.id())||!nonce.evaluationDigest().equals(DirectoryService.digest(codec.json(claims))))
+                throw ManagementAccess.denied();
+            operations.requireFresh(tenant,tx,i);
+            var effect=tx.effects().byNonce(claims.nonce());
+            if(effect==null||!effect.binding().operationId().equals(i.id())||!effect.binding().attemptId().equals(i.reservedNonce())
+                ||!effect.binding().requestDigest().equals(binding(claims)))throw ManagementAccess.denied();
+            tx.effects().sending(claims.nonce(),device,request.brokerInstanceId(),request.handlerId(),now);
+            tx.audit(DirectoryService.digest(device),"SERVICE_PERMIT_SENDING","invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest());
+            return new Store.Reply(200,codec.json(new ServicePermitDispatchAllowed(true)),i.revision());
         });
     }
     public Store.Reply consume(DirectoryService.Actor service, ServiceAudience audience, String document) {
@@ -83,7 +109,8 @@ public final class ServicePermits {
             operations.requireFresh(service.tenant(),tx,i);
             if(!Set.of("memory.read","rag.query").contains(claims.operation())){
                 var effect=tx.effects().byNonce(claims.nonce());
-                if(effect==null||!effect.binding().operationId().equals(i.id())||!effect.binding().attemptId().equals(i.reservedNonce()))throw ManagementAccess.denied();
+                if(effect==null||!effect.binding().operationId().equals(i.id())||!effect.binding().attemptId().equals(i.reservedNonce())
+                    ||claims.httpRequestDigest()!=null&&!effect.state().equals("SENDING"))throw ManagementAccess.denied();
                 var consumed=tx.effects().consume(claims.nonce(),binding(claims),audience.name(),"legacy:"+claims.executorKeySha256(),now);
                 if(!consumed.newAuthority())throw ManagementAccess.denied();
             }

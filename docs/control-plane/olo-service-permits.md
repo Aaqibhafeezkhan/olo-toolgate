@@ -192,3 +192,27 @@ unverified JWT payloads.
 A verifier request with transport facts explicitly requires httpRequestDigest.
 An unbound legacy permit is refused before consumption. Other adapters using the
 legacy four-argument request constructor retain their existing behavior.
+
+### Owner-bound write dispatch
+
+Bound issuance also requires brokerInstanceId and handlerId. The trusted broker
+creates one random in-memory instance ID per process and a fresh handler ID for
+each route call. Control records them in the effect generation; another handler
+or restarted process cannot obtain that generation's grant.
+
+Before an OLO write contacts its target, the broker calls
+POST /api/control/v1/access/service-permits/sending over direct device mTLS with
+the signed service permit and both owner IDs. Control verifies the executor key,
+current invocation authority, exact recorded grant and owner, then atomically
+changes AUTHORIZED to SENDING. Only one concurrent caller succeeds. A refused or
+lost response permits no target send or automatic replay. Target consumption
+requires SENDING for bound writes. Reads retain their existing boundary.
+
+Upgrade broker and Control together; generated Java issue constructors gain two
+optional wire fields that are mandatory for bound issuance. The explicit
+development loopback option never downgrades reserved OLO destinations to HTTP:
+they still require verified HTTPS and client certificates.
+
+This slice supplies no public release/reopen protocol, shared target claim store,
+exact consent, general route grants or outcome finalization. A send-gate success
+is permission for one send, not evidence that a target committed a business effect.

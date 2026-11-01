@@ -3217,6 +3217,12 @@
         },
         "invocationPermit": {
           "$ref": "../v2/permit.schema.json#/$defs/SignedInvocationPermit"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
         }
       }
     },
@@ -3426,6 +3432,41 @@
             "minLength": 1,
             "maxLength": 128
           }
+        }
+      }
+    },
+    "ServicePermitDispatch": {
+      "type": "object",
+      "description": "Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send.",
+      "additionalProperties": false,
+      "required": [
+        "permit",
+        "brokerInstanceId",
+        "handlerId"
+      ],
+      "properties": {
+        "permit": {
+          "$ref": "#/$defs/ServicePermit"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      }
+    },
+    "ServicePermitDispatchAllowed": {
+      "type": "object",
+      "description": "This owner won the single send transition; a lost response cannot be replayed into new authority.",
+      "additionalProperties": false,
+      "required": [
+        "authorized"
+      ],
+      "properties": {
+        "authorized": {
+          "type": "boolean",
+          "const": true
         }
       }
     }

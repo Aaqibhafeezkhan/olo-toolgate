@@ -2606,6 +2606,16 @@
     "requestFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "executorKeySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
+  "ServicePermitDispatch": {
+    "permit": {
+      "jws": "e30.e30.c2ln"
+    },
+    "brokerInstanceId": "device-1",
+    "handlerId": "device-1"
+  },
+  "ServicePermitDispatchAllowed": {
+    "authorized": true
+  },
   "ServicePermitIssue": {
     "invocationId": "inv-1",
     "fencingToken": "fence-1",

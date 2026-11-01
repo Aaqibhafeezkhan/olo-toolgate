@@ -20,10 +20,10 @@ public final class ServiceRequestValidation {
         var manifest=request.httpRequestManifest();
         var lease=tx.enterprise().executionLease(invocation.id());
         if(request.httpRequestDigest()==null){
-            if(lease!=null||manifest!=null||request.invocationPermit()!=null)throw ManagementAccess.denied();
+            if(lease!=null||manifest!=null||request.invocationPermit()!=null||request.brokerInstanceId()!=null||request.handlerId()!=null)throw ManagementAccess.denied();
             return;
         }
-        if(manifest==null||request.invocationPermit()==null||lease==null||lease.expiresAt()<=now
+        if(manifest==null||request.invocationPermit()==null||request.brokerInstanceId()==null||request.handlerId()==null||lease==null||lease.expiresAt()<=now
             ||!lease.deviceId().equals(device)||!lease.fencingToken().equals(invocation.reservedNonce()))throw ManagementAccess.denied();
         var claims=signer.verifyInvocation(request.invocationPermit());
         var e=invocation.evaluation();var c=e.context();var identity=claims.identity();var target=claims.target();

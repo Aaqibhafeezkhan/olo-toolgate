@@ -11,6 +11,8 @@ package io.ololabs.toolgate.contracts;
  * @param httpRequestDigest canonical httpRequestDigest value
  * @param httpRequestManifest canonical httpRequestManifest value
  * @param invocationPermit canonical invocationPermit value
+ * @param brokerInstanceId canonical brokerInstanceId value
+ * @param handlerId canonical handlerId value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServicePermitIssue(
@@ -19,7 +21,9 @@ public record ServicePermitIssue(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "audience", required = true) ServiceAudience audience,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestManifest", required = false) PreparedHttpRequestManifest httpRequestManifest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationPermit", required = false) io.ololabs.toolgate.contracts.v2.SignedInvocationPermit invocationPermit
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "invocationPermit", required = false) io.ololabs.toolgate.contracts.v2.SignedInvocationPermit invocationPermit,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "brokerInstanceId", required = false) String brokerInstanceId,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "handlerId", required = false) String handlerId
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +33,8 @@ public record ServicePermitIssue(
      * @param httpRequestDigest canonical httpRequestDigest value
      * @param httpRequestManifest canonical httpRequestManifest value
      * @param invocationPermit canonical invocationPermit value
+     * @param brokerInstanceId canonical brokerInstanceId value
+     * @param handlerId canonical handlerId value
      */
     public ServicePermitIssue {
         java.util.Objects.requireNonNull(invocationId, "invocationId");

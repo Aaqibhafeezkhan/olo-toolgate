@@ -1804,6 +1804,16 @@ export interface ServicePermitConsumption {
   readonly executorKeySha256: string;
   readonly httpRequestDigest?: string;
 }
+/** Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send. */
+export interface ServicePermitDispatch {
+  readonly permit: ServicePermit;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+}
+/** This owner won the single send transition; a lost response cannot be replayed into new authority. */
+export interface ServicePermitDispatchAllowed {
+  readonly authorized: boolean;
+}
 /** Executor request for downstream authorization; scope comes exclusively from the admitted invocation. */
 export interface ServicePermitIssue {
   readonly invocationId: string;
@@ -1812,6 +1822,8 @@ export interface ServicePermitIssue {
   readonly httpRequestDigest?: string;
   readonly httpRequestManifest?: PreparedHttpRequestManifest;
   readonly invocationPermit?: V2.SignedInvocationPermit;
+  readonly brokerInstanceId?: string;
+  readonly handlerId?: string;
 }
 export type Sha256 = string;
 /** Endpoint identity foundation wire model. */

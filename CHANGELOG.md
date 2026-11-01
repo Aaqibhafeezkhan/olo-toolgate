@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Bound OLO writes require recorded broker/handler ownership and one authenticated
+  AUTHORIZED-to-SENDING transition before dispatch. Target consumption refuses
+  unsent generations. Upgrade broker and Control together.
+
 - Transport-aware target verifiers refuse unbound legacy permits before online
   consumption. Coordinate the actual OLO memory/RAG listener upgrade and trusted
   profile bindings in olo-mono/olo-knowledge.

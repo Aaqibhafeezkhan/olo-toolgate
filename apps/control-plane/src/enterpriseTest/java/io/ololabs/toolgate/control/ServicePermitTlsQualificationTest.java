@@ -45,7 +45,9 @@ class ServicePermitTlsQualificationTest {
         var expectedHeaders=Map.of("content-type",List.of("application/json"),"accept",List.of("*/*"),"x-recipient",List.of("alice"));
         String httpDigest=HttpRequestFingerprint.digest(profile,destination,"POST",expectedHeaders,body);
         var permit=rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",executorHash,
-            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory,httpDigest,bound.manifest(),bound.proof()))).body(),ServicePermit.class);
+            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory,httpDigest,bound.manifest(),bound.proof(),"broker-test","handler-test"))).body(),ServicePermit.class);
+        permits.sending(rig.gateway.tenant(),tx->"device",executorHash,
+            rig.graph.codec.json(new ServicePermitDispatch(permit,"broker-test","handler-test")));
         var publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(EnterpriseOperationTest.key.getModulus(),EnterpriseOperationTest.key.getPublicExponent()));
         var verifier=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("permit-key",publicKey),rig.clock,
             tenant->null,(audience,request)->{permits.consume(rig.gateway,audience,rig.graph.codec.json(request));return true;});
