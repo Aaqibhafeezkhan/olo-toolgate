@@ -46,8 +46,9 @@ reopen APIs, and generalized effect authorization remain outstanding.
 
 Legacy repeat service consumption still refuses execution. A shared target SQL
 claim foundation and authenticated claim-token consumption/status/outcome APIs
-are now available; their actual target transaction integration remains
-outstanding. Do not infer target deduplication or final
+are now integrated with the actual memory/RAG transactions and durable target
+outcome delivery. Their component qualification uses scripted Control; complete
+stack/deployment conformance remains outstanding. Do not infer target deduplication or final
 operation success from CONSUMED. Existing operations remain conservative UNKNOWN
 after consumed terminal attempts.
 

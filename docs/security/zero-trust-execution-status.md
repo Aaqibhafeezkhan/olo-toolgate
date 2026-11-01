@@ -10,9 +10,9 @@ does not establish a passing security claim.
 Updated: **2026-11-01**. Branch: `feature/zero-trust-execution-plan`.
 Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
 
-**Overall: partially implemented.** Twelve scoped deliveries are implemented:
+**Overall: partially implemented.** Thirteen scoped deliveries are implemented:
 renewable leases/durable execution recovery, qualified Python OCI containment,
-explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, and OLO claim-token consumption/status/outcome APIs. Executed validation for the current
+explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, OLO claim-token consumption/status/outcome APIs, and verified target-claim orchestration with memory/RAG transaction integration. Executed validation for the current
 delivery is recorded below. **0 of 7 full roadmap phases have met every exit
 criterion.** Phases 0–3 have
 partial delivery; phases 4–6 have not started as generalized implementations.
@@ -29,7 +29,7 @@ completion forecast. No delivery count or percentage is used as an effort weight
 | 0 — Boundary and harness | Partial | Preserved revision-10 plan, claim inventory, scoped documentation and executable OCI conformance gate with revision/source/image evidence. | Adopt the full threat matrix across security docs; execute all C1–C8 conformance cases and publish a complete release scorecard. |
 | 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key binding; V3 operation/attempt records, immutable snapshots, historical backfill, positive-proof reservation replacement and conservative operation summaries. | Generalized requiresBusinessKey/namespace/dedupe-window policy, retention maintenance, whole-invocation rebinding and full effect-aware operation finalization/caller integration; complete admission/rebinding and crash conformance. |
 | 2 — Containment | Partial; Python worker slice delivered | Rootless Podman/crun workers; permit-bound image; isolated namespaces and UID ranges; read-only files; enforced resource limits; stdio broker; teardown/restart recovery; no native fallback; service unit and CI gate. | Separate the trusted broker's OS identity/network namespace as specified by the plan; broader deployment/interface conformance and deployment SLO evidence. Other languages and VM tiers require separate qualification. |
-| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; production target integration remains outstanding. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. | Generalize the independently validated OLO path to broker enforcement for all route classes, effect keys/manifests, generalized owner protocol, consent slots, target fencing SDK/shared claims, deduplication, reconciliation and operation finalization. |
+| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; the actual memory/RAG adapters now integrate it. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. The target SDK separates verified facts from online consumption, persists APPLYING before external actions, and atomically journals completion/outcome delivery with business SQL. | Generalize the independently validated OLO path to broker enforcement for all route classes, effect keys/manifests, generalized owner protocol, consent slots, generalized target fencing/deduplication, reconciliation and operation finalization. |
 | 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
 | 5 — Identity hardening | Not started | Existing device certificates remain the baseline. | Sender-constrained agent-run credentials, narrowing delegation and continuously verified executor posture. |
 | 6 — Policy differentiation | Not started | Existing approvals remain the baseline. | Broker OAuth/token exchange, trusted provenance, exact effect previews and stronger step-up approvals. |
@@ -42,14 +42,14 @@ The complete first milestone in issue #230 is **not yet accepted**.
 |---|---|---|
 | Exact consent rejects recipient changes and additional effects | Not implemented | OLO fingerprints are independently route/profile-checked by Control and signed/target-checked, including actual memory/RAG component TLS tests; independent exact consent slots and additional-effect rejection remain unimplemented. |
 | Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down a real OCI SDK worker; generalized sensitive-effect authorization and measured deployment bounds remain outstanding. |
-| Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; owner races permit one SENDING winner and refused gates contact no target; target-commit/shared-claim crash scenarios remain outstanding. |
-| Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; shared SQLite/PostgreSQL claim-store races now exercise one mutation, paused-owner fencing and apply/recovery exclusion; actual target integration and network/crash qualification remain outstanding. |
+| Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; owner races permit one SENDING winner and refused gates contact no target; actual target tests now exercise paused-owner abandonment, two JVMs, writer loss after business commit and lost outcome acknowledgement; complete Control/Gateway crash scenarios remain outstanding. |
+| Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; shared SQLite/PostgreSQL claims and actual memory/RAG JVM replicas now exercise one mutation, paused-owner fencing, writer loss and outcome redelivery; complete Control/Gateway partition/crash qualification remains outstanding. |
 | Operation finalization includes all attempts/effects and late evidence | Partial | Each permit has independent identity/snapshots and late evidence. New operations finalize FAILED only without consumption; consumed terminal work remains unknown. Authenticated target outcomes now retain late completion/conflict evidence independently of permit expiry or signing-key rotation. Complete effect aggregation and caller-visible finalization remain outstanding. |
-| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target guarantees and the complete release scorecard remain outstanding. |
+| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target component evidence now pins verified SDK/contracts artifacts and executes replica/crash cases; full-stack/deployment guarantees and the complete release scorecard remain outstanding. |
 
-**Next implementation target:** integrate verified target-claim orchestration
-and Control's claim APIs into the actual memory/RAG transactions and recovery
-paths. Generalized route/effect-grant APIs, exact consent slots
+**Next implementation target:** qualify the integrated claim path against the
+actual Control/Gateway stack, then generalize effect grants/keys and exact consent.
+Generalized route/effect-grant APIs, exact consent slots
 and effect-aware operation finalization remain outstanding. Whole-invocation rebinding, generalized key policy and public history
 presentation remain outstanding. Only an expired unconsumed permit may be replaced
 inside its operation's original deadline; consumed attempts remain fenced.
@@ -71,13 +71,13 @@ carry this requirement into future work.
 | C1, no ambient target authority | Available for qualified Python OCI pools | Workers have no network socket authority, route, resolver, host mounts or ambient supervisor environment. Native pools do not establish this claim. |
 | C2, verified sender-constrained run identity | Partial | Device certificate admission exists; sender-constrained agent runs remain planned. |
 | C3a, current admission authorization | Implemented existing boundary | Signed-permit admission and current Control checks; Tool Host `bad_permits_are_refused_before_anything_runs`. |
-| C3b, current per-effect authorization | Partial; OLO write path only | Existing OLO current-authority checks now reserve/consume durable effect generations atomically. OLO permits also sign prepared HTTP fingerprints and the target verifier checks accepted-request facts. Control now independently verifies pinned OLO profile/route manifests and original signed admission scope; v2 leases cannot downgrade to unbound issuance. Actual memory/RAG listeners supply HTTP facts from accepted requests with trusted deployment bindings. Bound write dispatch now rechecks current authority and recorded ownership at a single SENDING transition; bound target consumption refuses unsent generations. A shared SQL claim-store foundation is tested independently. Control now exposes claim-token consumption/status and late authenticated outcomes; actual target claim-store integration remains outstanding. Generalized enforcement, consent and integrating claims with verified grants/Control consumption remain required. |
+| C3b, current per-effect authorization | Partial; OLO write path only | Existing OLO current-authority checks now reserve/consume durable effect generations atomically. OLO permits also sign prepared HTTP fingerprints and the target verifier checks accepted-request facts. Control now independently verifies pinned OLO profile/route manifests and original signed admission scope; v2 leases cannot downgrade to unbound issuance. Actual memory/RAG listeners supply HTTP facts from accepted requests with trusted deployment bindings. Bound write dispatch now rechecks current authority and recorded ownership at a single SENDING transition; bound target consumption refuses unsent generations. A shared SQL claim-store foundation is tested independently. Control now exposes claim-token consumption/status and late authenticated outcomes; actual memory/RAG integration now uses verified facts, durable claims and a target outcome outbox. The qualification uses scripted Control and does not replace complete stack/deployment evidence. Generalized enforcement, exact consent and complete stack/deployment conformance remain required. |
 | C3c, bounded unmediated execution | Partial | Native direct-worker supervision and OCI teardown on cancellation/deadline are tested. Enforced service cgroups contain worker processes; measured deployment revocation SLOs remain required. |
 | C4, bound admission intent | Implemented existing boundary | Tool Host admission binds signature, audience, arguments and content digests; dispatch integration tests. |
 | C5, contained execution | Available for qualified Python OCI pools | Executed rootless namespace, UID, filesystem, socket, syscall, resource, flooding, cancellation and recovery tests. Requires the documented delegated service; other runtime tiers do not inherit the claim. |
 | C6, honest tamper-evident record | Partial | Durable admission, immutable executor evidence, independent immutable attempt snapshots and host result retry; standalone SDK SQLite restart/late-completion recovery uses immediate writer transactions. Hash chains and external anchors remain required. |
 | C7, revocation | Partial | Renewable leases and current authority checks; full target and compromised-host distinctions remain required. |
-| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; all consumed same-row replay is disabled. Effect generations now separate authorization from consumption/outcome on the OLO write path. The HTTP/1.1 broker now binds OLO service fingerprints through signed claims, immutable effect identity and target checks. Pinned OLO request/route validation is independent at Control. A process/handler-owned single-send gate prevents replaying a bound generation's dispatch authority. The SQL target claim foundation tests unique ownership and atomic business completion. Claim-token consumption/status and late target outcomes are exposed at Control, but actual target transactions have not adopted them. Generalized key policy, other route classes, consent slots, target deduplication integration and full operation finalization remain required. |
+| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; all consumed same-row replay is disabled. Effect generations now separate authorization from consumption/outcome on the OLO write path. The HTTP/1.1 broker now binds OLO service fingerprints through signed claims, immutable effect identity and target checks. Pinned OLO request/route validation is independent at Control. A process/handler-owned single-send gate prevents replaying a bound generation's dispatch authority. The SQL target claim foundation tests unique ownership and atomic business completion. Claim-token consumption/status and late target outcomes are exposed at Control, and actual memory/RAG transactions now adopt them with restricted SQL state/binding guards and durable outcome delivery. Generalized key policy, other route classes, consent slots, generalized target deduplication and full operation finalization remain required. |
 
 This is an implementation inventory, not a passing per-release C1–C8 scorecard.
 No full-plan acceptance is claimed by this increment. A release scorecard must
@@ -640,3 +640,67 @@ these final evidence/documentation additions.
 
 Next: verified target-claim orchestration and actual memory/RAG
 transaction/recovery integration.
+
+
+## Verified target-claim orchestration delivery
+
+[ADR 044](../adr/044-target-claim-orchestration.md) separates the SDK's
+VerifiedWrite facts from commit authorization. The actual OLO adapter commits its
+unique local claim before online consumption, then commits APPLYING before any
+business action. RAG also checks the original deadline before embedding and
+external vector mutation. Completion and a durable outcome record share the
+business SQL transaction; the reporter retries only evidence delivery.
+
+Expired CLAIMED recovery commits ABANDONED and not-started evidence atomically,
+fencing a paused owner. APPLYING is never automatically reported not-started.
+Legacy expiry 0 remains unknown. Bounded, coalesced recovery and keyset outcome
+pagination prevent permanently deferred records from starving later evidence.
+Owner/outcome representations redact tokens. Target migrations force tenant
+RLS, restrict runtime writes to transition/delivery columns, prohibit deletion
+and guard immutable bindings/state transitions. Missing/unsafe schema fails
+startup; writes have no one-shot fallback.
+
+This remains an OLO/component slice. An outcome unknown to Control stays queued
+for reconciliation without authority to resend. There is no automatic replacement
+for abandoned/uncertain effects. Generalized routes, exact consent, whole-operation
+finalization and production SLO/release acceptance remain outstanding.
+
+Executed validation:
+- Final full javaCheck passed with a fresh real PostgreSQL fixture: Control
+  enterprise 189 passed without skips, main 260 passed with five configured
+  skips, service SDK 30 passed without skips. New SDK cases cover verified facts
+  without consumption, original deadline across slow consumers, durable outcome
+  delivery/acknowledgement, keyset pagination, atomic abandonment evidence and
+  compatible v1 migration without invented expiry.
+- Actual knowledge qualification passed **32 tests, no skips**: service-core 5,
+  memory 10, RAG 17. Real PostgreSQL/TLS/Qdrant/Ollama with scripted Control.
+  Each TLS fixture uses two application JVMs, paused-owner fencing, refused/
+  other-claim/wrong-generation replies, one racing business mutation, writer
+  termination and lost outcome acknowledgement recovered by the survivor.
+  SQL cases check forced RLS, immutable binding/deletion privileges and state
+  guards; expiry after embedding refuses the external vector write.
+- Memory/RAG distributions built and installed SDK/contracts hashes matched
+  their qualified runtime classpaths. Full-stack provisioning syntax checked.
+  Positive verify-only and temporary-copy changed-contract/classpath/skipped
+  evidence negative controls passed. Full Control/Gateway and production SLO
+  qualification remain outstanding.
+- No Rust, containment or wire-schema source changed in this increment; their
+  executed evidence remains the preceding known delivery.
+
+Known ToolGate parent: 3665e52d7b8c622d4d776361eff0a564ad961c32.
+Changed SDK source SHA-256:
+6f0d13e8c6fe92617354d66c46d6bc4c40b7931990c69fded03574a79b9da64e.
+Input is the five sorted changed Java main/test paths beneath
+backend-libs/service-authorization/, one NUL and exact bytes; documentation
+is excluded. Complete verifier-source SHA-256:
+3287fa65030eea04ccc0471f89939cc63312e700e67c487323b23858193453e1.
+Coordinated knowledge integration is pushed as olo-mono commit 690c08b.
+Qualified knowledge component SHA-256:
+8d661624055f36d4ebb0b6da67c9a20f4679c6b0b4d96b7673b625fc0cd37c6a.
+SDK JAR SHA-256:
+16e961a02fc5b032578b8aecb1bf41daad0de157a2905c6552c7ce88307d35fe.
+Contracts JAR SHA-256:
+1daad128498a9dccd8a9bcf1969962213ff7d341a1716f8e52d732ea6fe28cc7.
+
+Next: actual Control/Gateway qualification for this integrated target path, then
+generalized effect grants/keys and exact consent slots.

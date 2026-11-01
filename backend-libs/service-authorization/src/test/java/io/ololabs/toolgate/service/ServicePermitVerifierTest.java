@@ -50,6 +50,25 @@ class ServicePermitVerifierTest {
             Map.of("content-type",List.of("application/json"),"accept",List.of("*/*"),"x-recipient",List.of(recipient),
                 "toolgate-service-permit",List.of("actual-signed-permit")));
     }
+    @Test void verifiedWritesNeverConsumeAndKeepTheirOriginalDeadline()throws Exception{
+        var facts=transport("alice");String digest=HttpRequestFingerprint.digest(facts.profile(),facts.uri(),facts.method(),facts.headers(),BODY);
+        var permit=boundPermit("memory.append",digest);
+        var request=new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,facts);
+        var verified=verifier.verifyWriteKey(permit,request,EXECUTOR);
+        assertEquals(0,commits.get());assertEquals("effect-1",verified.binding().effectId());
+        assertEquals(digest,verified.binding().requestDigest());assertEquals("nonce-1",verified.binding().authNonce());
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(permit,request,"0".repeat(64)));
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(permit("memory.append"),request,EXECUTOR));
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(permit("memory.read"),request("memory.read"),EXECUTOR));
+        assertEquals(0,commits.get());time.set(115001);
+        assertThrows(SecurityException.class,verified::checkDeadline);
+    }
+    @Test void aSlowConsumerCannotReturnAnExpiredCommitAuthorization()throws Exception{
+        Clock clock=new Clock(){public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId z){return this;}public Instant instant(){return Instant.ofEpochMilli(time.get());}};
+        var delayed=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("effect-key",key.getPublic()),clock,t->null,
+            (a,c)->{time.set(115001);return true;});
+        assertThrows(SecurityException.class,()->delayed.authorizeKey(permit("memory.append"),request("memory.append"),EXECUTOR));
+    }
     @Test void boundPermitRequiresActualTransportFactsBeforeOnlineConsumption()throws Exception{
         var facts=transport("alice");
         String digest=HttpRequestFingerprint.digest(facts.profile(),facts.uri(),facts.method(),facts.headers(),BODY);

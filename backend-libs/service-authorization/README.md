@@ -19,5 +19,21 @@ and actual accepted URI, method and repeated headers to the five-argument
 integrations before deploying the updated broker; see the installation guide.
 
 The SQL target-claim foundation is available as JdbcEffectClaims. Every replica
-must share the store and use caller-owned transactions. It is not yet integrated
-into OLO online consumption. See the [transaction and recovery guide](../../docs/operations/target-effect-claims.md).
+must share the store and use caller-owned transactions. The actual OLO adapters now integrate it
+with verified writes and claim-token online consumption. See the [transaction and recovery guide](../../docs/operations/target-effect-claims.md).
+
+
+For writes using shared fencing, call ControlServiceAuthorization.verifyWrite
+with accepted TLS/HTTP facts. Its VerifiedWrite exposes immutable claim binding
+but cannot authorize a commit. Commit the unique local claim, then call
+consumeClaim with that owner and win beginApply before acting. The original
+deadline includes claim/Control round trips and is never renewed by replay.
+
+JdbcEffectClaims.finish atomically records terminal state and a pending outcome
+in the caller's business transaction. Deliver pending outcomes through
+reportOutcome and acknowledge only accepted evidence. Use keyset pagination so
+deferred records do not starve later delivery. Expired CLAIMED work may be
+abandoned by CAS; APPLYING is never automatically declared not-started.
+The migration adds expiry compatibly; legacy expiry 0 remains unknown. Owner
+and outcome string representations redact tokens. Credential suppliers used by
+the new concurrent reporting APIs must support concurrent reads.

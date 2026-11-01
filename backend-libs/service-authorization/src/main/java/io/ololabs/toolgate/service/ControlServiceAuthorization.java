@@ -24,7 +24,10 @@ public final class ControlServiceAuthorization {
     private long refreshedAt=-1;
     private Map<String,PublicKey> keys=Map.of();
     private ServicePermitVerifier.Epoch epoch;
-    private static final ObjectMapper JSON=new ObjectMapper().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private static final ObjectMapper JSON=com.fasterxml.jackson.databind.json.JsonMapper.builder()
+        .enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+        .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     public ControlServiceAuthorization(HttpClient http, URI origin, String issuer, String tenant,
             ServiceAudience audience, Supplier<String> credential, Clock clock) {
         if(!"https".equals(origin.getScheme())||origin.getHost()==null||origin.getUserInfo()!=null||origin.getQuery()!=null
@@ -41,6 +44,47 @@ public final class ControlServiceAuthorization {
         refresh();
         return withFreshEpoch(()->new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null,
             (a,c)->consume(c)).authorize(permit,request,executor),()->{refreshedAt=-1;refresh();});
+    }
+    /** Verify accepted write facts without consuming a grant or granting permission to commit. */
+    public synchronized ServicePermitVerifier.VerifiedWrite verifyWrite(ServicePermit permit,
+            ServicePermitVerifier.Request request,SSLSession executor){
+        if(!tenant.equals(request.tenant()))throw denied();refresh();
+        return new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null,
+            (a,c)->{throw denied();}).verifyWrite(permit,request,executor);
+    }
+    /** The target must commit its local claim first and still win beginApply before acting. */
+    public ServicePermitVerifier.Authorization consumeClaim(ServicePermitVerifier.VerifiedWrite verified,
+            JdbcEffectClaims.Owner owner){
+        var binding=verified.binding();
+        if(!binding.equals(owner.binding())||!tenant.equals(binding.tenant())
+            ||!issuer.equals(verified.claims().iss())||audience!=verified.claims().aud())throw denied();
+        verified.checkDeadline();
+        var status=claimResult(exchange("claims/consume",new ServicePermitClaimConsumption(
+            verified.consumption(),owner.claimToken())),binding);
+        if(status.status()!=ServicePermitClaimState.CONSUMED)throw denied();
+        return verified.consumed();
+    }
+    /** Status only: this cannot produce a commit authorization. */
+    public ServicePermitClaimResult claimStatus(JdbcEffectClaims.Binding binding,String claimToken){
+        if(!tenant.equals(binding.tenant()))throw denied();
+        return claimResult(exchange("claims/status",new ServicePermitClaimReference(binding.authNonce(),claimToken)),binding);
+    }
+    /** Report only durable local evidence; this method neither verifies a fresh grant nor retries a business effect. */
+    public ServicePermitClaimResult reportOutcome(JdbcEffectClaims.Binding binding,String claimToken,
+            ServicePermitTargetOutcomeKind outcome,String resultDigest){
+        if(!tenant.equals(binding.tenant()))throw denied();
+        var result=claimResult(exchange("claims/outcome",new ServicePermitTargetOutcome(
+            new ServicePermitClaimReference(binding.authNonce(),claimToken),outcome,resultDigest)),binding);
+        if(result.status()!=ServicePermitClaimState.CONFLICT&&!result.status().name().equals(outcome.name()))throw denied();
+        return result;
+    }
+    private ServicePermitClaimResult claimResult(JsonNode value,JdbcEffectClaims.Binding binding){
+        if(!tenant.equals(binding.tenant()))throw denied();
+        try{
+            var result=JSON.treeToValue(value,ServicePermitClaimResult.class);
+            if(!binding.effectId().equals(result.effectId())||binding.authorizationGeneration()!=result.authorizationGeneration())throw denied();
+            return result;
+        }catch(java.io.IOException|IllegalArgumentException invalid){throw denied();}
     }
     /** Refresh once only for a fully verified read whose signed epoch differs from our cache. */
     static <T> T withFreshEpoch(Supplier<T> authorize,Runnable refresh) {

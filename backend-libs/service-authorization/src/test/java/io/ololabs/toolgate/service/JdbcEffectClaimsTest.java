@@ -109,6 +109,60 @@ class JdbcEffectClaimsTest {
         assertTrue(claim(new JdbcEffectClaims.Binding("other-tenant",b.effectId(),1,b.authNonce(),DIGEST)).acquired());
         try(var c=user==null?DriverManager.getConnection(url):DriverManager.getConnection(url,user,password)){assertThrows(IllegalArgumentException.class,()->claims.claim(c,b));}
     }
+    void durableOutcomeDelivery()throws Exception{
+        var b=binding();var a=tx(c->claims.claim(c,b,100));
+        assertTrue(this.<Boolean>tx(c->claims.beginApply(c,a.owner())));
+        assertTrue(this.<Boolean>tx(c->claims.finish(c,a.owner(),true,RESULT)));
+        var pending=tx(c->claims.pendingOutcomes(c,b.tenant(),100)).stream().filter(p->p.binding().equals(b)).toList();
+        assertEquals(1,pending.size());var report=pending.getFirst();
+        assertEquals(report,tx(c->claims.pendingOutcome(c,b)));
+        var seen=new HashSet<String>();String cursor=null;
+        for(int page=0;page<1000;page++){
+            String after=cursor;var batch=tx(c->claims.pendingOutcomes(c,b.tenant(),after,1));
+            if(batch.isEmpty())break;
+            assertEquals(1,batch.size());cursor=batch.getFirst().binding().effectId();assertTrue(seen.add(cursor));
+        }
+        assertTrue(seen.contains(b.effectId()));
+        assertEquals(a.owner().claimToken(),report.claimToken());assertEquals(RESULT,report.resultDigest());
+        assertFalse(a.owner().toString().contains(a.owner().claimToken()));assertFalse(report.toString().contains(report.claimToken()));
+        assertTrue(this.<Boolean>tx(c->claims.acknowledgeOutcome(c,report)));
+        assertFalse(this.<Boolean>tx(c->claims.acknowledgeOutcome(c,report)));
+        assertNull(tx(c->claims.pendingOutcome(c,b)));
+        assertTrue(tx(c->claims.pendingOutcomes(c,b.tenant(),100)).stream().noneMatch(p->p.binding().equals(b)));
+        assertFalse(claim(b).acquired());assertEquals(JdbcEffectClaims.State.DONE,inspect(b).state());
+    }
+    void expiredClaimRecovery()throws Exception{
+        var legacy=binding();claim(legacy);var active=binding();tx(c->claims.claim(c,active,1001));
+        var expired=binding();var owner=tx(c->claims.claim(c,expired,100)).owner();
+        var found=tx(c->claims.expiredClaims(c,expired.tenant(),1000,100));
+        assertTrue(found.stream().anyMatch(p->p.binding().equals(expired)));
+        assertTrue(found.stream().noneMatch(p->p.binding().equals(legacy)||p.binding().equals(active)));
+        var observed=inspect(expired);
+        try(var c=connection()){assertTrue(claims.abandon(c,observed));c.rollback();}
+        assertEquals(JdbcEffectClaims.State.CLAIMED,inspect(expired).state());
+        assertTrue(tx(c->claims.pendingOutcomes(c,expired.tenant(),100)).stream().noneMatch(p->p.binding().equals(expired)));
+        assertTrue(this.<Boolean>tx(c->claims.abandon(c,observed)));
+        assertFalse(this.<Boolean>tx(c->claims.beginApply(c,owner)));
+        var pending=tx(c->claims.pendingOutcomes(c,expired.tenant(),100)).stream().filter(p->p.binding().equals(expired)).toList();
+        assertEquals(1,pending.size());assertEquals("FAILED",pending.getFirst().outcome().name());
+        var applying=binding();var applyingOwner=tx(c->claims.claim(c,applying,100)).owner();
+        assertTrue(this.<Boolean>tx(c->claims.beginApply(c,applyingOwner)));
+        assertTrue(tx(c->claims.expiredClaims(c,applying.tenant(),1000,100)).stream().noneMatch(p->p.binding().equals(applying)));
+        assertEquals(JdbcEffectClaims.State.APPLYING,inspect(applying).state());
+    }
+    void existingV1ClaimsKeepTheirUnknownExpiry()throws Exception{
+        var b=binding();claim(b);
+        tx(c->{try(var q=c.createStatement()){
+            q.executeUpdate("DROP TABLE toolgate_target_outcomes");
+            q.executeUpdate("ALTER TABLE toolgate_target_claims DROP COLUMN authorization_expires_at");
+        }return null;});
+        initialize();assertEquals(JdbcEffectClaims.State.CLAIMED,inspect(b).state());
+        assertTrue(tx(c->claims.expiredClaims(c,b.tenant(),Long.MAX_VALUE,100)).stream().noneMatch(p->p.binding().equals(b)));
+        assertFalse(claim(b).acquired());
+    }
+    @Test void outcomesSurviveReopenAndDeliveryAcknowledgementDoesNotReopenClaims()throws Exception{durableOutcomeDelivery();}
+    @Test void expiryRecoveryFencesOnlyClaimedWorkAndCommitsItsEvidenceAtomically()throws Exception{expiredClaimRecovery();}
+    @Test void upgradingV1NeverInventsARecoveryDeadline()throws Exception{existingV1ClaimsKeepTheirUnknownExpiry();}
     @Test void twoReplicasHaveOneClaimOwner()throws Exception{replicaRace();}
     @Test void pausedOwnerCannotActAfterRecovery()throws Exception{pausedOwner();}
     @Test void applyAndRecoveryHaveOneWinner()throws Exception{applyTakeoverRace();}
@@ -122,7 +176,7 @@ class JdbcEffectClaimsTest {
         try(var c=DriverManager.getConnection(base,"control_migrator",secret);var s=c.createStatement()){s.execute("CREATE DATABASE "+database);}
         try{
             url=base.replace("/control?","/"+database+"?");user="control_migrator";password=secret;initialize();
-            replicaRace();pausedOwner();applyTakeoverRace();atomicCommitAndRollback();uncertainApplying();bindingConflicts();
+            replicaRace();pausedOwner();applyTakeoverRace();atomicCommitAndRollback();uncertainApplying();bindingConflicts();durableOutcomeDelivery();expiredClaimRecovery();existingV1ClaimsKeepTheirUnknownExpiry();
         }finally{
             try(var c=DriverManager.getConnection(base,"control_migrator",secret);var s=c.createStatement()){s.execute("DROP DATABASE "+database+" WITH (FORCE)");}
         }

@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add verified-write SDK facts, claim-bound online consumption, durable target
+  outcome delivery and expiry recovery. Actual memory/RAG adapters adopt the
+  shared claim protocol with restricted SQL migrations and status-only duplicate
+  responses. Upgrade target schema and SDK together; no one-shot fallback exists.
+
 - Bound OLO write grants carry effect/generation metadata. Dedicated target
   APIs consume with a claim token, return status on replay and retain late
   authenticated outcomes. These APIs grant no replacement dispatch authority.

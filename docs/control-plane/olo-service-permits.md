@@ -244,7 +244,9 @@ observations do not settle a consumed effect.
 
 These authenticated APIs live under
 /api/control/v1/access/service-permits/{audience}/. Credentials and claim tokens
-must remain within the trusted target boundary. This protocol is not yet wired
-into actual memory/RAG mutation transactions. The current target adapter continues
-its legacy one-shot online consume boundary until that integration is qualified.
-Whole-operation finalization remains conservative and separate.
+remain within the trusted target boundary. The actual memory/RAG adapters now
+use verified-write SDK facts, durable local claims and this protocol. They commit
+APPLYING before business actions and completion/outcome intent with SQL
+publication. Startup requires the additive target schema and restricted runtime
+permissions; writes have no one-shot fallback. Whole-operation finalization
+remains conservative and separate.
