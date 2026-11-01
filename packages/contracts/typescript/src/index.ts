@@ -1771,6 +1771,23 @@ export interface ServiceAuthorizationEpoch {
 export interface ServicePermit {
   readonly jws: string;
 }
+/** Target-owned claim consumption. Replies are status only; local ownership controls execution. */
+export interface ServicePermitClaimConsumption {
+  readonly request: ServicePermitConsumption;
+  readonly claimToken: string;
+}
+/** Recorded target claim reference; not an execution capability. */
+export interface ServicePermitClaimReference {
+  readonly authNonce: string;
+  readonly claimToken: string;
+}
+/** Status only. Never grants execution authority; the target must own its shared local claim. */
+export interface ServicePermitClaimResult {
+  readonly effectId: string;
+  readonly authorizationGeneration: number;
+  readonly status: ServicePermitClaimState;
+}
+export type ServicePermitClaimState = "CONSUMED" | "CONSUMED_BY_OTHER_CLAIM" | "COMPLETED" | "FAILED" | "AMBIGUOUS" | "CONFLICT";
 /** Control-issued exact-request authorization for a downstream service; times are Unix milliseconds. */
 export interface ServicePermitClaims {
   readonly iss: string;
@@ -1790,6 +1807,8 @@ export interface ServicePermitClaims {
   readonly exp: number;
   readonly executionNonce: string;
   readonly httpRequestDigest?: string;
+  readonly effectId?: string;
+  readonly authorizationGeneration?: number;
 }
 /** Single-use downstream write permit was consumed under current authority. */
 export interface ServicePermitConsumed {
@@ -1825,6 +1844,13 @@ export interface ServicePermitIssue {
   readonly brokerInstanceId?: string;
   readonly handlerId?: string;
 }
+/** Authenticated target evidence, accepted after grant expiry without renewing authority. */
+export interface ServicePermitTargetOutcome {
+  readonly claim: ServicePermitClaimReference;
+  readonly outcome: ServicePermitTargetOutcomeKind;
+  readonly resultDigest: string;
+}
+export type ServicePermitTargetOutcomeKind = "COMPLETED" | "FAILED";
 export type Sha256 = string;
 /** Endpoint identity foundation wire model. */
 export interface SignedClientDiscovery {

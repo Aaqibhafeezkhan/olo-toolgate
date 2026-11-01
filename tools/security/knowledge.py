@@ -45,6 +45,14 @@ def verify(knowledge, version):
     artifact = ROOT / f"build/sdk-repo/io/github/olo-labs/toolgate-service-authorization/{version}/toolgate-service-authorization-{version}.jar"
     if report["toolgateSdkSha256"] != hashlib.sha256(artifact.read_bytes()).hexdigest():
         raise ValueError("Knowledge qualification used a different SDK artifact")
+    contracts = ROOT / f".dev/maven/io/github/olo-labs/toolgate-contracts/{version}/toolgate-contracts-{version}.jar"
+    if report.get("toolgateContractsSha256") != hashlib.sha256(contracts.read_bytes()).hexdigest():
+        raise ValueError("Knowledge qualification used a different contracts artifact")
+    expected = {"toolgate-service-authorization": report["toolgateSdkSha256"],
+                "toolgate-contracts": report["toolgateContractsSha256"]}
+    resolved = report.get("resolvedToolgateArtifacts", {})
+    if set(resolved) != set(modules) or any(value != expected for value in resolved.values()):
+        raise ValueError("Knowledge application classpaths used different ToolGate artifacts")
     return report
 
 

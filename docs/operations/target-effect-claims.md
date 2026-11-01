@@ -17,12 +17,13 @@ claims consistently with business data. Database exceptions grant no authority.
    acquisition with a non-null owner token may proceed. Losing replicas return
    status, not permission to act. Changed bindings fail closed.
 2. The claim owner consumes the corresponding authorization at Control.
-   This foundation does not yet implement claim-token consumption replay.
+   Control now provides claim-token consumption replay and late target outcomes;
+   the current OLO target adapter still requires integration with them.
 3. Call beginApply with that owner before any business action. Abort if its CAS
    fails. Prefer one transaction containing beginApply, the business mutation,
    finish and the authorization deadline check immediately before commit.
 4. Record the durable DONE or FAILED result digest and report the outcome using
-   the target identity once the public outcome integration is available.
+   the target identity using Control's authenticated claims/outcome API.
 
 A restarting replica can inspect a claim without retrieving its owner token.
 For CLAIMED, recovery may abandon the observed ownership generation. Commit the
@@ -39,7 +40,8 @@ rollback and grant no execution authority. PostgreSQL READ COMMITTED is the
 qualification baseline. Stronger isolation may reject transactions; handle that
 as failure, without dispatching an effect.
 
-No retention/deletion policy, automatic takeover from APPLYING, outcome HTTP API,
-or full memory/RAG integration is delivered by this foundation. See
+No retention/deletion policy, automatic takeover from APPLYING or full memory/RAG
+integration is delivered by this foundation. Control's separate authenticated
+claim/outcome APIs must be adopted by the target integration. See
 [ADR 042](../adr/042-shared-target-claims.md) and the
 [live status](../security/zero-trust-execution-status.md).

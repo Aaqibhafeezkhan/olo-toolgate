@@ -44,10 +44,10 @@ identifiers. Bound requests include independently validated exact HTTP facts.
 General route classes, several logical writes, consent slots, public release or
 reopen APIs, and generalized effect authorization remain outstanding.
 
-Existing repeat service consumption still refuses execution; the target-side
-shared claim store/SDK and status-returning consume API are not implemented by
-this increment. Internal target-outcome methods are tested but no new public
-outcome endpoint is exposed yet. Do not infer target deduplication or final
+Legacy repeat service consumption still refuses execution. A shared target SQL
+claim foundation and authenticated claim-token consumption/status/outcome APIs
+are now available; their actual target transaction integration remains
+outstanding. Do not infer target deduplication or final
 operation success from CONSUMED. Existing operations remain conservative UNKNOWN
 after consumed terminal attempts.
 

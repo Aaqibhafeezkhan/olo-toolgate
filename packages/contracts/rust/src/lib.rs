@@ -2979,6 +2979,44 @@ pub struct ServiceAuthorizationEpoch {
 pub struct ServicePermit {
     pub jws: String,
 }
+/// Target-owned claim consumption. Replies are status only; local ownership controls execution.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaimConsumption {
+    pub request: ServicePermitConsumption,
+    pub claim_token: String,
+}
+/// Recorded target claim reference; not an execution capability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaimReference {
+    pub auth_nonce: String,
+    pub claim_token: String,
+}
+/// Status only. Never grants execution authority; the target must own its shared local claim.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaimResult {
+    pub effect_id: String,
+    pub authorization_generation: u64,
+    pub status: ServicePermitClaimState,
+}
+/// Canonical ServicePermitClaimState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServicePermitClaimState {
+    #[serde(rename = "CONSUMED")]
+    Consumed,
+    #[serde(rename = "CONSUMED_BY_OTHER_CLAIM")]
+    ConsumedByOtherClaim,
+    #[serde(rename = "COMPLETED")]
+    Completed,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "AMBIGUOUS")]
+    Ambiguous,
+    #[serde(rename = "CONFLICT")]
+    Conflict,
+}
 /// Control-issued exact-request authorization for a downstream service; times are Unix milliseconds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3002,6 +3040,10 @@ pub struct ServicePermitClaims {
     pub execution_nonce: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_request_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization_generation: Option<u64>,
 }
 /// Single-use downstream write permit was consumed under current authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3052,6 +3094,22 @@ pub struct ServicePermitIssue {
     pub broker_instance_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handler_id: Option<String>,
+}
+/// Authenticated target evidence, accepted after grant expiry without renewing authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitTargetOutcome {
+    pub claim: ServicePermitClaimReference,
+    pub outcome: ServicePermitTargetOutcomeKind,
+    pub result_digest: String,
+}
+/// Canonical ServicePermitTargetOutcomeKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServicePermitTargetOutcomeKind {
+    #[serde(rename = "COMPLETED")]
+    Completed,
+    #[serde(rename = "FAILED")]
+    Failed,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

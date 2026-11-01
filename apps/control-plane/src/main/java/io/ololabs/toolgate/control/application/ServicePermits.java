@@ -46,17 +46,19 @@ public final class ServicePermits {
             long expiry=existing==null?Math.min(now+MAX_LIFETIME_MS,Math.min(i.expiresAtUnixMs(),credentialDeadline==null?Long.MAX_VALUE:credentialDeadline)):existing.expiresAt();
             long issuedAt=existing==null?now:existing.issuedAt();
             if(expiry>i.expiresAtUnixMs())throw ManagementAccess.denied();
+            String route=request.audience().name()+"/"+op;
+            String effectId=read?null:"eff-"+DirectoryService.digest(codec.json(List.of("toolgate-effect-v1",tenant.value(),i.id(),route,"service-write")));
+            var previous=read?null:tx.effects().byNonce(nonceId);
+            Long generation=read?null:previous==null?1L:previous.generation();
             var claims=new ServicePermitClaims(operations.issuer(),request.audience(),tenant.value(),subject,
                 c.mode()==RequestMode.DELEGATED?c.agentId():null,c.mode(),op,i.evaluation().resources(),
-                i.evaluation().argumentsDigest(),executorKeySha256,i.id(),nonceId,i.authorizationEpoch(),issuedAt,expiry,i.reservedNonce(),request.httpRequestDigest());
+                i.evaluation().argumentsDigest(),executorKeySha256,i.id(),nonceId,i.authorizationEpoch(),issuedAt,expiry,i.reservedNonce(),request.httpRequestDigest(),request.httpRequestDigest()==null?null:effectId,request.httpRequestDigest()==null?null:generation);
             String digest=DirectoryService.digest(codec.json(claims));
             if(existing!=null&&!existing.evaluationDigest().equals(digest))throw ManagementAccess.denied();
             var permit=operations.signer().signService(claims);
             if(existing==null)tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(claims.nonce(),i.id(),digest,i.authorizationEpoch(),issuedAt,expiry,null));
             if(!read){
-                String route=request.audience().name()+"/"+op;
-                String effect="eff-"+DirectoryService.digest(codec.json(List.of("toolgate-effect-v1",tenant.value(),i.id(),route,"service-write")));
-                var authorization=tx.effects().authorize(new EffectStore.Binding(effect,i.id(),i.reservedNonce(),route,binding(claims),device,
+                var authorization=tx.effects().authorize(new EffectStore.Binding(effectId,i.id(),i.reservedNonce(),route,binding(claims),device,
                     request.httpRequestDigest()==null?i.reservedNonce():request.brokerInstanceId(),
                     request.httpRequestDigest()==null?nonceId:request.handlerId(),nonceId,expiry,expiry+60000),now);
                 if(request.httpRequestDigest()!=null&&!authorization.generation().state().equals("AUTHORIZED"))throw Failure.conflict();
@@ -118,6 +120,69 @@ public final class ServicePermits {
             tx.audit(service.id(),"SERVICE_PERMIT_CONSUME","invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest());
             return new Store.Reply(200,codec.json(new ServicePermitConsumed(true)),i.revision());
         });
+    }
+    /** Claim replay is status only: execution still requires the target's durable local ownership CAS. */
+    public Store.Reply consumeClaim(DirectoryService.Actor service,ServiceAudience audience,String document){
+        var submitted=codec.model(document,ServicePermitClaimConsumption.class);var request=submitted.request();
+        var claims=operations.signer().verifyService(request.permit());
+        return store.transaction(service.tenant(),true,tx->{
+            long now=operations.clock(tx);var nonce=tx.enterprise().nonce(claims.nonce());
+            var effect=tx.effects().byNonce(claims.nonce());
+            if(!claims.iss().equals(operations.issuer())||claims.aud()!=audience
+                ||!claims.tenantId().equals(service.tenant().value())||claims.httpRequestDigest()==null
+                ||claims.effectId()==null||claims.authorizationGeneration()==null
+                ||Set.of("memory.read","rag.query").contains(claims.operation())
+                ||!request.operation().equals(claims.operation())||!request.resources().equals(claims.resources())
+                ||!Objects.equals(request.httpRequestDigest(),claims.httpRequestDigest())
+                ||!request.requestFingerprint().equals(claims.requestFingerprint())
+                ||!request.executorKeySha256().equals(claims.executorKeySha256())
+                ||nonce==null||!nonce.invocationId().equals(claims.invocationId())
+                ||nonce.authorizationEpoch()!=claims.authorizationEpoch()
+                ||!nonce.evaluationDigest().equals(DirectoryService.digest(codec.json(claims)))
+                ||effect==null||!effect.binding().effectId().equals(claims.effectId())
+                ||effect.generation()!=claims.authorizationGeneration()
+                ||!effect.binding().operationId().equals(claims.invocationId())
+                ||!effect.binding().attemptId().equals(claims.executionNonce())
+                ||!effect.binding().requestDigest().equals(binding(claims)))throw ManagementAccess.denied();
+            if(effect.consumer()!=null){
+                if(nonce.consumedAt()==null)throw ManagementAccess.denied();
+                return claimReply(effect,audience,submitted.claimToken());
+            }
+            var i=operations.invocationIn(tx,claims.invocationId());
+            if(claims.iat()>now||claims.exp()<=now||claims.exp()<=claims.iat()||claims.exp()-claims.iat()>MAX_LIFETIME_MS
+                ||nonce.consumedAt()!=null||i.state()!=EnterpriseInvocationState.EXECUTING
+                ||!Objects.equals(i.reservedNonce(),claims.executionNonce())||!effect.state().equals("SENDING"))
+                throw ManagementAccess.denied();
+            operations.requireFresh(service.tenant(),tx,i);
+            var consumed=tx.effects().consume(claims.nonce(),binding(claims),audience.name(),submitted.claimToken(),now);
+            if(!consumed.newAuthority())throw ManagementAccess.denied();
+            tx.enterprise().consumeNonce(claims.nonce(),now);
+            tx.audit(service.id(),"SERVICE_CLAIM_CONSUME","invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest());
+            return claimReply(consumed.generation(),audience,submitted.claimToken());
+        });
+    }
+    /** Authenticated status stays available after expiry/termination and never reopens dispatch. */
+    public Store.Reply claimStatus(DirectoryService.Actor service,ServiceAudience audience,String document){
+        var reference=codec.model(document,ServicePermitClaimReference.class);
+        return store.transaction(service.tenant(),false,tx->claimReply(tx.effects().byNonce(reference.authNonce()),audience,reference.claimToken()));
+    }
+    /** Late evidence is bound to the recorded service/claim; it does not depend on an expired signing key. */
+    public Store.Reply targetOutcome(DirectoryService.Actor service,ServiceAudience audience,String document){
+        var request=codec.model(document,ServicePermitTargetOutcome.class);var reference=request.claim();
+        return store.transaction(service.tenant(),true,tx->{
+            long now=operations.clock(tx);var effect=tx.effects().byNonce(reference.authNonce());
+            if(effect==null||!audience.name().equals(effect.consumer())||!reference.claimToken().equals(effect.claimToken()))
+                throw ManagementAccess.denied();
+            var settled=tx.effects().targetOutcome(reference.authNonce(),audience.name(),reference.claimToken(),
+                request.outcome().name(),request.resultDigest(),now);
+            tx.audit(service.id(),"SERVICE_TARGET_OUTCOME","effect:"+effect.binding().effectId(),settled.revision(),"target-"+DirectoryService.digest(reference.authNonce()).substring(0,32),DirectoryService.digest(codec.json(request)));
+            return claimReply(settled,audience,reference.claimToken());
+        });
+    }
+    private Store.Reply claimReply(EffectStore.Generation effect,ServiceAudience audience,String claimToken){
+        if(effect==null||!audience.name().equals(effect.consumer()))throw ManagementAccess.denied();
+        var state=claimToken.equals(effect.claimToken())?ServicePermitClaimState.valueOf(effect.state()):ServicePermitClaimState.CONSUMED_BY_OTHER_CLAIM;
+        return new Store.Reply(200,codec.json(new ServicePermitClaimResult(effect.binding().effectId(),effect.generation(),state)),effect.revision());
     }
     public Store.Reply epoch(DirectoryService.Actor service) {
         // Reading the epoch also persists the anti-rollback clock. Reserve a

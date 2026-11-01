@@ -26,7 +26,7 @@ class ServicePermitVerifierTest {
     }
     ServicePermit permit(String operation)throws Exception{
         var claims=new ServicePermitClaims("control",ServiceAudience.olo_memory,TENANT,"alice",null,RequestMode.HUMAN,operation,RESOURCES,
-            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BODY)),EXECUTOR,"inv-1","nonce-1",7L,100000L,115000L,"execution-1",null);
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BODY)),EXECUTOR,"inv-1","nonce-1",7L,100000L,115000L,"execution-1",null,null,null);
         return signed("olo-service-permit+jws","effect-key",claims);
     }
     ServicePermit signed(String type,String kid,ServicePermitClaims claims)throws Exception{
@@ -41,7 +41,7 @@ class ServicePermitVerifierTest {
         var c=json.readValue(Base64.getUrlDecoder().decode(original.jws().split("\\.")[1]),ServicePermitClaims.class);
         return signed("olo-service-permit+jws","effect-key",new ServicePermitClaims(c.iss(),c.aud(),c.tenantId(),c.sub(),c.act(),
             c.mode(),c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),
-            c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),digest));
+            c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),digest,"effect-1",1L));
     }
     ServicePermitVerifier.Transport transport(String recipient){
         return new ServicePermitVerifier.Transport(
@@ -147,7 +147,7 @@ class ServicePermitVerifierTest {
         var c=json.readValue(Base64.getUrlDecoder().decode(original.jws().split("\\.")[1]),ServicePermitClaims.class);
         for(var mode:List.of(RequestMode.DELEGATED,RequestMode.SERVICE)) {
             var bad=new ServicePermitClaims(c.iss(),c.aud(),c.tenantId(),c.sub(),mode==RequestMode.DELEGATED?"agent":null,
-                mode,c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),null);
+                mode,c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),null,null,null);
             var token=signed("olo-service-permit+jws","effect-key",bad);
             assertThrows(SecurityException.class,()->verifier.authorizeKey(token,request("memory.read"),EXECUTOR));
         }

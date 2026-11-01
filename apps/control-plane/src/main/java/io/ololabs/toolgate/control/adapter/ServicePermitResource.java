@@ -41,6 +41,12 @@ public class ServicePermitResource {
     }
     @POST @Path("{audience}/consume") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response consume(@PathParam("audience") String audience,String body){return reply(permits().consume(service(audience),ServiceAudience.valueOf(audience.replace('-','_')),body));}
+    @POST @Path("{audience}/claims/consume") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response consumeClaim(@PathParam("audience") String audience,String body){return reply(permits().consumeClaim(service(audience),ServiceAudience.valueOf(audience.replace('-','_')),body));}
+    @POST @Path("{audience}/claims/status") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response claimStatus(@PathParam("audience") String audience,String body){return reply(permits().claimStatus(service(audience),ServiceAudience.valueOf(audience.replace('-','_')),body));}
+    @POST @Path("{audience}/claims/outcome") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response targetOutcome(@PathParam("audience") String audience,String body){return reply(permits().targetOutcome(service(audience),ServiceAudience.valueOf(audience.replace('-','_')),body));}
     @GET @Path("{audience}/epoch") @io.quarkus.security.Authenticated
     public Response epoch(@PathParam("audience") String audience){return reply(permits().epoch(service(audience)));}
     @GET @Path("{audience}/jwks") @io.quarkus.security.Authenticated

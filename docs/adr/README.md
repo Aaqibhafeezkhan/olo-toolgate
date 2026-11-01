@@ -75,3 +75,5 @@ Use `000-template.md`.
 - [041: Owner-bound OLO dispatch](041-owned-olo-dispatch.md)
 
 - [042: Shared target SQL claims](042-shared-target-claims.md)
+
+- [043: OLO claim consumption and target outcomes](043-olo-claim-consumption-outcomes.md)

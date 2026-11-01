@@ -2567,6 +2567,33 @@
   "ServicePermit": {
     "jws": "e30.e30.c2ln"
   },
+  "ServicePermitClaimConsumption": {
+    "request": {
+      "permit": {
+        "jws": "e30.e30.c2ln"
+      },
+      "operation": "memory.append",
+      "resources": [
+        {
+          "kind": "CUSTOM",
+          "locator": "olo://10000000-0000-4000-8000-000000000001/conversation/c1"
+        }
+      ],
+      "requestFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "executorKeySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "claimToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ServicePermitClaimReference": {
+    "authNonce": "device-1",
+    "claimToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ServicePermitClaimResult": {
+    "effectId": "device-1",
+    "authorizationGeneration": 1,
+    "status": "CONSUMED"
+  },
+  "ServicePermitClaimState": "CONSUMED",
   "ServicePermitClaims": {
     "iss": "control",
     "aud": "olo-memory",
@@ -2621,6 +2648,15 @@
     "fencingToken": "fence-1",
     "audience": "olo-memory"
   },
+  "ServicePermitTargetOutcome": {
+    "claim": {
+      "authNonce": "device-1",
+      "claimToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "outcome": "COMPLETED",
+    "resultDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ServicePermitTargetOutcomeKind": "COMPLETED",
   "Sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "SignedClientDiscovery": {
     "payload": "AA",

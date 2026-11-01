@@ -95,6 +95,92 @@ class ServicePermitBridgeTest {
         return permits.sending(rig.gateway.tenant(),tx->"device",KEY,
             rig.graph.codec.json(new ServicePermitDispatch(permit,broker,handler)));
     }
+    static final String CLAIM_A="a".repeat(64),CLAIM_B="b".repeat(64),RESULT_DIGEST="sha256:"+"c".repeat(64);
+    ServicePermitClaimResult claimConsume(ServicePermit p,String token){
+        return rig.graph.codec.model(permits.consumeClaim(rig.gateway,ServiceAudience.olo_memory,
+            rig.graph.codec.json(new ServicePermitClaimConsumption(consumption(p),token))).body(),ServicePermitClaimResult.class);
+    }
+    ServicePermitClaimReference reference(ServicePermit p,String token){return new ServicePermitClaimReference(rig.signer.verifyService(p).nonce(),token);}
+    ServicePermitClaimResult claimStatus(ServicePermit p,String token){
+        return rig.graph.codec.model(permits.claimStatus(rig.gateway,ServiceAudience.olo_memory,
+            rig.graph.codec.json(reference(p,token))).body(),ServicePermitClaimResult.class);
+    }
+    ServicePermitClaimResult targetOutcome(ServicePermit p,String token,ServicePermitTargetOutcomeKind outcome){
+        return rig.graph.codec.model(permits.targetOutcome(rig.gateway,ServiceAudience.olo_memory,
+            rig.graph.codec.json(new ServicePermitTargetOutcome(reference(p,token),outcome,RESULT_DIGEST))).body(),ServicePermitClaimResult.class);
+    }
+    void claimReplayExercise(){
+        var i=start("target-claim-"+UUID.randomUUID());var facts=bound(i);var permit=issueBound(i,facts.digest());
+        var signed=rig.signer.verifyService(permit);assertNotNull(signed.effectId());assertEquals(1L,signed.authorizationGeneration().longValue());
+        assertThrows(Failure.class,()->claimConsume(permit,CLAIM_A)); // no SENDING transition
+        sending(permit,"broker-test","handler-test");
+        var first=claimConsume(permit,CLAIM_A);assertEquals(ServicePermitClaimState.CONSUMED,first.status());
+        assertEquals(signed.effectId(),first.effectId());assertEquals(signed.authorizationGeneration(),first.authorizationGeneration());
+        assertEquals(first,claimConsume(permit,CLAIM_A));
+        assertEquals(ServicePermitClaimState.CONSUMED_BY_OTHER_CLAIM,claimConsume(permit,CLAIM_B).status());
+        assertEquals(ServicePermitClaimState.CONSUMED_BY_OTHER_CLAIM,claimStatus(permit,CLAIM_B).status());
+        assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(permit))));
+        assertThrows(Failure.class,()->issueBound(i,facts.digest()));
+        assertThrows(Failure.class,()->targetOutcome(permit,CLAIM_B,ServicePermitTargetOutcomeKind.COMPLETED));
+        assertThrows(Failure.class,()->permits.claimStatus(rig.gateway,ServiceAudience.olo_rag,rig.graph.codec.json(reference(permit,CLAIM_A))));
+        assertEquals(ServicePermitClaimState.COMPLETED,targetOutcome(permit,CLAIM_A,ServicePermitTargetOutcomeKind.COMPLETED).status());
+        assertEquals(ServicePermitClaimState.COMPLETED,targetOutcome(permit,CLAIM_A,ServicePermitTargetOutcomeKind.COMPLETED).status());
+        assertEquals(ServicePermitClaimState.CONFLICT,targetOutcome(permit,CLAIM_A,ServicePermitTargetOutcomeKind.FAILED).status());
+        assertEquals(ServicePermitClaimState.CONFLICT,claimConsume(permit,CLAIM_A).status());
+    }
+    @Test void targetClaimConsumptionReturnsStatusWithoutGrantingAnotherExecution(){claimReplayExercise();}
+    @Test void revocationAndChangedFactsRefuseInitialClaimConsumption(){
+        var i=start("claim-revoked");var facts=bound(i);var permit=issueBound(i,facts.digest());sending(permit,"broker-test","handler-test");
+        var good=consumption(permit);
+        for(var bad:List.of(
+            new ServicePermitConsumption(permit,good.operation(),good.resources(),"e".repeat(64),KEY,good.httpRequestDigest()),
+            new ServicePermitConsumption(permit,good.operation(),good.resources(),good.requestFingerprint(),"e".repeat(64),good.httpRequestDigest()),
+            new ServicePermitConsumption(permit,good.operation(),good.resources(),good.requestFingerprint(),KEY,"sha256:"+"e".repeat(64)))){
+            assertThrows(Failure.class,()->permits.consumeClaim(rig.gateway,ServiceAudience.olo_memory,
+                rig.graph.codec.json(new ServicePermitClaimConsumption(bad,CLAIM_A))));
+        }
+        rig.graph.remove(Ids.Kind.GRANT,"human");rig.saveGraph();
+        assertThrows(Failure.class,()->claimConsume(permit,CLAIM_A));
+        assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().byNonce(rig.signer.verifyService(permit).nonce()).consumer()));
+    }
+    @Test void expiredTerminatedClaimsAndRotatedSigningKeysDoNotLoseRecordedTargetOutcomes(){
+        var i=start("late-claim");var permit=issueBound(i,bound(i).digest());sending(permit,"broker-test","handler-test");
+        claimConsume(permit,CLAIM_A);
+        rig.operations.report(rig.gateway.tenant(),"device",rig.graph.codec.json(new EnterpriseEffectReport(
+            i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null)));
+        var clock=java.time.Clock.fixed(java.time.Instant.ofEpochMilli(EnterpriseConformanceTest.NOW+120000),java.time.ZoneOffset.UTC);
+        var late=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,clock,"control","toolgate-client",60000,100);
+        permits=new ServicePermits(rig.store,rig.graph.codec,late);
+        assertEquals(ServicePermitClaimState.AMBIGUOUS,claimConsume(permit,CLAIM_A).status());
+        rig.graph.remove(Ids.Kind.GRANT,"human");rig.saveGraph();
+        EffectSigner rotated=new EffectSigner(){
+            public EnterpriseSignedPermit sign(EnterprisePermitClaims claims){throw Failure.unavailable();}
+            public EnterprisePermitClaims verify(EnterpriseSignedPermit permit){throw Failure.unavailable();}
+        };
+        permits=new ServicePermits(rig.store,rig.graph.codec,new EnterpriseOperations(rig.store,rig.graph.codec,rotated,clock,"control","toolgate-client",60000,100));
+        assertThrows(Failure.class,()->claimConsume(permit,CLAIM_A));
+        assertEquals(ServicePermitClaimState.AMBIGUOUS,claimStatus(permit,CLAIM_A).status());
+        assertEquals(ServicePermitClaimState.COMPLETED,targetOutcome(permit,CLAIM_A,ServicePermitTargetOutcomeKind.COMPLETED).status());
+        assertEquals(ServicePermitClaimState.COMPLETED,claimStatus(permit,CLAIM_A).status());
+    }
+    @Test void claimConsumptionAndOutcomesAlsoRunWithPostgresTenantRls()throws Exception{
+        String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
+        Assumptions.assumeTrue(base!=null&&password!=null,"Requires isolated PostgreSQL");
+        String database="service_claims_"+UUID.randomUUID().toString().replace("-","");
+        try(var c=java.sql.DriverManager.getConnection(base,"control_migrator",password);var q=c.createStatement()){q.execute("CREATE DATABASE "+database);}
+        String url=base.replace("/control?","/"+database+"?");
+        org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
+        var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
+        rig.store=new io.ololabs.toolgate.control.adapter.PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),rig.graph.codec);
+        rig.store.transaction(rig.gateway.tenant(),true,tx->{tx.save(tx.load(),rig.graph.directory());return null;});
+        EnterpriseConformanceTest.online(rig.store,rig.graph.codec,"device");
+        rig.operations=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,rig.clock,"control","toolgate-client",60000,100);
+        permits=new ServicePermits(rig.store,rig.graph.codec,rig.operations);claimReplayExercise();
+    }
+    @Test void legacyGrantsCannotBeAdoptedByTheClaimProtocol(){
+        var permit=issue(start("legacy-claim"));assertThrows(Failure.class,()->claimConsume(permit,CLAIM_A));
+        permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(permit)));
+    }
     @Test void preparedHttpDigestIsSignedImmutableAndRequiredForConsumption(){
         var i=start("http-bound");String digest=bound(i).digest();
         var permit=issueBound(i,digest);var claims=rig.signer.verifyService(permit);

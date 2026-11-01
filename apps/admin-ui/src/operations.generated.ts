@@ -243,6 +243,9 @@ export const operations = {
   issueServicePermit: { method: 'POST', path: '/api/control/v1/access/service-permits/issue' },
   beginServicePermitDispatch: { method: 'POST', path: '/api/control/v1/access/service-permits/sending' },
   consumeServicePermit: { method: 'POST', path: '/api/control/v1/access/service-permits/{audience}/consume' },
+  consumeServicePermitClaim: { method: 'POST', path: '/api/control/v1/access/service-permits/{audience}/claims/consume' },
+  servicePermitClaimStatus: { method: 'POST', path: '/api/control/v1/access/service-permits/{audience}/claims/status' },
+  reportServicePermitTargetOutcome: { method: 'POST', path: '/api/control/v1/access/service-permits/{audience}/claims/outcome' },
   serviceAuthorizationEpoch: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/epoch' },
   servicePermitKeys: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/jwks' },
 } as const;

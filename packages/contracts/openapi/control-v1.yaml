@@ -9239,6 +9239,90 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitConsumption
+  /api/control/v1/access/service-permits/{audience}/claims/consume:
+    post:
+      operationId: consumeServicePermitClaim
+      description: Dedicated audience service role; first consumption checks current authority. Replays return status only; local target claim ownership controls execution.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimConsumption
+  /api/control/v1/access/service-permits/{audience}/claims/status:
+    post:
+      operationId: servicePermitClaimStatus
+      description: Dedicated audience service role; recorded claim status after expiry or termination. Never renews execution authority.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimReference
+  /api/control/v1/access/service-permits/{audience}/claims/outcome:
+    post:
+      operationId: reportServicePermitTargetOutcome
+      description: Dedicated audience service role; append late target outcome evidence for the recorded claim. Never renews execution authority.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitTargetOutcome
   /api/control/v1/access/service-permits/{audience}/epoch:
     get:
       operationId: serviceAuthorizationEpoch

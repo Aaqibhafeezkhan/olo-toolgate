@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Bound OLO write grants carry effect/generation metadata. Dedicated target
+  APIs consume with a claim token, return status on replay and retain late
+  authenticated outcomes. These APIs grant no replacement dispatch authority.
+  Upgrade target contracts before Control; shared-claim integration is separate.
+
 - Add a shared JDBC target-claim foundation with unique ownership, pre-apply
   recovery fencing and caller-transaction completion. Control claim replay and
   memory/RAG integration remain outstanding; see the target effect claims guide.

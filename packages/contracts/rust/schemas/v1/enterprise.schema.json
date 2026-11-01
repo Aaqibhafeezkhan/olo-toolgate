@@ -3185,6 +3185,16 @@
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$",
           "description": "Optional toolgate-http-request-v1 fingerprint of the exact prepared transport. Bound permits require matching target-observed HTTP facts; omission preserves legacy behavior."
+        },
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier",
+          "description": "Immutable effect identity for bound OLO writes; supplied by Control."
+        },
+        "authorizationGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Recorded authorization generation for the signed effect."
         }
       }
     },
@@ -3469,6 +3479,105 @@
           "const": true
         }
       }
+    },
+    "ServicePermitClaimConsumption": {
+      "type": "object",
+      "description": "Target-owned claim consumption. Replies are status only; local ownership controls execution.",
+      "additionalProperties": false,
+      "required": [
+        "request",
+        "claimToken"
+      ],
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/ServicePermitConsumption"
+        },
+        "claimToken": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServicePermitClaimReference": {
+      "type": "object",
+      "description": "Recorded target claim reference; not an execution capability.",
+      "additionalProperties": false,
+      "required": [
+        "authNonce",
+        "claimToken"
+      ],
+      "properties": {
+        "authNonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "claimToken": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServicePermitTargetOutcome": {
+      "type": "object",
+      "description": "Authenticated target evidence, accepted after grant expiry without renewing authority.",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "outcome",
+        "resultDigest"
+      ],
+      "properties": {
+        "claim": {
+          "$ref": "#/$defs/ServicePermitClaimReference"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ServicePermitTargetOutcomeKind"
+        },
+        "resultDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServicePermitClaimResult": {
+      "type": "object",
+      "description": "Status only. Never grants execution authority; the target must own its shared local claim.",
+      "additionalProperties": false,
+      "required": [
+        "effectId",
+        "authorizationGeneration",
+        "status"
+      ],
+      "properties": {
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "$ref": "#/$defs/ServicePermitClaimState"
+        }
+      }
+    },
+    "ServicePermitTargetOutcomeKind": {
+      "type": "string",
+      "enum": [
+        "COMPLETED",
+        "FAILED"
+      ]
+    },
+    "ServicePermitClaimState": {
+      "type": "string",
+      "enum": [
+        "CONSUMED",
+        "CONSUMED_BY_OTHER_CLAIM",
+        "COMPLETED",
+        "FAILED",
+        "AMBIGUOUS",
+        "CONFLICT"
+      ]
     }
   }
 }

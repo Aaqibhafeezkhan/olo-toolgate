@@ -216,3 +216,35 @@ they still require verified HTTPS and client certificates.
 This slice supplies no public release/reopen protocol, shared target claim store,
 exact consent, general route grants or outcome finalization. A send-gate success
 is permission for one send, not evidence that a target committed a business effect.
+
+### Claim-token consumption and target outcomes
+
+Bound OLO write grants now sign effectId and authorizationGeneration. Upgrade
+target contracts and the service SDK before Control emits these fields; old
+strict JSON readers cannot accept them. Drain short-lived in-flight grants during
+the coordinated upgrade. Legacy one-shot consume retains its no-replay behavior.
+
+For targets integrating the shared claim store, commit the unique local claim
+first. Its owner posts ServicePermitClaimConsumption to the audience's
+claims/consume endpoint with the verified request facts and its random 64-hex
+claim token. Control checks the stored signed grant, exact request, current
+authority and SENDING generation before its first atomic consumption. Repeats
+return status; a different token receives CONSUMED_BY_OTHER_CLAIM. No reply is
+a fresh execution capability. The target must own its local claim and win
+beginApply before acting, and still check the original authorization deadline
+immediately before business commit. Replaying status never extends that deadline.
+
+POST claims/status accepts ServicePermitClaimReference. It returns only recorded
+status after expiry or termination, without requiring the original signing key.
+POST claims/outcome accepts ServicePermitTargetOutcome, using the same reference,
+COMPLETED or FAILED and a result digest. The dedicated audience service identity,
+tenant and recorded claim must match. Late outcomes append target evidence;
+contradictory outcomes become CONFLICT. They cannot renew dispatch. Broker
+observations do not settle a consumed effect.
+
+These authenticated APIs live under
+/api/control/v1/access/service-permits/{audience}/. Credentials and claim tokens
+must remain within the trusted target boundary. This protocol is not yet wired
+into actual memory/RAG mutation transactions. The current target adapter continues
+its legacy one-shot online consume boundary until that integration is qualified.
+Whole-operation finalization remains conservative and separate.
