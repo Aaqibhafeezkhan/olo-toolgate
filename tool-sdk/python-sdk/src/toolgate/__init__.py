@@ -10,7 +10,7 @@ from .context import (CancellationToken, HttpClient, InputRequest, Invocation, J
                       TcpConnector, ToolContext, ToolResult, Values)
 from .declarations import (ErrorDecl, Global, JwtClaim, Param, Secret, Variable, client_tool, destination, example,
                            http_auth, http_route, idempotency, reconcile, server_tool, tcp_destination, tool_package,
-                           tool_variables)
+                           tool_variables, training, TrainingValues, TrainingPrompt)
 from .enums import (AuthType, Reconciliation, BusinessKey, EffectSafety, HttpMethod, IdempotencyScope, InvocationMode, KeyNamespace,
                     OpenWorld, RuntimeTier, SecretScope, Streaming, ValueType)
 from .errors import (PlatformCode, PlatformError, ToolBusinessError, ToolConfigurationError, ToolError,
@@ -24,7 +24,7 @@ __all__ = [
     "TcpConnector", "ToolContext", "ToolResult", "Values",
     "ErrorDecl", "Global", "JwtClaim", "Param", "Secret", "Variable", "client_tool", "destination", "example",
     "http_auth", "http_route", "idempotency", "reconcile", "server_tool", "tcp_destination", "tool_package",
-    "tool_variables",
+    "tool_variables", "training", "TrainingValues", "TrainingPrompt",
     "AuthType", "Reconciliation", "BusinessKey", "EffectSafety", "HttpMethod", "IdempotencyScope", "InvocationMode", "KeyNamespace",
     "OpenWorld", "RuntimeTier", "SecretScope", "Streaming", "ValueType",
     "PlatformCode", "PlatformError", "ToolBusinessError", "ToolConfigurationError", "ToolError", "ToolInputError",

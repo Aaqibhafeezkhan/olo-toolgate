@@ -18,6 +18,9 @@ import io.ololabs.toolgate.sdk.annotations.Secret;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.RawResponse;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
@@ -67,6 +70,66 @@ public class WebhookNotify {
             exchanges = "exchanges/sent.json")
     @Example(arguments = "{\"channel\":\"ceo-inbox\",\"title\":\"hi\",\"text\":\"hi\",\"reference\":\"r1\"}",
             expectedError = "CHANNEL_NOT_ALLOWED")
+    @Training(
+            phrasings = {
+                "Post to {channel}: {title} - {text}, reference {reference}",
+                "Notify {channel} that {text} (title {title}, ref {reference})",
+                "Send a {severity} alert to {channel} titled {title}: {text}. Id {reference}",
+                "Tell the {channel} channel {text}, headline {title}, reference {reference}",
+                "Alert {channel}, {severity}: {title}. {text} (ref {reference})",
+                "Send a notification to {channel} with title {title} and message {text}, id {reference}"
+            },
+            defaultPhrasings = "Post {title} to {channel}: {text} (ref {reference})",
+            negatives = {
+                "What is a webhook?",
+                "How do I set up a Slack incoming webhook?",
+                "Write an announcement for the team about the outage"
+            },
+            parameters = {
+                @TrainingValues(name = "channel",
+                    examples = {
+                        "ops-alerts",
+                        "deployments",
+                        "on-call",
+                        "team-backend",
+                        "support"
+                    }),
+                @TrainingValues(name = "title",
+                    examples = {
+                        "Disk almost full",
+                        "Deploy finished",
+                        "Backup failed",
+                        "Service restored",
+                        "High error rate"
+                    }),
+                @TrainingValues(name = "text",
+                    examples = {
+                        "C: on app-02 is at 95%",
+                        "Release 1.4.2 is live",
+                        "The nightly backup exited with code 1",
+                        "The API is answering again",
+                        "Error rate above 5% for 10 minutes"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "INC-5001",
+                        "job-20261031-02",
+                        "deploy-1.4.2",
+                        "alert-7781",
+                        "backup-1031"
+                    }),
+                @TrainingValues(name = "severity",
+                    phrasings = {
+                        @ValuePhrasing(value = "warning", phrasings = {
+                            "warning",
+                            "warning-level"
+                        }),
+                        @ValuePhrasing(value = "critical", phrasings = {
+                            "critical",
+                            "urgent"
+                        })
+                    })
+            })
     public Sent send(
             @Param(description = "Channel to post to, such as ops-alerts", maxLength = 64) String channel,
             @Param(description = "Short headline", minLength = 1, maxLength = 200) String title,

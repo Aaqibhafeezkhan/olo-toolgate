@@ -16,7 +16,16 @@
           "type": "STRING",
           "description": "Text to return",
           "default": "ping",
-          "maxLength": 1024
+          "maxLength": 1024,
+          "training": {
+            "examples": [
+              "hello",
+              "test 123",
+              "are you there?",
+              "pong",
+              "check"
+            ]
+          }
         }
       },
       "output": {
@@ -37,7 +46,31 @@
           "fraction": 1,
           "message": "Echo complete"
         }
-      ]
+      ],
+      "training": {
+        "phrasings": [
+          "Echo {text}",
+          "Say {text} back to me",
+          "Connectivity test: echo {text}",
+          "Repeat {text}",
+          "Ping the tool host with {text}"
+        ],
+        "defaultPhrasings": [
+          "Run an echo test",
+          "Is the tool host reachable? Echo something",
+          "Echo test please",
+          "Ping the echo tool",
+          "Is the tool host reachable?",
+          "Test the connection with echo",
+          "Do an echo",
+          "Connectivity check",
+          "echo"
+        ],
+        "negatives": [
+          "What is an echo chamber?",
+          "Why do I hear an echo on calls?"
+        ]
+      }
     }
   ]
 }

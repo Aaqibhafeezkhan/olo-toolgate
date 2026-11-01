@@ -9,6 +9,8 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import java.nio.charset.StandardCharsets;
@@ -66,6 +68,42 @@ public class FraudDetection {
             effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"minScore\":70}", expectedOutput = "{\"alerts\":[{\"transactionId\":\"T-3\",\"score\":100,"
             + "\"summary\":\"GiftCardHub, 200.00 EUR\"},{\"transactionId\":\"T-2\",\"score\":75,\"summary\":\"TechnoMax Online, 2399.00 EUR\"}]}")
+    @Training(
+            phrasings = {
+                "Any fraud alerts?",
+                "Show transactions with a risk score of {minScore} or more",
+                "Which transactions look risky?",
+                "List alerts above {minScore}",
+                "Riskiest transactions first, threshold {minScore}",
+                "What's in the fraud queue?",
+                "Show me suspicious card payments"
+            },
+            defaultPhrasings = {
+                "Show the fraud alerts",
+                "Any suspicious transactions?",
+                "Any fraud alerts?",
+                "Show risky transactions",
+                "What's in the fraud queue?",
+                "List fraud alerts",
+                "Which payments look suspicious?",
+                "fraud alerts please",
+                "Show the current alerts",
+                "Any risky card payments?",
+                "What needs a fraud review?",
+                "Show flagged transactions"
+            },
+            negatives = {
+                "How do banks detect card fraud?",
+                "What is a chargeback?"
+            },
+            parameters = @TrainingValues(name = "minScore",
+                    examples = {
+                        "40",
+                        "50",
+                        "70",
+                        "80",
+                        "90"
+                    }))
     public Alerts alerts(@Param(description = "Lowest score to include", defaultValue = "60", min = "0", max = "100") int minScore,
             ToolContext context) {
         return new Alerts(Data.TRANSACTIONS.values().stream()
@@ -78,6 +116,23 @@ public class FraudDetection {
     @ServerTool(name = "transaction", title = "Get a transaction",
             description = "Returns a card transaction's details: amount, merchant, category, country, device and velocity.",
             effect = EffectSafety.READ_ONLY, errors = @ErrorDecl(code = "NOT_FOUND", description = "No transaction or account has that id."))
+    @Training(
+            phrasings = {
+                "Show transaction {transactionId}",
+                "Details of {transactionId}?",
+                "Where was {transactionId} made and for how much?",
+                "Which merchant and device for {transactionId}?",
+                "Look up card transaction {transactionId}"
+            },
+            negatives = "What's a merchant category code?",
+            parameters = @TrainingValues(name = "transactionId",
+                    examples = {
+                        "T-2",
+                        "T-1",
+                        "T-7",
+                        "T-13",
+                        "T-21"
+                    }))
     public Transaction transaction(@Param(description = "Transaction id, such as T-2", maxLength = 20) String transactionId, ToolContext context) {
         return find(transactionId);
     }
@@ -101,6 +156,23 @@ public class FraudDetection {
             effect = EffectSafety.READ_ONLY, errors = @ErrorDecl(code = "NOT_FOUND", description = "No transaction or account has that id."))
     @Example(arguments = "{\"transactionId\":\"T-1\"}", expectedOutput = "{\"transactionId\":\"T-1\",\"score\":0,\"level\":\"LOW\","
             + "\"signals\":[],\"recommendedAction\":\"APPROVE\"}")
+    @Training(
+            phrasings = {
+                "How risky is {transactionId}?",
+                "Score {transactionId} for fraud",
+                "Is {transactionId} fraudulent?",
+                "Why is {transactionId} flagged? Score it",
+                "Run the fraud rules on {transactionId}"
+            },
+            negatives = "How are fraud risk scores calculated in general?",
+            parameters = @TrainingValues(name = "transactionId",
+                    examples = {
+                        "T-2",
+                        "T-1",
+                        "T-7",
+                        "T-13",
+                        "T-21"
+                    }))
     public RiskScore riskScore(@Param(description = "Transaction id", maxLength = 20) String transactionId, ToolContext context) {
         return score(find(transactionId));
     }
@@ -140,6 +212,41 @@ public class FraudDetection {
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
             errors = @ErrorDecl(code = "NOT_FOUND", description = "No transaction or account has that id."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"transactionId\":\"T-404\",\"reason\":\"x\",\"reference\":\"r\"}", expectedError = "NOT_FOUND")
+    @Training(
+            phrasings = {
+                "Freeze the card used in {transactionId}: {reason}. Case {reference}",
+                "Block the card for {transactionId} because {reason} (ref {reference})",
+                "Stop the card behind {transactionId}, reason {reason}, alert {reference}",
+                "Freeze it: transaction {transactionId}, {reason}, reference {reference}"
+            },
+            negatives = {
+                "What should I do if my card is stolen?",
+                "How long does a card freeze last?"
+            },
+            parameters = {
+                @TrainingValues(name = "transactionId",
+                    examples = {
+                        "T-2",
+                        "T-1",
+                        "T-7",
+                        "T-13",
+                        "T-21"
+                    }),
+                @TrainingValues(name = "reason",
+                    examples = {
+                        "foreign purchase on a new device",
+                        "customer reported card stolen",
+                        "five purchases in two minutes",
+                        "amount far above normal spend"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "ALERT-301",
+                        "case-4471",
+                        "FR-2026-118",
+                        "alert-T2"
+                    })
+            })
     public Freeze freezeCard(
             @Param(description = "The suspicious transaction", maxLength = 20) String transactionId,
             @Param(description = "Why", minLength = 1, maxLength = 500) String reason,

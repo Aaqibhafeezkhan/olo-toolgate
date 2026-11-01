@@ -9,6 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolConfigurationError;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
@@ -56,6 +59,43 @@ public class DiskUsage {
             useWhen = "Use it for 'is any disk full?' or 'how much space is left on D:?'.",
             effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{}")
+    @Training(
+            phrasings = {
+                "How much disk space is left?",
+                "Which drive is the fullest?",
+                "Show free space on all volumes",
+                "Is the disk full?",
+                "Disk usage per volume, {all}",
+                "How much room is on C:?",
+                "Are we running out of disk space?",
+                "List the disks with free space, {all}",
+                "df -h for this machine"
+            },
+            defaultPhrasings = {
+                "How full are the disks?",
+                "Free disk space?",
+                "How much disk space is free?",
+                "Disk space?",
+                "Which disk is fullest?",
+                "Are the disks full?",
+                "Show disk usage",
+                "How full are the drives?",
+                "Free space on the volumes?",
+                "disk usage please",
+                "Are we low on disk?",
+                "How much space is left on each drive?"
+            },
+            negatives = {
+                "What's the difference between an SSD and an HDD?",
+                "How do I partition a new disk?",
+                "How much storage does a 4K movie need?"
+            },
+            parameters = @TrainingValues(name = "all",
+                    phrasings = @ValuePhrasing(value = "true", phrasings = {
+                            "including read-only and tmpfs file systems",
+                            "all file systems too",
+                            "include in-memory volumes"
+                        })))
     public Volumes space(
             @Param(description = "Include read-only and in-memory file systems", defaultValue = "false") boolean all,
             ToolContext context) {
@@ -94,6 +134,52 @@ public class DiskUsage {
             useWhen = "Use it after disk.space shows a volume nearly full.",
             effect = EffectSafety.READ_ONLY, maxDurationMs = 60_000)
     @Example(arguments = "{\"path\":\"/etc/../..\"}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "What is filling up {path}?",
+                "Find the largest files under {path}",
+                "Show the {limit} biggest files and folders in {path}",
+                "What's taking up space in {path}?",
+                "Biggest directories in {path}, {depth} levels deep",
+                "Why is {path} so big?",
+                "Top {limit} space hogs in {path}",
+                "Find big files in {path} going {depth} levels down"
+            },
+            defaultPhrasings = {
+                "What's using space in {path}?",
+                "Largest files in {path}"
+            },
+            negatives = {
+                "How do I compress a folder?",
+                "Where does Windows keep temporary files?"
+            },
+            parameters = {
+                @TrainingValues(name = "path",
+                    examples = {
+                        "C:\\logs",
+                        "D:\\data",
+                        "/var/log",
+                        "/srv/data",
+                        "/home/app",
+                        "C:\\inetpub\\logs",
+                        "/opt/backups"
+                    }),
+                @TrainingValues(name = "limit",
+                    examples = {
+                        "5",
+                        "10",
+                        "30",
+                        "50"
+                    }),
+                @TrainingValues(name = "depth",
+                    examples = {
+                        "1",
+                        "2",
+                        "3",
+                        "4",
+                        "12"
+                    })
+            })
     public Largest largest(
             @Param(description = "Directory to search: one of the allowed roots or a directory inside one", maxLength = 500)
             String path,

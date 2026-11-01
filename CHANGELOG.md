@@ -6,6 +6,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Training hints are declared on the tools and `training/annotations.json` is generated from them: `@Training`,
+  `@TrainingValues`, `@TrainingPrompt` and `@ValuePhrasing` in Java, `training(...)`, `TrainingValues` and
+  `TrainingPrompt` in Python, and `"training"` blocks on tools and inputs in `toolgate.json`. The build checks every
+  hint against the tool's inputs and types. `toolgate pack` folds them into the tool schema and writes the file beside
+  the `.tgpkg`; it refuses a hand-written annotations file. Hints never reach a descriptor, and Java and JSON packages
+  keep their digests when a hint changes. `core-mcp/hello-world` declares its hints in `HelloWorld.java`.
+  See `tool-sdk/spec/authoring/training.md`.
+
 - Tool schema for training: `toolgate pack` also writes `<name>-<version>.tool-schema.json` beside the `.tgpkg`
   (each tool's name, description, `useWhen`, effect, parameters with types, defaults, enums and bounds, and the
   input and output schemas), merging optional phrasing hints from the project's `training/annotations.json`.

@@ -10,6 +10,8 @@ import io.ololabs.toolgate.sdk.annotations.HttpRoute;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.RawResponse;
 import io.ololabs.toolgate.sdk.context.RouteCall;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -60,6 +62,63 @@ public class EndpointCheck {
             effect = EffectSafety.READ_ONLY, routes = {"health.one", "health.two"})
     @Example(arguments = "{\"path\":\"actuator/health\",\"expectStatus\":\"UP\"}", exchanges = "exchanges/actuator-up.json")
     @Example(arguments = "{\"path\":\"../admin\"}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Is the service up?",
+                "Check the health endpoint",
+                "Ping the service's {path} endpoint",
+                "Is the API healthy? Check {path}",
+                "Health check on {path}, it should report {expectStatus}",
+                "Is the service up and reporting {expectStatus}?",
+                "Check {path} with a {timeoutMs} ms timeout",
+                "How long does the health check take?",
+                "Is the backend responding?",
+                "Call {path} and tell me the status"
+            },
+            defaultPhrasings = {
+                "Is the service healthy?",
+                "Run the health check",
+                "Is the service up?",
+                "Health check please",
+                "Is the API alive?",
+                "Check the service health",
+                "Is the backend up?",
+                "Ping the health endpoint",
+                "service status?",
+                "Is the app responding?",
+                "Run the endpoint check",
+                "Is the service OK?"
+            },
+            negatives = {
+                "What should a health endpoint return?",
+                "How do I add actuator/health to Spring Boot?",
+                "What's a good timeout for HTTP calls?"
+            },
+            parameters = {
+                @TrainingValues(name = "path",
+                    examples = {
+                        "healthz",
+                        "actuator/health",
+                        "status",
+                        "api/health",
+                        "ready"
+                    }),
+                @TrainingValues(name = "expectStatus",
+                    examples = {
+                        "UP",
+                        "OK",
+                        "healthy",
+                        "READY"
+                    }),
+                @TrainingValues(name = "timeoutMs",
+                    examples = {
+                        "1000",
+                        "2000",
+                        "3000",
+                        "8000",
+                        "10000"
+                    })
+            })
     public Health check(
             @Param(description = "Health path, one or two segments, such as health, healthz or actuator/health",
                     defaultValue = "health", maxLength = 129) String path,

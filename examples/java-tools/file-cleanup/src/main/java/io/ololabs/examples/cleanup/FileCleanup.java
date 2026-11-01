@@ -10,6 +10,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolConfigurationError;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
@@ -73,6 +76,64 @@ public class FileCleanup {
                     + " what would be deleted before deleting.",
             effect = EffectSafety.IDEMPOTENT, destructive = true, maxDurationMs = 60_000, maxConcurrency = 1, reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
     @Example(arguments = "{\"path\":\"/\",\"olderThanDays\":30}", expectedError = "CONFIGURATION")
+    @Training(
+            phrasings = {
+                "Which files in {path} are older than {olderThanDays} days?",
+                "List files older than {olderThanDays} days in {path}",
+                "Find {pattern} files in {path} older than {olderThanDays} days",
+                "Clean up {pattern} in {path} older than {olderThanDays} days, {dryRun}",
+                "Delete files in {path} not touched for {olderThanDays} days, {dryRun}",
+                "What old {pattern} files are in {path}? Older than {olderThanDays} days, {recursive}",
+                "Remove {pattern} files older than {olderThanDays} days from {path}, {recursive}, {dryRun}",
+                "Show stale files in {path} (more than {olderThanDays} days old)"
+            },
+            defaultPhrasings = "Which files in {path} are older than {olderThanDays} days?",
+            negatives = {
+                "How do I delete files older than 30 days with PowerShell?",
+                "Is it safe to delete log files?",
+                "How do I free up space on Windows?"
+            },
+            parameters = {
+                @TrainingValues(name = "path",
+                    examples = {
+                        "C:\\logs",
+                        "D:\\exports",
+                        "/var/log/app",
+                        "/tmp/uploads",
+                        "/srv/exports",
+                        "C:\\temp"
+                    }),
+                @TrainingValues(name = "olderThanDays",
+                    examples = {
+                        "7",
+                        "14",
+                        "30",
+                        "60",
+                        "90",
+                        "180",
+                        "365"
+                    }),
+                @TrainingValues(name = "pattern",
+                    examples = {
+                        "*.log",
+                        "export-*.csv",
+                        "*.tmp",
+                        "*.zip",
+                        "backup-*.bak"
+                    }),
+                @TrainingValues(name = "recursive",
+                    phrasings = @ValuePhrasing(value = "true", phrasings = {
+                            "including sub-folders",
+                            "recursively",
+                            "in sub-directories too"
+                        })),
+                @TrainingValues(name = "dryRun",
+                    phrasings = @ValuePhrasing(value = "false", phrasings = {
+                            "and actually delete them",
+                            "really delete them",
+                            "not a dry run"
+                        }))
+            })
     public Cleanup oldFiles(
             @Param(description = "Directory to clean: one of the cleanup roots or a directory inside one", maxLength = 500)
             String path,

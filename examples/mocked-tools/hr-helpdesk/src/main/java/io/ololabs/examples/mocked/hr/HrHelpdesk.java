@@ -10,6 +10,9 @@ import io.ololabs.toolgate.sdk.annotations.JwtClaim;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
@@ -85,6 +88,28 @@ public class HrHelpdesk {
     @Example(arguments = "{\"query\":\"becker\"}", expectedOutput = "{\"employees\":[{\"employeeId\":\"E-101\",\"name\":\"Lukas Becker\","
             + "\"title\":\"Senior Software Engineer\",\"department\":\"Engineering\",\"managerId\":\"E-100\",\"location\":\"Berlin\","
             + "\"email\":\"lukas.becker@example.com\"}]}")
+    @Training(
+            phrasings = {
+                "Who is {query}?",
+                "Find {query} in the directory",
+                "Who does {query} report to?",
+                "Which team is {query} in?",
+                "Look up colleague {query}",
+                "What's {query}'s job title and office?"
+            },
+            negatives = {
+                "How do I write a good employee review?",
+                "What makes a good manager?"
+            },
+            parameters = @TrainingValues(name = "query",
+                    examples = {
+                        "Priya",
+                        "E-1042",
+                        "jane.smith",
+                        "Okafor",
+                        "m.rossi@example.com",
+                        "Lars Berg"
+                    }))
     public Employees employee(@Param(description = "Employee id, name or email, or part of one", minLength = 2, maxLength = 100) String query,
             ToolContext context) {
         String q = query.trim().toLowerCase(Locale.ROOT);
@@ -110,6 +135,28 @@ public class HrHelpdesk {
     @Example(arguments = "{\"question\":\"Can I carry over unused vacation days?\"}", expectedOutput = "{\"sections\":[{\"section\":\"HR-2.1\","
             + "\"title\":\"Annual leave\",\"text\":\"Employees accrue 24 days of annual leave a year. Up to 5 unused days carry over to the"
             + " next year and expire on 31 March. Requests of more than 5 working days need 2 weeks' notice.\"}]}")
+    @Training(
+            phrasings = {
+                "{question}",
+                "What does the HR policy say: {question}",
+                "Check the handbook: {question}",
+                "HR question: {question}",
+                "Find the HR policy for this: {question}"
+            },
+            negatives = {
+                "What is my insurance policy number?",
+                "Write a remote-work policy for a startup",
+                "Is my car insurance policy still valid?"
+            },
+            parameters = @TrainingValues(name = "question",
+                    examples = {
+                        "How many days of annual leave do I get?",
+                        "Can I work from home on Fridays?",
+                        "What's the parental leave policy?",
+                        "Do unused holidays carry over to next year?",
+                        "How do I claim travel expenses?",
+                        "What is the notice period if I resign?"
+                    }))
     public PolicyAnswers policy(@Param(description = "The employee's question", minLength = 2, maxLength = 500) String question,
             ToolContext context) {
         Set<String> words = Arrays.stream(question.toLowerCase(Locale.ROOT).split("[^a-z]+")).collect(Collectors.toSet());
@@ -134,6 +181,33 @@ public class HrHelpdesk {
             effect = EffectSafety.READ_ONLY,
             errors = @ErrorDecl(code = "NOT_AN_EMPLOYEE", description = "The signed-in user is not in the directory."))
     @JwtClaim(name = "employeeId", claim = "employee_id")
+    @Training(
+            phrasings = {
+                "How much leave do I have left?",
+                "What's my holiday balance?",
+                "How many sick days do I have?",
+                "My leave balances please",
+                "How many vacation days are left this year?",
+                "How many holidays have I got left?",
+                "What's my annual leave balance?",
+                "Do I have any leave left?",
+                "How many days off can I still take?",
+                "Check my leave balances",
+                "How much vacation have I used?",
+                "My remaining sick leave?",
+                "How many annual leave days remain for me?",
+                "What's left of my holiday allowance?",
+                "leave balance?",
+                "Can I still take a week off this year?",
+                "Show my leave",
+                "How much parental leave do I have?",
+                "How many PTO days do I have?",
+                "Remaining days off for me",
+                "Check how much time off I have",
+                "What's my time-off balance?",
+                "How many holiday days are left for me this year?"
+            },
+            negatives = "How many vacation days is normal in Germany?")
     public Balance myLeave(ToolContext context) {
         String me = me(context);
         Map<String, Double> b = Data.LEAVE.get(me);
@@ -156,6 +230,51 @@ public class HrHelpdesk {
                 @ErrorDecl(code = "INSUFFICIENT_BALANCE", description = "Not enough leave of that type left."),
                 @ErrorDecl(code = "NOT_AN_EMPLOYEE", description = "The signed-in user is not in the directory.")}, reconciliation = Reconciliation.MANUAL)
     @JwtClaim(name = "employeeId", claim = "employee_id")
+    @Training(
+            phrasings = {
+                "Book {type} leave from {from} to {to}, request {reference}",
+                "I'd like to take {type} leave {from} until {to} (ref {reference})",
+                "Request {type} leave between {from} and {to}, id {reference}",
+                "Put in for {type} leave, {from} to {to}. Reference {reference}"
+            },
+            negatives = "How do I ask my manager for time off?",
+            parameters = {
+                @TrainingValues(name = "type",
+                    phrasings = {
+                        @ValuePhrasing(value = "ANNUAL", phrasings = {
+                            "annual",
+                            "vacation",
+                            "holiday"
+                        }),
+                        @ValuePhrasing(value = "SICK", phrasings = "sick"),
+                        @ValuePhrasing(value = "PARENTAL", phrasings = "parental")
+                    }),
+                @TrainingValues(name = "from",
+                    examples = {
+                        "2026-11-03",
+                        "2026-11-10",
+                        "2026-12-01",
+                        "2026-11-17",
+                        "2026-12-21"
+                    }),
+                @TrainingValues(name = "to",
+                    examples = {
+                        "2026-11-07",
+                        "2026-11-14",
+                        "2026-12-05",
+                        "2026-11-21",
+                        "2027-01-02"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "case-4471",
+                        "req-20261031-01",
+                        "conv-88213",
+                        "ticket-flow-17",
+                        "chat-5520",
+                        "REQ-3307"
+                    })
+            })
     public LeaveRequest requestLeave(
             @Param(description = "Type", enumValues = {"ANNUAL", "SICK", "PARENTAL"}) String type,
             @Param(description = "First day, ISO 8601", pattern = "^\\d{4}-\\d{2}-\\d{2}$") String from,

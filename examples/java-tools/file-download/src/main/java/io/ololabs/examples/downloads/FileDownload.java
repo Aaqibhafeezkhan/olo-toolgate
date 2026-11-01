@@ -14,6 +14,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.RawResponse;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
@@ -72,6 +75,51 @@ public class FileDownload {
     @Example(arguments = "{\"path\":\"../secrets/key.pem\"}", expectedError = "INVALID_ARGUMENT")
     @Example(arguments = "{\"path\":\"reports/missing.csv\"}", expectedError = "NOT_FOUND",
             exchanges = "exchanges/missing.json")
+    @Training(
+            phrasings = {
+                "Download {path}",
+                "Fetch {path} from the file server",
+                "Get {path} and save it as {saveAs}",
+                "Download {path}, {overwrite}",
+                "Grab the file {path} for me",
+                "Pull {path} down from the server",
+                "Save {path} locally as {saveAs}, {overwrite}",
+                "I need {path} downloaded"
+            },
+            defaultPhrasings = {
+                "Download {path}",
+                "Fetch {path}"
+            },
+            negatives = {
+                "How do I download a file with curl?",
+                "Why is my download so slow?",
+                "What's the best FTP client?"
+            },
+            parameters = {
+                @TrainingValues(name = "path",
+                    examples = {
+                        "reports/2026-10.csv",
+                        "invoices/INV-1042.pdf",
+                        "exports/customers.csv",
+                        "logs/app-2026-10-30.log",
+                        "builds/release-1.4.2.zip",
+                        "reports/weekly-summary.xlsx",
+                        "images/logo.png"
+                    }),
+                @TrainingValues(name = "saveAs",
+                    examples = {
+                        "october.csv",
+                        "invoice.pdf",
+                        "customers-latest.csv",
+                        "release.zip"
+                    }),
+                @TrainingValues(name = "overwrite",
+                    phrasings = @ValuePhrasing(value = "true", phrasings = {
+                            "overwrite it if it exists",
+                            "replace the old copy",
+                            "overwriting any existing file"
+                        }))
+            })
     public Downloaded fetch(
             @Param(description = "Path on the file server, as folder/file, such as reports/2026-10.csv",
                     pattern = "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,199}$") String path,

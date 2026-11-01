@@ -11,6 +11,8 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import io.ololabs.toolgate.sdk.errors.ToolConfigurationError;
@@ -83,6 +85,58 @@ public class ScriptRunner {
                 @ErrorDecl(code = "SCRIPT_FAILED_TO_START", description = "The interpreter could not be started.")}, reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"script\":\"../../etc/passwd\"}", expectedError = "INVALID_ARGUMENT")
     @Example(arguments = "{\"script\":\"cleanup.sh\",\"arguments\":[\"a && rm -rf /\"]}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Run {script}",
+                "Execute the {script} script",
+                "Run {script} with arguments {arguments}",
+                "Start {script} and show the last {lines} lines of output",
+                "Run {script}, give it {timeoutSeconds} seconds",
+                "Kick off {script} {arguments}",
+                "Can you run {script} for me?"
+            },
+            defaultPhrasings = {
+                "Run {script}",
+                "Execute {script}"
+            },
+            negatives = {
+                "Write me a bash script that backs up a folder",
+                "What's the difference between .bat and .ps1?",
+                "Why does my PowerShell script not run?"
+            },
+            parameters = {
+                @TrainingValues(name = "script",
+                    examples = {
+                        "nightly-report.bat",
+                        "restart-iis.ps1",
+                        "backup.sh",
+                        "cleanup-temp.cmd",
+                        "rotate-logs.sh",
+                        "sync-files.ps1"
+                    }),
+                @TrainingValues(name = "arguments",
+                    examples = {
+                        "[\"--dry-run\"]",
+                        "[\"2026-10-30\"]",
+                        "[\"prod\"]",
+                        "[\"-Verbose\"]",
+                        "[\"--full\",\"eu-west\"]"
+                    }),
+                @TrainingValues(name = "lines",
+                    examples = {
+                        "5",
+                        "10",
+                        "50",
+                        "100"
+                    }),
+                @TrainingValues(name = "timeoutSeconds",
+                    examples = {
+                        "10",
+                        "20",
+                        "45",
+                        "55"
+                    })
+            })
     public ScriptRun run(
             @Param(description = "File name of the script in the scripts directory, such as nightly-report.bat",
                     maxLength = 128) String script,
@@ -156,6 +210,33 @@ public class ScriptRunner {
 
     @ServerTool(name = "list", title = "List scripts",
             description = "Lists the scripts callers may run with scripts.run.", effect = EffectSafety.READ_ONLY)
+    @Training(
+            phrasings = {
+                "Which scripts can I run?",
+                "List the available scripts",
+                "What scripts are allowed?",
+                "Show me the scripts in the scripts directory",
+                "What automation scripts do you have?",
+                "What scripts can you run?",
+                "Show the allowlisted scripts",
+                "list scripts",
+                "Which scripts are available to run?",
+                "What can scripts.run execute?",
+                "Which .bat and .ps1 scripts are there?",
+                "What maintenance scripts exist?",
+                "Is there a backup script? List them",
+                "Show me what I can run",
+                "Which jobs can I start?",
+                "Names of the runnable scripts?",
+                "What's in the scripts directory?",
+                "scripts?",
+                "Which shell scripts are allowed?",
+                "Give me the list of admin scripts",
+                "What automation can I trigger?",
+                "Show runnable scripts",
+                "Which scripts may I execute?"
+            },
+            negatives = "Can you list some good scripting languages?")
     public ScriptList list(ToolContext context) {
         Path dir = scriptsDir(context);
         Set<String> allowed = allowedNames(context);

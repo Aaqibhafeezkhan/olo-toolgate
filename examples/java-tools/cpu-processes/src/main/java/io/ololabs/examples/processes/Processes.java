@@ -7,6 +7,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import java.lang.management.ManagementFactory;
 import java.time.Duration;
@@ -35,6 +38,46 @@ public class Processes {
             description = "Measures this machine's CPU use over a short sample, with processor count and load average.",
             effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"sampleMs\":200}")
+    @Training(
+            phrasings = {
+                "How busy is the CPU right now?",
+                "What's the CPU usage on this machine?",
+                "Check the processor load",
+                "Is the CPU maxed out?",
+                "Measure CPU use over {sampleMs} ms",
+                "Sample the CPU for {sampleMs} milliseconds and tell me the load",
+                "What's the load average on this box?",
+                "How many cores does this machine have and how loaded are they?",
+                "cpu %?",
+                "Why is the machine slow? Check CPU utilisation"
+            },
+            defaultPhrasings = {
+                "CPU usage?",
+                "Check the CPU load please",
+                "How busy is the CPU?",
+                "Check CPU",
+                "What's the processor load?",
+                "cpu load?",
+                "Is the CPU busy?",
+                "Measure the CPU",
+                "Show CPU use",
+                "How loaded is the processor?",
+                "CPU check please"
+            },
+            negatives = {
+                "What is a CPU cache and how does it work?",
+                "Which CPU should I buy for a gaming PC?",
+                "Explain what load average means on Linux",
+                "How do I overclock my processor?"
+            },
+            parameters = @TrainingValues(name = "sampleMs",
+                    examples = {
+                        "250",
+                        "500",
+                        "2000",
+                        "3000",
+                        "5000"
+                    }))
     public CpuUsage cpu(
             @Param(description = "How long to sample, in milliseconds", defaultValue = "1000", min = "100", max = "10000")
             int sampleMs,
@@ -65,6 +108,53 @@ public class Processes {
             useWhen = "Use it when a machine is slow or its CPU is high, to find the process responsible.",
             effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"limit\":3,\"sampleMs\":200}")
+    @Training(
+            phrasings = {
+                "Which processes are using the most CPU?",
+                "Show me the top {limit} processes by CPU",
+                "What's hogging the CPU?",
+                "List the {limit} busiest processes",
+                "Like top: what is eating the processor?",
+                "Top CPU consumers over a {sampleMs} ms sample",
+                "Which program is making the machine slow?",
+                "Show the heaviest processes, top {limit}",
+                "What's using all the CPU right now, sample {sampleMs} ms"
+            },
+            defaultPhrasings = {
+                "What's using the CPU?",
+                "Show the top processes",
+                "Top processes?",
+                "Which processes are busiest?",
+                "Show top",
+                "What's hogging the processor?",
+                "List the heaviest processes",
+                "Who's eating CPU?",
+                "Busiest processes please",
+                "top",
+                "What processes use the most CPU?"
+            },
+            negatives = {
+                "How do I use the top command on Linux?",
+                "How do I kill a process in Task Manager?",
+                "What's the difference between a process and a thread?"
+            },
+            parameters = {
+                @TrainingValues(name = "limit",
+                    examples = {
+                        "3",
+                        "5",
+                        "15",
+                        "20",
+                        "25"
+                    }),
+                @TrainingValues(name = "sampleMs",
+                    examples = {
+                        "500",
+                        "2000",
+                        "3000",
+                        "5000"
+                    })
+            })
     public TopProcesses top(
             @Param(description = "How many processes to return", defaultValue = "10", min = "1", max = "100") int limit,
             @Param(description = "How long to sample, in milliseconds", defaultValue = "1000", min = "100", max = "10000")
@@ -98,6 +188,48 @@ public class Processes {
             useWhen = "Use it to answer 'is the service or agent X running on this machine?'.",
             effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"name\":\"no-such-process-name\"}", expectedOutput = "{\"running\":false,\"count\":0,\"processes\":[]}")
+    @Training(
+            phrasings = {
+                "Is {name} running?",
+                "Check whether {name} is running on this machine",
+                "Is the {name} process up?",
+                "Find the {name} process",
+                "Do we have {name} running right now?",
+                "Is anything named {name} running? {partial}",
+                "Look for processes matching {name}, {partial}",
+                "Is {name} alive or did it die?",
+                "Show me the PID of {name}"
+            },
+            defaultPhrasings = {
+                "Is {name} running?",
+                "Find process {name}"
+            },
+            negatives = {
+                "How do I install nginx?",
+                "What does the java process do?",
+                "How do I start postgres as a service?"
+            },
+            parameters = {
+                @TrainingValues(name = "name",
+                    examples = {
+                        "nginx",
+                        "java",
+                        "sqlservr.exe",
+                        "postgres",
+                        "node",
+                        "redis-server",
+                        "chrome",
+                        "python",
+                        "w3wp.exe",
+                        "httpd"
+                    }),
+                @TrainingValues(name = "partial",
+                    phrasings = @ValuePhrasing(value = "true", phrasings = {
+                            "partial match",
+                            "names containing it",
+                            "match any name that contains it"
+                        }))
+            })
     public Found find(
             @Param(description = "Executable name, such as nginx, java or sqlservr.exe", minLength = 1, maxLength = 128)
             String name,

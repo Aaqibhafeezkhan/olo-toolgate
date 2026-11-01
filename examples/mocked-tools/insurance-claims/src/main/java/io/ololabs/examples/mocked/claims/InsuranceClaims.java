@@ -9,6 +9,8 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
@@ -80,6 +82,26 @@ public class InsuranceClaims {
             description = "Returns a policy: holder, product, status, cover dates, covered and excluded perils, limit and deductible.",
             effect = EffectSafety.READ_ONLY, errors = @ErrorDecl(code = "POLICY_NOT_FOUND", description = "No policy has that id."))
     @Example(arguments = "{\"policyId\":\"POL-9999\"}", expectedError = "POLICY_NOT_FOUND")
+    @Training(
+            phrasings = {
+                "Show insurance policy {policyId}",
+                "What does {policyId} cover?",
+                "Is {policyId} active?",
+                "What's the deductible and limit on {policyId}?",
+                "Which perils are excluded from {policyId}?",
+                "Who holds policy {policyId}?"
+            },
+            negatives = {
+                "What's the HR policy on sick leave?",
+                "What is a deductible in insurance?"
+            },
+            parameters = @TrainingValues(name = "policyId",
+                    examples = {
+                        "POL-2001",
+                        "POL-2002",
+                        "POL-2010",
+                        "POL-2015"
+                    }))
     public Policy policy(@Param(description = "Policy id, such as POL-2001", maxLength = 20) String policyId, ToolContext context) {
         return findPolicy(policyId);
     }
@@ -90,6 +112,21 @@ public class InsuranceClaims {
     @Example(arguments = "{\"claimId\":\"CLM-3001\"}", expectedOutput = "{\"claimId\":\"CLM-3001\",\"policyId\":\"POL-2002\","
             + "\"peril\":\"COLLISION\",\"incidentDate\":\"2026-09-28\",\"status\":\"IN_REVIEW\",\"adjuster\":\"J. Alvarez\","
             + "\"missingDocuments\":[\"Repair estimate\"],\"nextStep\":\"Upload the garage's repair estimate so the adjuster can approve.\"}")
+    @Training(
+            phrasings = {
+                "Status of claim {claimId}?",
+                "What's happening with {claimId}?",
+                "Which documents are missing for {claimId}?",
+                "Who is the adjuster on {claimId}?",
+                "Next step for claim {claimId}?"
+            },
+            negatives = "How long do insurance claims usually take?",
+            parameters = @TrainingValues(name = "claimId",
+                    examples = {
+                        "CLM-3001",
+                        "CLM-3002",
+                        "CLM-3009"
+                    }))
     public Claim claim(@Param(description = "Claim id, such as CLM-3001", maxLength = 20) String claimId, ToolContext context) {
         Claim c = Data.CLAIMS.get(claimId.trim().toUpperCase(Locale.ROOT));
         if (c == null) throw new ToolBusinessError("CLAIM_NOT_FOUND", "No claim has that id. The mocked claim is CLM-3001.");
@@ -116,6 +153,50 @@ public class InsuranceClaims {
             expectedOutput = "{\"policyId\":\"POL-2001\",\"peril\":\"STORM\",\"covered\":true,\"reason\":\"STORM is covered by this HOME policy.\","
                     + "\"lossAmount\":4200.0,\"deductible\":1000.0,\"payout\":3200.0,"
                     + "\"requiredDocuments\":[\"Photos of the damage\",\"Repair estimate\"],\"fastTrack\":true}")
+    @Training(
+            phrasings = {
+                "Is a {peril} loss of {lossAmount} on {incidentDate} covered by {policyId}?",
+                "Would {policyId} pay for {peril} damage of {lossAmount} from {incidentDate}?",
+                "Estimate the payout: {policyId}, {peril}, {lossAmount}, happened {incidentDate}",
+                "Check cover for {policyId}: {peril} on {incidentDate}, loss {lossAmount}"
+            },
+            negatives = "Does home insurance usually cover floods?",
+            parameters = {
+                @TrainingValues(name = "policyId",
+                    examples = {
+                        "POL-2001",
+                        "POL-2002",
+                        "POL-2010",
+                        "POL-2015"
+                    }),
+                @TrainingValues(name = "peril",
+                    examples = {
+                        "STORM",
+                        "FIRE",
+                        "THEFT",
+                        "WATER_BURST",
+                        "FLOOD",
+                        "COLLISION",
+                        "GLASS"
+                    }),
+                @TrainingValues(name = "lossAmount",
+                    examples = {
+                        "800",
+                        "2500",
+                        "4200",
+                        "12000",
+                        "35000",
+                        "950.5"
+                    }),
+                @TrainingValues(name = "incidentDate",
+                    examples = {
+                        "2026-10-01",
+                        "2026-10-12",
+                        "2026-09-28",
+                        "2026-10-20",
+                        "2026-08-15"
+                    })
+            })
     public Assessment assess(
             @Param(description = "Policy id", maxLength = 20) String policyId,
             @Param(description = "What happened: STORM, FIRE, THEFT, WATER_BURST, FLOOD, COLLISION, GLASS ...", maxLength = 30) String peril,
@@ -158,6 +239,65 @@ public class InsuranceClaims {
             }, reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"policyId\":\"POL-2003\",\"peril\":\"FIRE\",\"lossAmount\":9000,\"incidentDate\":\"2026-09-01\","
             + "\"description\":\"Kitchen fire\",\"reference\":\"fnol-1\"}", expectedError = "NOT_COVERED")
+    @Training(
+            phrasings = {
+                "File a claim on {policyId}: {peril} on {incidentDate}, loss {lossAmount}. {description} (ref {reference})",
+                "Open a {peril} claim for {policyId}, {lossAmount} lost on {incidentDate}: {description}, case {reference}",
+                "Submit a claim under {policyId} for {peril} damage of {lossAmount} on {incidentDate}. The holder says: {description}. Reference {reference}"
+            },
+            negatives = "How do I write a description for an insurance claim?",
+            parameters = {
+                @TrainingValues(name = "policyId",
+                    examples = {
+                        "POL-2001",
+                        "POL-2002",
+                        "POL-2010",
+                        "POL-2015"
+                    }),
+                @TrainingValues(name = "peril",
+                    examples = {
+                        "STORM",
+                        "FIRE",
+                        "THEFT",
+                        "WATER_BURST",
+                        "FLOOD",
+                        "COLLISION",
+                        "GLASS"
+                    }),
+                @TrainingValues(name = "lossAmount",
+                    examples = {
+                        "800",
+                        "2500",
+                        "4200",
+                        "12000",
+                        "35000"
+                    }),
+                @TrainingValues(name = "incidentDate",
+                    examples = {
+                        "2026-10-01",
+                        "2026-10-12",
+                        "2026-09-28",
+                        "2026-10-20",
+                        "2026-08-15"
+                    }),
+                @TrainingValues(name = "description",
+                    examples = {
+                        "A tree fell on the garage roof",
+                        "Pipe burst in the kitchen overnight",
+                        "Bike stolen from the shed",
+                        "Windscreen cracked by a stone",
+                        "Rear-ended at a traffic light"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "case-4471",
+                        "req-20261031-01",
+                        "conv-88213",
+                        "ticket-flow-17",
+                        "chat-5520",
+                        "REQ-3307"
+                    })
+            })
     public Filed fileClaim(
             @Param(description = "Policy id", maxLength = 20) String policyId,
             @Param(description = "What happened, as for assess", maxLength = 30) String peril,

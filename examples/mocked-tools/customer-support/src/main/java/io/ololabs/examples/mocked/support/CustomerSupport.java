@@ -9,6 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import java.nio.charset.StandardCharsets;
@@ -88,6 +91,28 @@ public class CustomerSupport {
             effect = EffectSafety.READ_ONLY, errors = @ErrorDecl(code = "NOT_FOUND", description = "No such customer or order."))
     @Example(arguments = "{\"idOrEmail\":\"BEN.CARTER@example.net\"}", expectedOutput = "{\"customerId\":\"C-502\",\"name\":\"Ben Carter\","
             + "\"email\":\"ben.carter@example.net\",\"tier\":\"STANDARD\",\"since\":\"2025-12-01\",\"orders\":3,\"orderIds\":[\"O-9003\"]}")
+    @Training(
+            phrasings = {
+                "Look up customer {idOrEmail}",
+                "Who is {idOrEmail}?",
+                "What tier is {idOrEmail} on?",
+                "Find the customer with email {idOrEmail}",
+                "Which orders does {idOrEmail} have?",
+                "How long has {idOrEmail} been a customer?"
+            },
+            negatives = {
+                "How do I handle an angry customer?",
+                "What is customer lifetime value?"
+            },
+            parameters = @TrainingValues(name = "idOrEmail",
+                    examples = {
+                        "C-501",
+                        "C-502",
+                        "C-517",
+                        "C-530",
+                        "jane.doe@example.com",
+                        "sam@example.org"
+                    }))
     public Customer customer(@Param(description = "Customer id (C-501) or email", maxLength = 200, sensitive = true) String idOrEmail,
             ToolContext context) {
         String key = idOrEmail.trim().toLowerCase(Locale.ROOT);
@@ -104,6 +129,27 @@ public class CustomerSupport {
     @ServerTool(name = "order", title = "Track an order",
             description = "Returns an order's items, status, carrier, tracking number and latest event, and whether it is late.",
             effect = EffectSafety.READ_ONLY, errors = @ErrorDecl(code = "NOT_FOUND", description = "No such customer or order."))
+    @Training(
+            phrasings = {
+                "Where is order {orderId}?",
+                "What's the status of {orderId}?",
+                "Tracking number for {orderId}?",
+                "Is order {orderId} late?",
+                "What's in order {orderId}?",
+                "Which carrier has {orderId}?",
+                "My order {orderId} hasn't arrived"
+            },
+            negatives = {
+                "How long does standard shipping usually take?",
+                "What does 'in transit' mean?"
+            },
+            parameters = @TrainingValues(name = "orderId",
+                    examples = {
+                        "O-9002",
+                        "O-9001",
+                        "O-9015",
+                        "O-9040"
+                    }))
     public OrderStatus order(@Param(description = "Order id, such as O-9002", maxLength = 20) String orderId, ToolContext context) {
         Order o = findOrder(orderId);
         LocalDate promised = LocalDate.parse(o.promisedBy());
@@ -126,6 +172,52 @@ public class CustomerSupport {
     @Example(arguments = "{\"orderId\":\"O-9003\",\"reason\":\"CHANGED_MIND\"}", expectedOutput = "{\"eligible\":false,\"amount\":0.0,"
             + "\"method\":\"NONE\",\"returnRequired\":false,\"policy\":\"Change-of-mind returns are accepted within 30 days of delivery;"
             + " this order was delivered 45 days ago.\"}")
+    @Training(
+            phrasings = {
+                "Can {orderId} be refunded? The item is {reason}",
+                "Is order {orderId} eligible for a refund because of {reason}?",
+                "Customer wants money back on {orderId}: {reason}",
+                "Check refund eligibility for {orderId}, reason {reason}",
+                "How much can we refund on {orderId} if it was {reason}?"
+            },
+            negatives = "What's a fair refund policy for an online shop?",
+            parameters = {
+                @TrainingValues(name = "orderId",
+                    examples = {
+                        "O-9002",
+                        "O-9001",
+                        "O-9015",
+                        "O-9040"
+                    }),
+                @TrainingValues(name = "reason",
+                    phrasings = {
+                        @ValuePhrasing(value = "DAMAGED", phrasings = {
+                            "damaged",
+                            "broken on arrival",
+                            "arrived damaged"
+                        }),
+                        @ValuePhrasing(value = "NOT_RECEIVED", phrasings = {
+                            "never received",
+                            "not delivered",
+                            "it never arrived"
+                        }),
+                        @ValuePhrasing(value = "WRONG_ITEM", phrasings = {
+                            "the wrong item",
+                            "not what they ordered",
+                            "wrong item sent"
+                        }),
+                        @ValuePhrasing(value = "CHANGED_MIND", phrasings = {
+                            "a change of mind",
+                            "they changed their mind",
+                            "no longer wanted"
+                        }),
+                        @ValuePhrasing(value = "LATE", phrasings = {
+                            "late",
+                            "delivered too late",
+                            "much later than promised"
+                        })
+                    })
+            })
     public RefundDecision refundEligibility(
             @Param(description = "Order id", maxLength = 20) String orderId,
             @Param(description = "Why the customer wants a refund", enumValues = {"DAMAGED", "NOT_RECEIVED", "WRONG_ITEM", "CHANGED_MIND", "LATE"})
@@ -170,6 +262,67 @@ public class CustomerSupport {
             errors = @ErrorDecl(code = "NOT_FOUND", description = "No such customer or order."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"customerId\":\"C-501\",\"category\":\"DELIVERY\",\"subject\":\"Desk delayed\",\"description\":\"O-9002 is late\","
             + "\"reference\":\"chat-1\"}", expectedOutput = "{\"ticketId\":\"TCK-eaeb9111\",\"queue\":\"logistics\",\"firstResponseHours\":4}")
+    @Training(
+            phrasings = {
+                "Open a {category} ticket for {customerId}: {subject}. {description} (ref {reference})",
+                "Create a support ticket for {customerId}, category {category}, subject {subject}, details {description}, conversation {reference}",
+                "Log a {category} issue for customer {customerId} titled {subject}: {description}. Reference {reference}",
+                "File a ticket: customer {customerId}, {category}, {subject} - {description}, id {reference}"
+            },
+            negatives = {
+                "How do I write a good support ticket?",
+                "What's a reasonable SLA for support tickets?"
+            },
+            parameters = {
+                @TrainingValues(name = "customerId",
+                    examples = {
+                        "C-501",
+                        "C-502",
+                        "C-517",
+                        "C-530"
+                    }),
+                @TrainingValues(name = "subject",
+                    examples = {
+                        "Parcel not delivered",
+                        "Refund request",
+                        "Cannot log in",
+                        "Item broken",
+                        "Change delivery address"
+                    }),
+                @TrainingValues(name = "description",
+                    examples = {
+                        "The parcel shows delivered but nothing arrived",
+                        "Customer wants a refund for a cracked mug",
+                        "Password reset email never arrives",
+                        "Wants to know when the jacket is back in stock"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "case-4471",
+                        "req-20261031-01",
+                        "conv-88213",
+                        "ticket-flow-17",
+                        "chat-5520",
+                        "REQ-3307"
+                    }),
+                @TrainingValues(name = "category",
+                    phrasings = {
+                        @ValuePhrasing(value = "DELIVERY", phrasings = {
+                            "delivery",
+                            "shipping"
+                        }),
+                        @ValuePhrasing(value = "REFUND", phrasings = "refund"),
+                        @ValuePhrasing(value = "PRODUCT", phrasings = "product"),
+                        @ValuePhrasing(value = "ACCOUNT", phrasings = {
+                            "account",
+                            "login"
+                        }),
+                        @ValuePhrasing(value = "OTHER", phrasings = {
+                            "general",
+                            "other"
+                        })
+                    })
+            })
     public Ticket createTicket(
             @Param(description = "Customer id", maxLength = 20) String customerId,
             @Param(description = "Category", enumValues = {"DELIVERY", "REFUND", "PRODUCT", "ACCOUNT", "OTHER"}) String category,

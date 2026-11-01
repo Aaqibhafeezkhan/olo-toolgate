@@ -370,17 +370,16 @@ For Java the executable is `artifacts/tool.jar`, a fat jar of your jar and its w
 
 Optional files under `marketplace/` (`listing.json`, `README.md`, `CHANGELOG.md`, `icon.png`), `tests/self-tests.json` and `sbom/cyclonedx.json` in the staging directory are included as well.
 
-**Tool schema for training.** Beside the package, `pack` also writes `<name>-<version>.tool-schema.json`: each tool's name, description, `useWhen`, effect and parameters (type, description, required, default, enum and bounds), with the full input and output schemas. Training pipelines read it to generate tool-calling examples so a model learns to emit valid calls. Add phrasing hints and example values in `training/annotations.json` in your project; they are copied into the schema under each tool's `annotations`:
+**Tool schema for training.** Beside the package, `pack` also writes `<name>-<version>.tool-schema.json`: each tool's name, description, `useWhen`, effect and parameters (type, description, required, default, enum and bounds), with the full input and output schemas. Training pipelines read it to generate tool-calling examples so a model learns to emit valid calls. Declare phrasing hints and example values on the tool itself, so they change with it: `@Training` and `@TrainingValues` in Java, `training(...)` and `TrainingValues` in Python, a `"training"` block in `toolgate.json`. The build checks them against the tool (a `{name}` placeholder must name an input, an example must suit its type) and generates `training/annotations.json`; they are copied into the schema under each tool's `annotations`:
 
-```json
-{"tools": {"greet": {
-  "phrasings": ["Say hello to {name}"],
-  "defaultPhrasings": ["Say hello"],
-  "parameters": {"name": {"examples": ["Ada", "the team"]}},
-  "examples": [{"prompt": "Greet Ada", "arguments": {"name": "Ada"}}]}}}
+```java
+@ServerTool(name = "greet", title = "Greet", description = "Greets someone")
+@Training(phrasings = "Say hello to {name}", defaultPhrasings = "Say hello",
+        prompts = @TrainingPrompt(prompt = "Greet Ada", arguments = "{\"name\":\"Ada\"}"))
+public Greeting greet(@Param(description = "Who to greet") @TrainingValues(examples = {"Ada", "the team"}) String name) { ... }
 ```
 
-Annotations naming a tool the package does not have fail the build. The schema is not part of the package and does not change any digest. `toolgate schema <file.tgpkg>` writes it for any package you already have.
+There is no hand-written annotations file: `pack` refuses one. See [tool-sdk/spec/authoring/training.md](tool-sdk/spec/authoring/training.md). The schema is not part of the package and does not change any digest. `toolgate schema <file.tgpkg>` writes it for any package you already have.
 
 Bump `version` in your build for every release you hand to an administrator. The same version with different contents is a different digest and will be treated as a new package.
 

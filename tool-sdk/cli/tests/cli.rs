@@ -92,7 +92,7 @@ fn pack_writes_the_tool_schema_beside_the_package() {
     std::fs::create_dir_all(dir.join("training")).unwrap();
     std::fs::write(
         dir.join("training/annotations.json"),
-        r#"{"tools":{"orders.lookup":{"phrasings":["where is order {orderId}"]}}}"#,
+        r#"{"generatedBy":"toolgate-sdk-java","tools":{"orders.lookup":{"phrasings":["where is order {orderId}"]}}}"#,
     )
     .unwrap();
     let output = dir.join("acme.orders-1.4.0.tgpkg");
@@ -151,12 +151,86 @@ fn pack_writes_the_tool_schema_beside_the_package() {
 }
 
 #[test]
+fn pack_writes_generated_annotations_beside_the_package_and_removes_stale_ones() {
+    let dir = stage("schema-beside", &source_manifest(), ARTIFACT);
+    std::fs::create_dir_all(dir.join("training")).unwrap();
+    std::fs::write(
+        dir.join("training/annotations.json"),
+        r#"{"generatedBy":"toolgate-sdk-java","tools":{"orders.lookup":{"negatives":["what is an order?"]}}}"#,
+    )
+    .unwrap();
+    let out = dir.parent().unwrap().join("schema-beside-out");
+    let _ = std::fs::remove_dir_all(&out);
+    std::fs::create_dir_all(&out).unwrap();
+    let output = out.join("acme.orders-1.4.0.tgpkg");
+    let (code, packed) = toolgate(&[
+        "pack",
+        &dir.display().to_string(),
+        "-o",
+        &output.display().to_string(),
+    ]);
+    assert_eq!(0, code, "{packed}");
+    let beside = out.join("training/annotations.json");
+    let notes: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&beside).unwrap()).unwrap();
+    assert_eq!("toolgate pack", notes["generatedBy"]);
+    assert_eq!(
+        "what is an order?",
+        notes["tools"]["orders.lookup"]["negatives"][0]
+    );
+
+    // A build whose tools declare no hints any more removes the file it generated earlier...
+    std::fs::remove_file(dir.join("training/annotations.json")).unwrap();
+    let (code, packed) = toolgate(&[
+        "pack",
+        &dir.display().to_string(),
+        "-o",
+        &output.display().to_string(),
+    ]);
+    assert_eq!(0, code, "{packed}");
+    assert!(!beside.exists());
+
+    // ...but never a file an author wrote there.
+    std::fs::create_dir_all(beside.parent().unwrap()).unwrap();
+    std::fs::write(&beside, r#"{"tools":{}}"#).unwrap();
+    let (code, packed) = toolgate(&[
+        "pack",
+        &dir.display().to_string(),
+        "-o",
+        &output.display().to_string(),
+    ]);
+    assert_eq!(0, code, "{packed}");
+    assert_eq!(r#"{"tools":{}}"#, std::fs::read_to_string(&beside).unwrap());
+}
+
+#[test]
+fn pack_refuses_hand_written_annotations() {
+    let dir = stage("schema-hand", &source_manifest(), ARTIFACT);
+    std::fs::create_dir_all(dir.join("training")).unwrap();
+    std::fs::write(
+        dir.join("training/annotations.json"),
+        r#"{"tools":{"orders.lookup":{"phrasings":["where is order {orderId}"]}}}"#,
+    )
+    .unwrap();
+    let output = dir.join("acme.orders-1.4.0.tgpkg");
+    let (code, out) = toolgate(&[
+        "pack",
+        &dir.display().to_string(),
+        "-o",
+        &output.display().to_string(),
+    ]);
+    assert_eq!(1, code, "{out}");
+    assert!(out.contains("is written by hand"), "{out}");
+    assert!(out.contains("@Training"), "{out}");
+}
+
+#[test]
 fn schema_refuses_annotations_for_unknown_tools() {
     let dir = stage("schema-unknown", &source_manifest(), ARTIFACT);
     std::fs::create_dir_all(dir.join("training")).unwrap();
     std::fs::write(
         dir.join("training/annotations.json"),
-        r#"{"tools":{"nope":{}}}"#,
+        r#"{"generatedBy":"toolgate-sdk-java","tools":{"nope":{}}}"#,
     )
     .unwrap();
     let (code, out) = toolgate(&["schema", &dir.display().to_string()]);

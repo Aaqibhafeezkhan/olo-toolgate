@@ -9,6 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import java.nio.charset.StandardCharsets;
@@ -132,6 +135,44 @@ public class ServerRecovery {
     @Example(arguments = "{\"priority\":\"P1\"}", expectedOutput = "{\"incidents\":[{\"incidentId\":\"INC-5001\",\"priority\":\"P1\","
             + "\"title\":\"payments-api down on app-02: checkout failing\",\"host\":\"app-02\",\"service\":\"payments-api\","
             + "\"status\":\"OPEN\",\"openedAt\":\"2026-10-12T14:07:31Z\"}]}")
+    @Training(
+            phrasings = {
+                "What incidents are open?",
+                "Show me the {priority} incidents",
+                "Any open {priority}s?",
+                "List current incidents",
+                "What's on fire right now?"
+            },
+            defaultPhrasings = {
+                "List the open incidents",
+                "What incidents are open?",
+                "Show open incidents",
+                "Any open incidents?",
+                "List incidents",
+                "What's currently broken?",
+                "incidents?",
+                "Show the incident list",
+                "Which incidents are active?",
+                "What's on fire?",
+                "Open incidents please"
+            },
+            negatives = {
+                "How should we define P1 versus P2 incidents?",
+                "Write an incident postmortem template"
+            },
+            parameters = @TrainingValues(name = "priority",
+                    phrasings = {
+                        @ValuePhrasing(value = "P1", phrasings = {
+                            "P1",
+                            "priority 1"
+                        }),
+                        @ValuePhrasing(value = "P2", phrasings = {
+                            "P2",
+                            "priority 2"
+                        }),
+                        @ValuePhrasing(value = "P3", phrasings = "P3"),
+                        @ValuePhrasing(value = "P4", phrasings = "P4")
+                    }))
     public Incidents incidents(
             @Param(description = "Only this priority", required = false, enumValues = {"P1", "P2", "P3", "P4"}) String priority,
             ToolContext context) {
@@ -143,6 +184,23 @@ public class ServerRecovery {
             effect = EffectSafety.READ_ONLY,
             errors = @ErrorDecl(code = "HOST_NOT_FOUND", description = "No host has that name."))
     @Example(arguments = "{\"host\":\"mainframe-9\"}", expectedError = "HOST_NOT_FOUND")
+    @Training(
+            phrasings = {
+                "What's the status of {host}?",
+                "Is {host} up?",
+                "Which services are running on {host}?",
+                "When did {host} last send a heartbeat?",
+                "CPU, memory and disk on {host}?"
+            },
+            negatives = "What is a heartbeat in monitoring?",
+            parameters = @TrainingValues(name = "host",
+                    examples = {
+                        "app-02",
+                        "app-01",
+                        "db-01",
+                        "web-03",
+                        "cache-01"
+                    }))
     public HostStatus hostStatus(@Param(description = "Host name, such as app-02", maxLength = 64) String host, ToolContext context) {
         return host(Data.HOSTS, host);
     }
@@ -153,6 +211,23 @@ public class ServerRecovery {
             useWhen = "Use it after host-status shows a CRASHED or DEGRADED service, before choosing a remediation.",
             effect = EffectSafety.READ_ONLY,
             errors = @ErrorDecl(code = "HOST_NOT_FOUND", description = "No host has that name, or it has no crash."))
+    @Training(
+            phrasings = {
+                "Why did {host} crash?",
+                "Crash report for {host}",
+                "What caused the last crash on {host}?",
+                "Show the crash analysis for {host}",
+                "What changed before {host} went down?"
+            },
+            negatives = "How do I read a Java crash dump?",
+            parameters = @TrainingValues(name = "host",
+                    examples = {
+                        "app-02",
+                        "app-01",
+                        "db-01",
+                        "web-03",
+                        "cache-01"
+                    }))
     public CrashReport crashReport(@Param(description = "Host name", maxLength = 64) String host, ToolContext context) {
         return host(Data.CRASHES, host);
     }
@@ -168,6 +243,33 @@ public class ServerRecovery {
     @Example(arguments = "{\"cause\":\"DEADLOCK\"}", expectedOutput = "{\"title\":\"Service hung (deadlock)\",\"steps\":["
             + "\"Take a thread dump.\",\"RESTART_SERVICE.\",\"Verify and attach the dump to a problem ticket.\"],\"risk\":\"Low.\","
             + "\"estimatedMinutes\":10}")
+    @Training(
+            phrasings = {
+                "Runbook for {cause}",
+                "How do we recover from {cause}?",
+                "What are the steps when a host hits {cause}?",
+                "Give me the {cause} recovery procedure"
+            },
+            negatives = "What is a runbook?",
+            parameters = @TrainingValues(name = "cause",
+                    phrasings = {
+                        @ValuePhrasing(value = "OOM", phrasings = {
+                            "OOM",
+                            "out of memory"
+                        }),
+                        @ValuePhrasing(value = "DISK_FULL", phrasings = {
+                            "a full disk",
+                            "DISK_FULL"
+                        }),
+                        @ValuePhrasing(value = "DEADLOCK", phrasings = {
+                            "a deadlock",
+                            "DEADLOCK"
+                        }),
+                        @ValuePhrasing(value = "KERNEL_PANIC", phrasings = {
+                            "a kernel panic",
+                            "KERNEL_PANIC"
+                        })
+                    }))
     public Runbook runbook(
             @Param(description = "Cause from crash-report", enumValues = {"OOM", "DISK_FULL", "DEADLOCK", "KERNEL_PANIC"}) String cause,
             ToolContext context) {
@@ -191,6 +293,59 @@ public class ServerRecovery {
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference",
             errors = @ErrorDecl(code = "HOST_NOT_FOUND", description = "No host or service has that name."), reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"host\":\"app-02\",\"service\":\"payments-api\",\"action\":\"ROLLBACK_DEPLOY\",\"reference\":\"INC-5001-a1\"}")
+    @Training(
+            phrasings = {
+                "{action} {service} on {host}, change {reference}",
+                "Fix {host}: {action} for {service} (ref {reference})",
+                "On {host}, {action} the {service} service. Step id {reference}",
+                "Please {action} {service} on {host}, reference {reference}"
+            },
+            negatives = "Should I restart or roll back after a bad deploy?",
+            parameters = {
+                @TrainingValues(name = "host",
+                    examples = {
+                        "app-02",
+                        "app-01",
+                        "db-01",
+                        "web-03",
+                        "cache-01"
+                    }),
+                @TrainingValues(name = "service",
+                    examples = {
+                        "checkout-api",
+                        "nginx",
+                        "postgres",
+                        "worker",
+                        "redis",
+                        "payments"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "CHG-1201",
+                        "INC-5001-step2",
+                        "CHG-1207",
+                        "fix-app02-01"
+                    }),
+                @TrainingValues(name = "action",
+                    phrasings = {
+                        @ValuePhrasing(value = "RESTART_SERVICE", phrasings = {
+                            "restart",
+                            "restart the service"
+                        }),
+                        @ValuePhrasing(value = "ROLLBACK_DEPLOY", phrasings = {
+                            "roll back the last deploy of",
+                            "rollback"
+                        }),
+                        @ValuePhrasing(value = "FAILOVER", phrasings = {
+                            "fail over",
+                            "failover"
+                        }),
+                        @ValuePhrasing(value = "CLEAR_TEMP", phrasings = {
+                            "clear the temp files for",
+                            "clean temp space for"
+                        })
+                    })
+            })
     public Remediation remediate(
             @Param(description = "Host", maxLength = 64) String host,
             @Param(description = "Service on the host", maxLength = 64) String service,
@@ -225,6 +380,22 @@ public class ServerRecovery {
             description = "Runs post-recovery checks for a remediation: service state, health endpoint, error rate and"
                     + " resource use (mocked).", effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"remediationId\":\"REM-1234abcd\"}")
+    @Training(
+            phrasings = {
+                "Did remediation {remediationId} work?",
+                "Verify {remediationId}",
+                "Run the post-recovery checks for {remediationId}",
+                "Is everything healthy after {remediationId}?"
+            },
+            negatives = "How do I verify a fix in production safely?",
+            parameters = @TrainingValues(name = "remediationId",
+                    examples = {
+                        "REM-1a2b3c4d",
+                        "REM-00ff12ab",
+                        "REM-9c8d7e6f",
+                        "REM-deadbeef",
+                        "REM-4e5f6a7b"
+                    }))
     public Verification verify(@Param(description = "Id from incidents.remediate", pattern = "^REM-[0-9a-f]{8}$") String remediationId,
             ToolContext context) {
         return new Verification(true, List.of("Service state: RUNNING", "Health endpoint: 200 in 84 ms",
@@ -246,6 +417,49 @@ public class ServerRecovery {
     @Example(arguments = "{\"incidentId\":\"INC-5001\",\"status\":\"MITIGATED\",\"note\":\"Rolled back to 2.13.4\",\"reference\":\"u1\"}",
             expectedOutput = "{\"incidentId\":\"INC-5001\",\"status\":\"MITIGATED\",\"timelineEntry\":\"MITIGATED: Rolled back to 2.13.4\","
                     + "\"notified\":[\"#inc-5001\",\"payments-oncall\",\"status page\"]}")
+    @Training(
+            phrasings = {
+                "Mark {incidentId} as {status}: {note} (update {reference})",
+                "Set {incidentId} to {status} with note {note}, id {reference}",
+                "Update incident {incidentId}: {status}. {note}. Ref {reference}",
+                "{incidentId} is {status}. Add to the timeline: {note} ({reference})"
+            },
+            negatives = "How often should we update stakeholders during an incident?",
+            parameters = {
+                @TrainingValues(name = "incidentId",
+                    examples = {
+                        "INC-5001",
+                        "INC-5002",
+                        "INC-5010",
+                        "INC-5013"
+                    }),
+                @TrainingValues(name = "note",
+                    examples = {
+                        "Restarted checkout-api, errors dropped",
+                        "Rolled back release 1.4.2",
+                        "Disk cleared on app-02",
+                        "Still investigating the deadlock"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "UPD-01",
+                        "upd-5001-3",
+                        "UPD-17",
+                        "status-0931"
+                    }),
+                @TrainingValues(name = "status",
+                    phrasings = {
+                        @ValuePhrasing(value = "INVESTIGATING", phrasings = {
+                            "investigating",
+                            "under investigation"
+                        }),
+                        @ValuePhrasing(value = "MITIGATED", phrasings = "mitigated"),
+                        @ValuePhrasing(value = "RESOLVED", phrasings = {
+                            "resolved",
+                            "fixed"
+                        })
+                    })
+            })
     public IncidentUpdate updateIncident(
             @Param(description = "Incident id, such as INC-5001", maxLength = 20) String incidentId,
             @Param(description = "New status", enumValues = {"INVESTIGATING", "MITIGATED", "RESOLVED"}) String status,
