@@ -1,0 +1,26 @@
+<!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
+# ADR 037: Prepare one immutable broker request before authorization
+
+**Status:** Accepted for transport preparation; generalized Control enforcement remains a subsequent task.
+
+## Decision
+
+The broker prepares a buffered HTTP request exactly once. It normalizes the
+content type and query on the actual owned request, then hashes a canonical
+manifest of the pinned service profile, route, destination, method, encoded path,
+query, content type, exact body bytes and every non-excluded header. Duplicate
+query values retain their order. Credential values are excluded only with their
+declared header names and auth declaration ID retained. Transport headers owned
+by the broker are excluded; tools cannot supply them.
+
+The prepared request keeps its transport private and sends that same value.
+Automatic reqwest protocol retries and redirects are disabled. Binding digests
+are local broker observations, not new grants: this change does not send them to
+Control or claim generalized per-effect enforcement. The next protocol task must
+validate profile/route binding at Control and bind the digest into an effect
+authorization before the prepared send. Target request verification and shared
+claim SDK integration are also still required.
+
+Only buffered bodies and header-injected credentials are supported by this
+preparation API. Query/cookie credential injection and automatic request
+compression are not added. Credential bytes never enter the manifest or logs.

@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Request headers a tool may never set, whatever the route allows (ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.8.5).
-const FORBIDDEN: [&str; 11] = [
+const FORBIDDEN: [&str; 14] = [
     "authorization",
     "toolgate-service-permit",
     "proxy-authorization",
@@ -39,6 +39,9 @@ const FORBIDDEN: [&str; 11] = [
     "connection",
     "te",
     "upgrade",
+    "user-agent",
+    "traceparent",
+    "tracestate",
 ];
 /// Response headers removed before the reply reaches the tool.
 const STRIPPED: [&str; 5] = [
@@ -54,6 +57,8 @@ pub struct Invocation {
     pub invocation_id: String,
     pub fencing_token: String,
     pub deadline_unix_ms: u64,
+    pub profile_id: String,
+    pub profile_digest: String,
     /// The permit's routes as the service profile approves them.
     pub routes: Vec<RouteDeclaration>,
     pub destinations: Vec<ServiceDestination>,
@@ -91,6 +96,8 @@ impl Invocation {
         invocation_id: String,
         fencing_token: String,
         deadline_unix_ms: u64,
+        profile_id: String,
+        profile_digest: String,
         routes: Vec<RouteDeclaration>,
         destinations: Vec<ServiceDestination>,
         private_ranges: Vec<PrivateRangeApproval>,
@@ -104,6 +111,8 @@ impl Invocation {
             invocation_id,
             fencing_token,
             deadline_unix_ms,
+            profile_id,
+            profile_digest,
             routes,
             destinations,
             private_ranges,
@@ -358,6 +367,9 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         let value = value
             .as_str()
             .ok_or_else(|| refused(format!("header {name} is not a string")))?;
+        if outgoing.contains_key(&lower) {
+            return Err(refused(format!("duplicate header name {name}")));
+        }
         let name = reqwest::header::HeaderName::from_bytes(lower.as_bytes())
             .map_err(|_| refused(format!("header {name} is not valid")))?;
         let value = reqwest::header::HeaderValue::from_str(value)
@@ -438,7 +450,7 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
 
     let service_write =
         service_audience.is_some() && !matches!(path.as_str(), "/v1/memory.read" | "/v1/rag.query");
-    if let Some(audience) = service_audience {
+    if let Some(audience) = service_audience.clone() {
         let permit = invocation
             .control
             .service_permit(
@@ -492,12 +504,55 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
         return Err(refused("the invocation has ended"));
     }
+    let (auth_id, credential_headers) = if let Some(audience) = service_audience {
+        (
+            Some(
+                match audience {
+                    olo_toolgate_contracts::ServiceAudience::OloMemory => {
+                        "toolgate-service-permit:olo-memory"
+                    }
+                    olo_toolgate_contracts::ServiceAudience::OloRag => {
+                        "toolgate-service-permit:olo-rag"
+                    }
+                }
+                .into(),
+            ),
+            vec!["toolgate-service-permit".into()],
+        )
+    } else if let Some(auth) = auth {
+        (
+            Some(auth.id.clone()),
+            vec![auth
+                .header
+                .clone()
+                .unwrap_or_else(|| "authorization".into())
+                .to_ascii_lowercase()],
+        )
+    } else {
+        (None, Vec::new())
+    };
+    let prepared = crate::request_binding::PreparedRequest::new(
+        &client,
+        request.build().map_err(failure)?,
+        crate::request_binding::Metadata {
+            profile_id: invocation.profile_id.clone(),
+            profile_digest: invocation.profile_digest.clone(),
+            route_id: route.id.clone(),
+            auth_id,
+            credential_headers,
+        },
+    )
+    .map_err(refused)?;
+    tracing::info!(target:"toolgate::audit",invocation_id=%invocation.invocation_id,route=%route.id,request_digest=%prepared.digest(),"prepared broker request");
+    if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
+        return Err(refused("the invocation has ended"));
+    }
     if service_write {
         invocation
             .service_effect_started
             .store(true, Ordering::SeqCst);
     }
-    let response = request.send().await.map_err(failure)?;
+    let response = prepared.send().await.map_err(failure)?;
     let status = response.status().as_u16();
     let mut reply_headers = Map::new();
     for (name, value) in response.headers() {

@@ -17,6 +17,7 @@ pub mod mcp_call;
 pub mod mcp_scan;
 pub mod outbox;
 pub mod permit;
+mod request_binding;
 pub mod runner;
 pub mod sandbox;
 pub mod server;

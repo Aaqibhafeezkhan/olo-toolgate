@@ -524,6 +524,8 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
         id.clone(),
         fencing_token.clone(),
         deadline,
+        prepared.profile.profile_id.clone(),
+        claims.target.service_profile_digest.clone(),
         prepared.routes.clone(),
         prepared.profile.destinations.clone(),
         prepared.profile.private_ranges.clone(),

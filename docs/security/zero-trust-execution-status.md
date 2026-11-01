@@ -10,9 +10,9 @@ does not establish a passing security claim.
 Updated: **2026-10-31**. Branch: `feature/zero-trust-execution-plan`.
 Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
 
-**Overall: partially implemented.** Five scoped deliveries are implemented:
+**Overall: partially implemented.** Six scoped deliveries are implemented:
 renewable leases/durable execution recovery, qualified Python OCI containment,
-explicit business-key binding, independent operation/permit-attempt journaling, and an effect-generation foundation. Executed validation for the current
+explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, and exact broker transport preparation. Executed validation for the current
 delivery is recorded below. **0 of 7 full roadmap phases have met every exit
 criterion.** Phases 0–3 have
 partial delivery; phases 4–6 have not started as generalized implementations.
@@ -23,7 +23,7 @@ No percentage is assigned because the phases differ substantially in scope.
 | 0 — Boundary and harness | Partial | Preserved revision-10 plan, claim inventory, scoped documentation and executable OCI conformance gate with revision/source/image evidence. | Adopt the full threat matrix across security docs; execute all C1–C8 conformance cases and publish a complete release scorecard. |
 | 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key binding; V3 operation/attempt records, immutable snapshots, historical backfill, positive-proof reservation replacement and conservative operation summaries. | Generalized requiresBusinessKey/namespace/dedupe-window policy, retention maintenance, whole-invocation rebinding and full effect-aware operation finalization/caller integration; complete admission/rebinding and crash conformance. |
 | 2 — Containment | Partial; Python worker slice delivered | Rootless Podman/crun workers; permit-bound image; isolated namespaces and UID ranges; read-only files; enforced resource limits; stdio broker; teardown/restart recovery; no native fallback; service unit and CI gate. | Separate the trusted broker's OS identity/network namespace as specified by the plan; broader deployment/interface conformance and deployment SLO evidence. Other languages and VM tiers require separate qualification. |
-| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. | Complete HTTP request binding and generalized broker enforcement, effect keys/manifests, real broker instance/handler protocol, consent slots, target fencing SDK/shared claims, deduplication, reconciliation and operation finalization. |
+| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry transport. | Wire HTTP fingerprints into Control grants and target checks; generalized broker enforcement, effect keys/manifests, real broker instance/handler protocol, consent slots, target fencing SDK/shared claims, deduplication, reconciliation and operation finalization. |
 | 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
 | 5 — Identity hardening | Not started | Existing device certificates remain the baseline. | Sender-constrained agent-run credentials, narrowing delegation and continuously verified executor posture. |
 | 6 — Policy differentiation | Not started | Existing approvals remain the baseline. | Broker OAuth/token exchange, trusted provenance, exact effect previews and stronger step-up approvals. |
@@ -41,9 +41,9 @@ The complete first milestone in issue #230 is **not yet accepted**.
 | Operation finalization includes all attempts/effects and late evidence | Partial | Each permit has independent identity/snapshots and late evidence. New operations finalize FAILED only without consumption; consumed terminal work remains unknown. Complete effect aggregation and caller-visible finalization remain outstanding. |
 | Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | OCI report for `0813b71b` records six executed tests, source digest, image and architecture. Target guarantees and the complete release scorecard remain outstanding. |
 
-**Next implementation target:** exact HTTP request binding, then generalized
-broker effect authorization and manifests needed for target-deduplicated retries
-and effect-aware operation finalization. Whole-invocation rebinding, generalized key policy and public history
+**Next implementation target:** connect prepared HTTP fingerprints to an
+authenticated generalized broker effect-grant protocol at Control; then manifests,
+consent slots, target shared claims and effect-aware operation finalization. Whole-invocation rebinding, generalized key policy and public history
 presentation remain outstanding. Only an expired unconsumed permit may be replaced
 inside its operation's original deadline; consumed attempts remain fenced.
 
@@ -212,7 +212,7 @@ HTTP binding, broker APIs, target shared claims and consent remain outstanding.
 This increment does not establish a target deduplication guarantee or satisfy a
 complete phase/first-milestone exit criterion.
 
-Executed validation:
+Executed validation for the effect-generation delivery at `3f03acaf`:
 
 - Complete `./gradlew --no-parallel --max-workers=2 javaCheck`: **passed** with
   an isolated real PostgreSQL fixture. **174 enterprise tests passed without
@@ -229,3 +229,41 @@ Executed validation:
 Source SHA-256: `6799e849d8374062d84e27501baf9c83dc0f33897af080eb5b72b6f09c881b52` (276 files): sorted POSIX relative path,
 NUL, then bytes of `.java`, `.sql`, `.json` files under `apps/control-plane/src`
 and `tests/contracts/test_effect_generation_storage.py`. Documentation is excluded.
+
+## Prepared HTTP request delivery
+
+[ADR 037](../adr/037-prepared-http-request-binding.md) and the
+[operator guide](../operations/prepared-http-requests.md) describe one immutable
+buffered request, normalized on the wire before JCS fingerprinting. It binds the
+pinned service profile, route, actual URL, body bytes and non-excluded headers.
+Declared credential values are excluded while their names/auth ID remain bound.
+Production egress disables redirects and automatic protocol retries; tools cannot
+override broker transport headers or exploit case-colliding duplicate headers.
+
+These fingerprints remain broker observations: Control effect-grant binding and
+target verification are the next task, not a claim of this delivery. No complete
+phase or first-milestone acceptance criterion is marked complete.
+
+Executed validation:
+
+- `python tools/check.py --ci-common --ci-part rust`: **passed** workspace
+  formatting, tests and Clippy. After materializing reqwest's implicit Accept
+  header in the fingerprint, the affected Tool Host suite and Clippy were rerun
+  and passed against the final request preparation.
+- Shared digest vectors passed in both Tool Host and Control's
+  `HttpRequestBindingVectorTest`. Tests bind body/recipient changes and duplicate
+  query ordering, preserve credential-value exclusion, reject ambiguous content
+  types, and verify one request on an ambiguous TCP disconnect after its body.
+- Real rootless containment gate: **6 executed tests passed** on x86_64 using the
+  prepared Python image `docker.io/library/python@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159` and I/O device `8:48`.
+  The report under `build/security/sandbox/conformance.json` records parent
+  revision `3f03acaf6077855600805a73c80f4aa864d44528` plus working-tree source SHA-256
+  `e1f5807ff47408b64a1424ce418f4134bf11bcb46ec860c7e8d274df751d2e62`. That snapshot precedes this validation-text append;
+  the tested code was unchanged. This qualifies the Python containment slice,
+  not generalized effect authorization or target deduplication.
+
+Final code/fixture SHA-256: `42de6a136704e9a612be9263ab3184fdbaa28217b586a45ad916f752832cbde0` (31 files): sorted POSIX
+relative path, NUL, then bytes for Rust files under `apps/tool-host/src` and
+`apps/tool-host/tests`, the shared JSON vector fixture and the Control Java vector
+test. Documentation is excluded. HTTP/2 GOAWAY and full target/consent conformance
+remain outstanding; no whole phase is marked complete.

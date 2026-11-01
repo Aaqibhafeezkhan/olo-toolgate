@@ -194,6 +194,7 @@ pub fn client_with_identity(
     let mut builder = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
+        .retry(reqwest::retry::never())
         .tls_sslkeylogfile(false)
         .tls_info(true)
         .connect_timeout(Duration::from_secs(10))

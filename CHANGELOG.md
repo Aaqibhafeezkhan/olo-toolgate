@@ -6,6 +6,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Tool Host prepares and fingerprints the exact buffered HTTP request before
+  sending, binds the pinned profile and route, preserves duplicate-query order,
+  excludes declared credential values, and disables hidden protocol retries.
+  Digests are observations pending the generalized Control effect-grant protocol.
+  See `docs/operations/prepared-http-requests.md`.
+
 - Control records effect authorization generations for OLO service writes, with
   immutable bindings, single-send/consume transitions, expiry to ambiguity and
   retained outcome evidence. Consumption remains distinct from completion;
