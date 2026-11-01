@@ -21,9 +21,12 @@ a bounded signed lease. See [tool authoring](../client/tool-builder.md).
 ## Execution isolation
 
 Managed endpoint OCI runtimes enforce the limits described in
-[local runtimes](../client/local-runtimes.md). Tool Host Java execution currently
-has a clean environment, permit checks and a broker, but container/network
-isolation is unfinished. Do not infer confinement from a route declaration alone.
+[local runtimes](../client/local-runtimes.md). Configured
+[Python OCI Tool Host pools](../operations/rootless-tool-host.md) have qualified
+rootless worker isolation. Native Java/Python execution has permit checks,
+a clean environment and a broker but remains uncontained. Broker OS/network
+identity separation is outstanding. Do not infer confinement from a route
+declaration, language or successful development-stack test alone.
 See [Tool Host limitations](../../apps/tool-host/README.md#not-yet).
 
 ## Administrative authority
@@ -37,3 +40,15 @@ needs runtime grants and cannot override effect authorization or retired identit
 Marketplace signing is planned provenance for immutable community releases.
 It will remain separate from organization deployment signing and runtime
 authorization. See [Marketplace scope](../marketplace/README.md).
+
+
+## Zero Trust Execution threat boundary
+
+Adopt the [A1–A9 matrix and C1–C8 requirements](../security/zero-trust-boundaries.md)
+with the [live qualification scope](../security/zero-trust-execution-status.md).
+Control/identity roots/kernel/runtime are trusted. Gateway is not an authority;
+its documented OLO identity-context residual still matters. A compromised
+supervisor can ignore leases and keep unfenced credentials. Qualified fenced OLO
+writes order authorization at target consumption; revocation after consumption
+does not undo the effect. Generalized per-effect authorization, exact consent,
+tamper-evident anchors and production revocation SLOs remain outstanding.

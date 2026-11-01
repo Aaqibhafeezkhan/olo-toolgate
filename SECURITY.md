@@ -1,6 +1,6 @@
 # Security Policy
 
-Managed tool execution uses a trusted registered device, current owner/device enablement, installed-client connection approval, and the existing agent/tool/action/resource filters before every protected effect. Registration, green availability or deployment never grants execution. Temporary suspension retains the protected key; permanent revocation cannot be undone through approval or recovery.
+Managed device execution requires a registered device, current owner/device enablement, installed-client connection approval and the existing agent/tool/action/resource filters at implemented protected boundaries. Registration, green availability or deployment never grants execution. Temporary suspension retains the protected key; permanent revocation cannot be undone through approval or recovery.
 
 See [Device registry and tool-call controls](docs/control-plane/device-registry.md).
 
@@ -60,3 +60,13 @@ Security-sensitive areas include:
 ## Responsible Disclosure
 
 Please allow maintainers time to investigate and coordinate a fix before public disclosure.
+
+
+## Execution trust limits
+
+The [adopted Zero Trust Execution model](docs/security/zero-trust-boundaries.md) distinguishes healthy hosts,
+root-compromised hosts and compromised Control/identity/kernel trust roots.
+Lease expiry cannot constrain root controlling the supervisor or revoke already
+delivered credentials at unfenced targets. Current qualified Python OCI and OLO
+fenced-write guarantees do not imply generalized route/consent enforcement,
+sender-constrained agent credentials, externally anchored audit or production SLOs.

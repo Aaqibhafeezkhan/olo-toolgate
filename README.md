@@ -273,8 +273,9 @@ enforced today; the following are **not yet** in place:
   other runtimes and broker process separation remain work in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
 - **Execution recovery:** Tool Hosts have renewable execution leases, an admission
   spool and a durable result outbox ([operator guide](docs/operations/execution-leases.md)).
-  Per-effect authorization, consent, target fencing and operation-wide recovery
-  remain unfinished: [#230](https://github.com/olo-labs/olo-toolgate/issues/230)
+  The OLO memory/RAG path has qualified request-bound write authorization and
+  target claim/outcome fencing. Generalized per-effect authorization, exact consent
+  and operation-wide recovery remain unfinished: [#230](https://github.com/olo-labs/olo-toolgate/issues/230)
   ([claim inventory](docs/security/zero-trust-execution-status.md)).
 - **Offline protected effects:** unsupported; live Control authority remains
   required. Design review: [#239](https://github.com/olo-labs/olo-toolgate/issues/239).
@@ -284,6 +285,9 @@ enforced today; the following are **not yet** in place:
 - **Authoring:** Java and Python implementations are available; TypeScript and .NET
   authoring APIs remain specifications. Implementations: TypeScript [#242](https://github.com/olo-labs/olo-toolgate/issues/242)
   and .NET [#243](https://github.com/olo-labs/olo-toolgate/issues/243).
+
+The [adopted attacker matrix and trust limits](docs/security/zero-trust-boundaries.md)
+distinguish healthy enforcement from compromised hosts and trusted roots.
 
 Recorded acceptance and performance results apply to the tested revision and
 environment; they do not establish your deployment's readiness, capacity or
