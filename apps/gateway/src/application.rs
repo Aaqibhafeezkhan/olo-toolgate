@@ -6,6 +6,39 @@ use olo_toolgate_contracts::v2::{ExecutionContext, RequestContext};
 use olo_toolgate_contracts::*;
 use std::sync::Arc;
 
+/// Cross-field metadata invariants supplement the canonical wire schema.
+pub(crate) fn operation_matches(value: &EnterpriseOperationOutcome, id: &str) -> bool {
+    let terminal = matches!(
+        value.state,
+        EnterpriseOperationState::Succeeded
+            | EnterpriseOperationState::Partial
+            | EnterpriseOperationState::Failed
+    );
+    value.operation_id == id
+        && !value.retryable
+        && value.finalized == terminal
+        && (!terminal
+            || value.journal_complete
+                && value.unresolved_effect_count == 0
+                && value.unsettled_attempt_count == 0)
+}
+pub(crate) fn invocation_matches(value: &EnterpriseInvocation, context: &RequestContext) -> bool {
+    let actual = &value.evaluation.context;
+    value.id == context.request_id
+        && actual.request_id == context.request_id
+        && actual.tenant_id == context.tenant_id
+        && actual.mode == context.mode
+        && actual.user_id == context.user_id
+        && actual.agent_id == context.agent_id
+        && actual.workload_binding_id == context.workload_binding_id
+        && actual.chain == context.chain
+        && Some(actual.binding_id.as_str()) == context.binding_id.as_deref()
+        && value
+            .operation_outcome
+            .as_ref()
+            .is_some_and(|outcome| operation_matches(outcome, &context.request_id))
+}
+
 pub struct Gateway {
     pub contracts: Contracts,
     pub authority: Arc<dyn RelayPort>,

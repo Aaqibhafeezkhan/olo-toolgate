@@ -2266,6 +2266,285 @@
         "INSERT",
         "SELECT"
       ]
+    },
+    {
+      "name": "control_attempt_effects",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id",
+        "attempt_id",
+        "effect_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operation_attempts",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        },
+        {
+          "table": "control_effects",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "effect_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "effect_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_attempt_manifest_seals",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id",
+        "attempt_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operation_attempts",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_attempt_settlements",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id",
+        "attempt_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_attempt_manifest_seals",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_operation_outcomes",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id",
+        "revision"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_operation_review_owners",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_attempt_reviews",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id",
+        "attempt_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_attempt_manifest_seals",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        },
+        {
+          "table": "control_operation_outcomes",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "expected_outcome_revision"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "revision"
+          ]
+        },
+        {
+          "table": "control_outcome_reconciliations",
+          "columns": [
+            "tenant_id",
+            "reconciliation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "reconciliation_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
     }
   ]
 }

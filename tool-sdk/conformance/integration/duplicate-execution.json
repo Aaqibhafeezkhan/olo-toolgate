@@ -4,17 +4,19 @@
   "area": "duplicate-execution",
   "title": "Duplicate execution and effect semantics",
   "sources": [
-    "platform-requirements.md §11.4",
-    "platform-requirements.md §11.7",
-    "docs/security/threat-models/tool-host.md"
+    "platform-requirements.md \u00a711.4",
+    "platform-requirements.md \u00a711.7",
+    "docs/security/threat-models/tool-host.md",
+    "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
   ],
   "cases": [
     {
       "id": "ledger/ambiguous-dispatch",
       "title": "An ambiguous dispatch is never retried elsewhere",
       "requirements": [
-        "platform-requirements.md §11.4",
-        "T-AD-4"
+        "platform-requirements.md \u00a711.4",
+        "T-AD-4",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -24,7 +26,8 @@
       ],
       "when": "The connection resets after DISPATCH is sent for a NON_IDEMPOTENT tool",
       "then": [
-        "The Gateway queries Control; if claimed it collects the outcome; if unclaimed after exp it retries with a new permit"
+        "The Gateway queries authorized Control metadata; a claimed or potentially consumed attempt is never blindly resent",
+        "A replacement permit requires complete positive never-consumed proof after permit expiry, fresh current authority and the original operation deadline; lack of a reply is not proof"
       ],
       "status": "authored"
     },
@@ -32,8 +35,9 @@
       "id": "ledger/crash-after-admitted",
       "title": "A host crash after ADMITTED ends OUTCOME_UNKNOWN",
       "requirements": [
-        "platform-requirements.md §11.4",
-        "T-AD-4"
+        "platform-requirements.md \u00a711.4",
+        "T-AD-4",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -43,8 +47,8 @@
       ],
       "when": "The host process is killed after ADMITTED for a ledger tool, and for an idempotent tool",
       "then": [
-        "Ledger: lease expiry, OUTCOME_UNKNOWN, no retry",
-        "Idempotent: retried"
+        "A consumed crash remains OUTCOME_UNKNOWN and is not automatically retried because of an idempotent label",
+        "A resolved business outcome requires all attempts and effects plus closed complete mediation or independent scope review"
       ],
       "status": "authored"
     },
@@ -52,7 +56,7 @@
       "id": "duplicate/gateway-crash",
       "title": "A Gateway crash does not duplicate execution",
       "requirements": [
-        "platform-requirements.md §21 integration"
+        "platform-requirements.md \u00a721 integration"
       ],
       "level": "integration",
       "targets": [
@@ -70,7 +74,7 @@
       "id": "duplicate/client-reissue",
       "title": "A client re-issue matches the existing invocation",
       "requirements": [
-        "platform-requirements.md §11.4"
+        "platform-requirements.md \u00a711.4"
       ],
       "level": "integration",
       "targets": [
@@ -85,9 +89,10 @@
     },
     {
       "id": "duplicate/refused-retry",
-      "title": "REFUSED is retried on another host",
+      "title": "REFUSED cannot independently authorize another host",
       "requirements": [
-        "platform-requirements.md §11.4"
+        "platform-requirements.md \u00a711.4",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -96,7 +101,8 @@
       ],
       "when": "A host refuses BUSY",
       "then": [
-        "Retry elsewhere with a new permit for both classes"
+        "BUSY/refusal is reported evidence, not positive no-consumption proof",
+        "Retry elsewhere requires Control's complete never-consumed journal, current authority and the original deadline; it creates an independently retained fresh attempt"
       ],
       "status": "authored"
     },
@@ -104,8 +110,9 @@
       "id": "effects/reconcile",
       "title": "Reconcile answers update OUTCOME_UNKNOWN",
       "requirements": [
-        "platform-requirements.md §11.7 reconciliation",
-        "execution.md §5"
+        "platform-requirements.md \u00a711.7 reconciliation",
+        "execution.md \u00a75",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -114,8 +121,8 @@
       ],
       "when": "A tool with @Reconcile ends OUTCOME_UNKNOWN; reconcile answers APPLIED, NOT_APPLIED and UNKNOWN in three runs",
       "then": [
-        "Outcome updated with evidence; \"effectively once\" only with commit evidence",
-        "NOT_APPLIED re-execution only on opt-in, same key, new invocationId linked in audit"
+        "Outcome derivation preserves every attempt and effect; effectively-once claims require independent target commit evidence",
+        "NOT_APPLIED alone never grants re-execution; a fresh linked attempt on the same operation requires independently complete no-write proof or the separately approved safe-resend protocol, current authority and the original deadline"
       ],
       "status": "authored"
     },
@@ -123,7 +130,7 @@
       "id": "effects/no-reconcile-no-reexecute",
       "title": "Tools without reconcile are never re-executed",
       "requirements": [
-        "platform-requirements.md §11.7"
+        "platform-requirements.md \u00a711.7"
       ],
       "level": "integration",
       "targets": [
@@ -139,7 +146,7 @@
       "id": "effects/broker-evidence",
       "title": "The broker records evidence for each request",
       "requirements": [
-        "platform-requirements.md §11.7 rules"
+        "platform-requirements.md \u00a711.7 rules"
       ],
       "level": "integration",
       "targets": [
@@ -155,7 +162,7 @@
       "id": "effects/retry-library-warning",
       "title": "The packager warns about retry libraries",
       "requirements": [
-        "platform-requirements.md §11.7 rules"
+        "platform-requirements.md \u00a711.7 rules"
       ],
       "level": "unit",
       "targets": [
@@ -164,6 +171,63 @@
       "when": "A NON_IDEMPOTENT tool configures a known retry library",
       "then": [
         "A packaging warning"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/no-blind-retry",
+      "title": "An unknown operation never authorizes blind retry",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A consumed worker reports an unknown effect and the caller repeats its request",
+      "then": [
+        "Reservation is refused and submission returns the existing unknown invocation"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/EnterpriseOperationTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/settlement-no-authority",
+      "title": "Qualified settlement closes authority without another attempt",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A qualified consumed attempt ends and settlement is requested repeatedly",
+      "then": [
+        "Active settlement is refused; terminal settlement is idempotent, ends its matching lease and retains exactly one attempt"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/RecoveryAdmissionIntegrationTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/review-no-reissue",
+      "title": "Independent scope attestation never rewrites or reissues execution",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "Distinct independent reviewers approve a revision-bound closed-attempt scope review, then repeat approval",
+      "then": [
+        "Exactly one immutable proof applies; reported state and permit history remain unchanged"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/AttemptReviewTest.java"
       ],
       "status": "authored"
     }

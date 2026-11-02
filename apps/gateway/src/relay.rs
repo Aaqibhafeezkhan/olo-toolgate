@@ -79,6 +79,21 @@ pub trait RelayPort: Send + Sync {
         &'a self,
         request: &'a EnterpriseInvocationRequest,
     ) -> PortFuture<'a, Result<EnterpriseInvocation, ErrorCode>>;
+    /// Authorized Control metadata; this never reserves or dispatches execution.
+    fn read_invocation<'a>(
+        &'a self,
+        _context: &'a RequestContext,
+    ) -> PortFuture<'a, Result<EnterpriseInvocation, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
+    fn operation_history<'a>(
+        &'a self,
+        _context: &'a RequestContext,
+        _cursor: Option<&'a str>,
+        _limit: u16,
+    ) -> PortFuture<'a, Result<EnterpriseOperationHistoryPage, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
     fn reserve<'a>(
         &'a self,
         request: &'a EnterpriseReservationRequest,
@@ -331,6 +346,54 @@ impl RelayPort for HttpRelay {
             request,
             "EnterpriseInvocation",
         ))
+    }
+    fn read_invocation<'a>(
+        &'a self,
+        context: &'a RequestContext,
+    ) -> PortFuture<'a, Result<EnterpriseInvocation, ErrorCode>> {
+        Box::pin(async move {
+            if !crate::http::valid_operation_id(&context.request_id) {
+                return Err(ErrorCode::Validation);
+            }
+            self.exchange(
+                &format!(
+                    "/api/control/v1/access/invocations/{}/status",
+                    context.request_id
+                ),
+                Some(context),
+                "EnterpriseInvocation",
+                Self::MAX_DISPATCH_STATUS,
+            )
+            .await
+        })
+    }
+    fn operation_history<'a>(
+        &'a self,
+        context: &'a RequestContext,
+        cursor: Option<&'a str>,
+        limit: u16,
+    ) -> PortFuture<'a, Result<EnterpriseOperationHistoryPage, ErrorCode>> {
+        Box::pin(async move {
+            if !crate::http::valid_operation_id(&context.request_id)
+                || !(1..=100).contains(&limit)
+                || cursor.is_some_and(|value| !crate::http::valid_history_cursor(value))
+            {
+                return Err(ErrorCode::Validation);
+            }
+            let suffix = cursor
+                .map(|value| format!("&cursor={value}"))
+                .unwrap_or_default();
+            self.exchange(
+                &format!(
+                    "/api/control/v1/access/invocations/{}/history?limit={limit}{suffix}",
+                    context.request_id
+                ),
+                Some(context),
+                "EnterpriseOperationHistoryPage",
+                Self::MAX_DISPATCH_STATUS,
+            )
+            .await
+        })
     }
     fn reserve<'a>(
         &'a self,

@@ -1450,6 +1450,45 @@ pub enum EnterpriseApprovalType {
     #[serde(rename = "CONFIGURATION")]
     Configuration,
 }
+/// Canonical EnterpriseAttemptEffectScope wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseAttemptEffectScope {
+    #[serde(rename = "ADMISSION_ONLY")]
+    AdmissionOnly,
+    #[serde(rename = "QUALIFIED_BROKER_ONLY")]
+    QualifiedBrokerOnly,
+    #[serde(rename = "REVIEWER_WITNESSED")]
+    ReviewerWitnessed,
+    #[serde(rename = "LEGACY_UNKNOWN")]
+    LegacyUnknown,
+}
+/// Bounded attempt metadata; no bearer capabilities, raw input or target claim tokens.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseAttemptHistory {
+    pub attempt_id: String,
+    pub ordinal: u64,
+    pub state: EnterpriseInvocationState,
+    pub consumed: bool,
+    pub issued_at_unix_ms: u64,
+    pub expires_at_unix_ms: u64,
+    pub evidence_count: u64,
+    pub scope: EnterpriseAttemptEffectScope,
+    pub manifest_sealed: bool,
+    pub manifest_effect_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest_digest: Option<String>,
+    pub settled: bool,
+    pub grade: EnterpriseOutcomeGrade,
+}
+/// Exact closed-attempt scope attestation for independent maker/checker review; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseAttemptSettlementReview {
+    pub expected_outcome_revision: u64,
+    pub attempt_ids: Vec<String>,
+    pub no_further_effects: bool,
+}
 /// Saved authority, explicitly published signed snapshot and independently acknowledged device adoption are distinct states.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1679,6 +1718,41 @@ pub enum EnterpriseDecisionReason {
     #[serde(rename = "MANAGEMENT_DENIED")]
     ManagementDenied,
 }
+/// Canonical EnterpriseEffectGenerationState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseEffectGenerationState {
+    #[serde(rename = "AUTHORIZED")]
+    Authorized,
+    #[serde(rename = "RELEASED")]
+    Released,
+    #[serde(rename = "SENDING")]
+    Sending,
+    #[serde(rename = "CONSUMED")]
+    Consumed,
+    #[serde(rename = "AMBIGUOUS")]
+    Ambiguous,
+    #[serde(rename = "COMPLETED")]
+    Completed,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "CONFLICT")]
+    Conflict,
+}
+/// One immutable authorization-generation identity and its current evidence-derived state; response digests do not prove business-receipt equivalence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseEffectHistory {
+    pub effect_id: String,
+    pub generation: u64,
+    pub attempt_id: String,
+    pub route_id: String,
+    pub request_digest: String,
+    pub state: EnterpriseEffectGenerationState,
+    pub grade: EnterpriseOutcomeGrade,
+    pub evidence_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_digest: Option<String>,
+}
 /// Device-bound durable effect outcome and completed resource subset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1802,7 +1876,7 @@ pub struct EnterpriseHumanTarget {
     pub binding_id: String,
     pub device_id: String,
 }
-/// Durable exact binding and outcome state. OUTCOME_UNKNOWN never authorizes a blind retry.
+/// Durable exact binding and executor-reported state. operationOutcome, when present, is Control's independently derived business outcome; reported success alone never proves effects.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseInvocation {
@@ -1823,6 +1897,8 @@ pub struct EnterpriseInvocation {
     pub diagnostic_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reconciliation: Option<ReconciliationMethod>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_outcome: Option<EnterpriseOperationOutcome>,
 }
 /// Scoped durable effect states. A cursor does not disclose hidden rows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1897,6 +1973,51 @@ pub enum EnterpriseMemberType {
     #[serde(rename = "DEVICE")]
     Device,
 }
+/// Authorized operation snapshot and bounded generation history; a changed source revision invalidates the cursor rather than silently mixing snapshots.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseOperationHistoryPage {
+    pub operation: EnterpriseOperationOutcome,
+    pub attempts: Vec<EnterpriseAttemptHistory>,
+    pub effects: Vec<EnterpriseEffectHistory>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+    pub truncated: bool,
+}
+/// Control-derived business outcome; metadata never grants execution authority or automatic retry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseOperationOutcome {
+    pub operation_id: String,
+    pub state: EnterpriseOperationState,
+    pub revision: u64,
+    pub grade: EnterpriseOutcomeGrade,
+    pub journal_complete: bool,
+    pub attempt_count: u64,
+    pub effect_count: u64,
+    pub unresolved_effect_count: u64,
+    pub unsettled_attempt_count: u64,
+    pub finalized: bool,
+    pub retryable: bool,
+    pub deduplication_assumed: bool,
+    pub updated_at_unix_ms: u64,
+}
+/// Canonical EnterpriseOperationState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseOperationState {
+    #[serde(rename = "RUNNING")]
+    Running,
+    #[serde(rename = "OUTCOME_UNKNOWN")]
+    OutcomeUnknown,
+    #[serde(rename = "RECONCILIATION_REQUIRED")]
+    ReconciliationRequired,
+    #[serde(rename = "SUCCEEDED")]
+    Succeeded,
+    #[serde(rename = "PARTIAL")]
+    Partial,
+    #[serde(rename = "FAILED")]
+    Failed,
+}
 /// Scoped operational health and configured hard bounds. Snapshot lag never authorizes a cached effect.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1909,6 +2030,20 @@ pub struct EnterpriseOperationalStatus {
     pub clock_skew_ms: u64,
     pub authority_cache_grace_ms: u64,
     pub ready_probe_freshness_ms: u64,
+}
+/// Canonical EnterpriseOutcomeGrade wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseOutcomeGrade {
+    #[serde(rename = "REPORTED")]
+    Reported,
+    #[serde(rename = "CONTROL_PROVEN")]
+    ControlProven,
+    #[serde(rename = "TARGET_CONFIRMED")]
+    TargetConfirmed,
+    #[serde(rename = "REVIEWER_CONFIRMED")]
+    ReviewerConfirmed,
+    #[serde(rename = "TARGET_DEDUPLICATION_ASSUMED")]
+    TargetDeduplicationAssumed,
 }
 /// Short-lived audience-bound permit for one exact invocation and target.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1990,6 +2125,8 @@ pub struct EnterpriseReconciliationRequest {
     pub evidence_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt_settlement: Option<EnterpriseAttemptSettlementReview>,
 }
 /// Canonical EnterpriseReconciliationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2772,13 +2909,15 @@ pub struct RemoteToolRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<ErrorCode>,
 }
-/// Gateway-private queued request/result response.
+/// Authorized queued executor report/result. operationOutcome separately records the Control-derived business outcome; reported DONE alone does not prove completion.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RemoteToolResponse {
     pub record: RemoteToolRecord,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<RemoteToolResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_outcome: Option<EnterpriseOperationOutcome>,
 }
 /// Exact leased execution response. Failed execution carries a sanitized error code.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3241,6 +3380,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v1/local-tools.schema.json",
         include_str!("../schemas/v1/local-tools.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v1/operation.schema.json",
+        include_str!("../schemas/v1/operation.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v1/package.schema.json",

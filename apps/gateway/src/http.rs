@@ -11,7 +11,7 @@ use crate::{
 };
 use axum::{
     body::to_bytes,
-    extract::{Request, State},
+    extract::{Path, Query, Request, State},
     http::{HeaderMap, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -166,6 +166,8 @@ pub fn runtime_router(state: Arc<AppState>) -> Router {
             get(public_configuration),
         )
         .route("/access/invocations", post(authorize))
+        .route("/access/invocations/{id}", get(read_invocation))
+        .route("/access/invocations/{id}/history", get(operation_history))
         .route("/access/catalog", post(catalog))
         .route("/mcp", post(crate::mcp::ingress))
         .fallback(not_found)
@@ -534,6 +536,121 @@ async fn catalog(State(s): State<Arc<AppState>>, request: Request) -> Response {
     match s.gateway.authority.catalog(&context).await {
         Ok(c) => Json(c).into_response(),
         Err(e) => error(e, &correlation.request_id),
+    }
+}
+pub(crate) fn valid_operation_id(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= 128
+        && bytes[0].is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(b))
+}
+pub(crate) fn valid_history_cursor(value: &str) -> bool {
+    let Some((revision, offset)) = value.split_once(':') else {
+        return false;
+    };
+    !revision.is_empty()
+        && !offset.is_empty()
+        && !revision.starts_with('0')
+        && revision.len() <= 16
+        && offset.len() <= 4
+        && value.len() <= 32
+        && revision.bytes().all(|b| b.is_ascii_digit())
+        && offset.bytes().all(|b| b.is_ascii_digit())
+        && revision
+            .parse::<u64>()
+            .is_ok_and(|number| (1..=9_007_199_254_740_991).contains(&number))
+        && offset.parse::<u16>().is_ok_and(|number| number <= 4096)
+}
+fn read_context(
+    request: &Request,
+    id: &str,
+) -> Result<(RequestContext, Correlation), Box<Response>> {
+    let correlation = request
+        .extensions()
+        .get::<Correlation>()
+        .expect("guard correlation")
+        .clone();
+    if !valid_operation_id(id)
+        || request.headers().contains_key("content-encoding")
+        || request.headers().contains_key("transfer-encoding")
+        || single_header(request.headers(), "content-length").is_some_and(|value| value != "0")
+    {
+        return Err(Box::new(error(
+            ErrorCode::Validation,
+            &correlation.request_id,
+        )));
+    }
+    let mut context = request
+        .extensions()
+        .get::<RequestContext>()
+        .expect("guard authentication")
+        .clone();
+    context.request_id = id.to_owned();
+    Ok((context, correlation))
+}
+async fn read_invocation(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Response {
+    let (context, correlation) = match read_context(&request, &id) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
+    if request.uri().query().is_some() {
+        return error(ErrorCode::Validation, &correlation.request_id);
+    }
+    match s.gateway.authority.read_invocation(&context).await {
+        Ok(value) if crate::application::invocation_matches(&value, &context) => {
+            Json(value).into_response()
+        }
+        Ok(_) => error(ErrorCode::Validation, &correlation.request_id),
+        Err(code) => error(code, &correlation.request_id),
+    }
+}
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OperationHistoryQuery {
+    cursor: Option<String>,
+    #[serde(default = "history_limit")]
+    limit: u16,
+}
+fn history_limit() -> u16 {
+    50
+}
+async fn operation_history(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    query: Result<Query<OperationHistoryQuery>, axum::extract::rejection::QueryRejection>,
+    request: Request,
+) -> Response {
+    let (context, correlation) = match read_context(&request, &id) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
+    let query = match query {
+        Ok(Query(value))
+            if (1..=100).contains(&value.limit)
+                && value.cursor.as_deref().is_none_or(valid_history_cursor) =>
+        {
+            value
+        }
+        _ => return error(ErrorCode::Validation, &correlation.request_id),
+    };
+    match s
+        .gateway
+        .authority
+        .operation_history(&context, query.cursor.as_deref(), query.limit)
+        .await
+    {
+        Ok(value) if crate::application::operation_matches(&value.operation, &id) => {
+            Json(value).into_response()
+        }
+        Ok(_) => error(ErrorCode::Validation, &correlation.request_id),
+        Err(code) => error(code, &correlation.request_id),
     }
 }
 async fn authorize(State(s): State<Arc<AppState>>, request: Request) -> Response {

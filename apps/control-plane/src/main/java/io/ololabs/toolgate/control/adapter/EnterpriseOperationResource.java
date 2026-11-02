@@ -72,6 +72,16 @@ public class EnterpriseOperationResource {
     public Response reconciliation(@PathParam("id")String id){return reply(operations.reconciliation(actors.human(),id));}
     @POST @Path("reconciliations/{id}/decision") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response reconcile(@PathParam("id")String id,String document){return reply(operations.reconcile(actors.human(),id,body(document)));}
+    @POST @Path("invocations/{id}/status") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response callerStatus(@PathParam("id")String id,String document){return reply(operations.readFromGateway(gateway(),id,body(document)));}
+    @POST @Path("invocations/{id}/history") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response callerHistory(@PathParam("id")String id,@QueryParam("cursor")String cursor,
+            @QueryParam("limit")@DefaultValue("50")int limit,String document){
+        return reply(operations.historyFromGateway(gateway(),id,body(document),cursor,limit));
+    }
+    @GET @Path("invocations/{id}/history") @io.quarkus.security.Authenticated
+    public Response history(@PathParam("id")String id,@QueryParam("cursor")String cursor,
+            @QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.history(reader(),id,cursor,limit));}
     @GET @Path("invocations/{id}") @io.quarkus.security.Authenticated
     public Response invocation(@PathParam("id")String id){return reply(operations.get(reader(),id));}
     @POST @Path("invocations/{id}/cancel") @io.quarkus.security.Authenticated

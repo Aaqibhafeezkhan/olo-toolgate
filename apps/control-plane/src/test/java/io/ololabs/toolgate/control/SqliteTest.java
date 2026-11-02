@@ -18,7 +18,7 @@ final class SqliteTest {
             try(var r=s.executeQuery("SELECT version FROM quickstart_migrations ORDER BY version")){
                 assertTrue(r.next());assertEquals(1,r.getInt(1));
                 assertTrue(r.next());assertEquals(2,r.getInt(1));
-                assertTrue(r.next());assertEquals(3,r.getInt(1));assertTrue(r.next());assertEquals(4,r.getInt(1));assertTrue(r.next());assertEquals(5,r.getInt(1));assertTrue(r.next());assertEquals(6,r.getInt(1));assertFalse(r.next());
+                assertTrue(r.next());assertEquals(3,r.getInt(1));assertTrue(r.next());assertEquals(4,r.getInt(1));assertTrue(r.next());assertEquals(5,r.getInt(1));assertTrue(r.next());assertEquals(6,r.getInt(1));assertTrue(r.next());assertEquals(7,r.getInt(1));assertFalse(r.next());
             }
             try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name IN ('control_access_migration_archive','control_approvals','control_permit_leases','quickstart_vault')")){
                 assertFalse(r.next());
@@ -94,9 +94,9 @@ final class SqliteTest {
         }
         var upgraded=SqliteState.open(path);
         try(var c=upgraded.getConnection();var s=c.createStatement()){
-            try(var r=s.executeQuery("SELECT count(*) FROM quickstart_migrations")){assertTrue(r.next());assertEquals(6,r.getInt(1));}
+            try(var r=s.executeQuery("SELECT count(*) FROM quickstart_migrations")){assertTrue(r.next());assertEquals(7,r.getInt(1));}
             try(var r=s.executeQuery("SELECT document FROM control_records WHERE record_id='kept'")){assertTrue(r.next());assertTrue(r.getString(1).contains("Kept"));}
-            s.execute("INSERT INTO quickstart_migrations VALUES(7,'future')");
+            s.execute("INSERT INTO quickstart_migrations VALUES(8,'future')");
         }
         assertThrows(IllegalStateException.class,()->SqliteState.open(path));
     }

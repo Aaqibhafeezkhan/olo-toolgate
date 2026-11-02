@@ -75,3 +75,16 @@ The first-release schema includes the current invocation model directly. Pre-rel
 - `tests/contracts/test_migration_specs_v2.py` applies the current Flyway and Quickstart trees plus the specifications, and runs shared accept/refuse scenarios on SQLite always and on PostgreSQL when `TOOLGATE_D2_POSTGRES` is set. Both passed for this gate, on PostgreSQL 16 and SQLite 3.45.
 - `tests/contracts/test_contracts_v2.py` covers the amended schemas and fixtures.
 - D3 authors conformance cases for every transition in invocation-state-v2.md §3, including the ambiguous-dispatch, lease-expiry, rebind, late-result and cross-identity cases.
+
+
+## S10 amendment: derived business finality
+
+[ADR 048](048-derived-operation-finalization.md) adds PARTIAL to persisted
+business-key outcomes. The business outcome follows the complete operation
+projection: RUNNING has no outcome; uncertainty and reconciliation map to
+OUTCOME_UNKNOWN; SUCCEEDED maps to COMPLETED; PARTIAL and FAILED remain distinct.
+Executor-reported state is retained separately and cannot establish business
+completion. A final business status can leave finality only for
+RECONCILIATION_REQUIRED, except ADR 047's explicitly recorded proven-no-write
+FAILED-to-RUNNING recovery. Late evidence never grants execution authority.
+This amendment does not accept full roadmap-phase security claims.

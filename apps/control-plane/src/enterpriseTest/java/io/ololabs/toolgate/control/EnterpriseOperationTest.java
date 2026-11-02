@@ -233,6 +233,9 @@ class EnterpriseOperationTest {
         var response=graph.codec.model(runtime.result(alice,1L,"human-host").body(),RemoteToolResponse.class);
         assertEquals(RemoteToolState.DONE,response.record().state());
         assertEquals("Hello World",response.result().output().get("message").asText());
+        assertEquals(EnterpriseOperationState.OUTCOME_UNKNOWN,response.operationOutcome().state());
+        assertEquals(EnterpriseOutcomeGrade.REPORTED,response.operationOutcome().grade());
+        assertFalse(response.operationOutcome().retryable());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(alice,2L,"human-host")).status());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(reviewer,1L,"human-host")).status());
         graph.remove(Kind.GRANT,"human");saveGraph();
@@ -274,12 +277,18 @@ class EnterpriseOperationTest {
     EnterpriseInvocationRequest epochs(String id,String path,long session,long credential){var r=request(id,path);var c=r.context();
         var renewed=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),session,credential,c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
         return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null);}
+    /** Compare the preserved report independently of additive response-only outcome metadata. */
+    static EnterpriseInvocation reported(EnterpriseInvocation i){
+        return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),i.state(),i.revision(),
+                i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),
+                i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation());
+    }
     EnterpriseInvocation submitted(EnterpriseInvocationRequest r){return graph.codec.model(operations.submit(gateway,graph.codec.json(r)).body(),EnterpriseInvocation.class);}
     /** M5.3: the same logical operation with changed arguments is a conflict and never creates or changes an invocation. */
     @Test void changedArgumentsUnderTheSameKeyAreAConflict(){var first=submit("op-1");
         var conflict=assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(request("op-1","data/other.txt"))));
         assertEquals(409,conflict.status());
-        assertEquals(first,store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-1")));}
+        assertEquals(reported(first),store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-1")));}
     /** M5.3: rotating the workload credential replays the same invocation under the current credential epoch. */
     @Test void aRotatedCredentialReplaysTheSameInvocation(){var first=submit("op-2");
         graph.remove(Kind.WORKLOAD_BINDING,"workload");
@@ -362,8 +371,18 @@ class EnterpriseOperationTest {
         assertEquals(i.requestDigest(),resent.requestDigest());
         assertThrows(Failure.class,()->reserve(resent));}
     @Test void invocationsRecordTheirToolsReconciliationMethod(){assertEquals(ReconciliationMethod.MANUAL,submit("manual").reconciliation());}
-    @Test void unknownExternalOutcomeCannotTriggerBlindRetry(){var i=consume(reserve(submit("request")));var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report)).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());assertThrows(Failure.class,()->reserve(unknown));assertEquals(unknown,submit("request"));}
+    @Test void unknownExternalOutcomeCannotTriggerBlindRetry(){var i=consume(reserve(submit("request")));var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report)).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());assertThrows(Failure.class,()->reserve(unknown));assertEquals(unknown,reported(submit("request")));}
     @Test void successRequiresEveryResourceAndAResultDigest(){var i=consume(reserve(submit("request")));assertThrows(Failure.class,()->operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,List.of(),EnterpriseConformanceTest.DIGEST))));var success=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST);assertEquals(EnterpriseInvocationState.SUCCEEDED,graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(success)).body(),EnterpriseInvocation.class).state());}
+    @Test void historyRequiresCurrentAuthorizationAndDoesNotWriteOnDeniedRead(){
+        var i=submit("history-authorization");
+        assertEquals(200,operations.history(gateway,i.id(),null,10).status());
+        var before=store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id()));
+        graph.remove(Kind.GRANT,"human");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->operations.history(gateway,i.id(),null,10)).status());
+        assertEquals(before,store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id())));
+        assertEquals(400,assertThrows(Failure.class,()->operations.history(gateway,i.id(),"not-a-cursor",10)).status());
+        assertEquals(400,assertThrows(Failure.class,()->operations.history(gateway,i.id(),null,101)).status());
+    }
     @Test void responseRetrievalChecksRevokedAuthorization(){var i=consume(reserve(submit("request")));assertEquals(200,operations.get(gateway,i.id()).status());graph.remove(Kind.GRANT,"human");saveGraph();assertThrows(Failure.class,()->operations.get(gateway,i.id()));}
     @Test void durableGroupBudgetHasOneWinnerAcrossConcurrentSubmissions()throws Exception{
         var entry=graph.entries.get(Kind.GRANT.id("human"));var node=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(entry.document());((com.fasterxml.jackson.databind.node.ObjectNode)node.path("scope").path("conditions")).put("maxInvocationsPerMinute",1);graph.entries.put(entry.id(),graph.codec.entry(Kind.GRANT,graph.codec.json(node)));saveGraph();
@@ -524,6 +543,125 @@ class EnterpriseOperationTest {
         graph.add(Kind.TOOL,new ControlTool(original.id(),original.name(),original.enabled(),
                 original.revision()+1,definition,original.extractorId(),original.version(),original.packageDigest()));
         saveGraph();
+    }
+    @Test void reportedSuccessCannotFinalizeAConsumedUnqualifiedBusinessKey(){
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,10000L,null));
+        var i=consume(reserve(keyed("reported-key","data/report.txt","b6".repeat(32))));
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),
+                EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST)));
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","b6".repeat(32)));
+        assertEquals("OUTCOME_UNKNOWN",key.outcome());
+        var latest=store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id()));
+        assertEquals(EnterpriseOperationState.OUTCOME_UNKNOWN,latest.value().state());assertFalse(latest.value().retryable());
+        assertEquals(EnterpriseInvocationState.SUCCEEDED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(i.id())).state());
+        assertNull(key.tombstonedAt());
+    }
+    @Test void completedWriteWithAWorkerFailureKeepsAPartialBusinessKey(){
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,10000L,null));
+        var reservation=reserve(keyed("partial-key","data/report.txt","b7".repeat(32)));
+        // Trusted admission/target ports exercise derivation and SQL, not OCI or provider qualification.
+        var scope=new RecoveryAdmissionPolicy.Scope("device","pool","sha256:"+"a".repeat(64),
+                "sha256:"+"b".repeat(64),"sha256:"+"c".repeat(64),"sha256:"+"d".repeat(64),1L);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope(reservation.invocation().reservedNonce(),scope);return null;});
+        var i=consume(reservation);long now=clock.millis();String digest="sha256:"+"a".repeat(64);
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.effects().authorize(new EffectStore.Binding("partial-effect",i.id(),i.reservedNonce(),"approved-route",
+                    digest,"device","broker","handler","partial-auth",now+10000,now+60000),now);
+            tx.effects().consume("partial-auth",digest,"target","partial-claim",now);
+            tx.effects().targetOutcome("partial-auth","target","partial-claim","COMPLETED","sha256:"+"b".repeat(64),now);
+            return null;
+        });
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),
+                EnterpriseInvocationState.FAILED,List.of(),null)));
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(i.id()));
+        assertEquals("PARTIAL",key.outcome());assertNull(key.tombstonedAt());
+        var observed=graph.codec.model(operations.get(gateway,i.id()).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseInvocationState.FAILED,observed.state());
+        assertEquals(EnterpriseOperationState.PARTIAL,observed.operationOutcome().state());
+        assertEquals(EnterpriseOutcomeGrade.TARGET_CONFIRMED,observed.operationOutcome().grade());
+        assertFalse(observed.operationOutcome().retryable());assertThrows(Failure.class,()->reserve(observed));
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.effects().targetOutcome("partial-auth","target","partial-claim","FAILED","sha256:"+"c".repeat(64),now);
+            new OperationFinalizer(graph.codec).refresh(tx,i.id(),now);return null;
+        });
+        var changed=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(i.id()));
+        assertEquals("OUTCOME_UNKNOWN",changed.outcome());assertEquals(key.retainUntil(),changed.retainUntil());
+        assertEquals(key.fingerprint(),changed.fingerprint());assertEquals(key.invocation(),changed.invocation());
+        assertEquals(EnterpriseOperationState.RECONCILIATION_REQUIRED,store.transaction(gateway.tenant(),false,
+                tx->tx.enterprise().latestOperationOutcome(i.id())).value().state());
+    }
+    @Test void originalReviewOwnersRemainImmutableAcrossAgentOwnershipTransfer(){
+        var i=submit("review-ownership");
+        assertEquals(Set.of("alice","bob"),store.transaction(gateway.tenant(),false,tx->tx.enterprise().reviewOwners(i.id())));
+        graph.add(Kind.AGENT,new ControlAgent("agent","Transferred agent",null,true,2L,"admin"));saveGraph();
+        assertEquals(Set.of("alice","bob"),store.transaction(gateway.tenant(),false,tx->tx.enterprise().reviewOwners(i.id())));
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().saveReviewOwners(i.id(),tx.load().revision(),Set.of("admin"));return null;
+        }));
+        assertEquals(Set.of("alice","bob"),store.transaction(gateway.tenant(),false,tx->tx.enterprise().reviewOwners(i.id())));
+    }
+    private String callerContext(String id,java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> change){
+        var value=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.codec.json(request(id,"data/report.txt").context()));
+        change.accept(value);return value.toString();
+    }
+    @Test void nativeStatusAndHistoryReadCurrentOwnedMetadataWithoutAddingAuthority(){
+        var i=submit("caller-running");
+        var current=graph.codec.model(operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->{})).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseOperationState.RUNNING,current.operationOutcome().state());assertFalse(current.operationOutcome().retryable());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(i.id(),clock.millis())).isEmpty());
+        var reservation=reserve(i);assertEquals(EnterpriseOperationState.RUNNING,reservation.invocation().operationOutcome().state());
+        var history=graph.codec.model(operations.historyFromGateway(gateway,i.id(),callerContext(i.id(),v->{}),null,10).body(),EnterpriseOperationHistoryPage.class);
+        assertEquals(EnterpriseOperationState.RUNNING,history.operation().state());assertEquals(1,history.attempts().size());
+        assertFalse(history.attempts().getFirst().consumed());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(i.id(),clock.millis())).size());
+    }
+    @Test void currentCallerCanReadAfterExecutionDeadlineWithoutRebindingOrExtendingIt(){
+        var i=submit("caller-expired");var reservation=reserve(i);
+        clock=Clock.offset(clock,Duration.ofMillis(60001));
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        String context=callerContext(i.id(),v->v.put("expiresAtUnixMs",clock.millis()+15000));
+        var current=graph.codec.model(operations.readFromGateway(gateway,i.id(),context).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseInvocationState.EXPIRED,current.state());assertEquals(i.expiresAtUnixMs(),current.expiresAtUnixMs());
+        assertEquals(EnterpriseOperationState.FAILED,current.operationOutcome().state());assertFalse(current.operationOutcome().retryable());
+        assertEquals(reservation.invocation().reservedNonce(),current.reservedNonce());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveries(i.id(),100)).isEmpty());
+        assertEquals(1,graph.codec.model(operations.historyFromGateway(gateway,i.id(),context,null,10).body(),EnterpriseOperationHistoryPage.class).attempts().size());
+        assertThrows(Failure.class,()->reserve(current));
+    }
+    @Test void callerMetadataUsesRotatedCurrentProofWithoutRewritingHistoricalCredentials(){
+        var i=submit("caller-rotated");
+        graph.add(Kind.WORKLOAD_BINDING,new ControlWorkloadBinding("workload","workload",true,2L,"agent",RequestMode.DELEGATED,
+                "gateway","workload-subject","gateway","c".repeat(64),2L,EnterpriseConformanceTest.NOW+100000,"alice",null,1L,null,null));saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->{}))).status());
+        String current=callerContext(i.id(),v->v.put("credentialSha256","c".repeat(64)).put("credentialEpoch",2));
+        var view=graph.codec.model(operations.readFromGateway(gateway,i.id(),current).body(),EnterpriseInvocation.class);
+        assertEquals(1L,view.evaluation().context().credentialEpoch());
+        assertEquals(reported(i),store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(i.id())));
+        graph.remove(Kind.GRANT,"human");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->operations.historyFromGateway(gateway,i.id(),current,null,10)).status());
+    }
+    @Test void unownedAndUnknownCallerOperationsAreNotFoundAndFakeProofCannotRead(){
+        var i=submit("caller-private");
+        assertEquals(404,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("userId","bob")))).status());
+        assertEquals(404,assertThrows(Failure.class,()->operations.historyFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("agentId","another-agent")),null,10)).status());
+        assertEquals(404,assertThrows(Failure.class,()->operations.readFromGateway(gateway,"absent",callerContext("absent",v->{}))).status());
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("credentialSha256","0".repeat(64))))).status());
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("expiresAtUnixMs",clock.millis())))).status());
+    }
+    @Test void gatewayHumanMetadataRequiresTheConfiguredVerifiedUserIssuer(){
+        var original=request("caller-human","data/report.txt");
+        var context=new RequestContext("caller-human",gateway.tenant().value(),RequestMode.HUMAN,CredentialKind.STATIC_TOKEN,null,
+                "alice",null,null,List.of(),1L,null,null,null,"binding-a",null);
+        var owner=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        var i=graph.codec.model(operations.submitHuman(owner,new EnterpriseInvocationRequest(context,original.request(),
+                original.toolDigest(),original.packageDigest(),null,null),"device").body(),EnterpriseInvocation.class);
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),graph.codec.json(context))).status());
+        operations.userCredentialIssuer("https://identity.example");
+        var body=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.codec.json(context));
+        body.put("credentialKind","JWT").put("issuer","https://identity.example").put("credentialSha256","f".repeat(64)).put("expiresAtUnixMs",clock.millis()+10000);
+        assertEquals(200,operations.readFromGateway(gateway,i.id(),body.toString()).status());
+        body.put("issuer","https://wrong.example");
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),body.toString())).status());
     }
     @Test void requiredBusinessKeyIsRefusedBeforeAnyInvocationIsAdmitted() {
         businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,null,null));
@@ -746,6 +884,25 @@ class EnterpriseOperationTest {
             assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
         } finally {pool.shutdownNow();}
     }
+    @Test void verifiedDerivedSuccessCanRotateAWindowDespiteTheConservativeLegacySummary(){
+        windowPolicy();var reserved=reserve(submit("verified-window"));
+        // Trusted admission-port fixture, not an executor claim or an OCI qualification.
+        var scope=new RecoveryAdmissionPolicy.Scope("device","pool","sha256:"+"a".repeat(64),
+                "sha256:"+"b".repeat(64),"sha256:"+"c".repeat(64),"sha256:"+"d".repeat(64),1L);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope(reserved.invocation().reservedNonce(),scope);return null;});
+        var i=consume(reserved);
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),
+                EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST)));
+        assertEquals("OUTCOME_UNKNOWN",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(i.id())).state());
+        assertEquals(EnterpriseOperationState.SUCCEEDED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id())).value().state());
+        clock=Clock.offset(clock,Duration.ofMillis(6000));
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var next=submit("verified-window-next");assertNotEquals(i.id(),next.id());
+        assertEquals(EnterpriseInvocationState.QUEUED,next.state());
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(next.id()));
+        var history=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(row.tool(),row.namespace(),row.identity(),row.hash(),10));
+        assertEquals(1,history.size());assertEquals("COMPLETED",history.getFirst().outcome());
+    }
     @Test void requiredKeyNeverFallsBackToItsConfiguredWindow() {
         businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,5000L,10000L,null));
         assertEquals(400,assertThrows(Failure.class,()->submit("required-key-window-fallback")).status());
@@ -757,6 +914,15 @@ class EnterpriseOperationTest {
                 this::optionalWindowCoalescesNewRequestIdsWithoutBecomingAnExplicitKey,
                 this::elapsedWindowCannotReplaceAStillRunningOperation,
                 this::elapsedWindowCreatesANewOperationOnlyAfterPositiveResolution,
+                this::verifiedDerivedSuccessCanRotateAWindowDespiteTheConservativeLegacySummary,
+                this::reportedSuccessCannotFinalizeAConsumedUnqualifiedBusinessKey,
+                this::completedWriteWithAWorkerFailureKeepsAPartialBusinessKey,
+                this::originalReviewOwnersRemainImmutableAcrossAgentOwnershipTransfer,
+                this::nativeStatusAndHistoryReadCurrentOwnedMetadataWithoutAddingAuthority,
+                this::currentCallerCanReadAfterExecutionDeadlineWithoutRebindingOrExtendingIt,
+                this::callerMetadataUsesRotatedCurrentProofWithoutRewritingHistoricalCredentials,
+                this::unownedAndUnknownCallerOperationsAreNotFoundAndFakeProofCannotRead,
+                this::gatewayHumanMetadataRequiresTheConfiguredVerifiedUserIssuer,
                 this::tombstonedWindowHistorySurvivesANewResolvedGeneration,
                 this::ambiguousWindowRemainsFencedAfterItsDedupeDeadline,
                 this::concurrentWindowSubmissionsFromTwoServiceInstancesShareOneOperation,

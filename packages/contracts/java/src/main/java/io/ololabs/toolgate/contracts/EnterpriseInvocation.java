@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** Durable exact binding and outcome state. OUTCOME_UNKNOWN never authorizes a blind retry.
+/** Durable exact binding and executor-reported state. operationOutcome, when present, is Control's independently derived business outcome; reported success alone never proves effects.
  *
  * @param id canonical id value
  * @param requestDigest canonical requestDigest value
@@ -18,6 +18,7 @@ package io.ololabs.toolgate.contracts;
  * @param resultDigest canonical resultDigest value
  * @param diagnosticId canonical diagnosticId value
  * @param reconciliation canonical reconciliation value
+ * @param operationOutcome canonical operationOutcome value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EnterpriseInvocation(
@@ -33,7 +34,8 @@ public record EnterpriseInvocation(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "downstreamIdempotencyKey", required = false) String downstreamIdempotencyKey,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "resultDigest", required = false) String resultDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "diagnosticId", required = true) String diagnosticId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "reconciliation", required = false) ReconciliationMethod reconciliation
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "reconciliation", required = false) ReconciliationMethod reconciliation,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "operationOutcome", required = false) EnterpriseOperationOutcome operationOutcome
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -50,6 +52,7 @@ public record EnterpriseInvocation(
      * @param resultDigest canonical resultDigest value
      * @param diagnosticId canonical diagnosticId value
      * @param reconciliation canonical reconciliation value
+     * @param operationOutcome canonical operationOutcome value
      */
     public EnterpriseInvocation {
         java.util.Objects.requireNonNull(id, "id");
@@ -63,4 +66,6 @@ public record EnterpriseInvocation(
         completedResources = completedResources == null ? null : java.util.List.copyOf(completedResources);
         java.util.Objects.requireNonNull(diagnosticId, "diagnosticId");
     }
+    /** Construct stored/legacy execution state without a derived response projection. */
+    public EnterpriseInvocation(String id, String requestDigest, EnterpriseEvaluation evaluation, EnterpriseInvocationState state, Long revision, Long authorizationEpoch, String reservedNonce, Long expiresAtUnixMs, java.util.List<ResourceDescriptor> completedResources, String downstreamIdempotencyKey, String resultDigest, String diagnosticId, ReconciliationMethod reconciliation) { this(id, requestDigest, evaluation, state, revision, authorizationEpoch, reservedNonce, expiresAtUnixMs, completedResources, downstreamIdempotencyKey, resultDigest, diagnosticId, reconciliation, null); }
 }

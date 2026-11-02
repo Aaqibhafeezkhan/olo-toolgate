@@ -1119,6 +1119,28 @@
   },
   "EnterpriseApprovalState": "PENDING",
   "EnterpriseApprovalType": "OPERATION",
+  "EnterpriseAttemptEffectScope": "ADMISSION_ONLY",
+  "EnterpriseAttemptHistory": {
+    "attemptId": "device-1",
+    "ordinal": 1,
+    "state": "PENDING_APPROVAL",
+    "consumed": false,
+    "issuedAtUnixMs": 0,
+    "expiresAtUnixMs": 0,
+    "evidenceCount": 0,
+    "scope": "ADMISSION_ONLY",
+    "manifestSealed": false,
+    "manifestEffectCount": 0,
+    "settled": false,
+    "grade": "REPORTED"
+  },
+  "EnterpriseAttemptSettlementReview": {
+    "expectedOutcomeRevision": 1,
+    "attemptIds": [
+      "attempt-001-example"
+    ],
+    "noFurtherEffects": true
+  },
   "EnterpriseAuthorityStatus": {
     "directoryRevision": 1,
     "authorizationEpoch": 1,
@@ -1286,6 +1308,17 @@
     "diagnosticId": "example"
   },
   "EnterpriseDecisionReason": "MATCHED",
+  "EnterpriseEffectGenerationState": "AUTHORIZED",
+  "EnterpriseEffectHistory": {
+    "effectId": "effect-first",
+    "generation": 1,
+    "attemptId": "attempt-first",
+    "routeId": "olo-memory/memory.append",
+    "requestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "AUTHORIZED",
+    "grade": "CONTROL_PROVEN",
+    "evidenceCount": 0
+  },
   "EnterpriseEffectReport": {
     "invocationId": "example",
     "expectedRevision": 1,
@@ -1459,6 +1492,42 @@
     }
   },
   "EnterpriseMemberType": "USER",
+  "EnterpriseOperationHistoryPage": {
+    "operation": {
+      "operationId": "device-1",
+      "state": "RUNNING",
+      "revision": 1,
+      "grade": "REPORTED",
+      "journalComplete": false,
+      "attemptCount": 0,
+      "effectCount": 0,
+      "unresolvedEffectCount": 0,
+      "unsettledAttemptCount": 0,
+      "finalized": false,
+      "retryable": false,
+      "deduplicationAssumed": false,
+      "updatedAtUnixMs": 0
+    },
+    "attempts": [],
+    "effects": [],
+    "truncated": false
+  },
+  "EnterpriseOperationOutcome": {
+    "operationId": "device-1",
+    "state": "RUNNING",
+    "revision": 1,
+    "grade": "REPORTED",
+    "journalComplete": false,
+    "attemptCount": 0,
+    "effectCount": 0,
+    "unresolvedEffectCount": 0,
+    "unsettledAttemptCount": 0,
+    "finalized": false,
+    "retryable": false,
+    "deduplicationAssumed": false,
+    "updatedAtUnixMs": 0
+  },
+  "EnterpriseOperationState": "RUNNING",
   "EnterpriseOperationalStatus": {
     "pendingSnapshotEvents": 0,
     "oldestUnpublishedUnixMs": 0,
@@ -1469,6 +1538,7 @@
     "authorityCacheGraceMs": 0,
     "readyProbeFreshnessMs": 0
   },
+  "EnterpriseOutcomeGrade": "REPORTED",
   "EnterprisePermitClaims": {
     "issuer": "example",
     "audience": "example",

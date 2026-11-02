@@ -891,6 +891,29 @@ export interface EnterpriseApprovalReview {
 }
 export type EnterpriseApprovalState = "PENDING" | "APPROVED" | "DENIED" | "CANCELLED" | "EXPIRED" | "REVOKED";
 export type EnterpriseApprovalType = "OPERATION" | "CONFIGURATION";
+export type EnterpriseAttemptEffectScope = "ADMISSION_ONLY" | "QUALIFIED_BROKER_ONLY" | "REVIEWER_WITNESSED" | "LEGACY_UNKNOWN";
+/** Bounded attempt metadata; no bearer capabilities, raw input or target claim tokens. */
+export interface EnterpriseAttemptHistory {
+  readonly attemptId: string;
+  readonly ordinal: number;
+  readonly state: EnterpriseInvocationState;
+  readonly consumed: boolean;
+  readonly issuedAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly evidenceCount: number;
+  readonly scope: EnterpriseAttemptEffectScope;
+  readonly manifestSealed: boolean;
+  readonly manifestEffectCount: number;
+  readonly manifestDigest?: string;
+  readonly settled: boolean;
+  readonly grade: EnterpriseOutcomeGrade;
+}
+/** Exact closed-attempt scope attestation for independent maker/checker review; never execution authority. */
+export interface EnterpriseAttemptSettlementReview {
+  readonly expectedOutcomeRevision: number;
+  readonly attemptIds: ReadonlyArray<string>;
+  readonly noFurtherEffects: boolean;
+}
 /** Saved authority, explicitly published signed snapshot and independently acknowledged device adoption are distinct states. */
 export interface EnterpriseAuthorityStatus {
   readonly directoryRevision: number;
@@ -996,6 +1019,19 @@ export interface EnterpriseDecision {
   readonly diagnosticId: string;
 }
 export type EnterpriseDecisionReason = "MATCHED" | "NO_GRANT" | "IDENTITY_DISABLED" | "INVALID_CONTEXT" | "GROUP_UNAVAILABLE" | "NO_BINDING" | "DEVICE_UNTRUSTED" | "RESOURCE_REJECTED" | "BLOCKED" | "APPROVAL_REQUIRED" | "EVIDENCE_MISSING" | "EXPIRED" | "STALE_AUTHORITY" | "QUOTA_EXCEEDED" | "VERSION_MISMATCH" | "MANAGEMENT_DENIED";
+export type EnterpriseEffectGenerationState = "AUTHORIZED" | "RELEASED" | "SENDING" | "CONSUMED" | "AMBIGUOUS" | "COMPLETED" | "FAILED" | "CONFLICT";
+/** One immutable authorization-generation identity and its current evidence-derived state; response digests do not prove business-receipt equivalence. */
+export interface EnterpriseEffectHistory {
+  readonly effectId: string;
+  readonly generation: number;
+  readonly attemptId: string;
+  readonly routeId: string;
+  readonly requestDigest: string;
+  readonly state: EnterpriseEffectGenerationState;
+  readonly grade: EnterpriseOutcomeGrade;
+  readonly evidenceCount: number;
+  readonly receiptDigest?: string;
+}
 /** Device-bound durable effect outcome and completed resource subset. */
 export interface EnterpriseEffectReport {
   readonly invocationId: string;
@@ -1062,7 +1098,7 @@ export interface EnterpriseHumanTarget {
   readonly bindingId: string;
   readonly deviceId: string;
 }
-/** Durable exact binding and outcome state. OUTCOME_UNKNOWN never authorizes a blind retry. */
+/** Durable exact binding and executor-reported state. operationOutcome, when present, is Control's independently derived business outcome; reported success alone never proves effects. */
 export interface EnterpriseInvocation {
   readonly id: string;
   readonly requestDigest: string;
@@ -1077,6 +1113,7 @@ export interface EnterpriseInvocation {
   readonly resultDigest?: string;
   readonly diagnosticId: string;
   readonly reconciliation?: ReconciliationMethod;
+  readonly operationOutcome?: EnterpriseOperationOutcome;
 }
 /** Scoped durable effect states. A cursor does not disclose hidden rows. */
 export interface EnterpriseInvocationPage {
@@ -1104,6 +1141,31 @@ export interface EnterpriseManagementRule {
   readonly deviceScope?: string;
 }
 export type EnterpriseMemberType = "USER" | "AGENT" | "TOOL" | "DEVICE";
+/** Authorized operation snapshot and bounded generation history; a changed source revision invalidates the cursor rather than silently mixing snapshots. */
+export interface EnterpriseOperationHistoryPage {
+  readonly operation: EnterpriseOperationOutcome;
+  readonly attempts: ReadonlyArray<EnterpriseAttemptHistory>;
+  readonly effects: ReadonlyArray<EnterpriseEffectHistory>;
+  readonly next?: string;
+  readonly truncated: boolean;
+}
+/** Control-derived business outcome; metadata never grants execution authority or automatic retry. */
+export interface EnterpriseOperationOutcome {
+  readonly operationId: string;
+  readonly state: EnterpriseOperationState;
+  readonly revision: number;
+  readonly grade: EnterpriseOutcomeGrade;
+  readonly journalComplete: boolean;
+  readonly attemptCount: number;
+  readonly effectCount: number;
+  readonly unresolvedEffectCount: number;
+  readonly unsettledAttemptCount: number;
+  readonly finalized: boolean;
+  readonly retryable: boolean;
+  readonly deduplicationAssumed: boolean;
+  readonly updatedAtUnixMs: number;
+}
+export type EnterpriseOperationState = "RUNNING" | "OUTCOME_UNKNOWN" | "RECONCILIATION_REQUIRED" | "SUCCEEDED" | "PARTIAL" | "FAILED";
 /** Scoped operational health and configured hard bounds. Snapshot lag never authorizes a cached effect. */
 export interface EnterpriseOperationalStatus {
   readonly pendingSnapshotEvents: number;
@@ -1115,6 +1177,7 @@ export interface EnterpriseOperationalStatus {
   readonly authorityCacheGraceMs: number;
   readonly readyProbeFreshnessMs: number;
 }
+export type EnterpriseOutcomeGrade = "REPORTED" | "CONTROL_PROVEN" | "TARGET_CONFIRMED" | "REVIEWER_CONFIRMED" | "TARGET_DEDUPLICATION_ASSUMED";
 /** Short-lived audience-bound permit for one exact invocation and target. */
 export interface EnterprisePermitClaims {
   readonly issuer: string;
@@ -1172,6 +1235,7 @@ export interface EnterpriseReconciliationRequest {
   readonly completedResources: ReadonlyArray<ResourceDescriptor>;
   readonly evidenceDigest: string;
   readonly resultDigest?: string;
+  readonly attemptSettlement?: EnterpriseAttemptSettlementReview;
 }
 export type EnterpriseReconciliationState = "PENDING" | "APPLIED" | "DENIED";
 /** Protected operator review for group-only bootstrap or bounded recovery. */
@@ -1653,10 +1717,11 @@ export interface RemoteToolRecord {
   readonly completedAtUnixMs?: number;
   readonly error?: ErrorCode;
 }
-/** Gateway-private queued request/result response. */
+/** Authorized queued executor report/result. operationOutcome separately records the Control-derived business outcome; reported DONE alone does not prove completion. */
 export interface RemoteToolResponse {
   readonly record: RemoteToolRecord;
   readonly result?: RemoteToolResult;
+  readonly operationOutcome?: EnterpriseOperationOutcome;
 }
 /** Exact leased execution response. Failed execution carries a sanitized error code. */
 export interface RemoteToolResult {

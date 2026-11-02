@@ -11,6 +11,182 @@ import java.util.*;
 final class PostgresEnterpriseStore implements EnterpriseStore {
     public Operation operation(String id){return new JdbcOperationLedger(connection,tenant).operation(id);}
     public List<Attempt> attempts(String id,long now){return new JdbcOperationLedger(connection,tenant).attempts(id,now);}
+    public List<String> manifestEffects(String operation,String attempt){
+        try(var s=query("SELECT effect_id FROM control_attempt_effects WHERE tenant_id=? AND operation_id=? AND attempt_id=? ORDER BY effect_id LIMIT 4097",operation,attempt);var rows=s.executeQuery()){
+            var ids=new ArrayList<String>();while(rows.next())ids.add(rows.getString(1));
+            if(ids.size()>4096)throw Failure.unavailable();return List.copyOf(ids);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public ManifestSeal manifestSeal(String operation,String attempt){
+        try(var s=query("SELECT invocation_revision,created_at,effect_count,manifest_digest,document FROM control_attempt_manifest_seals WHERE tenant_id=? AND operation_id=? AND attempt_id=?",operation,attempt);var rows=s.executeQuery()){
+            if(!rows.next())return null;String document=rows.getString(5),digest=rows.getString(4);
+            if(!DirectoryService.digest(document).equals(digest))throw Failure.unavailable();
+            return new ManifestSeal(operation,attempt,rows.getLong(1),rows.getLong(2),rows.getInt(3),digest,document);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public ManifestSeal sealManifest(String operation,String attempt,long now){
+        var old=manifestSeal(operation,attempt);if(old!=null)return old;
+        var i=invocation(operation);if(i==null)throw Failure.conflict();
+        var lease=executionLease(operation);
+        if(lease!=null&&lease.fencingToken().equals(attempt)&&lease.expiresAt()>now)
+            saveExecutionLease(new ExecutionLease(operation,attempt,lease.deviceId(),now));
+        var ids=manifestEffects(operation,attempt);
+        var contents=new LinkedHashMap<String,Object>();contents.put("format","toolgate-attempt-manifest-v1");
+        contents.put("operationId",operation);contents.put("attemptId",attempt);contents.put("effects",ids);
+        String document=codec.json(contents),digest=DirectoryService.digest(document);
+        try(var s=query("INSERT INTO control_attempt_manifest_seals(tenant_id,operation_id,attempt_id,invocation_revision,created_at,effect_count,manifest_digest,document) VALUES(?,?,?,?,?,?,?,?)",
+                operation,attempt,i.revision(),now,ids.size(),digest,document)){
+            if(s.executeUpdate()!=1)throw Failure.conflict();return manifestSeal(operation,attempt);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public AttemptSettlement attemptSettlement(String operation,String attempt){
+        try(var s=query("SELECT proof,invocation_revision,recorded_at,source_digest,document FROM control_attempt_settlements WHERE tenant_id=? AND operation_id=? AND attempt_id=?",operation,attempt);var rows=s.executeQuery()){
+            if(!rows.next())return null;String document=rows.getString(5),digest=rows.getString(4);
+            if(!DirectoryService.digest(document).equals(digest))throw Failure.unavailable();
+            return new AttemptSettlement(operation,attempt,SettlementProof.valueOf(rows.getString(1)),
+                    rows.getLong(2),rows.getLong(3),digest,document);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public AttemptSettlement settleAttempt(String operation,String attempt,SettlementProof proof,long now){
+        var old=attemptSettlement(operation,attempt);if(old!=null)return old;
+        var i=invocation(operation);var seal=manifestSeal(operation,attempt);
+        if(i==null||seal==null||proof==null)throw Failure.conflict();
+        var contents=new LinkedHashMap<String,Object>();contents.put("format","toolgate-attempt-settlement-v1");
+        contents.put("operationId",operation);contents.put("attemptId",attempt);contents.put("proof",proof.name());
+        contents.put("manifestDigest",seal.digest());
+        String document=codec.json(contents),digest=DirectoryService.digest(document);
+        try(var s=query("INSERT INTO control_attempt_settlements(tenant_id,operation_id,attempt_id,proof,invocation_revision,recorded_at,source_digest,document) VALUES(?,?,?,?,?,?,?,?)",
+                operation,attempt,proof.name(),i.revision(),now,digest,document)){
+            if(s.executeUpdate()!=1)throw Failure.conflict();return attemptSettlement(operation,attempt);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public AttemptReview attemptReview(String operation,String attempt){
+        try(var s=query("SELECT reconciliation_id,expected_outcome_revision,recorded_at,source_digest,document FROM control_attempt_reviews WHERE tenant_id=? AND operation_id=? AND attempt_id=?",operation,attempt);var rows=s.executeQuery()){
+            if(!rows.next())return null;String document=rows.getString(5),digest=rows.getString(4);
+            if(!DirectoryService.digest(document).equals(digest))throw Failure.unavailable();
+            return new AttemptReview(operation,attempt,rows.getString(1),rows.getLong(2),rows.getLong(3),digest,document);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public boolean hasAttemptReviews(String operation){
+        try(var s=query("SELECT 1 FROM control_attempt_reviews WHERE tenant_id=? AND operation_id=? LIMIT 1",operation);var rows=s.executeQuery()){return rows.next();}
+        catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public AttemptReview recordAttemptReview(String operation,String attempt,String reconciliation,long now){
+        var old=attemptReview(operation,attempt);
+        if(old!=null){if(!old.reconciliationId().equals(reconciliation))throw Failure.conflict();return old;}
+        var review=reconciliation(reconciliation);var outcome=latestOperationOutcome(operation);var seal=manifestSeal(operation,attempt);
+        if(review==null||outcome==null||seal==null||review.request().attemptSettlement()==null)throw Failure.conflict();
+        long directoryRevision;
+        try(var s=query("SELECT revision FROM control_tenant_authority WHERE tenant_id=?");var rows=s.executeQuery()){
+            if(!rows.next())throw Failure.unavailable();directoryRevision=rows.getLong(1);
+        }catch(SQLException failure){throw Failure.unavailable();}
+        var contents=new LinkedHashMap<String,Object>();contents.put("format","toolgate-attempt-review-v1");
+        contents.put("operationId",operation);contents.put("attemptId",attempt);contents.put("manifestDigest",seal.digest());
+        contents.put("outcomeSourceDigest",outcome.sourceDigest());contents.put("review",review);
+        contents.put("directoryRevision",directoryRevision);contents.put("authorizationEpoch",authorizationEpoch());
+        String document=codec.json(contents),digest=DirectoryService.digest(document);
+        try(var s=query("INSERT INTO control_attempt_reviews(tenant_id,operation_id,attempt_id,reconciliation_id,expected_outcome_revision,recorded_at,source_digest,document) VALUES(?,?,?,?,?,?,?,?)",
+                operation,attempt,reconciliation,review.request().attemptSettlement().expectedOutcomeRevision(),now,digest,document)){
+            if(s.executeUpdate()!=1)throw Failure.conflict();return attemptReview(operation,attempt);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public FinalizationPreparation prepareFinalization(String operation,long now){
+        return new JdbcOperationFinalization(connection,tenant,this,codec).prepare(operation,now);
+    }
+    public OperationFinalizationPolicy.Facts finalizationFacts(String operation,long now){
+        return new JdbcOperationFinalization(connection,tenant,this,codec).facts(operation,now);
+    }
+    public List<EnterpriseEffectHistory> effectHistory(String operation,int offset,int limit){
+        if(offset<0||offset>4096||limit<1||limit>101)throw Failure.validation();
+        var result=new ArrayList<EnterpriseEffectHistory>();
+        try(var s=query("SELECT e.effect_id,g.generation,g.attempt_id,e.route_id,e.request_digest,g.state,g.consumer,g.claim_token,"
+                +"(SELECT count(*) FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation),"
+                +"CASE WHEN EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND w.source='TARGET:'||g.consumer AND w.outcome=g.state) THEN 1 ELSE 0 END "
+                +"FROM control_effects e JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id "
+                +"WHERE e.tenant_id=? AND e.operation_id=? ORDER BY e.effect_id,g.generation LIMIT ? OFFSET ?",operation,limit,offset);var rows=s.executeQuery()){
+            while(rows.next()){
+                String state=rows.getString(6),consumer=rows.getString(7),claim=rows.getString(8);
+                boolean witnessed=consumer!=null&&claim!=null&&rows.getInt(10)==1;
+                String receipt=witnessed&&state.equals("COMPLETED")
+                        ?JdbcOperationFinalization.receipt(tenant,rows.getString(1),consumer,claim):null;
+                var grade=witnessed?EnterpriseOutcomeGrade.TARGET_CONFIRMED:state.equals("RELEASED")
+                        ?EnterpriseOutcomeGrade.CONTROL_PROVEN:EnterpriseOutcomeGrade.REPORTED;
+                result.add(new EnterpriseEffectHistory(rows.getString(1),rows.getLong(2),rows.getString(3),
+                        rows.getString(4),rows.getString(5),EnterpriseEffectGenerationState.valueOf(state),
+                        grade,rows.getLong(9),receipt));
+            }
+            return List.copyOf(result);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public Set<String> reviewOwners(String operation){
+        try(var s=query("SELECT document,source_digest FROM control_operation_review_owners WHERE tenant_id=? AND operation_id=?",operation);var rows=s.executeQuery()){
+            if(!rows.next())return null;String document=rows.getString(1);
+            if(!DirectoryService.digest(document).equals(rows.getString(2)))throw Failure.unavailable();
+            var value=(com.fasterxml.jackson.databind.JsonNode)codec.value(document);var owners=new TreeSet<String>();
+            if(!value.path("owners").isArray())throw Failure.unavailable();
+            for(var owner:value.path("owners")){
+                if(!owner.isTextual())throw Failure.unavailable();
+                owners.add(io.ololabs.toolgate.control.domain.Ids.valid(owner.asText()));
+            }
+            if(owners.isEmpty()||owners.size()>66)throw Failure.unavailable();return Set.copyOf(owners);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public void saveReviewOwners(String operation,long directoryRevision,Set<String> owners){
+        if(owners==null||owners.isEmpty()||owners.size()>66)throw Failure.validation();
+        owners.forEach(io.ololabs.toolgate.control.domain.Ids::valid);
+        var contents=new LinkedHashMap<String,Object>();contents.put("format","toolgate-review-owners-v1");
+        contents.put("operationId",operation);contents.put("owners",new TreeSet<>(owners));
+        String document=codec.json(contents),digest=DirectoryService.digest(document);
+        try(var s=query("INSERT INTO control_operation_review_owners(tenant_id,operation_id,directory_revision,source_digest,document) VALUES(?,?,?,?,?)",
+                operation,directoryRevision,digest,document)){if(s.executeUpdate()!=1)throw Failure.conflict();}
+        catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public OutcomeSnapshot latestOperationOutcome(String operation){
+        try(var s=query("SELECT document,source_digest,invocation_revision FROM control_operation_outcomes WHERE tenant_id=? AND operation_id=? ORDER BY revision DESC LIMIT 1",operation);var rows=s.executeQuery()){
+            return rows.next()?new OutcomeSnapshot(codec.model(rows.getString(1),EnterpriseOperationOutcome.class),rows.getString(2),rows.getLong(3)):null;
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public OutcomeSnapshot recordOperationOutcome(EnterpriseOperationOutcome value,String sourceDigest,long invocationRevision){
+        var old=latestOperationOutcome(value.operationId());
+        if(old!=null&&old.sourceDigest().equals(sourceDigest)&&old.value().state()==value.state()){
+            syncBusinessOutcome(old.value());return old;
+        }
+        String document=checked(value,EnterpriseOperationOutcome.class);
+        try(var s=query("INSERT INTO control_operation_outcomes(tenant_id,operation_id,revision,invocation_revision,state,source_digest,recorded_at,document) VALUES(?,?,?,?,?,?,?,?)",
+                value.operationId(),value.revision(),invocationRevision,value.state().name(),sourceDigest,value.updatedAtUnixMs(),document)){
+            if(s.executeUpdate()!=1)throw Failure.conflict();syncBusinessOutcome(value);return latestOperationOutcome(value.operationId());
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    private void syncBusinessOutcome(EnterpriseOperationOutcome value){
+        String outcome=switch(value.state()){
+            case RUNNING->null;case SUCCEEDED->"COMPLETED";case PARTIAL->"PARTIAL";case FAILED->"FAILED";default->"OUTCOME_UNKNOWN";
+        };
+        try(var s=bound("UPDATE control_business_keys SET outcome=? WHERE tenant_id=? AND invocation_id=? "
+                +"AND NOT(COALESCE(outcome,'') IN('CANCELLED','EXPIRED','REJECTED') AND ?='FAILED') "
+                +"AND (outcome IS NULL OR outcome<>? OR CAST(? AS TEXT) IS NULL)",outcome,tenant,value.operationId(),outcome,outcome,outcome)){
+            s.executeUpdate();
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public String operationEvidenceHead(String operation){
+        var head=new LinkedHashMap<String,Object>();
+        var queries=new LinkedHashMap<String,String>();
+        queries.put("attempts","SELECT count(*) FROM control_operation_attempts WHERE tenant_id=? AND operation_id=?");
+        queries.put("snapshots","SELECT count(*) FROM control_attempt_snapshots WHERE tenant_id=? AND operation_id=?");
+        queries.put("executionEvidence","SELECT count(*) FROM control_execution_evidence WHERE tenant_id=? AND invocation_id=?");
+        queries.put("effects","SELECT count(*) FROM control_effects WHERE tenant_id=? AND operation_id=?");
+        queries.put("generationRevision","SELECT COALESCE(sum(revision),0) FROM control_effect_generations WHERE tenant_id=? AND operation_id=?");
+        queries.put("effectEvidence","SELECT count(*) FROM control_effect_evidence e WHERE e.tenant_id=? AND EXISTS(SELECT 1 FROM control_effects f WHERE f.tenant_id=e.tenant_id AND f.effect_id=e.effect_id AND f.operation_id=?)");
+        queries.put("manifestMembers","SELECT count(*) FROM control_attempt_effects WHERE tenant_id=? AND operation_id=?");
+        queries.put("manifestSeals","SELECT count(*) FROM control_attempt_manifest_seals WHERE tenant_id=? AND operation_id=?");
+        queries.put("settlements","SELECT count(*) FROM control_attempt_settlements WHERE tenant_id=? AND operation_id=?");
+        queries.put("reviews","SELECT count(*) FROM control_attempt_reviews WHERE tenant_id=? AND operation_id=?");
+        try{
+            for(var item:queries.entrySet())try(var s=query(item.getValue(),operation);var rows=s.executeQuery()){
+                if(!rows.next())throw Failure.unavailable();head.put(item.getKey(),rows.getLong(1));
+            }
+        }catch(SQLException failure){throw Failure.unavailable();}
+        return codec.json(head);
+    }
     public RecoveryAdmissionPolicy.Scope recoveryScope(String attempt){
         try(var s=query("SELECT device_id,pool_id,image_digest,runtime_digest,descriptor_digest,profile_digest,profile_revision FROM control_attempt_recovery_scopes WHERE tenant_id=? AND attempt_id=?",attempt);var rows=s.executeQuery()){
             return rows.next()?new RecoveryAdmissionPolicy.Scope(rows.getString(1),rows.getString(2),rows.getString(3),
@@ -139,13 +315,16 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
     }
     public void replaceBusinessKey(BusinessKey previous,BusinessKey next,long now){
         var operation=operation(previous.invocation());
+        var projection=latestOperationOutcome(previous.invocation());
+        boolean resolved=projection!=null&&Set.of(EnterpriseOperationState.SUCCEEDED,EnterpriseOperationState.FAILED).contains(projection.value().state())
+                ||operation!=null&&operation.state().equals("FAILED")&&(projection==null||projection.value().state()!=EnterpriseOperationState.RECONCILIATION_REQUIRED);
         if(!"DEDUPE_WINDOW".equals(previous.source())||!"DEDUPE_WINDOW".equals(next.source())
                 ||previous.dedupeExpiresAt()==null||previous.dedupeExpiresAt()>now
                 ||next.dedupeExpiresAt()==null||next.dedupeExpiresAt()<=now||next.retainUntil()<next.dedupeExpiresAt()
                 ||next.outcome()!=null||next.tombstonedAt()!=null||previous.invocation().equals(next.invocation())
                 ||!previous.tool().equals(next.tool())||!previous.namespace().equals(next.namespace())
                 ||!previous.identity().equals(next.identity())||!previous.hash().equals(next.hash())
-                ||operation==null||operation.legacy()||!Set.of("FAILED","SUCCEEDED").contains(operation.state())
+                ||operation==null||operation.legacy()||!resolved
                 ||!previous.equals(businessKey(previous.tool(),previous.namespace(),previous.identity(),previous.hash())))throw Failure.conflict();
         try{
             try(var archive=bound("INSERT INTO control_business_key_history(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,outcome,tombstoned_at,archived_at) SELECT tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,outcome,tombstoned_at,? FROM control_business_keys WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=? AND invocation_id=? AND source='DEDUPE_WINDOW'",now,tenant,previous.tool(),previous.namespace(),previous.identity(),previous.hash(),previous.invocation())){
@@ -162,7 +341,7 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         if(limit<1||limit>100)throw Failure.validation();
         var keys=new ArrayList<String[]>();
         try{
-            try(var s=query("SELECT k.tool_id,k.namespace,k.namespace_identity,k.business_key_hash,k.invocation_id FROM control_business_keys k JOIN control_operations o ON o.tenant_id=k.tenant_id AND o.operation_id=k.invocation_id WHERE k.tenant_id=? AND k.retain_until<=? AND k.tombstoned_at IS NULL AND k.outcome IS NOT NULL AND k.outcome<>'OUTCOME_UNKNOWN' AND NOT o.legacy AND o.state IN('FAILED','SUCCEEDED') ORDER BY k.retain_until,k.tool_id,k.namespace,k.namespace_identity,k.business_key_hash LIMIT ?",now,limit);var rows=s.executeQuery()){
+            try(var s=query("SELECT k.tool_id,k.namespace,k.namespace_identity,k.business_key_hash,k.invocation_id FROM control_business_keys k JOIN control_operations o ON o.tenant_id=k.tenant_id AND o.operation_id=k.invocation_id WHERE k.tenant_id=? AND k.retain_until<=? AND k.tombstoned_at IS NULL AND k.outcome IS NOT NULL AND k.outcome<>'OUTCOME_UNKNOWN' AND NOT o.legacy AND ((o.state IN('FAILED','SUCCEEDED') OR EXISTS(SELECT 1 FROM control_operation_outcomes v  WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id AND v.state IN('SUCCEEDED','FAILED')  AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)))  AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id  AND v.state='RECONCILIATION_REQUIRED' AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id))) ORDER BY k.retain_until,k.tool_id,k.namespace,k.namespace_identity,k.business_key_hash LIMIT ?",now,limit);var rows=s.executeQuery()){
                 while(rows.next())keys.add(new String[]{rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5)});
             }
             int count=0;
@@ -178,8 +357,21 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         catch(SQLException failure){throw Failure.unavailable();}
     }
     public void saveExecutionEvidence(String id,String fence,String digest,String document,long now){
-        try(var s=query("INSERT INTO control_execution_evidence(tenant_id,invocation_id,fencing_token,report_digest,document,recorded_at) VALUES(?,?,?,?,?,?) ON CONFLICT DO NOTHING",id,fence,digest,document,now)){s.executeUpdate();}
-        catch(SQLException failure){throw Failure.unavailable();}
+        try{
+            boolean local=SqliteState.local(connection),qualified;
+            String state=local?"json_extract(ep.document,'$.state')":"ep.document::jsonb->>'state'";
+            String enabled=local?"json_extract(d.document,'$.enabled')=1":"d.document::jsonb->>'enabled'='true'";
+            String device=local?"json_extract(i.document,'$.evaluation.context.deviceId')":"i.document::jsonb->'evaluation'->'context'->>'deviceId'";
+            try(var check=query("SELECT 1 FROM control_enterprise_nonces n JOIN control_attempt_recovery_scopes s ON s.tenant_id=n.tenant_id AND s.operation_id=n.invocation_id AND s.attempt_id=n.nonce "
+                    +"JOIN control_enterprise_invocations i ON i.tenant_id=n.tenant_id AND i.invocation_id=n.invocation_id "
+                    +"JOIN control_endpoints ep ON ep.tenant_id=s.tenant_id AND ep.device_id=s.device_id "
+                    +"JOIN control_records d ON d.tenant_id=s.tenant_id AND d.kind='DEVICE' AND d.record_id=s.device_id "
+                    +"WHERE n.tenant_id=? AND n.invocation_id=? AND n.nonce=? AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND n.consumed_at<=? "
+                    +"AND s.device_id="+device+" AND "+state+"='ACTIVE' AND "+enabled+(local?"":" FOR SHARE OF ep,d"),id,fence,now);
+                    var rows=check.executeQuery()){qualified=rows.next();}
+            try(var insert=query("INSERT INTO control_execution_evidence(tenant_id,invocation_id,fencing_token,report_digest,document,recorded_at,qualified_report) VALUES(?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+                    id,fence,digest,document,now,qualified)){insert.executeUpdate();}
+        }catch(SQLException failure){throw Failure.unavailable();}
     }
     public ExecutionLease executionLease(String id){
         try(var s=query("SELECT fencing_token,device_id,expires_at FROM control_execution_leases WHERE tenant_id=? AND invocation_id=?",id);var r=s.executeQuery()){
@@ -239,6 +431,10 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
     }
     public EnterpriseInvocation invocation(String id){try(var s=query("SELECT document FROM control_enterprise_invocations WHERE tenant_id=? AND invocation_id=?",id);var rows=s.executeQuery()){return rows.next()?codec.model(rows.getString(1),EnterpriseInvocation.class):null;}catch(SQLException failure){throw Failure.unavailable();}}
     public void saveInvocation(EnterpriseInvocation value,long createdAt,long expectedRevision){
+        // Derived response metadata is never persisted as executor or authorization evidence.
+        if(value.operationOutcome()!=null)value=new EnterpriseInvocation(value.id(),value.requestDigest(),value.evaluation(),
+                value.state(),value.revision(),value.authorizationEpoch(),value.reservedNonce(),value.expiresAtUnixMs(),
+                value.completedResources(),value.downstreamIdempotencyKey(),value.resultDigest(),value.diagnosticId(),value.reconciliation());
         String document=checked(value,EnterpriseInvocation.class);int changed;String previous=null;
         try{
             // Every ledger transition is recorded as a platform run event in the same transaction.
@@ -250,6 +446,13 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
             if(changed!=1)throw Failure.conflict();
         }catch(SQLException failure){throw Failure.unavailable();}
         new JdbcOperationLedger(connection,tenant).observe(value,document,createdAt,expectedRevision==0);
+        boolean terminal=switch(value.state()){case PENDING_APPROVAL,QUEUED,RESERVED,DISPATCHED,EXECUTING->false;default->true;};
+        if(terminal&&value.reservedNonce()!=null){
+            boolean known;
+            try(var s=query("SELECT 1 FROM control_operation_attempts WHERE tenant_id=? AND operation_id=? AND attempt_id=?",value.id(),value.reservedNonce());var rows=s.executeQuery()){known=rows.next();}
+            catch(SQLException failure){throw Failure.unavailable();}
+            if(known)sealManifest(value.id(),value.reservedNonce(),createdAt);
+        }
         // Commit terminal business-key outcome with its invocation, including watchdog settlement.
         String outcome=switch(value.state()){
             case SUCCEEDED -> "COMPLETED";

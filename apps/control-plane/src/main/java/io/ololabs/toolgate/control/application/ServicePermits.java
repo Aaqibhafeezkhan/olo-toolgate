@@ -183,6 +183,7 @@ public final class ServicePermits {
             var settled=tx.effects().targetOutcome(reference.authNonce(),audience.name(),reference.claimToken(),
                 request.outcome().name(),request.resultDigest(),now);
             tx.audit(service.id(),"SERVICE_TARGET_OUTCOME","effect:"+effect.binding().effectId(),settled.revision(),"target-"+DirectoryService.digest(reference.authNonce()).substring(0,32),DirectoryService.digest(codec.json(request)));
+            new OperationFinalizer(codec).refresh(tx,effect.binding().operationId(),now);
             return claimReply(settled,audience,reference.claimToken());
         });
     }

@@ -18,8 +18,8 @@ class ExecutionLeaseStorageTest(unittest.TestCase):
         self.assertFalse(db.run("UPDATE control_execution_leases SET expires_at=-1"))
         self.assertTrue(db.run("UPDATE control_execution_leases SET expires_at=40000"))
         evidence = f"'{TENANT}','lease-attempt','fence-1','{'a'*64}','{{}}',1000"
-        self.assertTrue(db.run('INSERT INTO control_execution_evidence VALUES(' + evidence + ')'))
-        self.assertFalse(db.run('INSERT INTO control_execution_evidence VALUES(' + evidence + ')'))
+        self.assertTrue(db.run('INSERT INTO control_execution_evidence(tenant_id,invocation_id,fencing_token,report_digest,document,recorded_at) VALUES(' + evidence + ')'))
+        self.assertFalse(db.run('INSERT INTO control_execution_evidence(tenant_id,invocation_id,fencing_token,report_digest,document,recorded_at) VALUES(' + evidence + ')'))
 
     def test_sqlite_lease_identity_and_evidence_are_immutable(self):
         db = SqliteRun(versions(QUICKSTART, 'V*.sql'))

@@ -220,12 +220,15 @@ final class RecoveryAdmissionIntegrationTest {
     @Test void unqualifiedFailureAndAnySentGenerationStayFencedOnPublicReplay() throws Exception {
         var unqualified=fixture(false,false);var rig=unqualified.bridge().rig;
         var failed=failAfterConsumption(unqualified,permit(unqualified,"public-unqualified"));
-        assertEquals(failed,replay(unqualified,rig.operations,failed.id()));
+        var replayed=replay(unqualified,rig.operations,failed.id());
+        assertEquals(failed,EnterpriseOperationTest.reported(replayed));
+        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOperationState.OUTCOME_UNKNOWN,replayed.operationOutcome().state());
+        assertFalse(replayed.operationOutcome().retryable());
         var qualified=fixture(true,false);var r=qualified.bridge().rig;
         var signed=permit(qualified,"public-sent");consume(qualified,signed);
         var write=grant(qualified,signed,"sent-handler");qualified.bridge().sending(write,"broker-test","sent-handler");
         var uncertain=reportFailure(qualified,signed);
-        assertEquals(uncertain,replay(qualified,r.operations,uncertain.id()));
+        assertEquals(uncertain,EnterpriseOperationTest.reported(replay(qualified,r.operations,uncertain.id())));
         assertTrue(r.store.transaction(r.gateway.tenant(),false,tx->tx.enterprise().recoveries(uncertain.id(),100)).isEmpty());
     }
 
@@ -289,6 +292,236 @@ final class RecoveryAdmissionIntegrationTest {
         assertThrows(Failure.class,()->f.bridge().sending(unsent,"broker-test","unsent"));
         assertThrows(Failure.class,()->f.bridge().claimConsume(unsent,owner.claimToken()));
         assertEquals("COMPLETED",rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().byNonce(claims.nonce())).state());
+    }
+
+    private EnterpriseStore.AttemptSettlement settle(Fixture f,SignedInvocationPermit signed){
+        var rig=f.bridge().rig;var claims=rig.signer.verifyInvocation(signed);
+        return rig.store.transaction(rig.gateway.tenant(),true,tx->tx.enterprise().settleAttempt(claims.invocationId(),
+                claims.nonce(),EnterpriseStore.SettlementProof.QUALIFIED_BROKER_ONLY,rig.clock.millis()));
+    }
+    @Test void aQualifiedTerminalAttemptClosesItsLeaseAndSettlesWithoutNewAuthority() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"qualified-settlement");consume(f,signed);
+        assertThrows(Failure.class,()->settle(f,signed));
+        var failed=reportFailure(f,signed);
+        var lease=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().executionLease(failed.id()));
+        assertTrue(lease.expiresAt()<=rig.clock.millis());
+        var record=settle(f,signed);assertEquals(record,settle(f,signed));
+        assertEquals(EnterpriseStore.SettlementProof.QUALIFIED_BROKER_ONLY,record.proof());
+        assertEquals(EnterpriseInvocationState.FAILED,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().invocation(failed.id())).state());
+        assertEquals(1,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().attempts(failed.id(),rig.clock.millis())).size());
+    }
+    @Test void settlementRejectsEveryPotentialWriteUntilTargetWitnessResolvesIt() throws Exception {
+        var unsent=fixture(true,false);var u=permit(unsent,"settle-unsent");consume(unsent,u);
+        var old=grant(unsent,u,"unsent");reportFailure(unsent,u);
+        assertNotNull(settle(unsent,u));assertThrows(Failure.class,()->unsent.bridge().sending(old,"broker-test","unsent"));
+        var sent=fixture(true,false);var s=permit(sent,"settle-sent");consume(sent,s);
+        var grant=grant(sent,s,"sent");sent.bridge().sending(grant,"broker-test","sent");reportFailure(sent,s);
+        assertThrows(Failure.class,()->settle(sent,s));
+        var pending=fixture(true,false);var p=permit(pending,"settle-target");consume(pending,p);
+        var target=grant(pending,p,"target");pending.bridge().sending(target,"broker-test","target");
+        String token="e".repeat(64);pending.bridge().claimConsume(target,token);reportFailure(pending,p);
+        assertThrows(Failure.class,()->settle(pending,p));
+        pending.bridge().targetOutcome(target,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.FAILED);
+        assertNotNull(settle(pending,p));
+        // A later contradiction remains independently visible despite the immutable settlement.
+        pending.bridge().targetOutcome(target,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.COMPLETED);
+        var rig=pending.bridge().rig;var claims=rig.signer.verifyService(target);
+        assertEquals("CONFLICT",rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().byNonce(claims.nonce())).state());
+    }
+    @Test void aDisabledEndpointOrDirectoryDeviceCannotSupplySettlementProof() throws Exception {
+        for(boolean endpoint:List.of(true,false)){
+            var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"disabled-settlement");
+            consume(f,signed);
+            if(endpoint)rig.store.transaction(rig.gateway.tenant(),true,tx->{
+                var old=tx.endpoint("device");var document=(ObjectNode)rig.graph.codec.value(old.document());
+                document.put("state","REVOKED").put("revision",document.path("revision").asLong()+1);
+                tx.saveEndpoint(new Store.EndpointRecord(old.id(),old.fingerprint(),document.toString(),old.csr(),old.reportDigest(),old.acknowledgment()));
+                return null;
+            });
+            else{
+                var id=io.ololabs.toolgate.control.domain.Ids.Kind.DEVICE.id("device");
+                var document=(ObjectNode)rig.graph.codec.value(rig.graph.entries.get(id).document());
+                document.put("enabled",false).put("revision",document.path("revision").asLong()+1);
+                var entry=rig.graph.codec.entry(io.ololabs.toolgate.control.domain.Ids.Kind.DEVICE,document.toString());
+                rig.graph.entries.put(entry.id(),entry);rig.saveGraph();
+            }
+            reportFailure(f,signed);
+            assertThrows(Failure.class,()->settle(f,signed));
+            var claims=rig.signer.verifyInvocation(signed);
+            assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().attemptSettlement(claims.invocationId(),claims.nonce())));
+        }
+    }
+
+    private OperationFinalizationPolicy.Result project(Fixture f,String operation){
+        var rig=f.bridge().rig;
+        return rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var persisted=new OperationFinalizer(rig.graph.codec).refresh(tx,operation,rig.clock.millis());
+            var derived=OperationFinalizationPolicy.derive(tx.enterprise().finalizationFacts(operation,rig.clock.millis()));
+            assertEquals(derived.status().name(),persisted.state().name());
+            assertFalse(persisted.retryable());
+            assertEquals(persisted,new OperationFinalizer(rig.graph.codec).refresh(tx,operation,rig.clock.millis()+1));
+            return derived;
+        });
+    }
+    private EnterpriseInvocation reportSuccess(Fixture f,SignedInvocationPermit signed){
+        var rig=f.bridge().rig;var claims=rig.signer.verifyInvocation(signed);
+        var report=JSON.createObjectNode().put("invocationId",claims.invocationId()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED");
+        var result=report.putObject("result");result.put("kind","RESULT").put("resultType","complete").put("isError",false);result.putArray("content");
+        return rig.graph.codec.model(rig.operations.reportInvocation(rig.gateway.tenant(),tx->"device",report.toString(),claims.nonce()).body(),EnterpriseInvocation.class);
+    }
+    @Test void authoritativeProjectionUsesAllRecoveryGenerationsAndWaitsForWorkerClosure() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var a=permit(f,"all-generation-projection");consume(f,a);
+        grant(f,a,"unsent");var failed=reportFailure(f,a);
+        assertEquals(OperationFinalizationPolicy.Status.FAILED,project(f,failed.id()).status());
+        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOutcomeGrade.CONTROL_PROVEN,
+                rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(failed.id())).value().grade());
+        assertEquals(EnterpriseInvocationState.QUEUED,replay(f,rig.operations,failed.id()).state());
+        var b=permit(f,failed.id());consume(f,b);var write=grant(f,b,"replacement");
+        f.bridge().sending(write,"broker-test","replacement");String token="f".repeat(64);f.bridge().claimConsume(write,token);
+        assertEquals(OperationFinalizationPolicy.Status.RUNNING,project(f,failed.id()).status());
+        f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.COMPLETED);
+        assertEquals(OperationFinalizationPolicy.Status.RUNNING,project(f,failed.id()).status());
+        reportSuccess(f,b);
+        assertEquals(OperationFinalizationPolicy.Status.SUCCEEDED,project(f,failed.id()).status());
+        assertEquals(2,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().finalizationFacts(failed.id(),rig.clock.millis())).effects().getFirst().generations().size());
+        var observed=rig.graph.codec.model(rig.operations.get(rig.gateway,failed.id()).body(),EnterpriseInvocation.class);
+        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOperationState.SUCCEEDED,observed.operationOutcome().state());
+        var first=rig.graph.codec.model(rig.operations.history(rig.gateway,failed.id(),null,1).body(),
+                io.ololabs.toolgate.contracts.EnterpriseOperationHistoryPage.class);
+        assertEquals(2,first.attempts().size());assertEquals(1,first.effects().size());assertNotNull(first.next());
+        var second=rig.graph.codec.model(rig.operations.history(rig.gateway,failed.id(),first.next(),1).body(),
+                io.ololabs.toolgate.contracts.EnterpriseOperationHistoryPage.class);
+        assertEquals(1,second.effects().size());assertNull(second.next());
+        assertEquals(2L,second.effects().getFirst().generation());assertNotNull(second.effects().getFirst().receiptDigest());
+        String metadata=rig.graph.codec.json(second);
+        for(String forbidden:List.of(token,"claimToken","authNonce","credentialHeaders","arguments","permit"))
+            assertFalse(metadata.contains(forbidden),forbidden);
+        f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.FAILED);
+        assertEquals(409,assertThrows(Failure.class,()->rig.operations.history(rig.gateway,failed.id(),first.next(),1)).status());
+        assertEquals(OperationFinalizationPolicy.Status.RECONCILIATION_REQUIRED,project(f,failed.id()).status());
+    }
+    @Test void anUnqualifiedSuccessfulReportAndAnUnresolvedQualifiedWriteStayUnknown() throws Exception {
+        var unqualified=fixture(false,false);var signed=permit(unqualified,"unqualified-projection");consume(unqualified,signed);
+        var i=reportSuccess(unqualified,signed);
+        assertEquals(EnterpriseInvocationState.SUCCEEDED,i.state());
+        assertEquals(OperationFinalizationPolicy.Status.OUTCOME_UNKNOWN,project(unqualified,i.id()).status());
+        var f=fixture(true,false);var p=permit(f,"ambiguous-projection");consume(f,p);
+        var write=grant(f,p,"ambiguous");f.bridge().sending(write,"broker-test","ambiguous");
+        var failed=reportFailure(f,p);var result=project(f,failed.id());
+        assertEquals(OperationFinalizationPolicy.Status.OUTCOME_UNKNOWN,result.status());
+        assertEquals(1,result.unresolvedEffects());
+    }
+    @Test void completedTransportWithAnErrorFrameCannotSupplySuccessfulAttemptEvidence() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"error-frame");
+        consume(f,signed);var claims=rig.signer.verifyInvocation(signed);var write=grant(f,signed,"error-frame");
+        f.bridge().sending(write,"broker-test","error-frame");String token="e".repeat(64);f.bridge().claimConsume(write,token);
+        f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.COMPLETED);
+        var report=JSON.createObjectNode().put("invocationId",claims.invocationId()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED");
+        var result=report.putObject("result");result.put("kind","RESULT").put("resultType","complete").put("isError",true);result.putArray("content");
+        var received=rig.graph.codec.model(rig.operations.reportInvocation(rig.gateway.tenant(),tx->"device",report.toString(),claims.nonce()).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseInvocationState.FAILED,received.state());
+        assertEquals(OperationFinalizationPolicy.Status.PARTIAL,project(f,received.id()).status());
+    }
+    @Test void contradictoryTargetEvidenceCancelsActiveAuthorityButKeepsReportAndHistory() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"active-conflict");
+        consume(f,signed);var claims=rig.signer.verifyInvocation(signed);var write=grant(f,signed,"active-conflict");
+        f.bridge().sending(write,"broker-test","active-conflict");String token="c".repeat(64);f.bridge().claimConsume(write,token);
+        f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.COMPLETED);
+        f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.FAILED);
+        assertEquals(403,assertThrows(Failure.class,()->grant(f,signed,"refused-conflict")).status());
+        var heartbeat=JSON.createObjectNode().put("invocationId",claims.invocationId()).put("fencingToken",claims.nonce());
+        var reply=rig.operations.heartbeat(rig.gateway.tenant(),tx->"device",claims.invocationId(),heartbeat.toString());
+        assertTrue(JSON.readTree(reply.body()).path("cancelRequested").asBoolean());
+        var current=rig.graph.codec.model(rig.operations.get(rig.gateway,claims.invocationId()).body(),EnterpriseInvocation.class);
+        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOperationState.RECONCILIATION_REQUIRED,current.operationOutcome().state());
+        assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,current.state());
+        assertEquals(current.state(),reportSuccess(f,signed).state());
+        var history=JSON.readTree(rig.operations.history(rig.gateway,claims.invocationId(),null,100).body());
+        assertEquals("RECONCILIATION_REQUIRED",history.path("operation").path("state").asText());
+        assertFalse(history.path("operation").path("retryable").asBoolean());
+        assertEquals("CONFLICT",history.path("effects").get(0).path("state").asText());
+    }
+    @Test void qualifiedLateSuccessDoesNotResolveAPendingWriteButCanCompleteAfterItsTargetWitness() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"late-qualified-success");
+        consume(f,signed);var claims=rig.signer.verifyInvocation(signed);var write=grant(f,signed,"late-qualified");
+        f.bridge().sending(write,"broker-test","late-qualified");String token="7".repeat(64);f.bridge().claimConsume(write,token);
+        rig.clock=java.time.Clock.offset(rig.clock,java.time.Duration.ofMillis(30001));
+        rig.operations=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,rig.clock,"control","toolgate-client",60000,100);
+        f.bridge().permits=new ServicePermits(rig.store,rig.graph.codec,rig.operations);
+        rig.operations.sweep(rig.gateway.tenant());
+        assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,reportSuccess(f,signed).state());
+        assertEquals(OperationFinalizationPolicy.Status.OUTCOME_UNKNOWN,project(f,claims.invocationId()).status());
+        f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.COMPLETED);
+        assertEquals(OperationFinalizationPolicy.Status.SUCCEEDED,project(f,claims.invocationId()).status());
+        // Renew the user's credential through ordinary admission replay; this cannot resend a completed effect.
+        var original=f.bridge().request(claims.invocationId());var context=original.context();
+        var renewed=new io.ololabs.toolgate.contracts.v2.RequestContext(context.requestId(),context.tenantId(),context.mode(),
+                context.credentialKind(),context.issuer(),context.userId(),context.agentId(),context.workloadBindingId(),context.chain(),
+                context.sessionEpoch(),context.credentialEpoch(),context.delegatedSessionEpoch(),rig.clock.millis()+15000,
+                context.bindingId(),context.credentialSha256());
+        var request=new io.ololabs.toolgate.contracts.EnterpriseInvocationRequest(renewed,original.request(),
+                original.toolDigest(),original.packageDigest(),original.downstreamIdempotencyKey(),original.executionContext(),original.businessKeyHash());
+        assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,rig.graph.codec.model(f.bridge().submit(request).body(),EnterpriseInvocation.class).state());
+        var history=rig.graph.codec.model(rig.operations.history(rig.gateway,claims.invocationId(),null,10).body(),
+                io.ololabs.toolgate.contracts.EnterpriseOperationHistoryPage.class);
+        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOperationState.SUCCEEDED,history.operation().state());
+        assertEquals(EnterpriseInvocationState.SUCCEEDED,history.attempts().getFirst().state());
+        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOutcomeGrade.REPORTED,history.attempts().getFirst().grade());
+        assertTrue(history.attempts().getFirst().settled());assertFalse(history.operation().retryable());
+        assertTrue(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().recoveries(claims.invocationId(),100)).isEmpty());
+    }
+    @Test void reenablingADeviceCannotUpgradeAnEarlierUnqualifiedLateReport() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"late-disabled-success");
+        consume(f,signed);var write=grant(f,signed,"disabled-late");String token="8".repeat(64);
+        f.bridge().sending(write,"broker-test","disabled-late");f.bridge().claimConsume(write,token);reportFailure(f,signed);
+        rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var old=tx.endpoint("device");var document=(ObjectNode)rig.graph.codec.value(old.document());
+            document.put("state","REVOKED").put("revision",document.path("revision").asLong()+1);
+            tx.saveEndpoint(new Store.EndpointRecord(old.id(),old.fingerprint(),document.toString(),old.csr(),old.reportDigest(),old.acknowledgment()));return null;
+        });
+        // Trusted receipt-port fixture: public disabled-device ingress is separately authenticated.
+        assertEquals(EnterpriseInvocationState.FAILED,reportSuccess(f,signed).state());
+        assertEquals(OperationFinalizationPolicy.Status.OUTCOME_UNKNOWN,project(f,"late-disabled-success").status());
+        rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var old=tx.endpoint("device");var document=(ObjectNode)rig.graph.codec.value(old.document());
+            document.put("state","ACTIVE").put("revision",document.path("revision").asLong()+1);
+            tx.saveEndpoint(new Store.EndpointRecord(old.id(),old.fingerprint(),document.toString(),old.csr(),old.reportDigest(),old.acknowledgment()));return null;
+        });
+        f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.COMPLETED);
+        assertEquals(OperationFinalizationPolicy.Status.PARTIAL,project(f,"late-disabled-success").status());
+        reportSuccess(f,signed); // The same immutable report remains unqualified despite re-enablement.
+        assertEquals(OperationFinalizationPolicy.Status.PARTIAL,project(f,"late-disabled-success").status());
+    }
+    @Test void outcomePersistenceAndItsAuditRollBackTogether() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"outcome-rollback");
+        consume(f,signed);
+        String before=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.auditPage(0,100));
+        var previous=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome("outcome-rollback"));
+        assertThrows(IllegalStateException.class,()->rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var running=tx.enterprise().invocation("outcome-rollback");
+            var terminal=new EnterpriseInvocation(running.id(),running.requestDigest(),running.evaluation(),EnterpriseInvocationState.SUCCEEDED,
+                    running.revision()+1,running.authorizationEpoch(),running.reservedNonce(),running.expiresAtUnixMs(),
+                    running.evaluation().resources(),running.downstreamIdempotencyKey(),"a".repeat(64),running.diagnosticId(),running.reconciliation());
+            tx.enterprise().saveInvocation(terminal,rig.clock.millis(),running.revision());
+            var value=new OperationFinalizer(rig.graph.codec).refresh(tx,"outcome-rollback",rig.clock.millis());
+            assertTrue(value.finalized());
+            throw new IllegalStateException("rollback");
+        }));
+        assertEquals(previous,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome("outcome-rollback")));
+        assertEquals(before,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.auditPage(0,100)));
+        assertEquals(EnterpriseInvocationState.EXECUTING,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().invocation("outcome-rollback")).state());
+        reportSuccess(f,signed);project(f,"outcome-rollback");
+    }
+    @Test void recordedSettlementDoesNotLoseItsHistoricalProofWhenDeviceTrustChanges() throws Exception {
+        var f=fixture(true,false);var rig=f.bridge().rig;var signed=permit(f,"historical-settlement");
+        consume(f,signed);reportSuccess(f,signed);
+        assertEquals(OperationFinalizationPolicy.Status.SUCCEEDED,project(f,"historical-settlement").status());
+        rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var old=tx.endpoint("device");var document=(ObjectNode)rig.graph.codec.value(old.document());
+            document.put("state","REVOKED").put("revision",document.path("revision").asLong()+1);
+            tx.saveEndpoint(new Store.EndpointRecord(old.id(),old.fingerprint(),document.toString(),old.csr(),old.reportDigest(),old.acknowledgment()));return null;
+        });
+        assertEquals(OperationFinalizationPolicy.Status.SUCCEEDED,project(f,"historical-settlement").status());
     }
 
     @Test void realSignedAdmissionCapturesScopeBeforeConsumptionAndBindsEverySignedDigest() throws Exception {
@@ -366,6 +599,17 @@ final class RecoveryAdmissionIntegrationTest {
         lateReceiptsCannotReplaceTheRecoveredDispatchOrItsCurrentOutcome();
         onlyAProvenUnsentGenerationCanReceiveFreshWriteAuthority();
         aRecoveredGenerationCanCompleteOnlyOnceThroughTheTargetClaimSdk();
+        aQualifiedTerminalAttemptClosesItsLeaseAndSettlesWithoutNewAuthority();
+        settlementRejectsEveryPotentialWriteUntilTargetWitnessResolvesIt();
+        aDisabledEndpointOrDirectoryDeviceCannotSupplySettlementProof();
+        authoritativeProjectionUsesAllRecoveryGenerationsAndWaitsForWorkerClosure();
+        anUnqualifiedSuccessfulReportAndAnUnresolvedQualifiedWriteStayUnknown();
+        recordedSettlementDoesNotLoseItsHistoricalProofWhenDeviceTrustChanges();
+        outcomePersistenceAndItsAuditRollBackTogether();
+        qualifiedLateSuccessDoesNotResolveAPendingWriteButCanCompleteAfterItsTargetWitness();
+        reenablingADeviceCannotUpgradeAnEarlierUnqualifiedLateReport();
+        completedTransportWithAnErrorFrameCannotSupplySuccessfulAttemptEvidence();
+        contradictoryTargetEvidenceCancelsActiveAuthorityButKeepsReportAndHistory();
         concurrentPublicReplayAfterRestartCreatesOneRecoveryAndOneNewPermit();
         publicRecoveryRechecksCurrentGrantApprovalCredentialAndOriginalDeadline();
         anExistingLiveApprovalAllowsRecoveryButAChangedObligationDoesNot();

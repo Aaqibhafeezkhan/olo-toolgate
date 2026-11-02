@@ -246,6 +246,7 @@ export class ControlClient {
     return this.send(operations.deleteControlUser, { id: user.id, revision: user.revision, key });
   }
   invocation(id:string,signal?:AbortSignal):Promise<import("@olo-labs/toolgate-contracts").EnterpriseInvocation>{return this.send(operations.getEnterpriseInvocation,{id,signal});}
+  operationHistory(id:string,cursor?:string,signal?:AbortSignal):Promise<import("@olo-labs/toolgate-contracts").EnterpriseOperationHistoryPage>{const query=new URLSearchParams({limit:'50'});if(cursor)query.set('cursor',cursor);return this.send(operations.getEnterpriseOperationHistory,{id,query,signal});}
   cancelInvocation(id:string,revision:number):Promise<import("@olo-labs/toolgate-contracts").EnterpriseInvocation>{return this.send(operations.cancelEnterpriseInvocation,{id,revision});}
   approvals(cursor?: string, signal?: AbortSignal): Promise<EnterpriseApprovalPage> {
     const query = new URLSearchParams({ limit: '50' }); if (cursor) query.set('cursor', cursor);

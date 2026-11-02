@@ -32,6 +32,7 @@ impl Contracts {
             ("RequestContext", "v2/common"),
             ("EnterpriseInvocationRequest", "v1/enterprise"),
             ("EnterpriseInvocation", "v1/enterprise"),
+            ("EnterpriseOperationHistoryPage", "v1/operation"),
             ("EnterpriseReservationRequest", "v1/enterprise"),
             ("EnterpriseReservation", "v1/enterprise"),
             ("EnterpriseAuthorizationOutcome", "v1/enterprise"),

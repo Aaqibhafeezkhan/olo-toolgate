@@ -590,7 +590,7 @@ public final class ServerPackages {
             if (actor.userId() == null || !actor.userId().equals(context.userId())
                     || context.mode() != io.ololabs.toolgate.contracts.v2.RequestMode.HUMAN
                     || !Objects.equals(context.sessionEpoch(), sessionEpoch)) throw ManagementAccess.denied();
-            operations.requireFresh(actor.tenant(), tx, invocation);
+            operations.requireMetadataFresh(actor.tenant(), tx, invocation);
             var relayed = current(tx.packages().relayed(invocationId));
             if (relayed == null || !relayed.hostId().equals(context.deviceId())) throw notFound();
             var status = status(relayed); RemoteToolResult result = null; ErrorCode error = null;
@@ -613,7 +613,7 @@ public final class ServerPackages {
             else if (state == RemoteToolState.FAILED) error = ErrorCode.DEPENDENCY_UNAVAILABLE;
             var record = new RemoteToolRecord(invocationId, context.deviceId(), null, evaluation.toolId(), state,
                     evaluation.nowUnixMs(), invocation.expiresAtUnixMs(), null, null, null, error);
-            return reply(200, new RemoteToolResponse(record, result));
+            return reply(200, new RemoteToolResponse(record, result, new OperationFinalizer(codec).refresh(tx,invocationId,operations.clock(tx))));
         });
     }
 

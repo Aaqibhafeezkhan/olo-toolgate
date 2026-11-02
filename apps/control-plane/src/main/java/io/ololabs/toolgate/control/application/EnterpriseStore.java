@@ -11,6 +11,32 @@ public interface EnterpriseStore {
     record Attempt(String id,String operationId,String state,Long consumedAt,long issuedAt,long expiresAt,long revision,long evidenceCount) {}
     default Operation operation(String id){throw Failure.unavailable();}
     default List<Attempt> attempts(String operationId,long now){throw Failure.unavailable();}
+    record ManifestSeal(String operationId,String attemptId,long invocationRevision,long createdAt,int effectCount,String digest,String document) {}
+    default List<String> manifestEffects(String operation,String attempt){throw Failure.unavailable();}
+    default ManifestSeal manifestSeal(String operation,String attempt){throw Failure.unavailable();}
+    /** Closure only; never supplies execution or replacement authority. */
+    default ManifestSeal sealManifest(String operation,String attempt,long now){throw Failure.unavailable();}
+    enum SettlementProof { NEVER_CONSUMED, QUALIFIED_BROKER_ONLY }
+    record AttemptSettlement(String operationId,String attemptId,SettlementProof proof,long invocationRevision,long recordedAt,String digest,String document) {}
+    default AttemptSettlement attemptSettlement(String operation,String attempt){throw Failure.unavailable();}
+    default AttemptSettlement settleAttempt(String operation,String attempt,SettlementProof proof,long now){throw Failure.unavailable();}
+    record AttemptReview(String operationId,String attemptId,String reconciliationId,long outcomeRevision,long recordedAt,String digest,String document) {}
+    default AttemptReview attemptReview(String operation,String attempt){throw Failure.unavailable();}
+    default AttemptReview recordAttemptReview(String operation,String attempt,String reconciliation,long now){throw Failure.unavailable();}
+    default boolean hasAttemptReviews(String operation){throw Failure.unavailable();}
+    record FinalizationPreparation(int closed,int settled,String digest) {}
+    default FinalizationPreparation prepareFinalization(String operation,long now){throw Failure.unavailable();}
+    default OperationFinalizationPolicy.Facts finalizationFacts(String operation,long now){throw Failure.unavailable();}
+    /** Ordered metadata only; no dispatch capabilities, arguments or target claim tokens. */
+    default List<EnterpriseEffectHistory> effectHistory(String operation,int offset,int limit){throw Failure.unavailable();}
+    /** Original admission ownership, never retroactively inferred after a transfer. */
+    default java.util.Set<String> reviewOwners(String operation){throw Failure.unavailable();}
+    default void saveReviewOwners(String operation,long directoryRevision,java.util.Set<String> owners){throw Failure.unavailable();}
+    record OutcomeSnapshot(EnterpriseOperationOutcome value,String sourceDigest,long invocationRevision) {}
+    default OutcomeSnapshot latestOperationOutcome(String operation){throw Failure.unavailable();}
+    default OutcomeSnapshot recordOperationOutcome(EnterpriseOperationOutcome value,String sourceDigest,long invocationRevision){throw Failure.unavailable();}
+    /** Canonical input head counters exclude the finalization records/audit themselves. */
+    default String operationEvidenceHead(String operation){throw Failure.unavailable();}
     default void saveRecoveryScope(String attempt,RecoveryAdmissionPolicy.Scope scope){throw Failure.unavailable();}
     default RecoveryAdmissionPolicy.Scope recoveryScope(String attempt){throw Failure.unavailable();}
     record Recovery(String operationId,long fromRevision,long toRevision,String proof,long createdAt,String document) {}

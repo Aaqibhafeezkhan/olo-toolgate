@@ -1263,7 +1263,7 @@
     },
     "EnterpriseInvocation": {
       "type": "object",
-      "description": "Durable exact binding and outcome state. OUTCOME_UNKNOWN never authorizes a blind retry.",
+      "description": "Durable exact binding and executor-reported state. operationOutcome, when present, is Control's independently derived business outcome; reported success alone never proves effects.",
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -1315,6 +1315,9 @@
         },
         "reconciliation": {
           "$ref": "tool.schema.json#/$defs/ReconciliationMethod"
+        },
+        "operationOutcome": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOperationOutcome"
         }
       },
       "required": [
@@ -2842,6 +2845,9 @@
         "resultDigest": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "attemptSettlement": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseAttemptSettlementReview"
         }
       },
       "required": [

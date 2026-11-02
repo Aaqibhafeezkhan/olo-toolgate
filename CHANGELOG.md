@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Derive separate operation outcomes and bounded history across every attempt
+  and effect generation. Seal attempt manifests, retain qualified late evidence,
+  fence conflicting work and support independent revision-bound scope review.
+  Expose current-authority metadata in Gateway/MCP and human/console results.
+  Coordinate V7 and current contract readers; reported success alone cannot
+  resolve ambiguous work. Full original distributed-suite acceptance remains outstanding.
+
 - Recover safe failed operations under their original deadline using immutable
   Control proofs, fresh attempt nonces and current authorization. Default-off
   device/pool/image qualification restricts consumed recovery to supported

@@ -4,15 +4,16 @@
   "area": "audit-spool",
   "title": "Audit spool exhaustion and fencing",
   "sources": [
-    "platform-requirements.md §12.7 row 11",
-    "docs/security/threat-models/tool-host.md"
+    "platform-requirements.md \u00a712.7 row 11",
+    "docs/security/threat-models/tool-host.md",
+    "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
   ],
   "cases": [
     {
       "id": "audit/spool-full",
       "title": "Normal space exhausted refuses new contacts",
       "requirements": [
-        "platform-requirements.md §12.7 row 11",
+        "platform-requirements.md \u00a712.7 row 11",
         "T-AD-6"
       ],
       "level": "integration",
@@ -32,8 +33,9 @@
       "id": "audit/fenced",
       "title": "Headroom exhausted fences the host",
       "requirements": [
-        "platform-requirements.md §12.7 row 11",
-        "T-AD-6"
+        "platform-requirements.md \u00a712.7 row 11",
+        "T-AD-6",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -43,7 +45,7 @@
       "when": "The headroom is exhausted, then the spool disk fails",
       "then": [
         "The host enters FENCED, kills non-built-in sandboxes, invalidates tokens and reports unhealthy",
-        "Ledger work ends OUTCOME_UNKNOWN, others FAILED"
+        "Consumed work remains OUTCOME_UNKNOWN unless independent complete mediation and all effects establish resolution; executor notStarted or a non-ledger label supplies no no-write proof"
       ],
       "status": "authored"
     },
@@ -51,7 +53,7 @@
       "id": "audit/fenced-recovery",
       "title": "A FENCED host recovers and replays",
       "requirements": [
-        "platform-requirements.md §21 integration"
+        "platform-requirements.md \u00a721 integration"
       ],
       "level": "integration",
       "targets": [
@@ -61,6 +63,63 @@
       "when": "The spool recovers",
       "then": [
         "In-memory records replay to the spool; outcomes are resolved from ledger and broker evidence; the host accepts work again only after reporting healthy"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/outcome-audit-atomicity",
+      "title": "Outcome evidence and audit roll back together",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A writer transaction seals an attempt and derives success, then aborts",
+      "then": [
+        "The prior outcome and audit page remain byte-identical and execution remains active"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/RecoveryAdmissionIntegrationTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/manifest-closure",
+      "title": "Closing an attempt cannot leave unrecorded authorization",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "An active attempt authorizes an effect and its terminal transaction first aborts, then commits",
+      "then": [
+        "Abort retains active authority without a seal; commit seals exact membership and refuses further authorizations; membership and seal are immutable"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/AttemptManifestTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/review-rollback",
+      "title": "A mismatching approved result cannot partially apply a review",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "An independent checker approves a requested state that disagrees with derived facts",
+      "then": [
+        "The approval, proof, outcome and audit all roll back"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/AttemptReviewTest.java"
       ],
       "status": "authored"
     }

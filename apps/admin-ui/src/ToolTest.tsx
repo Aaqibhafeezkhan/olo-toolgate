@@ -5,6 +5,7 @@ import type { LocalToolInfo, ControlDevice, ControlExecutionBinding } from '@olo
 import type { RunEvent, RunEventPage } from '@olo-labs/toolgate-contracts/v2';
 import { ApiError, ControlClient } from './api';
 import { Failure } from './Failure';
+import { OperationHistory } from './OperationHistory';
 import { testDefaults } from './testDefaults';
 
 type Run = { id: string; startedAt: number; endedAt?: number; state: string; terminal: boolean; events: RunEvent[]; truncated: boolean; droppedFrames: number; expired: boolean; gaps: RunEventPage['gaps']; reconnecting: boolean };
@@ -21,7 +22,7 @@ export function responseText(event: RunEvent | undefined): string | undefined {
 }
 function describe(event: RunEvent): string {
   switch (event.kind) {
-    case 'STATE': return `Invocation ${event.state?.toLowerCase().replace(/_/g, ' ') ?? 'changed'}`;
+    case 'STATE': return `${event.state === 'SUCCEEDED' ? 'Executor reported' : 'Invocation'} ${event.state?.toLowerCase().replace(/_/g, ' ') ?? 'changed'}`;
     case 'LOG': return `${event.level ?? 'info'}: ${event.message ?? ''}`;
     case 'PROGRESS': return `Progress ${Math.round((event.fraction ?? 0) * 100)}%${event.message ? ` — ${event.message}` : ''}`;
     case 'INPUT_REQUEST': return `Input requested (${event.requestId ?? 'request'})`;
@@ -129,11 +130,12 @@ export function ToolTest({ client, deviceId: fixedDevice }: { client: ControlCli
     {run && <section aria-label="Run responses">
       <h3>Run responses</h3>
       <p>Invocation <code>{run.id}</code>{run.events.find(e => e.executorId)?.executorId ? <> on <code>{run.events.find(e => e.executorId)?.executorId}</code></> : null} — {run.state.toLowerCase().replace(/_/g, ' ')}{run.endedAt ? ` after ${run.endedAt - run.startedAt} ms` : ''}</p>
-      <p role="status" aria-live="polite">{run.reconnecting ? 'Connection lost; resuming the same run from the last received event.' : run.terminal ? 'Run finished.' : run.state === 'PENDING_APPROVAL' ? 'Waiting for approval. An independent reviewer decides in Approvals; then press Test again with the same input to continue this request.' : 'Waiting for responses…'}</p>
+      <p role="status" aria-live="polite">{run.reconnecting ? 'Connection lost; resuming the same run from the last received event.' : run.terminal ? 'Executor run finished. Business completion is shown separately.' : run.state === 'PENDING_APPROVAL' ? 'Waiting for approval. An independent reviewer decides in Approvals; then press Test again with the same input to continue this request.' : 'Waiting for responses…'}</p>
       {run.expired && <p role="alert">Retention for this run has ended; its events are no longer available.</p>}
       {run.truncated && <p role="alert">Some responses exceeded the retained limits and are not shown.</p>}
       {run.droppedFrames > 0 && <p role="alert">The executor dropped {run.droppedFrames} response frame(s) before delivery.</p>}
       {run.gaps.length > 0 && <p role="alert">Missing responses: {run.gaps.map(g => g.fromSequence === g.toSequence ? `#${g.fromSequence}` : `#${g.fromSequence}–${g.toSequence}`).join(', ')}.</p>}
+      <OperationHistory key={run.id+':'+run.terminal} client={client} id={run.id}/>
       <label><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow new responses</label>
       <ol ref={timeline} className="run-timeline" aria-label="Run timeline">{run.events.map(e => <li key={e.cursor}><time>{time(e.recordedAtUnixMs)}</time> <strong>{label(e)}</strong> {describe(e)}</li>)}</ol>
       {final && <section aria-label="Response"><h3>Response</h3><p>{response}</p>

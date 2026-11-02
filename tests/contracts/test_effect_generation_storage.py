@@ -8,11 +8,12 @@ from test_migration_specs_v2 import QUICKSTART, TENANT, SqliteRun, invocation, v
 class EffectGenerationStorageTest(unittest.TestCase):
     def fixture(self):
         db=SqliteRun(versions(QUICKSTART,'V*.sql'))
-        self.assertTrue(db.run(invocation('effect-op','EXECUTING')))
+        self.assertTrue(db.run("UPDATE control_tenant_authority SET authorization_epoch=1"))
+        self.assertTrue(db.run(invocation('effect-op','EXECUTING').replace("'{}'", "'{\"reservedNonce\":\"attempt\"}'")))
         self.assertTrue(db.run(f"INSERT INTO control_operations VALUES('{TENANT}','effect-op','{'c'*64}','RUNNING',0,1,1000)"))
         self.assertTrue(db.run(f"INSERT INTO control_enterprise_nonces VALUES('{TENANT}','attempt','effect-op','{'a'*64}',1,1000,5000,NULL,'EXECUTION')"))
         self.assertTrue(db.run(f"INSERT INTO control_operation_attempts VALUES('{TENANT}','attempt','effect-op','{'a'*64}',1,1000,5000)"))
-        self.assertTrue(db.run("UPDATE control_enterprise_nonces SET consumed_at=1500 WHERE nonce='attempt'"))
+        self.assertTrue(db.run("UPDATE control_enterprise_nonces SET consumed_at=1000 WHERE nonce='attempt'"))
         self.assertTrue(db.run(f"INSERT INTO control_effects VALUES('{TENANT}','effect','effect-op','route','sha256:{'a'*64}',1)"))
         self.assertTrue(db.run(f"INSERT INTO control_effect_generations VALUES('{TENANT}','effect',1,'effect-op','attempt','auth-1','device','broker','handler','AUTHORIZED',1000,5000,60000,1,NULL,NULL)"))
         return db

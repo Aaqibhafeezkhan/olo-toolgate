@@ -726,7 +726,43 @@ async fn tools_call(
         })?;
     }
     }.await;
-    result.map(|value| with_invocation_reference(value, &canonical_id))
+    let value = result?;
+    // A host's result is reported content. Only an authorized Control projection
+    // supplies the independently graded business outcome.
+    let invocation = relay.read_invocation(&context).await.map_err(|code| rpc_error(
+        status(&code), id.clone(), -32000, "Operation outcome unavailable",
+        json!({"code":code,"requestId":canonical_id,"state":"OUTCOME_UNKNOWN","retryable":false}),
+    ))?;
+    let operation = invocation.operation_outcome.as_ref().filter(|_|
+        crate::application::invocation_matches(&invocation,&context)
+    ).ok_or_else(|| rpc_error(
+        StatusCode::SERVICE_UNAVAILABLE, id.clone(), -32000, "Operation outcome unavailable",
+        json!({"code":ErrorCode::DependencyUnavailable,"requestId":canonical_id,"state":"OUTCOME_UNKNOWN","retryable":false}),
+    ))?;
+    Ok(with_invocation_reference(
+        with_operation_outcome(value, operation),
+        &canonical_id,
+    ))
+}
+
+/// Reserved Gateway metadata is populated from authenticated Control, never worker content.
+const OPERATION_OUTCOME: &str = "io.ololabs.toolgate/operationOutcome";
+fn with_operation_outcome(
+    mut result: Value,
+    operation: &olo_toolgate_contracts::EnterpriseOperationOutcome,
+) -> Value {
+    if !result.get("_meta").is_some_and(Value::is_object) {
+        result["_meta"] = json!({});
+    }
+    result["_meta"][OPERATION_OUTCOME] = json!(operation);
+    if !matches!(
+        operation.state,
+        olo_toolgate_contracts::EnterpriseOperationState::Succeeded
+            | olo_toolgate_contracts::EnterpriseOperationState::Running
+    ) {
+        result["isError"] = json!(true);
+    }
+    result
 }
 
 /// Pull mode: hands the dispatch to Control, where the Tool Host fetches it, and waits for the
@@ -893,6 +929,55 @@ mod tests {
             let result = finished(provenance);
             assert!(result["_meta"].get(UNTRUSTED_UPSTREAM).is_none());
             assert!(result["_meta"]["io.modelcontextprotocol/serverInfo"].is_object());
+        }
+    }
+
+    #[test]
+    fn operation_metadata_overrides_worker_forgery_and_unknown_is_an_error() {
+        let operation = serde_json::from_value::<olo_toolgate_contracts::EnterpriseOperationOutcome>(json!({
+            "operationId":"op-1","state":"OUTCOME_UNKNOWN","revision":3,"grade":"REPORTED",
+            "journalComplete":true,"attemptCount":1,"effectCount":1,
+            "unresolvedEffectCount":1,"unsettledAttemptCount":1,
+            "finalized":false,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
+        })).unwrap();
+        let result = with_operation_outcome(
+            json!({
+                "content":[],"isError":false,"structuredContent":{"operationOutcome":{"state":"SUCCEEDED"}},
+                "_meta":{"io.ololabs.toolgate/operationOutcome":{"state":"SUCCEEDED","retryable":true}}
+            }),
+            &operation,
+        );
+        assert_eq!(
+            result["_meta"][OPERATION_OUTCOME]["state"],
+            "OUTCOME_UNKNOWN"
+        );
+        assert_eq!(result["_meta"][OPERATION_OUTCOME]["retryable"], false);
+        assert_eq!(result["isError"], true);
+        assert_eq!(
+            result["structuredContent"]["operationOutcome"]["state"],
+            "SUCCEEDED"
+        );
+    }
+
+    #[test]
+    fn verified_success_preserves_reported_error_and_other_metadata() {
+        let operation = serde_json::from_value::<olo_toolgate_contracts::EnterpriseOperationOutcome>(json!({
+            "operationId":"op-1","state":"SUCCEEDED","revision":3,"grade":"TARGET_CONFIRMED",
+            "journalComplete":true,"attemptCount":1,"effectCount":1,
+            "unresolvedEffectCount":0,"unsettledAttemptCount":0,
+            "finalized":true,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
+        })).unwrap();
+        for is_error in [false, true] {
+            let result = with_operation_outcome(
+                json!({"isError":is_error,"_meta":{"other":"retained"}}),
+                &operation,
+            );
+            assert_eq!(result["isError"], is_error);
+            assert_eq!(result["_meta"]["other"], "retained");
+            assert_eq!(
+                result["_meta"][OPERATION_OUTCOME]["grade"],
+                "TARGET_CONFIRMED"
+            );
         }
     }
 

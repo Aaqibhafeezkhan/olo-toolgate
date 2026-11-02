@@ -203,6 +203,8 @@ struct Authority {
     business_policy: Option<BusinessKeyPolicy>,
     canonical: Option<String>,
     mismatched_context_id: bool,
+    outcome_unavailable: bool,
+    history_reads: Mutex<Vec<(String, Option<String>, u16)>>,
 }
 impl Authority {
     /// The host claims the call on the second poll and finishes it on the third.
@@ -223,6 +225,7 @@ impl Authority {
         let guard = self.submission.lock().unwrap();
         let s = guard.as_ref().unwrap();
         RemoteToolResponse {
+            operation_outcome: None,
             record: RemoteToolRecord {
                 request_id: s.context.request_id.clone(),
                 device_id: "placed-device".into(),
@@ -383,6 +386,74 @@ impl RelayPort for Authority {
             }
             *self.invocation.lock().unwrap() = Some(i.clone());
             Ok(i)
+        })
+    }
+    fn read_invocation<'a>(
+        &'a self,
+        context: &'a RequestContext,
+    ) -> PortFuture<'a, Result<EnterpriseInvocation, ErrorCode>> {
+        Box::pin(async move {
+            if self.outcome_unavailable {
+                return Err(ErrorCode::DependencyUnavailable);
+            }
+            let mut invocation = self
+                .invocation
+                .lock()
+                .unwrap()
+                .clone()
+                .ok_or(ErrorCode::NotFound)?;
+            if invocation.id != context.request_id
+                || invocation.evaluation.context.user_id != context.user_id
+                || invocation.evaluation.context.agent_id != context.agent_id
+                || invocation.evaluation.context.mode != context.mode
+                || invocation.evaluation.context.workload_binding_id != context.workload_binding_id
+                || invocation.evaluation.context.chain != context.chain
+                || invocation.evaluation.context.binding_id.as_str()
+                    != context.binding_id.as_deref().unwrap_or("")
+            {
+                return Err(ErrorCode::NotFound);
+            }
+            let working = self.ask
+                || !self.replayed
+                    && self.ended.is_none()
+                    && self.submission.lock().unwrap().is_none()
+                    && self.permit.lock().unwrap().is_none();
+            invocation.operation_outcome = Some(serde_json::from_value(json!({
+                "operationId":invocation.id,"state":if working {"RUNNING"} else {"OUTCOME_UNKNOWN"},
+                "revision":1,"grade":"REPORTED","journalComplete":true,
+                "attemptCount":1,"effectCount":0,"unresolvedEffectCount":0,"unsettledAttemptCount":1,
+                "finalized":false,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
+            })).unwrap());
+            Ok(invocation)
+        })
+    }
+    fn operation_history<'a>(
+        &'a self,
+        context: &'a RequestContext,
+        cursor: Option<&'a str>,
+        limit: u16,
+    ) -> PortFuture<'a, Result<EnterpriseOperationHistoryPage, ErrorCode>> {
+        Box::pin(async move {
+            let invocation = self.read_invocation(context).await?;
+            let operation = invocation.operation_outcome.unwrap();
+            self.history_reads.lock().unwrap().push((
+                context.request_id.clone(),
+                cursor.map(str::to_owned),
+                limit,
+            ));
+            if cursor.is_some_and(|value| {
+                value.split(':').next().and_then(|v| v.parse::<u64>().ok())
+                    != Some(operation.revision)
+            }) {
+                return Err(ErrorCode::Conflict);
+            }
+            Ok(EnterpriseOperationHistoryPage {
+                operation,
+                attempts: vec![],
+                effects: vec![],
+                next: None,
+                truncated: false,
+            })
         })
     }
     fn reserve<'a>(
@@ -967,6 +1038,44 @@ async fn a_tool_host_without_a_route_gets_its_calls_through_control() {
 /// ADR 031 and conformance case `mcp-core/trace-propagation`: the caller's trace and declared correlation reach the
 /// dispatch, and the result names its invocation. None of it is an authorization input.
 #[tokio::test]
+async fn worker_success_is_reported_separately_from_the_unknown_control_business_outcome() {
+    let authority = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let (status, body) = call(
+        runtime_router(state(authority)),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    assert_eq!(body["result"]["isError"], true);
+    let operation = &body["result"]["_meta"]["io.ololabs.toolgate/operationOutcome"];
+    assert_eq!(operation["state"], "OUTCOME_UNKNOWN");
+    assert_eq!(operation["grade"], "REPORTED");
+    assert_eq!(operation["retryable"], false);
+}
+
+#[tokio::test]
+async fn an_unavailable_authorized_outcome_does_not_disclose_the_worker_result_or_invite_retry() {
+    let authority = Arc::new(Authority {
+        tool_host: true,
+        outcome_unavailable: true,
+        ..Authority::default()
+    });
+    let (status, body) = call(
+        runtime_router(state(authority)),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["error"]["data"]["state"], "OUTCOME_UNKNOWN");
+    assert_eq!(body["error"]["data"]["retryable"], false);
+    assert!(body.get("result").is_none());
+}
+
+#[tokio::test]
 async fn trace_context_and_declared_ids_reach_the_dispatch() {
     let a = Arc::new(Authority {
         tool_host: true,
@@ -1462,4 +1571,91 @@ async fn key_policy_discovery_cannot_be_overridden_by_caller_metadata() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
     assert!(authority.invocation.lock().unwrap().is_none());
     assert!(authority.submission.lock().unwrap().is_none());
+}
+
+fn metadata_request(path: &str) -> Request<Body> {
+    let mut request = req(path, json!({}));
+    *request.method_mut() = axum::http::Method::GET;
+    *request.body_mut() = Body::empty();
+    request.headers_mut().remove("idempotency-key");
+    request
+}
+#[tokio::test]
+async fn native_owned_status_history_and_stale_cursor_never_reserve_again() {
+    let authority = Arc::new(Authority::default());
+    let router = runtime_router(state(authority.clone()));
+    let (status, created) = call(router.clone(), req("/access/invocations", payload())).await;
+    assert_eq!(status, StatusCode::OK);
+    let id = created["invocation"]["id"].as_str().unwrap();
+    let (status, view) = call(
+        router.clone(),
+        metadata_request(&format!("/access/invocations/{id}")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{view}");
+    assert_eq!(view["operationOutcome"]["state"], "RUNNING");
+    let (status, page) = call(
+        router.clone(),
+        metadata_request(&format!(
+            "/access/invocations/{id}/history?limit=3&cursor=1:0"
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{page}");
+    assert_eq!(page["operation"]["operationId"], id);
+    assert_eq!(
+        authority.history_reads.lock().unwrap()[0],
+        (id.to_owned(), Some("1:0".into()), 3)
+    );
+    let (status, _) = call(
+        router,
+        metadata_request(&format!("/access/invocations/{id}/history?cursor=2:0")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 1);
+}
+#[tokio::test]
+async fn native_metadata_rejects_bad_pagination_without_calling_control() {
+    let authority = Arc::new(Authority::default());
+    let router = runtime_router(state(authority.clone()));
+    for query in [
+        "limit=0",
+        "limit=101",
+        "cursor=bad",
+        "cursor=1:9999",
+        "unexpected=true",
+        "limit=1&limit=2",
+    ] {
+        let (status, _) = call(
+            router.clone(),
+            metadata_request(&format!("/access/invocations/op-1/history?{query}")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{query}");
+    }
+    assert!(authority.history_reads.lock().unwrap().is_empty());
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn native_metadata_cannot_disclose_a_different_owners_operation() {
+    let authority = Arc::new(Authority::default());
+    let mut foreign: EnterpriseInvocation =
+        serde_json::from_value(fixtures()["EnterpriseInvocation"].clone()).unwrap();
+    foreign.id = "foreign-op".into();
+    foreign.evaluation.context.request_id = foreign.id.clone();
+    foreign.evaluation.context.user_id = Some("another-user".into());
+    *authority.invocation.lock().unwrap() = Some(foreign);
+    let router = runtime_router(state(authority.clone()));
+    for path in [
+        "/access/invocations/foreign-op",
+        "/access/invocations/foreign-op/history",
+        "/access/invocations/absent",
+    ] {
+        let (status, body) = call(router.clone(), metadata_request(path)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+        assert_eq!(body["code"], "NOT_FOUND");
+        assert!(body.get("evaluation").is_none());
+    }
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 0);
 }

@@ -7400,6 +7400,114 @@ paths:
         required: true
         schema:
           $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+  /api/control/v1/access/invocations/{id}/status:
+    post:
+      operationId: readCallerOperation
+      description: Gateway service only. Recheck the authenticated current caller context against the original owner and current grants. Metadata only; no reservation, resend or deadline extension.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
+      responses:
+        '200':
+          description: Retained executor state and separate current derived business outcome
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseInvocation
+        '403':
+          description: Current credential or grant denied
+        '404':
+          description: Unknown or unowned operation
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+  /api/control/v1/access/invocations/{id}/history:
+    get:
+      operationId: getEnterpriseOperationHistory
+      description: Authorized bounded attempt and effect metadata, pinned to one derived evidence revision. Never supplies execution authority.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Current derived outcome and bounded history
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/operation.schema.json#/$defs/EnterpriseOperationHistoryPage
+        '400':
+          description: Invalid cursor or limit
+        '403':
+          description: Current access denied
+        '409':
+          description: Evidence changed; start again without a cursor
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 512
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+    post:
+      operationId: readCallerOperationHistory
+      description: Gateway service only. Bounded metadata with current caller ownership and grant checks; never execution authority.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
+      responses:
+        '200':
+          description: Current derived outcome and bounded attempt/effect history
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/operation.schema.json#/$defs/EnterpriseOperationHistoryPage
+        '403':
+          description: Current credential or grant denied
+        '404':
+          description: Unknown or unowned operation
+        '409':
+          description: Evidence changed; restart pagination
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 512
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
   /api/control/v1/access/invocations/{id}/cancel:
     post:
       operationId: cancelEnterpriseInvocation
