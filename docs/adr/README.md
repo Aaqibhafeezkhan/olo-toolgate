@@ -89,3 +89,6 @@ Use `000-template.md`.
 - [048 — Derived operation finalization and caller history](048-derived-operation-finalization.md)
 
 - [049: Isolated per-invocation brokers](049-isolated-invocation-brokers.md)
+- [050 — Strict qualified-worker protocol boundary](050-qualified-worker-protocol-boundary.md)
+
+- [051 — Verified leaf SPKI pins](051-verified-leaf-spki-pins.md)

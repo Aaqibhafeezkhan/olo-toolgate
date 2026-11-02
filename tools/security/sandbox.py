@@ -102,6 +102,10 @@ def main():
         'frame_and_diagnostic_flooding_end_the_worker_before_the_deadline',
         'rootless_workers_deny_ambient_authority_and_preserve_the_stdio_protocol',
         'worker_cannot_impersonate_the_private_broker_authority_channel',
+        'qualified_worker_interface_attacks_fail_without_recovering_to_success',
+        'isolated_pool_refuses_unsupported_profiles_before_consuming_authority',
+        'sequential_invocations_reuse_no_scratch_environment_or_broker_authority',
+        'worker_inherits_no_supervisor_file_descriptor_or_platform_credentials',
     }
     success = (result.returncode == 0 and required.issubset(passed)
                and len(passed) == len(set(passed)) and before == source_digest())

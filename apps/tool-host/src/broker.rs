@@ -96,6 +96,9 @@ pub struct Egress {
 const MAX_EGRESS: usize = 256;
 
 impl Invocation {
+    pub(crate) fn isolated_worker_protocol(&self) -> bool {
+        self.requires_isolated.load(Ordering::SeqCst)
+    }
     pub fn require_isolated_broker(&self) -> Result<(), &'static str> {
         if self.closed.load(Ordering::SeqCst) {
             return Err("broker invocation has ended");

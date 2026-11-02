@@ -109,7 +109,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 | T-BR-3 | Credential theft through the broker (E1) | The broker injects credentials last and strips client `Authorization`, `Cookie`, `Proxy-Authorization`, `Host` and `X-Forwarded-*`. It filters `Set-Cookie` and auth challenges from responses, and never returns credentials. | An upstream that echoes the credential in a response body. Review checks routes against known echo endpoints. | `broker/credential-echo-filter`, `broker/auth-header-refused` |
 | T-BR-4 | Another sandbox's broker is used (E1, E6) | There is no socket or capability to steal: each invocation's broker reads only that process's stdout and answers on its stdin, for the permit, fencing token and profile of that invocation, until it ends | E6 controls every live invocation on its host | `broker/foreign-capability` |
 | T-BR-5 | Redirect or DNS rebinding to a blocked address (E3) | Every resolved address is checked at connect time; link-local, metadata, loopback and cluster CIDRs are always blocked. Redirects are followed only within approved routes, and never for ledger tools (platform-requirements.md §11.6). | None | `egress/rebinding`, `egress/redirect-out` |
-| T-BR-6 | Upstream TLS interception (E4) | The broker verifies the upstream certificate against the system store or an admin-pinned CA or SPKI | A compromised public CA, which pinning mitigates | `egress/bad-cert` |
+| T-BR-6 | Upstream TLS interception (E4) | The broker verifies the upstream certificate against the system store or an explicit admin CA bundle, plus any configured verified-leaf SPKI pins | A compromised public CA, which pinning mitigates | `egress/bad-cert` |
 
 ### 4.4 Egress proxy and the transport matrix (B6)
 

@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Reject malformed, duplicate, oversized or out-of-order qualified-worker frames
+  before authority/event handling. Check complete DNS answers and literal IPs,
+  preserve no-redirect HTTP/1.1 transport and qualify the declared-tier interface
+  matrix with source/image-bound reports. SPKI pins now require standard
+  certificate validation and match the verified leaf only: private/self-signed
+  services must supply caBundle, and intermediate-only pins must be replaced.
+
 - Run each qualified Python OCI invocation with a separate trusted broker
   identity and network namespace. Bind private authority/transport IPC to one
   admission, require a positive send gate and tear down/recover the worker and

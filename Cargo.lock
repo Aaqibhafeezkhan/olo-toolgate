@@ -1371,6 +1371,7 @@ dependencies = [
  "ring",
  "rsa",
  "rustls",
+ "rustls-native-certs",
  "ryu-js",
  "serde",
  "serde_json",

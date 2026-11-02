@@ -1080,3 +1080,60 @@ async fn pull_mode_takes_calls_from_control_and_answers_through_it() {
     assert_eq!(seen.results[0]["outcome"], "COMPLETED");
     assert_eq!(seen.reports.len(), 1);
 }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+#[ignore = "requires a delegated rootless OCI service; run tools/security/sandbox.py"]
+async fn isolated_pool_refuses_unsupported_profiles_before_consuming_authority() {
+    let image = std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap();
+    let mut rig = rig_for_tier(true, Some(image.split_once('@').unwrap().1), true)
+        .await
+        .unwrap();
+    let store = rig.dir.join("store");
+    let original: Value = serde_json::from_slice(
+        &std::fs::read(store.join("profiles").join(format!(
+                "{}.json",
+                rig.target["serviceProfileDigest"]
+                    .as_str()
+                    .unwrap()
+                    .trim_start_matches("sha256:")
+            )))
+        .unwrap(),
+    )
+    .unwrap();
+    for mutation in [
+        "tunnel",
+        "streaming",
+        "request-limit",
+        "response-limit",
+        "duplicate-destination",
+    ] {
+        let mut profile = original.clone();
+        match mutation {
+            "tunnel" => profile["destinations"][0]["mode"] = json!("TUNNEL"),
+            "streaming" => profile["routes"][0]["streaming"] = json!("RESPONSE"),
+            "request-limit" => profile["routes"][0]["maxRequestBytes"] = json!(2_097_153),
+            "response-limit" => profile["routes"][0]["maxResponseBytes"] = json!(2_097_153),
+            "duplicate-destination" => {
+                let duplicate = profile["destinations"][0].clone();
+                profile["destinations"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(duplicate);
+            }
+            _ => unreachable!(),
+        }
+        rig.target["serviceProfileDigest"] = json!(put(&store, "profiles", &profile));
+        let arguments = json!({"orderId":"123456"});
+        let (jws, _) = permit(&rig, &arguments, |_| {});
+        let lines = dispatch(&rig, &jws, &arguments).await;
+        assert_eq!(lines[0]["kind"], "REFUSED", "{mutation}: {lines:?}");
+        assert_eq!(
+            lines[0]["reason"], "UNSUPPORTED_TIER",
+            "{mutation}: {lines:?}"
+        );
+        let seen = rig.seen.lock().unwrap();
+        assert!(seen.consumed.is_empty(), "{mutation}");
+        assert!(seen.upstream.is_empty(), "{mutation}");
+    }
+}

@@ -112,6 +112,23 @@ pub struct AddressPolicy {
 }
 
 impl AddressPolicy {
+    fn checked_addresses(
+        &self,
+        addresses: Vec<SocketAddr>,
+    ) -> Result<Vec<SocketAddr>, AddressRefused> {
+        if addresses.is_empty() {
+            return Err(AddressRefused("destination did not resolve".into()));
+        }
+        for address in &addresses {
+            if address.port() != self.port {
+                return Err(AddressRefused(
+                    "resolved port differs from approved destination".into(),
+                ));
+            }
+            self.check(address.ip())?;
+        }
+        Ok(addresses)
+    }
     pub fn check(&self, ip: IpAddr) -> Result<(), AddressRefused> {
         let allowed = match classify(ip) {
             AddressClass::Public => true,
@@ -150,24 +167,9 @@ impl reqwest::dns::Resolve for CheckedResolver {
             let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host.as_str(), policy.port))
                 .await?
                 .collect();
-            let mut refused = None;
-            let allowed: Vec<SocketAddr> = addrs
-                .into_iter()
-                .filter(|a| match policy.check(a.ip()) {
-                    Ok(()) => true,
-                    Err(e) => {
-                        refused = Some(e);
-                        false
-                    }
-                })
-                .collect();
-            // One forbidden address refuses the name, so a rebinding answer cannot mix one in.
-            if let Some(e) = refused {
-                return Err(Box::new(e) as _);
-            }
-            if allowed.is_empty() {
-                return Err(Box::new(AddressRefused(format!("{host} did not resolve"))) as _);
-            }
+            let allowed = policy
+                .checked_addresses(addrs)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
             Ok(Box::new(allowed.into_iter()) as reqwest::dns::Addrs)
         })
     }
@@ -187,6 +189,16 @@ pub fn client_with_identity(
     policy: AddressPolicy,
     identity: Option<reqwest::Identity>,
 ) -> Result<reqwest::Client, String> {
+    if !destination.host.eq_ignore_ascii_case(&policy.host)
+        || destination.port != u64::from(policy.port)
+    {
+        return Err("transport address policy differs from the approved destination".into());
+    }
+    // Literal IP URLs bypass the HTTP client's DNS resolver. Apply the same
+    // policy here as well as on every hostname resolution.
+    if let Ok(ip) = destination.host.trim_matches(['[', ']']).parse() {
+        policy.check(ip).map_err(|e| e.to_string())?;
+    }
     let _ = rustls::crypto::ring::default_provider().install_default();
     if identity.is_some() && !destination.tls.spki_pins.is_empty() {
         return Err("service mTLS requires CA-verified HTTPS".into());
@@ -219,13 +231,47 @@ pub fn client_with_identity(
                     .ok_or_else(|| format!("pin {p} must be sha256/<base64>"))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let provider = rustls::crypto::ring::default_provider();
-        let algorithms = provider.signature_verification_algorithms;
-        let mut config = rustls::ClientConfig::builder_with_provider(Arc::new(provider))
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let verifier: Arc<dyn ServerCertVerifier> = if let Some(bundle) = &tls.ca_bundle {
+            use rustls::pki_types::pem::PemObject;
+            let mut roots = rustls::RootCertStore::empty();
+            for certificate in CertificateDer::pem_slice_iter(bundle.as_bytes()) {
+                roots
+                    .add(certificate.map_err(|_| "invalid pin-mode CA certificate")?)
+                    .map_err(|_| "invalid pin-mode trust anchor")?;
+            }
+            if roots.is_empty() {
+                return Err("pin-mode CA bundle is empty".into());
+            }
+            rustls::client::WebPkiServerVerifier::builder_with_provider(
+                Arc::new(roots),
+                provider.clone(),
+            )
+            .build()
+            .map_err(|_| "pin-mode trust verifier unavailable")?
+        } else {
+            let native = rustls_native_certs::load_native_certs();
+            let mut roots = rustls::RootCertStore::empty();
+            for certificate in native.certs {
+                roots
+                    .add(certificate)
+                    .map_err(|_| "system certificate trust anchor invalid")?;
+            }
+            if roots.is_empty() {
+                return Err("system certificate trust store is empty or unavailable".into());
+            }
+            rustls::client::WebPkiServerVerifier::builder_with_provider(
+                Arc::new(roots),
+                provider.clone(),
+            )
+            .build()
+            .map_err(|_| "system certificate verifier unavailable")?
+        };
+        let mut config = rustls::ClientConfig::builder_with_provider(provider)
             .with_safe_default_protocol_versions()
             .map_err(|e| e.to_string())?
             .dangerous()
-            .with_custom_certificate_verifier(Arc::new(Pinned { pins, algorithms }))
+            .with_custom_certificate_verifier(Arc::new(Pinned { pins, verifier }))
             .with_no_client_auth();
         config.alpn_protocols = vec![b"http/1.1".to_vec()];
         builder = builder.tls_backend_preconfigured(config);
@@ -248,7 +294,7 @@ pub fn client_with_identity(
 #[derive(Debug)]
 struct Pinned {
     pins: Vec<String>,
-    algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
+    verifier: Arc<dyn ServerCertVerifier>,
 }
 
 /// `base64(sha256(SubjectPublicKeyInfo))` of a DER certificate.
@@ -265,19 +311,19 @@ impl ServerCertVerifier for Pinned {
         &self,
         end_entity: &CertificateDer<'_>,
         intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp: &[u8],
-        _now: UnixTime,
+        server_name: &ServerName<'_>,
+        ocsp: &[u8],
+        now: UnixTime,
     ) -> Result<ServerCertVerified, rustls::Error> {
-        let matched = std::iter::once(end_entity)
-            .chain(intermediates)
-            .filter_map(|c| spki_pin(c))
-            .any(|pin| self.pins.contains(&pin));
-        if matched {
+        self.verifier
+            .verify_server_cert(end_entity, intermediates, server_name, ocsp, now)?;
+        // Supplied intermediates are not proof of membership in the verified
+        // path. Only the authenticated leaf can satisfy a destination pin.
+        if spki_pin(end_entity).is_some_and(|pin| self.pins.contains(&pin)) {
             Ok(ServerCertVerified::assertion())
         } else {
             Err(rustls::Error::General(
-                "no certificate in the chain matches the destination's SPKI pins".into(),
+                "verified leaf does not match destination SPKI pins".into(),
             ))
         }
     }
@@ -288,7 +334,7 @@ impl ServerCertVerifier for Pinned {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algorithms)
+        self.verifier.verify_tls12_signature(message, cert, dss)
     }
 
     fn verify_tls13_signature(
@@ -297,11 +343,11 @@ impl ServerCertVerifier for Pinned {
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algorithms)
+        self.verifier.verify_tls13_signature(message, cert, dss)
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.algorithms.supported_schemes()
+        self.verifier.supported_verify_schemes()
     }
 }
 
@@ -359,6 +405,42 @@ mod tests {
             .is_err());
     }
 
+    #[test]
+    fn every_new_or_mixed_dns_answer_is_rechecked_without_partial_acceptance() {
+        let policy = policy(vec![], false);
+        let public = "93.184.216.34:443".parse().unwrap();
+        assert!(policy.checked_addresses(vec![public]).is_ok());
+        for blocked in [
+            "169.254.169.254:443",
+            "127.0.0.1:443",
+            "10.96.0.1:443",
+            "192.168.1.1:443",
+            "[::ffff:169.254.169.254]:443",
+            "[fd00::1]:443",
+        ] {
+            let address = blocked.parse().unwrap();
+            assert!(
+                policy.checked_addresses(vec![address]).is_err(),
+                "{blocked}"
+            );
+            assert!(
+                policy.checked_addresses(vec![public, address]).is_err(),
+                "{blocked}"
+            );
+            assert!(
+                policy.checked_addresses(vec![address, public]).is_err(),
+                "{blocked}"
+            );
+        }
+        assert!(policy.checked_addresses(vec![]).is_err());
+        assert!(policy
+            .checked_addresses(vec!["93.184.216.34:8443".parse().unwrap()])
+            .is_err());
+        assert!(
+            policy.checked_addresses(vec![public]).is_ok(),
+            "a refused answer never changes policy"
+        );
+    }
     #[test]
     fn cidr_matching() {
         assert!(in_cidr("10.0.0.1".parse().unwrap(), "10.0.0.0/8"));

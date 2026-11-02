@@ -49,6 +49,32 @@ fn identifier(value: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b))
 }
+pub(crate) fn supports_routes(
+    routes: &[RouteDeclaration],
+    destinations: &[ServiceDestination],
+) -> bool {
+    use olo_toolgate_contracts::v2::{DestinationScheme, EgressMode, Streaming};
+    routes.len() <= 256
+        && destinations.len() <= 64
+        && routes.iter().map(|r| &r.id).collect::<HashSet<_>>().len() == routes.len()
+        && destinations
+            .iter()
+            .map(|d| &d.id)
+            .collect::<HashSet<_>>()
+            .len()
+            == destinations.len()
+        && routes.iter().all(|route| {
+            route.max_request_bytes <= MAX_BODY as u64
+                && route.max_response_bytes <= MAX_BODY as u64
+                && route.streaming == Streaming::None
+                && destinations
+                    .iter()
+                    .find(|d| d.id == route.destination)
+                    .is_some_and(|d| {
+                        d.scheme == DestinationScheme::Https && d.mode == EgressMode::Brokered
+                    })
+        })
+}
 impl Policy {
     pub fn validate(&self, now: u64) -> Result<(), &'static str> {
         if !identifier(&self.invocation_id)
@@ -67,13 +93,7 @@ impl Policy {
                 })
             || self.invocation_permit.jws.is_empty()
             || self.invocation_permit.jws.len() > 131072
-            || self.routes.iter().any(|r| {
-                r.max_request_bytes > MAX_BODY as u64
-                    || r.max_response_bytes > MAX_BODY as u64
-                    || r.streaming != olo_toolgate_contracts::v2::Streaming::None
-            })
-            || self.routes.len() > 256
-            || self.destinations.len() > 64
+            || !supports_routes(&self.routes, &self.destinations)
             || self.private_ranges.len() > 64
             || self.auths.len() > 128
             || self.secrets.len() > 128

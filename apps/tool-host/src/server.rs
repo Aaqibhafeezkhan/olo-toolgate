@@ -343,12 +343,12 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
             pool.accepts(
                 &prepared.runtime.runtime_id,
                 prepared.runtime.base_image_digest.as_deref(),
-            ) && prepared.routes.len() <= 256
-                && prepared.routes.iter().all(|route| {
-                    route.max_request_bytes <= crate::broker_process::MAX_BODY as u64
-                        && route.max_response_bytes <= crate::broker_process::MAX_BODY as u64
-                        && route.streaming == olo_toolgate_contracts::v2::Streaming::None
-                })
+            ) && crate::broker_process::supports_routes(
+                &prepared.routes,
+                &prepared.profile.destinations,
+            ) && prepared.profile.private_ranges.len() <= 64
+                && prepared.tool.descriptor.http_auth.len() <= 128
+                && prepared.tool.descriptor.variables.secrets.len() <= 128
         }
         None => prepared.runtime.base_image_digest.is_none(),
     };

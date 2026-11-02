@@ -26,6 +26,7 @@ pub mod server;
 pub mod store;
 pub mod stream;
 pub mod trace;
+mod worker_protocol;
 mod workload_identity;
 
 /// Milliseconds since the Unix epoch.

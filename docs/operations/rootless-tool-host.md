@@ -167,7 +167,7 @@ request/response headers at most 64 KiB (8 KiB per value), with 4,096 frames and
 64 MiB per direction per invocation. Unsupported policies are refused rather than
 silently truncated. Existing native transport ceilings remain unchanged.
 
-The eight-case OCI runner requires the builder's report to match the current
+The twelve-case OCI runner requires the builder's report to match the current
 source digest, known revision, binary digest and image reference. Build the image
 after source is frozen, then execute conformance without edits between them.
 It covers approved target contact, denied worker authority, broker crash,
@@ -176,3 +176,36 @@ restart cleanup. These are component containment checks, not a production
 connectivity SLO, a generalized effect grant or a compromised-kernel guarantee.
 See [ADR 049](../adr/049-isolated-invocation-brokers.md) and the
 [live status](../security/zero-trust-execution-status.md) for stage acceptance.
+
+
+## Qualified worker frames and TLS pin upgrades
+
+The strict worker boundary is enforced for the qualified isolated tier. Valid v2
+stdout frames must match the canonical schemas, have unique object keys, valid
+UTF-8 and at most 64 levels of nesting. The invocation accepts at most 1,000
+nonblank frames, one terminal result, no later frames and no reused broker request
+IDs. A malformed frame cannot be repaired by printing a later successful result.
+Aggregate stdout/stderr and deadline limits still apply. S13 passes the declared-tier matrix; consult the live progress document for
+executed evidence and the remaining deployment/full-catalog limitations.
+
+The SPKI verifier now requires ordinary certificate validation and an allowed
+verified-leaf key pin together. A private/self-signed service must supply its
+public trust anchor in caBundle. Replace intermediate-only spkiPins with leaf
+pins before upgrading; the old pin-only trust path is removed. Hostname,
+validity, chain and TLS handshake signatures are checked before HTTP delivery.
+This shared TLS security correction applies to native broker clients too; it
+does not qualify native worker containment. See [ADR 051](../adr/051-verified-leaf-spki-pins.md).
+
+
+After the current-source actual OCI gate, run python tools/security/containment.py
+without editing source between the two. The [declared-tier matrix](../security/qualified-containment-matrix.md)
+records the native/component witnesses, disabled features and original-catalog
+limitations. The final matrix now also covers live supervisor descriptors and
+sequential state isolation. Diagnostic/output failure cancels an outstanding
+authority/target future immediately; it does not wait for the target response.
+
+For MCP proxy upstreams, which use the host trust store rather than an inline
+per-upstream CA field, install the reviewed private CA in the dedicated host's
+trust store or configure its trusted SSL_CERT_FILE/SSL_CERT_DIR environment.
+Pins remain leaf-only and cannot substitute for certificate trust. Worker OCI
+environments do not inherit those supervisor environment variables.

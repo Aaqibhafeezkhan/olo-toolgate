@@ -171,6 +171,8 @@ jobs:
         python tools/security/broker_image.py
         cargo test -p olo-toolgate-tool-host --lib --test sandbox --locked --no-run
         sudo --preserve-env=PATH,RUSTUP_HOME,CARGO_HOME python tools/security/sandbox.py --service-user "$USER" --cargo "$(command -v cargo)" --image "$SANDBOX_IMAGE" --broker-image "$(cat build/security/broker-image/image-ref.txt)" --broker-image-evidence build/security/broker-image/image.json
+    - name: Qualified interface and egress conformance
+      run: python tools/security/containment.py
     - name: Retain containment evidence
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -179,6 +181,7 @@ jobs:
         path: |
           build/security/sandbox/
           build/security/broker-image/
+          build/security/containment/
         if-no-files-found: error
   examples:
     runs-on: ubuntu-24.04

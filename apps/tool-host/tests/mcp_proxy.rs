@@ -61,14 +61,48 @@ struct Upstream {
     seen: Arc<Mutex<Vec<(String, String)>>>,
 }
 
+// Every fixture leaf is signed by one test-only CA. The explicit native-store
+// override is process local; no host certificate store is modified and no
+// private key is written. All callers initialize it before constructing clients.
+fn test_issuer() -> &'static rcgen::Issuer<'static, rcgen::KeyPair> {
+    static ISSUER: std::sync::OnceLock<rcgen::Issuer<'static, rcgen::KeyPair>> =
+        std::sync::OnceLock::new();
+    ISSUER.get_or_init(|| {
+        let mut params = rcgen::CertificateParams::new(Vec::new()).unwrap();
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        params.key_usages = vec![
+            rcgen::KeyUsagePurpose::KeyCertSign,
+            rcgen::KeyUsagePurpose::CrlSign,
+        ];
+        let key = rcgen::KeyPair::generate().unwrap();
+        let ca = params.self_signed(&key).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "toolgate-mcp-public-test-ca-{}.pem",
+            tool_host::random_hex(16)
+        ));
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        file.write_all(ca.pem().as_bytes()).unwrap();
+        file.sync_all().unwrap();
+        std::env::set_var("SSL_CERT_FILE", path);
+        std::env::remove_var("SSL_CERT_DIR");
+        rcgen::Issuer::new(params, key)
+    })
+}
 fn serve(script: Script) -> Upstream {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let certified = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-    let der = certified.cert.der().to_vec();
+    let issuer = test_issuer();
+    let signing_key = rcgen::KeyPair::generate().unwrap();
+    let mut params = rcgen::CertificateParams::new(vec!["localhost".to_string()]).unwrap();
+    params.extended_key_usages = vec![rcgen::ExtendedKeyUsagePurpose::ServerAuth];
+    let certificate = params.signed_by(&signing_key, issuer).unwrap();
+    let der = certificate.der().to_vec();
     let pin = format!("sha256/{}", tool_host::egress::spki_pin(&der).unwrap());
-    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
-        certified.signing_key.serialize_der(),
-    ));
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(signing_key.serialize_der()));
     let config = Arc::new(
         rustls::ServerConfig::builder()
             .with_no_client_auth()
