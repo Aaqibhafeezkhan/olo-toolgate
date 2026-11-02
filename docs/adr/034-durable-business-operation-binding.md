@@ -34,6 +34,14 @@ records and the phase-3 target-deduplicated protocol. This implementation never
 rebinds a consumed, failed, expired or missing operation. Thirty-day retention
 expiry and existing tombstones refuse reuse; no runtime deletion is introduced.
 
+## S09 extension
+
+[ADR 047](047-proof-bound-operation-rebinding.md) extends this original
+single-attempt slice with positive-proof, original-deadline whole-operation
+recovery. It preserves the operation ID and key owner/fingerprint while assigning
+a separate immutable attempt nonce. The original no-rebinding limits below apply
+to the foundation; the later qualification and no-ambiguity rules govern recovery.
+
 ## Compatibility and limits
 
 `EnterpriseInvocationRequest.businessKeyHash` is optional. Generated Java retains

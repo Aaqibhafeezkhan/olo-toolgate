@@ -20,7 +20,7 @@ final class JdbcEffectStore implements EffectStore {
             return new Generation(b,rows.getLong(12),rows.getString(13),rows.getLong(14),rows.getString(15),rows.getString(16));
         }catch(SQLException failure){throw Failure.unavailable();}
     }
-    private Generation current(String id){
+    public Generation current(String id){
         try(var s=query("SELECT g.auth_nonce FROM control_effects e JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id AND g.generation=e.current_generation WHERE e.tenant_id=? AND e.effect_id=?",id);var rows=s.executeQuery()){return rows.next()?byNonce(rows.getString(1)):null;}
         catch(SQLException failure){throw Failure.unavailable();}
     }
@@ -83,12 +83,19 @@ final class JdbcEffectStore implements EffectStore {
         if(!Set.of("CONSUMED","AMBIGUOUS").contains(g.state()))throw Failure.conflict();
         return change(g,outcome,consumer,claim);
     }
+    /** This positive closure is available only for a qualified, v2-leased complete-mediation attempt. */
+    private static final String CLOSED_BEFORE_SEND="CASE WHEN state='AUTHORIZED' AND EXISTS("
+            +"SELECT 1 FROM control_attempt_recovery_scopes s JOIN control_execution_leases l "
+            +"ON l.tenant_id=s.tenant_id AND l.invocation_id=s.operation_id AND l.fencing_token=s.attempt_id "
+            +"WHERE s.tenant_id=control_effect_generations.tenant_id AND s.operation_id=control_effect_generations.operation_id "
+            +"AND s.attempt_id=control_effect_generations.attempt_id AND s.device_id=control_effect_generations.device_id "
+            +"AND l.device_id=s.device_id) THEN 'RELEASED' ELSE 'AMBIGUOUS' END";
     public void abandon(String operationId){
-        try(var s=query("UPDATE control_effect_generations SET state='AMBIGUOUS',revision=revision+1 WHERE tenant_id=? AND operation_id=? AND state IN('AUTHORIZED','SENDING','CONSUMED')",operationId)){s.executeUpdate();}
+        try(var s=query("UPDATE control_effect_generations SET state="+CLOSED_BEFORE_SEND+",revision=revision+1 WHERE tenant_id=? AND operation_id=? AND state IN('AUTHORIZED','SENDING','CONSUMED')",operationId)){s.executeUpdate();}
         catch(SQLException failure){throw Failure.unavailable();}
     }
     public int expire(long now){
-        try(var s=query("UPDATE control_effect_generations SET state='AMBIGUOUS',revision=revision+1 WHERE tenant_id=? AND (effect_id,generation) IN (SELECT effect_id,generation FROM control_effect_generations WHERE tenant_id=? AND ((state='AUTHORIZED' AND expires_at<=?) OR (state IN('SENDING','CONSUMED') AND outcome_deadline<=?)) ORDER BY expires_at LIMIT 100)",tenant,now,now)){return s.executeUpdate();}
+        try(var s=query("UPDATE control_effect_generations SET state="+CLOSED_BEFORE_SEND+",revision=revision+1 WHERE tenant_id=? AND (effect_id,generation) IN (SELECT effect_id,generation FROM control_effect_generations WHERE tenant_id=? AND ((state='AUTHORIZED' AND expires_at<=?) OR (state IN('SENDING','CONSUMED') AND outcome_deadline<=?)) ORDER BY expires_at LIMIT 100)",tenant,now,now)){return s.executeUpdate();}
         catch(SQLException failure){throw Failure.unavailable();}
     }
 }

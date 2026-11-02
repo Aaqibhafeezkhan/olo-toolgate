@@ -11,6 +11,17 @@ public interface EnterpriseStore {
     record Attempt(String id,String operationId,String state,Long consumedAt,long issuedAt,long expiresAt,long revision,long evidenceCount) {}
     default Operation operation(String id){throw Failure.unavailable();}
     default List<Attempt> attempts(String operationId,long now){throw Failure.unavailable();}
+    default void saveRecoveryScope(String attempt,RecoveryAdmissionPolicy.Scope scope){throw Failure.unavailable();}
+    default RecoveryAdmissionPolicy.Scope recoveryScope(String attempt){throw Failure.unavailable();}
+    record Recovery(String operationId,long fromRevision,long toRevision,String proof,long createdAt,String document) {}
+    /** Called only after fresh domain authorization in the same tenant writer transaction. */
+    default EnterpriseInvocation rebind(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){throw Failure.unavailable();}
+    default Recovery recordRecovery(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){throw Failure.unavailable();}
+    default boolean hasRecovery(String operation){throw Failure.unavailable();}
+    default boolean recoveryCoversAttempt(String operation,String attempt){throw Failure.unavailable();}
+    default List<Recovery> recoveries(String operation,int limit){throw Failure.unavailable();}
+    /** Trusted journal projection only. Never deserialize these recovery facts from a caller or executor. */
+    default OperationRebindingPolicy.Facts recoveryFacts(String invocation){throw Failure.unavailable();}
     record BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt,String source,Long dedupeExpiresAt,String outcome) {
         public BusinessKey(String tool,String namespace,String identity,String hash,String fingerprint,String agent,String user,String invocation,long retainUntil,Long tombstonedAt) {
             this(tool,namespace,identity,hash,fingerprint,agent,user,invocation,retainUntil,tombstonedAt,"HEADER",null,null);

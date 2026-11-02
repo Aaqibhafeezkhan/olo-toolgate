@@ -10,6 +10,7 @@ public interface EffectStore {
     /** False on replay: observing a previous authorization is not permission to dispatch it again. */
     record Authorization(Generation generation,boolean newAuthority) {}
     Generation byNonce(String nonce);
+    default Generation current(String effectId){throw Failure.unavailable();}
     Authorization authorize(Binding binding,long now);
     Generation release(String nonce,String device,String broker,String handler,long now);
     Generation sending(String nonce,String device,String broker,String handler,long now);

@@ -40,6 +40,15 @@ Worker-reported success is still visible through the legacy invocation API, but
 it does not establish a final effect-verified operation success. Phase-3 manifests,
 effect resolution and reconciliation are required before that can be asserted.
 
+## S09 extension
+
+[ADR 047](047-proof-bound-operation-rebinding.md) adds immutable proof-bound
+whole-operation recovery while retaining these attempt identities. Qualified,
+default-off broker-only consumed recovery requires admission-time containment
+scope and every predecessor generation released. Unqualified/ambiguous consumed
+work still stays fenced. The no-new-authority limits below describe this ADR's
+original V3 foundation, not a bypass of the later proof requirements.
+
 ## Limits and compatibility
 
 No new execution authority or automatic retry after consumption is introduced.

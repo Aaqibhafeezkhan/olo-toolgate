@@ -31,7 +31,14 @@ public final class ServerPackages {
     public static final String ACTION = "invoke";
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private final Store store; private final Codec codec; private final EnterpriseOperations operations; private final Clock clock;
-    public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock) { this.store = store; this.codec = codec; this.operations = operations; this.clock = clock; }
+    private final Set<String> qualifiedRecoveryExecutors;
+    public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock) {
+        this(store,codec,operations,clock,Set.of());
+    }
+    public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock,Set<String> qualifiedRecoveryExecutors) {
+        this.store=store;this.codec=codec;this.operations=operations;this.clock=clock;
+        this.qualifiedRecoveryExecutors=RecoveryAdmissionPolicy.parseQualifiedExecutors(String.join(",",qualifiedRecoveryExecutors));
+    }
 
     private static void validateDestinationTls(String id,JsonNode tls) {
         // Platform mTLS must retain normal CA/hostname validation; SPKI-only validation is insufficient.
@@ -464,7 +471,7 @@ public final class ServerPackages {
                 .put("deploymentBindingDigest", Canonical.digest(deployment)).put("deploymentBindingRevision", deployment.get("revision").asLong()).put("configRevision", deployment.get("revision").asLong());
             var targetRoutes = target.putArray("routes"); for (var route : descriptor.path("routes")) targetRoutes.add(route.get("id").asText());
             var claims = JSON.objectNode().put("jti", UUID.randomUUID().toString()).put("iss", operations.issuer()).put("aud", device)
-                .put("iat", lease.issuedAt()).put("nbf", lease.issuedAt()).put("exp", lease.expiresAt()).put("nonce", lease.nonce()).put("invocationId", i.id()).put("attempt", request.attempt());
+                .put("iat", lease.issuedAt()).put("nbf", lease.issuedAt()).put("exp", lease.expiresAt()).put("nonce", lease.nonce()).put("invocationId", i.id()).put("attempt",tx.enterprise().attempts(i.id(),lease.issuedAt()).size());
             claims.set("identity", identity); claims.set("target", target);
             claims.put("catalogRevision", Canonical.sha256(Long.toString(tx.load().revision()).getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .put("argumentsDigest", Canonical.arguments(arguments)).put("action", e.action());
@@ -473,7 +480,22 @@ public final class ServerPackages {
             var approvals = claims.putArray("approvalIds"); lease.approvalIds().forEach(approvals::add);
             claims.put("deadlineUnixMs", i.expiresAtUnixMs());
             if (PackageCompatibility.proxy(manifest)) claims.set("mcpVerification", mcpVerification(tx, version, clock.millis()));
-            return operations.signer().signInvocation(codec.model(codec.json(claims), io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class));
+            var signedClaims=codec.model(codec.json(claims),io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class);
+            if(!qualifiedRecoveryExecutors.isEmpty()){
+                String profile=tx.packages().document(target.path("serviceProfileDigest").asText());
+                if(profile!=null){
+                    var scope=RecoveryAdmissionPolicy.qualify(runtime,descriptor,node(profile),
+                            node(tx.packages().toolHost(device)),qualifiedRecoveryExecutors);
+                    if(scope!=null){
+                        if(!scope.runtimeDigest().equals(signedClaims.target().runtimeDigest())
+                                ||!scope.descriptorDigest().equals(signedClaims.target().toolDescriptorDigest())
+                                ||!scope.profileDigest().equals(signedClaims.target().serviceProfileDigest())
+                                ||scope.profileRevision()!=signedClaims.target().serviceProfileRevision())throw Failure.conflict();
+                        tx.enterprise().saveRecoveryScope(lease.nonce(),scope);
+                    }
+                }
+            }
+            return operations.signer().signInvocation(signedClaims);
         }
     }
 
@@ -520,6 +542,11 @@ public final class ServerPackages {
         if (parts.length != 3) throw Failure.validation();
         try { return node(new String(Base64.getUrlDecoder().decode(parts[1]), java.nio.charset.StandardCharsets.UTF_8)); }
         catch (IllegalArgumentException invalid) { throw Failure.validation(); }
+    }
+    private String dispatchNonce(PackageStore.Relayed relayed){
+        String nonce=claims(node(relayed.document()).path("dispatch")).path("nonce").asText("");
+        if(nonce.isEmpty())throw Failure.conflict();
+        return Ids.valid(nonce);
     }
     private ObjectNode status(PackageStore.Relayed relayed) { return (ObjectNode) node(relayed.document()).get("status"); }
     private PackageStore.Relayed updated(PackageStore.Relayed relayed, String state, java.util.function.Consumer<ObjectNode> change) {
@@ -638,6 +665,10 @@ public final class ServerPackages {
             var d = host(tx, device); var relayed = current(tx.packages().relayed(invocationId));
             if (relayed == null || !relayed.hostId().equals(d.deviceId())) throw notFound();
             if (!relayed.state().equals("CLAIMED")) throw Failure.conflict();
+            String expected=dispatchNonce(relayed);
+            if(admission.fencingToken()!=null&&!expected.equals(admission.fencingToken())
+                    ||admission.kind()==io.ololabs.toolgate.contracts.v2.AdmissionKind.ADMITTED&&admission.fencingToken()==null
+                    ||admission.fencingToken()==null&&tx.enterprise().hasRecovery(invocationId))throw Failure.conflict();
             String state = admission.kind() == io.ololabs.toolgate.contracts.v2.AdmissionKind.ADMITTED ? "ADMITTED" : "REFUSED";
             var next = updated(relayed, state, s -> s.set("admission", node(codec.json(admission))));
             tx.packages().saveRelayed(next);
@@ -651,8 +682,19 @@ public final class ServerPackages {
         if (!result.invocationId().equals(invocationId)) throw Failure.validation();
         return store.transaction(tenant, true, tx -> {
             var d = host(tx, device); var relayed = tx.packages().relayed(invocationId);
+            if(operations!=null&&result.fencingToken()!=null){
+                var i=operations.invocationIn(tx,invocationId);
+                if(!Objects.equals(i.reservedNonce(),result.fencingToken())){
+                    operations.retainHistoricalExecutionEvidence(tenant,tx,d.deviceId(),invocationId,result.fencingToken(),body);
+                    // Acknowledge the superseded receipt even while the replacement has no dispatch pointer.
+                    var receipt=relayed==null?JSON.objectNode().put("invocationId",invocationId).put("hostId",d.deviceId()).put("state","EXPIRED"):status(current(relayed));
+                    return reply(200,receipt);
+                }
+            }
             if (relayed == null || !relayed.hostId().equals(d.deviceId())) throw notFound();
             if (!relayed.state().equals("ADMITTED")) throw Failure.conflict();
+            if(result.fencingToken()!=null&&!dispatchNonce(relayed).equals(result.fencingToken())
+                    ||result.fencingToken()==null&&tx.enterprise().hasRecovery(invocationId))throw Failure.conflict();
             var next = updated(relayed, "FINISHED", s -> s.set("result", node(codec.json(result))));
             tx.packages().saveRelayed(next);
             return reply(200, status(next));

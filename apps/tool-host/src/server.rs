@@ -190,6 +190,14 @@ fn valid_identifier(id: &str) -> bool {
 
 /// The invocation id a refused permit claims, unverified, only to label the refusal.
 fn claimed_id(jws: &str) -> String {
+    claimed_field(jws, "invocationId").unwrap_or_default()
+}
+
+fn claimed_nonce(jws: &str) -> Option<String> {
+    claimed_field(jws, "nonce").filter(|nonce| valid_identifier(nonce))
+}
+
+fn claimed_field(jws: &str, field: &str) -> Option<String> {
     use base64::Engine;
     jws.split('.')
         .nth(1)
@@ -199,12 +207,7 @@ fn claimed_id(jws: &str) -> String {
                 .ok()
         })
         .and_then(|p| serde_json::from_slice::<Value>(&p).ok())
-        .and_then(|v| {
-            v.get("invocationId")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        })
-        .unwrap_or_default()
+        .and_then(|v| v.get(field).and_then(Value::as_str).map(str::to_string))
 }
 
 async fn dispatch(State(host): State<Arc<Host>>, body: Bytes) -> Response {
@@ -864,9 +867,12 @@ async fn answer(host: Arc<Host>, dispatch: Dispatch) {
     // Control queued the call under the invocation id its permit names; answer under that id even
     // when the permit is refused, so the Gateway hears the refusal.
     let id = claimed_id(&dispatch.permit.jws);
+    let nonce = claimed_nonce(&dispatch.permit.jws);
     match admit(&host, dispatch).await {
         Err(mut refused) => {
             refused.invocation_id = id;
+            // Correlates a refused dispatch; it is not evidence of permit consumption.
+            refused.fencing_token = nonce;
             if let Err(e) = host.control.admission(&refused).await {
                 tracing::warn!(invocation_id = %refused.invocation_id, error = %e, "Control did not take the refusal");
             }

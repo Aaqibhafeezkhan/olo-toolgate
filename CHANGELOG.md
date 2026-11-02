@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Recover safe failed operations under their original deadline using immutable
+  Control proofs, fresh attempt nonces and current authorization. Default-off
+  device/pool/image qualification restricts consumed recovery to supported
+  broker-only Python OCI OLO routes with every generation released. Preserve
+  predecessor dispatches and fence stale receipts. Apply V6 and coordinate
+  Control/Tool Host upgrades; ambiguous writes remain fenced.
+
 - Enforce reviewed business-key requirements, verified namespaces and argument
   keys across Control, Gateway and human calls. Add bounded optional dedupe
   windows with resolved-operation proof, immutable generation history and

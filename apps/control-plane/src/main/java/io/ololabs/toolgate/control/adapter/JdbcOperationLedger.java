@@ -4,6 +4,7 @@ package io.ololabs.toolgate.control.adapter;
 
 import io.ololabs.toolgate.control.application.EnterpriseStore;
 import io.ololabs.toolgate.control.application.Failure;
+import io.ololabs.toolgate.control.application.OperationRebindingPolicy;
 import io.ololabs.toolgate.contracts.EnterpriseInvocation;
 import java.sql.*;
 import java.util.*;
@@ -21,6 +22,59 @@ final class JdbcOperationLedger {
         try(var s=query("SELECT state,legacy,revision FROM control_operations WHERE tenant_id=? AND operation_id=?",id);var rows=s.executeQuery()){
             return rows.next()?new EnterpriseStore.Operation(id,rows.getString(1),rows.getBoolean(2),rows.getLong(3)):null;
         }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    OperationRebindingPolicy.Facts recoveryFacts(EnterpriseInvocation invocation){
+        if(invocation==null)return new OperationRebindingPolicy.Facts(false,false,false,false,false,"UNKNOWN","UNKNOWN",0,List.of());
+        var operation=operation(invocation.id());
+        if(operation==null)return new OperationRebindingPolicy.Facts(false,false,false,false,false,invocation.state().name(),"UNKNOWN",invocation.expiresAtUnixMs(),List.of());
+        record Permit(boolean execution,boolean bound,Long consumed,long expires) {}
+        var permits=new LinkedHashMap<String,Permit>();
+        var effects=new HashMap<String,List<String>>();
+        var qualified=new HashSet<String>();
+        boolean complete=true,cancelled,rejected;
+        try {
+            try(var s=query("SELECT 1 FROM control_operation_cancellations WHERE tenant_id=? AND invocation_id=?",invocation.id());var rows=s.executeQuery()){
+                cancelled=rows.next();
+            }
+            String approvalState=SqliteState.local(connection)?"json_extract(document,'$.state')":"document::jsonb->>'state'";
+            try(var s=query("SELECT 1 FROM control_enterprise_approvals WHERE tenant_id=? AND invocation_id=? AND approval_type='OPERATION' AND ("+approvalState+") IN('DENIED','REVOKED')",invocation.id());var rows=s.executeQuery()){
+                rejected=rows.next();
+            }
+            try(var s=query("SELECT n.nonce,n.purpose,n.consumed_at,n.expires_at,CASE WHEN a.attempt_id IS NOT NULL AND a.operation_id=n.invocation_id AND a.evaluation_digest=n.evaluation_digest AND a.authorization_epoch=n.authorization_epoch AND a.issued_at=n.issued_at AND a.expires_at=n.expires_at THEN 1 ELSE 0 END FROM control_enterprise_nonces n LEFT JOIN control_operation_attempts a ON a.tenant_id=n.tenant_id AND a.attempt_id=n.nonce WHERE n.tenant_id=? AND n.invocation_id=? AND n.purpose<>'SERVICE' ORDER BY n.issued_at,n.nonce LIMIT 65",invocation.id());var rows=s.executeQuery()){
+                while(rows.next()){
+                    long value=rows.getLong(3);Long consumed=rows.wasNull()?null:value;
+                    permits.put(rows.getString(1),new Permit("EXECUTION".equals(rows.getString(2)),rows.getInt(5)==1,consumed,rows.getLong(4)));
+                }
+            }
+            if(permits.size()>64)complete=false;
+            if(invocation.reservedNonce()!=null&&!permits.containsKey(invocation.reservedNonce()))complete=false;
+            try(var s=query("SELECT attempt_id,device_id FROM control_attempt_recovery_scopes WHERE tenant_id=? AND operation_id=? LIMIT 65",invocation.id());var rows=s.executeQuery()){
+                while(rows.next()){
+                    if(!permits.containsKey(rows.getString(1)))complete=false;
+                    if(invocation.evaluation().context().deviceId().equals(rows.getString(2)))qualified.add(rows.getString(1));
+                }
+            }
+            if(qualified.size()>64)complete=false;
+            int generations=0;
+            try(var s=query("SELECT attempt_id,state FROM control_effect_generations WHERE tenant_id=? AND operation_id=? ORDER BY effect_id,generation LIMIT 4097",invocation.id());var rows=s.executeQuery()){
+                while(rows.next()){
+                    generations++;
+                    String attempt=rows.getString(1);
+                    if(!permits.containsKey(attempt))complete=false;
+                    effects.computeIfAbsent(attempt,ignored->new ArrayList<>()).add(rows.getString(2));
+                }
+            }
+            if(generations>4096)complete=false;
+        }catch(SQLException failure){throw Failure.unavailable();}
+        var attempts=new ArrayList<OperationRebindingPolicy.Attempt>();
+        for(var entry:permits.entrySet()){
+            var permit=entry.getValue();
+            // Only an immutable, Control-qualified admission scope can make consumed work eligible.
+            attempts.add(new OperationRebindingPolicy.Attempt(permit.execution(),permit.bound(),permit.consumed(),
+                    permit.expires(),qualified.contains(entry.getKey()),effects.getOrDefault(entry.getKey(),List.of())));
+        }
+        return new OperationRebindingPolicy.Facts(true,operation.legacy(),complete,cancelled,rejected,
+                invocation.state().name(),operation.state(),invocation.expiresAtUnixMs(),attempts);
     }
     void reserve(EnterpriseStore.Nonce nonce){
         try(var s=query("INSERT INTO control_operation_attempts(tenant_id,attempt_id,operation_id,evaluation_digest,authorization_epoch,issued_at,expires_at) VALUES(?,?,?,?,?,?,?)",nonce.id(),nonce.invocationId(),nonce.evaluationDigest(),nonce.authorizationEpoch(),nonce.issuedAt(),nonce.expiresAt())){s.executeUpdate();}

@@ -2174,6 +2174,98 @@
         "INSERT",
         "SELECT"
       ]
+    },
+    {
+      "name": "control_attempt_recovery_scopes",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "attempt_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operation_attempts",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_operation_recoveries",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "operation_id",
+        "from_revision"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_operations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id"
+          ]
+        },
+        {
+          "table": "control_operation_attempts",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "previous_nonce"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
     }
   ]
 }

@@ -101,11 +101,12 @@ transactions, so overlapping old-runtime completions and new-runtime polls do no
 fail on deferred lock upgrades. Existing restart tests verify the old runtime
 cannot replace a recorded unknown outcome with success.
 
-If a keyed operation is OUTCOME_UNKNOWN, reconcile it through the existing
-reviewed reconciliation workflow. Retrying cannot reopen it even when the tool
-has declared DOWNSTREAM_IDEMPOTENCY. Failed/expired operations also remain bound;
-whole-invocation rebinding remains disabled. Expired unconsumed permit replacement inside
-the original deadline is recorded as a separate attempt by the
+A keyed operation with potentially sent or unqualified unknown work requires
+the existing reviewed reconciliation workflow. A DOWNSTREAM_IDEMPOTENCY
+declaration alone cannot authorize replay. Safe failed attempts may instead use
+[proof-bound recovery](../control-plane/operation-recovery.md), preserving the
+same operation/key and original deadline. Expired unconsumed permit replacement
+is recorded as a separate attempt by the
 [operation/attempt journal](operation-attempt-journal.md). Do not generate a new
 key to bypass uncertainty: that is a new operation with potential duplicate effects.
 
@@ -140,9 +141,20 @@ including a tombstoned one, only with the exact immutable history and resolution
 proof. History cannot be updated or deleted by the runtime role.
 
 Key-row retention does not purge independent task/result/dispatch payloads.
-Whole-invocation rebinding, cross-agent result reuse and effect-aware operation
-finalization remain outstanding. Calls without a declared window and without a
+Cross-agent result reuse and complete effect-aware operation finalization remain
+outstanding; proof-bound recovery does not establish verified success. Calls without a declared window and without a
 key retain request-ID replay lookup. None of these paths can reopen consumed
 unknown attempts through legacy retry; see
 [the live progress document](../security/zero-trust-execution-status.md) and
 [ADR 034](../adr/034-durable-business-operation-binding.md).
+
+## Proof-bound recovery
+
+[Operation recovery](../control-plane/operation-recovery.md) preserves immutable
+attempt history. Exact replay may queue the same logical
+operation only after complete Control proof that every predecessor could not
+write, with fresh current authority and the original deadline. Never-consumed,
+expired permits qualify from the journal; consumed attempts require default-off
+operator qualification and every generation released. Old attempts and receipts
+remain history. Missing evidence, possible sends, completed writes, cancellation,
+denial and elapsed original deadlines cannot authorize a replacement.

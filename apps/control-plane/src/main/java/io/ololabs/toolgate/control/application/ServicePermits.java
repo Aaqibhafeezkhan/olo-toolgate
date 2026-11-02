@@ -38,18 +38,25 @@ public final class ServicePermits {
             Long credentialDeadline=tx.enterprise().userCredentialDeadline(i.id());
             if(c.mode()!=RequestMode.SERVICE&&credentialDeadline==null)throw ManagementAccess.denied();
             boolean read=Set.of("memory.read","rag.query").contains(op);
-            String nonceId=read?UUID.randomUUID().toString():"service-"+DirectoryService.digest(i.id()+"\n"+request.audience()).substring(0,48);
+            boolean recovered=!read&&tx.enterprise().hasRecovery(i.id());
+            String nonceId=read?UUID.randomUUID().toString():"service-"+DirectoryService.digest(i.id()+"\n"+request.audience()
+                    +(recovered?"\n"+i.reservedNonce():"")).substring(0,48);
             var existing=tx.enterprise().nonce(nonceId);
-            // One write capability per logical operation, even across executor retries or fencing-token renewal.
-            // An ambiguous consumed write is reconciled; minting another nonce must never repeat its effect.
+            // Preserve existing capability IDs until a proof-bound whole-operation recovery.
+            // A replacement gets its own nonce only after every predecessor was proven unable to write.
             if(existing!=null&&(existing.consumedAt()!=null||existing.expiresAt()<=now))throw ManagementAccess.denied();
             long expiry=existing==null?Math.min(now+MAX_LIFETIME_MS,Math.min(i.expiresAtUnixMs(),credentialDeadline==null?Long.MAX_VALUE:credentialDeadline)):existing.expiresAt();
             long issuedAt=existing==null?now:existing.issuedAt();
             if(expiry>i.expiresAtUnixMs())throw ManagementAccess.denied();
             String route=request.audience().name()+"/"+op;
             String effectId=read?null:"eff-"+DirectoryService.digest(codec.json(List.of("toolgate-effect-v1",tenant.value(),i.id(),route,"service-write")));
-            var previous=read?null:tx.effects().byNonce(nonceId);
+            var previous=read?null:tx.effects().current(effectId);
             Long generation=read?null:previous==null?1L:previous.generation();
+            if(previous!=null&&!previous.binding().authNonce().equals(nonceId)){
+                if(!recovered||!previous.state().equals("RELEASED")
+                        ||!tx.enterprise().recoveryCoversAttempt(i.id(),previous.binding().attemptId()))throw Failure.conflict();
+                generation=Math.addExact(previous.generation(),1);
+            }
             var claims=new ServicePermitClaims(operations.issuer(),request.audience(),tenant.value(),subject,
                 c.mode()==RequestMode.DELEGATED?c.agentId():null,c.mode(),op,i.evaluation().resources(),
                 i.evaluation().argumentsDigest(),executorKeySha256,i.id(),nonceId,i.authorizationEpoch(),issuedAt,expiry,i.reservedNonce(),request.httpRequestDigest(),request.httpRequestDigest()==null?null:effectId,request.httpRequestDigest()==null?null:generation);

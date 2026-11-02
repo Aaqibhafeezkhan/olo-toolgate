@@ -313,7 +313,9 @@ final class ServerPackagesTest {
         assertTrue(ServerPackages.targets(null, codec, node("{}"), "any-host"));
 
         // A relayed call waits for its host, which claims it, admits it and sends its result.
-        var dispatch = "{\"permit\":{\"jws\":\"a.b.c\"},\"arguments\":{\"id\":\"1\"}}";
+        String token="header."+Base64.getUrlEncoder().withoutPadding().encodeToString(
+                "{\"invocationId\":\"inv-1\",\"nonce\":\"f-1\"}".getBytes(StandardCharsets.UTF_8))+".signature";
+        var dispatch = "{\"permit\":{\"jws\":\""+token+"\"},\"arguments\":{\"id\":\"1\"}}";
         var record = "{\"dispatch\":" + dispatch + ",\"status\":{\"invocationId\":\"inv-1\",\"hostId\":\"host-2\",\"state\":\"QUEUED\"}}";
         store.transaction(tenant, true, tx -> { tx.packages().saveRelayed(new PackageStore.Relayed("inv-1", "host-2", "QUEUED", System.currentTimeMillis() + 60000, record)); return null; });
         assertEquals(204, packages.next(tenant, tx -> hosts.get("host-1")).status());

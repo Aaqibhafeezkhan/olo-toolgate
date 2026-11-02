@@ -58,7 +58,8 @@ public final class EnterpriseOperations {
     }
     private EnterpriseInvocation invocation(Store.Session tx,String id){var i=tx.enterprise().invocation(Ids.valid(id));if(i==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Invocation not found");
         long time=clock.millis();var executionLease=i.state()==EnterpriseInvocationState.EXECUTING?tx.enterprise().executionLease(i.id()):null;
-        boolean expired=i.expiresAtUnixMs()<=time||executionLease!=null&&executionLease.expiresAt()<=time;
+        boolean expired=i.expiresAtUnixMs()<=time||executionLease!=null
+                &&Objects.equals(executionLease.fencingToken(),i.reservedNonce())&&executionLease.expiresAt()<=time;
         if(expired&&Set.of(EnterpriseInvocationState.PENDING_APPROVAL,EnterpriseInvocationState.QUEUED,EnterpriseInvocationState.RESERVED,EnterpriseInvocationState.EXECUTING).contains(i.state())){
             var state=i.state()==EnterpriseInvocationState.EXECUTING?EnterpriseInvocationState.OUTCOME_UNKNOWN:EnterpriseInvocationState.EXPIRED;
             var next=changed(i,state,i.reservedNonce(),i.completedResources(),i.resultDigest());tx.enterprise().saveInvocation(next,time,i.revision());tx.audit("effect-watchdog","INVOCATION_"+state.name(),"invocation:"+id,next.revision(),i.evaluation().context().requestId(),i.requestDigest(),evidence(next));i=next;
@@ -92,8 +93,14 @@ public final class EnterpriseOperations {
         String json=codec.json(m);if(json.length()<=4096)return json;m.remove("resources");return codec.json(m);}
     private void audit(Store.Session tx,DirectoryService.Actor actor,String operation,EnterpriseInvocation i){tx.audit(actor.id(),operation,"invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest(),evidence(i));}
     private void fresh(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation i,long now){
+        fresh(tenant,tx,i,now,false);
+    }
+    private void fresh(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation i,long now,boolean provenRecovery){
         var executionLease=tx.enterprise().executionLease(i.id());
-        if(executionLease!=null&&executionLease.expiresAt()<=now)throw ManagementAccess.denied();
+        // Only a positively proven replacement may outlive its predecessor's execution lease.
+        // Its original operation deadline, credentials, epoch and approvals still apply.
+        if(!provenRecovery&&executionLease!=null&&Objects.equals(executionLease.fencingToken(),i.reservedNonce())
+                &&executionLease.expiresAt()<=now)throw ManagementAccess.denied();
         Long credentialDeadline=tx.enterprise().userCredentialDeadline(i.id());
         if(credentialDeadline!=null&&credentialDeadline<=now)throw ManagementAccess.denied();
         if(i.expiresAtUnixMs()<=now||i.authorizationEpoch()!=tx.enterprise().authorizationEpoch())throw ManagementAccess.denied();
@@ -228,7 +235,13 @@ public final class EnterpriseOperations {
             if(key!=null&&business==null)throw Failure.conflict();
             if(!previous.requestDigest().equals(digest))throw Failure.conflict();
             previous=invocation(tx,previous.id());previous=renewed(tx,actor,previous,e.context(),time);
-            decide(actor.tenant(),tx,previous.evaluation(),time,true);return reply(previous,previous.revision());
+            var proof=OperationRebindingPolicy.proof(tx.enterprise().recoveryFacts(previous.id()),time);
+            if(proof!=null){
+                fresh(actor.tenant(),tx,previous,time,true);
+                previous=tx.enterprise().rebind(previous,proof,time);
+                audit(tx,actor,"INVOCATION_REBOUND",previous);
+            }else decide(actor.tenant(),tx,previous.evaluation(),time,true);
+            return reply(previous,previous.revision());
         }
         if(tx.enterprise().invocationsSince(Math.max(0,time-lifetime))>=capacity)throw Failure.conflict();
         var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,time,false,budgets);
@@ -267,7 +280,10 @@ public final class EnterpriseOperations {
         long now=now(tx);var i=invocation(tx,invocationId);if(i.revision()!=expectedRevision)throw Failure.conflict();fresh(tenant,tx,i,now);
             if(i.state()==EnterpriseInvocationState.RESERVED){var old=tx.enterprise().nonce(i.reservedNonce());if(old==null||old.consumedAt()!=null||old.expiresAt()>now)throw Failure.conflict();}
             else if(i.state()!=EnterpriseInvocationState.QUEUED)throw Failure.conflict();
-            var decision=decide(tenant,tx,i.evaluation(),now,true);String nonce=UUID.randomUUID().toString();long expires=Math.min(i.expiresAtUnixMs(),Math.min(now+10000,decision.validUntilUnixMs()));
+            var decision=decide(tenant,tx,i.evaluation(),now,true);
+            int previousAttempts=tx.enterprise().attempts(i.id(),now).size();
+            if(previousAttempts>=64)throw Failure.conflict();
+            String nonce=String.format(java.util.Locale.ROOT,"attempt-%03d-%s",previousAttempts+1,UUID.randomUUID());long expires=Math.min(i.expiresAtUnixMs(),Math.min(now+10000,decision.validUntilUnixMs()));
             String evalDigest=DirectoryService.digest(codec.json(i.evaluation()));var e=i.evaluation();var approval=tx.enterprise().approval(approvalId(i.id()));var ids=approval==null?List.<String>of():List.of(approval.id());
             var next=changed(i,EnterpriseInvocationState.RESERVED,nonce,i.completedResources(),null);tx.enterprise().reserveExecutionNonce(new EnterpriseStore.Nonce(nonce,i.id(),evalDigest,i.authorizationEpoch(),now,expires,null));tx.enterprise().saveInvocation(next,now,i.revision());tx.audit(actorId,"PERMIT_RESERVE","invocation:"+next.id(),next.revision(),e.context().requestId(),next.requestDigest(),evidence(next));
             return new Lease(next,nonce,evalDigest,now,expires,ids);
@@ -349,11 +365,9 @@ public final class EnterpriseOperations {
     public Store.Reply reportInvocation(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String document,String fencingToken){var report=codec.model(document,io.ololabs.toolgate.contracts.v2.InvocationResultReport.class);
         if(!report.fencingToken().equals(fencingToken))throw ManagementAccess.denied();
         return authoritative(tenant,"device-effect",report.invocationId(),DirectoryService.digest(document),tx->{String device=certificate.apply(tx);var i=invocation(tx,report.invocationId());
-            if(!device.equals(i.evaluation().context().deviceId())||!report.fencingToken().equals(i.reservedNonce())||tx.packages().toolHost(device)==null)throw ManagementAccess.denied();
-            var admission=tx.enterprise().nonce(report.fencingToken());
-            if(admission==null||admission.consumedAt()==null||!admission.invocationId().equals(i.id()))throw ManagementAccess.denied();
+            requireReportedAttempt(tx,i,device,report.fencingToken());
             tx.enterprise().saveExecutionEvidence(i.id(),report.fencingToken(),DirectoryService.digest(document),document,now(tx));
-            if(i.state()!=EnterpriseInvocationState.EXECUTING){
+            if(!report.fencingToken().equals(i.reservedNonce())||i.state()!=EnterpriseInvocationState.EXECUTING){
                 // Evidence may arrive after cancellation, expiry, or reconciliation. Keep
                 // the report without silently overriding a reviewed business outcome.
                 tx.audit(DirectoryService.digest(device),"LATE_EXECUTION_EVIDENCE","invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),DirectoryService.digest(document));
@@ -365,7 +379,7 @@ public final class EnterpriseOperations {
             var effect=new EnterpriseEffectReport(i.id(),i.state()==EnterpriseInvocationState.EXECUTING?i.revision():i.revision()-1,state,state==EnterpriseInvocationState.SUCCEEDED?i.evaluation().resources():List.of(),
                 state==EnterpriseInvocationState.SUCCEEDED?Canonical.digest(result).substring(7):null);
             var next=reportInSession(tenant,tx,device,effect);
-            Integer attempt=tx.runEvents().attempt(i.id(),report.fencingToken());new RunEvents(store,codec,this).recordResult(tx,i,attempt==null?1:attempt,report.fencingToken(),device,report.result(),clock.millis());
+            Integer attempt=tx.runEvents().attempt(i.id(),report.fencingToken());new RunEvents(store,codec,this).recordResult(tx,i,attempt==null?attemptOrdinal(tx,i.id(),report.fencingToken()):attempt,report.fencingToken(),device,report.result(),clock.millis());
             // A call the Gateway took to the host directly: keep its result as a finished dispatch, as for a call the host
             // fetched, so a repeated call returns it instead of running the tool again.
             if(tx.packages().relayed(i.id())==null){
@@ -375,6 +389,30 @@ public final class EnterpriseOperations {
                 tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),device,"FINISHED",i.expiresAtUnixMs(),codec.json(finished)));
             }
             return reply(next,next.revision());});
+    }
+    int attemptOrdinal(Store.Session tx,String operation,String fence){
+        var history=tx.enterprise().attempts(operation,clock.millis());
+        for(int index=0;index<history.size();index++)if(history.get(index).id().equals(fence))return index+1;
+        return 1; // Historical metadata without a journal cannot qualify for recovery.
+    }
+    private void requireReportedAttempt(Store.Session tx,EnterpriseInvocation i,String device,String fence){
+        if(fence==null||!device.equals(i.evaluation().context().deviceId())||tx.packages().toolHost(device)==null)
+            throw ManagementAccess.denied();
+        var admission=tx.enterprise().nonce(fence);
+        if(admission==null||admission.consumedAt()==null||!admission.invocationId().equals(i.id())
+                ||tx.enterprise().attempts(i.id(),clock.millis()).stream().noneMatch(a->a.id().equals(fence)))
+            throw ManagementAccess.denied();
+    }
+    /** Receipt only: never changes the current invocation, dispatch pointer, result or execution authority. */
+    EnterpriseInvocation retainHistoricalExecutionEvidence(Ids.TenantId tenant,Store.Session tx,String device,
+                                                            String id,String fence,String document){
+        var i=invocation(tx,id);
+        if(Objects.equals(i.reservedNonce(),fence))throw Failure.conflict();
+        requireReportedAttempt(tx,i,device,fence);
+        tx.enterprise().saveExecutionEvidence(id,fence,DirectoryService.digest(document),document,now(tx));
+        tx.audit(DirectoryService.digest(device),"LATE_EXECUTION_EVIDENCE","invocation:"+id,i.revision(),
+                i.evaluation().context().requestId(),DirectoryService.digest(document));
+        return i;
     }
     private void reviewer(Store.Session tx,String user,EnterpriseInvocation i,String obligation,long now){
         var d=tx.load();var e=i.evaluation();if(new ManagementAccess(codec).superAdministrator(d,user)){var policyEntry=d.entries().get(Kind.POLICY.id(obligation));if(policyEntry==null||!policyEntry.enabled()||codec.model(policyEntry.document(),ControlPolicy.class).decision()!=Decision.ASK)throw ManagementAccess.denied();return;}if(user.equals(e.context().userId()))throw ManagementAccess.denied();

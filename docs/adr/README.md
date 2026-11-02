@@ -83,3 +83,5 @@ Use `000-template.md`.
 - [045: Source-bound actual Control/knowledge qualification](045-knowledge-stack-qualification.md)
 
 - [046: Control-owned business-key policy and retention](046-business-key-policy-retention.md)
+
+- [047: Positive-proof operation rebinding](047-proof-bound-operation-rebinding.md)

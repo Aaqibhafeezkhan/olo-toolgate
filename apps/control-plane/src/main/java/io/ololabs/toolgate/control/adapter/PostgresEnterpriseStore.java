@@ -11,6 +11,102 @@ import java.util.*;
 final class PostgresEnterpriseStore implements EnterpriseStore {
     public Operation operation(String id){return new JdbcOperationLedger(connection,tenant).operation(id);}
     public List<Attempt> attempts(String id,long now){return new JdbcOperationLedger(connection,tenant).attempts(id,now);}
+    public RecoveryAdmissionPolicy.Scope recoveryScope(String attempt){
+        try(var s=query("SELECT device_id,pool_id,image_digest,runtime_digest,descriptor_digest,profile_digest,profile_revision FROM control_attempt_recovery_scopes WHERE tenant_id=? AND attempt_id=?",attempt);var rows=s.executeQuery()){
+            return rows.next()?new RecoveryAdmissionPolicy.Scope(rows.getString(1),rows.getString(2),rows.getString(3),
+                    rows.getString(4),rows.getString(5),rows.getString(6),rows.getLong(7)):null;
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public void saveRecoveryScope(String attempt,RecoveryAdmissionPolicy.Scope scope){
+        var old=recoveryScope(attempt);
+        if(old!=null){if(!old.equals(scope))throw Failure.conflict();return;}
+        for(var digest:List.of(scope.imageDigest(),scope.runtimeDigest(),scope.descriptorDigest(),scope.profileDigest()))
+            if(!digest.matches("sha256:[a-f0-9]{64}"))throw Failure.validation();
+        io.ololabs.toolgate.control.domain.Ids.valid(scope.deviceId());
+        io.ololabs.toolgate.control.domain.Ids.valid(scope.poolId());
+        try(var s=bound("INSERT INTO control_attempt_recovery_scopes(tenant_id,operation_id,attempt_id,device_id,pool_id,image_digest,runtime_digest,descriptor_digest,profile_digest,profile_revision) SELECT tenant_id,invocation_id,nonce,?,?,?,?,?,?,? FROM control_enterprise_nonces WHERE tenant_id=? AND nonce=?",
+                scope.deviceId(),scope.poolId(),scope.imageDigest(),scope.runtimeDigest(),scope.descriptorDigest(),
+                scope.profileDigest(),scope.profileRevision(),tenant,attempt)){
+            if(s.executeUpdate()!=1)throw Failure.conflict();
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public List<Recovery> recoveries(String operation,int limit){
+        if(limit<1||limit>100)throw Failure.validation();
+        try(var s=query("SELECT from_revision,to_revision,proof,created_at,document FROM control_operation_recoveries WHERE tenant_id=? AND operation_id=? ORDER BY from_revision LIMIT ?",operation,limit);var rows=s.executeQuery()){
+            var history=new ArrayList<Recovery>();
+            while(rows.next())history.add(new Recovery(operation,rows.getLong(1),rows.getLong(2),rows.getString(3),rows.getLong(4),rows.getString(5)));
+            return List.copyOf(history);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public boolean hasRecovery(String operation){
+        try(var s=query("SELECT 1 FROM control_operation_recoveries WHERE tenant_id=? AND operation_id=? LIMIT 1",operation);var rows=s.executeQuery()){
+            return rows.next();
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public boolean recoveryCoversAttempt(String operation,String attempt){
+        try {
+            String members=SqliteState.local(connection)?"json_each(r.attempt_ids) j":"jsonb_array_elements_text(r.attempt_ids::jsonb) j(value)";
+            try(var s=query("SELECT 1 FROM control_operation_recoveries r WHERE r.tenant_id=? AND r.operation_id=? AND r.proof='QUALIFIED_BROKER_NO_WRITE' AND EXISTS(SELECT 1 FROM "+members+" WHERE j.value=?) LIMIT 1",operation,attempt);var rows=s.executeQuery()){
+                return rows.next();
+            }
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public EnterpriseInvocation rebind(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){
+        var recovery=recordRecovery(previous,proof,now);
+        var snapshot=(com.fasterxml.jackson.databind.JsonNode)codec.value(recovery.document());
+        var next=new EnterpriseInvocation(previous.id(),previous.requestDigest(),previous.evaluation(),
+                EnterpriseInvocationState.QUEUED,recovery.toRevision(),previous.authorizationEpoch(),null,
+                previous.expiresAtUnixMs(),List.of(),previous.downstreamIdempotencyKey(),null,
+                previous.diagnosticId(),previous.reconciliation());
+        String dispatch=snapshot.path("dispatch").asText(null);
+        try {
+            // Remove only the active pointer after its exact bytes are durably archived above.
+            if(dispatch!=null)try(var s=query("DELETE FROM control_tool_host_dispatches WHERE tenant_id=? AND invocation_id=? AND document=?",previous.id(),dispatch)){
+                if(s.executeUpdate()!=1)throw Failure.conflict();
+            }
+            saveInvocation(next,now,previous.revision());
+            try(var s=query("UPDATE control_business_keys SET outcome=NULL WHERE tenant_id=? AND invocation_id=? AND outcome IS NOT NULL",previous.id())){
+                s.executeUpdate();
+            }
+        }catch(SQLException failure){throw Failure.unavailable();}
+        return next;
+    }
+    public Recovery recordRecovery(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){
+        var stored=invocation(previous.id());
+        if(stored==null||!codec.json(stored).equals(codec.json(previous)))throw Failure.conflict();
+        var facts=recoveryFacts(previous.id());
+        if(proof==null||OperationRebindingPolicy.proof(facts,now)!=proof)throw Failure.conflict();
+        var operation=operation(previous.id());
+        var ids=new ArrayList<String>();
+        String dispatch=null;
+        try {
+            try(var s=query("SELECT nonce FROM control_enterprise_nonces WHERE tenant_id=? AND invocation_id=? AND purpose<>'SERVICE' ORDER BY nonce LIMIT 65",previous.id());var rows=s.executeQuery()){
+                while(rows.next())ids.add(rows.getString(1));
+            }
+            if(ids.size()>64)throw Failure.conflict();
+            try(var s=query("SELECT document FROM control_tool_host_dispatches WHERE tenant_id=? AND invocation_id=?",previous.id());var rows=s.executeQuery()){
+                if(rows.next())dispatch=rows.getString(1);
+            }
+            var snapshot=new LinkedHashMap<String,Object>();
+            snapshot.put("format","toolgate-operation-recovery-v1");
+            snapshot.put("invocation",codec.json(previous));snapshot.put("attemptIds",ids);
+            var lease=executionLease(previous.id());
+            snapshot.put("lease",lease==null?null:codec.json(lease));
+            snapshot.put("dispatch",dispatch);snapshot.put("facts",facts);
+            String document=codec.json(snapshot);
+            if(document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>33554432)throw Failure.validation();
+            var recovery=new Recovery(previous.id(),previous.revision(),Math.addExact(previous.revision(),1),proof.name(),now,document);
+            try(var s=query("INSERT INTO control_operation_recoveries(tenant_id,operation_id,from_revision,to_revision,operation_revision,previous_nonce,original_deadline,proof,created_at,attempt_ids,document) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    previous.id(),previous.revision(),recovery.toRevision(),operation.revision(),previous.reservedNonce(),
+                    previous.expiresAtUnixMs(),proof.name(),now,codec.json(ids),document)){
+                if(s.executeUpdate()!=1)throw Failure.conflict();
+            }
+            return recovery;
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public OperationRebindingPolicy.Facts recoveryFacts(String id){
+        return new JdbcOperationLedger(connection,tenant).recoveryFacts(invocation(id));
+    }
     public BusinessKey businessKey(String tool,String namespace,String identity,String hash){
         try(var s=query("SELECT fingerprint,caller_agent_id,caller_user_id,invocation_id,retain_until,tombstoned_at,source,dedupe_expires_at,outcome FROM control_business_keys WHERE tenant_id=? AND tool_id=? AND namespace=? AND namespace_identity=? AND business_key_hash=?",tool,namespace,identity,hash);var rows=s.executeQuery()){
             return rows.next()?businessKeyRow(rows,tool,namespace,identity,hash):null;
@@ -91,7 +187,7 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         }catch(SQLException failure){throw Failure.unavailable();}
     }
     public void saveExecutionLease(ExecutionLease lease){
-        try(var s=query("INSERT INTO control_execution_leases(tenant_id,invocation_id,fencing_token,device_id,expires_at) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,invocation_id) DO UPDATE SET expires_at=excluded.expires_at WHERE control_execution_leases.fencing_token=excluded.fencing_token AND control_execution_leases.device_id=excluded.device_id",lease.invocationId(),lease.fencingToken(),lease.deviceId(),lease.expiresAt())){
+        try(var s=query("INSERT INTO control_execution_leases(tenant_id,invocation_id,fencing_token,device_id,expires_at) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,invocation_id) DO UPDATE SET fencing_token=excluded.fencing_token,device_id=excluded.device_id,expires_at=excluded.expires_at",lease.invocationId(),lease.fencingToken(),lease.deviceId(),lease.expiresAt())){
             if(s.executeUpdate()!=1)throw Failure.conflict();
         }catch(SQLException failure){throw Failure.unavailable();}
     }

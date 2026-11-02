@@ -18,6 +18,7 @@ See [publication and adoption](policy-bundles.md).
 | `MP_JWT_VERIFY_AUDIENCES` | Dedicated administrative access-token audience |
 | `TOOLGATE_CONTROL_MAX_RECORDS` | Active records across all kinds per tenant, 1–512; default 512 |
 | `TOOLGATE_CONTROL_MAX_CONFIG_BYTES` | Serialized record bytes per tenant, 1024–1048576; default 1 MiB |
+| `TOOLGATE_CONTROL_RECOVERY_QUALIFIED_EXECUTORS` | Empty by default; explicitly qualified authenticated device/pool/OCI-image pins for bounded broker-only recovery; see [operation recovery](operation-recovery.md) |
 | `TOOLGATE_CONTROL_DEVELOPMENT_MODE` | Default false; explicit isolated local tests may use PostgreSQL without TLS |
 | `QUARKUS_HTTP_PORT`, `QUARKUS_MANAGEMENT_PORT` | Defaults 8082 and 9092 |
 | `TOOLGATE_CONTROL_TRACE_EXPORT_ENABLED` | Default false; enable sanitized outbound traces at runtime |
