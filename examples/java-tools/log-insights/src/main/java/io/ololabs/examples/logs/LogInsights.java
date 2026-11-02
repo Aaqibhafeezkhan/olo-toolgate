@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -169,6 +171,19 @@ public class LogInsights {
                             "fatal"
                         })
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "What got logged between 2026-10-28T22:00:00Z and 2026-10-31T10:45:00Z?", arguments = "{\"from\":\"2026-10-28T22:00:00Z\",\"to\":\"2026-10-31T10:45:00Z\"}"),
+                @TrainingPrompt(prompt = "Search logs for timeout, level DEBUG or higher", arguments = "{\"contains\":\"timeout\",\"minLevel\":\"DEBUG\"}"),
+                @TrainingPrompt(prompt = "Warnings and worse mentioning connection refused", arguments = "{\"contains\":\"connection refused\",\"minLevel\":\"WARN\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "find log lines with 'disk full' from the last 30 minutes", arguments = "{\"contains\":\"disk full\",\"lastMinutes\":30}"),
+                @TrainingPrompt(prompt = "only ERROR and above containing payment", arguments = "{\"contains\":\"payment\",\"minLevel\":\"ERROR\"}")
+            },
+            negatives = {
+                "How should log messages be formatted?"
             })
     public Search search(
             @Param(description = "Inclusive start, ISO 8601", required = false) String from,
@@ -223,7 +238,8 @@ public class LogInsights {
                 "errors vs warnings count?",
                 "Break the logs down by level",
                 "Log level summary",
-                "How noisy are the logs?"
+                "How noisy are the logs?",
+                "Log level counts"
             },
             negatives = "Explain log levels in syslog",
             parameters = {
@@ -268,6 +284,14 @@ public class LogInsights {
                         "1440"
                     })
             })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "count log lines by level", arguments = "{}"),
+                @TrainingPrompt(prompt = "level breakdown per 30 minute bucket", arguments = "{\"bucketMinutes\":30}")
+            },
+            negatives = {
+                "What log level should I use for debugging?"
+            })
     public Levels levels(
             @Param(description = "Inclusive start, ISO 8601", required = false) String from,
             @Param(description = "Inclusive end, ISO 8601", required = false) String to,
@@ -311,7 +335,9 @@ public class LogInsights {
                 "Top {limit} error types since {from}",
                 "Summarise the errors between {from} and {to}",
                 "Which exceptions keep coming up?",
-                "Show the error groups for the last {lastMinutes} minutes, top {limit}"
+                "Show the error groups for the last {lastMinutes} minutes, top {limit}",
+                "What exceptions occurred in the last {lastMinutes} minutes?",
+                "What's been failing in the last {lastMinutes} minutes?"
             },
             defaultPhrasings = {
                 "What errors are in the logs?",
@@ -370,6 +396,18 @@ public class LogInsights {
                         "30",
                         "50"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "What exceptions occurred in the last 1440 minutes?", arguments = "{\"lastMinutes\":1440}"),
+                @TrainingPrompt(prompt = "What's been failing in the last 180 minutes?", arguments = "{\"lastMinutes\":180}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "top errors in the last hour", arguments = "{\"lastMinutes\":60}"),
+                @TrainingPrompt(prompt = "group the errors since 2026-11-01T00:00:00Z", arguments = "{\"from\":\"2026-11-01T00:00:00Z\"}")
+            },
+            negatives = {
+                "What is a NullPointerException?"
             })
     public Errors errors(
             @Param(description = "Inclusive start, ISO 8601", required = false) String from,
@@ -432,6 +470,13 @@ public class LogInsights {
                         "200",
                         "500"
                     })
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "last 50 lines of app.log", arguments = "{\"file\":\"app.log\",\"lines\":50}")
+            },
+            negatives = {
+                "What does tail -f do?"
             })
     public Tail tail(
             @Param(description = "File name relative to LogDir", maxLength = 500) String file,

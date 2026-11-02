@@ -18,7 +18,9 @@ import io.ololabs.toolgate.sdk.annotations.Secret;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.RawResponse;
@@ -129,6 +131,18 @@ public class WebhookNotify {
                             "urgent"
                         })
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Send an urgent message to team-backend: \"Disk almost full\" - \"C: on app-02 is at 95%\" (ref INC-5001)", arguments = "{\"channel\":\"team-backend\",\"severity\":\"critical\",\"title\":\"Disk almost full\",\"text\":\"C: on app-02 is at 95%\",\"reference\":\"INC-5001\"}"),
+                @TrainingPrompt(prompt = "Post a warning to deployments: Deploy finished - \"Release 1.4.2 is live\", ref deploy-1.4.2", arguments = "{\"channel\":\"deployments\",\"severity\":\"warning\",\"title\":\"Deploy finished\",\"text\":\"Release 1.4.2 is live\",\"reference\":\"deploy-1.4.2\"}"),
+                @TrainingPrompt(prompt = "Post to on-call: High error rate - \"Error rate above 5% for 10 minutes\", reference INC-5002", arguments = "{\"channel\":\"on-call\",\"title\":\"High error rate\",\"text\":\"Error rate above 5% for 10 minutes\",\"reference\":\"INC-5002\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "ping support channel: Backup done - all 3 jobs ok, info level, ref job-1101", arguments = "{\"channel\":\"support\",\"severity\":\"info\",\"title\":\"Backup done\",\"text\":\"all 3 jobs ok\",\"reference\":\"job-1101\"}")
+            },
+            negatives = {
+                "How do webhooks work?"
             })
     public Sent send(
             @Param(description = "Channel to post to, such as ops-alerts", maxLength = 64) String channel,

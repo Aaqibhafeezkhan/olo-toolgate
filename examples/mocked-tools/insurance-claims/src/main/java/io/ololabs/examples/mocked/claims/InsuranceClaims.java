@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
@@ -89,7 +91,9 @@ public class InsuranceClaims {
                 "Is {policyId} active?",
                 "What's the deductible and limit on {policyId}?",
                 "Which perils are excluded from {policyId}?",
-                "Who holds policy {policyId}?"
+                "Who holds policy {policyId}?",
+                "Is policy {policyId} still active?",
+                "Limit and deductible of {policyId}"
             },
             negatives = {
                 "What's the HR policy on sick leave?",
@@ -101,7 +105,18 @@ public class InsuranceClaims {
                         "POL-2002",
                         "POL-2010",
                         "POL-2015"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Is policy POL-2010 still active?", arguments = "{\"policyId\":\"POL-2010\"}"),
+                @TrainingPrompt(prompt = "Limit and deductible of POL-2002", arguments = "{\"policyId\":\"POL-2002\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "does POL-2004 cover theft?", arguments = "{\"policyId\":\"POL-2004\"}")
+            },
+            negatives = {
+                "What is a deductible?"
+            })
     public Policy policy(@Param(description = "Policy id, such as POL-2001", maxLength = 20) String policyId, ToolContext context) {
         return findPolicy(policyId);
     }
@@ -118,7 +133,11 @@ public class InsuranceClaims {
                 "What's happening with {claimId}?",
                 "Which documents are missing for {claimId}?",
                 "Who is the adjuster on {claimId}?",
-                "Next step for claim {claimId}?"
+                "Next step for claim {claimId}?",
+                "Where is claim {claimId} at?",
+                "What documents are missing on {claimId}?",
+                "What happens next with {claimId}?",
+                "Status of claim {claimId}"
             },
             negatives = "How long do insurance claims usually take?",
             parameters = @TrainingValues(name = "claimId",
@@ -126,7 +145,18 @@ public class InsuranceClaims {
                         "CLM-3001",
                         "CLM-3002",
                         "CLM-3009"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Where is claim CLM-3009 at?", arguments = "{\"claimId\":\"CLM-3009\"}"),
+                @TrainingPrompt(prompt = "What documents are missing on CLM-3002?", arguments = "{\"claimId\":\"CLM-3002\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "who's the adjuster on CLM-3005?", arguments = "{\"claimId\":\"CLM-3005\"}")
+            },
+            negatives = {
+                "Out of curiosity, how long do insurance claims usually take?"
+            })
     public Claim claim(@Param(description = "Claim id, such as CLM-3001", maxLength = 20) String claimId, ToolContext context) {
         Claim c = Data.CLAIMS.get(claimId.trim().toUpperCase(Locale.ROOT));
         if (c == null) throw new ToolBusinessError("CLAIM_NOT_FOUND", "No claim has that id. The mocked claim is CLM-3001.");
@@ -196,6 +226,17 @@ public class InsuranceClaims {
                         "2026-10-20",
                         "2026-08-15"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Would POL-2001 pay for FLOOD damage of 950.5 from 2026-10-01?", arguments = "{\"policyId\":\"POL-2001\",\"peril\":\"FLOOD\",\"lossAmount\":950.5,\"incidentDate\":\"2026-10-01\"}"),
+                @TrainingPrompt(prompt = "Check cover for POL-2001: FIRE on 2026-10-20, loss 12000", arguments = "{\"policyId\":\"POL-2001\",\"peril\":\"FIRE\",\"lossAmount\":12000,\"incidentDate\":\"2026-10-20\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "is a THEFT loss of 800 on 2026-09-15 covered under POL-2003?", arguments = "{\"policyId\":\"POL-2003\",\"peril\":\"THEFT\",\"lossAmount\":800,\"incidentDate\":\"2026-09-15\"}")
+            },
+            negatives = {
+                "What does force majeure mean?"
             })
     public Assessment assess(
             @Param(description = "Policy id", maxLength = 20) String policyId,
@@ -297,6 +338,16 @@ public class InsuranceClaims {
                         "chat-5520",
                         "REQ-3307"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "File a claim on POL-2002: FIRE on 2026-09-28, loss 4200, Pipe burst in the kitchen overnight, ref req-20261031-01", arguments = "{\"policyId\":\"POL-2002\",\"peril\":\"FIRE\",\"incidentDate\":\"2026-09-28\",\"lossAmount\":4200,\"description\":\"Pipe burst in the kitchen overnight\",\"reference\":\"req-20261031-01\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "lodge a THEFT claim for POL-2001, bike stolen from the shed on 2026-10-01, 650, ref req-77", arguments = "{\"policyId\":\"POL-2001\",\"peril\":\"THEFT\",\"incidentDate\":\"2026-10-01\",\"lossAmount\":650,\"description\":\"bike stolen from the shed\",\"reference\":\"req-77\"}")
+            },
+            negatives = {
+                "How do I file a claim with my car insurer?"
             })
     public Filed fileClaim(
             @Param(description = "Policy id", maxLength = 20) String policyId,

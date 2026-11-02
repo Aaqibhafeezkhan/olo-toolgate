@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -141,6 +143,14 @@ public class Healthcare {
                         "MRN-1007",
                         "MRN-1015"
                     }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "pull up the chart summary for MRN-1004", arguments = "{\"mrn\":\"MRN-1004\"}"),
+                @TrainingPrompt(prompt = "Who is MRN-1009's care provider and what allergies do they have?", arguments = "{\"mrn\":\"MRN-1009\"}")
+            },
+            negatives = {
+                "What should a patient summary include?"
+            })
     public Patient patient(@Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn, ToolContext context) {
         return find(Data.PATIENTS, mrn);
     }
@@ -167,6 +177,14 @@ public class Healthcare {
                         "MRN-1007",
                         "MRN-1015"
                     }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "what meds is MRN-1006 on?", arguments = "{\"mrn\":\"MRN-1006\"}"),
+                @TrainingPrompt(prompt = "Current prescriptions for MRN-1001", arguments = "{\"mrn\":\"MRN-1001\"}")
+            },
+            negatives = {
+                "What is the usual dose of paracetamol?"
+            })
     public Medications medications(@Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn, ToolContext context) {
         return new Medications(find(Data.MEDICATIONS, mrn));
     }
@@ -210,6 +228,14 @@ public class Healthcare {
                         "creatinine"
                     })
             })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "latest bloodwork for MRN-1002", arguments = "{\"mrn\":\"MRN-1002\"}"),
+                @TrainingPrompt(prompt = "Was MRN-1005's HbA1c high?", arguments = "{\"mrn\":\"MRN-1005\",\"test\":\"HbA1c\"}")
+            },
+            negatives = {
+                "Out of curiosity, what is a normal HbA1c?"
+            })
     public Labs labs(
             @Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn,
             @Param(description = "Only this test, such as HbA1c", required = false, maxLength = 60) String test,
@@ -251,7 +277,10 @@ public class Healthcare {
                 "Check interactions between {drugs}",
                 "Is it safe to give {drugs} to {mrn}?",
                 "Can {mrn} take {drugs} with their current meds?",
-                "Interaction check for {drugs}"
+                "Interaction check for {drugs}",
+                "Do {drugs} interact with each other?",
+                "Can {drugs} be taken together?",
+                "Any interactions between {drugs}?"
             },
             defaultPhrasings = "Check {drugs} for interactions",
             negatives = {
@@ -276,6 +305,19 @@ public class Healthcare {
                         "MRN-1007",
                         "MRN-1015"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Do warfarin, aspirin interact with each other?", arguments = "{\"drugs\":[\"warfarin\",\"aspirin\"]}"),
+                @TrainingPrompt(prompt = "Is it safe to give simvastatin, clarithromycin to MRN-1007?", arguments = "{\"drugs\":[\"simvastatin\",\"clarithromycin\"],\"mrn\":\"MRN-1007\"}"),
+                @TrainingPrompt(prompt = "Can ibuprofen and lisinopril be taken together?", arguments = "{\"drugs\":[\"ibuprofen\",\"lisinopril\"]}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "ok to combine metformin with alcohol-free cough syrup dextromethorphan?", arguments = "{\"drugs\":[\"metformin\",\"dextromethorphan\"]}"),
+                @TrainingPrompt(prompt = "Check sertraline + tramadol for MRN-1003", arguments = "{\"drugs\":[\"sertraline\",\"tramadol\"],\"mrn\":\"MRN-1003\"}")
+            },
+            negatives = {
+                "Out of curiosity, what is a drug interaction?"
             })
     public InteractionCheck interactions(
             @Param(description = "Drug names, generic, such as [\"ibuprofen\"]") List<String> drugs,
@@ -321,7 +363,10 @@ public class Healthcare {
                 "Open {specialty} slots from {from}",
                 "When can I see {clinician} in {specialty}?",
                 "Free {specialty} slots with {clinician} after {from}",
-                "Find a {specialty} appointment"
+                "Find a {specialty} appointment",
+                "Any free {specialty} slots?",
+                "Next free {specialty} appointment",
+                "Book-able {specialty} times from {from}?"
             },
             defaultPhrasings = "Open {specialty} slots?",
             negatives = {
@@ -364,6 +409,25 @@ public class Healthcare {
                         "2026-11-17",
                         "2026-12-21"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Any free GP slots?", arguments = "{\"specialty\":\"PRIMARY_CARE\"}"),
+                @TrainingPrompt(prompt = "Next free GP appointment", arguments = "{\"specialty\":\"PRIMARY_CARE\"}"),
+                @TrainingPrompt(prompt = "Find appointment slots with a GP", arguments = "{\"specialty\":\"PRIMARY_CARE\"}"),
+                @TrainingPrompt(prompt = "Free GP slots with Dr. Patel after 2026-12-01", arguments = "{\"specialty\":\"PRIMARY_CARE\",\"clinician\":\"Dr. Patel\",\"from\":\"2026-12-01\"}"),
+                @TrainingPrompt(prompt = "Any mental health appointments available?", arguments = "{\"specialty\":\"PSYCHIATRY\"}"),
+                @TrainingPrompt(prompt = "When can I see Dr. Lindqvist in heart specialist?", arguments = "{\"specialty\":\"CARDIOLOGY\",\"clinician\":\"Dr. Lindqvist\"}"),
+                @TrainingPrompt(prompt = "Diabetes clinic openings from 2026-11-17", arguments = "{\"specialty\":\"ENDOCRINOLOGY\",\"from\":\"2026-11-17\"}"),
+                @TrainingPrompt(prompt = "Any primary care appointments available?", arguments = "{\"specialty\":\"PRIMARY_CARE\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "can i get in with a family doctor next week? from 2026-11-09", arguments = "{\"specialty\":\"PRIMARY_CARE\",\"from\":\"2026-11-09\"}"),
+                @TrainingPrompt(prompt = "openings at cardiology?", arguments = "{\"specialty\":\"CARDIOLOGY\"}"),
+                @TrainingPrompt(prompt = "When is the psychiatrist Dr. Okafor free?", arguments = "{\"specialty\":\"PSYCHIATRY\",\"clinician\":\"Dr. Okafor\"}")
+            },
+            negatives = {
+                "How long is a typical GP visit?"
             })
     public Slots slots(
             @Param(description = "Specialty", enumValues = {"PRIMARY_CARE", "CARDIOLOGY", "ENDOCRINOLOGY", "PSYCHIATRY"}) String specialty,
@@ -434,6 +498,13 @@ public class Healthcare {
                         "chat-5520",
                         "REQ-3307"
                     })
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "book slot S-204 for MRN-1002, reason knee pain, ref chat-881", arguments = "{\"slotId\":\"S-204\",\"mrn\":\"MRN-1002\",\"reason\":\"knee pain\",\"reference\":\"chat-881\"}")
+            },
+            negatives = {
+                "How far ahead can I book a GP appointment?"
             })
     public Booking book(
             @Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn,

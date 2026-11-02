@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -91,6 +93,13 @@ public class CsvQuery {
                 "What's the difference between CSV and TSV?",
                 "Convert this list to CSV for me: apples, pears, plums"
             })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "which csv files can you query?", arguments = "{}")
+            },
+            negatives = {
+                "What does CSV stand for?"
+            })
     public CsvFiles files(ToolContext context) {
         Path dir = dataDir(context);
         try (Stream<Path> list = Files.list(dir)) {
@@ -138,7 +147,11 @@ public class CsvQuery {
                 "From {file} give me only {columns}",
                 "How many rows in {file} per {groupBy}?",
                 "Query {file}: {where}, first {limit}",
-                "Show me {file}"
+                "Show me {file}",
+                "Which rows in {file} match {where}?",
+                "Sort {file} by {sortBy}, top {limit}",
+                "Filter {file} where {where}",
+                "Total {sum} by {groupBy} in {file}"
             },
             defaultPhrasings = {
                 "Show me the rows in {file}",
@@ -214,6 +227,19 @@ public class CsvQuery {
                             "descending",
                             "highest first"
                         }))
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Which rows in sales-2026.csv match region=EMEA, amount>=500?", arguments = "{\"file\":\"sales-2026.csv\",\"where\":[\"region=EMEA\",\"amount>=500\"]}"),
+                @TrainingPrompt(prompt = "Sort inventory.csv by name, top 20", arguments = "{\"file\":\"inventory.csv\",\"sortBy\":\"name\",\"limit\":20}"),
+                @TrainingPrompt(prompt = "Query inventory.csv grouped by region, sorted by quantity descending, top 5", arguments = "{\"file\":\"inventory.csv\",\"groupBy\":\"region\",\"sortBy\":\"quantity\",\"descending\":true,\"limit\":5}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "in employees.csv show rows where team=ops", arguments = "{\"file\":\"employees.csv\",\"where\":[\"team=ops\"]}"),
+                @TrainingPrompt(prompt = "sum amount by region from sales-2026.csv", arguments = "{\"file\":\"sales-2026.csv\",\"sum\":\"amount\",\"groupBy\":\"region\"}")
+            },
+            negatives = {
+                "Out of curiosity, how do I open a CSV file in Excel?"
             })
     public QueryResult query(
             @Param(description = "File name in the data directory, such as orders.csv", maxLength = 200) String file,

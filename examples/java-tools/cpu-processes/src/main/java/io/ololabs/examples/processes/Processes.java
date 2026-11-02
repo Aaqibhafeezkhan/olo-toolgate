@@ -7,7 +7,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -78,6 +80,13 @@ public class Processes {
                         "3000",
                         "5000"
                     }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "how busy is the processor right now?", arguments = "{}")
+            },
+            negatives = {
+                "How many cores does a typical laptop have?"
+            })
     public CpuUsage cpu(
             @Param(description = "How long to sample, in milliseconds", defaultValue = "1000", min = "100", max = "10000")
             int sampleMs,
@@ -131,7 +140,9 @@ public class Processes {
                 "Who's eating CPU?",
                 "Busiest processes please",
                 "top",
-                "What processes use the most CPU?"
+                "What processes use the most CPU?",
+                "What's eating the CPU?",
+                "Top processes"
             },
             negatives = {
                 "How do I use the top command on Linux?",
@@ -154,6 +165,17 @@ public class Processes {
                         "3000",
                         "5000"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "What's using the CPU?", arguments = "{}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "which apps are hammering the cpu", arguments = "{}"),
+                @TrainingPrompt(prompt = "top 5 processes by CPU", arguments = "{\"limit\":5}")
+            },
+            negatives = {
+                "What does CPU stand for?"
             })
     public TopProcesses top(
             @Param(description = "How many processes to return", defaultValue = "10", min = "1", max = "100") int limit,
@@ -198,7 +220,9 @@ public class Processes {
                 "Is anything named {name} running? {partial}",
                 "Look for processes matching {name}, {partial}",
                 "Is {name} alive or did it die?",
-                "Show me the PID of {name}"
+                "Show me the PID of {name}",
+                "Check if {name} is up",
+                "Look for processes matching {name}, partial match"
             },
             defaultPhrasings = {
                 "Is {name} running?",
@@ -229,6 +253,19 @@ public class Processes {
                             "names containing it",
                             "match any name that contains it"
                         }))
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Is python alive or did it die?", arguments = "{\"name\":\"python\"}"),
+                @TrainingPrompt(prompt = "Check if w3wp.exe is up", arguments = "{\"name\":\"w3wp.exe\"}"),
+                @TrainingPrompt(prompt = "Look for processes matching python, partial match", arguments = "{\"name\":\"python\",\"partial\":true}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "is nginx still running?", arguments = "{\"name\":\"nginx\"}"),
+                @TrainingPrompt(prompt = "any java processes? partial name match", arguments = "{\"name\":\"java\",\"partial\":true}")
+            },
+            negatives = {
+                "How do I kill a process in Linux?"
             })
     public Found find(
             @Param(description = "Executable name, such as nginx, java or sqlservr.exe", minLength = 1, maxLength = 128)

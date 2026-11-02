@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
@@ -104,6 +106,14 @@ public class FraudDetection {
                         "80",
                         "90"
                     }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "transactions scoring 80 or more?", arguments = "{\"minScore\":80}"),
+                @TrainingPrompt(prompt = "any fraud alerts?", arguments = "{}")
+            },
+            negatives = {
+                "How do banks detect fraud?"
+            })
     public Alerts alerts(@Param(description = "Lowest score to include", defaultValue = "60", min = "0", max = "100") int minScore,
             ToolContext context) {
         return new Alerts(Data.TRANSACTIONS.values().stream()
@@ -132,7 +142,17 @@ public class FraudDetection {
                         "T-7",
                         "T-13",
                         "T-21"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Where was T-1 made and for how much?", arguments = "{\"transactionId\":\"T-1\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "details of T-9 please", arguments = "{\"transactionId\":\"T-9\"}")
+            },
+            negatives = {
+                "How do card transactions work?"
+            })
     public Transaction transaction(@Param(description = "Transaction id, such as T-2", maxLength = 20) String transactionId, ToolContext context) {
         return find(transactionId);
     }
@@ -172,7 +192,17 @@ public class FraudDetection {
                         "T-7",
                         "T-13",
                         "T-21"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Score transaction T-13", arguments = "{\"transactionId\":\"T-13\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "how risky is T-21?", arguments = "{\"transactionId\":\"T-21\"}")
+            },
+            negatives = {
+                "What is a fraud risk score?"
+            })
     public RiskScore riskScore(@Param(description = "Transaction id", maxLength = 20) String transactionId, ToolContext context) {
         return score(find(transactionId));
     }
@@ -217,7 +247,8 @@ public class FraudDetection {
                 "Freeze the card used in {transactionId}: {reason}. Case {reference}",
                 "Block the card for {transactionId} because {reason} (ref {reference})",
                 "Stop the card behind {transactionId}, reason {reason}, alert {reference}",
-                "Freeze it: transaction {transactionId}, {reason}, reference {reference}"
+                "Freeze it: transaction {transactionId}, {reason}, reference {reference}",
+                "Freeze the card behind {transactionId}, reason {reason}, case {reference}"
             },
             negatives = {
                 "What should I do if my card is stolen?",
@@ -246,6 +277,16 @@ public class FraudDetection {
                         "FR-2026-118",
                         "alert-T2"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Freeze the card behind T-7, reason \"amount far above normal spend\", case case-4471", arguments = "{\"transactionId\":\"T-7\",\"reason\":\"amount far above normal spend\",\"reference\":\"case-4471\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "block the card used for T-12, it's stolen, ref case-900", arguments = "{\"transactionId\":\"T-12\",\"reason\":\"it's stolen\",\"reference\":\"case-900\"}")
+            },
+            negatives = {
+                "How do I freeze my credit report?"
             })
     public Freeze freezeCard(
             @Param(description = "The suspicious transaction", maxLength = 20) String transactionId,

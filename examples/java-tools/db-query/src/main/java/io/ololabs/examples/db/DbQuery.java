@@ -11,7 +11,9 @@ import io.ololabs.toolgate.sdk.annotations.Secret;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
@@ -119,6 +121,18 @@ public class DbQuery {
                 "What is a database index?",
                 "How do I create a table in PostgreSQL?",
                 "Explain normalisation in databases"
+            },
+            defaultPhrasings = {
+                "What schema does the database have?",
+                "Which tables can you read?"
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "what tables and columns are in the db?", arguments = "{}"),
+                @TrainingPrompt(prompt = "describe the database", arguments = "{}")
+            },
+            negatives = {
+                "What is database normalisation?"
             })
     public Tables tables(ToolContext context) {
         Set<String> allowed = allowedTables(context);
@@ -163,7 +177,8 @@ public class DbQuery {
                 "Show the record in {table} whose {column} equals {value}",
                 "Pull up {table} for {column} {value}",
                 "Which {table} have {column} {value}? At most {limit}",
-                "Fetch from {table} where {column} is {value}"
+                "Fetch from {table} where {column} is {value}",
+                "Which {table} have {column} {value}?"
             },
             defaultPhrasings = "Find {table} where {column} is {value}",
             negatives = {
@@ -205,6 +220,18 @@ public class DbQuery {
                         "20",
                         "100"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Find customers with status = 1042", arguments = "{\"table\":\"customers\",\"column\":\"status\",\"value\":\"1042\"}"),
+                @TrainingPrompt(prompt = "Look up open in invoices by status", arguments = "{\"table\":\"invoices\",\"column\":\"status\",\"value\":\"open\"}"),
+                @TrainingPrompt(prompt = "Which invoices have country DE? At most 5", arguments = "{\"table\":\"invoices\",\"column\":\"country\",\"value\":\"DE\",\"limit\":5}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "orders where id is 1042", arguments = "{\"table\":\"orders\",\"column\":\"id\",\"value\":\"1042\"}")
+            },
+            negatives = {
+                "Why would a table need two indexes?"
             })
     public Rows row(
             @Param(description = "Table name, as db.tables lists it", maxLength = 128) String table,
@@ -249,7 +276,9 @@ public class DbQuery {
                 "Query the database: {sql}",
                 "Run {sql} with parameters {parameters}",
                 "SQL please: {sql}, limit {limit}",
-                "Can you run the select {sql}"
+                "Can you run the select {sql}",
+                "Run {sql} and return at most {limit} rows",
+                "Execute this query: {sql}"
             },
             defaultPhrasings = "Run {sql}",
             negatives = {
@@ -281,6 +310,20 @@ public class DbQuery {
                         "50",
                         "500"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Run SELECT name, email FROM employees ORDER BY name and return at most 500 rows", arguments = "{\"sql\":\"SELECT name, email FROM employees ORDER BY name\",\"limit\":500}"),
+                @TrainingPrompt(prompt = "SQL please: SELECT name, email FROM employees ORDER BY name, limit 50", arguments = "{\"sql\":\"SELECT name, email FROM employees ORDER BY name\",\"limit\":50}"),
+                @TrainingPrompt(prompt = "Run \"SELECT id, total FROM orders WHERE total > ? ORDER BY total DESC\" with parameter 500", arguments = "{\"sql\":\"SELECT id, total FROM orders WHERE total > ? ORDER BY total DESC\",\"parameters\":[\"500\"]}"),
+                @TrainingPrompt(prompt = "Run \"SELECT status, COUNT(*) FROM orders WHERE created >= ? GROUP BY status\" with parameters 2026-10-01", arguments = "{\"sql\":\"SELECT status, COUNT(*) FROM orders WHERE created >= ? GROUP BY status\",\"parameters\":[\"2026-10-01\"]}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "query: SELECT COUNT(*) FROM customers", arguments = "{\"sql\":\"SELECT COUNT(*) FROM customers\"}"),
+                @TrainingPrompt(prompt = "run SELECT * FROM orders WHERE country = ? for DE, max 20 rows", arguments = "{\"sql\":\"SELECT * FROM orders WHERE country = ?\",\"parameters\":[\"DE\"],\"limit\":20}")
+            },
+            negatives = {
+                "How do I write a LEFT JOIN in SQL?"
             })
     public Rows query(
             @Param(description = "One SELECT statement, such as SELECT status, COUNT(*) FROM orders GROUP BY status",

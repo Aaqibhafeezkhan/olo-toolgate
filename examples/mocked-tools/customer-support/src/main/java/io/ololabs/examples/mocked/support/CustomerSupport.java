@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -98,7 +100,11 @@ public class CustomerSupport {
                 "What tier is {idOrEmail} on?",
                 "Find the customer with email {idOrEmail}",
                 "Which orders does {idOrEmail} have?",
-                "How long has {idOrEmail} been a customer?"
+                "How long has {idOrEmail} been a customer?",
+                "Who is customer {idOrEmail}?",
+                "Look up {idOrEmail}",
+                "Customer profile for {idOrEmail}",
+                "What tier is {idOrEmail}?"
             },
             negatives = {
                 "How do I handle an angry customer?",
@@ -112,7 +118,20 @@ public class CustomerSupport {
                         "C-530",
                         "jane.doe@example.com",
                         "sam@example.org"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Find the customer with email jane.doe@example.com", arguments = "{\"idOrEmail\":\"jane.doe@example.com\"}"),
+                @TrainingPrompt(prompt = "Find a customer with id or email C-502", arguments = "{\"idOrEmail\":\"C-502\"}"),
+                @TrainingPrompt(prompt = "Which orders does C-530 have?", arguments = "{\"idOrEmail\":\"C-530\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "who's sam.lee@example.org in our system?", arguments = "{\"idOrEmail\":\"sam.lee@example.org\"}"),
+                @TrainingPrompt(prompt = "How long has C-511 been a customer?", arguments = "{\"idOrEmail\":\"C-511\"}")
+            },
+            negatives = {
+                "What makes a loyalty programme work?"
+            })
     public Customer customer(@Param(description = "Customer id (C-501) or email", maxLength = 200, sensitive = true) String idOrEmail,
             ToolContext context) {
         String key = idOrEmail.trim().toLowerCase(Locale.ROOT);
@@ -137,7 +156,10 @@ public class CustomerSupport {
                 "Is order {orderId} late?",
                 "What's in order {orderId}?",
                 "Which carrier has {orderId}?",
-                "My order {orderId} hasn't arrived"
+                "My order {orderId} hasn't arrived",
+                "Show the items in {orderId}",
+                "Has {orderId} shipped yet?",
+                "Status of {orderId}"
             },
             negatives = {
                 "How long does standard shipping usually take?",
@@ -149,7 +171,20 @@ public class CustomerSupport {
                         "O-9001",
                         "O-9015",
                         "O-9040"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Has O-9002 shipped yet?", arguments = "{\"orderId\":\"O-9002\"}"),
+                @TrainingPrompt(prompt = "Tracking number for O-9040?", arguments = "{\"orderId\":\"O-9040\"}"),
+                @TrainingPrompt(prompt = "Which carrier has O-9015?", arguments = "{\"orderId\":\"O-9015\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "where's my package, order O-9033", arguments = "{\"orderId\":\"O-9033\"}"),
+                @TrainingPrompt(prompt = "What's in order O-9008 and when did it last move?", arguments = "{\"orderId\":\"O-9008\"}")
+            },
+            negatives = {
+                "Do couriers deliver on Sundays?"
+            })
     public OrderStatus order(@Param(description = "Order id, such as O-9002", maxLength = 20) String orderId, ToolContext context) {
         Order o = findOrder(orderId);
         LocalDate promised = LocalDate.parse(o.promisedBy());
@@ -178,7 +213,10 @@ public class CustomerSupport {
                 "Is order {orderId} eligible for a refund because of {reason}?",
                 "Customer wants money back on {orderId}: {reason}",
                 "Check refund eligibility for {orderId}, reason {reason}",
-                "How much can we refund on {orderId} if it was {reason}?"
+                "How much can we refund on {orderId} if it was {reason}?",
+                "Can {orderId} be refunded? Reason: {reason}",
+                "Is {orderId} eligible for a refund, it was {reason}",
+                "Refund check for {orderId}, {reason}"
             },
             negatives = "What's a fair refund policy for an online shop?",
             parameters = {
@@ -217,6 +255,21 @@ public class CustomerSupport {
                             "much later than promised"
                         })
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Can O-9002 be refunded? It arrived broken", arguments = "{\"orderId\":\"O-9002\",\"reason\":\"DAMAGED\"}"),
+                @TrainingPrompt(prompt = "Is O-9001 eligible for a refund, it never arrived", arguments = "{\"orderId\":\"O-9001\",\"reason\":\"NOT_RECEIVED\"}"),
+                @TrainingPrompt(prompt = "Refund check for O-9010, customer changed their mind", arguments = "{\"orderId\":\"O-9010\",\"reason\":\"CHANGED_MIND\"}"),
+                @TrainingPrompt(prompt = "O-9020 came late, can we refund it?", arguments = "{\"orderId\":\"O-9020\",\"reason\":\"LATE\"}"),
+                @TrainingPrompt(prompt = "They sent the wrong item for O-9004, refund possible?", arguments = "{\"orderId\":\"O-9004\",\"reason\":\"WRONG_ITEM\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "customer says O-9011 showed up smashed, do they get money back?", arguments = "{\"orderId\":\"O-9011\",\"reason\":\"DAMAGED\"}"),
+                @TrainingPrompt(prompt = "O-9006 never got delivered, how much can we refund?", arguments = "{\"orderId\":\"O-9006\",\"reason\":\"NOT_RECEIVED\"}")
+            },
+            negatives = {
+                "What is a typical refund policy for online stores?"
             })
     public RefundDecision refundEligibility(
             @Param(description = "Order id", maxLength = 20) String orderId,
@@ -322,6 +375,18 @@ public class CustomerSupport {
                             "other"
                         })
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Create a support ticket for C-530, category shipping, subject \"Late parcel\", details \"Still not here after 10 days\", conversation chat-5520", arguments = "{\"customerId\":\"C-530\",\"category\":\"DELIVERY\",\"subject\":\"Late parcel\",\"description\":\"Still not here after 10 days\",\"reference\":\"chat-5520\"}"),
+                @TrainingPrompt(prompt = "Log a login issue for customer C-502 titled Cannot sign in: \"Password reset email never arrives\". Reference chat-5521", arguments = "{\"customerId\":\"C-502\",\"category\":\"ACCOUNT\",\"subject\":\"Cannot sign in\",\"description\":\"Password reset email never arrives\",\"reference\":\"chat-5521\"}"),
+                @TrainingPrompt(prompt = "Open a refund ticket for C-501, subject Refund request, details Charged twice, ref case-4471", arguments = "{\"customerId\":\"C-501\",\"category\":\"REFUND\",\"subject\":\"Refund request\",\"description\":\"Charged twice\",\"reference\":\"case-4471\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "raise a product ticket for C-544: subject Blender noisy, details Makes a grinding sound, ref chat-9001", arguments = "{\"customerId\":\"C-544\",\"category\":\"PRODUCT\",\"subject\":\"Blender noisy\",\"description\":\"Makes a grinding sound\",\"reference\":\"chat-9001\"}")
+            },
+            negatives = {
+                "How should I word a support ticket?"
             })
     public Ticket createTicket(
             @Param(description = "Customer id", maxLength = 20) String customerId,

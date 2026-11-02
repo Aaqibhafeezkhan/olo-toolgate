@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -96,6 +98,18 @@ public class SystemHealth {
                 "How much RAM does a laptop need?",
                 "What is swap space?",
                 "How do I keep a server healthy?"
+            },
+            defaultPhrasings = {
+                "Is this machine healthy?",
+                "Health check please"
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "give me a quick health snapshot of the box", arguments = "{}"),
+                @TrainingPrompt(prompt = "is anything red on this server?", arguments = "{}")
+            },
+            negatives = {
+                "What are signs of a healthy diet?"
             })
     public Health system(ToolContext context) {
         var values = context.global();

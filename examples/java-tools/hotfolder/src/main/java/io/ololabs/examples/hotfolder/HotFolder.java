@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.DeviceFiles;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -58,7 +60,10 @@ public class HotFolder {
                 "Show me everything in the HotFolder",
                 "Which files are in the hot folder?",
                 "ls {folder}",
-                "What files are waiting in {folder}?"
+                "What files are waiting in {folder}?",
+                "Anything new in {folder}?",
+                "What's in {folder}?",
+                "Show the contents of {folder}"
             },
             defaultPhrasings = {
                 "List the HotFolder",
@@ -86,7 +91,19 @@ public class HotFolder {
                         "notes",
                         "reports",
                         "processed"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Anything new in processed?", arguments = "{\"folder\":\"processed\"}"),
+                @TrainingPrompt(prompt = "Show the contents of reports", arguments = "{\"folder\":\"reports\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "what files are sitting in inbox right now", arguments = "{\"folder\":\"inbox\"}"),
+                @TrainingPrompt(prompt = "List everything in the hot folder", arguments = "{}")
+            },
+            negatives = {
+                "How do I list files in a directory with PowerShell?"
+            })
     public Listing list(@Param(description = "Folder to list, such as inbox; empty lists everything", maxLength = 1024, required = false) String folder,
                         ToolContext context) {
         String prefix = folder == null || folder.isEmpty() ? "" : folder + "/";
@@ -103,7 +120,12 @@ public class HotFolder {
                 "What does {path} say?",
                 "Open {path} and show me the text",
                 "Show the contents of {path}",
-                "cat {path}"
+                "cat {path}",
+                "Show me {path}",
+                "Open {path}",
+                "Print {path}",
+                "Let me see the contents of {path}",
+                "What's written in {path}?"
             },
             negatives = "How do I read a text file in Python?",
             parameters = @TrainingValues(name = "path",
@@ -113,7 +135,20 @@ public class HotFolder {
                         "reports/summary.md",
                         "config/settings.ini",
                         "inbox/readme.txt"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Show me config/settings.ini", arguments = "{\"path\":\"config/settings.ini\"}"),
+                @TrainingPrompt(prompt = "What does reports/summary.md say?", arguments = "{\"path\":\"reports/summary.md\"}"),
+                @TrainingPrompt(prompt = "Please read inbox/order-1042.txt", arguments = "{\"path\":\"inbox/order-1042.txt\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "open up notes/ideas.txt for me", arguments = "{\"path\":\"notes/ideas.txt\"}"),
+                @TrainingPrompt(prompt = "What's inside outbox/reply.txt right now?", arguments = "{\"path\":\"outbox/reply.txt\"}")
+            },
+            negatives = {
+                "How do I read a file line by line in C#?"
+            })
     public Text readText(@Param(description = "File path, such as notes/today.txt", maxLength = 1024) String path, ToolContext context) {
         var files = context.files();
         return exists(files, path) ? new Text(true, files.readText(path)) : new Text(false, "");
@@ -128,7 +163,10 @@ public class HotFolder {
                 "Does {path} exist?",
                 "How big is {path}?",
                 "Check whether {path} is there",
-                "File size of {path}?"
+                "File size of {path}?",
+                "Info on {path}",
+                "File size of {path}",
+                "Is there a file {path}?"
             },
             negatives = "What's the largest file size NTFS allows?",
             parameters = @TrainingValues(name = "path",
@@ -137,7 +175,19 @@ public class HotFolder {
                         "reports/summary.md",
                         "archive/2026-09.zip",
                         "notes/today.txt"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Info on inbox/order-1042.txt", arguments = "{\"path\":\"inbox/order-1042.txt\"}"),
+                @TrainingPrompt(prompt = "How big is reports/summary.md?", arguments = "{\"path\":\"reports/summary.md\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "is archive/2026-09.zip there and how large is it?", arguments = "{\"path\":\"archive/2026-09.zip\"}"),
+                @TrainingPrompt(prompt = "size of notes/todo.md", arguments = "{\"path\":\"notes/todo.md\"}")
+            },
+            negatives = {
+                "What's the largest file size FAT32 allows?"
+            })
     public Info fileInfo(@Param(description = "File path", maxLength = 1024) String path, ToolContext context) {
         var files = context.files();
         return exists(files, path) ? new Info(true, files.info(path).bytes()) : new Info(false, 0);
@@ -151,7 +201,10 @@ public class HotFolder {
                 "SHA-256 of {path}",
                 "Give me the checksum of {path}",
                 "Hash {path}",
-                "Compute the sha256 for {path}"
+                "Compute the sha256 for {path}",
+                "Fingerprint {path}",
+                "Checksum for {path}?",
+                "Compute the hash of {path}"
             },
             negatives = {
                 "Is SHA-256 better than MD5?",
@@ -162,7 +215,19 @@ public class HotFolder {
                         "inbox/order-1042.txt",
                         "reports/summary.md",
                         "notes/today.txt"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Give me the checksum of reports/summary.md", arguments = "{\"path\":\"reports/summary.md\"}"),
+                @TrainingPrompt(prompt = "Hash inbox/order-1042.txt", arguments = "{\"path\":\"inbox/order-1042.txt\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "sha256 for outbox/invoice.txt?", arguments = "{\"path\":\"outbox/invoice.txt\"}"),
+                @TrainingPrompt(prompt = "Has notes/today.txt changed? Give me its hash", arguments = "{\"path\":\"notes/today.txt\"}")
+            },
+            negatives = {
+                "Out of curiosity, is SHA-256 better than MD5?"
+            })
     public Hash hash(@Param(description = "File path", maxLength = 1024) String path, ToolContext context) {
         var files = context.files();
         if (!exists(files, path)) return new Hash(false, "");
@@ -182,7 +247,10 @@ public class HotFolder {
                 "Search {path} for {query}",
                 "Find {query} in {path}",
                 "grep {query} in {path}",
-                "Does {path} contain {query}?"
+                "Does {path} contain {query}?",
+                "Does {query} appear in {path}?",
+                "On which lines does {path} mention {query}?",
+                "Look for {query} inside {path}"
             },
             negatives = "How do I search inside files on Windows?",
             parameters = {
@@ -202,6 +270,20 @@ public class HotFolder {
                         "Berlin",
                         "refund"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Find ERROR in logs/app.log", arguments = "{\"path\":\"logs/app.log\",\"query\":\"ERROR\"}"),
+                @TrainingPrompt(prompt = "Which lines of logs/app.log mention timeout?", arguments = "{\"path\":\"logs/app.log\",\"query\":\"timeout\"}"),
+                @TrainingPrompt(prompt = "grep invoice in reports/summary.md", arguments = "{\"path\":\"reports/summary.md\",\"query\":\"invoice\"}"),
+                @TrainingPrompt(prompt = "Does inbox/order-1042.txt contain TODO?", arguments = "{\"path\":\"inbox/order-1042.txt\",\"query\":\"TODO\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "is the word refund anywhere in inbox/mail-77.txt?", arguments = "{\"path\":\"inbox/mail-77.txt\",\"query\":\"refund\"}"),
+                @TrainingPrompt(prompt = "Line numbers where notes/todo.md says urgent", arguments = "{\"path\":\"notes/todo.md\",\"query\":\"urgent\"}")
+            },
+            negatives = {
+                "What is the grep command used for?"
             })
     public Matches searchText(@Param(description = "File path", maxLength = 1024) String path,
                               @Param(description = "Text to find", minLength = 1, maxLength = 256) String query, ToolContext context) {
@@ -224,7 +306,15 @@ public class HotFolder {
                 "Write {text} to {path}",
                 "Create {path} containing {text}",
                 "Save a file {path} with the text {text}",
-                "Replace the contents of {path} with {text}"
+                "Replace the contents of {path} with {text}",
+                "Save {text} into {path}",
+                "Make a file {path} that says {text}",
+                "Overwrite {path} with {text}",
+                "Put {text} in {path}",
+                "Create {path} with the text {text}",
+                "Store {text} as {path}",
+                "Write a new file {path}: {text}",
+                "Set the contents of {path} to {text}"
             },
             negatives = {
                 "Write me a short poem about autumn",
@@ -246,6 +336,21 @@ public class HotFolder {
                         "All checks passed",
                         "Hello team"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Save \"All checks passed\" into outbox/reply.txt", arguments = "{\"path\":\"outbox/reply.txt\",\"text\":\"All checks passed\"}"),
+                @TrainingPrompt(prompt = "Make a file notes/today.txt that says Hello team", arguments = "{\"path\":\"notes/today.txt\",\"text\":\"Hello team\"}"),
+                @TrainingPrompt(prompt = "Overwrite outbox/status.txt with Remember to call Jane", arguments = "{\"path\":\"outbox/status.txt\",\"text\":\"Remember to call Jane\"}"),
+                @TrainingPrompt(prompt = "Replace whatever is in notes/todo.md with Order 1042 shipped", arguments = "{\"path\":\"notes/todo.md\",\"text\":\"Order 1042 shipped\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "pls write 'deploy ok' into status/today.txt", arguments = "{\"path\":\"status/today.txt\",\"text\":\"deploy ok\"}"),
+                @TrainingPrompt(prompt = "New file outbox/note.txt, content: Back at 2pm", arguments = "{\"path\":\"outbox/note.txt\",\"text\":\"Back at 2pm\"}"),
+                @TrainingPrompt(prompt = "Wipe notes/draft.md and put Final version in it", arguments = "{\"path\":\"notes/draft.md\",\"text\":\"Final version\"}")
+            },
+            negatives = {
+                "What's the difference between overwrite and append?"
             })
     public Written writeText(@Param(description = "File path", maxLength = 1024) String path,
                              @Param(description = "UTF-8 text", maxLength = 65536) String text, ToolContext context) {
@@ -262,7 +367,12 @@ public class HotFolder {
                 "Append {text} to {path}",
                 "Add the line {text} to {path}",
                 "Add {text} at the end of {path}",
-                "Log {text} in {path}"
+                "Log {text} in {path}",
+                "Add {text} to the end of {path}",
+                "Tack {text} onto {path}",
+                "Append {text} at the bottom of {path}",
+                "Add a line {text} to {path}",
+                "Log {text} in {path} without replacing it"
             },
             negatives = "What does append mean in Python lists?",
             parameters = {
@@ -279,6 +389,19 @@ public class HotFolder {
                         "Buy milk",
                         "Reviewed PR 42"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Add \"Backup done\" at the end of logs/journal.txt", arguments = "{\"path\":\"logs/journal.txt\",\"text\":\"Backup done\"}"),
+                @TrainingPrompt(prompt = "Tack Reviewed PR 42 onto notes/todo.md", arguments = "{\"path\":\"notes/todo.md\",\"text\":\"Reviewed PR 42\"}"),
+                @TrainingPrompt(prompt = "Add a line Buy milk to notes/today.txt, keep what's there", arguments = "{\"path\":\"notes/today.txt\",\"text\":\"Buy milk\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "add 'call the bank' to my notes/todo.md list", arguments = "{\"path\":\"notes/todo.md\",\"text\":\"call the bank\"}"),
+                @TrainingPrompt(prompt = "Append Server rebooted at 03:10 to logs/ops.txt", arguments = "{\"path\":\"logs/ops.txt\",\"text\":\"Server rebooted at 03:10\"}")
+            },
+            negatives = {
+                "How do I append to a list in JavaScript?"
             })
     public Written appendText(@Param(description = "File path", maxLength = 1024) String path,
                               @Param(description = "UTF-8 text", maxLength = 65536) String text, ToolContext context) {
@@ -294,7 +417,8 @@ public class HotFolder {
                 "Create a folder {path}",
                 "Make a new directory called {path}",
                 "mkdir {path}",
-                "Add a folder {path} in the hot folder"
+                "Add a folder {path} in the hot folder",
+                "New folder {path}"
             },
             negatives = "How do I create a folder on the desktop?",
             parameters = @TrainingValues(name = "path",
@@ -303,7 +427,18 @@ public class HotFolder {
                         "inbox/urgent",
                         "reports/q4",
                         "processed"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Make a new directory called archive/2026-10", arguments = "{\"path\":\"archive/2026-10\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "set up an empty folder reports/2027", arguments = "{\"path\":\"reports/2027\"}"),
+                @TrainingPrompt(prompt = "I need a directory named outbox/old", arguments = "{\"path\":\"outbox/old\"}")
+            },
+            negatives = {
+                "How do I create a folder on my desktop?"
+            })
     public Created mkdir(@Param(description = "Folder path", maxLength = 1024) String path, ToolContext context) {
         var files = context.files();
         if (!exists(files, path)) files.mkdir(path);
@@ -319,7 +454,10 @@ public class HotFolder {
                 "Move {path} to {destination}",
                 "Rename {path} to {destination}",
                 "Put {path} into {destination}",
-                "mv {path} {destination}"
+                "mv {path} {destination}",
+                "Rename {path} as {destination}",
+                "Relocate {path} to {destination}",
+                "Put {path} under {destination} and remove the original"
             },
             negatives = "How do I move files between drives?",
             parameters = {
@@ -335,6 +473,18 @@ public class HotFolder {
                         "archive/today.txt",
                         "reports/q4/summary.md"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Rename inbox/order-1042.txt to archive/today.txt", arguments = "{\"path\":\"inbox/order-1042.txt\",\"destination\":\"archive/today.txt\"}"),
+                @TrainingPrompt(prompt = "Rename reports/summary.md as reports/q4/summary.md", arguments = "{\"path\":\"reports/summary.md\",\"destination\":\"reports/q4/summary.md\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "rename notes/draft.txt to notes/final.txt", arguments = "{\"path\":\"notes/draft.txt\",\"destination\":\"notes/final.txt\"}"),
+                @TrainingPrompt(prompt = "Shift inbox/scan-5.pdf over to processed/scan-5.pdf", arguments = "{\"path\":\"inbox/scan-5.pdf\",\"destination\":\"processed/scan-5.pdf\"}")
+            },
+            negatives = {
+                "How do I rename a branch in git?"
             })
     public Moved move(@Param(description = "File to move", maxLength = 1024) String path,
                       @Param(description = "New path", maxLength = 1024) String destination, ToolContext context) {
@@ -354,7 +504,9 @@ public class HotFolder {
                 "Copy {path} to {destination}",
                 "Duplicate {path} as {destination}",
                 "Make a copy of {path} at {destination}",
-                "cp {path} {destination}"
+                "cp {path} {destination}",
+                "Clone {path} to {destination}",
+                "Back up {path} to {destination}"
             },
             negatives = "Can you copy-edit this sentence: their going home",
             parameters = {
@@ -370,6 +522,18 @@ public class HotFolder {
                         "notes/today-backup.txt",
                         "outbox/summary.md"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Clone notes/today.txt to archive/order-1042.txt", arguments = "{\"path\":\"notes/today.txt\",\"destination\":\"archive/order-1042.txt\"}"),
+                @TrainingPrompt(prompt = "Duplicate reports/summary.md as outbox/summary.md", arguments = "{\"path\":\"reports/summary.md\",\"destination\":\"outbox/summary.md\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "make a backup copy of config/app.ini at config/app.ini.bak", arguments = "{\"path\":\"config/app.ini\",\"destination\":\"config/app.ini.bak\"}"),
+                @TrainingPrompt(prompt = "Copy inbox/order-77.txt into archive/order-77.txt, keep the original", arguments = "{\"path\":\"inbox/order-77.txt\",\"destination\":\"archive/order-77.txt\"}")
+            },
+            negatives = {
+                "What's the keyboard shortcut for copy on a Mac?"
             })
     public Copied copy(@Param(description = "File to copy", maxLength = 1024) String path,
                        @Param(description = "New path", maxLength = 1024) String destination, ToolContext context) {

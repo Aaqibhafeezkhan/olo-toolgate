@@ -10,7 +10,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -85,7 +87,8 @@ public class FileCleanup {
                 "Delete files in {path} not touched for {olderThanDays} days, {dryRun}",
                 "What old {pattern} files are in {path}? Older than {olderThanDays} days, {recursive}",
                 "Remove {pattern} files older than {olderThanDays} days from {path}, {recursive}, {dryRun}",
-                "Show stale files in {path} (more than {olderThanDays} days old)"
+                "Show stale files in {path} (more than {olderThanDays} days old)",
+                "Files older than {olderThanDays} days in {path}?"
             },
             defaultPhrasings = "Which files in {path} are older than {olderThanDays} days?",
             negatives = {
@@ -133,6 +136,16 @@ public class FileCleanup {
                             "really delete them",
                             "not a dry run"
                         }))
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Show stale files in C:\\logs (more than 30 days old)", arguments = "{\"path\":\"C:\\\\logs\",\"olderThanDays\":30}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "anything in /var/tmp untouched for 90 days?", arguments = "{\"path\":\"/var/tmp\",\"olderThanDays\":90}")
+            },
+            negatives = {
+                "How often should log files be rotated?"
             })
     public Cleanup oldFiles(
             @Param(description = "Directory to clean: one of the cleanup roots or a directory inside one", maxLength = 500)

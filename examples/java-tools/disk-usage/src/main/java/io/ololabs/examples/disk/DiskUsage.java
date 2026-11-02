@@ -9,7 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -96,6 +98,14 @@ public class DiskUsage {
                             "all file systems too",
                             "include in-memory volumes"
                         })))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "how full are the drives?", arguments = "{}"),
+                @TrainingPrompt(prompt = "disk usage on all volumes, include read-only ones too", arguments = "{\"all\":true}")
+            },
+            negatives = {
+                "How big is a terabyte in gigabytes?"
+            })
     public Volumes space(
             @Param(description = "Include read-only and in-memory file systems", defaultValue = "false") boolean all,
             ToolContext context) {
@@ -143,7 +153,10 @@ public class DiskUsage {
                 "Biggest directories in {path}, {depth} levels deep",
                 "Why is {path} so big?",
                 "Top {limit} space hogs in {path}",
-                "Find big files in {path} going {depth} levels down"
+                "Find big files in {path} going {depth} levels down",
+                "What's huge in {path}?",
+                "List the {limit} largest items under {path}",
+                "What's eating space in {path}?"
             },
             defaultPhrasings = {
                 "What's using space in {path}?",
@@ -179,6 +192,20 @@ public class DiskUsage {
                         "4",
                         "12"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "List the 50 largest items under /var/log", arguments = "{\"path\":\"/var/log\",\"limit\":50}"),
+                @TrainingPrompt(prompt = "Show the 30 biggest files and folders in /srv/data", arguments = "{\"path\":\"/srv/data\",\"limit\":30}"),
+                @TrainingPrompt(prompt = "Why is /home/app so big?", arguments = "{\"path\":\"/home/app\"}"),
+                @TrainingPrompt(prompt = "Biggest directories in C:\\inetpub\\logs, 3 levels deep", arguments = "{\"path\":\"C:\\\\inetpub\\\\logs\",\"depth\":3}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "what's hogging space under /opt?", arguments = "{\"path\":\"/opt\"}"),
+                @TrainingPrompt(prompt = "top 10 biggest things in D:\\backups", arguments = "{\"path\":\"D:\\\\backups\",\"limit\":10}")
+            },
+            negatives = {
+                "How do I free up disk space on Windows?"
             })
     public Largest largest(
             @Param(description = "Directory to search: one of the allowed roots or a directory inside one", maxLength = 500)

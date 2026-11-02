@@ -14,7 +14,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.RawResponse;
@@ -119,6 +121,14 @@ public class FileDownload {
                             "replace the old copy",
                             "overwriting any existing file"
                         }))
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "grab reports/2026-10.pdf from the file server", arguments = "{\"path\":\"reports/2026-10.pdf\"}"),
+                @TrainingPrompt(prompt = "download invoices/INV-77.pdf and save it as inv77.pdf", arguments = "{\"path\":\"invoices/INV-77.pdf\",\"saveAs\":\"inv77.pdf\"}")
+            },
+            negatives = {
+                "Which is faster for downloads, wget or curl?"
             })
     public Downloaded fetch(
             @Param(description = "Path on the file server, as folder/file, such as reports/2026-10.csv",

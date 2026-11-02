@@ -11,7 +11,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
@@ -93,7 +95,9 @@ public class ScriptRunner {
                 "Start {script} and show the last {lines} lines of output",
                 "Run {script}, give it {timeoutSeconds} seconds",
                 "Kick off {script} {arguments}",
-                "Can you run {script} for me?"
+                "Can you run {script} for me?",
+                "Start {script} and show the last {lines} lines",
+                "Launch {script} with {arguments}"
             },
             defaultPhrasings = {
                 "Run {script}",
@@ -136,6 +140,23 @@ public class ScriptRunner {
                         "45",
                         "55"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Kick off backup.sh --dry-run", arguments = "{\"script\":\"backup.sh\",\"arguments\":[\"--dry-run\"]}"),
+                @TrainingPrompt(prompt = "Run sync-files.ps1, give it 55 seconds", arguments = "{\"script\":\"sync-files.ps1\",\"timeoutSeconds\":55}"),
+                @TrainingPrompt(prompt = "Run restart-iis.ps1 with arguments --full, eu-west", arguments = "{\"script\":\"restart-iis.ps1\",\"arguments\":[\"--full\",\"eu-west\"]}"),
+                @TrainingPrompt(prompt = "Run backup.sh with argument 2026-10-30", arguments = "{\"script\":\"backup.sh\",\"arguments\":[\"2026-10-30\"]}"),
+                @TrainingPrompt(prompt = "Run backup.sh, show 10 lines, timeout 55 seconds", arguments = "{\"script\":\"backup.sh\",\"lines\":10,\"timeoutSeconds\":55}"),
+                @TrainingPrompt(prompt = "Execute rotate-logs.sh", arguments = "{\"script\":\"rotate-logs.sh\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "fire off cleanup.cmd now", arguments = "{\"script\":\"cleanup.cmd\"}"),
+                @TrainingPrompt(prompt = "Run deploy.ps1 with -Env staging", arguments = "{\"script\":\"deploy.ps1\",\"arguments\":[\"-Env\",\"staging\"]}"),
+                @TrainingPrompt(prompt = "execute backup.sh for 2026-11-01 and only show 20 lines", arguments = "{\"script\":\"backup.sh\",\"arguments\":[\"2026-11-01\"],\"lines\":20}")
+            },
+            negatives = {
+                "How do I write a bash script?"
             })
     public ScriptRun run(
             @Param(description = "File name of the script in the scripts directory, such as nightly-report.bat",
@@ -236,7 +257,19 @@ public class ScriptRunner {
                 "Show runnable scripts",
                 "Which scripts may I execute?"
             },
-            negatives = "Can you list some good scripting languages?")
+            negatives = "Can you list some good scripting languages?",
+            defaultPhrasings = {
+                "What scripts am I allowed to run?",
+                "Show the runnable scripts"
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "which scripts can you kick off for me?", arguments = "{}"),
+                @TrainingPrompt(prompt = "list the allowlisted scripts", arguments = "{}")
+            },
+            negatives = {
+                "Out of curiosity, what's the difference between .bat and .ps1?"
+            })
     public ScriptList list(ToolContext context) {
         Path dir = scriptsDir(context);
         Set<String> allowed = allowedNames(context);

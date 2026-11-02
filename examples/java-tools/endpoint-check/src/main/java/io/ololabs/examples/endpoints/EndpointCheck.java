@@ -10,7 +10,9 @@ import io.ololabs.toolgate.sdk.annotations.HttpRoute;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.RawResponse;
 import io.ololabs.toolgate.sdk.context.RouteCall;
@@ -73,7 +75,10 @@ public class EndpointCheck {
                 "Check {path} with a {timeoutMs} ms timeout",
                 "How long does the health check take?",
                 "Is the backend responding?",
-                "Call {path} and tell me the status"
+                "Call {path} and tell me the status",
+                "Is {path} up?",
+                "Check the {path} endpoint",
+                "Is the app healthy and reporting {expectStatus}?"
             },
             defaultPhrasings = {
                 "Is the service healthy?",
@@ -87,7 +92,9 @@ public class EndpointCheck {
                 "service status?",
                 "Is the app responding?",
                 "Run the endpoint check",
-                "Is the service OK?"
+                "Is the service OK?",
+                "Is the service reachable?",
+                "Health check the service"
             },
             negatives = {
                 "What should a health endpoint return?",
@@ -118,6 +125,20 @@ public class EndpointCheck {
                         "8000",
                         "10000"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Call status and tell me the status", arguments = "{\"path\":\"status\"}"),
+                @TrainingPrompt(prompt = "Call ready and tell me the status", arguments = "{\"path\":\"ready\"}"),
+                @TrainingPrompt(prompt = "Is the backend responding?", arguments = "{}"),
+                @TrainingPrompt(prompt = "Is the app healthy and reporting OK?", arguments = "{\"expectStatus\":\"OK\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "ping the health endpoint", arguments = "{}"),
+                @TrainingPrompt(prompt = "check /ready on the service", arguments = "{\"path\":\"/ready\"}")
+            },
+            negatives = {
+                "What HTTP status code means not found?"
             })
     public Health check(
             @Param(description = "Health path, one or two segments, such as health, healthz or actuator/health",

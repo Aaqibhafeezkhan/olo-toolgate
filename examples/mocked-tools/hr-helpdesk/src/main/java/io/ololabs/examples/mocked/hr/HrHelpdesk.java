@@ -10,7 +10,9 @@ import io.ololabs.toolgate.sdk.annotations.JwtClaim;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -110,6 +112,14 @@ public class HrHelpdesk {
                         "m.rossi@example.com",
                         "Lars Berg"
                     }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "who manages priya in the directory?", arguments = "{\"query\":\"priya\"}"),
+                @TrainingPrompt(prompt = "Find E-1042's title and team", arguments = "{\"query\":\"E-1042\"}")
+            },
+            negatives = {
+                "Out of curiosity, how do I write a good employee review?"
+            })
     public Employees employee(@Param(description = "Employee id, name or email, or part of one", minLength = 2, maxLength = 100) String query,
             ToolContext context) {
         String q = query.trim().toLowerCase(Locale.ROOT);
@@ -141,7 +151,11 @@ public class HrHelpdesk {
                 "What does the HR policy say: {question}",
                 "Check the handbook: {question}",
                 "HR question: {question}",
-                "Find the HR policy for this: {question}"
+                "Find the HR policy for this: {question}",
+                "{question} What does the policy say?",
+                "According to HR, {question}",
+                "HR policy question: {question}",
+                "What does the handbook say about this: {question}"
             },
             negatives = {
                 "What is my insurance policy number?",
@@ -156,7 +170,22 @@ public class HrHelpdesk {
                         "Do unused holidays carry over to next year?",
                         "How do I claim travel expenses?",
                         "What is the notice period if I resign?"
-                    }))
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "How many days of annual leave do I get?", arguments = "{\"question\":\"How many days of annual leave do I get?\"}"),
+                @TrainingPrompt(prompt = "Check the handbook: \"Can I work from home on Fridays?\"", arguments = "{\"question\":\"Can I work from home on Fridays?\"}"),
+                @TrainingPrompt(prompt = "What is the notice period if I resign?", arguments = "{\"question\":\"What is the notice period if I resign?\"}"),
+                @TrainingPrompt(prompt = "What's the parental leave policy?", arguments = "{\"question\":\"What's the parental leave policy?\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "am I allowed to carry over unused vacation days?", arguments = "{\"question\":\"am I allowed to carry over unused vacation days?\"}"),
+                @TrainingPrompt(prompt = "What does our policy say about overtime pay?", arguments = "{\"question\":\"What does our policy say about overtime pay?\"}")
+            },
+            negatives = {
+                "Out of curiosity, what is my insurance policy number?",
+                "Write a remote work policy for a startup"
+            })
     public PolicyAnswers policy(@Param(description = "The employee's question", minLength = 2, maxLength = 500) String question,
             ToolContext context) {
         Set<String> words = Arrays.stream(question.toLowerCase(Locale.ROOT).split("[^a-z]+")).collect(Collectors.toSet());
@@ -207,7 +236,20 @@ public class HrHelpdesk {
                 "What's my time-off balance?",
                 "How many holiday days are left for me this year?"
             },
-            negatives = "How many vacation days is normal in Germany?")
+            negatives = "How many vacation days is normal in Germany?",
+            defaultPhrasings = {
+                "Check my holiday days",
+                "How many leave days do I have left?",
+                "What's my leave balance?"
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "how many days off do i still have this year", arguments = "{}"),
+                @TrainingPrompt(prompt = "My sick leave balance?", arguments = "{}")
+            },
+            negatives = {
+                "How many public holidays does Germany have?"
+            })
     public Balance myLeave(ToolContext context) {
         String me = me(context);
         Map<String, Double> b = Data.LEAVE.get(me);
@@ -235,7 +277,9 @@ public class HrHelpdesk {
                 "Book {type} leave from {from} to {to}, request {reference}",
                 "I'd like to take {type} leave {from} until {to} (ref {reference})",
                 "Request {type} leave between {from} and {to}, id {reference}",
-                "Put in for {type} leave, {from} to {to}. Reference {reference}"
+                "Put in for {type} leave, {from} to {to}. Reference {reference}",
+                "Book {type} leave from {from} to {to}, reference {reference}",
+                "Request {type} from {from} to {to}, ref {reference}"
             },
             negatives = "How do I ask my manager for time off?",
             parameters = {
@@ -274,6 +318,20 @@ public class HrHelpdesk {
                         "chat-5520",
                         "REQ-3307"
                     })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "I'd like to take annual leave 2026-11-03 until 2027-01-02 (ref REQ-3307)", arguments = "{\"type\":\"ANNUAL\",\"from\":\"2026-11-03\",\"to\":\"2027-01-02\",\"reference\":\"REQ-3307\"}"),
+                @TrainingPrompt(prompt = "Book vacation from 2026-11-10 to 2026-11-14, reference chat-5520", arguments = "{\"type\":\"ANNUAL\",\"from\":\"2026-11-10\",\"to\":\"2026-11-14\",\"reference\":\"chat-5520\"}"),
+                @TrainingPrompt(prompt = "I'm sick, request leave 2026-11-17 to 2026-11-21, ref ticket-flow-17", arguments = "{\"type\":\"SICK\",\"from\":\"2026-11-17\",\"to\":\"2026-11-21\",\"reference\":\"ticket-flow-17\"}"),
+                @TrainingPrompt(prompt = "Parental leave from 2026-11-10 to 2026-12-05, reference case-4471", arguments = "{\"type\":\"PARENTAL\",\"from\":\"2026-11-10\",\"to\":\"2026-12-05\",\"reference\":\"case-4471\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "put me down for holiday 2026-12-22 to 2026-12-31, ref REQ-9001", arguments = "{\"type\":\"ANNUAL\",\"from\":\"2026-12-22\",\"to\":\"2026-12-31\",\"reference\":\"REQ-9001\"}"),
+                @TrainingPrompt(prompt = "Need sick days 2026-11-04 through 2026-11-05 (ref chat-77)", arguments = "{\"type\":\"SICK\",\"from\":\"2026-11-04\",\"to\":\"2026-11-05\",\"reference\":\"chat-77\"}")
+            },
+            negatives = {
+                "How much notice do I need to give for leave?"
             })
     public LeaveRequest requestLeave(
             @Param(description = "Type", enumValues = {"ANNUAL", "SICK", "PARENTAL"}) String type,
